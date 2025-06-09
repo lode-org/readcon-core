@@ -1,3 +1,17 @@
+use std::env;
+use std::fs;
 fn main() {
-    println!("Hello, world!");
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!(
+            "Usage: {} <filename>\nbut got {} arguments",
+            args[0],
+            args.len()
+        );
+        std::process::exit(1);
+    }
+    let fname = &args[1];
+    println!("Attempting to open file {}", fname);
+    let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
+    println!("{}", fdat);
 }
