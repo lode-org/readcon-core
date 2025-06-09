@@ -17,7 +17,6 @@ fn main() {
         eprintln!("Error: File not found at {}", fname.display());
     }
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
-    let lines: Vec<&str> = fdat.split("\n").collect();
-    let res: Vec<f64> = parse_line_of_n(line[11], 5);
+    let res = readcon::parser::parse_frame_header(&mut fdat.split("\n")).unwrap();
     println!("{:?}", res);
 }

@@ -4,8 +4,8 @@ pub struct FrameHeader {
     pub boxl: [f64; 3],
     pub angles: [f64; 3],
     pub postbox_header: [String; 2],
-    pub natm_types: u32,
-    pub natms_per_type: Vec<u32>,
+    pub natm_types: usize,
+    pub natms_per_type: Vec<usize>,
     pub masses_per_type: Vec<f64>,
 }
 
