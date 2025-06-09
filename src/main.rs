@@ -18,9 +18,6 @@ fn main() {
     }
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
     let lines: Vec<&str> = fdat.split("\n").collect();
-    let res: Vec<f64> = lines[11]
-        .split_whitespace()
-        .map(|num| num.parse::<f64>().unwrap_or(0.))
-        .collect();
+    let res: Vec<f64> = parse_line_of_n(line[11], 5);
     println!("{:?}", res);
 }
