@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -13,5 +14,6 @@ fn main() {
     let fname = &args[1];
     println!("Attempting to open file {}", fname);
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
-    println!("{}", fdat);
+    let lines: Vec<&str> = fdat.split("\n").collect();
+    println!("{}", lines[0]);
 }
