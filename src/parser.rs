@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::types::FrameHeader;
+use crate::types::{AtomDatum, ConFrame, FrameHeader};
 
 /// Helper function to parse a line of N space separated values.
 pub fn parse_line_of_n<T: std::str::FromStr>(line: &str, n: usize) -> Result<Vec<T>, ParseError>
@@ -65,6 +65,31 @@ pub fn parse_frame_header<'a>(
 }
 
 /// Main parsing function for a single frame
-pub fn parse_single_frame(lines: &mut impl Iterator<Item = str>) -> Result<String, ParseError> {
-    Err(ParseError::IncompleteFrame)
+pub fn parse_single_frame<'a>(
+    lines: &mut impl Iterator<Item = &'a str>,
+) -> Result<ConFrame, ParseError> {
+    let header = parse_frame_header(lines)?;
+    let mut atom_data = Vec::new();
+    for num_atoms in &header.natms_per_type {
+        let symbol = lines
+            .next()
+            .ok_or(ParseError::IncompleteFrame)?
+            .trim()
+            .to_string();
+        // Consume and discard the "Coordinates of Component X" line.
+        lines.next().ok_or(ParseError::IncompleteFrame)?;
+        for _ in 0..*num_atoms {
+            let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+            let vals = parse_line_of_n::<f64>(coord_line, 5)?;
+            atom_data.push(AtomDatum {
+                symbol: symbol.clone(),
+                x: vals[0],
+                y: vals[1],
+                z: vals[2],
+                is_fixed: vals[3] != 0.0,
+                atom_id: vals[4] as u64,
+            });
+        }
+    }
+    Ok(ConFrame { header, atom_data })
 }
