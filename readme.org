@@ -1,0 +1,6 @@
+* About
+Re-implementation of [[github:HaoZeke/readCon][readCon]].
+** Why
+To learn Rust. Maybe speed.
+* License
+MIT.
