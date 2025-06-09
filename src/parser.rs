@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-fn parse_line_of<T: std::str::FromStr>(line: &str, n: u64) -> Result<Vec<T>, ParseError>
+fn parse_line_of<T: std::str::FromStr>(line: &str, n: usize) -> Result<Vec<T>, ParseError>
 where
     ParseError: From<<T as std::str::FromStr>::Err>,
 {
