@@ -3,5 +3,23 @@
 version = 4
 
 [[package]]
+name = "cog"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5663d13e7c89704c2d8f074e0bb748362a6661edb085a98c9d539c0a9c431917"
+dependencies = [
+ "rustc-serialize",
+]
+
+[[package]]
 name = "readcon-rs"
 version = "0.1.0"
+dependencies = [
+ "cog",
+]
+
+[[package]]
+name = "rustc-serialize"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe834bc780604f4674073badbad26d7219cadfb4a2275802db12cbae17498401"
