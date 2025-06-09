@@ -17,6 +17,6 @@ fn main() {
         eprintln!("Error: File not found at {}", fname.display());
     }
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
-    let res = readcon::parser::parse_frame_header(&mut fdat.split("\n")).unwrap();
+    let res = readcon::parser::parse_single_frame(&mut fdat.split("\n")).unwrap();
     println!("{:?}", res);
 }
