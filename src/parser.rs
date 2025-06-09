@@ -1,7 +1,33 @@
 use crate::error::ParseError;
 use crate::types::{AtomDatum, ConFrame, FrameHeader};
 
-/// Helper function to parse a line of N space separated values.
+/// Parses a line of whitespace-separated values into a vector of a specific type.
+///
+/// This generic helper function takes a string slice, splits it by whitespace,
+/// and attempts to parse each substring into the target type `T`. The type `T`
+/// must implement `std::str::FromStr`.
+///
+/// # Arguments
+///
+/// * `line` - A string slice representing a single line of data.
+/// * `n` - The exact number of values expected on the line.
+///
+/// # Errors
+///
+/// * `ParseError::InvalidVectorLength` if the number of parsed values is not equal to `n`.
+/// * Propagates any error from the `parse()` method of the target type `T`.
+///
+/// # Example
+///
+/// ```
+/// use readcon::parser::parse_line_of_n;
+/// let line = "10.5 20.0 30.5";
+/// let values: Vec<f64> = parse_line_of_n(line, 3).unwrap();
+/// assert_eq!(values, vec![10.5, 20.0, 30.5]);
+///
+/// let result = parse_line_of_n::<i32>(line, 2);
+/// assert!(result.is_err());
+/// ```
 pub fn parse_line_of_n<T: std::str::FromStr>(line: &str, n: usize) -> Result<Vec<T>, ParseError>
 where
     ParseError: From<<T as std::str::FromStr>::Err>,
@@ -21,7 +47,26 @@ where
     }
 }
 
-/// Consume 9 lines to build the FrameHeader
+/// Parses the 9-line header of a `.con` file frame from an iterator.
+///
+/// This function consumes the next 9 lines from the given line iterator to
+/// construct a `FrameHeader`. The iterator is advanced by 9 lines on success.
+///
+/// # Arguments
+///
+/// * `lines` - A mutable reference to an iterator that yields string slices.
+///
+/// # Errors
+///
+/// * `ParseError::IncompleteHeader` if the iterator has fewer than 9 lines remaining.
+/// * Propagates any errors from `parse_line_of_n` if the numeric data within
+///   the header is malformed.
+///
+/// # Panics
+///
+/// This function will panic if the intermediate vectors for box dimensions or angles,
+/// after being successfully parsed, cannot be converted into fixed-size arrays.
+/// This should not happen if `parse_line_of_n` is used correctly with `n=3`.
 pub fn parse_frame_header<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<FrameHeader, ParseError> {
@@ -64,7 +109,54 @@ pub fn parse_frame_header<'a>(
     })
 }
 
-/// Main parsing function for a single frame
+/// Parses a complete frame from a `.con` file, including its header and atomic data.
+///
+/// This function first parses the frame header and then uses the information within it
+/// (specifically the number of atom types and atoms per type) to parse the subsequent
+/// atom coordinate blocks.
+///
+/// # Arguments
+///
+/// * `lines` - A mutable reference to an iterator that yields string slices for the frame.
+///
+/// # Errors
+///
+/// * `ParseError::IncompleteFrame` if the iterator ends before all expected
+///   atomic data has been read.
+/// * Propagates any errors from the underlying calls to `parse_frame_header` and
+///   `parse_line_of_n`.
+///
+/// # Example
+///
+/// ```
+/// use readcon::parser::parse_single_frame;
+///
+/// let frame_text = r#"
+///PREBOX LINE 1
+///PREBOX LINE 2
+///10.0 10.0 10.0
+///90.0 90.0 90.0
+///POSTBOX LINE 1
+///POSTBOX LINE 2
+///2
+///1 1
+///12.011 1.008
+///C
+///Coordinates of Component 1
+///1.0 1.0 1.0 0.0 1
+///H
+///Coordinates of Component 2
+///2.0 2.0 2.0 0.0 2
+/// "#;
+///
+/// let mut lines = frame_text.trim().lines();
+/// let con_frame = parse_single_frame(&mut lines).unwrap();
+///
+/// assert_eq!(con_frame.header.natm_types, 2);
+/// assert_eq!(con_frame.atom_data.len(), 2);
+/// assert_eq!(con_frame.atom_data[0].symbol, "C");
+/// assert_eq!(con_frame.atom_data[1].atom_id, 2);
+/// ```
 pub fn parse_single_frame<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<ConFrame, ParseError> {
