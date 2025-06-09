@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 // Kanged and expanded from [1]
+#[macro_export]
 macro_rules! test_case {
     ($fname:expr) => {
         Path::new(env!("CARGO_MANIFEST_DIR"))
