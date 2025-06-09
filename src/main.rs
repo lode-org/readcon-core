@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::path::Path;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -11,9 +12,16 @@ fn main() {
         );
         std::process::exit(1);
     }
-    let fname = &args[1];
-    println!("Attempting to open file {}", fname);
+    let fname = Path::new(&args[1]);
+    if !fname.exists() {
+        eprintln!("Error: File not found at {}", fname.display());
+    }
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
     let lines: Vec<&str> = fdat.split("\n").collect();
-    println!("{}", lines[0]);
+    let nums: Vec<&str> = lines[11].split_whitespace().collect();
+    let res: Vec<f64> = nums
+        .iter()
+        .map(|num| num.parse::<f64>().unwrap_or(0.))
+        .collect();
+    println!("{:?}", res);
 }
