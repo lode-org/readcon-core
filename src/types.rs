@@ -1,3 +1,7 @@
+//=============================================================================
+// Data Structures - The shape of our parsed data
+//=============================================================================
+
 #[derive(Debug)]
 pub struct FrameHeader {
     pub prebox_header: [String; 2],
