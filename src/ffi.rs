@@ -1,16 +1,17 @@
+use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::ConFrameIterator;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CStr};
 use std::ptr;
 
 #[repr(C)]
 pub struct CAtom {
-    pub symbol: *const c_char,
+    pub atomic_number: u64,
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    pub is_fixed: bool,
     pub atom_id: u64,
     pub mass: f64,
+    pub is_fixed: bool, // must be here for padding issues
 }
 
 #[repr(C)]
@@ -19,6 +20,19 @@ pub struct CFrame {
     pub num_atoms: usize,
     pub cell: [f64; 3],
     pub angles: [f64; 3],
+}
+
+/// Takes a C-style string symbol and returns the corresponding atomic number.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust_symbol_to_atomic_number(symbol_c: *const c_char) -> u64 {
+    if symbol_c.is_null() {
+        return 0;
+    }
+    let symbol_str = match unsafe { CStr::from_ptr(symbol_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    symbol_to_atomic_number(symbol_str)
 }
 
 /// Parses a .con file and returns a pointer to a CFrame struct.
@@ -52,32 +66,30 @@ pub unsafe extern "C" fn read_con_file(filename_c: *const c_char) -> *mut CFrame
     };
 
     // --- Convert the Rust data into C-compatible data ---
-    let mut c_atoms: Vec<CAtom> = Vec::with_capacity(parsed_frame.atom_data.len());
-    let mut atom_cursor = 0;
     // Iterate through each component type to get the correct mass
-    for (component_index, num_atoms_in_component) in
-        parsed_frame.header.natms_per_type.iter().enumerate()
-    {
-        // Get the mass for this specific component
-        let component_mass = parsed_frame.header.masses_per_type[component_index];
+    // Create a flat iterator that yields the correct mass for each atom in order.
+    let masses_iter = parsed_frame
+        .header
+        .natms_per_type
+        .iter()
+        .zip(parsed_frame.header.masses_per_type.iter())
+        .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
 
-        // Assign this mass to all atoms of this component
-        for _ in 0..*num_atoms_in_component {
-            let atom_datum = &parsed_frame.atom_data[atom_cursor];
-            let symbol_cstr = CString::new(atom_datum.symbol.clone()).unwrap();
-
-            c_atoms.push(CAtom {
-                symbol: symbol_cstr.into_raw(),
-                x: atom_datum.x,
-                y: atom_datum.y,
-                z: atom_datum.z,
-                is_fixed: atom_datum.is_fixed,
-                atom_id: atom_datum.atom_id,
-                mass: component_mass,
-            });
-            atom_cursor += 1;
-        }
-    }
+    // Zip the atom data with its corresponding mass, then map to the C-struct.
+    let mut c_atoms: Vec<CAtom> = parsed_frame
+        .atom_data
+        .into_iter()
+        .zip(masses_iter)
+        .map(|(atom_datum, mass)| CAtom {
+            atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
+            x: atom_datum.x,
+            y: atom_datum.y,
+            z: atom_datum.z,
+            is_fixed: atom_datum.is_fixed,
+            atom_id: atom_datum.atom_id,
+            mass,
+        })
+        .collect();
 
     // Turn the Vec<CAtom> into a raw pointer for C.
     // Leaks memory here, giving ownership to the caller.
@@ -112,18 +124,11 @@ pub unsafe extern "C" fn free_con_frame(frame: *mut CFrame) {
         let frame_box = Box::from_raw(frame);
 
         // Retake ownership of the slice of CAtoms.
-        let c_atoms_vec = Vec::from_raw_parts(
+        let _ = Vec::from_raw_parts(
             frame_box.atoms as *mut CAtom,
             frame_box.num_atoms,
             frame_box.num_atoms,
         );
-
-        // Third, iterate through the vec and retake ownership of each CString
-        // so it can be properly dropped (deallocated).
-        for atom in c_atoms_vec {
-            let _ = CString::from_raw(atom.symbol as *mut c_char);
-        }
-
         // The `frame_box` is dropped automatically at the end of this scope.
         // The `c_atoms_vec` is also dropped here. All memory is now freed.
     }
