@@ -23,6 +23,8 @@ pub struct CFrame {
 }
 
 /// Takes a C-style string symbol and returns the corresponding atomic number.
+/// # Safety
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust_symbol_to_atomic_number(symbol_c: *const c_char) -> u64 {
     if symbol_c.is_null() {
@@ -41,6 +43,8 @@ pub unsafe extern "C" fn rust_symbol_to_atomic_number(symbol_c: *const c_char) -
 /// on it to prevent a memory leak.
 /// Returns a null pointer on error.
 /// This function is `unsafe` because it dereferences a raw C pointer.
+/// # Safety
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn read_con_file(filename_c: *const c_char) -> *mut CFrame {
     // Safely convert the C string to a Rust string inside an unsafe block
@@ -113,6 +117,8 @@ pub unsafe extern "C" fn read_con_file(filename_c: *const c_char) -> *mut CFrame
 ///
 /// Must be called on any non-null pointer returned by read_con_file.
 /// This function is `unsafe` because it deals with raw pointers and memory deallocation.
+/// # Safety
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_con_frame(frame: *mut CFrame) {
     if frame.is_null() {
