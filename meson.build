@@ -14,16 +14,18 @@ cppc = meson.get_compiler('cpp')
 cbindgen_prog = find_program('cbindgen', required: true)
 readcon_header_target = custom_target(
     'cbindgen-readcon',
-    input: 'src/lib.rs',
+    input: [files('cbindgen.toml'), files('src/lib.rs')],
     output: 'readcon.h',
     command: [
         cbindgen_prog,
         '--config',
-        '@SOURCE_ROOT@/cbindgen.toml',
+        '@INPUT0@',
         '--crate',
         'readcon',
         '--output',
         '@OUTPUT@',
+        '--',
+        '@INPUT1@',
     ],
 )
 readcon_lib = static_library(
