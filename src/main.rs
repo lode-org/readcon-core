@@ -40,6 +40,12 @@ fn main() {
         println!("\n-> Summary of last valid frame:");
         println!("  - Box vectors: {:?}", last_frame.header.boxl);
         println!("  - Angles: {:?}", last_frame.header.angles);
+        println!("  - Atom masses: {:?}", last_frame.header.masses_per_type);
+        println!("  - Atom atom types: {:?}", last_frame.header.natm_types);
+        println!(
+            "  - Atom numbers per type: {:?}",
+            last_frame.header.natms_per_type
+        );
         println!("  - Atom types: {}", last_frame.header.natm_types);
         println!("  - Total atoms: {}", last_frame.atom_data.len());
         if let Some(last_atom) = last_frame.atom_data.last() {
