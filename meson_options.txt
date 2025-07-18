@@ -1,0 +1,4 @@
+option('with_examples', type : 'boolean',
+       value : false,
+       description: 'Builds and runs FFI examples',
+      )

@@ -11,16 +11,25 @@ project(
         'b_ndebug=if-release',
     ],
 )
+
+# Sanity checks
 cc = meson.get_compiler('c')
 rc = meson.get_compiler('rust')
 if rc.version().version_compare('< 1.88.0')
     error('readcon-rs requires Rust 1.88.0')
 endif
 
-# C Header
 cbindgen_prog = find_program('cbindgen', version: '>=0.29.0', required: true)
-readcon_header_target = custom_target(
-    'cbindgen-readcon',
+
+# Auxiliary variables
+_mbproot = meson.project_build_root()
+_msproot = meson.project_source_root()
+
+# C Header
+# This is done twice, once for installing things and once to generate the
+# "in-tree" copy
+readcon_header_build = custom_target(
+    'cbindgen_clone',
     input: [files('cbindgen.toml'), files('src/lib.rs')],
     output: ['readcon-core.h'],
     command: [
@@ -37,6 +46,27 @@ readcon_header_target = custom_target(
     ],
     install: true,
     install_dir: 'include',
+    build_by_default: true,
+)
+
+
+readcon_header_intree = custom_target(
+    'cbindgen-readcon',
+    input: [files('cbindgen.toml'), files('src/lib.rs')],
+    output: ['readcon-intree'],
+    command: [
+        cbindgen_prog,
+        '-q',
+        '--config',
+        '@INPUT0@',
+        '--crate',
+        'readcon',
+        '@INPUT1@',
+        '--output',
+        f'@_msproot@/include/readcon-core.h',
+    ],
+    install: false,
+    build_by_default: true,
 )
 
 # Library
@@ -56,6 +86,12 @@ readcon_dep = declare_dependency(
     include_directories: include_directories('.'),
 )
 
+# Examples
+if get_option('with_examples')
+    subdir('examples')
+endif
+
+# Pkgconf generation
 
 pkg = import('pkgconfig')
 pkg_ver = meson.project_version()
