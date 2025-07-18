@@ -41,3 +41,48 @@ fn test_cuh2_parsing() {
 
     assert!(frames_found == 1);
 }
+
+#[test]
+fn test_multi_parsing() {
+    let fdat = fs::read_to_string(test_case!("tiny_multi_cuh2.con")).expect("Can't find test.");
+    let parser = ConFrameIterator::new(&fdat);
+
+    let frames: Vec<_> = parser.map(|result| result.expect("Failed to parse a frame")).collect();
+    assert_eq!(frames.len(), 2, "Expected to parse 2 frames, but found {}", frames.len());
+
+    let first_frame = &frames[0];
+    assert_eq!(first_frame.header.natm_types, 2);
+    assert_eq!(first_frame.header.natms_per_type, vec![2, 2]);
+    assert_eq!(first_frame.header.masses_per_type, vec![63.546, 1.00793]);
+    assert_eq!(first_frame.atom_data.len(), 4);
+
+    let first_atom = &first_frame.atom_data[0];
+    assert_eq!(first_atom.symbol, "Cu");
+    assert_eq!(first_atom.x, 0.6394);
+    assert_eq!(first_atom.y, 0.9045);
+    assert_eq!(first_atom.z, 6.9753);
+    assert_eq!(first_atom.is_fixed, true);
+    assert_eq!(first_atom.atom_id, 0);
+
+    let last_atom = &first_frame.atom_data.last().unwrap();
+    assert_eq!(last_atom.symbol, "H");
+    assert_eq!(last_atom.x, 7.9421);
+    assert_eq!(last_atom.y, 9.947);
+    assert_eq!(last_atom.z, 11.733);
+    assert_eq!(last_atom.is_fixed, false);
+    assert_eq!(last_atom.atom_id, 3);
+
+    let second_frame = &frames[1];
+    assert_eq!(second_frame.header.natm_types, 2);
+    assert_eq!(second_frame.header.natms_per_type, vec![2, 2]);
+    assert_eq!(second_frame.header.masses_per_type, vec![63.546, 1.00793]);
+    assert_eq!(second_frame.atom_data.len(), 4);
+
+    let second_atom = &second_frame.atom_data[1];
+    assert_eq!(second_atom.symbol, "Cu");
+    assert_eq!(second_atom.x, 3.1969);
+    assert_eq!(second_atom.y, 0.9045);
+    assert_eq!(second_atom.z, 6.9752);
+    assert_eq!(second_atom.is_fixed, true);
+    assert_eq!(second_atom.atom_id, 1);
+}
