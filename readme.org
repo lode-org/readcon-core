@@ -2,7 +2,7 @@
 Oxidized rust re-implementation of [[github:HaoZeke/readCon][readCon]]. Relevant portions of the original ~readme~ are reproduced below.
 ** Usage
 #+begin_src bash
-cargo run resources/test/sulfolene.con
+cargo run -- resources/test/sulfolene.con
 #+end_src
 ** Design Decisions
 Currently this implements the ~con~ format specification as written out by eON,
@@ -57,12 +57,15 @@ Coordinates of Component 2
 
 Nothing else. No whitespace or lines between the ~con~ entries.
 **** Why?
-We read the entire file to memory and then map it to a set of strings. The first
-9 lines are parsed to figure out how many lines are needed for the rest of the
-(first) frame, and then this logic is repeated en-masse until the lines run out.
+The library is designed with the following principles in mind:
 
-Better memory management / streaming files / more errors and sanity checks are
-all welcome as pull requests.
+- *Lazy Parsing:* The ConFrameIterator allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
+
+- *Robust Error Handling:* The ParseError enum provides detailed information about parsing failures, allowing for granular error handling.
+
+- *Structured Data:* The parsed data is organized into clear and well-defined structs like ConFrame, FrameHeader, and AtomDatum, making it easy to work with.
+
+- *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility.
 ** Why
 To learn Rust. Maybe speed.
 * License
