@@ -1,9 +1,9 @@
 #include "readcon-core.hpp"
 #include <iostream>
-#include <vector>
 
 // A helper function to print the frame's data
-void print_frame_details(const readcon::ConFrame &frame) {
+void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
+    std::cout << "\n==================== FRAME " << frame_number << " ====================\n";
     // Print cell information
     auto cell = frame.cell();
     auto angles = frame.angles();
@@ -13,14 +13,21 @@ void print_frame_details(const readcon::ConFrame &frame) {
               << angles[2] << std::endl;
 
     // Print atom information
-    std::cout << "\n--- Atoms (" << frame.atoms().size() << ") ---\n";
-    std::cout << std::boolalpha;
+    std::cout << "--- Atoms (" << frame.atoms().size() << ") ---\n";
+    std::cout << std::boolalpha; // Print booleans as "true"/"false"
 
+    // Print details for the first 5 atoms for brevity
+    int atoms_to_print = 0;
     for (const auto &atom : frame.atoms()) {
-        std::cout << "ID: " << atom.atom_id << ", Z: " << atom.atomic_number
+        if (atoms_to_print >= 5) {
+            std::cout << "... and " << frame.atoms().size() - 5 << " more." << std::endl;
+            break;
+        }
+        std::cout << "  ID: " << atom.atom_id << ", Z: " << atom.atomic_number
                   << ", Pos: (" << atom.x << ", " << atom.y << ", " << atom.z
                   << ")"
                   << ", Fixed: " << atom.is_fixed << std::endl;
+        atoms_to_print++;
     }
 }
 
@@ -33,16 +40,22 @@ int main(int argc, char *argv[]) {
     std::string filename = argv[1];
 
     try {
-        std::cout << "Attempting to read file: " << filename << "\n"
-                  << std::endl;
+        std::cout << "Attempting to iterate through all frames in: " << filename << std::endl;
 
-        // Use the factory function to create a frame object.
-        // RAII ensures memory is automatically freed when 'frame' goes out of
-        // scope.
-        auto frame = readcon::ConFrame::from_file(filename);
+        // To read all frames, create a ConFrameIterator object.
+        // RAII ensures the underlying C iterator is freed when this object
+        // goes out of scope.
+        readcon::ConFrameIterator frame_iterator(filename);
 
-        std::cout << "File parsed successfully!\n" << std::endl;
-        print_frame_details(frame);
+        int frame_count = 0;
+        // Use a modern range-based for loop to process each frame.
+        for (const auto& frame : frame_iterator) {
+            frame_count++;
+            print_frame_details(frame_count, frame);
+        }
+
+        std::cout << "\n==================================================\n";
+        std::cout << "Iteration complete. Total frames processed: " << frame_count << std::endl;
 
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
