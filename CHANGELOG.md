@@ -2,6 +2,40 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.1.1 - 2025-07-19
+#### Benchmarks
+- Add iterator validation - (9c49c86) - HaoZeke
+#### Bugfixes
+- Fixup a misunderstanding of lifetimes - (038cc5c) - HaoZeke
+#### Buildsystem
+- Use the multi con for examples - (cbdfd6a) - HaoZeke
+#### Continuous Integration
+- Only run benchmarks on request - (222d727) - HaoZeke
+- Kill useless release thing - (96aa79a) - HaoZeke
+- Run benchmarks - (f60a32a) - HaoZeke
+- Use valgrind for gha - (0b2179e) - HaoZeke
+#### Enhancements
+- Demonstrate more of the C++ usage - (f9f838c) - HaoZeke
+- Setup the iterator usage in the C example - (596f65a) - HaoZeke
+- Add a more elegant iterator interface to C++ - (706f14b) - HaoZeke
+- Expose iterators through C interface - (aad794a) - HaoZeke
+- Implement a basic forward skipper - (6e2c8a4) - HaoZeke
+#### Generated
+- Update for criterion - (f1fcfa2) - HaoZeke
+#### Maintenance
+- Fix category tags - (19b7499) - HaoZeke
+- Bump version - (09ae400) - HaoZeke
+- Stop hardcoding paths - (7dbb381) - HaoZeke
+- More sane returns - (66fed6a) - HaoZeke
+- Add a valgrind suppression file - (9ea9c89) - HaoZeke
+- Rework to better explain behavior - (d65634a) - HaoZeke
+- Try to use cargo-dist for generating things - (2ff5ce6) - HaoZeke
+- Fix license and keywords - (aa016b2) - HaoZeke
+#### Tests
+- Add a test for the forward iterator - (0917875) - HaoZeke
+
+- - -
+
 ## v0.1.0 - 2025-07-19
 #### Buildsystem
 - Remove unstable rust module for stable - (bb7a200) - HaoZeke
