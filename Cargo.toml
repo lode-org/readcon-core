@@ -5,7 +5,9 @@ edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader with FFI bindings for ergonomic C/C++ usage."
 repository = "https://github.com/lode-org/readcon-rs"
-license-file = "LICENSE"
+keywords = ["Parser", "comp-chem", "file-format"]
+categories = ["Filesystem", "Parser implementations", "Science", "Simulation"]
+license = "MIT"
 
 [dev-dependencies]
 cog = "0.1.0"
