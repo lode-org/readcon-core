@@ -20,7 +20,7 @@ use crate::types::{AtomDatum, ConFrame, FrameHeader};
 /// # Example
 ///
 /// ```
-/// use readcon::parser::parse_line_of_n;
+/// use readcon_core::parser::parse_line_of_n;
 /// let line = "10.5 20.0 30.5";
 /// let values: Vec<f64> = parse_line_of_n(line, 3).unwrap();
 /// assert_eq!(values, vec![10.5, 20.0, 30.5]);
@@ -129,7 +129,7 @@ pub fn parse_frame_header<'a>(
 /// # Example
 ///
 /// ```
-/// use readcon::parser::parse_single_frame;
+/// use readcon_core::parser::parse_single_frame;
 ///
 /// let frame_text = r#"
 ///PREBOX LINE 1

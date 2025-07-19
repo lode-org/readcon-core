@@ -1,0 +1,73 @@
+name: Coverage
+# Adapted from https://github.com/metatensor/metatensor/pull/939
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  coverage:
+    runs-on: ubuntu-22.04
+    name: collect code coverage
+    # Adapted from https://www.scivision.dev/github-actions-latest-llvm-clang-flang/
+    strategy:
+      matrix:
+        llvm-version: [20]
+    env:
+      CMAKE_C_COMPILER: clang-${{ matrix.llvm-version }}
+      CMAKE_CXX_COMPILER: clang++-${{ matrix.llvm-version }}
+      CC: clang-${{ matrix.llvm-version }}
+      CXX: clang++-${{ matrix.llvm-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup LLVM
+        run: |
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh ${{ matrix.llvm-version }}
+            sudo apt-get update
+            sudo apt install --no-install-recommends clang-${{ matrix.llvm-version }}
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+          override: true
+
+      - name: install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: setup sccache environnement variables
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+
+      - name: generate rust code coverage
+        id: coverage
+        run: |
+          cargo llvm-cov --all-features --workspace \
+            --no-fail-fast --codecov \
+            --include-ffi \
+            --output-path rust_codecov.json
+
+      # - name: upload to codecov.io
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     fail_ci_if_error: true
+      #     files: rust_codecov.json
+      #     token: ${{ secrets.CODECOV_TOKEN }}
