@@ -1,0 +1,50 @@
+name: Basic tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: btest_rust-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  btest_rust:
+    runs-on: ubuntu-22.04
+    name: Run basic tests and build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+          override: true
+
+      - name: setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: setup sccache environnement variables
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+
+      - name: install dependencies
+        run: |
+          python -m pip install meson
+
+      - name: Build and test
+        id: btest_rust
+        run: |
+          meson setup bbdir -Dwith_tests=True \
+          -Dwith_cpp=True \
+          -Dwith_examples=True \
+          --buildtype=release
+          meson test -C bbdir

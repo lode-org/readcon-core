@@ -1,9 +1,14 @@
 [package]
-name = "readcon"
+name = "readcon-core"
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
+rust-version = "1.88"
+description = "An oxidized single and multiple CON file reader with FFI bindings for ergonomic C/C++ usage."
+repository = "https://github.com/lode-org/readcon-rs"
+license-file = "LICENSE"
 
 [dev-dependencies]
 cog = "0.1.0"
+
+[build-dependencies]
+cbindgen = "0.29.0"
