@@ -77,12 +77,20 @@ readcon_lib = library(
     'src/iterators.rs',
     'src/parser.rs',
     'src/types.rs',
-    rust_abi: 'c',  # Can be 'C' or 'Rust'
+    rust_abi: 'c',
 )
+
+if get_option('with_tests')
+    rustmod = import('unstable-rust')
+    rustmod.test('Rust tests', readcon_lib)
+    # TODO(rg) :: Open an issue since doctests fail because of "unresolved or
+    # unlinked readcon_core", though everything works via cargo --test
+    # rustmod.doctest('Rust documentation tests', readcon_lib)
+endif
 
 readcon_dep = declare_dependency(
     link_with: readcon_lib,
-    include_directories: include_directories('.'),
+    include_directories: include_directories('include'),
 )
 
 # Examples

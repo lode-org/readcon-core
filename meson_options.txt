@@ -6,3 +6,7 @@ option('with_cpp', type : 'boolean',
        value : false,
        description: 'Builds and runs CPP FFI examples',
       )
+option('with_tests', type : 'boolean',
+       value : false,
+       description: 'Builds and runs tests',
+      )
