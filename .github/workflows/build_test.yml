@@ -39,6 +39,7 @@ jobs:
       - name: install dependencies
         run: |
           python -m pip install meson
+          sudo apt install valgrind
 
       - name: Build and test
         id: btest_rust
@@ -47,4 +48,5 @@ jobs:
           -Dwith_cpp=True \
           -Dwith_examples=True \
           --buildtype=release
-          meson test -C bbdir
+          meson test -C bbdir \
+          --wrap='valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all'
