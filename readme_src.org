@@ -1,5 +1,5 @@
 * About
-Oxidized rust re-implementation of [[github:HaoZeke/readCon][readCon]].
+Oxidized rust re-implementation of [[https://github.com/HaoZeke/readCon][readCon]].
 ** Usage
 #+begin_src bash
 cargo run -- resources/test/sulfolene.con
