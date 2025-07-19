@@ -11,6 +11,11 @@ license = "MIT"
 
 [dev-dependencies]
 cog = "0.1.0"
+criterion = { version = "0.6.0", features = ["html_reports"] }
+
+[[bench]]
+name = "iterator_bench"
+harness = false
 
 [build-dependencies]
 cbindgen = "0.29.0"
@@ -19,3 +24,4 @@ cbindgen = "0.29.0"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
