@@ -285,6 +285,9 @@ pub unsafe extern "C" fn con_frame_iterator_next(iterator: *mut CConFrameIterato
 /// The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIterator) -> i32 {
+    if iterator.is_null() {
+        return -1;
+    }
     let iter = unsafe { &mut *(*iterator).iterator };
     match iter.forward() {
         Some(Ok(())) => 0,
