@@ -1,0 +1,16 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Audit for large files
+      uses: HaoZeke/large-file-auditor@v0.1.0
+      with:
+        file-size-threshold: "1M"
