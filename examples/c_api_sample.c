@@ -3,7 +3,7 @@
 
 int main(int argc, char *argv[]) {
     // Load the .con file
-    CFrame* frame = read_con_file(argv[1]);
+    CFrame* frame = read_single_frame(argv[1]);
 
     if (frame) {
         printf("Successfully loaded a frame with %zu atoms.\n", frame->num_atoms);

@@ -73,7 +73,7 @@ uint64_t rust_symbol_to_atomic_number(const char *symbol_c);
  * # Safety
  * The caller must ensure that `filename_c` is a valid, null-terminated C string.
  */
-struct CFrame *read_con_file(const char *filename_c);
+struct CFrame *read_single_frame(const char *filename_c);
 
 /**
  * Frees the memory allocated by read_con_file.
