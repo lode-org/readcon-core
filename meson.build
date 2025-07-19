@@ -80,12 +80,24 @@ readcon_lib = library(
     rust_abi: 'c',
 )
 
+# Mostly only for doctests
+# gh-14813 is why this is static for now
+readcon_rlib = static_library(
+    'readcon_core',
+    'src/lib.rs',
+    'src/error.rs',
+    'src/iterators.rs',
+    'src/parser.rs',
+    'src/types.rs',
+    rust_abi: 'rust',
+)
+
 if get_option('with_tests')
     rustmod = import('rust')
     rustmod.test('Rust tests', readcon_lib)
     # TODO(rg) :: Open an issue since doctests fail because of "unresolved or
     # unlinked readcon_core", though everything works via cargo --test
-    # rustmod.doctest('Rust documentation tests', readcon_lib)
+    rustmod.doctest('Rust documentation tests', readcon_rlib)
 endif
 
 readcon_dep = declare_dependency(
