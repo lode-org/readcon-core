@@ -49,7 +49,6 @@ readcon_header_build = custom_target(
     build_by_default: true,
 )
 
-
 readcon_header_intree = custom_target(
     'cbindgen-readcon',
     input: [files('cbindgen.toml'), files('src/lib.rs')],
