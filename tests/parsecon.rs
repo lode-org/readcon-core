@@ -1,5 +1,5 @@
 mod common;
-use readcon::iterators::ConFrameIterator;
+use readcon_core::iterators::ConFrameIterator;
 use std::fs;
 use std::path::Path;
 
