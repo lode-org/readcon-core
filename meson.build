@@ -16,7 +16,7 @@ project(
 cc = meson.get_compiler('c')
 rc = meson.get_compiler('rust')
 if rc.version().version_compare('< 1.88.0')
-    error('readcon-rs requires Rust 1.88.0')
+    error('readcon-core requires Rust 1.88.0')
 endif
 
 cbindgen_prog = find_program('cbindgen', version: '>=0.29.0', required: true)

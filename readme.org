@@ -1,10 +1,16 @@
 * About
-Oxidized rust re-implementation of [[github:HaoZeke/readCon][readCon]]. Relevant portions of the original ~readme~ are reproduced below.
+Oxidized rust re-implementation of [[github:HaoZeke/readCon][readCon]].
 ** Usage
 #+begin_src bash
 cargo run -- resources/test/sulfolene.con
 #+end_src
 ** Design Decisions
+The library is designed with the following principles in mind:
+
+- *Lazy Parsing:* The ~ConFrameIterator~ allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
+
+- *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a ~C~ header is auto-generated along with a hand-crafted ~C++~ interface, following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+** Specification
 Currently this implements the ~con~ format specification as written out by eON,
 so some assumptions are made about the input files, not all of which are
 currently tested / guaranteed to throw (contributions are welcome for additional
@@ -56,17 +62,7 @@ Coordinates of Component 2
 #+end_src
 
 Nothing else. No whitespace or lines between the ~con~ entries.
-**** Why?
-The library is designed with the following principles in mind:
-
-- *Lazy Parsing:* The ConFrameIterator allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
-
-- *Robust Error Handling:* The ParseError enum provides detailed information about parsing failures, allowing for granular error handling.
-
-- *Structured Data:* The parsed data is organized into clear and well-defined structs like ConFrame, FrameHeader, and AtomDatum, making it easy to work with.
-
-- *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility.
-** Why
+** Why use this over [[https://github.com/HaoZeke/readCon][readCon]]?
 To learn Rust. Maybe speed.
 * License
 MIT.
