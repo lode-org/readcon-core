@@ -91,13 +91,13 @@ class ConFrame {
             for (size_t i = 0; i < frame_ptr_->num_atoms; ++i) {
                 const CAtom &c_atom = frame_ptr_->atoms[i];
                 atoms_cache_.emplace_back(Atom{
-                    .atomic_number = c_atom.atomic_number,
-                    .x = c_atom.x,
-                    .y = c_atom.y,
-                    .z = c_atom.z,
-                    .atom_id = c_atom.atom_id,
-                    .mass = c_atom.mass,
-                    .is_fixed = c_atom.is_fixed,
+                    /* .atomic_number = */ c_atom.atomic_number,
+                    /* .x = */ c_atom.x,
+                    /* .y = */ c_atom.y,
+                    /* .z = */ c_atom.z,
+                    /* .atom_id = */ c_atom.atom_id,
+                    /* .mass = */ c_atom.mass,
+                    /* .is_fixed = */ c_atom.is_fixed,
                 });
             }
         }
