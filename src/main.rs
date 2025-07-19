@@ -1,6 +1,8 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use readcon_core::iterators::ConFrameIterator;
+use readcon_core::types::ConFrame;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -17,8 +19,8 @@ fn main() {
         eprintln!("Error: File not found at {}", fname.display());
     }
     let fdat = fs::read_to_string(&args[1]).expect("Failed to read.");
-    let parser = readcon::iterators::ConFrameIterator::new(&fdat);
-    let good_frames: Vec<readcon::types::ConFrame> = parser
+    let parser = ConFrameIterator::new(&fdat);
+    let good_frames: Vec<ConFrame> = parser
         .filter_map(|result| match result {
             Ok(frame) => Some(frame),
             Err(e) => {
