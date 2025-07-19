@@ -1,7 +1,7 @@
 # ------------------------ Examples
 
 examples_array = [  #
-    ['c_api_sample', 'c_api_sample.c', f'@_msproot@/resources/test/cuh2.con'],
+    ['c_api_sample', 'c_api_sample.c', f'@_msproot@/resources/test/tiny_multi_cuh2.con'],
 ]
 
 if get_option('with_cpp')
@@ -10,7 +10,7 @@ if get_option('with_cpp')
         [
             'cpp_api_sample',
             'cpp_api_sample.cpp',
-            f'@_msproot@/resources/test/sulfolene.con',
+            f'@_msproot@/resources/test/tiny_multi_cuh2.con',
         ],
     ]
 endif

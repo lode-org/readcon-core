@@ -16,6 +16,20 @@
 namespace readcon {
 #endif  // __cplusplus
 
+/**
+ * An iterator that lazily parses simulation frames from a `.con` file's contents.
+ *
+ * This struct wraps an iterator over the lines of a string and, upon each iteration,
+ * attempts to parse a complete `ConFrame`. This is the primary interface for reading
+ * data from a `.con` file.
+ *
+ * The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
+ * robust error handling for each frame.
+ */
+typedef struct ConFrameIterator ConFrameIterator;
+
+typedef struct String String;
+
 typedef struct CAtom {
     uint64_t atomic_number;
     double x;
@@ -33,6 +47,11 @@ typedef struct CFrame {
     double angles[3];
 } CFrame;
 
+typedef struct CConFrameIterator {
+    struct ConFrameIterator *iterator;
+    struct String *file_contents;
+} CConFrameIterator;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -40,7 +59,7 @@ extern "C" {
 /**
  * Takes a C-style string symbol and returns the corresponding atomic number.
  * # Safety
- *
+ * The caller must ensure that `symbol_c` is a valid, null-terminated C string.
  */
 uint64_t rust_symbol_to_atomic_number(const char *symbol_c);
 
@@ -52,9 +71,9 @@ uint64_t rust_symbol_to_atomic_number(const char *symbol_c);
  * Returns a null pointer on error.
  * This function is `unsafe` because it dereferences a raw C pointer.
  * # Safety
- *
+ * The caller must ensure that `filename_c` is a valid, null-terminated C string.
  */
-struct CFrame *read_con_file(const char *filename_c);
+struct CFrame *read_single_frame(const char *filename_c);
 
 /**
  * Frees the memory allocated by read_con_file.
@@ -62,9 +81,47 @@ struct CFrame *read_con_file(const char *filename_c);
  * Must be called on any non-null pointer returned by read_con_file.
  * This function is `unsafe` because it deals with raw pointers and memory deallocation.
  * # Safety
- *
+ * The caller must ensure that `frame` is a pointer previously returned by
+ * `read_con_file` or `con_frame_iterator_next`.
  */
 void free_con_frame(struct CFrame *frame);
+
+/**
+ * Creates a new iterator for a .con file.
+ *
+ * The caller OWNS the returned pointer and MUST call free_con_frame_iterator()
+ * on it to prevent a memory leak.
+ * Returns a null pointer on error.
+ * # Safety
+ * The caller must ensure that `filename_c` is a valid, null-terminated C string.
+ */
+struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
+
+/**
+ * Frees the memory for a CConFrameIterator.
+ * # Safety
+ * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ */
+void free_con_frame_iterator(struct CConFrameIterator *iterator);
+
+/**
+ * Reads the next frame from the iterator.
+ *
+ * The caller OWNS the returned CFrame pointer and must free it with `free_con_frame`.
+ * Returns a null pointer if there are no more frames or on error.
+ * # Safety
+ * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ */
+struct CFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
+
+/**
+ * Skips the next frame in the iterator.
+ *
+ * Returns 0 on success, -1 on error or end of iteration.
+ * # Safety
+ * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ */
+int32_t con_frame_iterator_forward(struct CConFrameIterator *iterator);
 
 #ifdef __cplusplus
 }  // extern "C"

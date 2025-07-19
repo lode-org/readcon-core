@@ -1,4 +1,4 @@
-name: Basic tests
+name: Criterion benchmarks
 
 on:
   push:
@@ -6,13 +6,18 @@ on:
   pull_request:
 
 concurrency:
-  group: btest_rust-${{ github.ref }}
+  group: critbench-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  btest_rust:
+  critbench:
+    # This job will only run if the commit message (on push) or PR title
+    # (on pull_request) contains the string "[BENCH]".
+    if: |
+      (github.event_name == 'push' && contains(join(github.event.commits.*.message), '[BENCH]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[BENCH]'))
     runs-on: ubuntu-22.04
-    name: Run basic tests and build
+    name: Run benchmarks
 
     steps:
       - uses: actions/checkout@v4
@@ -36,17 +41,7 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
 
-      - name: install dependencies
+      - name: Benchmark
+        id: critbench
         run: |
-          python -m pip install meson
-          sudo apt install valgrind
-
-      - name: Build and test
-        id: btest_rust
-        run: |
-          meson setup bbdir -Dwith_tests=True \
-          -Dwith_cpp=True \
-          -Dwith_examples=True \
-          --buildtype=release
-          meson test -C bbdir \
-          --wrap="valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all"
+          cargo bench
