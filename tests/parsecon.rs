@@ -86,3 +86,35 @@ fn test_multi_parsing() {
     assert_eq!(second_atom.is_fixed, true);
     assert_eq!(second_atom.atom_id, 1);
 }
+
+#[test]
+fn test_iterator_forward() {
+    let fdat = fs::read_to_string(test_case!("tiny_multi_cuh2.con")).expect("Can't find test.");
+    let mut parser = ConFrameIterator::new(&fdat);
+    // --- Test Case 1: forward -> next ---
+    let forward_result = parser.forward();
+    assert!(forward_result.is_some(), "Forward should succeed on the first frame");
+    assert!(forward_result.unwrap().is_ok(), "Forward result should be Ok");
+    let second_frame_result = parser.next();
+    assert!(second_frame_result.is_some(), "Should be able to get the second frame after forwarding");
+    let second_frame = second_frame_result.unwrap().expect("Parsing second frame should succeed");
+    assert_eq!(second_frame.atom_data.len(), 4);
+    let second_atom = &second_frame.atom_data[1];
+    assert_eq!(second_atom.symbol, "Cu");
+    assert_eq!(second_atom.x, 3.1969);
+    assert_eq!(second_atom.y, 0.9045);
+    assert_eq!(second_atom.z, 6.9752);
+    assert_eq!(second_atom.is_fixed, true);
+    assert_eq!(second_atom.atom_id, 1);
+    assert!(parser.next().is_none(), "There should be no more frames after the second one");
+
+    // --- Test Case 2: next -> forward -> next ---
+    let mut parser2 = ConFrameIterator::new(&fdat);
+    let first_frame_result = parser2.next();
+    assert!(first_frame_result.is_some(), "Should be able to get the first frame");
+    first_frame_result.unwrap().expect("Parsing first frame should succeed");
+    let forward_result_2 = parser2.forward();
+    assert!(forward_result_2.is_some(), "Forward should succeed on the second frame");
+    assert!(forward_result_2.unwrap().is_ok(), "Forward result should be Ok");
+    assert!(parser2.next().is_none(), "There should be no more frames after forwarding past the last one");
+}
