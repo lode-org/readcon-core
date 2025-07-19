@@ -81,7 +81,7 @@ readcon_lib = library(
 )
 
 if get_option('with_tests')
-    rustmod = import('unstable-rust')
+    rustmod = import('rust')
     rustmod.test('Rust tests', readcon_lib)
     # TODO(rg) :: Open an issue since doctests fail because of "unresolved or
     # unlinked readcon_core", though everything works via cargo --test
