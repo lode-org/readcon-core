@@ -59,7 +59,7 @@ pub unsafe extern "C" fn rust_symbol_to_atomic_number(symbol_c: *const c_char) -
 /// # Safety
 /// The caller must ensure that `filename_c` is a valid, null-terminated C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn read_con_file(filename_c: *const c_char) -> *mut CFrame {
+pub unsafe extern "C" fn read_single_frame(filename_c: *const c_char) -> *mut CFrame {
     // Safely convert the C string to a Rust string inside an unsafe block
     let filename = unsafe {
         if filename_c.is_null() {
