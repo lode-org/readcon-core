@@ -128,7 +128,7 @@ class ConFrame {
  * @return The corresponding atomic number.
  */
 inline uint64_t symbol_to_atomic_number(std::string_view symbol) {
-    return rust_symbol_to_atomic_number(symbol.data());
+    return rust_symbol_to_atomic_number(std::string(symbol).c_str());
 }
 
 } // namespace readcon
