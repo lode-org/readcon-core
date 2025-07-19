@@ -43,7 +43,7 @@ fn main() {
         println!("  - Box vectors: {:?}", last_frame.header.boxl);
         println!("  - Angles: {:?}", last_frame.header.angles);
         println!("  - Atom masses: {:?}", last_frame.header.masses_per_type);
-        println!("  - Atom atom types: {:?}", last_frame.header.natm_types);
+        println!("  - Number of atom types: {:?}", last_frame.header.natm_types);
         println!(
             "  - Atom numbers per type: {:?}",
             last_frame.header.natms_per_type
