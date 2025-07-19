@@ -29,6 +29,43 @@ impl<'a> ConFrameIterator<'a> {
             lines: file_contents.lines().peekable(),
         }
     }
+
+    /// Skips the next frame without fully parsing its atomic data.
+    ///
+    /// This is more efficient than `next()` if you only need to advance the
+    /// iterator. It reads the frame's header to determine how many lines to skip.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Ok(()))` on a successful skip.
+    /// * `Some(Err(ParseError::...))` if there's an error parsing the header.
+    /// * `None` if the iterator is already at the end.
+    pub fn forward(&mut self) -> Option<Result<(), error::ParseError>> {
+        self.lines.peek()?;
+
+        // Parse the header to determine the size of the frame.
+        let header = match crate::parser::parse_frame_header(&mut self.lines) {
+            Ok(header) => header,
+            Err(e) => return Some(Err(e)),
+        };
+
+        // Calculate the number of lines to skip for the atom data.
+        let num_atom_types = header.natm_types;
+        let total_atoms: usize = header.natms_per_type.iter().sum();
+
+        // For each atom type, there is one line for the symbol and one "Coordinates..." line.
+        let non_atom_lines = num_atom_types * 2;
+        let lines_to_skip = total_atoms + non_atom_lines;
+
+        // Advance the iterator by skipping the lines.
+        for _ in 0..lines_to_skip {
+            if self.lines.next().is_none() {
+                return Some(Err(error::ParseError::IncompleteFrame));
+            }
+        }
+
+        Some(Ok(()))
+    }
 }
 
 impl<'a> Iterator for ConFrameIterator<'a> {
