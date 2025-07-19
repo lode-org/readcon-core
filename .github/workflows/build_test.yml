@@ -49,4 +49,4 @@ jobs:
           -Dwith_examples=True \
           --buildtype=release
           meson test -C bbdir \
-          --wrap='valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all'
+          --wrap="valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all"
