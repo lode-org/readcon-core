@@ -14,3 +14,8 @@ cog = "0.1.0"
 
 [build-dependencies]
 cbindgen = "0.29.0"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
