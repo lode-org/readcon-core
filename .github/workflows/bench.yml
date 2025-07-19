@@ -11,6 +11,11 @@ concurrency:
 
 jobs:
   critbench:
+    # This job will only run if the commit message (on push) or PR title
+    # (on pull_request) contains the string "[BENCH]".
+    if: |
+      (github.event_name == 'push' && contains(join(github.event.commits.*.message), '[BENCH]')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[BENCH]'))
     runs-on: ubuntu-22.04
     name: Run benchmarks
 
