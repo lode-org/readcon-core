@@ -165,26 +165,34 @@ pub unsafe extern "C" fn free_con_frame(frame: *mut CFrame) {
 pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
 ) -> *mut CConFrameIterator {
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = unsafe {
+        match CStr::from_ptr(filename_c).to_str() {
+            Ok(s) => s,
+            Err(_) => return ptr::null_mut(),
+        }
     };
 
-    let file_contents = match std::fs::read_to_string(filename) {
+    let file_contents_box = match std::fs::read_to_string(filename) {
         Ok(contents) => Box::new(contents),
         Err(_) => return ptr::null_mut(),
     };
 
-    // Leak the file contents string to get a 'static reference.
-    // This is necessary because the iterator will live on, and we need to
-    // ensure the string it refers to does too.
-    let static_file_contents: &'static str = Box::leak(file_contents);
+    // Get a raw pointer to the heap-allocated string. We will manage this manually.
+    let file_contents_ptr = Box::into_raw(file_contents_box);
+
+    // Create a 'static reference from the raw pointer. This is unsafe, but we
+    // guarantee that the data will live as long as the iterator because we store
+    // the pointer to the Box and free it at the same time as the iterator.
+    let static_file_contents: &'static str = unsafe { &*file_contents_ptr };
 
     let iterator = Box::new(ConFrameIterator::new(static_file_contents));
 
     let c_iterator = Box::new(CConFrameIterator {
         iterator: Box::into_raw(iterator),
-        file_contents: static_file_contents as *const str as *mut String,
+        file_contents: file_contents_ptr,
     });
 
     Box::into_raw(c_iterator)
