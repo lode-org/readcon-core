@@ -123,6 +123,29 @@ struct CFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
  */
 int32_t con_frame_iterator_forward(struct CConFrameIterator *iterator);
 
+/**
+ * Writes a single CFrame to the specified file.
+ *
+ * Returns 0 on success, -1 on error.
+ * # Safety
+ * The caller must ensure `frame_ptr` is a valid pointer and `filename_c` is a
+ * valid, null-terminated C string.
+ */
+int32_t write_single_frame(const struct CFrame *frame_ptr,
+                           const char *filename_c);
+
+/**
+ * Writes an array of CFrames to the specified file, creating a multi-frame .con file.
+ *
+ * Returns 0 on success, -1 on error.
+ * # Safety
+ * The caller must ensure `frames_ptr` is a valid pointer to an array of `CFrame`
+ * pointers of length `num_frames`, and `filename_c` is a valid C string.
+ */
+int32_t write_con_file_from_c(const struct CFrame *const *frames_ptr,
+                              uintptr_t num_frames,
+                              const char *filename_c);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
