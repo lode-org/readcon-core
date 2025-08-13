@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
         frame_count++;
         if (is_write_mode) {
-            if (frame_count > frame_capacity) {
+            if (frame_count >= frame_capacity) {
                 frame_capacity *= 2;
                 RKRConFrame **new_array = realloc(
                     handles_array, frame_capacity * sizeof(RKRConFrame *));
