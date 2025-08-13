@@ -84,6 +84,8 @@ int main(int argc, char *argv[]) {
 
             // In write mode, we must collect all frames first.
             std::vector<readcon::ConFrame> all_frames;
+            // Use 'auto &&frame' to enable move semantics: ConFrameIterator
+            // yields rvalue references, so moves are without copy
             for (auto &&frame : frame_iterator) {
                 // We must move the frame from the iterator into our vector.
                 all_frames.push_back(std::move(frame));

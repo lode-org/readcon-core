@@ -11,18 +11,22 @@ use std::ptr;
 //=============================================================================
 
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
+/// The C/C++ side needs to treat this as a void pointer
 #[repr(C)]
 pub struct RKRConFrame {
     _private: [u8; 0],
 }
 
 /// An opaque handle to a Rust `ConFrameWriter` object.
+/// The C/C++ side needs to treat this as a void pointer
 #[repr(C)]
 pub struct RKRConFrameWriter {
     _private: [u8; 0],
 }
 
 /// A transparent, "lossy" C-struct containing only the core atomic data.
+/// This can be extracted from an `RKRConFrame` handle for direct data access.
+/// The caller is responsible for freeing the `atoms` array using `free_c_frame`.
 #[repr(C)]
 pub struct CFrame {
     pub atoms: *mut CAtom,
@@ -54,6 +58,7 @@ pub struct CConFrameIterator {
 
 /// Creates a new iterator for a .con file.
 /// The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
+/// Returns NULL if there are no more frames or on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
@@ -178,6 +183,7 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
 }
 
 /// Copies a header string line into a user-provided buffer.
+/// Returns the number of bytes written (excluding null terminator), or -1 on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_get_header_line(
     frame_handle: *const RKRConFrame,
