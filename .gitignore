@@ -1,5 +1,6 @@
 # Additions
 *.profraw
+compile_commands.json
 ###----------------###
 ###  TopTal: rust  ###
 ###----------------###
