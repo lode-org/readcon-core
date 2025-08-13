@@ -1,16 +1,33 @@
-use crate::helpers::{atomic_number_to_symbol, symbol_to_atomic_number};
+use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::ConFrameIterator;
-use crate::types::{AtomDatum, ConFrame, FrameHeader};
-use crate::writer::{write_con_file, write_con_frame};
-use std::collections::HashMap;
-use std::ffi::{c_char, CStr};
-use std::fs::File;
+use crate::types::ConFrame;
+use std::ffi::c_char;
+use std::ffi::CStr;
+use std::fs::{self, File};
 use std::io::BufWriter;
 use std::ptr;
 
-// Define constants for fixed-size arrays in the C struct.
-const HEADER_LINE_MAX_LEN: usize = 256;
-const MAX_ATOM_TYPES: usize = 64;
+//=============================================================================
+// C-Compatible Structs & Handles
+//=============================================================================
+
+/// An opaque handle to a full, lossless Rust `ConFrame` object.
+/// The C/C++ side should treat this as a void pointer.
+#[repr(C)]
+pub struct RKRConFrame {
+    _private: [u8; 0],
+}
+
+/// A transparent, "lossy" C-struct containing only the core atomic data.
+/// This can be extracted from an `RKRConFrame` handle for direct data access.
+/// The caller is responsible for freeing the `atoms` array using `free_c_frame_atoms`.
+#[repr(C)]
+pub struct CFrame {
+    pub atoms: *mut CAtom,
+    pub num_atoms: usize,
+    pub cell: [f64; 3],
+    pub angles: [f64; 3],
+}
 
 #[repr(C)]
 pub struct CAtom {
@@ -20,177 +37,21 @@ pub struct CAtom {
     pub z: f64,
     pub atom_id: u64,
     pub mass: f64,
-    pub is_fixed: bool, // must be here for padding issues
-}
-
-#[repr(C)]
-pub struct CFrame {
-    pub atoms: *const CAtom,
-    pub num_atoms: usize,
-
-    // Header data is now stored directly and losslessly.
-    pub cell: [f64; 3],
-    pub angles: [f64; 3],
-    pub prebox_header: [[c_char; HEADER_LINE_MAX_LEN]; 2],
-    pub postbox_header: [[c_char; HEADER_LINE_MAX_LEN]; 2],
-    pub natm_types: usize,
-    pub natms_per_type: [usize; MAX_ATOM_TYPES],
-    pub masses_per_type: [f64; MAX_ATOM_TYPES],
+    pub is_fixed: bool,
 }
 
 #[repr(C)]
 pub struct CConFrameIterator {
-    // Box to keep the iterator on the heap.
-    // The inner type is actually `ConFrameIterator<'a>`, but we can't use
-    // lifetimes here, so we'll have to be careful with memory management.
-    // We leak the file content string and let the iterator hold a 'static
-    // reference to it.
     iterator: *mut ConFrameIterator<'static>,
-    // Also need to store the file contents string that the iterator references.
     file_contents: *mut String,
 }
 
-// Helper to safely copy a Rust &str into a C-style fixed-size char array.
-unsafe fn copy_str_to_c_arr(rust_str: &str, c_arr: &mut [c_char]) {
-    let bytes = rust_str.as_bytes();
-    let len = std::cmp::min(bytes.len(), c_arr.len() - 1);
-    unsafe {
-        ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, c_arr.as_mut_ptr(), len);
-    }
-    c_arr[len] = 0; // Ensure null-termination.
-}
-
-/// Takes a C-style string symbol and returns the corresponding atomic number.
-/// # Safety
-/// The caller must ensure that `symbol_c` is a valid, null-terminated C string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust_symbol_to_atomic_number(symbol_c: *const c_char) -> u64 {
-    if symbol_c.is_null() {
-        return 0;
-    }
-    let symbol_str = match unsafe { CStr::from_ptr(symbol_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return 0,
-    };
-    symbol_to_atomic_number(symbol_str)
-}
-
-/// Parses a .con file and returns a pointer to a CFrame struct.
-///
-/// The caller OWNS the returned pointer and MUST call free_con_frame()
-/// on it to prevent a memory leak.
-/// Returns a null pointer on error.
-/// This function is `unsafe` because it dereferences a raw C pointer.
-/// # Safety
-/// The caller must ensure that `filename_c` is a valid, null-terminated C string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn read_single_frame(filename_c: *const c_char) -> *mut CFrame {
-    // Safely convert the C string to a Rust string inside an unsafe block
-    let filename = unsafe {
-        if filename_c.is_null() {
-            return ptr::null_mut();
-        }
-        match CStr::from_ptr(filename_c).to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
-        }
-    };
-
-    let file_contents = match std::fs::read_to_string(filename) {
-        Ok(contents) => contents,
-        Err(_) => return ptr::null_mut(),
-    };
-
-    let mut iterator = ConFrameIterator::new(&file_contents);
-    let parsed_frame = match iterator.next() {
-        Some(Ok(frame)) => frame,
-        _ => return ptr::null_mut(), // Return null on parse error or if empty
-    };
-
-    // --- Convert the Rust data into C-compatible data ---
-    // Iterate through each component type to get the correct mass
-    // Create a flat iterator that yields the correct mass for each atom in order.
-    let masses_iter = parsed_frame
-        .header
-        .natms_per_type
-        .iter()
-        .zip(parsed_frame.header.masses_per_type.iter())
-        .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
-
-    // Zip the atom data with its corresponding mass, then map to the C-struct.
-    let mut c_atoms: Vec<CAtom> = parsed_frame
-        .atom_data
-        .into_iter()
-        .zip(masses_iter)
-        .map(|(atom_datum, mass)| CAtom {
-            atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
-            x: atom_datum.x,
-            y: atom_datum.y,
-            z: atom_datum.z,
-            is_fixed: atom_datum.is_fixed,
-            atom_id: atom_datum.atom_id,
-            mass,
-        })
-        .collect();
-
-    // Turn the Vec<CAtom> into a raw pointer for C.
-    // Leaks memory here, giving ownership to the caller.
-    let atoms_ptr = c_atoms.as_mut_ptr();
-    let num_atoms = c_atoms.len();
-    std::mem::forget(c_atoms);
-
-    // Create the final CFrame struct on the heap
-    let c_frame = Box::new(CFrame {
-        atoms: atoms_ptr,
-        num_atoms,
-        cell: parsed_frame.header.boxl,
-        angles: parsed_frame.header.angles,
-        prebox_header: [[0; HEADER_LINE_MAX_LEN]; 2],
-        postbox_header: [[0; HEADER_LINE_MAX_LEN]; 2],
-        natm_types: parsed_frame.header.natm_types,
-        natms_per_type: [0; MAX_ATOM_TYPES],
-        masses_per_type: [0.0; MAX_ATOM_TYPES],
-    });
-
-    // Give ownership of the CFrame to the C++ caller
-    Box::into_raw(c_frame)
-}
-
-/// Frees the memory allocated by read_con_file.
-///
-/// Must be called on any non-null pointer returned by read_con_file.
-/// This function is `unsafe` because it deals with raw pointers and memory deallocation.
-/// # Safety
-/// The caller must ensure that `frame` is a pointer previously returned by
-/// `read_con_file` or `con_frame_iterator_next`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_con_frame(frame: *mut CFrame) {
-    if frame.is_null() {
-        return;
-    }
-
-    unsafe {
-        // Retake ownership of the main CFrame struct from the raw pointer.
-        let frame_box = Box::from_raw(frame);
-
-        // Retake ownership of the slice of CAtoms.
-        let _ = Vec::from_raw_parts(
-            frame_box.atoms as *mut CAtom,
-            frame_box.num_atoms,
-            frame_box.num_atoms,
-        );
-        // The `frame_box` is dropped automatically at the end of this scope.
-        // The `c_atoms_vec` is also dropped here. All memory is now freed.
-    }
-}
+//=============================================================================
+// Iterator and Memory Management
+//=============================================================================
 
 /// Creates a new iterator for a .con file.
-///
-/// The caller OWNS the returned pointer and MUST call free_con_frame_iterator()
-/// on it to prevent a memory leak.
-/// Returns a null pointer on error.
-/// # Safety
-/// The caller must ensure that `filename_c` is a valid, null-terminated C string.
+/// The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
@@ -204,39 +65,53 @@ pub unsafe extern "C" fn read_con_file_iterator(
             Err(_) => return ptr::null_mut(),
         }
     };
-
-    let file_contents_box = match std::fs::read_to_string(filename) {
+    let file_contents_box = match fs::read_to_string(filename) {
         Ok(contents) => Box::new(contents),
         Err(_) => return ptr::null_mut(),
     };
-
-    // Get a raw pointer to the heap-allocated string. We will manage this manually.
     let file_contents_ptr = Box::into_raw(file_contents_box);
-
-    // Create a 'static reference from the raw pointer. This is unsafe, but we
-    // guarantee that the data will live as long as the iterator because we store
-    // the pointer to the Box and free it at the same time as the iterator.
     let static_file_contents: &'static str = unsafe { &*file_contents_ptr };
-
     let iterator = Box::new(ConFrameIterator::new(static_file_contents));
-
     let c_iterator = Box::new(CConFrameIterator {
         iterator: Box::into_raw(iterator),
         file_contents: file_contents_ptr,
     });
-
     Box::into_raw(c_iterator)
 }
 
-/// Frees the memory for a CConFrameIterator.
-/// # Safety
-/// The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+/// Reads the next frame from the iterator, returning an opaque handle.
+/// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
+/// Returns NULL if there are no more frames or on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn con_frame_iterator_next(
+    iterator: *mut CConFrameIterator,
+) -> *mut RKRConFrame {
+    if iterator.is_null() {
+        return ptr::null_mut();
+    }
+    let iter = unsafe { &mut *(*iterator).iterator };
+    match iter.next() {
+        // On success, create a heap-allocated ConFrame and return a raw pointer to it.
+        Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        _ => ptr::null_mut(),
+    }
+}
+
+/// Frees the memory for an opaque `RKRConFrame` handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
+    if !frame_handle.is_null() {
+        // Retake ownership of the Box<ConFrame> to deallocate it.
+        let _ = unsafe { Box::from_raw(frame_handle as *mut ConFrame) };
+    }
+}
+
+/// Frees the memory for a `CConFrameIterator`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterator) {
     if iterator.is_null() {
         return;
     }
-    // Retake ownership to free the memory.
     unsafe {
         let c_iterator_box = Box::from_raw(iterator);
         let _ = Box::from_raw(c_iterator_box.iterator);
@@ -244,26 +119,29 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
     }
 }
 
-/// Helper function to convert a Rust ConFrame to a C-compatible CFrame.
-/// This function allocates memory for the CFrame and its atoms, which must be
-/// freed later by calling `free_con_frame`.
-fn convert_con_frame_to_c_frame(parsed_frame: ConFrame) -> *mut CFrame {
-    // Check if the number of atom types exceeds our FFI limit.
-    if parsed_frame.header.natm_types > MAX_ATOM_TYPES {
-        return ptr::null_mut();
-    }
+//=============================================================================
+// Data Accessors (The "Getter" API)
+//=============================================================================
 
-    let masses_iter = parsed_frame
+/// Extracts the core atomic data into a transparent `CFrame` struct.
+/// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) -> *mut CFrame {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+
+    let masses_iter = frame
         .header
         .natms_per_type
         .iter()
-        .zip(parsed_frame.header.masses_per_type.iter())
+        .zip(frame.header.masses_per_type.iter())
         .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
 
-    // Zip the atom data with its corresponding mass, then map to the C-struct.
-    let mut c_atoms: Vec<CAtom> = parsed_frame
+    let mut c_atoms: Vec<CAtom> = frame
         .atom_data
-        .into_iter()
+        .iter()
         .zip(masses_iter)
         .map(|(atom_datum, mass)| CAtom {
             atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
@@ -276,234 +154,99 @@ fn convert_con_frame_to_c_frame(parsed_frame: ConFrame) -> *mut CFrame {
         })
         .collect();
 
-    // Turn the Vec<CAtom> into a raw pointer for C.
-    // This leaks the memory of the vector's buffer, giving ownership to the caller.
     let atoms_ptr = c_atoms.as_mut_ptr();
     let num_atoms = c_atoms.len();
-    std::mem::forget(c_atoms);
+    std::mem::forget(c_atoms); // Give ownership of the buffer to the C caller.
 
-    // Mutable c_frame since it will be copied into
-    let mut c_frame_box = Box::new(CFrame {
+    let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
         num_atoms,
-        cell: parsed_frame.header.boxl,
-        angles: parsed_frame.header.angles,
-        prebox_header: [[0; HEADER_LINE_MAX_LEN]; 2],
-        postbox_header: [[0; HEADER_LINE_MAX_LEN]; 2],
-        natm_types: parsed_frame.header.natm_types,
-        natms_per_type: [0; MAX_ATOM_TYPES],
-        masses_per_type: [0.0; MAX_ATOM_TYPES],
+        cell: frame.header.boxl,
+        angles: frame.header.angles,
     });
 
-    // Copy per-type info into the fixed-size arrays.
-    let n_types = parsed_frame.header.natm_types;
-    c_frame_box.natms_per_type[..n_types].copy_from_slice(&parsed_frame.header.natms_per_type);
-    c_frame_box.masses_per_type[..n_types].copy_from_slice(&parsed_frame.header.masses_per_type);
+    Box::into_raw(c_frame)
+}
 
-    // Copy header strings.
+/// Frees the memory of a `CFrame` struct, including its internal atoms array.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
+    if frame.is_null() {
+        return;
+    }
     unsafe {
-        copy_str_to_c_arr(
-            &parsed_frame.header.prebox_header[0],
-            &mut c_frame_box.prebox_header[0],
-        );
-        copy_str_to_c_arr(
-            &parsed_frame.header.prebox_header[1],
-            &mut c_frame_box.prebox_header[1],
-        );
-        copy_str_to_c_arr(
-            &parsed_frame.header.postbox_header[0],
-            &mut c_frame_box.postbox_header[0],
-        );
-        copy_str_to_c_arr(
-            &parsed_frame.header.postbox_header[1],
-            &mut c_frame_box.postbox_header[1],
-        );
+        let frame_box = Box::from_raw(frame);
+        // Retake ownership of the atoms array to deallocate it.
+        let _ = Vec::from_raw_parts(frame_box.atoms, frame_box.num_atoms, frame_box.num_atoms);
     }
-
-    Box::into_raw(c_frame_box)
 }
 
-/// Reads the next frame from the iterator.
-///
-/// The caller OWNS the returned CFrame pointer and must free it with `free_con_frame`.
-/// Returns a null pointer if there are no more frames or on error.
-/// # Safety
-/// The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+/// Copies a header string line into a user-provided buffer.
+/// Returns the number of bytes written (excluding null terminator), or -1 on error.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn con_frame_iterator_next(iterator: *mut CConFrameIterator) -> *mut CFrame {
-    if iterator.is_null() {
-        return ptr::null_mut();
-    }
-    let iter = unsafe { &mut *(*iterator).iterator };
-    match iter.next() {
-        Some(Ok(frame)) => convert_con_frame_to_c_frame(frame),
-        _ => ptr::null_mut(),
-    }
-}
-
-/// Skips the next frame in the iterator.
-///
-/// Returns 0 on success, -1 on error or end of iteration.
-/// # Safety
-/// The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIterator) -> i32 {
-    if iterator.is_null() {
-        return -1;
-    }
-    let iter = unsafe { &mut *(*iterator).iterator };
-    match iter.forward() {
-        Some(Ok(())) => 0,
-        _ => -1,
-    }
-}
-
-//=============================================================================
-// FFI Writer Functions
-//=============================================================================
-
-/// Helper function to convert a C-style CFrame back to a Rust ConFrame.
-/// This is the inverse of `convert_con_frame_to_c_frame`.
-/// # Safety
-/// The caller must ensure that `c_frame` is a valid pointer to a CFrame struct
-/// and that its `atoms` pointer is valid for `num_atoms` elements.
-unsafe fn convert_c_frame_to_con_frame(c_frame: *const CFrame) -> Option<ConFrame> {
-    if c_frame.is_null() {
-        return None;
-    }
-    let frame = unsafe { &*c_frame };
-    let atoms_slice = unsafe { std::slice::from_raw_parts(frame.atoms, frame.num_atoms) };
-
-    // --- Reconstruct Header: Now a direct copy, no inference needed! ---
-    let prebox1 = unsafe {
-        CStr::from_ptr(frame.prebox_header[0].as_ptr())
-            .to_string_lossy()
-            .into_owned()
-    };
-    let prebox2 = unsafe {
-        CStr::from_ptr(frame.prebox_header[1].as_ptr())
-            .to_string_lossy()
-            .into_owned()
-    };
-    let postbox1 = unsafe {
-        CStr::from_ptr(frame.postbox_header[0].as_ptr())
-            .to_string_lossy()
-            .into_owned()
-    };
-    let postbox2 = unsafe {
-        CStr::from_ptr(frame.postbox_header[1].as_ptr())
-            .to_string_lossy()
-            .into_owned()
-    };
-
-    let n_types = frame.natm_types;
-    let header = FrameHeader {
-        prebox_header: [prebox1, prebox2],
-        boxl: frame.cell,
-        angles: frame.angles,
-        postbox_header: [postbox1, postbox2],
-        natm_types: n_types,
-        natms_per_type: frame.natms_per_type[..n_types].to_vec(),
-        masses_per_type: frame.masses_per_type[..n_types].to_vec(),
-    };
-
-    // --- Reconstruct Atom Data ---
-    // The logic to reconstruct component blocks is still needed for the writer.
-    let mut atom_data = Vec::with_capacity(frame.num_atoms);
-    let mut symbols_ordered: Vec<String> = Vec::new();
-    let mut type_map: HashMap<u64, ()> = HashMap::new();
-
-    for c_atom in atoms_slice {
-        let symbol = atomic_number_to_symbol(c_atom.atomic_number).to_string();
-        if !type_map.contains_key(&c_atom.atomic_number) {
-            type_map.insert(c_atom.atomic_number, ());
-            symbols_ordered.push(symbol.clone());
-        }
-    }
-
-    for sym in &symbols_ordered {
-        for atom in atoms_slice {
-            if atomic_number_to_symbol(atom.atomic_number) == *sym {
-                atom_data.push(AtomDatum {
-                    symbol: sym.clone(),
-                    x: atom.x,
-                    y: atom.y,
-                    z: atom.z,
-                    is_fixed: atom.is_fixed,
-                    atom_id: atom.atom_id,
-                });
-            }
-        }
-    }
-
-    Some(ConFrame { header, atom_data })
-}
-
-/// Writes a single CFrame to the specified file.
-///
-/// Returns 0 on success, -1 on error.
-/// # Safety
-/// The caller must ensure `frame_ptr` is a valid pointer and `filename_c` is a
-/// valid, null-terminated C string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_single_frame(
-    frame_ptr: *const CFrame,
-    filename_c: *const c_char,
+pub unsafe extern "C" fn rkr_frame_get_header_line(
+    frame_handle: *const RKRConFrame,
+    is_prebox: bool,
+    line_index: usize,
+    buffer: *mut c_char,
+    buffer_len: usize,
 ) -> i32 {
-    if frame_ptr.is_null() || filename_c.is_null() {
-        return -1;
-    }
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return -1,
-    };
-
-    let rust_frame = match unsafe { convert_c_frame_to_con_frame(frame_ptr) } {
-        Some(frame) => frame,
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
         None => return -1,
     };
 
-    let file = match File::create(filename) {
-        Ok(f) => f,
-        Err(_) => return -1,
+    let line_to_copy = if is_prebox {
+        frame.header.prebox_header.get(line_index)
+    } else {
+        frame.header.postbox_header.get(line_index)
     };
-    let mut writer = BufWriter::new(file);
 
-    match write_con_frame(&rust_frame, &mut writer) {
-        Ok(_) => 0,
-        Err(_) => -1,
+    if let Some(line) = line_to_copy {
+        let bytes = line.as_bytes();
+        let len_to_copy = std::cmp::min(bytes.len(), buffer_len - 1);
+        unsafe {
+            ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, len_to_copy);
+            // Null-terminate the string for C.
+            *buffer.add(len_to_copy) = 0;
+        }
+        len_to_copy as i32
+    } else {
+        -1 // Index out of bounds
     }
 }
 
-/// Writes an array of CFrames to the specified file, creating a multi-frame .con file.
+//=============================================================================
+// FFI Writer Functions (Now using opaque handles)
+//=============================================================================
+
+/// Writes an array of RKRConFrame handles to a single file.
 ///
+/// This is the efficient way to write a multi-frame .con file from C.
 /// Returns 0 on success, -1 on error.
-/// # Safety
-/// The caller must ensure `frames_ptr` is a valid pointer to an array of `CFrame`
-/// pointers of length `num_frames`, and `filename_c` is a valid C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_con_file_from_c(
-    frames_ptr: *const *const CFrame,
+pub unsafe extern "C" fn write_rkr_frames_to_file(
+    frame_handles: *const *const RKRConFrame,
     num_frames: usize,
     filename_c: *const c_char,
 ) -> i32 {
-    if frames_ptr.is_null() || filename_c.is_null() {
+    if frame_handles.is_null() || filename_c.is_null() {
         return -1;
     }
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+    let filename = match CStr::from_ptr(filename_c).to_str() {
         Ok(s) => s,
         Err(_) => return -1,
     };
 
-    let frames_slice = unsafe { std::slice::from_raw_parts(frames_ptr, num_frames) };
+    // Create an iterator of Rust ConFrame references from the array of handles.
+    let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
+    let rust_frames_iter = handles_slice.iter().filter_map(|&handle| {
+        // Cast the opaque handle back to a reference to the Rust struct.
+        unsafe { (handle as *const ConFrame).as_ref() }
+    });
 
-    let rust_frames: Vec<ConFrame> = frames_slice
-        .iter()
-        .filter_map(|&ptr| unsafe { convert_c_frame_to_con_frame(ptr) })
-        .collect();
-
-    if rust_frames.len() != num_frames {
-        // This indicates one of the frames was null or invalid.
+    // Check if any handle was null, which would cause the count to mismatch.
+    if rust_frames_iter.clone().count() != num_frames {
         return -1;
     }
 
@@ -513,7 +256,8 @@ pub unsafe extern "C" fn write_con_file_from_c(
     };
     let mut writer = BufWriter::new(file);
 
-    match write_con_file(rust_frames.iter(), &mut writer) {
+    // Use the existing multi-frame writer from the Rust writer module.
+    match crate::writer::write_con_file(rust_frames_iter, &mut writer) {
         Ok(_) => 0,
         Err(_) => -1,
     }
