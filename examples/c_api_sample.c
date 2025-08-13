@@ -53,6 +53,8 @@ int main(int argc, char *argv[]) {
     }
 
     const char *input_filename = argv[1];
+    const int is_write_mode = (argc == 3);
+
     CConFrameIterator *iterator = read_con_file_iterator(input_filename);
     if (!iterator) {
         fprintf(stderr, "Failed to open file or create iterator for '%s'.\n",
@@ -62,84 +64,97 @@ int main(int argc, char *argv[]) {
     printf("Successfully created iterator. Reading all frames from '%s'...\n",
            input_filename);
 
-    // --- Read-only and Summarize Mode ---
-    if (argc == 2) {
-        size_t frame_count = 0;
-        RKRConFrame *current_handle = NULL;
-        RKRConFrame *last_handle = NULL;
+    // --- Unified Reading Loop ---
+    size_t frame_count = 0;
+    RKRConFrame *last_handle = NULL;
+    RKRConFrame **handles_array = NULL;
+    size_t frame_capacity = 0;
 
-        while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
-            frame_count++;
-            if (last_handle) {
-                free_rkr_frame(last_handle);
-            }
-            last_handle = current_handle;
-        }
-        printf("Finished reading. Total frames found: %zu\n", frame_count);
-
-        print_frame_summary(last_handle);
-
-        if (last_handle) {
-            free_rkr_frame(last_handle);
-        }
-
-        // --- Read and Write Mode ---
-    } else { // argc == 3
-        const char *output_filename = argv[2];
-
-        size_t frame_capacity = 10;
-        size_t frame_count = 0;
-        RKRConFrame **handles_array =
-            malloc(frame_capacity * sizeof(RKRConFrame *));
+    if (is_write_mode) {
+        frame_capacity = 10;
+        handles_array = malloc(frame_capacity * sizeof(RKRConFrame *));
         if (!handles_array) {
             fprintf(stderr, "Failed to allocate memory for frame handles.\n");
             free_con_frame_iterator(iterator);
             return 1;
         }
+    }
 
-        RKRConFrame *current_handle = NULL;
-        while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
-            if (frame_count >= frame_capacity) {
+    RKRConFrame *current_handle = NULL;
+    while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
+        frame_count++;
+        if (is_write_mode) {
+            if (frame_count > frame_capacity) {
                 frame_capacity *= 2;
                 RKRConFrame **new_array = realloc(
                     handles_array, frame_capacity * sizeof(RKRConFrame *));
                 if (!new_array) {
-                    for (size_t i = 0; i < frame_count; ++i)
+                    fprintf(stderr, "Failed to reallocate memory.\n");
+                    for (size_t i = 0; i < frame_count - 1; ++i)
                         free_rkr_frame(handles_array[i]);
                     free(handles_array);
+                    free_rkr_frame(
+                        current_handle); // Free the one that didn't fit
                     free_con_frame_iterator(iterator);
                     return 1;
                 }
                 handles_array = new_array;
             }
-            handles_array[frame_count++] = current_handle;
+            handles_array[frame_count - 1] = current_handle;
+        } else {
+            if (last_handle) {
+                free_rkr_frame(last_handle);
+            }
+            last_handle = current_handle;
         }
-        printf("Finished reading. Total frames found: %zu\n", frame_count);
+    }
+    printf("Finished reading. Total frames found: %zu\n", frame_count);
+    free_con_frame_iterator(iterator);
 
-        if (frame_count > 0) {
-            print_frame_summary(handles_array[frame_count - 1]);
-            printf("\nWriting %zu frames to '%s'...\n", frame_count,
-                   output_filename);
+    // --- Summary ---
+    if (frame_count > 0) {
+        RKRConFrame *summary_handle =
+            is_write_mode ? handles_array[frame_count - 1] : last_handle;
+        print_frame_summary(summary_handle);
+    }
 
-            int result =
-                write_rkr_frames_to_file((const RKRConFrame **)handles_array,
-                                         frame_count, output_filename);
+    // --- Optional Writing ---
+    if (is_write_mode && frame_count > 0) {
+        const char *output_filename = argv[2];
+        printf("\nWriting %zu frames to '%s'...\n", frame_count,
+               output_filename);
 
+        // Use the new object-oriented writer API
+        RKRConFrameWriter *writer = create_writer_from_path_c(output_filename);
+        if (!writer) {
+            fprintf(stderr, "Failed to create writer for file '%s'.\n",
+                    output_filename);
+        } else {
+            int result = rkr_writer_extend(
+                writer, (const RKRConFrame **)handles_array, frame_count);
             if (result == 0) {
                 printf("Successfully wrote all frames.\n");
             } else {
                 fprintf(stderr, "An error occurred while writing the file.\n");
             }
+            // Free the writer to close the file and release resources.
+            free_rkr_writer(writer);
         }
+    }
 
-        printf("\nCleaning up allocated memory...\n");
+    // --- Cleanup ---
+    printf("\nCleaning up allocated memory...\n");
+    if (is_write_mode) {
         for (size_t i = 0; i < frame_count; ++i) {
             free_rkr_frame(handles_array[i]);
         }
         free(handles_array);
+    } else {
+        if (last_handle) {
+            free_rkr_frame(last_handle);
+        }
     }
 
-    free_con_frame_iterator(iterator);
     printf("Done.\n");
     return 0;
 }

@@ -65,6 +65,13 @@ typedef struct CFrame {
     double angles[3];
 } CFrame;
 
+/**
+ * An opaque handle to a Rust `ConFrameWriter` object.
+ */
+typedef struct RKRConFrameWriter {
+    uint8_t _private[0];
+} RKRConFrameWriter;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -114,21 +121,22 @@ int32_t rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
                                   uintptr_t buffer_len);
 
 /**
- * Writes an array of RKRConFrame handles to a single file.
- *
- * This is the efficient way to write a multi-frame .con file from C.
- * Returns 0 on success, -1 on error.
+ * Creates a new frame writer for the specified file.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
  */
-int32_t write_rkr_frames_to_file(const struct RKRConFrame *const *frame_handles,
-                                 uintptr_t num_frames,
-                                 const char *filename_c);
+struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 
 /**
- * Writes a single frame (given by its opaque handle) to the specified file.
- * Returns 0 on success, -1 on error.
+ * Frees the memory for an `RKRConFrameWriter`, closing the associated file.
  */
-int32_t write_single_rkr_frame(const struct RKRConFrame *frame_handle,
-                               const char *filename_c);
+void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
+
+/**
+ * Writes multiple frames from an array of handles to the file managed by the writer.
+ */
+int32_t rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
+                          const struct RKRConFrame *const *frame_handles,
+                          uintptr_t num_frames);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -1,10 +1,9 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::ConFrameIterator;
 use crate::types::ConFrame;
-use std::ffi::c_char;
-use std::ffi::CStr;
+use crate::writer::ConFrameWriter;
+use std::ffi::{c_char, CStr};
 use std::fs::{self, File};
-use std::io::BufWriter;
 use std::ptr;
 
 //=============================================================================
@@ -12,15 +11,18 @@ use std::ptr;
 //=============================================================================
 
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
-/// The C/C++ side should treat this as a void pointer.
 #[repr(C)]
 pub struct RKRConFrame {
     _private: [u8; 0],
 }
 
+/// An opaque handle to a Rust `ConFrameWriter` object.
+#[repr(C)]
+pub struct RKRConFrameWriter {
+    _private: [u8; 0],
+}
+
 /// A transparent, "lossy" C-struct containing only the core atomic data.
-/// This can be extracted from an `RKRConFrame` handle for direct data access.
-/// The caller is responsible for freeing the `atoms` array using `free_c_frame_atoms`.
 #[repr(C)]
 pub struct CFrame {
     pub atoms: *mut CAtom,
@@ -59,11 +61,9 @@ pub unsafe extern "C" fn read_con_file_iterator(
     if filename_c.is_null() {
         return ptr::null_mut();
     }
-    let filename = unsafe {
-        match CStr::from_ptr(filename_c).to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
-        }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
     };
     let file_contents_box = match fs::read_to_string(filename) {
         Ok(contents) => Box::new(contents),
@@ -81,7 +81,6 @@ pub unsafe extern "C" fn read_con_file_iterator(
 
 /// Reads the next frame from the iterator, returning an opaque handle.
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
-/// Returns NULL if there are no more frames or on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_next(
     iterator: *mut CConFrameIterator,
@@ -91,7 +90,6 @@ pub unsafe extern "C" fn con_frame_iterator_next(
     }
     let iter = unsafe { &mut *(*iterator).iterator };
     match iter.next() {
-        // On success, create a heap-allocated ConFrame and return a raw pointer to it.
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         _ => ptr::null_mut(),
     }
@@ -101,7 +99,6 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
     if !frame_handle.is_null() {
-        // Retake ownership of the Box<ConFrame> to deallocate it.
         let _ = unsafe { Box::from_raw(frame_handle as *mut ConFrame) };
     }
 }
@@ -156,7 +153,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 
     let atoms_ptr = c_atoms.as_mut_ptr();
     let num_atoms = c_atoms.len();
-    std::mem::forget(c_atoms); // Give ownership of the buffer to the C caller.
+    std::mem::forget(c_atoms);
 
     let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
@@ -176,13 +173,11 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
     }
     unsafe {
         let frame_box = Box::from_raw(frame);
-        // Retake ownership of the atoms array to deallocate it.
         let _ = Vec::from_raw_parts(frame_box.atoms, frame_box.num_atoms, frame_box.num_atoms);
     }
 }
 
 /// Copies a header string line into a user-provided buffer.
-/// Returns the number of bytes written (excluding null terminator), or -1 on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_get_header_line(
     frame_handle: *const RKRConFrame,
@@ -195,99 +190,80 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
         Some(f) => f,
         None => return -1,
     };
-
     let line_to_copy = if is_prebox {
         frame.header.prebox_header.get(line_index)
     } else {
         frame.header.postbox_header.get(line_index)
     };
-
     if let Some(line) = line_to_copy {
         let bytes = line.as_bytes();
         let len_to_copy = std::cmp::min(bytes.len(), buffer_len - 1);
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, len_to_copy);
-            // Null-terminate the string for C.
             *buffer.add(len_to_copy) = 0;
         }
         len_to_copy as i32
     } else {
-        -1 // Index out of bounds
+        -1
     }
 }
 
 //=============================================================================
-// FFI Writer Functions (Now using opaque handles)
+// FFI Writer Functions (Writer Object Model)
 //=============================================================================
 
-/// Writes an array of RKRConFrame handles to a single file.
-///
-/// This is the efficient way to write a multi-frame .con file from C.
-/// Returns 0 on success, -1 on error.
+/// Creates a new frame writer for the specified file.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_rkr_frames_to_file(
+pub unsafe extern "C" fn create_writer_from_path_c(
+    filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match crate::writer::ConFrameWriter::from_path(filename) {
+        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Frees the memory for an `RKRConFrameWriter`, closing the associated file.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) {
+    if !writer_handle.is_null() {
+        let _ = unsafe { Box::from_raw(writer_handle as *mut ConFrameWriter<File>) };
+    }
+}
+
+/// Writes multiple frames from an array of handles to the file managed by the writer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_extend(
+    writer_handle: *mut RKRConFrameWriter,
     frame_handles: *const *const RKRConFrame,
     num_frames: usize,
-    filename_c: *const c_char,
 ) -> i32 {
-    if frame_handles.is_null() || filename_c.is_null() {
+    let writer = match unsafe { (writer_handle as *mut ConFrameWriter<File>).as_mut() } {
+        Some(w) => w,
+        None => return -1,
+    };
+    if frame_handles.is_null() {
         return -1;
     }
-    let filename = unsafe {
-        match CStr::from_ptr(filename_c).to_str() {
-            Ok(s) => s,
-            Err(_) => return -1,
-        }
-    };
 
-    // Create an iterator of Rust ConFrame references from the array of handles.
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
-    let rust_frames_iter = handles_slice.iter().filter_map(|&handle| {
-        // Cast the opaque handle back to a reference to the Rust struct.
-        unsafe { (handle as *const ConFrame).as_ref() }
-    });
+    let rust_frames_iter = handles_slice
+        .iter()
+        .filter_map(|&handle| unsafe { (handle as *const ConFrame).as_ref() });
 
-    // Check if any handle was null, which would cause the count to mismatch.
     if rust_frames_iter.clone().count() != num_frames {
         return -1;
     }
 
-    let file = match File::create(filename) {
-        Ok(f) => f,
-        Err(_) => return -1,
-    };
-    let mut writer = BufWriter::new(file);
-
-    // Use the existing multi-frame writer from the Rust writer module.
-    match crate::writer::write_con_file(rust_frames_iter, &mut writer) {
-        Ok(_) => 0,
-        Err(_) => -1,
-    }
-}
-
-/// Writes a single frame (given by its opaque handle) to the specified file.
-/// Returns 0 on success, -1 on error.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn write_single_rkr_frame(
-    frame_handle: *const RKRConFrame,
-    filename_c: *const c_char,
-) -> i32 {
-    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
-        Some(f) => f,
-        None => return -1,
-    };
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return -1,
-    };
-
-    let file = match File::create(filename) {
-        Ok(f) => f,
-        Err(_) => return -1,
-    };
-    let mut writer = BufWriter::new(file);
-
-    match crate::writer::write_con_frame(frame, &mut writer) {
+    match writer.extend(rust_frames_iter) {
         Ok(_) => 0,
         Err(_) => -1,
     }

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 
+// A helper function to print the frame's data in detail.
 void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
     std::cout << "\n==================== FRAME " << frame_number
               << " ====================\n";
@@ -61,7 +62,9 @@ int main(int argc, char *argv[]) {
             readcon::ConFrameIterator frame_iterator(input_filename);
 
             int frame_count = 0;
-            for (auto &&frame : frame_iterator) {
+            // This loop is memory-efficient. It processes one frame at a time
+            // without storing them all in memory.
+            for (const auto &frame : frame_iterator) {
                 frame_count++;
                 print_frame_details(frame_count, frame);
             }
@@ -92,7 +95,13 @@ int main(int argc, char *argv[]) {
                 print_frame_details(all_frames.size(), all_frames.back());
                 std::cout << "\nWriting " << all_frames.size()
                           << " frames...\n";
-                readcon::write_con_file(output_filename, all_frames);
+
+                // Use the new, ergonomic ConFrameWriter object.
+                // RAII ensures the file is properly closed when the writer goes
+                // out of scope.
+                readcon::ConFrameWriter writer(output_filename);
+                writer.extend(all_frames);
+
                 std::cout << "Successfully wrote all frames." << std::endl;
             }
         }

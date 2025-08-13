@@ -1,9 +1,8 @@
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrame;
-use readcon_core::writer::write_con_file;
+use readcon_core::writer::ConFrameWriter;
 use std::env;
-use std::fs::{self, File};
-use std::io::BufWriter;
+use std::fs;
 use std::path::Path;
 
 fn main() {
@@ -42,7 +41,7 @@ fn main() {
     }
     println!("-> Successfully parsed {} valid frames.", all_frames.len());
 
-    // --- Summary Logic (restored from older version) ---
+    // --- Summary Logic ---
     if let Some(last_frame) = all_frames.last() {
         println!("\n-> Summary of last valid frame:");
         println!("  - Box vectors: {:?}", last_frame.header.boxl);
@@ -60,18 +59,19 @@ fn main() {
     }
 
     // --- Optional Writing Logic ---
-    // Check if the optional output filename was provided.
     if let Some(output_fname_str) = args.get(2) {
-        let output_fname = Path::new(output_fname_str);
-        println!("\n-> Writing all frames to '{}'...", output_fname.display());
+        println!("\n-> Writing all frames to '{}'...", output_fname_str);
 
-        let output_file = File::create(output_fname).expect("Failed to create output file.");
-        let mut writer = BufWriter::new(output_file);
-
-        // Pass an iterator over the collected frames to the writer function.
-        match write_con_file(all_frames.iter(), &mut writer) {
-            Ok(_) => println!("-> Successfully wrote all frames to the output file."),
-            Err(e) => eprintln!("Error writing to output file: {}", e),
+        // Use the new, more ergonomic writer API.
+        match ConFrameWriter::from_path(output_fname_str) {
+            Ok(mut writer) => {
+                if let Err(e) = writer.extend(all_frames.iter()) {
+                    eprintln!("Error writing to output file: {}", e);
+                } else {
+                    println!("-> Successfully wrote all frames to the output file.");
+                }
+            }
+            Err(e) => eprintln!("Failed to create output file: {}", e),
         }
     }
 }
