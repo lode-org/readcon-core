@@ -30,6 +30,19 @@ typedef struct ConFrameIterator ConFrameIterator;
 
 typedef struct String String;
 
+typedef struct CConFrameIterator {
+    struct ConFrameIterator *iterator;
+    struct String *file_contents;
+} CConFrameIterator;
+
+/**
+ * An opaque handle to a full, lossless Rust `ConFrame` object.
+ * The C/C++ side should treat this as a void pointer.
+ */
+typedef struct RKRConFrame {
+    uint8_t _private[0];
+} RKRConFrame;
+
 typedef struct CAtom {
     uint64_t atomic_number;
     double x;
@@ -40,111 +53,75 @@ typedef struct CAtom {
     bool is_fixed;
 } CAtom;
 
+/**
+ * A transparent, "lossy" C-struct containing only the core atomic data.
+ * This can be extracted from an `RKRConFrame` handle for direct data access.
+ * The caller is responsible for freeing the `atoms` array using `free_c_frame_atoms`.
+ */
 typedef struct CFrame {
-    const struct CAtom *atoms;
+    struct CAtom *atoms;
     uintptr_t num_atoms;
     double cell[3];
     double angles[3];
 } CFrame;
-
-typedef struct CConFrameIterator {
-    struct ConFrameIterator *iterator;
-    struct String *file_contents;
-} CConFrameIterator;
 
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
 /**
- * Takes a C-style string symbol and returns the corresponding atomic number.
- * # Safety
- * The caller must ensure that `symbol_c` is a valid, null-terminated C string.
- */
-uint64_t rust_symbol_to_atomic_number(const char *symbol_c);
-
-/**
- * Parses a .con file and returns a pointer to a CFrame struct.
- *
- * The caller OWNS the returned pointer and MUST call free_con_frame()
- * on it to prevent a memory leak.
- * Returns a null pointer on error.
- * This function is `unsafe` because it dereferences a raw C pointer.
- * # Safety
- * The caller must ensure that `filename_c` is a valid, null-terminated C string.
- */
-struct CFrame *read_single_frame(const char *filename_c);
-
-/**
- * Frees the memory allocated by read_con_file.
- *
- * Must be called on any non-null pointer returned by read_con_file.
- * This function is `unsafe` because it deals with raw pointers and memory deallocation.
- * # Safety
- * The caller must ensure that `frame` is a pointer previously returned by
- * `read_con_file` or `con_frame_iterator_next`.
- */
-void free_con_frame(struct CFrame *frame);
-
-/**
  * Creates a new iterator for a .con file.
- *
- * The caller OWNS the returned pointer and MUST call free_con_frame_iterator()
- * on it to prevent a memory leak.
- * Returns a null pointer on error.
- * # Safety
- * The caller must ensure that `filename_c` is a valid, null-terminated C string.
+ * The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
 
 /**
- * Frees the memory for a CConFrameIterator.
- * # Safety
- * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ * Reads the next frame from the iterator, returning an opaque handle.
+ * The caller OWNS the returned handle and must free it with `free_rkr_frame`.
+ * Returns NULL if there are no more frames or on error.
+ */
+struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
+
+/**
+ * Frees the memory for an opaque `RKRConFrame` handle.
+ */
+void free_rkr_frame(struct RKRConFrame *frame_handle);
+
+/**
+ * Frees the memory for a `CConFrameIterator`.
  */
 void free_con_frame_iterator(struct CConFrameIterator *iterator);
 
 /**
- * Reads the next frame from the iterator.
- *
- * The caller OWNS the returned CFrame pointer and must free it with `free_con_frame`.
- * Returns a null pointer if there are no more frames or on error.
- * # Safety
- * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ * Extracts the core atomic data into a transparent `CFrame` struct.
+ * The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
  */
-struct CFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
+struct CFrame *rkr_frame_to_c_frame(const struct RKRConFrame *frame_handle);
 
 /**
- * Skips the next frame in the iterator.
- *
- * Returns 0 on success, -1 on error or end of iteration.
- * # Safety
- * The caller must ensure `iterator` is a valid pointer from `read_con_file_iterator`.
+ * Frees the memory of a `CFrame` struct, including its internal atoms array.
  */
-int32_t con_frame_iterator_forward(struct CConFrameIterator *iterator);
+void free_c_frame(struct CFrame *frame);
 
 /**
- * Writes a single CFrame to the specified file.
+ * Copies a header string line into a user-provided buffer.
+ * Returns the number of bytes written (excluding null terminator), or -1 on error.
+ */
+int32_t rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
+                                  bool is_prebox,
+                                  uintptr_t line_index,
+                                  char *buffer,
+                                  uintptr_t buffer_len);
+
+/**
+ * Writes an array of RKRConFrame handles to a single file.
  *
+ * This is the efficient way to write a multi-frame .con file from C.
  * Returns 0 on success, -1 on error.
- * # Safety
- * The caller must ensure `frame_ptr` is a valid pointer and `filename_c` is a
- * valid, null-terminated C string.
  */
-int32_t write_single_frame(const struct CFrame *frame_ptr,
-                           const char *filename_c);
-
-/**
- * Writes an array of CFrames to the specified file, creating a multi-frame .con file.
- *
- * Returns 0 on success, -1 on error.
- * # Safety
- * The caller must ensure `frames_ptr` is a valid pointer to an array of `CFrame`
- * pointers of length `num_frames`, and `filename_c` is a valid C string.
- */
-int32_t write_con_file_from_c(const struct CFrame *const *frames_ptr,
-                              uintptr_t num_frames,
-                              const char *filename_c);
+int32_t write_rkr_frames_to_file(const struct RKRConFrame *const *frame_handles,
+                                 uintptr_t num_frames,
+                                 const char *filename_c);
 
 #ifdef __cplusplus
 }  // extern "C"
