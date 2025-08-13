@@ -16,13 +16,13 @@ fn test_writer_roundtrip() {
 
     let mut buffer: Vec<u8> = Vec::new();
 
-    // Introduce a scope so the writer releases its borrow on the buffer.
+    // Introduce a scope so the writer is dropped and flushes any buffered data, releasing the mutable reference to the buffer.
     {
         let mut writer = ConFrameWriter::new(&mut buffer);
         writer
             .extend(frames_original.iter())
             .expect("Failed to write to buffer.");
-    } // `writer` is dropped here, borrow ends.
+    } // `writer` is dropped here, ensuring all data is flushed and the mutable reference ends.
 
     // Convert the buffer back to a string and re-parse.
     // This move is now valid because the borrow has ended.

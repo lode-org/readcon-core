@@ -56,7 +56,6 @@ class ConFrameIterator {
         using iterator_category = std::input_iterator_tag;
         using value_type = ConFrame;
         using difference_type = std::ptrdiff_t;
-        // FIX: Return non-const to allow moving from the iterator
         using pointer = ConFrame *;
         using reference = ConFrame &;
 
@@ -102,7 +101,6 @@ class ConFrameIterator {
         }
     };
 
-    // FIX: This member was missing from the class definition.
     std::unique_ptr<CConFrameIterator, IteratorDeleter> iterator_ptr_;
 };
 

@@ -56,7 +56,7 @@ typedef struct CAtom {
 /**
  * A transparent, "lossy" C-struct containing only the core atomic data.
  * This can be extracted from an `RKRConFrame` handle for direct data access.
- * The caller is responsible for freeing the `atoms` array using `free_c_frame_atoms`.
+ * The caller is responsible for freeing the `atoms` array using `free_c_frame`.
  */
 typedef struct CFrame {
     struct CAtom *atoms;
