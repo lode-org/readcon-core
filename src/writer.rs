@@ -3,6 +3,13 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
+/// The floating-point precision used for writing coordinates, cell dimensions, and masses.
+const FLOAT_PRECISION: usize = 6;
+/// The value used to indicate a fixed atom in the output file.
+const FIXED_ATOM_FLAG: f64 = 1.0;
+/// The value used to indicate a non-fixed (free) atom in the output file.
+const FREE_ATOM_FLAG: f64 = 0.0;
+
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
 /// This struct encapsulates a writer (like a file) and provides a high-level API
@@ -36,19 +43,18 @@ impl<W: Write> ConFrameWriter<W> {
 
     /// Writes a single `ConFrame` to the output stream.
     pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
-        // This function contains the core formatting logic.
         // --- Write the 9-line Header ---
         writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
         writeln!(self.writer, "{}", frame.header.prebox_header[1])?;
         writeln!(
             self.writer,
-            "{:.6} {:.6} {:.6}",
-            frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
+            "{1:.0$} {2:.0$} {3:.0$}",
+            FLOAT_PRECISION, frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
         )?;
         writeln!(
             self.writer,
-            "{:.6} {:.6} {:.6}",
-            frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
+            "{1:.0$} {2:.0$} {3:.0$}",
+            FLOAT_PRECISION, frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
         )?;
         writeln!(self.writer, "{}", frame.header.postbox_header[0])?;
         writeln!(self.writer, "{}", frame.header.postbox_header[1])?;
@@ -66,7 +72,7 @@ impl<W: Write> ConFrameWriter<W> {
             .header
             .masses_per_type
             .iter()
-            .map(|m| format!("{:.6}", m))
+            .map(|m| format!("{:.1$}", m, FLOAT_PRECISION))
             .collect();
         writeln!(self.writer, "{}", masses_str.join(" "))?;
 
@@ -81,11 +87,16 @@ impl<W: Write> ConFrameWriter<W> {
                 let atom = &frame.atom_data[atom_idx_offset + i];
                 writeln!(
                     self.writer,
-                    "{:.6} {:.6} {:.6} {} {}",
+                    "{1:.0$} {2:.0$} {3:.0$} {4:.1} {5}",
+                    FLOAT_PRECISION,
                     atom.x,
                     atom.y,
                     atom.z,
-                    if atom.is_fixed { 1.0 } else { 0.0 },
+                    if atom.is_fixed {
+                        FIXED_ATOM_FLAG
+                    } else {
+                        FREE_ATOM_FLAG
+                    },
                     atom.atom_id
                 )?;
             }
