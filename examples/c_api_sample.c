@@ -1,5 +1,50 @@
 #include "readcon-core.h"
 #include <stdio.h>
+#include <stdlib.h> // For malloc and free
+
+// A helper function to print the summary using the new FFI.
+void print_frame_summary(const RKRConFrame *frame_handle) {
+    if (!frame_handle)
+        return;
+
+    // To inspect the data, extract a temporary, transparent CFrame.
+    CFrame *c_frame = rkr_frame_to_c_frame(frame_handle);
+    if (!c_frame) {
+        fprintf(stderr, "Failed to extract CFrame from handle.\n");
+        return;
+    }
+
+    char header_buffer[256];
+    printf("\n-> Summary of last valid frame:\n");
+
+    rkr_frame_get_header_line(frame_handle, 1, 0, header_buffer, 256);
+    printf("  - Pre-box header 1: \"%s\"\n", header_buffer);
+    rkr_frame_get_header_line(frame_handle, 1, 1, header_buffer, 256);
+    printf("  - Pre-box header 2: \"%s\"\n", header_buffer);
+
+    printf("  - Cell vectors:     [%.4f, %.4f, %.4f]\n", c_frame->cell[0],
+           c_frame->cell[1], c_frame->cell[2]);
+    printf("  - Cell angles:      [%.4f, %.4f, %.4f]\n", c_frame->angles[0],
+           c_frame->angles[1], c_frame->angles[2]);
+
+    rkr_frame_get_header_line(frame_handle, 0, 0, header_buffer, 256);
+    printf("  - Post-box header 1:\"%s\"\n", header_buffer);
+    rkr_frame_get_header_line(frame_handle, 0, 1, header_buffer, 256);
+    printf("  - Post-box header 2:\"%s\"\n", header_buffer);
+
+    printf("  - Total atoms:      %zu\n", c_frame->num_atoms);
+    if (c_frame->num_atoms > 0) {
+        const CAtom *last_atom = &c_frame->atoms[c_frame->num_atoms - 1];
+        printf(
+            "  - Last atom:        ID=%llu, Z=%llu, Pos=[%.4f, %.4f, %.4f]\n",
+            (unsigned long long)last_atom->atom_id,
+            (unsigned long long)last_atom->atomic_number, last_atom->x,
+            last_atom->y, last_atom->z);
+    }
+
+    // CRUCIAL: Free the temporary CFrame struct after we're done with it.
+    free_c_frame(c_frame);
+}
 
 int main(int argc, char *argv[]) {
     if (argc < 2 || argc > 3) {
@@ -8,97 +53,93 @@ int main(int argc, char *argv[]) {
     }
 
     const char *input_filename = argv[1];
-
-    // To read multiple frames, we must use the iterator API.
-    // First, create the iterator from the file path.
     CConFrameIterator *iterator = read_con_file_iterator(input_filename);
     if (!iterator) {
-        fprintf(stderr, "Failed to open file or create iterator.\n");
+        fprintf(stderr, "Failed to open file or create iterator for '%s'.\n",
+                input_filename);
         return 1;
     }
+    printf("Successfully created iterator. Reading all frames from '%s'...\n",
+           input_filename);
 
-    printf("Successfully created iterator. Reading all frames...\n");
-
+    // --- Read-only and Summarize Mode ---
     if (argc == 2) {
+        size_t frame_count = 0;
+        RKRConFrame *current_handle = NULL;
+        RKRConFrame *last_handle = NULL;
 
-        int frame_count = 0;
-        CFrame *current_frame = NULL;
-
-        // Loop by calling con_frame_iterator_next() until it returns NULL.
-        while ((current_frame = con_frame_iterator_next(iterator)) != NULL) {
+        while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
             frame_count++;
-            printf("  - Loaded frame %d with %zu atoms.\n", frame_count,
-                   current_frame->num_atoms);
+            if (last_handle) {
+                free_rkr_frame(last_handle);
+            }
+            last_handle = current_handle;
+        }
+        printf("Finished reading. Total frames found: %zu\n", frame_count);
 
-            // It is crucial to free each frame after you are done with it
-            // to prevent memory leaks inside the loop.
-            free_con_frame(current_frame);
+        print_frame_summary(last_handle);
+
+        if (last_handle) {
+            free_rkr_frame(last_handle);
         }
 
-        printf("Finished reading. Total frames found: %d\n", frame_count);
+        // --- Read and Write Mode ---
+    } else { // argc == 3
+        const char *output_filename = argv[2];
 
-        // Finally, free the iterator itself.
-        free_con_frame_iterator(iterator);
-    }
-
-    if (argc == 3) {
         size_t frame_capacity = 10;
         size_t frame_count = 0;
-        CFrame **frames_array = malloc(frame_capacity * sizeof(CFrame *));
-        if (!frames_array) {
-            fprintf(stderr, "Failed to allocate memory for frame pointers.\n");
+        RKRConFrame **handles_array =
+            malloc(frame_capacity * sizeof(RKRConFrame *));
+        if (!handles_array) {
+            fprintf(stderr, "Failed to allocate memory for frame handles.\n");
             free_con_frame_iterator(iterator);
             return 1;
         }
 
-        CFrame *current_frame = NULL;
-
-        while ((current_frame = con_frame_iterator_next(iterator)) != NULL) {
+        RKRConFrame *current_handle = NULL;
+        while ((current_handle = con_frame_iterator_next(iterator)) != NULL) {
             if (frame_count >= frame_capacity) {
                 frame_capacity *= 2;
-                CFrame **new_array =
-                    realloc(frames_array, frame_capacity * sizeof(CFrame *));
+                RKRConFrame **new_array = realloc(
+                    handles_array, frame_capacity * sizeof(RKRConFrame *));
                 if (!new_array) {
-                    fprintf(
-                        stderr,
-                        "Failed to reallocate memory for frame pointers.\n");
-                    for (size_t i = 0; i < frame_count; ++i) {
-                        free_con_frame(frames_array[i]);
-                    }
-                    free(frames_array);
+                    for (size_t i = 0; i < frame_count; ++i)
+                        free_rkr_frame(handles_array[i]);
+                    free(handles_array);
                     free_con_frame_iterator(iterator);
                     return 1;
                 }
-                frames_array = new_array;
+                handles_array = new_array;
             }
-            frames_array[frame_count] = current_frame;
-            frame_count++;
+            handles_array[frame_count++] = current_handle;
         }
-
         printf("Finished reading. Total frames found: %zu\n", frame_count);
-        free_con_frame_iterator(iterator);
 
-        const char *output_filename = argv[2];
         if (frame_count > 0) {
+            print_frame_summary(handles_array[frame_count - 1]);
             printf("\nWriting %zu frames to '%s'...\n", frame_count,
                    output_filename);
 
-            int result = write_con_file_from_c((const CFrame **)frames_array,
-                                               frame_count, output_filename);
+            int result =
+                write_rkr_frames_to_file((const RKRConFrame **)handles_array,
+                                         frame_count, output_filename);
 
             if (result == 0) {
-                printf("Successfully wrote frames.\n");
+                printf("Successfully wrote all frames.\n");
             } else {
                 fprintf(stderr, "An error occurred while writing the file.\n");
             }
         }
+
         printf("\nCleaning up allocated memory...\n");
         for (size_t i = 0; i < frame_count; ++i) {
-            free_con_frame(frames_array[i]);
+            free_rkr_frame(handles_array[i]);
         }
-        free(frames_array);
-        printf("Done.\n");
+        free(handles_array);
     }
 
+    free_con_frame_iterator(iterator);
+    printf("Done.\n");
     return 0;
 }
