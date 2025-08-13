@@ -3,6 +3,7 @@
 //=============================================================================
 
 use std::num::{ParseFloatError, ParseIntError};
+use std::rc::Rc;
 
 /// Represents all possible errors that can occur during `.con` file parsing.
 #[derive(Debug)]
@@ -56,10 +57,11 @@ pub struct FrameHeader {
 }
 
 /// Represents the data for a single atom in a frame.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
-    pub symbol: String,
+    /// Using Rc<String> to avoid expensive clones for each atom of the same type.
+    pub symbol: Rc<String>,
     /// The Cartesian x-coordinate.
     pub x: f64,
     /// The Cartesian y-coordinate.
@@ -72,11 +74,31 @@ pub struct AtomDatum {
     pub atom_id: u64,
 }
 
+// Manual implementation of PartialEq because Rc<T> doesn't derive it by default.
+impl PartialEq for AtomDatum {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare the string values, not the pointers.
+        *self.symbol == *other.symbol
+            && self.x == other.x
+            && self.y == other.y
+            && self.z == other.z
+            && self.is_fixed == other.is_fixed
+            && self.atom_id == other.atom_id
+    }
+}
+
 /// Represents a single, complete simulation frame, including header and all atomic data.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
     /// A vector holding all atomic data for the frame.
     pub atom_data: Vec<AtomDatum>,
+}
+
+// Manual implementation of PartialEq because of the change to AtomDatum.
+impl PartialEq for ConFrame {
+    fn eq(&self, other: &Self) -> bool {
+        self.header == other.header && self.atom_data == other.atom_data
+    }
 }
