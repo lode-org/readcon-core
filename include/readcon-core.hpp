@@ -120,18 +120,12 @@ class ConFrame {
     ConFrame(ConFrame &&) = default;
     ConFrame &operator=(ConFrame &&) = default;
 
-    /** @brief Gets the simulation cell dimensions (a, b, c). */
-    std::array<double, 3> cell() const;
-    /** @brief Gets the simulation cell angles (alpha, beta, gamma). */
-    std::array<double, 3> angles() const;
-    /** @brief Gets a vector of all atoms in the frame. */
-    std::vector<Atom> atoms() const;
-    /** @brief Gets the two pre-box header lines. */
-    std::array<std::string, 2> prebox_header() const;
-    /** @brief Gets the two post-box header lines. */
-    std::array<std::string, 2> postbox_header() const;
+    const std::array<double, 3> &cell() const;
+    const std::array<double, 3> &angles() const;
+    const std::vector<Atom> &atoms() const;
+    const std::array<std::string, 2> &prebox_header() const;
+    const std::array<std::string, 2> &postbox_header() const;
 
-    /** @brief Gets the raw opaque handle to the underlying Rust object. */
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
   private:
@@ -143,6 +137,15 @@ class ConFrame {
     };
     explicit ConFrame(RKRConFrame *frame_handle);
     std::unique_ptr<RKRConFrame, FrameDeleter> frame_handle_;
+
+    // --- Caching Implementation ---
+    void cache_data() const;
+    mutable bool is_cached_ = false;
+    mutable std::vector<Atom> atoms_cache_;
+    mutable std::array<double, 3> cell_cache_;
+    mutable std::array<double, 3> angles_cache_;
+    mutable std::array<std::string, 2> prebox_header_cache_;
+    mutable std::array<std::string, 2> postbox_header_cache_;
 };
 
 /**
@@ -230,60 +233,72 @@ inline ConFrameIterator::Iterator &ConFrameIterator::Iterator::operator++() {
 inline ConFrame::ConFrame(RKRConFrame *frame_handle)
     : frame_handle_(frame_handle) {}
 
-inline std::array<double, 3> ConFrame::cell() const {
-    CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
-    if (!c_frame)
-        throw std::runtime_error("Failed to extract CFrame from handle.");
-    std::array<double, 3> result = {c_frame->cell[0], c_frame->cell[1],
-                                    c_frame->cell[2]};
-    free_c_frame(c_frame);
-    return result;
-}
+inline void ConFrame::cache_data() const {
+    if (is_cached_) {
+        return;
+    }
 
-inline std::array<double, 3> ConFrame::angles() const {
+    // Extract the C-struct once.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
-    if (!c_frame)
-        throw std::runtime_error("Failed to extract CFrame from handle.");
-    std::array<double, 3> result = {c_frame->angles[0], c_frame->angles[1],
-                                    c_frame->angles[2]};
-    free_c_frame(c_frame);
-    return result;
-}
+    if (!c_frame) {
+        throw std::runtime_error(
+            "Failed to extract CFrame from handle for caching.");
+    }
 
-inline std::vector<Atom> ConFrame::atoms() const {
-    CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
-    if (!c_frame)
-        throw std::runtime_error("Failed to extract CFrame from handle.");
-    std::vector<Atom> atoms_vec;
-    atoms_vec.reserve(c_frame->num_atoms);
+    // Cache cell and angles.
+    cell_cache_ = {c_frame->cell[0], c_frame->cell[1], c_frame->cell[2]};
+    angles_cache_ = {c_frame->angles[0], c_frame->angles[1],
+                     c_frame->angles[2]};
+
+    // Cache atoms.
+    atoms_cache_.reserve(c_frame->num_atoms);
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
         const CAtom &c_atom = c_frame->atoms[i];
-        atoms_vec.emplace_back(Atom{c_atom.atomic_number, c_atom.x, c_atom.y,
-                                    c_atom.z, c_atom.atom_id, c_atom.mass,
-                                    c_atom.is_fixed});
+        atoms_cache_.emplace_back(Atom{c_atom.atomic_number, c_atom.x, c_atom.y,
+                                       c_atom.z, c_atom.atom_id, c_atom.mass,
+                                       c_atom.is_fixed});
     }
-    free_c_frame(c_frame);
-    return atoms_vec;
-}
 
-inline std::array<std::string, 2> ConFrame::prebox_header() const {
-    std::array<std::string, 2> headers;
+    // Free the temporary C-struct immediately after caching.
+    free_c_frame(c_frame);
+
+    // Cache headers.
     char buffer[256];
     rkr_frame_get_header_line(frame_handle_.get(), true, 0, buffer, 256);
-    headers[0] = buffer;
+    prebox_header_cache_[0] = buffer;
     rkr_frame_get_header_line(frame_handle_.get(), true, 1, buffer, 256);
-    headers[1] = buffer;
-    return headers;
+    prebox_header_cache_[1] = buffer;
+    rkr_frame_get_header_line(frame_handle_.get(), false, 0, buffer, 256);
+    postbox_header_cache_[0] = buffer;
+    rkr_frame_get_header_line(frame_handle_.get(), false, 1, buffer, 256);
+    postbox_header_cache_[1] = buffer;
+
+    is_cached_ = true;
 }
 
-inline std::array<std::string, 2> ConFrame::postbox_header() const {
-    std::array<std::string, 2> headers;
-    char buffer[256];
-    rkr_frame_get_header_line(frame_handle_.get(), false, 0, buffer, 256);
-    headers[0] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), false, 1, buffer, 256);
-    headers[1] = buffer;
-    return headers;
+inline const std::array<double, 3> &ConFrame::cell() const {
+    cache_data();
+    return cell_cache_;
+}
+
+inline const std::array<double, 3> &ConFrame::angles() const {
+    cache_data();
+    return angles_cache_;
+}
+
+inline const std::vector<Atom> &ConFrame::atoms() const {
+    cache_data();
+    return atoms_cache_;
+}
+
+inline const std::array<std::string, 2> &ConFrame::prebox_header() const {
+    cache_data();
+    return prebox_header_cache_;
+}
+
+inline const std::array<std::string, 2> &ConFrame::postbox_header() const {
+    cache_data();
+    return postbox_header_cache_;
 }
 
 // --- Implementation of ConFrameWriter methods ---
