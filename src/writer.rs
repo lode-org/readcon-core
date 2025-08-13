@@ -6,9 +6,9 @@ use std::path::Path;
 /// The floating-point precision used for writing coordinates, cell dimensions, and masses.
 const FLOAT_PRECISION: usize = 6;
 /// The value used to indicate a fixed atom in the output file.
-const FIXED_ATOM_FLAG: f64 = 1.0;
+const FIXED_ATOM_FLAG: usize = 1;
 /// The value used to indicate a non-fixed (free) atom in the output file.
-const FREE_ATOM_FLAG: f64 = 0.0;
+const FREE_ATOM_FLAG: usize = 0;
 
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
@@ -87,7 +87,7 @@ impl<W: Write> ConFrameWriter<W> {
                 let atom = &frame.atom_data[atom_idx_offset + i];
                 writeln!(
                     self.writer,
-                    "{1:.0$} {2:.0$} {3:.0$} {4:.1} {5}",
+                    "{1:.0$} {2:.0$} {3:.0$} {4:.0} {5}",
                     FLOAT_PRECISION,
                     atom.x,
                     atom.y,
