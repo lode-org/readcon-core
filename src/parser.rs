@@ -112,7 +112,7 @@ pub fn parse_frame_header<'a>(
 
 /// Parses a complete frame from a `.con` file, including its header and atomic data.
 ///
-/// This function first parses part of the frame header and then uses the information within it
+/// This function first parses the complete frame header and then uses the information within it
 /// (specifically the number of atom types and atoms per type) to parse the subsequent
 /// atom coordinate blocks.
 ///
@@ -155,7 +155,7 @@ pub fn parse_frame_header<'a>(
 ///
 /// assert_eq!(con_frame.header.natm_types, 2);
 /// assert_eq!(con_frame.atom_data.len(), 2);
-/// assert_eq!(con_frame.atom_data[0].symbol, "C");
+/// assert_eq!(&*con_frame.atom_data[0].symbol, "C");
 /// assert_eq!(con_frame.atom_data[1].atom_id, 2);
 /// ```
 pub fn parse_single_frame<'a>(

@@ -41,8 +41,9 @@ impl<'a> ConFrameIterator<'a> {
     /// * `Some(Err(ParseError::...))` if there's an error parsing the header.
     /// * `None` if the iterator is already at the end.
     pub fn forward(&mut self) -> Option<Result<(), error::ParseError>> {
-        // This optimized version avoids calling `parse_frame_header` and allocating
-        // unnecessary strings and vectors, which is much more efficient for skipping.
+        // Manually skipping lines and parsing only the minimal required fields,
+        // this method reduces allocations and parsing overhead, making it much
+        // more efficient for simply advancing the iterator.
         if self.lines.peek().is_none() {
             return None;
         }
