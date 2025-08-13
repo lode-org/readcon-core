@@ -1,6 +1,6 @@
 mod common;
 use readcon_core::iterators::ConFrameIterator;
-use readcon_core::writer::write_con_file;
+use readcon_core::writer::ConFrameWriter;
 use std::fs;
 use std::path::Path;
 
@@ -15,8 +15,17 @@ fn test_writer_roundtrip() {
     assert!(!frames_original.is_empty());
 
     let mut buffer: Vec<u8> = Vec::new();
-    write_con_file(frames_original.iter(), &mut buffer).expect("Failed to write to buffer.");
 
+    // Introduce a scope so the writer releases its borrow on the buffer.
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        writer
+            .extend(frames_original.iter())
+            .expect("Failed to write to buffer.");
+    } // `writer` is dropped here, borrow ends.
+
+    // Convert the buffer back to a string and re-parse.
+    // This move is now valid because the borrow has ended.
     let fdat_roundtrip = String::from_utf8(buffer).expect("Buffer is not valid UTF-8.");
     let parser_roundtrip = ConFrameIterator::new(&fdat_roundtrip);
     let frames_roundtrip: Vec<_> = parser_roundtrip.map(|r| r.unwrap()).collect();

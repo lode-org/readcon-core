@@ -9,6 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "readcon-core.h"
@@ -28,8 +29,9 @@ struct Atom {
     bool is_fixed;
 };
 
-// Forward declaration for use in ConFrameIterator
+// Forward declarations
 class ConFrame;
+class ConFrameWriter;
 
 /**
  * @brief An iterator for lazily reading frames from a .con file.
@@ -54,7 +56,7 @@ class ConFrameIterator {
         using iterator_category = std::input_iterator_tag;
         using value_type = ConFrame;
         using difference_type = std::ptrdiff_t;
-        // Return non-const to allow moving from the iterator
+        // FIX: Return non-const to allow moving from the iterator
         using pointer = ConFrame *;
         using reference = ConFrame &;
 
@@ -100,6 +102,7 @@ class ConFrameIterator {
         }
     };
 
+    // FIX: This member was missing from the class definition.
     std::unique_ptr<CConFrameIterator, IteratorDeleter> iterator_ptr_;
 };
 
@@ -113,6 +116,7 @@ class ConFrameIterator {
 class ConFrame {
   public:
     friend class ConFrameIterator::Iterator;
+    friend class ConFrameWriter;
 
     ConFrame(const ConFrame &) = delete;
     ConFrame &operator=(const ConFrame &) = delete;
@@ -129,8 +133,6 @@ class ConFrame {
     std::array<std::string, 2> prebox_header() const;
     /** @brief Gets the two post-box header lines. */
     std::array<std::string, 2> postbox_header() const;
-    /** @brief Writes the current frame to a file. */
-    void write(const std::filesystem::path &path) const;
 
     /** @brief Gets the raw opaque handle to the underlying Rust object. */
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
@@ -146,31 +148,38 @@ class ConFrame {
     std::unique_ptr<RKRConFrame, FrameDeleter> frame_handle_;
 };
 
-// --- Free function for writing multiple frames ---
-
 /**
- * @brief Writes a vector of ConFrame objects to a multi-frame .con file.
- * @param path The path to the output file.
- * @param frames A vector of ConFrame objects to write.
- * @throws std::runtime_error if writing fails.
+ * @brief A C++ wrapper for writing frames to a .con file.
+ *
+ * This class follows RAII to manage the underlying file handle from the Rust
+ * library. It opens the file on construction and automatically closes it on
+ * destruction.
  */
-inline void write_con_file(const std::filesystem::path &path,
-                           const std::vector<ConFrame> &frames) {
-    if (frames.empty())
-        return;
+class ConFrameWriter {
+  public:
+    /**
+     * @brief Constructs a writer and opens the specified file for writing.
+     * @param path The path to the output .con file.
+     * @throws std::runtime_error if the file cannot be created.
+     */
+    explicit ConFrameWriter(const std::filesystem::path &path);
 
-    std::vector<const RKRConFrame *> handles;
-    handles.reserve(frames.size());
-    for (const auto &frame : frames) {
-        handles.push_back(frame.get_handle());
-    }
+    /**
+     * @brief Writes all frames from a vector to the file.
+     * @param frames A vector of ConFrame objects.
+     * @throws std::runtime_error if the write operation fails.
+     */
+    void extend(const std::vector<ConFrame> &frames);
 
-    if (write_rkr_frames_to_file(handles.data(), handles.size(),
-                                 path.c_str()) != 0) {
-        throw std::runtime_error("Failed to write frames to file: " +
-                                 path.string());
-    }
-}
+  private:
+    struct WriterDeleter {
+        void operator()(RKRConFrameWriter *ptr) const {
+            if (ptr)
+                free_rkr_writer(ptr);
+        }
+    };
+    std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
+};
 
 // --- Implementation of ConFrameIterator and its nested Iterator ---
 
@@ -280,10 +289,29 @@ inline std::array<std::string, 2> ConFrame::postbox_header() const {
     return headers;
 }
 
-inline void ConFrame::write(const std::filesystem::path &path) const {
-    if (write_single_rkr_frame(frame_handle_.get(), path.c_str()) != 0) {
-        throw std::runtime_error("Failed to write frame to file: " +
+// --- Implementation of ConFrameWriter methods ---
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
+    writer_handle_.reset(create_writer_from_path_c(path.c_str()));
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " +
                                  path.string());
+    }
+}
+
+inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
+    if (frames.empty())
+        return;
+
+    std::vector<const RKRConFrame *> handles;
+    handles.reserve(frames.size());
+    for (const auto &frame : frames) {
+        handles.push_back(frame.get_handle());
+    }
+
+    if (rkr_writer_extend(writer_handle_.get(), handles.data(),
+                          handles.size()) != 0) {
+        throw std::runtime_error("Failed to write multiple frames.");
     }
 }
 
