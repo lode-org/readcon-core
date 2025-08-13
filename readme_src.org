@@ -10,6 +10,20 @@ The library is designed with the following principles in mind:
 - *Lazy Parsing:* The ~ConFrameIterator~ allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
 
 - *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a ~C~ header is auto-generated along with a hand-crafted ~C++~ interface, following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+*** FFI Layer
+A key challenge in designing the FFI layer was ensuring a "lossless" roundtrip
+of data. The initial (upto ~v0.1.1~) C-compatible struct (~CFrame~) only
+contained the essential atomic data and cell vectors. This was sufficient for
+reading, but it meant that when this "lossy" struct was passed back to the Rust
+writer function, the original string headers from the ~.con~ file had been
+discarded.
+
+The solution was to redesign the ~CFrame~ struct to be "lossless", mirroring all
+the fields of the Rust ~FrameHeader~, including fixed-size character arrays for
+the header strings. This ensures that a C program can read a frame, hold it in
+memory, and write it back out without losing any information, which is crucial
+for the library's robustness.
+
 ** Specification
 Currently this implements the ~con~ format specification as written out by eON,
 so some assumptions are made about the input files, not all of which are
