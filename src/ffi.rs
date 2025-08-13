@@ -233,9 +233,11 @@ pub unsafe extern "C" fn write_rkr_frames_to_file(
     if frame_handles.is_null() || filename_c.is_null() {
         return -1;
     }
-    let filename = match CStr::from_ptr(filename_c).to_str() {
-        Ok(s) => s,
-        Err(_) => return -1,
+    let filename = unsafe {
+        match CStr::from_ptr(filename_c).to_str() {
+            Ok(s) => s,
+            Err(_) => return -1,
+        }
     };
 
     // Create an iterator of Rust ConFrame references from the array of handles.
@@ -258,6 +260,34 @@ pub unsafe extern "C" fn write_rkr_frames_to_file(
 
     // Use the existing multi-frame writer from the Rust writer module.
     match crate::writer::write_con_file(rust_frames_iter, &mut writer) {
+        Ok(_) => 0,
+        Err(_) => -1,
+    }
+}
+
+/// Writes a single frame (given by its opaque handle) to the specified file.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn write_single_rkr_frame(
+    frame_handle: *const RKRConFrame,
+    filename_c: *const c_char,
+) -> i32 {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return -1,
+    };
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    let file = match File::create(filename) {
+        Ok(f) => f,
+        Err(_) => return -1,
+    };
+    let mut writer = BufWriter::new(file);
+
+    match crate::writer::write_con_frame(frame, &mut writer) {
         Ok(_) => 0,
         Err(_) => -1,
     }

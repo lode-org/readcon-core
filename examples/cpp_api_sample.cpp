@@ -1,26 +1,39 @@
 #include "readcon-core.hpp"
 #include <iostream>
+#include <vector>
 
-// A helper function to print the frame's data
 void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
-    std::cout << "\n==================== FRAME " << frame_number << " ====================\n";
+    std::cout << "\n==================== FRAME " << frame_number
+              << " ====================\n";
+
+    // Print header information using the accessor methods
+    auto pre_headers = frame.prebox_header();
+    std::cout << "Pre-box Header 1: \"" << pre_headers[0] << "\"\n";
+    std::cout << "Pre-box Header 2: \"" << pre_headers[1] << "\"\n";
+
     // Print cell information
     auto cell = frame.cell();
     auto angles = frame.angles();
-    std::cout << "Cell Dimensions: " << cell[0] << ", " << cell[1] << ", "
+    std::cout << "Cell Dimensions:  " << cell[0] << ", " << cell[1] << ", "
               << cell[2] << std::endl;
-    std::cout << "Cell Angles:     " << angles[0] << ", " << angles[1] << ", "
+    std::cout << "Cell Angles:      " << angles[0] << ", " << angles[1] << ", "
               << angles[2] << std::endl;
 
+    auto post_headers = frame.postbox_header();
+    std::cout << "Post-box Header 1:\"" << post_headers[0] << "\"\n";
+    std::cout << "Post-box Header 2:\"" << post_headers[1] << "\"\n";
+
     // Print atom information
-    std::cout << "--- Atoms (" << frame.atoms().size() << ") ---\n";
+    auto atoms = frame.atoms(); // Call once to avoid repeated conversions
+    std::cout << "--- Atoms (" << atoms.size() << ") ---\n";
     std::cout << std::boolalpha; // Print booleans as "true"/"false"
 
     // Print details for the first 5 atoms for brevity
     int atoms_to_print = 0;
-    for (const auto &atom : frame.atoms()) {
+    for (const auto &atom : atoms) {
         if (atoms_to_print >= 5) {
-            std::cout << "... and " << frame.atoms().size() - 5 << " more." << std::endl;
+            std::cout << "... and " << atoms.size() - 5 << " more."
+                      << std::endl;
             break;
         }
         std::cout << "  ID: " << atom.atom_id << ", Z: " << atom.atomic_number
@@ -32,30 +45,57 @@ void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <path_to_con_file>" << std::endl;
+    if (argc < 2 || argc > 3) {
+        std::cerr << "Usage: " << argv[0] << " <input.con> [output.con]"
+                  << std::endl;
         return 1;
     }
 
-    std::string filename = argv[1];
+    std::string input_filename = argv[1];
 
     try {
-        std::cout << "Attempting to iterate through all frames in: " << filename << std::endl;
+        // --- Read-only and Summarize Mode (Memory-Efficient) ---
+        if (argc == 2) {
+            std::cout << "Mode: Read-only. Iterating lazily through frames in: "
+                      << input_filename << std::endl;
+            readcon::ConFrameIterator frame_iterator(input_filename);
 
-        // To read all frames, create a ConFrameIterator object.
-        // RAII ensures the underlying C iterator is freed when this object
-        // goes out of scope.
-        readcon::ConFrameIterator frame_iterator(filename);
-
-        int frame_count = 0;
-        // Use a modern range-based for loop to process each frame.
-        for (const auto& frame : frame_iterator) {
-            frame_count++;
-            print_frame_details(frame_count, frame);
+            int frame_count = 0;
+            for (auto &&frame : frame_iterator) {
+                frame_count++;
+                print_frame_details(frame_count, frame);
+            }
+            std::cout
+                << "\n==================================================\n";
+            std::cout << "Iteration complete. Total frames processed: "
+                      << frame_count << std::endl;
         }
+        // --- Read and Write Mode ---
+        else { // argc == 3
+            std::string output_filename = argv[2];
+            std::cout << "Mode: Read-Write. Reading from '" << input_filename
+                      << "' and writing to '" << output_filename << "'."
+                      << std::endl;
 
-        std::cout << "\n==================================================\n";
-        std::cout << "Iteration complete. Total frames processed: " << frame_count << std::endl;
+            readcon::ConFrameIterator frame_iterator(input_filename);
+
+            // In write mode, we must collect all frames first.
+            std::vector<readcon::ConFrame> all_frames;
+            for (auto &&frame : frame_iterator) {
+                // We must move the frame from the iterator into our vector.
+                all_frames.push_back(std::move(frame));
+            }
+
+            if (all_frames.empty()) {
+                std::cout << "No valid frames found to write." << std::endl;
+            } else {
+                print_frame_details(all_frames.size(), all_frames.back());
+                std::cout << "\nWriting " << all_frames.size()
+                          << " frames...\n";
+                readcon::write_con_file(output_filename, all_frames);
+                std::cout << "Successfully wrote all frames." << std::endl;
+            }
+        }
 
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;

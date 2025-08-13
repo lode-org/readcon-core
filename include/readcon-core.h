@@ -123,6 +123,13 @@ int32_t write_rkr_frames_to_file(const struct RKRConFrame *const *frame_handles,
                                  uintptr_t num_frames,
                                  const char *filename_c);
 
+/**
+ * Writes a single frame (given by its opaque handle) to the specified file.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t write_single_rkr_frame(const struct RKRConFrame *frame_handle,
+                               const char *filename_c);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
