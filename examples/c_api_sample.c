@@ -1,6 +1,8 @@
 #include "readcon-core.h"
 #include <stdio.h>
-#include <stdlib.h> // For malloc and free
+#include <stdlib.h>
+
+const size_t MAX_HEADER_LENGTH = 256;
 
 // A helper function to print the summary using the new FFI.
 void print_frame_summary(const RKRConFrame *frame_handle) {
@@ -14,12 +16,14 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
         return;
     }
 
-    char header_buffer[256];
+    char header_buffer[MAX_HEADER_LENGTH];
     printf("\n-> Summary of last valid frame:\n");
 
-    rkr_frame_get_header_line(frame_handle, 1, 0, header_buffer, 256);
+    rkr_frame_get_header_line(frame_handle, 1, 0, header_buffer,
+                              MAX_HEADER_LENGTH);
     printf("  - Pre-box header 1: \"%s\"\n", header_buffer);
-    rkr_frame_get_header_line(frame_handle, 1, 1, header_buffer, 256);
+    rkr_frame_get_header_line(frame_handle, 1, 1, header_buffer,
+                              MAX_HEADER_LENGTH);
     printf("  - Pre-box header 2: \"%s\"\n", header_buffer);
 
     printf("  - Cell vectors:     [%.4f, %.4f, %.4f]\n", c_frame->cell[0],
@@ -27,9 +31,11 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
     printf("  - Cell angles:      [%.4f, %.4f, %.4f]\n", c_frame->angles[0],
            c_frame->angles[1], c_frame->angles[2]);
 
-    rkr_frame_get_header_line(frame_handle, 0, 0, header_buffer, 256);
+    rkr_frame_get_header_line(frame_handle, 0, 0, header_buffer,
+                              MAX_HEADER_LENGTH);
     printf("  - Post-box header 1:\"%s\"\n", header_buffer);
-    rkr_frame_get_header_line(frame_handle, 0, 1, header_buffer, 256);
+    rkr_frame_get_header_line(frame_handle, 0, 1, header_buffer,
+                              MAX_HEADER_LENGTH);
     printf("  - Post-box header 2:\"%s\"\n", header_buffer);
 
     printf("  - Total atoms:      %zu\n", c_frame->num_atoms);

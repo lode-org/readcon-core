@@ -14,6 +14,7 @@
 #include "readcon-core.h"
 
 namespace readcon {
+const size_t MAX_HEADER_LENGTH = 256;
 
 /**
  * @brief C++ representation of a single atom's core data.
@@ -263,14 +264,14 @@ inline void ConFrame::cache_data() const {
     free_c_frame(c_frame);
 
     // Cache headers.
-    char buffer[256];
-    rkr_frame_get_header_line(frame_handle_.get(), true, 0, buffer, 256);
+    char buffer[MAX_HEADER_LENGTH];
+    rkr_frame_get_header_line(frame_handle_.get(), true, 0, buffer, MAX_HEADER_LENGTH);
     prebox_header_cache_[0] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), true, 1, buffer, 256);
+    rkr_frame_get_header_line(frame_handle_.get(), true, 1, buffer, MAX_HEADER_LENGTH);
     prebox_header_cache_[1] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), false, 0, buffer, 256);
+    rkr_frame_get_header_line(frame_handle_.get(), false, 0, buffer, MAX_HEADER_LENGTH);
     postbox_header_cache_[0] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), false, 1, buffer, 256);
+    rkr_frame_get_header_line(frame_handle_.get(), false, 1, buffer, MAX_HEADER_LENGTH);
     postbox_header_cache_[1] = buffer;
 
     is_cached_ = true;
