@@ -37,7 +37,7 @@ impl From<ParseIntError> for ParseError {
 }
 
 /// Holds all metadata from the 9-line header of a simulation frame.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FrameHeader {
     /// The two text lines preceding the box dimension data.
     pub prebox_header: [String; 2],
@@ -56,7 +56,7 @@ pub struct FrameHeader {
 }
 
 /// Represents the data for a single atom in a frame.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
     pub symbol: String,
@@ -73,7 +73,7 @@ pub struct AtomDatum {
 }
 
 /// Represents a single, complete simulation frame, including header and all atomic data.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
