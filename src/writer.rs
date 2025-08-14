@@ -5,6 +5,7 @@ use std::path::Path;
 
 /// The floating-point precision used for writing coordinates, cell dimensions, and masses.
 const FLOAT_PRECISION: usize = 6;
+/// Always 0 or 1
 /// The value used to indicate a fixed atom in the output file.
 const FIXED_ATOM_FLAG: usize = 1;
 /// The value used to indicate a non-fixed (free) atom in the output file.
