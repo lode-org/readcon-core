@@ -10,6 +10,30 @@ The library is designed with the following principles in mind:
 - *Lazy Parsing:* The ~ConFrameIterator~ allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
 
 - *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a ~C~ header is auto-generated along with a hand-crafted ~C++~ interface, following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+*** FFI Layer
+A key challenge in designing an FFI is deciding how data is exposed to the C-compatible world. This library uses a hybrid approach to offer both safety and convenience:
+
+1.  *Opaque Pointers (The Handle Pattern):* The primary way to interact with
+   frame data is through an opaque pointer, represented as ~RKRConFrame*~ in C.
+   The C/C++ client holds this "handle" but cannot inspect its contents
+   directly. Instead, it must call Rust functions to interact with the data
+   (e.g., ~rkr_frame_get_header_line(frame_handle, ...~)). This is the safest
+   and most flexible pattern, as it completely hides Rust's internal data
+   structures and memory layout, preventing ABI breakage if the Rust code is
+   updated.
+
+2.  *Transparent ~#[repr(C)]~ Structs (The Data Extraction Pattern):* For
+   convenience and performance in cases where only the core atomic data is
+   needed, the library provides a function (~rkr_frame_to_c_frame~) to extract a
+   "lossy" but transparent ~CFrame~ struct from an opaque handle. The C/C++
+   client can directly read the fields of this struct (e.g.,
+   ~my_c_frame->num_atoms~). The client takes ownership of this extracted struct
+   and is responsible for freeing its memory.
+
+This hybrid model provides the best of both worlds: the safety and
+forward-compatibility of opaque handles for general use, and the performance of
+direct data access for the most common computational tasks.
+
 ** Specification
 Currently this implements the ~con~ format specification as written out by eON,
 so some assumptions are made about the input files, not all of which are
