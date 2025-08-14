@@ -37,6 +37,7 @@ typedef struct CConFrameIterator {
 
 /**
  * An opaque handle to a full, lossless Rust `ConFrame` object.
+ * The C/C++ side needs to treat this as a void pointer
  */
 typedef struct RKRConFrame {
     uint8_t _private[0];
@@ -54,6 +55,8 @@ typedef struct CAtom {
 
 /**
  * A transparent, "lossy" C-struct containing only the core atomic data.
+ * This can be extracted from an `RKRConFrame` handle for direct data access.
+ * The caller is responsible for freeing the `atoms` array using `free_c_frame`.
  */
 typedef struct CFrame {
     struct CAtom *atoms;
@@ -64,6 +67,7 @@ typedef struct CFrame {
 
 /**
  * An opaque handle to a Rust `ConFrameWriter` object.
+ * The C/C++ side needs to treat this as a void pointer
  */
 typedef struct RKRConFrameWriter {
     uint8_t _private[0];
@@ -76,6 +80,7 @@ extern "C" {
 /**
  * Creates a new iterator for a .con file.
  * The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
+ * Returns NULL if there are no more frames or on error.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
 
@@ -108,6 +113,8 @@ void free_c_frame(struct CFrame *frame);
 
 /**
  * Copies a header string line into a user-provided buffer.
+ * This is a C style helper... where the user explicitly sets the buffer.
+ * Returns the number of bytes written (excluding null terminator), or -1 on error.
  */
 int32_t rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
                                   bool is_prebox,
