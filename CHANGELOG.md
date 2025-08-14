@@ -2,6 +2,50 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.2.0 - 2025-08-14
+#### Buildsystem
+- Bump for doctests - (bfe85e1) - HaoZeke
+- Enable doctests - (1d79f3a) - HaoZeke
+#### Continuous Integration
+- Try to run benchmarks more - (049c077) - HaoZeke
+#### Documentation
+- Discuss the design.. - (9229f0d) - HaoZeke
+#### Enhancements
+- Single pass for the writer - (ae39401) - HaoZeke
+- More ergonomic without constants for C++ - (7d78227) - HaoZeke
+- Add a cache for better performance - (ec8244d) - HaoZeke
+- Rework to use a writer object - (7029562) - HaoZeke
+- Update to do better on benchmarks - (063a89c) - HaoZeke
+- Setup the C++ API - (c54daf7) - HaoZeke
+- Rework to use opaque pointers - (736bb71) - HaoZeke
+- Rework the FFI for writes - (baae1c8) - HaoZeke
+- Update the C API sample - (5854ccc) - HaoZeke
+- Rework CLI to test things a bit - (a1177b6) - HaoZeke
+- Add a basic writer - (9b825f8) - HaoZeke
+#### Generated
+- Update generated readme - (0277e8b) - HaoZeke
+- Update with a void pointer - (f415740) - HaoZeke
+#### Maintenance
+- Bump versions - (3619311) - HaoZeke
+- Even faster fails - (f729de5) - HaoZeke
+- Cleanup and reduce scope - (a734715) - HaoZeke
+- Cleanup - (3575fcf) - HaoZeke
+- Fail faster for the FFI writer - (a343b86) - HaoZeke
+- Nicer documentation - (84b33db) - HaoZeke
+- Cleanup with constants - (70cad4f) - HaoZeke
+- Minor cleanup - (a9892c6) - HaoZeke
+- Remove dup - (dade44d) - HaoZeke
+- Update format string - (a874a98) - HaoZeke
+- Fix test [BENCH] - (b53fa91) - HaoZeke
+- Use more constants - (973f924) - HaoZeke
+- Update gitig - (64e9a79) - HaoZeke
+- Add an inverse helper for writes - (6170681) - HaoZeke
+- Minor documentation update - (b89931a) - HaoZeke
+#### Tests
+- Add some for writers - (0a59fcd) - HaoZeke
+
+- - -
+
 ## v0.1.1 - 2025-07-19
 #### Benchmarks
 - Add iterator validation - (9c49c86) - HaoZeke
