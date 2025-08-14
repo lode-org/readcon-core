@@ -303,15 +303,16 @@ pub unsafe extern "C" fn rkr_writer_extend(
     }
 
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
-    let rust_frames_iter = handles_slice
+    let rust_frames: Vec<&ConFrame> = handles_slice
         .iter()
-        .filter_map(|&handle| unsafe { (handle as *const ConFrame).as_ref() });
+        .filter_map(|&handle| unsafe { (handle as *const ConFrame).as_ref() })
+        .collect();
 
-    if rust_frames_iter.clone().count() != num_frames {
+    if rust_frames.len() != num_frames {
         return -1;
     }
 
-    match writer.extend(rust_frames_iter) {
+    match writer.extend(rust_frames.into_iter()) {
         Ok(_) => 0,
         Err(_) => -1,
     }
