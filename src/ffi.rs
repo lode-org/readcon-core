@@ -303,13 +303,18 @@ pub unsafe extern "C" fn rkr_writer_extend(
     }
 
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
-    let rust_frames: Vec<&ConFrame> = handles_slice
-        .iter()
-        .filter_map(|&handle| unsafe { (handle as *const ConFrame).as_ref() })
-        .collect();
-
-    if rust_frames.len() != num_frames {
-        return -1;
+    let mut rust_frames: Vec<&ConFrame> = Vec::with_capacity(num_frames);
+    for &handle in handles_slice.iter() {
+        if handle.is_null() {
+            // Fail fast if any handle is null, as this indicates a bug on the caller's side.
+            return -1;
+        }
+        // Now assume the handle is valid.
+        match unsafe { (handle as *const ConFrame).as_ref() } {
+            Some(frame) => rust_frames.push(frame),
+            // This case should be unreachable if the handle is not null, but we handle it for safety.
+            None => return -1,
+        }
     }
 
     match writer.extend(rust_frames.into_iter()) {
