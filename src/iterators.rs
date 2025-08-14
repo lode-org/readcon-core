@@ -41,25 +41,51 @@ impl<'a> ConFrameIterator<'a> {
     /// * `Some(Err(ParseError::...))` if there's an error parsing the header.
     /// * `None` if the iterator is already at the end.
     pub fn forward(&mut self) -> Option<Result<(), error::ParseError>> {
-        self.lines.peek()?;
+        // Skip frame by parsing only required header fields to avoid full parsing overhead
+        if self.lines.peek().is_none() {
+            return None;
+        }
 
-        // Parse the header to determine the size of the frame.
-        let header = match crate::parser::parse_frame_header(&mut self.lines) {
-            Ok(header) => header,
-            Err(e) => return Some(Err(e)),
+        // Manually consume the first 6 lines of the header, which we don't need for skipping.
+        for _ in 0..6 {
+            if self.lines.next().is_none() {
+                return Some(Err(error::ParseError::IncompleteHeader));
+            }
+        }
+
+        // Line 7: natm_types. We need to parse this.
+        let natm_types: usize = match self.lines.next() {
+            Some(line) => match crate::parser::parse_line_of_n::<usize>(line, 1) {
+                Ok(v) => v[0],
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
 
-        // Calculate the number of lines to skip for the atom data.
-        let num_atom_types = header.natm_types;
-        let total_atoms: usize = header.natms_per_type.iter().sum();
+        // Line 8: natms_per_type. We need this to sum the total number of atoms.
+        let natms_per_type: Vec<usize> = match self.lines.next() {
+            Some(line) => match crate::parser::parse_line_of_n(line, natm_types) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
 
-        // For each atom type, there is one line for the symbol and one "Coordinates..." line.
-        let non_atom_lines = num_atom_types * 2;
+        // Line 9: masses_per_type. We just need to consume this line.
+        if self.lines.next().is_none() {
+            return Some(Err(error::ParseError::IncompleteHeader));
+        }
+
+        // Calculate how many more lines to skip.
+        let total_atoms: usize = natms_per_type.iter().sum();
+        // For each atom type, there is a symbol line and a "Coordinates..." line.
+        let non_atom_lines = natm_types * 2;
         let lines_to_skip = total_atoms + non_atom_lines;
 
-        // Advance the iterator by skipping the lines.
+        // Advance the iterator by skipping the remaining lines of the frame.
         for _ in 0..lines_to_skip {
             if self.lines.next().is_none() {
+                // The file ended before the header's promise was fulfilled.
                 return Some(Err(error::ParseError::IncompleteFrame));
             }
         }
