@@ -2,7 +2,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::ConFrameIterator;
 use crate::types::ConFrame;
 use crate::writer::ConFrameWriter;
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
 use std::fs::{self, File};
 use std::ptr;
 
@@ -183,6 +183,7 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
 }
 
 /// Copies a header string line into a user-provided buffer.
+/// This is a C style helper... where the user explicitly sets the buffer.
 /// Returns the number of bytes written (excluding null terminator), or -1 on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_get_header_line(
@@ -211,6 +212,47 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
         len_to_copy as i32
     } else {
         -1
+    }
+}
+
+/// Gets a header string line as a newly allocated, null-terminated C string.
+///
+/// The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
+/// to prevent a memory leak. Returns NULL on error or if the index is invalid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
+    frame_handle: *const RKRConFrame,
+    is_prebox: bool,
+    line_index: usize,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+
+    let line_to_copy = if is_prebox {
+        frame.header.prebox_header.get(line_index)
+    } else {
+        frame.header.postbox_header.get(line_index)
+    };
+
+    if let Some(line) = line_to_copy {
+        // Convert the Rust string slice to a C-compatible, heap-allocated string.
+        match CString::new(line.as_str()) {
+            Ok(c_string) => c_string.into_raw(), // Give ownership to the C caller
+            Err(_) => ptr::null_mut(),           // In case the string contains a null byte
+        }
+    } else {
+        ptr::null_mut() // Index out of bounds
+    }
+}
+
+/// Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
+    if !s.is_null() {
+        // Retake ownership of the CString to deallocate it properly.
+        let _ = unsafe { CString::from_raw(s) };
     }
 }
 

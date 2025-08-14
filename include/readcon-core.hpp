@@ -14,7 +14,6 @@
 #include "readcon-core.h"
 
 namespace readcon {
-const size_t MAX_HEADER_LENGTH = 256;
 
 /**
  * @brief C++ representation of a single atom's core data.
@@ -239,19 +238,17 @@ inline void ConFrame::cache_data() const {
         return;
     }
 
-    // Extract the C-struct once.
+    // Extract the C-struct once for numeric data.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
     if (!c_frame) {
         throw std::runtime_error(
             "Failed to extract CFrame from handle for caching.");
     }
 
-    // Cache cell and angles.
     cell_cache_ = {c_frame->cell[0], c_frame->cell[1], c_frame->cell[2]};
     angles_cache_ = {c_frame->angles[0], c_frame->angles[1],
                      c_frame->angles[2]};
 
-    // Cache atoms.
     atoms_cache_.reserve(c_frame->num_atoms);
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
         const CAtom &c_atom = c_frame->atoms[i];
@@ -260,19 +257,26 @@ inline void ConFrame::cache_data() const {
                                        c_atom.is_fixed});
     }
 
-    // Free the temporary C-struct immediately after caching.
     free_c_frame(c_frame);
 
-    // Cache headers.
-    char buffer[MAX_HEADER_LENGTH];
-    rkr_frame_get_header_line(frame_handle_.get(), true, 0, buffer, MAX_HEADER_LENGTH);
-    prebox_header_cache_[0] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), true, 1, buffer, MAX_HEADER_LENGTH);
-    prebox_header_cache_[1] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), false, 0, buffer, MAX_HEADER_LENGTH);
-    postbox_header_cache_[0] = buffer;
-    rkr_frame_get_header_line(frame_handle_.get(), false, 1, buffer, MAX_HEADER_LENGTH);
-    postbox_header_cache_[1] = buffer;
+    // Cache headers using the flexible FFI that allocates and frees
+    // strings. This helper lambda makes the code cleaner and ensures memory is
+    // always freed.
+    auto get_and_free_string = [&](bool is_prebox, size_t index) {
+        char *c_str = rkr_frame_get_header_line_cpp(frame_handle_.get(),
+                                                    is_prebox, index);
+        if (!c_str) {
+            return std::string();
+        }
+        std::string result(c_str);
+        rkr_free_string(c_str);
+        return result;
+    };
+
+    prebox_header_cache_[0] = get_and_free_string(true, 0);
+    prebox_header_cache_[1] = get_and_free_string(true, 1);
+    postbox_header_cache_[0] = get_and_free_string(false, 0);
+    postbox_header_cache_[1] = get_and_free_string(false, 1);
 
     is_cached_ = true;
 }

@@ -123,6 +123,21 @@ int32_t rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
                                   uintptr_t buffer_len);
 
 /**
+ * Gets a header string line as a newly allocated, null-terminated C string.
+ *
+ * The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
+ * to prevent a memory leak. Returns NULL on error or if the index is invalid.
+ */
+char *rkr_frame_get_header_line_cpp(const struct RKRConFrame *frame_handle,
+                                    bool is_prebox,
+                                    uintptr_t line_index);
+
+/**
+ * Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+ */
+void rkr_free_string(char *s);
+
+/**
  * Creates a new frame writer for the specified file.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
  */
