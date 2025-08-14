@@ -262,16 +262,17 @@ inline void ConFrame::cache_data() const {
     // Cache headers using the flexible FFI that allocates and frees
     // strings. This helper lambda makes the code cleaner and ensures memory is
     // always freed.
-    auto get_and_free_string = [&](bool is_prebox, size_t index) {
-        char *c_str = rkr_frame_get_header_line_cpp(frame_handle_.get(),
-                                                    is_prebox, index);
-        if (!c_str) {
-            return std::string();
-        }
-        std::string result(c_str);
-        rkr_free_string(c_str);
-        return result;
-    };
+    auto get_and_free_string =
+        [frame_handle = frame_handle_.get()](bool is_prebox, size_t index) {
+            char *c_str =
+                rkr_frame_get_header_line_cpp(frame_handle, is_prebox, index);
+            if (!c_str) {
+                return std::string();
+            }
+            std::string result(c_str);
+            rkr_free_string(c_str);
+            return result;
+        };
 
     prebox_header_cache_[0] = get_and_free_string(true, 0);
     prebox_header_cache_[1] = get_and_free_string(true, 1);
