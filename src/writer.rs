@@ -88,17 +88,17 @@ impl<W: Write> ConFrameWriter<W> {
                 let atom = &frame.atom_data[atom_idx_offset + i];
                 writeln!(
                     self.writer,
-                    "{1:.0$} {2:.0$} {3:.0$} {4:.0} {5}",
-                    FLOAT_PRECISION,
-                    atom.x,
-                    atom.y,
-                    atom.z,
-                    if atom.is_fixed {
+                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag:.0} {atom_id}",
+                    prec = FLOAT_PRECISION,
+                    x = atom.x,
+                    y = atom.y,
+                    z = atom.z,
+                    fixed_flag = if atom.is_fixed {
                         FIXED_ATOM_FLAG
                     } else {
                         FREE_ATOM_FLAG
                     },
-                    atom.atom_id
+                    atom_id = atom.atom_id
                 )?;
             }
             atom_idx_offset += num_atoms_in_type;
