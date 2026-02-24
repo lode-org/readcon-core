@@ -3,6 +3,33 @@ use crate::types::{AtomDatum, ConFrame, FrameHeader};
 use std::iter::Peekable;
 use std::rc::Rc;
 
+/// Parses a line of whitespace-separated f64 values using fast-float2.
+///
+/// This is the hot-path parser for coordinate and velocity lines. It uses
+/// `fast_float2::parse` instead of `str::parse::<f64>()` for better throughput
+/// on the numeric-heavy atom data lines.
+///
+/// # Arguments
+///
+/// * `line` - A string slice representing a single line of data.
+/// * `n` - The exact number of f64 values expected on the line.
+pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
+    let mut values = Vec::with_capacity(n);
+    for token in line.split_ascii_whitespace() {
+        let val: f64 = fast_float2::parse(token)
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        values.push(val);
+    }
+    if values.len() == n {
+        Ok(values)
+    } else {
+        Err(ParseError::InvalidVectorLength {
+            expected: n,
+            found: values.len(),
+        })
+    }
+}
+
 /// Parses a line of whitespace-separated values into a vector of a specific type.
 ///
 /// This generic helper function takes a string slice, splits it by whitespace,
@@ -80,8 +107,8 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    let boxl_vec = parse_line_of_n::<f64>(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
-    let angles_vec = parse_line_of_n::<f64>(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
+    let boxl_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
+    let angles_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
@@ -96,7 +123,7 @@ pub fn parse_frame_header<'a>(
         lines.next().ok_or(ParseError::IncompleteHeader)?,
         natm_types,
     )?;
-    let masses_per_type = parse_line_of_n::<f64>(
+    let masses_per_type = parse_line_of_n_f64(
         lines.next().ok_or(ParseError::IncompleteHeader)?,
         natm_types,
     )?;
@@ -179,7 +206,7 @@ pub fn parse_single_frame<'a>(
         lines.next().ok_or(ParseError::IncompleteFrame)?;
         for _ in 0..*num_atoms {
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
-            let vals = parse_line_of_n::<f64>(coord_line, 5)?;
+            let vals = parse_line_of_n_f64(coord_line, 5)?;
             atom_data.push(AtomDatum {
                 // This is now a cheap reference-count increment, not a full string clone.
                 symbol: Rc::clone(&symbol),
@@ -248,7 +275,7 @@ where
             let vel_line = lines
                 .next()
                 .ok_or(ParseError::IncompleteVelocitySection)?;
-            let vals = parse_line_of_n::<f64>(vel_line, 5)?;
+            let vals = parse_line_of_n_f64(vel_line, 5)?;
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].vx = Some(vals[0]);
                 atom_data[atom_idx].vy = Some(vals[1]);
