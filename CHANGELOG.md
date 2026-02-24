@@ -2,6 +2,30 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.0 - 2026-02-24
+#### Features
+- add convel format support with optional velocity fields - (d4c699f) - HaoZeke
+- add Cap'n Proto RPC schema, server, and client - (f5e01df) - HaoZeke
+- add PyO3 Python bindings with read/write functions - (eb2b971) - HaoZeke
+- add Julia ccall bindings package - (07e0288) - HaoZeke
+- add Rust standalone usage example - (f4d2838) - HaoZeke
+#### Enhancements
+- integrate fast-float2, memmap2 reader, and parallel parsing - (13dc682) - HaoZeke
+- update C/C++ examples with velocity field access - (d37ac52) - HaoZeke
+#### Documentation
+- add Sphinx docs site with org-mode source and con/convel spec - (e6c8c23) - HaoZeke
+- add tutorials page with examples for all languages - (931823a) - HaoZeke
+- update README source with convel, bindings, and performance features - (eda3109) - HaoZeke
+- add developer workflow, release guidelines, contributing guide - (7792fe3) - HaoZeke
+#### Buildsystem
+- add CMakeLists.txt and update meson.build for subproject use - (01738af) - HaoZeke
+#### Continuous Integration
+- add Python wheel CI/CD with PyPI publishing via trusted publisher - (89cd7eb) - HaoZeke
+#### Bug Fixes
+- bump PyO3 to 0.28 and fix Python build configuration - (13f3837) - HaoZeke
+- add readme to pyproject.toml for PyPI long description - (934073e) - HaoZeke
+
+- - -
 ## v0.2.0 - 2025-08-14
 #### Buildsystem
 - Bump for doctests - (bfe85e1) - HaoZeke
