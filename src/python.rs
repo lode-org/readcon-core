@@ -7,7 +7,7 @@ use crate::writer::ConFrameWriter;
 use std::rc::Rc;
 
 /// Python-visible atom data.
-#[pyclass(name = "Atom")]
+#[pyclass(name = "Atom", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyAtomDatum {
     #[pyo3(get)]
@@ -62,7 +62,7 @@ impl From<&AtomDatum> for PyAtomDatum {
 }
 
 /// Python-visible simulation frame.
-#[pyclass(name = "ConFrame")]
+#[pyclass(name = "ConFrame", from_py_object)]
 #[derive(Clone)]
 pub struct PyConFrame {
     #[pyo3(get)]

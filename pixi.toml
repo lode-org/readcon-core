@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "readcon-core"
 version = "0.2.0"
 description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
@@ -17,10 +17,11 @@ rust = ">=1.88"
 capnproto = "*"
 
 [feature.python]
-dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*" }
-tasks = { python-build = "maturin develop --features python", python-test = "pytest tests/python/" }
+dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*", pip = "*" }
+tasks = { python-build = "maturin develop --features python", python-test = { cmd = "pytest tests/python/", depends-on = ["python-build"] } }
 
 [feature.julia]
+platforms = ["linux-64"]
 dependencies = { julia = ">=1.10" }
 tasks = { julia-test = "julia --project=julia/ReadCon -e 'using Pkg; Pkg.test()'" }
 
@@ -31,5 +32,5 @@ tasks = { orgbld = "emacs --batch -l docs/export.el", docbld = { cmd = "sphinx-b
 [environments]
 default = { solve-group = "default" }
 python = { features = ["python"], solve-group = "default" }
-julia = { features = ["julia"], solve-group = "default" }
+julia = { features = ["julia"], solve-group = "julia" }
 docs = { features = ["docs"], solve-group = "default" }
