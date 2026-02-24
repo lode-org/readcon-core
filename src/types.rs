@@ -2,40 +2,7 @@
 // Data Structures - The shape of our parsed data
 //=============================================================================
 
-use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-
-/// Represents all possible errors that can occur during `.con` file parsing.
-#[derive(Debug)]
-pub enum ParseError {
-    /// The file ended unexpectedly while parsing a frame's 9-line header.
-    IncompleteHeader,
-    /// The file ended unexpectedly after the header, while reading atom data.
-    IncompleteFrame,
-    /// A line had a different number of values than expected.
-    InvalidVectorLength {
-        /// The number of values that the parser expected to find.
-        expected: usize,
-        /// The number of values actually found on the line.
-        found: usize,
-    },
-    /// A value could not be parsed into the required number type (e.g., `f64` or `usize`).
-    InvalidNumberFormat(String),
-}
-
-/// Allows `ParseFloatError` to be automatically converted into `ParseError`.
-impl From<ParseFloatError> for ParseError {
-    fn from(e: ParseFloatError) -> Self {
-        ParseError::InvalidNumberFormat(e.to_string())
-    }
-}
-
-/// Allows `ParseIntError` to be automatically converted into `ParseError`.
-impl From<ParseIntError> for ParseError {
-    fn from(e: ParseIntError) -> Self {
-        ParseError::InvalidNumberFormat(e.to_string())
-    }
-}
 
 /// Holds all metadata from the 9-line header of a simulation frame.
 #[derive(Debug, PartialEq, Clone)]
@@ -72,6 +39,19 @@ pub struct AtomDatum {
     pub is_fixed: bool,
     /// A unique integer identifier for the atom.
     pub atom_id: u64,
+    /// The x-component of velocity (present only in `.convel` files).
+    pub vx: Option<f64>,
+    /// The y-component of velocity (present only in `.convel` files).
+    pub vy: Option<f64>,
+    /// The z-component of velocity (present only in `.convel` files).
+    pub vz: Option<f64>,
+}
+
+impl AtomDatum {
+    /// Returns `true` if this atom has velocity data.
+    pub fn has_velocity(&self) -> bool {
+        self.vx.is_some() && self.vy.is_some() && self.vz.is_some()
+    }
 }
 
 // Manual implementation of PartialEq because Rc<T> doesn't derive it by default.
@@ -84,6 +64,9 @@ impl PartialEq for AtomDatum {
             && self.z == other.z
             && self.is_fixed == other.is_fixed
             && self.atom_id == other.atom_id
+            && self.vx == other.vx
+            && self.vy == other.vy
+            && self.vz == other.vz
     }
 }
 
@@ -94,6 +77,13 @@ pub struct ConFrame {
     pub header: FrameHeader,
     /// A vector holding all atomic data for the frame.
     pub atom_data: Vec<AtomDatum>,
+}
+
+impl ConFrame {
+    /// Returns `true` if any atom in this frame has velocity data.
+    pub fn has_velocities(&self) -> bool {
+        self.atom_data.first().is_some_and(|a| a.has_velocity())
+    }
 }
 
 // Manual implementation of PartialEq because of the change to AtomDatum.

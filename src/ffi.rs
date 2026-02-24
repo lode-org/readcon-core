@@ -33,6 +33,7 @@ pub struct CFrame {
     pub num_atoms: usize,
     pub cell: [f64; 3],
     pub angles: [f64; 3],
+    pub has_velocities: bool,
 }
 
 #[repr(C)]
@@ -44,6 +45,10 @@ pub struct CAtom {
     pub atom_id: u64,
     pub mass: f64,
     pub is_fixed: bool,
+    pub vx: f64,
+    pub vy: f64,
+    pub vz: f64,
+    pub has_velocity: bool,
 }
 
 #[repr(C)]
@@ -141,6 +146,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         .zip(frame.header.masses_per_type.iter())
         .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
 
+    let has_velocities = frame.has_velocities();
+
     let mut c_atoms: Vec<CAtom> = frame
         .atom_data
         .iter()
@@ -153,6 +160,10 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             is_fixed: atom_datum.is_fixed,
             atom_id: atom_datum.atom_id,
             mass,
+            vx: atom_datum.vx.unwrap_or(0.0),
+            vy: atom_datum.vy.unwrap_or(0.0),
+            vz: atom_datum.vz.unwrap_or(0.0),
+            has_velocity: atom_datum.has_velocity(),
         })
         .collect();
 
@@ -165,6 +176,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         num_atoms,
         cell: frame.header.boxl,
         angles: frame.header.angles,
+        has_velocities,
     });
 
     Box::into_raw(c_frame)

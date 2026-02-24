@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use crate::types::{AtomDatum, ConFrame, FrameHeader};
+use std::iter::Peekable;
 use std::rc::Rc;
 
 /// Parses a line of whitespace-separated values into a vector of a specific type.
@@ -187,10 +188,78 @@ pub fn parse_single_frame<'a>(
                 z: vals[2],
                 is_fixed: vals[3] != 0.0,
                 atom_id: vals[4] as u64,
+                vx: None,
+                vy: None,
+                vz: None,
             });
         }
     }
     Ok(ConFrame { header, atom_data })
+}
+
+/// Attempts to parse an optional velocity section following coordinate blocks.
+///
+/// In `.convel` files, after all coordinate blocks there is a blank separator line
+/// followed by per-component velocity blocks with the same structure as coordinate
+/// blocks (symbol line, "Velocities of Component N" line, then atom lines with
+/// `vx vy vz fixed atomID`).
+///
+/// This function peeks at the next line. If it is blank (or contains only whitespace),
+/// it consumes the blank line and parses velocity data into the existing `atom_data`.
+/// If the next line is not blank (or is absent), no velocities are parsed.
+///
+/// Returns `Ok(true)` if velocities were found and parsed, `Ok(false)` otherwise.
+pub fn parse_velocity_section<'a, I>(
+    lines: &mut Peekable<I>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    // Peek at the next line to check for blank separator
+    match lines.peek() {
+        Some(line) if line.trim().is_empty() => {
+            // Consume the blank separator
+            lines.next();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        // Symbol line
+        let _symbol = lines
+            .next()
+            .ok_or(ParseError::IncompleteVelocitySection)?
+            .trim();
+
+        // "Velocities of Component N" line
+        let comp_line = lines
+            .next()
+            .ok_or(ParseError::IncompleteVelocitySection)?;
+        // Validate it looks like a velocity header (optional strictness)
+        if !comp_line.contains("Velocities of Component") {
+            return Err(ParseError::IncompleteVelocitySection);
+        }
+        let _ = type_idx; // suppress unused warning
+
+        for _ in 0..num_atoms {
+            let vel_line = lines
+                .next()
+                .ok_or(ParseError::IncompleteVelocitySection)?;
+            let vals = parse_line_of_n::<f64>(vel_line, 5)?;
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].vx = Some(vals[0]);
+                atom_data[atom_idx].vy = Some(vals[1]);
+                atom_data[atom_idx].vz = Some(vals[2]);
+                // vals[3] is fixed flag, vals[4] is atom_id (redundant with coords)
+            }
+            atom_idx += 1;
+        }
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -414,5 +483,75 @@ mod tests {
                 found: 4
             }
         ));
+    }
+
+    #[test]
+    fn test_parse_velocity_section_present() {
+        let lines = vec![
+            "PREBOX1",
+            "PREBOX2",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "2",
+            "1 1",
+            "63.546 1.008",
+            "Cu",
+            "Coordinates of Component 1",
+            "0.0 0.0 0.0 1.0 0",
+            "H",
+            "Coordinates of Component 2",
+            "1.0 2.0 3.0 0.0 1",
+            "",
+            "Cu",
+            "Velocities of Component 1",
+            "0.1 0.2 0.3 1.0 0",
+            "H",
+            "Velocities of Component 2",
+            "0.4 0.5 0.6 0.0 1",
+        ];
+        let mut line_it = lines.iter().copied().peekable();
+        // Parse the frame first (consuming 15 lines)
+        let mut frame =
+            parse_single_frame(&mut line_it).expect("coordinate parsing should succeed");
+        assert!(!frame.has_velocities());
+
+        // Now parse the velocity section
+        let has_vel =
+            parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
+                .expect("velocity parsing should succeed");
+        assert!(has_vel);
+        assert_eq!(frame.atom_data[0].vx, Some(0.1));
+        assert_eq!(frame.atom_data[0].vy, Some(0.2));
+        assert_eq!(frame.atom_data[0].vz, Some(0.3));
+        assert_eq!(frame.atom_data[1].vx, Some(0.4));
+        assert_eq!(frame.atom_data[1].vy, Some(0.5));
+        assert_eq!(frame.atom_data[1].vz, Some(0.6));
+    }
+
+    #[test]
+    fn test_parse_velocity_section_absent() {
+        let lines = vec![
+            "PREBOX1",
+            "PREBOX2",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+            "C",
+            "Coordinates of Component 1",
+            "0.0 0.0 0.0 0.0 1",
+        ];
+        let mut line_it = lines.iter().copied().peekable();
+        let mut frame = parse_single_frame(&mut line_it).expect("parse should succeed");
+        let has_vel =
+            parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
+                .expect("should succeed with no velocities");
+        assert!(!has_vel);
+        assert_eq!(frame.atom_data[0].vx, None);
     }
 }

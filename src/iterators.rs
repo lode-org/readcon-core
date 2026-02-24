@@ -2,15 +2,17 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::parse_single_frame;
+use crate::parser::{parse_single_frame, parse_velocity_section};
 use crate::{error, types};
 use std::iter::Peekable;
 
-/// An iterator that lazily parses simulation frames from a `.con` file's contents.
+/// An iterator that lazily parses simulation frames from a `.con` or `.convel`
+/// file's contents.
 ///
 /// This struct wraps an iterator over the lines of a string and, upon each iteration,
-/// attempts to parse a complete `ConFrame`. This is the primary interface for reading
-/// data from a `.con` file.
+/// attempts to parse a complete `ConFrame`. Velocity sections are detected
+/// automatically: if a blank line follows the coordinate blocks, the velocity
+/// data is parsed into the atoms.
 ///
 /// The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
 /// robust error handling for each frame.
@@ -33,7 +35,8 @@ impl<'a> ConFrameIterator<'a> {
     /// Skips the next frame without fully parsing its atomic data.
     ///
     /// This is more efficient than `next()` if you only need to advance the
-    /// iterator. It reads the frame's header to determine how many lines to skip.
+    /// iterator. It reads the frame's header to determine how many lines to skip,
+    /// including any velocity section if present.
     ///
     /// # Returns
     ///
@@ -76,17 +79,33 @@ impl<'a> ConFrameIterator<'a> {
             return Some(Err(error::ParseError::IncompleteHeader));
         }
 
-        // Calculate how many more lines to skip.
+        // Calculate how many more lines to skip for coordinate blocks.
         let total_atoms: usize = natms_per_type.iter().sum();
         // For each atom type, there is a symbol line and a "Coordinates..." line.
         let non_atom_lines = natm_types * 2;
         let lines_to_skip = total_atoms + non_atom_lines;
 
-        // Advance the iterator by skipping the remaining lines of the frame.
+        // Advance the iterator by skipping the coordinate block lines.
         for _ in 0..lines_to_skip {
             if self.lines.next().is_none() {
                 // The file ended before the header's promise was fulfilled.
                 return Some(Err(error::ParseError::IncompleteFrame));
+            }
+        }
+
+        // Check for an optional velocity section (blank separator followed by
+        // velocity blocks with the same structure as coordinate blocks).
+        if let Some(line) = self.lines.peek() {
+            if line.trim().is_empty() {
+                // Consume the blank separator
+                self.lines.next();
+                // Skip the velocity blocks: same structure as coordinate blocks
+                let vel_lines_to_skip = total_atoms + non_atom_lines;
+                for _ in 0..vel_lines_to_skip {
+                    if self.lines.next().is_none() {
+                        return Some(Err(error::ParseError::IncompleteVelocitySection));
+                    }
+                }
             }
         }
 
@@ -112,6 +131,15 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             return None;
         }
         // Otherwise, attempt to parse the next frame from the available lines.
-        Some(parse_single_frame(&mut self.lines))
+        let mut frame = match parse_single_frame(&mut self.lines) {
+            Ok(f) => f,
+            Err(e) => return Some(Err(e)),
+        };
+        // Attempt to parse optional velocity section
+        match parse_velocity_section(&mut self.lines, &frame.header, &mut frame.atom_data) {
+            Ok(_) => {}
+            Err(e) => return Some(Err(e)),
+        }
+        Some(Ok(frame))
     }
 }
