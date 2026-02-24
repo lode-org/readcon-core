@@ -1,21 +1,30 @@
 ;; Batch export org-mode files to RST for Sphinx
 ;; Usage: emacs --batch -l docs/export.el
 
+;; Setup Package Manager (to fetch ox-rst automatically)
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+
+;; Ensure ox-rst is present
+(unless (package-installed-p 'ox-rst)
+  (package-refresh-contents)
+  (package-install 'ox-rst))
+
 (require 'ox-rst)
+(require 'ox-publish)
 
-(defun readcon--export-org-to-rst ()
-  "Export all .org files in docs/orgmode/ to .rst in docs/source/."
-  (let ((org-dir (expand-file-name "docs/orgmode/" default-directory))
-        (rst-dir (expand-file-name "docs/source/" default-directory)))
-    (dolist (org-file (directory-files org-dir t "\\.org$"))
-      (let* ((base (file-name-sans-extension (file-name-nondirectory org-file)))
-             (rst-file (expand-file-name (concat base ".rst") rst-dir)))
-        (with-current-buffer (find-file-noselect org-file)
-          (let ((org-export-with-toc nil)
-                (org-export-with-section-numbers nil))
-            (org-rst-export-as-rst)
-            (write-file rst-file)
-            (kill-buffer)))
-        (message "Exported %s -> %s" org-file rst-file)))))
+;; Define the Publishing Project
+(setq org-publish-project-alist
+      '(("sphinx-rst"
+         :base-directory "./docs/orgmode/"
+         :base-extension "org"
+         :publishing-directory "./docs/source/"
+         :publishing-function org-rst-publish-to-rst
+         :recursive t
+         :headline-levels 4
+         :with-toc nil
+         :section-numbers nil)))
 
-(readcon--export-org-to-rst)
+;; Run the publish
+(org-publish "sphinx-rst" t)

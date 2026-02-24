@@ -26,8 +26,12 @@ dependencies = { julia = ">=1.10" }
 tasks = { julia-test = "julia --project=julia/ReadCon -e 'using Pkg; Pkg.test()'" }
 
 [feature.docs]
-dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7", shibuya = "*", sphinxcontrib-bibtex = "*" }
-tasks = { orgbld = "emacs --batch -l docs/export.el", docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] } }
+dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7" }
+[feature.docs.pypi-dependencies]
+shibuya = ">=2026.1.9, <2027"
+[feature.docs.tasks]
+orgbld = "emacs --batch -l docs/export.el"
+docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] }
 
 [environments]
 default = { solve-group = "default" }
