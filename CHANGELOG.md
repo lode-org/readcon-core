@@ -2,6 +2,45 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.4.3 - 2026-02-24
+#### Enhancements
+- use read_to_string for files under 64 KiB instead of mmap, avoiding fixed VMA/page-fault overhead on small files - (fc1b0d6) - HaoZeke
+- add dedicated read_first_frame() that stops after the first frame instead of parsing the entire file - (fc1b0d6) - HaoZeke
+#### Bug Fixes
+- set PYO3_PYTHON in coverage CI so pyo3-build-config finds the interpreter in pixi environments - (7ebbd3c) - HaoZeke
+#### Tests
+- add integration tests for read_first_frame with single and multi-frame files - (fc1b0d6) - HaoZeke
+
+- - -
+## v0.4.2 - 2026-02-24
+#### Features
+- expose per-atom mass field in Python bindings (Atom.mass property) - (0c08b7f) - HaoZeke
+#### Bug Fixes
+- add cargo bin to PATH for sphinx-rustdocgen in docs CI - (e36eabb) - HaoZeke
+
+- - -
+## v0.4.1 - 2026-02-24
+#### Documentation
+- fix toctree rendering, add sphinxcontrib-rust for Rust API docs - (1f5aa2b) - HaoZeke
+#### Continuous Integration
+- add release workflow for native library artifacts (Linux, macOS x86_64, macOS aarch64) - (dfdc873) - HaoZeke
+
+- - -
+## v0.4.0 - 2026-02-24
+#### Features
+- add Rust-native ConFrameBuilder for constructing frames from in-memory data - (406bee3) - HaoZeke
+- add configurable writer precision (default 6, overridable per-writer) - (b5b2752) - HaoZeke
+- add frame builder and mmap-based reader FFI for C/C++ consumers - (c73a971) - HaoZeke
+- add Python Atom/ConFrame constructors, precision parameter, and ASE Atoms conversion - (32ed476) - HaoZeke
+#### Buildsystem
+- switch meson build to cargo custom_target so Cargo dependencies (memmap2, fast_float2) are available in all build paths - (bd0627d) - HaoZeke
+- modernize CI workflows - (5b93a7f) - HaoZeke
+#### Bug Fixes
+- fix docs build with MELPA ox-rst, pixi pypi deps, setup-pixi v0.9.4 - (9988860) - HaoZeke
+- use pixi for coverage workflow so capnproto is available for --all-features builds - (7edfff3) - HaoZeke
+- regenerate pixi.lock - (e219ce2) - HaoZeke
+
+- - -
 ## v0.3.2 - 2026-02-24
 #### Buildsystem
 - add Criterion benchmark regression CI with asv-perch PR commenting

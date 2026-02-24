@@ -31,21 +31,36 @@ for frame in frames:
     print(frame.angles)         # [f64, f64, f64]
     print(frame.has_velocities)
     for atom in frame.atoms:
-        print(atom.symbol, atom.x, atom.y, atom.z)
+        print(atom.symbol, atom.x, atom.y, atom.z, atom.mass)
         if atom.has_velocity:
             print(atom.vx, atom.vy, atom.vz)
 
-# Write frames
+# Construct frames (v0.4.0+)
+atom = readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
+                    is_fixed=False, atom_id=1)
+frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0],
+                         angles=[90.0, 90.0, 90.0],
+                         atoms=[atom])
+
+# Write frames (with optional precision)
 readcon.write_con("output.con", frames)
+readcon.write_con("precise.con", frames, precision=17)
 output_str = readcon.write_con_string(frames)
+
+# ASE conversion (v0.4.0+, requires ase)
+ase_atoms = frame.to_ase()
+frame2 = readcon.ConFrame.from_ase(ase_atoms)
 #+end_src
 
 ** Types
 
-- =readcon.Atom= :: symbol, x, y, z, is_fixed, atom_id, vx, vy, vz,
-  has_velocity
-- =readcon.ConFrame= :: cell, angles, atoms, has_velocities,
-  prebox_header, postbox_header
+- =readcon.Atom= :: Constructable with keyword arguments (v0.4.0+).
+  Properties: symbol, x, y, z, is_fixed, atom_id, mass (v0.4.2+),
+  vx, vy, vz, has_velocity
+- =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
+  optional headers (v0.4.0+).  Properties: cell, angles, atoms,
+  has_velocities, prebox_header, postbox_header.
+  Methods: to_ase(), from_ase() (v0.4.0+)
 
 * Julia (ccall)
 

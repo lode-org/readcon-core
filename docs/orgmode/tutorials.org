@@ -63,10 +63,61 @@ for frame in &frames {
 Velocity data is written automatically when
 =frame.has_velocities()= returns true.
 
-** Memory-mapped reading for large files
+** Building frames from data
 
-For trajectory files with many frames, =read_all_frames= uses
-memory-mapped I/O to avoid loading the entire file into memory.
+/Added in v0.4.0./
+
+Use =ConFrameBuilder= to construct frames programmatically:
+
+#+begin_src rust
+use readcon_core::types::ConFrameBuilder;
+
+let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
+builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
+let frame = builder.build();
+#+end_src
+
+** Writing with custom precision
+
+/Added in v0.4.0./
+
+Control the number of decimal places in output coordinates:
+
+#+begin_src rust
+use std::fs::File;
+use readcon_core::writer::ConFrameWriter;
+
+// Default precision (6 decimal places)
+let file = File::create("output.con").unwrap();
+let mut writer = ConFrameWriter::new(file);
+
+// High precision (17 decimal places for lossless roundtrip)
+let file = File::create("precise.con").unwrap();
+let mut writer = ConFrameWriter::with_precision(file, 17);
+#+end_src
+
+** Reading a single frame efficiently
+
+/Added in v0.4.3./
+
+When only the first frame is needed, =read_first_frame= stops after
+parsing it.  Files under 64 KiB are read into memory directly; larger
+files use memory-mapped I/O.
+
+#+begin_src rust
+use readcon_core::iterators::read_first_frame;
+use std::path::Path;
+
+let frame = read_first_frame(Path::new("single.con")).unwrap();
+println!("Atoms: {}", frame.atom_data.len());
+#+end_src
+
+** Reading all frames from a file
+
+For trajectory files with many frames, =read_all_frames= applies
+the same small-file optimization and uses memory-mapped I/O for
+larger files.
 
 #+begin_src rust
 use readcon_core::iterators::read_all_frames;
@@ -95,7 +146,7 @@ let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
 ** Installation
 
 #+begin_src shell
-# From PyPI (when published)
+# From PyPI
 pip install readcon
 
 # From source
@@ -126,7 +177,7 @@ for frame in frames:
 
     for atom in frame.atoms:
         print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
-        print(f"    fixed={atom.is_fixed}, id={atom.atom_id}")
+        print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
 #+end_src
 
 ** Working with convel velocity data
@@ -145,6 +196,28 @@ if frame.has_velocities:
             print(f"{atom.symbol}: no velocity")
 #+end_src
 
+** Constructing frames from data
+
+/Added in v0.4.0./
+
+Build frames programmatically using =Atom= and =ConFrame= constructors:
+
+#+begin_src python
+import readcon
+
+atoms = [
+    readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
+                 is_fixed=False, atom_id=1),
+    readcon.Atom(symbol="Cu", x=2.55, y=2.55, z=0.0,
+                 is_fixed=False, atom_id=2),
+]
+frame = readcon.ConFrame(
+    cell=[10.0, 10.0, 10.0],
+    angles=[90.0, 90.0, 90.0],
+    atoms=atoms,
+)
+#+end_src
+
 ** Writing frames
 
 #+begin_src python
@@ -159,6 +232,44 @@ readcon.write_con("output.con", frames)
 # Write to string
 output = readcon.write_con_string(frames)
 print(output)
+#+end_src
+
+** Writing with custom precision
+
+/Added in v0.4.0./
+
+Pass the =precision= keyword to control decimal places:
+
+#+begin_src python
+import readcon
+
+# Default (6 decimal places)
+readcon.write_con("output.con", frames)
+
+# Lossless roundtrip (17 decimal places)
+readcon.write_con("precise.con", frames, precision=17)
+output = readcon.write_con_string(frames, precision=17)
+#+end_src
+
+** ASE Atoms conversion
+
+/Added in v0.4.0./
+
+Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
+installed (it is an optional dependency).
+
+#+begin_src python
+import readcon
+
+# ConFrame -> ase.Atoms
+frames = readcon.read_con("input.con")
+ase_atoms = frames[0].to_ase()
+
+# ase.Atoms -> ConFrame
+frame = readcon.ConFrame.from_ase(ase_atoms)
+
+# Convenience: read a .con file directly as ase.Atoms list
+ase_list = readcon.read_con_as_ase("trajectory.con")
 #+end_src
 
 ** Roundtrip test pattern
@@ -212,6 +323,42 @@ int main(int argc, char *argv[]) {
     }
     free_con_frame_iterator(iter);
     return 0;
+}
+#+end_src
+
+** Building frames from data
+
+/Added in v0.4.0./
+
+#+begin_src c
+#include "readcon-core.h"
+
+double cell[3] = {10.0, 10.0, 10.0};
+double angles[3] = {90.0, 90.0, 90.0};
+RKRConFrame *frame = rkr_frame_new(cell, angles, "", "", "", "");
+rkr_frame_add_atom(frame, "Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
+rkr_frame_add_atom(frame, "Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
+rkr_frame_finalize(frame);
+
+// Write with custom precision
+RKRConFrameWriter *writer =
+    create_writer_from_path_with_precision_c("output.con", 17);
+rkr_writer_extend(writer, (const RKRConFrame **)&frame, 1);
+free_rkr_writer(writer);
+free_rkr_frame(frame);
+#+end_src
+
+** Reading a single frame
+
+/Added in v0.4.0./
+
+#+begin_src c
+RKRConFrame *frame = rkr_read_first_frame("input.con");
+if (frame) {
+    CFrame *cf = rkr_frame_to_c_frame(frame);
+    printf("Atoms: %zu\n", cf->num_atoms);
+    free_c_frame(cf);
+    free_rkr_frame(frame);
 }
 #+end_src
 
@@ -272,6 +419,29 @@ int main(int argc, char *argv[]) {
 }
 #+end_src
 
+** Building frames from data
+
+/Added in v0.4.0./
+
+#+begin_src cpp
+#include "readcon-core.hpp"
+
+readcon::ConFrameBuilder builder(
+    {10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
+builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
+builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
+auto frame = builder.build();
+#+end_src
+
+** Reading a single frame
+
+/Added in v0.4.0./
+
+#+begin_src cpp
+auto frame = readcon::read_first_frame("input.con");
+std::cout << "Atoms: " << frame.atoms().size() << "\n";
+#+end_src
+
 ** Collecting and writing frames
 
 #+begin_src cpp
@@ -285,23 +455,32 @@ for (auto&& frame : input) {
     all_frames.push_back(std::move(frame));
 }
 
+// Default precision (6 decimal places)
 readcon::ConFrameWriter writer("output.con");
 writer.extend(all_frames);
+
+// High precision (17 decimal places)
+readcon::ConFrameWriter precise_writer("precise.con", 17);
+precise_writer.extend(all_frames);
 #+end_src
 
 ** Integration with eOn
 
-The C++ RAII API mirrors eOn's =Matter::con2matter= / =matter2con=
-interface closely enough for drop-in replacement:
+The C++ RAII API is used by eOn for all =.con= and =.convel= I/O:
 
 #+begin_src cpp
-// Replace eOn's fopen/fgets loop with:
-readcon::ConFrameIterator frames(con_path);
-for (auto&& frame : frames) {
-    // frame.cell() replaces manual header parsing
-    // frame.atoms() replaces the per-atom sscanf loop
-    // frame.has_velocities() replaces extension-based detection
+// Reading: mmap-based single frame read
+auto frame = readcon::read_first_frame(con_path);
+// frame.cell(), frame.atoms(), frame.has_velocities()
+
+// Writing: builder with precision control
+readcon::ConFrameBuilder builder(lengths, angles);
+for (int i = 0; i < nAtoms; i++) {
+    builder.add_atom(symbol, x, y, z, is_fixed, id, mass);
 }
+auto out_frame = builder.build();
+readcon::ConFrameWriter writer(path, 17);  // 17 digits for lossless roundtrip
+writer.extend({out_frame});
 #+end_src
 
 * Julia
