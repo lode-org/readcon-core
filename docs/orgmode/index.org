@@ -10,6 +10,7 @@ and Julia.
    :caption: Contents
 
    spec
+   tutorials
    architecture
    bindings
    rpc

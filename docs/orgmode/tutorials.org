@@ -1,0 +1,371 @@
+#+title: Tutorials
+#+options: toc:2 num:t
+
+* Rust
+
+** Reading a CON file
+
+#+begin_src rust
+use std::fs;
+use readcon_core::iterators::ConFrameIterator;
+
+let contents = fs::read_to_string("trajectory.con").unwrap();
+let iter = ConFrameIterator::new(&contents);
+
+for result in iter {
+    let frame = result.unwrap();
+    println!("Cell: {:?}", frame.header.boxl);
+    println!("Atoms: {}", frame.atom_data.len());
+}
+#+end_src
+
+** Reading a convel file with velocities
+
+The same iterator handles both =.con= and =.convel= files.
+Velocity data is detected automatically by the parser.
+
+#+begin_src rust
+use std::fs;
+use readcon_core::iterators::ConFrameIterator;
+
+let contents = fs::read_to_string("trajectory.convel").unwrap();
+let iter = ConFrameIterator::new(&contents);
+
+for result in iter {
+    let frame = result.unwrap();
+    println!("Has velocities: {}", frame.has_velocities());
+
+    for atom in &frame.atom_data {
+        print!("{} ({:.4}, {:.4}, {:.4})", atom.symbol, atom.x, atom.y, atom.z);
+        if atom.has_velocity() {
+            print!(" vel=({:.6}, {:.6}, {:.6})",
+                   atom.vx.unwrap(), atom.vy.unwrap(), atom.vz.unwrap());
+        }
+        println!();
+    }
+}
+#+end_src
+
+** Writing frames
+
+#+begin_src rust
+use std::fs::File;
+use readcon_core::writer::ConFrameWriter;
+
+let file = File::create("output.con").unwrap();
+let mut writer = ConFrameWriter::new(file);
+
+for frame in &frames {
+    writer.write_frame(frame).unwrap();
+}
+#+end_src
+
+Velocity data is written automatically when
+=frame.has_velocities()= returns true.
+
+** Memory-mapped reading for large files
+
+For trajectory files with many frames, =read_all_frames= uses
+memory-mapped I/O to avoid loading the entire file into memory.
+
+#+begin_src rust
+use readcon_core::iterators::read_all_frames;
+use std::path::Path;
+
+let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
+println!("Loaded {} frames", frames.len());
+#+end_src
+
+** Parallel parsing
+
+Behind the =parallel= feature gate, multi-frame files can be parsed
+concurrently using rayon.
+
+#+begin_src rust
+#[cfg(feature = "parallel")]
+use readcon_core::iterators::parse_frames_parallel;
+
+let contents = std::fs::read_to_string("large_trajectory.con").unwrap();
+let results = parse_frames_parallel(&contents);
+let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
+#+end_src
+
+* Python
+
+** Installation
+
+#+begin_src shell
+# From PyPI (when published)
+pip install readcon
+
+# From source
+maturin develop --features python
+
+# Via pixi
+pixi r -e python python-build
+#+end_src
+
+** Reading and inspecting frames
+
+#+begin_src python
+import readcon
+
+# Read from file
+frames = readcon.read_con("trajectory.con")
+
+# Read from string
+with open("trajectory.con") as f:
+    frames = readcon.read_con_string(f.read())
+
+for frame in frames:
+    print(f"Cell: {frame.cell}")
+    print(f"Angles: {frame.angles}")
+    print(f"Atom count: {len(frame)}")
+    print(f"Has velocities: {frame.has_velocities}")
+    print(f"Pre-box header: {frame.prebox_header}")
+
+    for atom in frame.atoms:
+        print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
+        print(f"    fixed={atom.is_fixed}, id={atom.atom_id}")
+#+end_src
+
+** Working with convel velocity data
+
+#+begin_src python
+import readcon
+
+frames = readcon.read_con("trajectory.convel")
+frame = frames[0]
+
+if frame.has_velocities:
+    for atom in frame.atoms:
+        if atom.has_velocity:
+            print(f"{atom.symbol}: vel=({atom.vx:.6f}, {atom.vy:.6f}, {atom.vz:.6f})")
+        else:
+            print(f"{atom.symbol}: no velocity")
+#+end_src
+
+** Writing frames
+
+#+begin_src python
+import readcon
+
+# Read, modify, and write back
+frames = readcon.read_con("input.con")
+
+# Write to file
+readcon.write_con("output.con", frames)
+
+# Write to string
+output = readcon.write_con_string(frames)
+print(output)
+#+end_src
+
+** Roundtrip test pattern
+
+#+begin_src python
+import readcon
+
+frames = readcon.read_con("input.convel")
+output = readcon.write_con_string(frames)
+frames2 = readcon.read_con_string(output)
+
+assert len(frames) == len(frames2)
+for orig, reread in zip(frames, frames2):
+    assert len(orig) == len(reread)
+    assert orig.has_velocities == reread.has_velocities
+#+end_src
+
+* C
+
+** Reading and printing frames
+
+#+begin_src c
+#include "readcon-core.h"
+#include <stdio.h>
+
+int main(int argc, char *argv[]) {
+    CConFrameIterator *iter = read_con_file_iterator(argv[1]);
+    if (!iter) return 1;
+
+    RKRConFrame *handle;
+    while ((handle = con_frame_iterator_next(iter)) != NULL) {
+        CFrame *frame = rkr_frame_to_c_frame(handle);
+
+        printf("Cell: [%.4f, %.4f, %.4f]\n",
+               frame->cell[0], frame->cell[1], frame->cell[2]);
+        printf("Atoms: %zu, Has velocities: %s\n",
+               frame->num_atoms, frame->has_velocities ? "yes" : "no");
+
+        for (size_t i = 0; i < frame->num_atoms; i++) {
+            CAtom *a = &frame->atoms[i];
+            printf("  Atom %zu: (%.4f, %.4f, %.4f) fixed=%d id=%llu\n",
+                   i, a->x, a->y, a->z, a->is_fixed,
+                   (unsigned long long)a->atom_id);
+            if (a->has_velocity) {
+                printf("    vel=(%.6f, %.6f, %.6f)\n", a->vx, a->vy, a->vz);
+            }
+        }
+
+        free_c_frame(frame);
+        free_rkr_frame(handle);
+    }
+    free_con_frame_iterator(iter);
+    return 0;
+}
+#+end_src
+
+** Writing frames
+
+#+begin_src c
+#include "readcon-core.h"
+
+// After collecting handles into an array:
+RKRConFrameWriter *writer = create_writer_from_path_c("output.con");
+int result = rkr_writer_extend(writer,
+                               (const RKRConFrame **)handles,
+                               num_frames);
+free_rkr_writer(writer);
+#+end_src
+
+** Memory management
+
+The C API uses two ownership patterns:
+
+1. *Opaque handles* (=RKRConFrame=): allocated by Rust, freed with
+   =free_rkr_frame()=. Used for lossless frame manipulation.
+2. *Transparent structs* (=CFrame=): extracted copies freed with
+   =free_c_frame()=. Used for direct data access.
+
+Always free both the =CFrame= and the =RKRConFrame= separately.
+
+* C++
+
+** RAII iteration with range-based for
+
+#+begin_src cpp
+#include "readcon-core.hpp"
+#include <iostream>
+
+int main(int argc, char *argv[]) {
+    readcon::ConFrameIterator frames(argv[1]);
+
+    for (auto&& frame : frames) {
+        auto cell = frame.cell();
+        auto angles = frame.angles();
+        std::cout << "Cell: " << cell[0] << ", " << cell[1] << ", "
+                  << cell[2] << "\n";
+        std::cout << "Has velocities: " << std::boolalpha
+                  << frame.has_velocities() << "\n";
+
+        for (const auto& atom : frame.atoms()) {
+            std::cout << "  (" << atom.x << ", " << atom.y << ", "
+                      << atom.z << ")";
+            if (atom.has_velocity) {
+                std::cout << " vel=(" << atom.vx << ", " << atom.vy
+                          << ", " << atom.vz << ")";
+            }
+            std::cout << "\n";
+        }
+    }
+    return 0;
+}
+#+end_src
+
+** Collecting and writing frames
+
+#+begin_src cpp
+#include "readcon-core.hpp"
+#include <vector>
+
+readcon::ConFrameIterator input("input.con");
+std::vector<readcon::ConFrame> all_frames;
+
+for (auto&& frame : input) {
+    all_frames.push_back(std::move(frame));
+}
+
+readcon::ConFrameWriter writer("output.con");
+writer.extend(all_frames);
+#+end_src
+
+** Integration with eOn
+
+The C++ RAII API mirrors eOn's =Matter::con2matter= / =matter2con=
+interface closely enough for drop-in replacement:
+
+#+begin_src cpp
+// Replace eOn's fopen/fgets loop with:
+readcon::ConFrameIterator frames(con_path);
+for (auto&& frame : frames) {
+    // frame.cell() replaces manual header parsing
+    // frame.atoms() replaces the per-atom sscanf loop
+    // frame.has_velocities() replaces extension-based detection
+}
+#+end_src
+
+* Julia
+
+** Installation and setup
+
+#+begin_src julia
+# Point to the shared library
+ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
+
+# Or build from source (library auto-discovered)
+using Pkg
+Pkg.develop(path="julia/ReadCon")
+#+end_src
+
+** Reading frames
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("trajectory.con")
+
+for frame in frames
+    println("Cell: ", frame.cell)
+    println("Angles: ", frame.angles)
+    println("Atoms: ", length(frame.atoms))
+    println("Has velocities: ", frame.has_velocities)
+    println("Header: ", frame.prebox_header)
+
+    for atom in frame.atoms
+        @printf("  (%.4f, %.4f, %.4f) fixed=%s id=%d\n",
+                atom.x, atom.y, atom.z, atom.is_fixed, atom.atom_id)
+    end
+end
+#+end_src
+
+** Working with convel velocity data
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("trajectory.convel")
+frame = frames[1]
+
+if frame.has_velocities
+    for atom in frame.atoms
+        if atom.has_velocity
+            @printf("vel=(%.6f, %.6f, %.6f)\n", atom.vx, atom.vy, atom.vz)
+        end
+    end
+end
+#+end_src
+
+** Multi-frame trajectory processing
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("neb_trajectory.con")
+println("Loaded $(length(frames)) images")
+
+# Process each NEB image
+for (i, frame) in enumerate(frames)
+    n_free = count(a -> !a.is_fixed, frame.atoms)
+    println("Image $i: $n_free free atoms")
+end
+#+end_src

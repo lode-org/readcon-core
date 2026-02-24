@@ -6,6 +6,9 @@
 ** Installation
 
 #+begin_src shell
+# From PyPI
+pip install readcon
+
 # From source with maturin
 maturin develop --features python
 
@@ -93,7 +96,14 @@ CConFrameIterator *iter = read_con_file_iterator("file.con");
 RKRConFrame *handle;
 while ((handle = con_frame_iterator_next(iter)) != NULL) {
     CFrame *frame = rkr_frame_to_c_frame(handle);
-    // use frame->atoms, frame->cell, etc.
+    printf("Atoms: %zu, Velocities: %s\n",
+           frame->num_atoms, frame->has_velocities ? "yes" : "no");
+    for (size_t i = 0; i < frame->num_atoms; i++) {
+        CAtom *a = &frame->atoms[i];
+        if (a->has_velocity) {
+            printf("  vel=(%.6f, %.6f, %.6f)\n", a->vx, a->vy, a->vz);
+        }
+    }
     free_c_frame(frame);
     free_rkr_frame(handle);
 }
@@ -112,5 +122,28 @@ for (auto&& frame : frames) {
     auto& cell = frame.cell();
     auto& atoms = frame.atoms();
     bool has_vel = frame.has_velocities();
+    for (const auto& atom : atoms) {
+        if (atom.has_velocity) {
+            std::cout << atom.vx << " " << atom.vy << " " << atom.vz << "\n";
+        }
+    }
 }
+#+end_src
+
+** Build system integration
+
+*** Meson subproject
+
+#+begin_src meson
+readcon = subproject('readcon-core')
+readcon_dep = readcon.get_variable('readcon_dep')
+
+executable('my_app', 'main.cpp', dependencies: readcon_dep)
+#+end_src
+
+*** CMake subproject
+
+#+begin_src cmake
+add_subdirectory(readcon-core)
+target_link_libraries(my_app PRIVATE readcon-core::readcon-core)
 #+end_src
