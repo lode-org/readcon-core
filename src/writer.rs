@@ -3,8 +3,8 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-/// The floating-point precision used for writing coordinates, cell dimensions, and masses.
-const FLOAT_PRECISION: usize = 6;
+/// Default floating-point precision used for writing coordinates, cell dimensions, and masses.
+const DEFAULT_FLOAT_PRECISION: usize = 6;
 /// Always 0 or 1
 /// The value used to indicate a fixed atom in the output file.
 const FIXED_ATOM_FLAG: usize = 1;
@@ -27,6 +27,7 @@ const FREE_ATOM_FLAG: usize = 0;
 /// ```
 pub struct ConFrameWriter<W: Write> {
     writer: BufWriter<W>,
+    precision: usize,
 }
 
 // General implementation for any type that implements `Write`.
@@ -39,23 +40,39 @@ impl<W: Write> ConFrameWriter<W> {
     pub fn new(writer: W) -> Self {
         Self {
             writer: BufWriter::new(writer),
+            precision: DEFAULT_FLOAT_PRECISION,
+        }
+    }
+
+    /// Creates a new `ConFrameWriter` with a custom floating-point precision.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - Any type that implements `std::io::Write`.
+    /// * `precision` - Number of decimal places for floating-point output.
+    pub fn with_precision(writer: W, precision: usize) -> Self {
+        Self {
+            writer: BufWriter::new(writer),
+            precision,
         }
     }
 
     /// Writes a single `ConFrame` to the output stream.
     pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
+        let prec = self.precision;
+
         // --- Write the 9-line Header ---
         writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
         writeln!(self.writer, "{}", frame.header.prebox_header[1])?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",
-            FLOAT_PRECISION, frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
+            prec, frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
         )?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",
-            FLOAT_PRECISION, frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
+            prec, frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
         )?;
         writeln!(self.writer, "{}", frame.header.postbox_header[0])?;
         writeln!(self.writer, "{}", frame.header.postbox_header[1])?;
@@ -73,7 +90,7 @@ impl<W: Write> ConFrameWriter<W> {
             .header
             .masses_per_type
             .iter()
-            .map(|m| format!("{:.1$}", m, FLOAT_PRECISION))
+            .map(|m| format!("{:.1$}", m, prec))
             .collect();
         writeln!(self.writer, "{}", masses_str.join(" "))?;
 
@@ -89,7 +106,7 @@ impl<W: Write> ConFrameWriter<W> {
                 writeln!(
                     self.writer,
                     "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag:.0} {atom_id}",
-                    prec = FLOAT_PRECISION,
+                    prec = prec,
                     x = atom.x,
                     y = atom.y,
                     z = atom.z,
@@ -120,7 +137,7 @@ impl<W: Write> ConFrameWriter<W> {
                     writeln!(
                         self.writer,
                         "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag:.0} {atom_id}",
-                        prec = FLOAT_PRECISION,
+                        prec = prec,
                         vx = atom.vx.unwrap_or(0.0),
                         vy = atom.vy.unwrap_or(0.0),
                         vz = atom.vz.unwrap_or(0.0),
@@ -158,5 +175,11 @@ impl ConFrameWriter<File> {
     pub fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let file = File::create(path)?;
         Ok(Self::new(file))
+    }
+
+    /// Creates a new `ConFrameWriter` that writes to a file with a custom precision.
+    pub fn from_path_with_precision<P: AsRef<Path>>(path: P, precision: usize) -> io::Result<Self> {
+        let file = File::create(path)?;
+        Ok(Self::with_precision(file, precision))
     }
 }
