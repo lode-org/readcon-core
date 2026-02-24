@@ -1,0 +1,90 @@
+name: Release native libraries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: readcon-core-linux-x86_64
+            static_lib: libreadcon_core.a
+            shared_lib: libreadcon_core.so
+          - os: macos
+            runner: macos-14
+            target: aarch64-apple-darwin
+            artifact: readcon-core-macos-aarch64
+            static_lib: libreadcon_core.a
+            shared_lib: libreadcon_core.dylib
+          - os: macos
+            runner: macos-15
+            target: x86_64-apple-darwin
+            artifact: readcon-core-macos-x86_64
+            static_lib: libreadcon_core.a
+            shared_lib: libreadcon_core.dylib
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cbindgen
+        run: cargo install cbindgen
+
+      - name: Build static library
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Generate C header
+        run: cbindgen --config cbindgen.toml --crate readcon-core --output readcon-core.h
+
+      - name: Package artifacts
+        run: |
+          mkdir -p staging/include staging/lib
+          cp readcon-core.h staging/include/
+          cp include/readcon-core.hpp staging/include/
+          cp target/${{ matrix.target }}/release/${{ matrix.static_lib }} staging/lib/
+          cp target/${{ matrix.target }}/release/${{ matrix.shared_lib }} staging/lib/ || true
+          tar czf ${{ matrix.artifact }}.tar.gz -C staging .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  release:
+    name: Create GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            artifacts/*.tar.gz
