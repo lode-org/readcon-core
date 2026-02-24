@@ -74,15 +74,30 @@ cargo_prog = find_program('cargo', required: true)
 # (memmap2, fast_float2, etc.) are properly resolved and linked.
 # Meson's native library(rust_abi: 'c') bypasses Cargo, making
 # external crates unavailable.
+#
+# On Windows cargo produces .lib; elsewhere .a.
+if host_machine.system() == 'windows'
+    _cargo_lib_name = 'readcon_core.lib'
+else
+    _cargo_lib_name = 'libreadcon_core.a'
+endif
+
+_py = find_program('python3', 'python')
+
 readcon_cargo = custom_target(
     'readcon-cargo',
     input: files('Cargo.toml', 'Cargo.lock', 'src/lib.rs'),
-    output: 'libreadcon_core.a',
+    output: _cargo_lib_name,
     command: [
-        'sh', '-c',
-        cargo_prog.full_path() + ' build --release --manifest-path @INPUT0@ --target-dir @PRIVATE_DIR@/cargo-target && cp @PRIVATE_DIR@/cargo-target/release/libreadcon_core.a @OUTPUT0@',
+        _py, '-c',
+        'import subprocess, shutil, sys; ' +
+        'subprocess.check_call([sys.argv[1], "build", "--release", "--manifest-path", sys.argv[2], "--target-dir", sys.argv[3] + "/cargo-target"]); ' +
+        'shutil.copy2(sys.argv[3] + "/cargo-target/release/" + sys.argv[4], sys.argv[5])',
+        cargo_prog, '@INPUT0@', '@PRIVATE_DIR@', _cargo_lib_name, '@OUTPUT0@',
     ],
     build_by_default: true,
+    install: true,
+    install_dir: get_option('libdir'),
 )
 
 # System dependencies required when statically linking a Rust library
@@ -95,6 +110,13 @@ if host_machine.system() == 'linux'
     ]
 elif host_machine.system() == 'darwin'
     _rust_sys_deps += [dependency('threads')]
+elif host_machine.system() == 'windows'
+    _rust_sys_deps += [
+        cc.find_library('ws2_32', required: true),
+        cc.find_library('userenv', required: true),
+        cc.find_library('bcrypt', required: true),
+        cc.find_library('ntdll', required: true),
+    ]
 endif
 
 if get_option('with_tests')
