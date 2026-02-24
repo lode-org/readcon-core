@@ -124,8 +124,15 @@ if get_option('with_tests')
     )
 endif
 
+# Use link_args rather than link_with so that Meson never attempts to
+# promote the link to link_whole for installed static library consumers.
+# link_whole does not support custom_targets. Passing the archive path
+# via link_args sidesteps this entirely while working for both shared
+# and static consumers. The custom_target in sources ensures build
+# ordering (cargo runs before any consumer links).
 readcon_dep = declare_dependency(
-    link_with: readcon_cargo,
+    link_args: [readcon_cargo.full_path()],
+    sources: readcon_cargo,
     dependencies: _rust_sys_deps,
     include_directories: include_directories('include'),
 )
