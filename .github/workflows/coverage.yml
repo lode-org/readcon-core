@@ -43,6 +43,11 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          cache: true
+          environments: default
+
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
         with:
@@ -56,7 +61,7 @@ jobs:
       - name: Generate rust code coverage
         id: coverage
         run: |
-          cargo llvm-cov --all-features --workspace \
+          pixi r -e default cargo llvm-cov --all-features --workspace \
             --no-fail-fast --codecov \
             --include-ffi \
             --output-path rust_codecov.json
