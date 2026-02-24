@@ -61,7 +61,9 @@ jobs:
       - name: Generate rust code coverage
         id: coverage
         run: |
-          pixi r -e default cargo llvm-cov --all-features --workspace \
+          PIXI_PYTHON="$(pixi r -e default which python)"
+          PYO3_PYTHON="$PIXI_PYTHON" pixi r -e default \
+            cargo llvm-cov --all-features --workspace \
             --no-fail-fast --codecov \
             --include-ffi \
             --output-path rust_codecov.json
