@@ -30,6 +30,9 @@ pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
 cog = "0.1.0"
 criterion = { version = "0.6.0", features = ["html_reports"] }
 
+[[example]]
+name = "rust_usage"
+
 [[bench]]
 name = "iterator_bench"
 harness = false
