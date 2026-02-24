@@ -489,7 +489,9 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
 // Direct mmap-based Reader FFI
 //=============================================================================
 
-/// Reads the first frame from a .con file using mmap.
+/// Reads the first frame from a .con file.
+/// Uses `read_to_string` for small files (< 64 KiB) and mmap for larger ones.
+/// Stops after the first frame rather than parsing the entire file.
 /// The caller OWNS the returned handle and MUST call `free_rkr_frame`.
 /// Returns NULL on error.
 #[unsafe(no_mangle)]
@@ -503,12 +505,9 @@ pub unsafe extern "C" fn rkr_read_first_frame(
         Ok(s) => s,
         Err(_) => return ptr::null_mut(),
     };
-    match iterators::read_all_frames(Path::new(filename)) {
-        Ok(mut frames) if !frames.is_empty() => {
-            let frame = frames.swap_remove(0);
-            Box::into_raw(Box::new(frame)) as *mut RKRConFrame
-        }
-        _ => ptr::null_mut(),
+    match iterators::read_first_frame(Path::new(filename)) {
+        Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(_) => ptr::null_mut(),
     }
 }
 

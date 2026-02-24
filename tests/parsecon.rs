@@ -1,5 +1,5 @@
 mod common;
-use readcon_core::iterators::ConFrameIterator;
+use readcon_core::iterators::{self, ConFrameIterator};
 use std::fs;
 use std::path::Path;
 
@@ -152,4 +152,33 @@ fn test_iterator_forward() {
         parser2.next().is_none(),
         "There should be no more frames after forwarding past the last one"
     );
+}
+
+#[test]
+fn test_read_first_frame() {
+    let path = test_case!("cuh2.con");
+    let frame = iterators::read_first_frame(&path).expect("read_first_frame should succeed");
+    assert_eq!(frame.header.natm_types, 2);
+    assert_eq!(frame.atom_data.len(), 218);
+    assert_eq!(&*frame.atom_data[0].symbol, "Cu");
+    assert_eq!(frame.atom_data[0].atom_id, 0);
+}
+
+#[test]
+fn test_read_first_frame_multi() {
+    // read_first_frame on a multi-frame file should return only the first
+    let path = test_case!("tiny_multi_cuh2.con");
+    let frame = iterators::read_first_frame(&path).expect("read_first_frame should succeed");
+    assert_eq!(frame.atom_data.len(), 4);
+    assert_eq!(&*frame.atom_data[0].symbol, "Cu");
+    assert_eq!(frame.atom_data[0].x, 0.6394);
+}
+
+#[test]
+fn test_read_all_frames_matches_iterator() {
+    let path = test_case!("tiny_multi_cuh2.con");
+    let frames = iterators::read_all_frames(&path).expect("read_all_frames should succeed");
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0].atom_data.len(), 4);
+    assert_eq!(frames[1].atom_data.len(), 4);
 }
