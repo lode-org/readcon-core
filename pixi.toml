@@ -1,0 +1,35 @@
+[project]
+name = "readcon-core"
+version = "0.2.0"
+description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64"]
+
+[tasks]
+test = "cargo test"
+test-all = "cargo test --all-features"
+bench = "cargo bench"
+build = "cargo build --release"
+build-rpc = "cargo build --release --features rpc"
+
+[dependencies]
+rust = ">=1.88"
+capnproto = "*"
+
+[feature.python]
+dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*" }
+tasks = { python-build = "maturin develop --features python", python-test = "pytest tests/python/" }
+
+[feature.julia]
+dependencies = { julia = ">=1.10" }
+tasks = { julia-test = "julia --project=julia/ReadCon -e 'using Pkg; Pkg.test()'" }
+
+[feature.docs]
+dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7", shibuya = "*", sphinxcontrib-bibtex = "*" }
+tasks = { orgbld = "emacs --batch -l docs/export.el", docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] } }
+
+[environments]
+default = { solve-group = "default" }
+python = { features = ["python"], solve-group = "default" }
+julia = { features = ["julia"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
