@@ -1,7 +1,7 @@
 project(
     'readcon-core',
     ['rust', 'c'],
-    version: '0.1',
+    version: '0.2.0',
     meson_version: '>=1.8.0',
     default_options: [
         'buildtype=debugoptimized',
@@ -68,15 +68,22 @@ readcon_header_intree = custom_target(
     build_by_default: true,
 )
 
+readcon_sources = files(
+    'src/lib.rs',
+    'src/error.rs',
+    'src/ffi.rs',
+    'src/helpers.rs',
+    'src/iterators.rs',
+    'src/parser.rs',
+    'src/types.rs',
+    'src/writer.rs',
+)
+
 # Library
 # In most cases we'd like the C linkage
 readcon_lib = library(
     'readcon-core',
-    'src/lib.rs',
-    'src/error.rs',
-    'src/iterators.rs',
-    'src/parser.rs',
-    'src/types.rs',
+    readcon_sources,
     rust_abi: 'c',
 )
 
@@ -84,11 +91,7 @@ readcon_lib = library(
 # gh-14813 is why this is static for now
 readcon_rlib = static_library(
     'readcon_core',
-    'src/lib.rs',
-    'src/error.rs',
-    'src/iterators.rs',
-    'src/parser.rs',
-    'src/types.rs',
+    readcon_sources,
     rust_abi: 'rust',
 )
 
