@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.2 - 2026-02-24
+#### Buildsystem
+- add Criterion benchmark regression CI with asv-perch PR commenting
+- fix Python wheel builds (macos-15, aarch64 --find-interpreter)
+#### Documentation
+- regenerate README with current features, installation table, convel spec
+- add complete release checklist and CI workflow docs to contributing guide
+
+- - -
 ## v0.3.1 - 2026-02-24
 #### Bug Fixes
 - fix all repository URLs from readcon-rs to readcon-core

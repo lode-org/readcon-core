@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "readcon"
-version = "0.3.1"
+version = "0.3.2"
 description = "Python bindings for readcon-core CON/convel file parser"
 requires-python = ">=3.10"
 license = "MIT"
