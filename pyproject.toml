@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "readcon"
+version = "0.2.0"
+description = "Python bindings for readcon-core CON/convel file parser"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["parser", "comp-chem", "file-format", "con", "eon"]
+
+[tool.maturin]
+features = ["python"]
+module-name = "readcon"
