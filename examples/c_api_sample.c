@@ -39,6 +39,8 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
     printf("  - Post-box header 2:\"%s\"\n", header_buffer);
 
     printf("  - Total atoms:      %zu\n", c_frame->num_atoms);
+    printf("  - Has velocities:   %s\n",
+           c_frame->has_velocities ? "yes" : "no");
     if (c_frame->num_atoms > 0) {
         const CAtom *last_atom = &c_frame->atoms[c_frame->num_atoms - 1];
         printf(
@@ -46,6 +48,10 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
             (unsigned long long)last_atom->atom_id,
             (unsigned long long)last_atom->atomic_number, last_atom->x,
             last_atom->y, last_atom->z);
+        if (last_atom->has_velocity) {
+            printf("    Vel=[%.6f, %.6f, %.6f]\n", last_atom->vx,
+                   last_atom->vy, last_atom->vz);
+        }
     }
 
     // CRUCIAL: Free the temporary CFrame struct after we're done with it.
