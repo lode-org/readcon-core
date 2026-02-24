@@ -96,8 +96,6 @@ readcon_cargo = custom_target(
         cargo_prog, '@INPUT0@', '@PRIVATE_DIR@', _cargo_lib_name, '@OUTPUT0@',
     ],
     build_by_default: true,
-    install: true,
-    install_dir: get_option('libdir'),
 )
 
 # System dependencies required when statically linking a Rust library
