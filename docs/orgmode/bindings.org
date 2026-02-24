@@ -1,0 +1,116 @@
+#+title: Language bindings
+#+options: toc:2 num:t
+
+* Python (PyO3)
+
+** Installation
+
+#+begin_src shell
+# From source with maturin
+maturin develop --features python
+
+# Or via pixi
+pixi r -e python python-build
+#+end_src
+
+** Usage
+
+#+begin_src python
+import readcon
+
+# Read frames
+frames = readcon.read_con("path/to/file.con")
+frames = readcon.read_con_string(contents)
+
+# Access data
+for frame in frames:
+    print(frame.cell)           # [f64, f64, f64]
+    print(frame.angles)         # [f64, f64, f64]
+    print(frame.has_velocities)
+    for atom in frame.atoms:
+        print(atom.symbol, atom.x, atom.y, atom.z)
+        if atom.has_velocity:
+            print(atom.vx, atom.vy, atom.vz)
+
+# Write frames
+readcon.write_con("output.con", frames)
+output_str = readcon.write_con_string(frames)
+#+end_src
+
+** Types
+
+- =readcon.Atom= :: symbol, x, y, z, is_fixed, atom_id, vx, vy, vz,
+  has_velocity
+- =readcon.ConFrame= :: cell, angles, atoms, has_velocities,
+  prebox_header, postbox_header
+
+* Julia (ccall)
+
+** Installation
+
+Set =READCON_LIB_PATH= to the shared library path, or build with
+=cargo build --release= and the Julia package will find it
+automatically.
+
+#+begin_src shell
+export READCON_LIB_PATH=/path/to/libreadcon_core.so
+#+end_src
+
+** Usage
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("path/to/file.con")
+
+for frame in frames
+    println(frame.cell)
+    println(frame.angles)
+    println(frame.has_velocities)
+    for atom in frame.atoms
+        println(atom.x, " ", atom.y, " ", atom.z)
+    end
+end
+#+end_src
+
+** Types
+
+- =ReadCon.Atom= :: atomic_number, x, y, z, atom_id, mass, is_fixed,
+  vx, vy, vz, has_velocity
+- =ReadCon.ConFrame= :: cell, angles, atoms, has_velocities,
+  prebox_header, postbox_header
+
+* C/C++ (FFI)
+
+** C API
+
+Include =readcon-core.h= and link against =libreadcon_core=.
+
+#+begin_src c
+#include "readcon-core.h"
+
+CConFrameIterator *iter = read_con_file_iterator("file.con");
+RKRConFrame *handle;
+while ((handle = con_frame_iterator_next(iter)) != NULL) {
+    CFrame *frame = rkr_frame_to_c_frame(handle);
+    // use frame->atoms, frame->cell, etc.
+    free_c_frame(frame);
+    free_rkr_frame(handle);
+}
+free_con_frame_iterator(iter);
+#+end_src
+
+** C++ API
+
+Include =readcon-core.hpp= for RAII wrappers.
+
+#+begin_src cpp
+#include "readcon-core.hpp"
+
+readcon::ConFrameIterator frames("file.con");
+for (auto&& frame : frames) {
+    auto& cell = frame.cell();
+    auto& atoms = frame.atoms();
+    bool has_vel = frame.has_velocities();
+}
+#+end_src

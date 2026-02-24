@@ -1,6 +1,16 @@
 # Additions
 *.profraw
 compile_commands.json
+
+# Documentation build artifacts
+docs/build/
+docs/doctrees/
+docs/source/*.rst
+docs/source/crates/
+docs/source/api/
+
+# pixi
+.pixi/
 ###----------------###
 ###  TopTal: rust  ###
 ###----------------###

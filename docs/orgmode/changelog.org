@@ -1,0 +1,4 @@
+#+title: Changelog
+#+options: toc:nil num:nil
+
+See [[https://github.com/lode-org/readcon-rs/blob/main/CHANGELOG.md][CHANGELOG.md]] in the repository root for the full version history.

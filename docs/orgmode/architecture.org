@@ -1,0 +1,70 @@
+#+title: Library architecture
+#+options: toc:2 num:t
+
+* Overview
+
+readcon-core is structured as an hourglass API: a Rust core with
+thin FFI and language-specific wrapper layers.
+
+#+begin_example
+  Python (PyO3)    Julia (ccall)    C++ (RAII header)
+       \                |               /
+        \               |              /
+         +------- C FFI (ffi.rs) -----+
+                        |
+              Rust core library
+         types | parser | writer | iterators
+#+end_example
+
+* Core types (types.rs)
+
+- =FrameHeader= :: 9-line header metadata (cell, angles, atom counts,
+  masses).
+- =AtomDatum= :: Single atom data (symbol, coordinates, fixed flag,
+  atom ID, optional velocities).
+- =ConFrame= :: Complete frame (header + atom data vector).
+
+Symbol strings use =Rc<String>= to avoid per-atom string clones
+within a type block.
+
+* Parser (parser.rs)
+
+- =parse_line_of_n<T>= :: Generic whitespace-separated value parser
+  for header lines.
+- =parse_line_of_n_f64= :: fast-float2 specialized parser for the
+  coordinate/velocity hot path.
+- =parse_frame_header= :: Consumes 9 header lines.
+- =parse_single_frame= :: Header + coordinate blocks.
+- =parse_velocity_section= :: Optional velocity blocks after
+  coordinates (detected by blank separator).
+
+* Writer (writer.rs)
+
+- =ConFrameWriter<W: Write>= :: Generic buffered writer.
+- Writes header, coordinate blocks, and velocity blocks (if
+  =frame.has_velocities()=).
+
+* Iterators (iterators.rs)
+
+- =ConFrameIterator= :: Lazy frame-by-frame parser with =next()= and
+  =forward()= (skip without parsing atom data).
+- =read_all_frames()= :: Convenience function using memmap2 for large
+  trajectory files.
+- =parse_frames_parallel()= :: Rayon-based parallel parsing behind
+  the =parallel= feature gate.
+
+* FFI layer (ffi.rs)
+
+Opaque handle pattern:
+- =RKRConFrame= :: Opaque Rust frame handle.
+- =CFrame= / =CAtom= :: Transparent C structs for direct data access.
+- Iterator lifecycle: =read_con_file_iterator= ->
+  =con_frame_iterator_next= -> =rkr_frame_to_c_frame= ->
+  =free_c_frame= -> =free_rkr_frame= -> =free_con_frame_iterator=.
+
+* C++ wrapper (readcon-core.hpp)
+
+Header-only RAII wrappers with lazy caching:
+- =ConFrameIterator= :: Range-based for loop support.
+- =ConFrame= :: Cached accessors for cell, angles, atoms, headers.
+- =ConFrameWriter= :: RAII file writer.
