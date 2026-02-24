@@ -49,9 +49,9 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: aarch64
-          - os: macos-13
+          - os: macos-15
             target: x86_64
           - os: macos-14
             target: aarch64
@@ -68,13 +68,11 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features python
+          args: --release --out dist --features python --find-interpreter
           manylinux: auto
-          # Cross-compile aarch64 on x86_64 runners
-          docker-options: ${{ matrix.target == 'aarch64' && '-e JEMALLOC_SYS_WITH_LG_PAGE=16' || '' }}
 
       - name: Validate wheels
-        if: matrix.target != 'aarch64' || matrix.os != 'ubuntu-latest'
+        if: matrix.target != 'aarch64' || runner.os != 'Linux'
         run: pipx run twine check --strict dist/*
 
       - uses: actions/upload-artifact@v4

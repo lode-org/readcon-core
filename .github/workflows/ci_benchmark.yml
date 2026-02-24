@@ -1,0 +1,105 @@
+name: Benchmark PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: main
+            sha: ${{ github.event.pull_request.base.sha }}
+          - label: pr
+            sha: ${{ github.event.pull_request.head.sha }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout target commit
+        run: |
+          mkdir -p /tmp/_bench_preserve
+          cp -r benches/ /tmp/_bench_preserve/
+          git checkout -f ${{ matrix.sha }}
+          git clean -fd
+          cp -r /tmp/_bench_preserve/benches/ benches/
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: Setup sccache environment
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: Run benchmarks
+        run: |
+          cargo bench -- --save-baseline ${{ matrix.label }}
+
+      - name: Export Criterion results
+        run: |
+          tar czf criterion-${{ matrix.label }}.tar.gz -C target criterion/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: criterion-${{ matrix.label }}
+          path: criterion-${{ matrix.label }}.tar.gz
+          retention-days: 7
+
+  compare:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install critcmp
+        run: cargo install critcmp
+
+      - name: Download main results
+        uses: actions/download-artifact@v4
+        with:
+          name: criterion-main
+          path: .
+
+      - name: Download PR results
+        uses: actions/download-artifact@v4
+        with:
+          name: criterion-pr
+          path: .
+
+      - name: Extract and compare
+        run: |
+          mkdir -p target
+          tar xzf criterion-main.tar.gz -C target/
+          tar xzf criterion-pr.tar.gz -C target/
+          mkdir -p results
+          critcmp main pr --threshold 5 > results/comparison.txt || true
+          if [ ! -s results/comparison.txt ]; then
+            echo "No benchmark comparison output" > results/comparison.txt
+          fi
+          cat results/comparison.txt
+
+      - name: Write metadata
+        run: |
+          echo "main_sha=${{ github.event.pull_request.base.sha }}" > results/metadata.txt
+          echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> results/metadata.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
+          retention-days: 7

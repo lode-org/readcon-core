@@ -80,8 +80,8 @@ tst: add roundtrip test for convel writer
 - Bugfix branches: =fix/<description>=
 - Keep commits logical and atomic. Soft-reset and rebase as needed
   (never on =main=).
-- The CI runs on every PR: basic tests, lint (conventional commits +
-  large file audit), coverage, and benchmarks (on =[BENCH]= tag).
+- The CI runs on every PR: tests, lint, coverage, and benchmark
+  regression checks (via Criterion + critcmp + asv-perch).
 
 * Testing
 
@@ -104,9 +104,38 @@ cargo bench
 Test data lives in =resources/test/=. Use the =test_case!= macro in
 integration tests to locate test files.
 
+* Continuous integration
+
+** Workflows
+
+| Workflow | File | Trigger | Purpose |
+|---------------------------+----------------------------+--------------------+-----------------------------------------------|
+| Python wheels | =python_wheels.yml= | =v*= tag, PR | Build wheels for 5 platforms, publish to PyPI |
+| Benchmark PR | =ci_benchmark.yml= | PR to main | Run Criterion benchmarks on base and PR |
+| Comment benchmark results | =ci_bench_commenter.yml= | benchmark complete | Post comparison table as PR comment |
+| Coverage | =coverage.yml= | push, PR | Code coverage via tarpaulin |
+| Lint | =lint.yml= | push, PR | Conventional commit check + large file audit |
+
+** Benchmark regression detection
+
+The project uses a two-workflow pattern for safe benchmark PR comments:
+
+1. =ci_benchmark.yml= runs =cargo bench= on both the base commit and the
+   PR head in parallel (matrix strategy). It saves Criterion baselines as
+   artifacts.
+
+2. =ci_bench_commenter.yml= triggers on =workflow_run= completion. It
+   downloads the Criterion results, compares them with =critcmp=, and
+   posts the comparison table as a PR comment using [[https://github.com/HaoZeke/asv-perch][asv-perch]].
+
+The =workflow_run= split is required for fork PRs to have write access
+for posting comments (GitHub security model).
+
+Regressions above 10x trigger automatic conversion to draft PR.
+
 * Release process
 
-** Version bumping
+** Version files
 
 Versions are tracked in five places that must stay synchronized:
 
@@ -116,35 +145,92 @@ Versions are tracked in five places that must stay synchronized:
 4. =pixi.toml= (=version = "X.Y.Z"=)
 5. =docs/source/conf.py= (=release = "X.Y.Z"=)
 
-** Steps
+** Complete release checklist
 
-1. Ensure all tests pass and the branch is clean.
+1. Ensure all tests pass and the branch is clean:
 
-2. Bump versions in all three files.
+   #+begin_src shell
+   cargo test
+   cargo test --all-features
+   #+end_src
+
+2. Bump the version in all five files listed above.
 
 3. Generate the changelog:
 
    #+begin_src shell
-   cog changelog --at v0.3.0 > /tmp/cl.md
+   cog changelog --at vX.Y.Z > /tmp/cl.md
    # Review, then prepend to CHANGELOG.md
    #+end_src
 
-4. Commit the version bump:
+4. Regenerate the README from =readme_src.org=:
 
    #+begin_src shell
-   git add Cargo.toml Cargo.lock meson.build pyproject.toml CHANGELOG.md
-   git commit -m "chore(version): v0.3.0"
+   # Export org to markdown (emacs batch or manual)
+   # Verify README.md reflects current features
    #+end_src
 
-5. Tag the release:
+5. Commit the version bump:
 
    #+begin_src shell
-   git tag v0.3.0
+   git add Cargo.toml Cargo.lock meson.build pyproject.toml \
+           pixi.toml docs/source/conf.py CHANGELOG.md README.md
+   git commit -m "chore(version): vX.Y.Z"
+   #+end_src
+
+6. Tag the release (annotated, signed if GPG is configured):
+
+   #+begin_src shell
+   git tag -a vX.Y.Z -m "vX.Y.Z"
+   #+end_src
+
+7. Push to both remotes:
+
+   #+begin_src shell
    git push origin main --tags
+   git push upstream main --tags
    #+end_src
 
-6. The =v*= tag triggers the =python_wheels.yml= workflow which builds
-   wheels for all platforms and publishes to PyPI.
+8. Publish to crates.io:
+
+   #+begin_src shell
+   cargo publish
+   #+end_src
+
+9. The =v*= tag push triggers the =python_wheels.yml= workflow which
+   builds wheels for Linux (x86_64, aarch64), macOS (Intel, ARM), and
+   Windows (x86_64), then publishes to PyPI via OIDC trusted publisher.
+
+10. Create the GitHub release with artifacts:
+
+    #+begin_src shell
+    cargo build --release
+
+    # Package shared/static library + headers for C/C++/Julia
+    mkdir -p /tmp/pkg/{lib,include}
+    cp target/release/libreadcon_core.so /tmp/pkg/lib/
+    cp target/release/libreadcon_core.a /tmp/pkg/lib/
+    cp include/readcon-core.h /tmp/pkg/include/
+    cp include/readcon-core.hpp /tmp/pkg/include/
+    tar czf readcon-core-vX.Y.Z-linux-x86_64.tar.gz -C /tmp pkg/
+
+    # Package Julia bindings
+    tar czf ReadCon.jl-vX.Y.Z.tar.gz -C julia ReadCon/
+
+    # Create release (attach capnp schema too)
+    gh release create vX.Y.Z \
+      readcon-core-vX.Y.Z-linux-x86_64.tar.gz \
+      ReadCon.jl-vX.Y.Z.tar.gz \
+      schema/ReadCon.capnp \
+      --repo lode-org/readcon-core \
+      --title "vX.Y.Z" \
+      --notes-file /tmp/cl.md
+    #+end_src
+
+11. Verify all distribution channels:
+    - [[https://crates.io/crates/readcon-core][crates.io]] shows the new version
+    - [[https://pypi.org/project/readcon/][PyPI]] shows the new version (wait for CI)
+    - [[https://github.com/lode-org/readcon-core/releases][GitHub Releases]] has the tarball, Julia package, and capnp schema
 
 ** Initial PyPI setup (first release only)
 
@@ -157,7 +243,6 @@ maturin build --release --features python
 
 # Upload (first time, creates the project on PyPI)
 uvx twine upload target/wheels/*
-# Or: uv publish target/wheels/*
 #+end_src
 
 Then configure trusted publisher on PyPI:
@@ -170,15 +255,6 @@ Then configure trusted publisher on PyPI:
    - Environment: =pypi=
 
 After this, all subsequent tagged releases auto-publish via OIDC.
-
-** Cargo publishing
-
-The Rust crate is not currently published to crates.io (=publish =
-false= is not set, but no workflow automates it). To publish:
-
-#+begin_src shell
-cargo publish
-#+end_src
 
 * Adding new features
 
