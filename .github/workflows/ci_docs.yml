@@ -31,6 +31,8 @@ jobs:
 
       - name: Build documentation
         run: pixi r -e docs docbld
+        env:
+          CARGO_HOME: ${{ runner.temp }}/.cargo
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4

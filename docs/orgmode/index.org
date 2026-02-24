@@ -1,10 +1,19 @@
 #+title: readcon-core
-#+options: toc:nil num:nil
+#+options: toc:nil num:nil title:nil
+
+#+begin_export rst
+================
+``readcon-core``
+================
+#+end_export
 
 readcon-core is a Rust library for reading and writing CON and convel
 simulation configuration files, with FFI bindings for C/C++, Python,
 and Julia.
 
+* Contents
+
+#+begin_export rst
 .. toctree::
    :maxdepth: 2
    :caption: Contents
@@ -13,6 +22,8 @@ and Julia.
    tutorials
    architecture
    bindings
+   crates/readcon_core/lib
    rpc
    contributing
    changelog
+#+end_export
