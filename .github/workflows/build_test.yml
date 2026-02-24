@@ -32,14 +32,19 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install meson
+          python -m pip install meson ninja
+          cargo install cbindgen
           sudo snap install valgrind --classic
           sudo apt-get update && sudo apt-get install -y libc6-dbg --fix-missing
 
-      - name: Build and test
+      - name: Run Rust tests
+        run: cargo test
+
+      - name: Build and test FFI bindings
         id: btest_rust
         run: |
-          meson setup bbdir -Dwith_tests=True \
+          meson setup bbdir \
+          -Dwith_tests=False \
           -Dwith_cpp=True \
           -Dwith_examples=True \
           --buildtype=release

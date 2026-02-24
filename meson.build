@@ -1,7 +1,7 @@
 project(
     'readcon-core',
     ['rust', 'c'],
-    version: '0.3.2',
+    version: '0.4.0',
     meson_version: '>=1.8.0',
     default_options: [
         'buildtype=debugoptimized',
@@ -68,43 +68,45 @@ readcon_header_intree = custom_target(
     build_by_default: true,
 )
 
-readcon_sources = files(
-    'src/lib.rs',
-    'src/error.rs',
-    'src/ffi.rs',
-    'src/helpers.rs',
-    'src/iterators.rs',
-    'src/parser.rs',
-    'src/types.rs',
-    'src/writer.rs',
+cargo_prog = find_program('cargo', required: true)
+
+# Build the Rust library via cargo to ensure all dependencies
+# (memmap2, fast_float2, etc.) are properly resolved and linked.
+# Meson's native library(rust_abi: 'c') bypasses Cargo, making
+# external crates unavailable.
+readcon_cargo = custom_target(
+    'readcon-cargo',
+    input: files('Cargo.toml', 'Cargo.lock', 'src/lib.rs'),
+    output: 'libreadcon_core.a',
+    command: [
+        'sh', '-c',
+        cargo_prog.full_path() + ' build --release --manifest-path @INPUT0@ --target-dir @PRIVATE_DIR@/cargo-target && cp @PRIVATE_DIR@/cargo-target/release/libreadcon_core.a @OUTPUT0@',
+    ],
+    build_by_default: true,
 )
 
-# Library
-# In most cases we'd like the C linkage
-readcon_lib = library(
-    'readcon-core',
-    readcon_sources,
-    rust_abi: 'c',
-)
-
-# Mostly only for doctests
-# gh-14813 is why this is static for now
-readcon_rlib = static_library(
-    'readcon_core',
-    readcon_sources,
-    rust_abi: 'rust',
-)
+# System dependencies required when statically linking a Rust library
+_rust_sys_deps = []
+if host_machine.system() == 'linux'
+    _rust_sys_deps += [
+        dependency('threads'),
+        cc.find_library('dl', required: true),
+        cc.find_library('m', required: true),
+    ]
+elif host_machine.system() == 'darwin'
+    _rust_sys_deps += [dependency('threads')]
+endif
 
 if get_option('with_tests')
-    rustmod = import('rust')
-    rustmod.test('Rust tests', readcon_lib)
-    # TODO(rg) :: Open an issue since doctests fail because of "unresolved or
-    # unlinked readcon_core", though everything works via cargo --test
-    rustmod.doctest('Rust documentation tests', readcon_rlib)
+    test('cargo-tests', cargo_prog,
+        args: ['test', '--manifest-path', _msproot / 'Cargo.toml'],
+        timeout: 300,
+    )
 endif
 
 readcon_dep = declare_dependency(
-    link_with: readcon_lib,
+    link_with: readcon_cargo,
+    dependencies: _rust_sys_deps,
     include_directories: include_directories('include'),
 )
 
@@ -119,7 +121,6 @@ pkg = import('pkgconfig')
 pkg_ver = meson.project_version()
 pkg_install_dir = join_paths(get_option('datadir'), 'pkgconfig')
 pkg.generate(
-    readcon_lib,
     name: 'readcon-core',
     filebase: 'meson-readcon-core',
     description: 'CON file-reader in Rust',
