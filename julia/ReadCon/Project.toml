@@ -1,0 +1,14 @@
+[deps]
+
+[compat]
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
+
+name = "ReadCon"
+uuid = "f4d2e3b1-8c7a-4e5f-9012-3a4b5c6d7e8f"
+version = "0.2.0"

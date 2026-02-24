@@ -1,0 +1,92 @@
+#+title: CON and convel file format specification
+#+options: toc:2 num:t
+
+* Overview
+
+The CON file format originated in the eOn (Evolving Objects on
+Networks) saddle-point search code. It stores atomic configurations
+for molecular dynamics and transition-state search simulations. The
+convel extension adds per-atom velocity data.
+
+* File extensions
+
+- =.con= :: Coordinate-only configuration files.
+- =.convel= :: Configuration files with velocity sections appended
+  after each frame's coordinate blocks.
+
+* Header (9 lines)
+
+Every frame begins with a 9-line header:
+
+| Line | Content | Example |
+|------+---------+---------|
+| 1 | Comment (often "Random Number Seed") | =Random Number Seed= |
+| 2 | Comment (often "Time") | =Time= |
+| 3 | Cell dimensions: Lx Ly Lz | =15.3456 21.702 100.0= |
+| 4 | Cell angles: alpha beta gamma | =90.0 90.0 90.0= |
+| 5 | Comment (reserved) | =0 0= |
+| 6 | Comment (reserved) | =218 0 1= |
+| 7 | Number of atom types (N) | =2= |
+| 8 | Atoms per type (N integers) | =216 2= |
+| 9 | Mass per type (N floats) | =63.546 1.00793= |
+
+Cell dimensions and angles are whitespace-separated floating-point
+values. Tabs and spaces are both valid separators throughout the format.
+
+* Coordinate blocks
+
+After the header, for each atom type i (1 to N):
+
+1. Symbol line :: The chemical symbol for this type (e.g., =Cu=, =H=).
+2. Label line :: =Coordinates of Component i=
+3. Atom lines :: One line per atom: =x y z fixed_flag atom_id=
+
+Where:
+- =x=, =y=, =z= are floating-point Cartesian coordinates.
+- =fixed_flag= is =0= (free) or =1= (fixed/frozen).
+- =atom_id= is a non-negative integer identifier.
+
+Atoms within a type block appear in order of their =atom_id=.
+
+* Velocity blocks (convel only)
+
+In =.convel= files, a velocity section follows the coordinate blocks
+of each frame. The structure is:
+
+1. Blank separator line :: An empty line (or whitespace-only) marking
+   the start of the velocity section.
+2. For each atom type i (1 to N):
+   a. Symbol line :: Same chemical symbol as in the coordinate block.
+   b. Label line :: =Velocities of Component i=
+   c. Atom lines :: One line per atom: =vx vy vz fixed_flag atom_id=
+
+The velocity fields =vx=, =vy=, =vz= are floating-point velocity
+components. The =fixed_flag= and =atom_id= match those in the
+corresponding coordinate block.
+
+If no blank line follows the coordinate blocks, the frame has no
+velocity data (standard =.con= behavior).
+
+* Multi-frame files
+
+Multiple frames are concatenated directly with no separator. The
+parser detects a new frame by encountering a valid 9-line header
+after the previous frame's data (coordinate blocks, and velocity
+blocks if present).
+
+* Data types
+
+- Floating-point values :: Written with at least 6 decimal places of
+  precision. Parsers should accept any valid floating-point
+  representation.
+- Integer values :: =fixed_flag= is 0 or 1. =atom_id= and
+  =natm_types= are non-negative integers. =natms_per_type= values
+  are positive integers.
+
+* Constraints
+
+- Atoms must be grouped by type in the order declared in the header.
+- Component numbering starts at 1.
+- The total number of atoms equals the sum of =natms_per_type=.
+- Maximum 100 atom types (practical limit from eOn).
+- Symbol strings should match standard chemical element symbols.

@@ -26,6 +26,10 @@ struct Atom {
     uint64_t atom_id;
     double mass;
     bool is_fixed;
+    double vx;
+    double vy;
+    double vz;
+    bool has_velocity;
 };
 
 // Forward declarations
@@ -125,6 +129,7 @@ class ConFrame {
     const std::vector<Atom> &atoms() const;
     const std::array<std::string, 2> &prebox_header() const;
     const std::array<std::string, 2> &postbox_header() const;
+    bool has_velocities() const;
 
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
@@ -146,6 +151,7 @@ class ConFrame {
     mutable std::array<double, 3> angles_cache_;
     mutable std::array<std::string, 2> prebox_header_cache_;
     mutable std::array<std::string, 2> postbox_header_cache_;
+    mutable bool has_velocities_cache_ = false;
 };
 
 /**
@@ -249,12 +255,15 @@ inline void ConFrame::cache_data() const {
     angles_cache_ = {c_frame->angles[0], c_frame->angles[1],
                      c_frame->angles[2]};
 
+    has_velocities_cache_ = c_frame->has_velocities;
+
     atoms_cache_.reserve(c_frame->num_atoms);
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
         const CAtom &c_atom = c_frame->atoms[i];
-        atoms_cache_.emplace_back(Atom{c_atom.atomic_number, c_atom.x, c_atom.y,
-                                       c_atom.z, c_atom.atom_id, c_atom.mass,
-                                       c_atom.is_fixed});
+        atoms_cache_.emplace_back(
+            Atom{c_atom.atomic_number, c_atom.x, c_atom.y, c_atom.z,
+                 c_atom.atom_id, c_atom.mass, c_atom.is_fixed,
+                 c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity});
     }
 
     free_c_frame(c_frame);
@@ -305,6 +314,11 @@ inline const std::array<std::string, 2> &ConFrame::prebox_header() const {
 inline const std::array<std::string, 2> &ConFrame::postbox_header() const {
     cache_data();
     return postbox_header_cache_;
+}
+
+inline bool ConFrame::has_velocities() const {
+    cache_data();
+    return has_velocities_cache_;
 }
 
 // --- Implementation of ConFrameWriter methods ---

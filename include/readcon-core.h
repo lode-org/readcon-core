@@ -51,6 +51,10 @@ typedef struct CAtom {
     uint64_t atom_id;
     double mass;
     bool is_fixed;
+    double vx;
+    double vy;
+    double vz;
+    bool has_velocity;
 } CAtom;
 
 /**
@@ -63,6 +67,7 @@ typedef struct CFrame {
     uintptr_t num_atoms;
     double cell[3];
     double angles[3];
+    bool has_velocities;
 } CFrame;
 
 /**

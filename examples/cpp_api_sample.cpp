@@ -24,10 +24,13 @@ void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
     std::cout << "Post-box Header 1:\"" << post_headers[0] << "\"\n";
     std::cout << "Post-box Header 2:\"" << post_headers[1] << "\"\n";
 
+    // Print velocity status
+    std::cout << "Has Velocities:   " << std::boolalpha << frame.has_velocities()
+              << std::endl;
+
     // Print atom information
     auto atoms = frame.atoms(); // Call once to avoid repeated conversions
     std::cout << "--- Atoms (" << atoms.size() << ") ---\n";
-    std::cout << std::boolalpha; // Print booleans as "true"/"false"
 
     // Print details for the first 5 atoms for brevity
     int atoms_to_print = 0;
@@ -40,7 +43,12 @@ void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
         std::cout << "  ID: " << atom.atom_id << ", Z: " << atom.atomic_number
                   << ", Pos: (" << atom.x << ", " << atom.y << ", " << atom.z
                   << ")"
-                  << ", Fixed: " << atom.is_fixed << std::endl;
+                  << ", Fixed: " << atom.is_fixed;
+        if (atom.has_velocity) {
+            std::cout << ", Vel: (" << atom.vx << ", " << atom.vy << ", "
+                      << atom.vz << ")";
+        }
+        std::cout << std::endl;
         atoms_to_print++;
     }
 }

@@ -1,9 +1,32 @@
 * About
 Oxidized rust re-implementation of [[https://github.com/HaoZeke/readCon][readCon]].
-** Usage
-#+begin_src bash
-cargo run -- resources/test/sulfolene.con
+
+Reads and writes both =.con= (coordinate-only) and =.convel= (coordinates
+plus velocities) simulation configuration files used by [[https://theory.cm.utexas.edu/eon/][eOn]].
+
+** Features
+
+- *CON and convel support:* Parses both coordinate-only and velocity-augmented files. Velocity sections are auto-detected without relying on file extensions.
+- *Lazy iteration:* ~ConFrameIterator~ parses one frame at a time for memory-efficient trajectory processing.
+- *Performance:* Uses [[https://github.com/aldanor/fast-float-rust][fast-float2]] (Eisel-Lemire algorithm) for the f64 parsing hot path and [[https://docs.rs/memmap2][memmap2]] for large trajectory files.
+- *Parallel parsing:* Optional rayon-based parallel frame parsing behind the ~parallel~ feature gate.
+- *Language bindings:* Python (PyO3), Julia (ccall), C (cbindgen FFI), and C++ (RAII header-only wrapper), following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+- *RPC serving:* Optional Cap'n Proto RPC interface (~rpc~ feature) for network-accessible parsing.
+
+** Quick start
+
+#+begin_src shell
+# Rust
+cargo run --example rust_usage -- resources/test/tiny_cuh2.con
+
+# Python
+pip install readcon
+python -c "import readcon; print(readcon.read_con('file.con'))"
+
+# C/C++ (via meson subproject or cmake)
+meson setup builddir -Dwith_examples=True && meson test -C builddir
 #+end_src
+
 ** Design Decisions
 The library is designed with the following principles in mind:
 
@@ -35,58 +58,19 @@ forward-compatibility of opaque handles for general use, and the performance of
 direct data access for the most common computational tasks.
 
 ** Specification
-Currently this implements the ~con~ format specification as written out by eON,
-so some assumptions are made about the input files, not all of which are
-currently tested / guaranteed to throw (contributions are welcome for additional
-sanity checks).
-*** Single Frames
-- The first 9 lines are the header
-- The remaining lines can be inferred from the header
-*** Multiple Frames
-Often, as for example when running a Nudged Elastic Band, ~eON~ will write out
-multiple units of ~con~ like data into a single file.
-- The ~con~ like data *have no whitespace between them*!
 
-That is we expect:
-#+begin_src bash
-Random Number Seed
-Time
-15.345600	21.702000	100.000000
-90.000000	90.000000	90.000000
-0 0
-218 0 1
-2
-2 2
-63.546000 1.007930
-Cu
-Coordinates of Component 1
-   0.63940000000000108    0.90450000000000019    6.97529999999999539 1    0
-   3.19699999999999873    0.90450000000000019    6.97529999999999539 1    1
-H
-Coordinates of Component 2
-   8.68229999999999968    9.94699999999999740   11.73299999999999343 0  2
-   7.94209999999999550    9.94699999999999740   11.73299999999999343 0  3
-Random Number Seed
-Time
-15.345600	21.702000	100.000000
-90.000000	90.000000	90.000000
-0 0
-218 0 1
-2
-2 2
-63.546000 1.007930
-Cu
-Coordinates of Component 1
-   0.63940000000000108    0.90450000000000019    6.97529999999999539 1    0
-   3.19699999999999873    0.90450000000000019    6.97529999999999539 1    1
-H
-Coordinates of Component 2
-   8.85495714285713653    9.94699999999999740   11.16538571428571380 0  2
-   7.76944285714285154    9.94699999999999740   11.16538571428571380 0  3
-#+end_src
+See the [[https://lode-org.github.io/readcon-rs/spec.html][formal specification]] for full details. A summary follows.
 
-Nothing else. No whitespace or lines between the ~con~ entries.
+*** CON format
+- A 9-line header (comments, cell dimensions, cell angles, atom type/count/mass metadata)
+- Per-type coordinate blocks (symbol, label, atom lines with x y z fixed atomID)
+- Multiple frames are concatenated directly with no separator
+
+*** convel format
+Same as CON, with an additional velocity section after each frame's coordinates:
+- A blank separator line
+- Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 ** Why use this over [[https://github.com/HaoZeke/readCon][readCon]]?
-To learn Rust. Maybe speed.
+Speed, correctness, and multi-language bindings.
 * License
 MIT.

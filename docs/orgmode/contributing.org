@@ -1,0 +1,217 @@
+#+title: Developer workflow and release guidelines
+#+options: toc:2 num:t
+
+* Development setup
+
+** Prerequisites
+
+- Rust >= 1.88 (edition 2024)
+- [[https://pixi.sh][pixi]] for environment management
+- [[https://github.com/cocogitto/cocogitto][cocogitto]] (=cog=) for conventional commits and changelog
+
+** Getting started
+
+#+begin_src shell
+git clone https://github.com/lode-org/readcon-rs.git
+cd readcon-rs
+pixi install
+
+# Run tests
+pixi r test
+
+# Run with all features (needs capnproto)
+pixi r test-all
+
+# Build release
+pixi r build
+#+end_src
+
+** Environment-specific workflows
+
+#+begin_src shell
+# Python bindings
+pixi r -e python python-build
+pixi r -e python python-test
+
+# Julia bindings
+pixi r -e julia julia-test
+
+# Documentation
+pixi r -e docs docbld
+# Docs output in docs/build/
+#+end_src
+
+* Commit conventions
+
+The project uses [[https://www.conventionalcommits.org/][conventional commits]] enforced by cocogitto.
+The CI lint check rejects non-conforming commit messages.
+
+Recognized commit types (from =cog.toml=):
+
+| Type | Changelog section | Use for |
+|-------+-------------------+----------------------------------------------|
+| feat | Features | New user-facing functionality |
+| enh | Enhancements | Improvements to existing features |
+| fix | Bugfixes | Bug corrections |
+| bug | Bugfixes | Alias for fix |
+| doc | Documentation | Documentation-only changes |
+| tst | Tests | Test additions or modifications |
+| bld | Buildsystem | Build system, CI, dependency changes |
+| maint | Maintenance | Refactoring, cleanup, internal changes |
+| bench | Benchmarks | Benchmark additions or modifications |
+| gen | Generated | Auto-generated file updates |
+| dat | Data | Test data or resource changes |
+
+Examples:
+
+#+begin_src text
+feat: add convel format support with optional velocity fields
+enh: integrate fast-float2 for f64 parsing hot path
+fix: handle empty velocity section in multi-frame files
+doc: update tutorials with Julia convel example
+bld: add CMakeLists.txt for cmake subproject use
+tst: add roundtrip test for convel writer
+#+end_src
+
+* Branching and workflow
+
+- =main= is the release branch. All PRs target =main=.
+- Feature branches: =feat/<description>=
+- Bugfix branches: =fix/<description>=
+- Keep commits logical and atomic. Soft-reset and rebase as needed
+  (never on =main=).
+- The CI runs on every PR: basic tests, lint (conventional commits +
+  large file audit), coverage, and benchmarks (on =[BENCH]= tag).
+
+* Testing
+
+#+begin_src shell
+# Core Rust tests
+cargo test
+
+# All features (parallel, rpc, python)
+cargo test --all-features
+
+# Meson build with valgrind leak checking
+meson setup bbdir -Dwith_tests=True -Dwith_examples=True
+meson test -C bbdir
+
+# Benchmarks
+cargo bench
+# or: pixi r bench
+#+end_src
+
+Test data lives in =resources/test/=. Use the =test_case!= macro in
+integration tests to locate test files.
+
+* Release process
+
+** Version bumping
+
+Versions are tracked in three places that must stay synchronized:
+
+1. =Cargo.toml= (=version = "X.Y.Z"=)
+2. =meson.build= (=version: 'X.Y.Z'=)
+3. =pyproject.toml= (=version = "X.Y.Z"=)
+
+** Steps
+
+1. Ensure all tests pass and the branch is clean.
+
+2. Bump versions in all three files.
+
+3. Generate the changelog:
+
+   #+begin_src shell
+   cog changelog --at v0.3.0 > /tmp/cl.md
+   # Review, then prepend to CHANGELOG.md
+   #+end_src
+
+4. Commit the version bump:
+
+   #+begin_src shell
+   git add Cargo.toml Cargo.lock meson.build pyproject.toml CHANGELOG.md
+   git commit -m "chore(version): v0.3.0"
+   #+end_src
+
+5. Tag the release:
+
+   #+begin_src shell
+   git tag v0.3.0
+   git push origin main --tags
+   #+end_src
+
+6. The =v*= tag triggers the =python_wheels.yml= workflow which builds
+   wheels for all platforms and publishes to PyPI.
+
+** Initial PyPI setup (first release only)
+
+For the very first release, PyPI trusted publisher is not yet
+configured. Publish manually:
+
+#+begin_src shell
+# Build wheels
+maturin build --release --features python
+
+# Upload (first time, creates the project on PyPI)
+uvx twine upload target/wheels/*
+# Or: uv publish target/wheels/*
+#+end_src
+
+Then configure trusted publisher on PyPI:
+
+1. Go to https://pypi.org/manage/project/readcon/settings/publishing/
+2. Add a new pending publisher:
+   - Owner: =lode-org=
+   - Repository: =readcon-rs=
+   - Workflow: =python_wheels.yml=
+   - Environment: =pypi=
+
+After this, all subsequent tagged releases auto-publish via OIDC.
+
+** Cargo publishing
+
+The Rust crate is not currently published to crates.io (=publish =
+false= is not set, but no workflow automates it). To publish:
+
+#+begin_src shell
+cargo publish
+#+end_src
+
+* Adding new features
+
+** Feature gates
+
+Optional functionality is gated behind Cargo features:
+
+| Feature | Dependencies | Purpose |
+|----------+--------------------------------+--------------------------|
+| parallel | rayon | Multi-frame parallel parse |
+| rpc | capnp, capnp-rpc, tokio, etc. | Cap'n Proto RPC serving |
+| python | pyo3 | Python bindings |
+
+Add new optional features in =Cargo.toml= under =[features]=.
+
+** Adding a new binding
+
+1. Add the binding source under =src/= (e.g., =src/python.rs=) or as
+   a separate package (e.g., =julia/ReadCon/=).
+2. Gate behind a feature flag if it adds dependencies.
+3. Add tests under =tests/= or the binding's own test directory.
+4. Document in =docs/orgmode/bindings.org= and =docs/orgmode/tutorials.org=.
+5. Add a pixi environment and tasks if applicable.
+
+** Updating the C header
+
+The C header =include/readcon-core.h= is generated by cbindgen.
+After modifying =src/ffi.rs=:
+
+#+begin_src shell
+cbindgen --config cbindgen.toml --crate readcon --output include/readcon-core.h -- src/lib.rs
+#+end_src
+
+Or let the meson/cmake build regenerate it.
+
+The C++ header =include/readcon-core.hpp= is hand-maintained and must
+be updated manually to match any changes to =CAtom=, =CFrame=, or
+the FFI function signatures.

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "readcon"
+version = "0.2.0"
+description = "Python bindings for readcon-core CON/convel file parser"
+requires-python = ">=3.10"
+license = "MIT"
+readme = "README.md"
+keywords = ["parser", "comp-chem", "file-format", "con", "eon"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[project.urls]
+Homepage = "https://github.com/lode-org/readcon-rs"
+Documentation = "https://lode-org.github.io/readcon-rs/"
+Repository = "https://github.com/lode-org/readcon-rs"
+Issues = "https://github.com/lode-org/readcon-rs/issues"
+Changelog = "https://github.com/lode-org/readcon-rs/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+features = ["python"]
+module-name = "readcon"

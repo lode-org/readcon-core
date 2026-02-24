@@ -103,6 +103,39 @@ impl<W: Write> ConFrameWriter<W> {
             }
             atom_idx_offset += num_atoms_in_type;
         }
+
+        // --- Write optional velocity section ---
+        if frame.has_velocities() {
+            // Blank separator line between coordinates and velocities
+            writeln!(self.writer)?;
+
+            let mut vel_idx_offset = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[vel_idx_offset].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Velocities of Component {}", type_idx + 1)?;
+
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[vel_idx_offset + i];
+                    writeln!(
+                        self.writer,
+                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag:.0} {atom_id}",
+                        prec = FLOAT_PRECISION,
+                        vx = atom.vx.unwrap_or(0.0),
+                        vy = atom.vy.unwrap_or(0.0),
+                        vz = atom.vz.unwrap_or(0.0),
+                        fixed_flag = if atom.is_fixed {
+                            FIXED_ATOM_FLAG
+                        } else {
+                            FREE_ATOM_FLAG
+                        },
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                vel_idx_offset += num_atoms_in_type;
+            }
+        }
+
         Ok(())
     }
 
