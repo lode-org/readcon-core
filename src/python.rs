@@ -23,6 +23,8 @@ pub struct PyAtomDatum {
     #[pyo3(get)]
     pub atom_id: u64,
     #[pyo3(get)]
+    pub mass: Option<f64>,
+    #[pyo3(get)]
     pub vx: Option<f64>,
     #[pyo3(get)]
     pub vy: Option<f64>,
@@ -46,7 +48,6 @@ impl PyAtomDatum {
         vy: Option<f64>,
         vz: Option<f64>,
     ) -> Self {
-        let _ = mass; // stored externally in frame header
         PyAtomDatum {
             symbol,
             x,
@@ -54,6 +55,7 @@ impl PyAtomDatum {
             z,
             is_fixed,
             atom_id,
+            mass,
             vx,
             vy,
             vz,
@@ -73,8 +75,8 @@ impl PyAtomDatum {
     }
 }
 
-impl From<&AtomDatum> for PyAtomDatum {
-    fn from(atom: &AtomDatum) -> Self {
+impl PyAtomDatum {
+    fn from_atom_with_mass(atom: &AtomDatum, mass: f64) -> Self {
         PyAtomDatum {
             symbol: (*atom.symbol).clone(),
             x: atom.x,
@@ -82,6 +84,7 @@ impl From<&AtomDatum> for PyAtomDatum {
             z: atom.z,
             is_fixed: atom.is_fixed,
             atom_id: atom.atom_id,
+            mass: Some(mass),
             vx: atom.vx,
             vy: atom.vy,
             vz: atom.vz,
@@ -161,7 +164,30 @@ impl PyConFrame {
 
 impl From<&ConFrame> for PyConFrame {
     fn from(frame: &ConFrame) -> Self {
-        let atoms: Vec<PyAtomDatum> = frame.atom_data.iter().map(PyAtomDatum::from).collect();
+        // Build per-atom mass lookup from per-type header data
+        let mut per_atom_mass: Vec<f64> = Vec::with_capacity(frame.atom_data.len());
+        for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
+            let mass = frame
+                .header
+                .masses_per_type
+                .get(type_idx)
+                .copied()
+                .unwrap_or(0.0);
+            for _ in 0..count {
+                per_atom_mass.push(mass);
+            }
+        }
+
+        let atoms: Vec<PyAtomDatum> = frame
+            .atom_data
+            .iter()
+            .enumerate()
+            .map(|(i, atom)| {
+                let mass = per_atom_mass.get(i).copied().unwrap_or(0.0);
+                PyAtomDatum::from_atom_with_mass(atom, mass)
+            })
+            .collect();
+
         PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -186,6 +212,7 @@ impl PyConFrame {
             ]);
 
         for py_atom in &self.atoms_inner {
+            let mass = py_atom.mass.unwrap_or(0.0);
             if py_atom.has_velocity() {
                 builder.add_atom_with_velocity(
                     &py_atom.symbol,
@@ -194,7 +221,7 @@ impl PyConFrame {
                     py_atom.z,
                     py_atom.is_fixed,
                     py_atom.atom_id,
-                    0.0, // mass placeholder (builder groups by symbol)
+                    mass,
                     py_atom.vx.unwrap_or(0.0),
                     py_atom.vy.unwrap_or(0.0),
                     py_atom.vz.unwrap_or(0.0),
@@ -207,7 +234,7 @@ impl PyConFrame {
                     py_atom.z,
                     py_atom.is_fixed,
                     py_atom.atom_id,
-                    0.0, // mass placeholder
+                    mass,
                 );
             }
         }
@@ -382,6 +409,13 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         }
     }
 
+    // Extract masses from ASE (optional, may not be set)
+    let masses: Option<Vec<f64>> = ase_atoms
+        .call_method0("get_masses")
+        .ok()
+        .and_then(|m| m.call_method0("tolist").ok())
+        .and_then(|m| m.extract().ok());
+
     // Build PyAtomDatum list
     let atoms: Vec<PyAtomDatum> = symbols
         .iter()
@@ -394,6 +428,7 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
             z: pos[2],
             is_fixed: fixed_set.contains(&i),
             atom_id: i as u64,
+            mass: masses.as_ref().map(|m| m[i]),
             vx: None,
             vy: None,
             vz: None,
