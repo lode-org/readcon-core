@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.1 - 2026-02-24
+#### Bug Fixes
+- fix all repository URLs from readcon-rs to readcon-core
+- update version tracking docs to include pixi.toml and conf.py
+
+- - -
 ## v0.3.0 - 2026-02-24
 #### Features
 - add convel format support with optional velocity fields - (d4c699f) - HaoZeke

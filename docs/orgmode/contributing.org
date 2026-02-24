@@ -12,8 +12,8 @@
 ** Getting started
 
 #+begin_src shell
-git clone https://github.com/lode-org/readcon-rs.git
-cd readcon-rs
+git clone https://github.com/lode-org/readcon-core.git
+cd readcon-core
 pixi install
 
 # Run tests
@@ -108,11 +108,13 @@ integration tests to locate test files.
 
 ** Version bumping
 
-Versions are tracked in three places that must stay synchronized:
+Versions are tracked in five places that must stay synchronized:
 
 1. =Cargo.toml= (=version = "X.Y.Z"=)
 2. =meson.build= (=version: 'X.Y.Z'=)
 3. =pyproject.toml= (=version = "X.Y.Z"=)
+4. =pixi.toml= (=version = "X.Y.Z"=)
+5. =docs/source/conf.py= (=release = "X.Y.Z"=)
 
 ** Steps
 
@@ -163,7 +165,7 @@ Then configure trusted publisher on PyPI:
 1. Go to https://pypi.org/manage/project/readcon/settings/publishing/
 2. Add a new pending publisher:
    - Owner: =lode-org=
-   - Repository: =readcon-rs=
+   - Repository: =readcon-core=
    - Workflow: =python_wheels.yml=
    - Environment: =pypi=
 

@@ -59,7 +59,7 @@ direct data access for the most common computational tasks.
 
 ** Specification
 
-See the [[https://lode-org.github.io/readcon-rs/spec.html][formal specification]] for full details. A summary follows.
+See the [[https://lode-org.github.io/readcon-core/spec.html][formal specification]] for full details. A summary follows.
 
 *** CON format
 - A 9-line header (comments, cell dimensions, cell angles, atom type/count/mass metadata)

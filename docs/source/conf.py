@@ -1,7 +1,7 @@
 project = "readcon-core"
 copyright = "2025, LODE developers"
 author = "LODE developers"
-release = "0.3.0"
+release = "0.3.1"
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -15,7 +15,7 @@ html_theme = "shibuya"
 html_static_path = ["_static"]
 
 html_theme_options = {
-    "github_url": "https://github.com/lode-org/readcon-rs",
+    "github_url": "https://github.com/lode-org/readcon-core",
 }
 
 intersphinx_mapping = {

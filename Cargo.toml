@@ -1,10 +1,10 @@
 [package]
 name = "readcon-core"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
-repository = "https://github.com/lode-org/readcon-rs"
+repository = "https://github.com/lode-org/readcon-core"
 keywords = ["Parser", "comp-chem", "file-format"]
 categories = ["filesystem", "parser-implementations", "science"]
 license = "MIT"

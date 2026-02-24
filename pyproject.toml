@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "readcon"
-version = "0.3.0"
+version = "0.3.1"
 description = "Python bindings for readcon-core CON/convel file parser"
 requires-python = ">=3.10"
 license = "MIT"
@@ -20,11 +20,11 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/lode-org/readcon-rs"
-Documentation = "https://lode-org.github.io/readcon-rs/"
-Repository = "https://github.com/lode-org/readcon-rs"
-Issues = "https://github.com/lode-org/readcon-rs/issues"
-Changelog = "https://github.com/lode-org/readcon-rs/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/lode-org/readcon-core"
+Documentation = "https://lode-org.github.io/readcon-core/"
+Repository = "https://github.com/lode-org/readcon-core"
+Issues = "https://github.com/lode-org/readcon-core/issues"
+Changelog = "https://github.com/lode-org/readcon-core/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 features = ["python"]
