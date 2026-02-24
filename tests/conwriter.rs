@@ -73,6 +73,40 @@ fn test_builder_roundtrip() {
 }
 
 #[test]
+fn test_writer_precision_default_vs_high() {
+    let mut builder =
+        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder.add_atom("Cu", 1.23456789012345678, 0.0, 0.0, false, 0, 63.546);
+    let frame = builder.build();
+
+    // Default precision (6)
+    let mut buf6: Vec<u8> = Vec::new();
+    {
+        let mut w = ConFrameWriter::new(&mut buf6);
+        w.write_frame(&frame).unwrap();
+    }
+    let s6 = String::from_utf8(buf6).unwrap();
+    let frames6: Vec<_> = ConFrameIterator::new(&s6)
+        .map(|r| r.unwrap())
+        .collect();
+    // 6 decimal places means ~1e-6 precision loss
+    assert!((frames6[0].atom_data[0].x - 1.234568).abs() < 1e-5);
+
+    // High precision (17)
+    let mut buf17: Vec<u8> = Vec::new();
+    {
+        let mut w = ConFrameWriter::with_precision(&mut buf17, 17);
+        w.write_frame(&frame).unwrap();
+    }
+    let s17 = String::from_utf8(buf17).unwrap();
+    let frames17: Vec<_> = ConFrameIterator::new(&s17)
+        .map(|r| r.unwrap())
+        .collect();
+    // 17 decimal places preserves the full f64
+    assert!((frames17[0].atom_data[0].x - 1.23456789012345678).abs() < 1e-14);
+}
+
+#[test]
 fn test_builder_velocity_roundtrip() {
     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
     builder.add_atom_with_velocity("Cu", 1.0, 2.0, 3.0, true, 0, 63.546, 0.1, 0.2, 0.3);
