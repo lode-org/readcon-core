@@ -15,31 +15,26 @@ jobs:
     name: Run basic tests and build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: llvm-tools-preview
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: setup sccache
+      - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
         with:
           version: "v0.10.0"
 
-      - name: setup sccache environnement variables
+      - name: Setup sccache environment
         run: |
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
 
-      - name: install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install meson
-          sudo apt install valgrind
+          sudo snap install valgrind --classic
+          sudo apt-get update && sudo apt-get install -y libc6-dbg --fix-missing
 
       - name: Build and test
         id: btest_rust

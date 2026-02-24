@@ -25,39 +25,35 @@ jobs:
       CXX: clang++-${{ matrix.llvm-version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: setup LLVM
+      - name: Setup LLVM
         run: |
             wget https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.llvm-version }}
             sudo apt-get update
-            sudo apt install --no-install-recommends clang-${{ matrix.llvm-version }}
+            sudo apt-get install --no-install-recommends -y clang-${{ matrix.llvm-version }}
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: llvm-tools-preview
-          override: true
 
-      - name: install cargo-llvm-cov
+      - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: setup sccache
+      - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
         with:
           version: "v0.10.0"
 
-      - name: setup sccache environnement variables
+      - name: Setup sccache environment
         run: |
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
 
-      - name: generate rust code coverage
+      - name: Generate rust code coverage
         id: coverage
         run: |
           cargo llvm-cov --all-features --workspace \
@@ -65,7 +61,7 @@ jobs:
             --include-ffi \
             --output-path rust_codecov.json
 
-      # - name: upload to codecov.io
+      # - name: Upload to codecov.io
       #   uses: codecov/codecov-action@v5
       #   with:
       #     fail_ci_if_error: true
