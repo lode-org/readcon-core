@@ -35,6 +35,7 @@ struct Atom {
 // Forward declarations
 class ConFrame;
 class ConFrameWriter;
+class ConFrameBuilder;
 
 /**
  * @brief An iterator for lazily reading frames from a .con file.
@@ -118,6 +119,9 @@ class ConFrame {
   public:
     friend class ConFrameIterator::Iterator;
     friend class ConFrameWriter;
+    friend class ConFrameBuilder;
+    friend ConFrame read_first_frame(const std::filesystem::path &);
+    friend std::vector<ConFrame> read_all_frames(const std::filesystem::path &);
 
     ConFrame(const ConFrame &) = delete;
     ConFrame &operator=(const ConFrame &) = delete;
@@ -166,9 +170,11 @@ class ConFrameWriter {
     /**
      * @brief Constructs a writer and opens the specified file for writing.
      * @param path The path to the output .con file.
+     * @param precision Number of decimal places for floating-point output (default 6).
      * @throws std::runtime_error if the file cannot be created.
      */
-    explicit ConFrameWriter(const std::filesystem::path &path);
+    explicit ConFrameWriter(const std::filesystem::path &path,
+                            uint8_t precision = 6);
 
     /**
      * @brief Writes all frames from a vector to the file.
@@ -186,6 +192,97 @@ class ConFrameWriter {
     };
     std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
 };
+
+/**
+ * @brief A builder for constructing ConFrame objects from in-memory data.
+ *
+ * Atoms are accumulated and grouped by symbol on build() to compute
+ * the header fields.
+ *
+ * Example:
+ *
+ * readcon::ConFrameBuilder builder({10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
+ * builder.add_atom("Cu", 0.0, 0.0, 0.0, true, 0, 63.546);
+ * auto frame = builder.build();
+ */
+class ConFrameBuilder {
+  public:
+    /**
+     * @brief Constructs a builder with cell dimensions, angles, and optional headers.
+     */
+    ConFrameBuilder(const std::array<double, 3> &cell,
+                    const std::array<double, 3> &angles,
+                    const std::array<std::string, 2> &prebox = {"", ""},
+                    const std::array<std::string, 2> &postbox = {"", ""});
+
+    ~ConFrameBuilder();
+    ConFrameBuilder(const ConFrameBuilder &) = delete;
+    ConFrameBuilder &operator=(const ConFrameBuilder &) = delete;
+    ConFrameBuilder(ConFrameBuilder &&other) noexcept;
+    ConFrameBuilder &operator=(ConFrameBuilder &&other) noexcept;
+
+    /**
+     * @brief Adds an atom without velocity data.
+     */
+    void add_atom(const std::string &symbol, double x, double y, double z,
+                  bool is_fixed, uint64_t atom_id, double mass);
+
+    /**
+     * @brief Adds an atom with velocity data.
+     */
+    void add_atom_with_velocity(const std::string &symbol, double x, double y,
+                                double z, bool is_fixed, uint64_t atom_id,
+                                double mass, double vx, double vy, double vz);
+
+    /**
+     * @brief Consumes the builder and returns a finalized ConFrame.
+     * @throws std::runtime_error if the build fails.
+     */
+    ConFrame build();
+
+  private:
+    RKRConFrameBuilder *builder_handle_ = nullptr;
+};
+
+// --- Convenience free functions ---
+
+/**
+ * @brief Reads the first frame from a .con file using mmap.
+ * @throws std::runtime_error on failure.
+ */
+inline ConFrame read_first_frame(const std::filesystem::path &path) {
+    RKRConFrame *handle = rkr_read_first_frame(path.c_str());
+    if (!handle) {
+        throw std::runtime_error("Failed to read first frame from: " +
+                                 path.string());
+    }
+    return ConFrame(handle);
+}
+
+/**
+ * @brief Reads all frames from a .con file using mmap.
+ * @throws std::runtime_error on failure.
+ */
+inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) {
+    size_t num_frames = 0;
+    RKRConFrame **handles = rkr_read_all_frames(path.c_str(), &num_frames);
+    if (!handles) {
+        throw std::runtime_error("Failed to read frames from: " +
+                                 path.string());
+    }
+    std::vector<ConFrame> frames;
+    frames.reserve(num_frames);
+    for (size_t i = 0; i < num_frames; ++i) {
+        frames.emplace_back(ConFrame(handles[i]));
+    }
+    // Null out the handles since they're now owned by ConFrame objects,
+    // then free the array via the Rust allocator.
+    for (size_t i = 0; i < num_frames; ++i) {
+        handles[i] = nullptr;
+    }
+    free_rkr_frame_array(handles, num_frames);
+    return frames;
+}
 
 // --- Implementation of ConFrameIterator and its nested Iterator ---
 
@@ -323,8 +420,14 @@ inline bool ConFrame::has_velocities() const {
 
 // --- Implementation of ConFrameWriter methods ---
 
-inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
-    writer_handle_.reset(create_writer_from_path_c(path.c_str()));
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      uint8_t precision) {
+    if (precision == 6) {
+        writer_handle_.reset(create_writer_from_path_c(path.c_str()));
+    } else {
+        writer_handle_.reset(
+            create_writer_from_path_with_precision_c(path.c_str(), precision));
+    }
     if (!writer_handle_) {
         throw std::runtime_error("Failed to create writer for file: " +
                                  path.string());
@@ -345,6 +448,72 @@ inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
                           handles.size()) != 0) {
         throw std::runtime_error("Failed to write multiple frames.");
     }
+}
+
+// --- Implementation of ConFrameBuilder methods ---
+
+inline ConFrameBuilder::ConFrameBuilder(
+    const std::array<double, 3> &cell, const std::array<double, 3> &angles,
+    const std::array<std::string, 2> &prebox,
+    const std::array<std::string, 2> &postbox) {
+    builder_handle_ =
+        rkr_frame_new(cell.data(), angles.data(), prebox[0].c_str(),
+                      prebox[1].c_str(), postbox[0].c_str(), postbox[1].c_str());
+    if (!builder_handle_) {
+        throw std::runtime_error("Failed to create frame builder.");
+    }
+}
+
+inline ConFrameBuilder::~ConFrameBuilder() {
+    if (builder_handle_) {
+        free_rkr_frame_builder(builder_handle_);
+    }
+}
+
+inline ConFrameBuilder::ConFrameBuilder(ConFrameBuilder &&other) noexcept
+    : builder_handle_(other.builder_handle_) {
+    other.builder_handle_ = nullptr;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
+    if (this != &other) {
+        if (builder_handle_) {
+            free_rkr_frame_builder(builder_handle_);
+        }
+        builder_handle_ = other.builder_handle_;
+        other.builder_handle_ = nullptr;
+    }
+    return *this;
+}
+
+inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
+                                      double y, double z, bool is_fixed,
+                                      uint64_t atom_id, double mass) {
+    if (rkr_frame_add_atom(builder_handle_, symbol.c_str(), x, y, z, is_fixed,
+                           atom_id, mass) != 0) {
+        throw std::runtime_error("Failed to add atom to frame builder.");
+    }
+}
+
+inline void ConFrameBuilder::add_atom_with_velocity(
+    const std::string &symbol, double x, double y, double z, bool is_fixed,
+    uint64_t atom_id, double mass, double vx, double vy, double vz) {
+    if (rkr_frame_add_atom_with_velocity(builder_handle_, symbol.c_str(), x, y,
+                                         z, is_fixed, atom_id, mass, vx, vy,
+                                         vz) != 0) {
+        throw std::runtime_error(
+            "Failed to add atom with velocity to frame builder.");
+    }
+}
+
+inline ConFrame ConFrameBuilder::build() {
+    RKRConFrame *frame = rkr_frame_builder_build(builder_handle_);
+    builder_handle_ = nullptr; // ownership transferred
+    if (!frame) {
+        throw std::runtime_error("Failed to build frame from builder.");
+    }
+    return ConFrame(frame);
 }
 
 } // namespace readcon

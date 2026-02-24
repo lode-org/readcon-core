@@ -1,9 +1,10 @@
 use crate::helpers::symbol_to_atomic_number;
-use crate::iterators::ConFrameIterator;
-use crate::types::ConFrame;
+use crate::iterators::{self, ConFrameIterator};
+use crate::types::{ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
 use std::ffi::{c_char, CStr, CString};
 use std::fs::{self, File};
+use std::path::Path;
 use std::ptr;
 
 //=============================================================================
@@ -333,5 +334,233 @@ pub unsafe extern "C" fn rkr_writer_extend(
     match writer.extend(rust_frames.into_iter()) {
         Ok(_) => 0,
         Err(_) => -1,
+    }
+}
+
+//=============================================================================
+// Writer with Precision
+//=============================================================================
+
+/// Creates a new frame writer with custom floating-point precision.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
+    filename_c: *const c_char,
+    precision: u8,
+) -> *mut RKRConFrameWriter {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match ConFrameWriter::from_path_with_precision(filename, precision as usize) {
+        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+//=============================================================================
+// Frame Builder FFI (construct ConFrame from C data)
+//=============================================================================
+
+/// An opaque handle to a Rust `ConFrameBuilder` object.
+#[repr(C)]
+pub struct RKRConFrameBuilder {
+    _private: [u8; 0],
+}
+
+/// Creates a new frame builder with the given cell dimensions, angles, and header lines.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
+/// `rkr_frame_builder_build`.
+/// Returns NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_new(
+    cell: *const f64,
+    angles: *const f64,
+    prebox0: *const c_char,
+    prebox1: *const c_char,
+    postbox0: *const c_char,
+    postbox1: *const c_char,
+) -> *mut RKRConFrameBuilder {
+    if cell.is_null() || angles.is_null() {
+        return ptr::null_mut();
+    }
+    let cell_arr = unsafe { [*cell, *cell.add(1), *cell.add(2)] };
+    let angles_arr = unsafe { [*angles, *angles.add(1), *angles.add(2)] };
+
+    let get_str = |p: *const c_char| -> String {
+        if p.is_null() {
+            String::new()
+        } else {
+            unsafe { CStr::from_ptr(p) }
+                .to_str()
+                .unwrap_or("")
+                .to_string()
+        }
+    };
+
+    let builder = ConFrameBuilder::new(cell_arr, angles_arr)
+        .prebox_header([get_str(prebox0), get_str(prebox1)])
+        .postbox_header([get_str(postbox0), get_str(postbox1)]);
+
+    Box::into_raw(Box::new(builder)) as *mut RKRConFrameBuilder
+}
+
+/// Adds an atom (without velocity) to the frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    is_fixed: bool,
+    atom_id: u64,
+    mass: f64,
+) -> i32 {
+    if builder_handle.is_null() || symbol.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    builder.add_atom(sym, x, y, z, is_fixed, atom_id, mass);
+    0
+}
+
+/// Adds an atom with velocity data to the frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    is_fixed: bool,
+    atom_id: u64,
+    mass: f64,
+    vx: f64,
+    vy: f64,
+    vz: f64,
+) -> i32 {
+    if builder_handle.is_null() || symbol.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    builder.add_atom_with_velocity(sym, x, y, z, is_fixed, atom_id, mass, vx, vy, vz);
+    0
+}
+
+/// Consumes the builder and returns a finalized RKRConFrame handle.
+/// The builder handle is invalidated after this call.
+/// The caller OWNS the returned frame and MUST call `free_rkr_frame`.
+/// Returns NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_build(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut RKRConFrame {
+    if builder_handle.is_null() {
+        return ptr::null_mut();
+    }
+    let builder = unsafe { *Box::from_raw(builder_handle as *mut ConFrameBuilder) };
+    let frame = builder.build();
+    Box::into_raw(Box::new(frame)) as *mut RKRConFrame
+}
+
+/// Frees a frame builder without building.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrameBuilder) {
+    if !builder_handle.is_null() {
+        let _ = unsafe { Box::from_raw(builder_handle as *mut ConFrameBuilder) };
+    }
+}
+
+//=============================================================================
+// Direct mmap-based Reader FFI
+//=============================================================================
+
+/// Reads the first frame from a .con file using mmap.
+/// The caller OWNS the returned handle and MUST call `free_rkr_frame`.
+/// Returns NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_first_frame(
+    filename_c: *const c_char,
+) -> *mut RKRConFrame {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match iterators::read_all_frames(Path::new(filename)) {
+        Ok(mut frames) if !frames.is_empty() => {
+            let frame = frames.swap_remove(0);
+            Box::into_raw(Box::new(frame)) as *mut RKRConFrame
+        }
+        _ => ptr::null_mut(),
+    }
+}
+
+/// Reads all frames from a .con file using mmap.
+/// Returns an array of frame handles and sets `num_frames` to the count.
+/// The caller OWNS both the array and each frame handle.
+/// Free frames with `free_rkr_frame` and the array with `free_rkr_frame_array`.
+/// Returns NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_all_frames(
+    filename_c: *const c_char,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
+    if filename_c.is_null() || num_frames.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match iterators::read_all_frames(Path::new(filename)) {
+        Ok(frames) => {
+            let count = frames.len();
+            let mut handles: Vec<*mut RKRConFrame> = frames
+                .into_iter()
+                .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
+                .collect();
+            let ptr = handles.as_mut_ptr();
+            std::mem::forget(handles);
+            unsafe { *num_frames = count };
+            ptr
+        }
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Frees an array of frame handles returned by `rkr_read_all_frames`.
+/// Each frame is freed individually, then the array itself.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_frame_array(
+    frames: *mut *mut RKRConFrame,
+    num_frames: usize,
+) {
+    if frames.is_null() {
+        return;
+    }
+    unsafe {
+        let handles = Vec::from_raw_parts(frames, num_frames, num_frames);
+        for handle in handles {
+            if !handle.is_null() {
+                let _ = Box::from_raw(handle as *mut ConFrame);
+            }
+        }
     }
 }
