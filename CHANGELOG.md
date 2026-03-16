@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.4.4 - 2026-03-16
+#### Buildsystem
+- use link_args instead of link_with in declare_dependency for meson - (261aa19) - HaoZeke
+- do not install cargo custom_target - (a861711) - HaoZeke
+- Windows support for meson build - (3b80468) - HaoZeke
+#### Documentation
+- add v0.4.0-v0.4.3 changelog, update tutorials and bindings - (3eed202) - HaoZeke
+
+- - -
 ## v0.4.3 - 2026-02-24
 #### Enhancements
 - use read_to_string for files under 64 KiB instead of mmap, avoiding fixed VMA/page-fault overhead on small files - (fc1b0d6) - HaoZeke
