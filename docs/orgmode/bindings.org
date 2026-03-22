@@ -16,6 +16,15 @@ maturin develop --features python
 pixi r -e python python-build
 #+end_src
 
+** Version and spec queries
+
+#+begin_src python
+import readcon
+
+print(readcon.__version__)       # e.g. "0.5.0"
+print(readcon.CON_SPEC_VERSION)  # 2
+#+end_src
+
 ** Usage
 
 #+begin_src python
@@ -99,6 +108,21 @@ end
   prebox_header, postbox_header
 
 * C/C++ (FFI)
+
+** Version and spec queries
+
+#+begin_src c
+#include "readcon-core.h"
+
+// Compile-time check
+#if RKR_CON_SPEC_VERSION < 2
+#error "readcon-core spec v2 required for atom_index support"
+#endif
+
+// Runtime queries
+printf("Spec version: %u\n", rkr_con_spec_version());
+printf("Library version: %s\n", rkr_library_version());
+#+end_src
 
 ** C API
 

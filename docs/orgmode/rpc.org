@@ -17,6 +17,11 @@ The schema defines a =ReadConService= interface with two methods:
 
 The schema file is at =schema/ReadCon.capnp=.
 
+Each =ConFrameData= message includes a =specVersion= field (default 2)
+indicating the CON format spec version. Clients that do not set this
+field receive the default (spec version 2). Older clients that do not
+know this field will silently ignore it (standard Cap'n Proto evolution).
+
 * Building
 
 #+begin_src shell

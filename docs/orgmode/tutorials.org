@@ -1,6 +1,47 @@
 #+title: Tutorials
 #+options: toc:2 num:t
 
+* Querying the spec version
+
+/Added in v0.5.0./
+
+All consumers can check which CON format spec version the library
+implements. This is useful for gating code that depends on atom_index
+semantics (spec version 2+).
+
+** Rust
+
+#+begin_src rust
+use readcon_core::{CON_SPEC_VERSION, VERSION};
+
+assert_eq!(CON_SPEC_VERSION, 2);
+println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
+#+end_src
+
+** C/C++
+
+#+begin_src c
+#include "readcon-core.h"
+
+// Compile-time
+#if RKR_CON_SPEC_VERSION >= 2
+    // atom_index semantics available
+#endif
+
+// Runtime
+printf("spec v%u, lib %s\n",
+       rkr_con_spec_version(), rkr_library_version());
+#+end_src
+
+** Python
+
+#+begin_src python
+import readcon
+
+print(readcon.__version__)       # "0.5.0"
+print(readcon.CON_SPEC_VERSION)  # 2
+#+end_src
+
 * Rust
 
 ** Reading a CON file
@@ -67,15 +108,23 @@ Velocity data is written automatically when
 
 /Added in v0.4.0./
 
-Use =ConFrameBuilder= to construct frames programmatically:
+Use =ConFrameBuilder= to construct frames programmatically. The
+=atom_id= parameter (6th argument to =add_atom=) is the original atom
+index -- the position of this atom in your input before type-based
+grouping. The builder groups atoms by symbol automatically, but
+preserves each atom's =atom_id= so the original ordering can be
+reconstructed.
 
 #+begin_src rust
 use readcon_core::types::ConFrameBuilder;
 
 let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
-builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
+// atom_id 0 and 1 for Cu, 2 for H -- these survive type-based reordering
+builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 0, 63.546);
+builder.add_atom("H",  1.0, 2.0, 3.0, false, 2, 1.008);
+builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 1, 63.546);
 let frame = builder.build();
+// Atoms are now grouped: Cu(id=0), Cu(id=1), H(id=2)
 #+end_src
 
 ** Writing with custom precision
