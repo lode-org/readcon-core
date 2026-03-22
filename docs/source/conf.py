@@ -3,7 +3,7 @@ import os
 project = "readcon-core"
 copyright = "2025--present, LODE developers"
 author = "LODE developers"
-release = "0.4.3"
+release = "0.5.0"
 
 extensions = [
     "sphinx.ext.autodoc",

@@ -151,3 +151,25 @@ atom_index value. Earlier readcon-core versions (< 0.5.0) also
 preserved column 5 values through roundtrips but did not enforce the
 semantic meaning; they are effectively version 2 conformant for the
 read/write path but were not tested against the reordering scenario.
+
+** Querying the spec version
+
+The file format itself contains no version marker. The spec version is
+a property of the implementation, not the file. Consumers query it as
+follows:
+
+| Language | Compile-time | Runtime |
+|----------+--------------+---------|
+| Rust | =readcon_core::CON_SPEC_VERSION= (u32) | same |
+| C/C++ | =#define RKR_CON_SPEC_VERSION= | =rkr_con_spec_version()= |
+| Python | N/A | =readcon.CON_SPEC_VERSION= |
+| Cap'n Proto | N/A | =specVersion= field on =ConFrameData= |
+
+C/C++ example for compile-time gating:
+
+#+begin_src c
+#include <readcon-core.h>
+#if RKR_CON_SPEC_VERSION < 2
+#error "readcon-core spec v2 required for atom_index support"
+#endif
+#+end_src

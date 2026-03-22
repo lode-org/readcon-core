@@ -8,6 +8,29 @@ use std::path::Path;
 use std::ptr;
 
 //=============================================================================
+// Version & Spec Constants (exported as #define by cbindgen)
+//=============================================================================
+
+/// CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
+/// to gate code that depends on atom_index semantics.
+pub const RKR_CON_SPEC_VERSION: u32 = 2;
+
+/// Returns the spec version at runtime (for dynamically linked consumers).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_con_spec_version() -> u32 {
+    crate::CON_SPEC_VERSION
+}
+
+/// Returns a pointer to a static, null-terminated library version string.
+/// The returned pointer is valid for the lifetime of the process. Do NOT free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_library_version() -> *const c_char {
+    // concat! produces a &'static str with a trailing NUL byte
+    const VERSION_NUL: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
+    VERSION_NUL.as_ptr() as *const c_char
+}
+
+//=============================================================================
 // C-Compatible Structs & Handles
 //=============================================================================
 
