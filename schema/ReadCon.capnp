@@ -20,6 +20,7 @@ struct ConFrameData {
   preboxHeader  @3 :List(Text);
   postboxHeader @4 :List(Text);
   hasVelocities @5 :Bool;
+  specVersion   @6 :UInt32 = 2;
 }
 
 struct ParseRequest {

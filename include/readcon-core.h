@@ -17,6 +17,21 @@ namespace readcon {
 #endif  // __cplusplus
 
 /**
+ * CON/convel format spec version implemented by this build.
+ *
+ * - Version 1: column 5 present but semantics undefined. Readers MAY ignore it.
+ * - Version 2: column 5 is the original atom index before type-based grouping.
+ *   Readers MUST parse and preserve it. Writers MUST write the stored value.
+ */
+#define CON_SPEC_VERSION 2
+
+/**
+ * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
+ * to gate code that depends on atom_index semantics.
+ */
+#define RKR_CON_SPEC_VERSION 2
+
+/**
  * An iterator that lazily parses simulation frames from a `.con` or `.convel`
  * file's contents.
  *
@@ -90,6 +105,17 @@ typedef struct RKRConFrameBuilder {
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * Returns the spec version at runtime (for dynamically linked consumers).
+ */
+uint32_t rkr_con_spec_version(void);
+
+/**
+ * Returns a pointer to a static, null-terminated library version string.
+ * The returned pointer is valid for the lifetime of the process. Do NOT free it.
+ */
+const char *rkr_library_version(void);
 
 /**
  * Creates a new iterator for a .con file.
@@ -232,7 +258,9 @@ struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder *builder_h
 void free_rkr_frame_builder(struct RKRConFrameBuilder *builder_handle);
 
 /**
- * Reads the first frame from a .con file using mmap.
+ * Reads the first frame from a .con file.
+ * Uses `read_to_string` for small files (< 64 KiB) and mmap for larger ones.
+ * Stops after the first frame rather than parsing the entire file.
  * The caller OWNS the returned handle and MUST call `free_rkr_frame`.
  * Returns NULL on error.
  */

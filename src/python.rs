@@ -449,6 +449,8 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
