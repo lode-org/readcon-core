@@ -30,6 +30,37 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
     }
 }
 
+/// Parses a line of whitespace-separated f64 values, accepting between `min`
+/// and `max` values (inclusive). Returns a vector of exactly `max` elements,
+/// padding with values from `defaults` when fewer than `max` are present.
+///
+/// Used for atom lines where column 5 (atom_index) is optional.
+pub fn parse_line_of_range_f64(
+    line: &str,
+    min: usize,
+    max: usize,
+    defaults: &[f64],
+) -> Result<Vec<f64>, ParseError> {
+    let mut values = Vec::with_capacity(max);
+    for token in line.split_ascii_whitespace() {
+        let val: f64 = fast_float2::parse(token)
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        values.push(val);
+    }
+    if values.len() < min || values.len() > max {
+        return Err(ParseError::InvalidVectorLength {
+            expected: max,
+            found: values.len(),
+        });
+    }
+    // Pad missing columns from defaults
+    while values.len() < max {
+        let idx = values.len();
+        values.push(defaults[idx]);
+    }
+    Ok(values)
+}
+
 /// Parses a line of whitespace-separated values into a vector of a specific type.
 ///
 /// This generic helper function takes a string slice, splits it by whitespace,
@@ -193,6 +224,7 @@ pub fn parse_single_frame<'a>(
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
 
+    let mut global_atom_idx: u64 = 0;
     for num_atoms in &header.natms_per_type {
         // Create a reference-counted string for the symbol once per component.
         let symbol = Rc::new(
@@ -206,7 +238,9 @@ pub fn parse_single_frame<'a>(
         lines.next().ok_or(ParseError::IncompleteFrame)?;
         for _ in 0..*num_atoms {
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
-            let vals = parse_line_of_n_f64(coord_line, 5)?;
+            // Column 5 (atom_index) is optional; defaults to sequential index.
+            let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
+            let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             atom_data.push(AtomDatum {
                 // This is now a cheap reference-count increment, not a full string clone.
                 symbol: Rc::clone(&symbol),
@@ -219,6 +253,7 @@ pub fn parse_single_frame<'a>(
                 vy: None,
                 vz: None,
             });
+            global_atom_idx += 1;
         }
     }
     Ok(ConFrame { header, atom_data })
@@ -253,7 +288,7 @@ where
         _ => return Ok(false),
     }
 
-    let mut atom_idx = 0;
+    let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         // Symbol line
         let _symbol = lines
@@ -275,12 +310,14 @@ where
             let vel_line = lines
                 .next()
                 .ok_or(ParseError::IncompleteVelocitySection)?;
-            let vals = parse_line_of_n_f64(vel_line, 5)?;
+            // Column 5 (atom_index) is optional in velocity lines too.
+            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
+            let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].vx = Some(vals[0]);
                 atom_data[atom_idx].vy = Some(vals[1]);
                 atom_data[atom_idx].vz = Some(vals[2]);
-                // vals[3] is fixed flag, vals[4] is atom_id (redundant with coords)
+                // vals[3] is fixed flag, vals[4] is atom_index (redundant with coords)
             }
             atom_idx += 1;
         }
@@ -478,7 +515,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_single_frame_invalid_atom_coords() {
+    fn test_parse_single_frame_missing_atom_index_defaults_sequential() {
+        // Column 5 (atom_index) is optional; when absent, defaults to sequential.
         let lines = vec![
             "PREBOX1",
             "PREBOX2",
@@ -496,9 +534,39 @@ mod tests {
             "-0.5470 0.9499 0.0 0.0 3",
             "2",
             "Coordinates of Component 2",
-            "5.0 5.0 5.0 0.0", // Missing atom_id
-            "6.0940 5.0 5.0 0.0 5",
-            "5.5470 5.9499 5.0 0.0 6",
+            "5.0 5.0 5.0 0.0",       // No atom_index: defaults to 3
+            "6.0940 5.0 5.0 0.0 10", // Explicit atom_index: 10
+            "5.5470 5.9499 5.0 0.0",  // No atom_index: defaults to 5
+        ];
+        let mut line_it = lines.iter().copied();
+        let frame = parse_single_frame(&mut line_it).unwrap();
+        assert_eq!(frame.atom_data.len(), 6);
+        // First type: explicit atom_index values
+        assert_eq!(frame.atom_data[0].atom_id, 1);
+        assert_eq!(frame.atom_data[1].atom_id, 2);
+        assert_eq!(frame.atom_data[2].atom_id, 3);
+        // Second type: mixed explicit and defaulted
+        assert_eq!(frame.atom_data[3].atom_id, 3); // defaulted (global idx 3)
+        assert_eq!(frame.atom_data[4].atom_id, 10); // explicit
+        assert_eq!(frame.atom_data[5].atom_id, 5); // defaulted (global idx 5)
+    }
+
+    #[test]
+    fn test_parse_single_frame_too_few_columns_fails() {
+        // Only 3 columns (missing fixed_flag too) should still fail.
+        let lines = vec![
+            "PREBOX1",
+            "PREBOX2",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+            "C",
+            "Coordinates of Component 1",
+            "0.0 0.0 0.0", // Only 3 values
         ];
         let mut line_it = lines.iter().copied();
         let result = parse_single_frame(&mut line_it);
@@ -507,7 +575,7 @@ mod tests {
             result.unwrap_err(),
             ParseError::InvalidVectorLength {
                 expected: 5,
-                found: 4
+                found: 3
             }
         ));
     }
@@ -580,5 +648,57 @@ mod tests {
                 .expect("should succeed with no velocities");
         assert!(!has_vel);
         assert_eq!(frame.atom_data[0].vx, None);
+    }
+
+    #[test]
+    fn test_parse_line_of_range_f64_exact() {
+        let vals = parse_line_of_range_f64("1.0 2.0 3.0 0.0 42", 4, 5, &[0.0; 5]).unwrap();
+        assert_eq!(vals, vec![1.0, 2.0, 3.0, 0.0, 42.0]);
+    }
+
+    #[test]
+    fn test_parse_line_of_range_f64_padded() {
+        let defaults = [0.0, 0.0, 0.0, 0.0, 99.0];
+        let vals = parse_line_of_range_f64("1.0 2.0 3.0 0.0", 4, 5, &defaults).unwrap();
+        assert_eq!(vals, vec![1.0, 2.0, 3.0, 0.0, 99.0]);
+    }
+
+    #[test]
+    fn test_parse_line_of_range_f64_too_few() {
+        let result = parse_line_of_range_f64("1.0 2.0 3.0", 4, 5, &[0.0; 5]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_of_range_f64_too_many() {
+        let result = parse_line_of_range_f64("1.0 2.0 3.0 0.0 5.0 6.0", 4, 5, &[0.0; 5]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_all_four_column_lines() {
+        // All atom lines have only 4 columns; atom_index defaults to sequential.
+        let lines = vec![
+            "PREBOX1",
+            "PREBOX2",
+            "10.0 10.0 10.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "3",
+            "12.011",
+            "C",
+            "Coordinates of Component 1",
+            "0.0 0.0 0.0 0",
+            "1.0 0.0 0.0 0",
+            "2.0 0.0 0.0 1",
+        ];
+        let mut line_it = lines.iter().copied();
+        let frame = parse_single_frame(&mut line_it).unwrap();
+        assert_eq!(frame.atom_data[0].atom_id, 0);
+        assert_eq!(frame.atom_data[1].atom_id, 1);
+        assert_eq!(frame.atom_data[2].atom_id, 2);
+        assert_eq!(frame.atom_data[2].is_fixed, true);
     }
 }

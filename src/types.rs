@@ -37,7 +37,15 @@ pub struct AtomDatum {
     pub z: f64,
     /// A flag indicating if the atom's position is fixed during a simulation.
     pub is_fixed: bool,
-    /// A unique integer identifier for the atom.
+    /// The original atom index (column 5 in .con format).
+    ///
+    /// The .con format groups atoms by element type, which reorders them
+    /// relative to their original input ordering. This field preserves the
+    /// pre-grouping index so the original sequence can be reconstructed
+    /// after any number of read/write cycles.
+    ///
+    /// When column 5 is absent from the input, defaults to the sequential
+    /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
     /// The x-component of velocity (present only in `.convel` files).
     pub vx: Option<f64>,
