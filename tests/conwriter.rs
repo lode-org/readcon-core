@@ -129,3 +129,48 @@ fn test_builder_velocity_roundtrip() {
     assert_eq!(frames[0].atom_data[0].vx, Some(0.1));
     assert_eq!(frames[0].atom_data[1].vz, Some(0.6));
 }
+
+/// Verifies that non-sequential atom_id values (representing the original
+/// atom index before type-based reordering) survive a write-read roundtrip.
+///
+/// This is the key scenario from eOn commit 8b8d929: atoms like
+/// C(0),C(1),C(2),O(3),C(4),C(5) get reordered to C(0),C(1),C(2),C(4),C(5),O(3)
+/// in the .con file, and column 5 must preserve the original indices.
+#[test]
+fn test_nonsequential_atom_index_roundtrip() {
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    // Simulate atoms added in original order: C,C,C,O,C,C
+    // The builder groups by symbol, so C atoms come first, then O.
+    // We assign atom_id matching the original pre-grouping index.
+    builder.add_atom("C", 0.0, 0.0, 0.0, false, 0, 12.011);
+    builder.add_atom("C", 1.0, 0.0, 0.0, false, 1, 12.011);
+    builder.add_atom("C", 2.0, 0.0, 0.0, false, 2, 12.011);
+    builder.add_atom("O", 3.0, 0.0, 0.0, false, 3, 15.999);
+    builder.add_atom("C", 4.0, 0.0, 0.0, false, 4, 12.011);
+    builder.add_atom("C", 5.0, 0.0, 0.0, false, 5, 12.011);
+    let frame = builder.build();
+
+    // After build(), atoms are grouped: C(0),C(1),C(2),C(4),C(5),O(3)
+    assert_eq!(frame.header.natm_types, 2);
+    assert_eq!(frame.header.natms_per_type, vec![5, 1]);
+    assert_eq!(frame.atom_data[3].atom_id, 4); // C at x=4, original idx 4
+    assert_eq!(frame.atom_data[4].atom_id, 5); // C at x=5, original idx 5
+    assert_eq!(frame.atom_data[5].atom_id, 3); // O at x=3, original idx 3
+
+    // Write and re-read
+    let mut buffer: Vec<u8> = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        writer.write_frame(&frame).expect("Failed to write frame.");
+    }
+    let fdat = String::from_utf8(buffer).expect("Buffer is not valid UTF-8.");
+    let parser = ConFrameIterator::new(&fdat);
+    let frames: Vec<_> = parser.map(|r| r.unwrap()).collect();
+    assert_eq!(frames.len(), 1);
+
+    let rt = &frames[0];
+    // Non-sequential atom_id values must survive the roundtrip
+    assert_eq!(rt.atom_data[3].atom_id, 4);
+    assert_eq!(rt.atom_data[4].atom_id, 5);
+    assert_eq!(rt.atom_data[5].atom_id, 3);
+}

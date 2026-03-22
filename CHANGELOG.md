@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.0 - 2026-03-22
+#### Features
+- clarify column 5 (atom_index) semantics: preserves original atom index through type-based reordering, matching eOn 8b8d929 - HaoZeke
+- make column 5 optional in parser: accept 4-column atom lines with sequential default for backward compatibility - HaoZeke
+#### Documentation
+- update .con/.convel spec to document atom_index semantics, backward compatibility, and why reordering preservation matters - HaoZeke
+#### Tests
+- add tests for 4-column atom lines, non-sequential atom_index roundtrip, and parse_line_of_range_f64 - HaoZeke
+
+- - -
 ## v0.4.4 - 2026-03-16
 #### Buildsystem
 - use link_args instead of link_with in declare_dependency for meson - (261aa19) - HaoZeke

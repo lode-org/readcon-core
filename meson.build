@@ -1,7 +1,7 @@
 project(
     'readcon-core',
     ['rust', 'c'],
-    version: '0.4.4',
+    version: '0.5.0',
     meson_version: '>=1.8.0',
     default_options: [
         'buildtype=debugoptimized',
