@@ -9,6 +9,10 @@ pub mod writer;
 #[cfg(feature = "rpc")]
 pub mod rpc;
 
+// Re-export for generated capnp code which references crate::ReadCon_capnp
+#[cfg(feature = "rpc")]
+pub use rpc::read_con_capnp as ReadCon_capnp;
+
 #[cfg(feature = "python")]
 pub mod python;
 

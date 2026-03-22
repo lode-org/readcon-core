@@ -1,5 +1,6 @@
 use capnp::capability::Promise;
-use capnp_rpc::{RpcSystem, twoparty, rpc_twoparty_capnp};
+use capnp_rpc::{pry, RpcSystem, twoparty, rpc_twoparty_capnp};
+use futures::AsyncReadExt;
 
 use crate::iterators::ConFrameIterator;
 use crate::writer::ConFrameWriter;
@@ -44,12 +45,12 @@ impl read_con_service::Server for ReadConServiceImpl {
 
             // Headers
             let mut prebox = fb.reborrow().init_prebox_header(2);
-            prebox.set(0, &frame.header.prebox_header[0]);
-            prebox.set(1, &frame.header.prebox_header[1]);
+            prebox.set(0, &*frame.header.prebox_header[0]);
+            prebox.set(1, &*frame.header.prebox_header[1]);
 
             let mut postbox = fb.reborrow().init_postbox_header(2);
-            postbox.set(0, &frame.header.postbox_header[0]);
-            postbox.set(1, &frame.header.postbox_header[1]);
+            postbox.set(0, &*frame.header.postbox_header[0]);
+            postbox.set(1, &*frame.header.postbox_header[1]);
 
             fb.set_has_velocities(frame.has_velocities());
             fb.set_spec_version(crate::CON_SPEC_VERSION);
@@ -58,7 +59,7 @@ impl read_con_service::Server for ReadConServiceImpl {
             let mut atoms_builder = fb.reborrow().init_atoms(frame.atom_data.len() as u32);
             for (k, atom) in frame.atom_data.iter().enumerate() {
                 let mut ab = atoms_builder.reborrow().get(k as u32);
-                ab.set_symbol(&atom.symbol);
+                ab.set_symbol(&*atom.symbol);
                 ab.set_x(atom.x);
                 ab.set_y(atom.y);
                 ab.set_z(atom.z);
@@ -87,7 +88,7 @@ impl read_con_service::Server for ReadConServiceImpl {
 
         let mut frames = Vec::new();
         for i in 0..frame_data_list.len() {
-            let fd = pry!(frame_data_list.get(i));
+            let fd = frame_data_list.get(i);
 
             let cell_list = pry!(fd.get_cell());
             let angles_list = pry!(fd.get_angles());
@@ -107,12 +108,12 @@ impl read_con_service::Server for ReadConServiceImpl {
             ];
 
             let prebox_header = [
-                pry!(prebox_list.get(0)).to_string(),
-                pry!(prebox_list.get(1)).to_string(),
+                pry!(prebox_list.get(0)).to_str().unwrap_or_default().to_string(),
+                pry!(prebox_list.get(1)).to_str().unwrap_or_default().to_string(),
             ];
             let postbox_header = [
-                pry!(postbox_list.get(0)).to_string(),
-                pry!(postbox_list.get(1)).to_string(),
+                pry!(postbox_list.get(0)).to_str().unwrap_or_default().to_string(),
+                pry!(postbox_list.get(1)).to_str().unwrap_or_default().to_string(),
             ];
 
             // Reconstruct atom data
@@ -123,8 +124,8 @@ impl read_con_service::Server for ReadConServiceImpl {
             let mut current_count: usize = 0;
 
             for j in 0..atoms_list.len() {
-                let a = pry!(atoms_list.get(j));
-                let sym = pry!(a.get_symbol()).to_string();
+                let a = atoms_list.get(j);
+                let sym = pry!(a.get_symbol()).to_str().unwrap_or_default().to_string();
 
                 if sym != current_symbol {
                     if current_count > 0 {
@@ -188,8 +189,7 @@ impl read_con_service::Server for ReadConServiceImpl {
 /// This function blocks until the server is shut down.
 pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    let service = read_con_service::ToClient::new(ReadConServiceImpl)
-        .into_client::<capnp_rpc::Server>();
+    let service: read_con_service::Client = capnp_rpc::new_client(ReadConServiceImpl);
 
     loop {
         let (stream, _) = listener.accept().await?;
