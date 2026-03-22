@@ -4,10 +4,10 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 ## v0.5.0 - 2026-03-22
 #### Features
-- clarify column 5 (atom_index) semantics: preserves original atom index through type-based reordering, matching eOn 8b8d929 - HaoZeke
+- implement .con/.convel spec version 2: column 5 (atom_index) preserves the original atom index through type-based reordering (matching eOn 8b8d929) - HaoZeke
 - make column 5 optional in parser: accept 4-column atom lines with sequential default for backward compatibility - HaoZeke
 #### Documentation
-- update .con/.convel spec to document atom_index semantics, backward compatibility, and why reordering preservation matters - HaoZeke
+- rewrite .con/.convel spec with versioned normative requirements (version 1 vs version 2), RFC 2119 keywords, and implementation notes - HaoZeke
 #### Tests
 - add tests for 4-column atom lines, non-sequential atom_index roundtrip, and parse_line_of_range_f64 - HaoZeke
 

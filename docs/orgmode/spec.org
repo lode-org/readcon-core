@@ -1,14 +1,64 @@
 #+title: CON and convel file format specification
 #+options: toc:2 num:t
 
-*Spec version 0.5.0* (2026-03-22)
-
 * Overview
 
 The CON file format originated in the eOn (Evolving Objects on
 Networks) saddle-point search code. It stores atomic configurations
 for molecular dynamics and transition-state search simulations. The
 convel extension adds per-atom velocity data.
+
+This document uses RFC 2119 keywords: MUST, MUST NOT, SHOULD, MAY.
+
+* Spec versions
+
+** Version 1 (original eOn behavior)
+
+The de facto format used by eOn before commit =8b8d929=. Column 5 of
+atom lines is present and contains a non-negative integer, but its
+value carries no defined semantics.
+
+Normative requirements for version 1 conformance:
+- Writers MUST emit 5 columns per atom line. The value of column 5 is
+  unspecified; a sequential counter (0, 1, 2, ...) is typical.
+- Readers MUST parse 5 columns per atom line. Readers MAY ignore the
+  value of column 5.
+
+** Version 2 (atom_index semantics, 2026-03-22)
+
+Column 5 is the *original atom index*: the position of this atom in
+the input structure before type-based grouping. This version was
+introduced to fix a data-loss bug where round-tripping .con files
+destroyed the original atom ordering.
+
+Normative requirements for version 2 conformance:
+- Writers MUST emit 5 columns per atom line. Column 5 MUST contain the
+  original atom index (the position of this atom before type-based
+  reordering). Writers MUST NOT substitute a sequential counter.
+- Readers MUST parse column 5 and store it as the atom index. Readers
+  MUST preserve this value through write-back.
+- Readers SHOULD also accept 4-column lines for backward compatibility
+  with hand-edited or third-party files. When column 5 is absent, the
+  reader MUST default to the sequential position within the frame
+  (0, 1, 2, ...).
+
+A version 2 reader that reads a version 1 file (sequential counters)
+will produce correct results: the sequential values are a valid
+atom_index for structures that were never reordered. No version marker
+exists in the file itself; the distinction is in the implementation.
+
+*** Why atom_index matters
+
+The .con format groups atoms by element type. A structure with atoms
+in order C, C, C, O, C, C (indices 0-5) gets written as five C atoms
+followed by one O atom. Without a meaningful column 5, the original
+ordering is lost. The =atom_index= field preserves the pre-grouping
+index so that the original atom sequence can be reconstructed after
+any number of read/write cycles.
+
+This is essential for comparing geometries against reference structures
+(e.g. Baker transition-state test set) after NEB or dimer calculations
+that read and rewrite .con files.
 
 * File extensions
 
@@ -41,34 +91,13 @@ After the header, for each atom type i (1 to N):
 
 1. Symbol line :: The chemical symbol for this type (e.g., =Cu=, =H=).
 2. Label line :: =Coordinates of Component i=
-3. Atom lines :: One line per atom: =x y z fixed_flag [atom_index]=
+3. Atom lines :: One line per atom: =x y z fixed_flag atom_index=
 
 Where:
 - =x=, =y=, =z= are floating-point Cartesian coordinates.
 - =fixed_flag= is =0= (free) or =1= (fixed/frozen).
-- =atom_index= (optional) is a non-negative integer representing the
-  original atom index before type-based reordering. When absent,
-  defaults to the sequential position within the frame (0, 1, 2, ...).
-
-** Why atom_index matters
-
-The .con format groups atoms by element type. A structure with atoms
-in order C, C, C, O, C, C (indices 0--5) gets written as five C atoms
-followed by one O atom. Without column 5, the original ordering is
-lost. The =atom_index= field preserves the pre-grouping index so that
-the original atom sequence can be reconstructed after any number of
-read/write cycles.
-
-This is essential for comparing geometries against reference structures
-(e.g. Baker transition-state test set) after NEB or dimer calculations
-that read and rewrite .con files.
-
-** Backward compatibility
-
-Older .con files may contain a sequential counter in column 5 (or omit
-it entirely for 4-column lines). Parsers should accept both 4-column
-and 5-column atom lines, defaulting to sequential indexing when column
-5 is absent.
+- =atom_index= is a non-negative integer. See "Spec versions" for the
+  semantics and optionality requirements per version.
 
 * Velocity blocks (convel only)
 
@@ -80,12 +109,12 @@ of each frame. The structure is:
 2. For each atom type i (1 to N):
    a. Symbol line :: Same chemical symbol as in the coordinate block.
    b. Label line :: =Velocities of Component i=
-   c. Atom lines :: One line per atom: =vx vy vz fixed_flag [atom_index]=
+   c. Atom lines :: One line per atom: =vx vy vz fixed_flag atom_index=
 
 The velocity fields =vx=, =vy=, =vz= are floating-point velocity
 components. The =fixed_flag= and =atom_index= match those in the
-corresponding coordinate block. Column 5 is optional in velocity
-lines as well.
+corresponding coordinate block. The same column 5 optionality rules
+apply as in coordinate blocks.
 
 If no blank line follows the coordinate blocks, the frame has no
 velocity data (standard =.con= behavior).
@@ -108,8 +137,17 @@ blocks if present).
 
 * Constraints
 
-- Atoms must be grouped by type in the order declared in the header.
+- Atoms MUST be grouped by type in the order declared in the header.
 - Component numbering starts at 1.
 - The total number of atoms equals the sum of =natms_per_type=.
 - Maximum 100 atom types (practical limit from eOn).
-- Symbol strings should match standard chemical element symbols.
+- Symbol strings SHOULD match standard chemical element symbols.
+
+* Implementation notes
+
+readcon-core v0.5.0+ implements spec version 2. It reads and
+preserves atom_index, accepts 4-column lines, and writes the stored
+atom_index value. Earlier readcon-core versions (< 0.5.0) also
+preserved column 5 values through roundtrips but did not enforce the
+semantic meaning; they are effectively version 2 conformant for the
+read/write path but were not tested against the reordering scenario.
