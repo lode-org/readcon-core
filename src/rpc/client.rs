@@ -1,4 +1,5 @@
 use capnp_rpc::{RpcSystem, twoparty, rpc_twoparty_capnp};
+use futures::AsyncReadExt;
 
 use crate::iterators::ConFrameIterator;
 use crate::types::ConFrame;
@@ -59,18 +60,8 @@ impl RpcClient {
             let result = response.get()?.get_result()?;
             let frame_data_list = result.get_frames()?;
 
-            // Convert Cap'n Proto frames back to Rust ConFrame by serializing
-            // back through the writer/parser roundtrip (the schema carries
-            // enough data to reconstruct the text format).
-            //
-            // For a simpler approach, we just parse the returned data as UTF-8
-            // text and feed it through ConFrameIterator. This works because the
-            // server's writeFrames does exactly this serialization.
-            //
-            // Instead, reconstruct directly from the Cap'n Proto messages:
-            let _ = frame_data_list; // suppress warning
-            // The simplest path: ask the server to also return the serialized text
-            // For now, just parse the original data locally as fallback
+            // For now, parse the original data locally as fallback
+            let _ = frame_data_list;
             let contents = std::str::from_utf8(data)?;
             let iter = ConFrameIterator::new(contents);
             let frames: Result<Vec<_>, _> = iter.collect();
@@ -84,7 +75,6 @@ impl RpcClient {
         frames: &[ConFrame],
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         use crate::writer::ConFrameWriter;
-        // Serialize locally and send to server for validation/processing
         let mut buffer: Vec<u8> = Vec::new();
         {
             let mut writer = ConFrameWriter::new(&mut buffer);
