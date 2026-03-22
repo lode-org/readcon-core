@@ -21,7 +21,8 @@ thin FFI and language-specific wrapper layers.
 - =FrameHeader= :: 9-line header metadata (cell, angles, atom counts,
   masses).
 - =AtomDatum= :: Single atom data (symbol, coordinates, fixed flag,
-  atom ID, optional velocities).
+  atom_id (original atom index before type-based reordering),
+  optional velocities).
 - =ConFrame= :: Complete frame (header + atom data vector).
 
 Symbol strings use =Rc<String>= to avoid per-atom string clones
@@ -33,8 +34,12 @@ within a type block.
   for header lines.
 - =parse_line_of_n_f64= :: fast-float2 specialized parser for the
   coordinate/velocity hot path.
+- =parse_line_of_range_f64= :: Flexible parser accepting between
+  =min= and =max= columns, padding from defaults. Used for atom
+  lines where column 5 (atom_index) is optional.
 - =parse_frame_header= :: Consumes 9 header lines.
-- =parse_single_frame= :: Header + coordinate blocks.
+- =parse_single_frame= :: Header + coordinate blocks. Accepts
+  4-column atom lines (column 5 defaults to sequential index).
 - =parse_velocity_section= :: Optional velocity blocks after
   coordinates (detected by blank separator).
 
@@ -61,6 +66,13 @@ Opaque handle pattern:
 - Iterator lifecycle: =read_con_file_iterator= ->
   =con_frame_iterator_next= -> =rkr_frame_to_c_frame= ->
   =free_c_frame= -> =free_rkr_frame= -> =free_con_frame_iterator=.
+
+Version and spec constants:
+- =#define RKR_CON_SPEC_VERSION 2= :: Compile-time spec version for
+  =#if= guards.
+- =rkr_con_spec_version()= :: Runtime spec version query.
+- =rkr_library_version()= :: Returns library version string (e.g.
+  ="0.5.0"=). The pointer is static; do not free it.
 
 * C++ wrapper (readcon-core.hpp)
 
