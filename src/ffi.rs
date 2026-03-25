@@ -66,6 +66,35 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(
     }
 }
 
+/// Returns the per-frame energy from metadata, or NaN if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.energy().unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Returns the potential type string from metadata as a heap-allocated
+/// null-terminated C string. The caller MUST free with `rkr_free_string`.
+/// Returns NULL if absent or on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_potential_type(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    match frame.header.potential_type() {
+        Some(pot_type) => match CString::new(pot_type) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => ptr::null_mut(),
+        },
+        None => ptr::null_mut(),
+    }
+}
+
 //=============================================================================
 // C-Compatible Structs & Handles
 //=============================================================================

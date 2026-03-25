@@ -32,6 +32,117 @@ pub struct FrameHeader {
     pub metadata: BTreeMap<String, serde_json::Value>,
 }
 
+/// Typed accessors for recommended JSON metadata keys.
+///
+/// All getters read from `self.metadata`; all setters write to it.
+/// The underlying `BTreeMap` is the source of truth -- these helpers
+/// provide ergonomic typed access without changing storage.
+impl FrameHeader {
+    /// Per-frame total energy (in the units declared by the `units` key).
+    pub fn energy(&self) -> Option<f64> {
+        self.metadata.get("energy").and_then(|v| v.as_f64())
+    }
+
+    /// Sets the per-frame total energy.
+    pub fn set_energy(&mut self, e: f64) {
+        self.metadata
+            .insert("energy".to_string(), serde_json::Value::from(e));
+    }
+
+    /// Potential type string (e.g. "EMT", "LJ").
+    pub fn potential_type(&self) -> Option<&str> {
+        self.metadata
+            .get("potential")
+            .and_then(|v| v.as_object())
+            .and_then(|obj| obj.get("type"))
+            .and_then(|v| v.as_str())
+    }
+
+    /// Potential parameters as a JSON value.
+    pub fn potential_params(&self) -> Option<&serde_json::Value> {
+        self.metadata
+            .get("potential")
+            .and_then(|v| v.as_object())
+            .and_then(|obj| obj.get("params"))
+    }
+
+    /// Sets the potential type and parameters.
+    pub fn set_potential(&mut self, pot_type: &str, params: serde_json::Value) {
+        let obj = serde_json::json!({
+            "type": pot_type,
+            "params": params,
+        });
+        self.metadata
+            .insert("potential".to_string(), obj);
+    }
+
+    /// Zero-based frame index within a trajectory.
+    pub fn frame_index(&self) -> Option<u64> {
+        self.metadata.get("frame_index").and_then(|v| v.as_u64())
+    }
+
+    /// Sets the frame index.
+    pub fn set_frame_index(&mut self, idx: u64) {
+        self.metadata
+            .insert("frame_index".to_string(), serde_json::Value::from(idx));
+    }
+
+    /// Simulation time of this frame (in the declared time unit).
+    pub fn time(&self) -> Option<f64> {
+        self.metadata.get("time").and_then(|v| v.as_f64())
+    }
+
+    /// Sets the simulation time.
+    pub fn set_time(&mut self, t: f64) {
+        self.metadata
+            .insert("time".to_string(), serde_json::Value::from(t));
+    }
+
+    /// Integration timestep (in the declared time unit).
+    pub fn timestep(&self) -> Option<f64> {
+        self.metadata.get("timestep").and_then(|v| v.as_f64())
+    }
+
+    /// Sets the integration timestep.
+    pub fn set_timestep(&mut self, dt: f64) {
+        self.metadata
+            .insert("timestep".to_string(), serde_json::Value::from(dt));
+    }
+
+    /// Unit system as a JSON object (e.g. `{"length":"angstrom","energy":"eV"}`).
+    pub fn units(&self) -> Option<&serde_json::Value> {
+        self.metadata.get("units")
+    }
+
+    /// Sets the unit system.
+    pub fn set_units(&mut self, units: serde_json::Value) {
+        self.metadata
+            .insert("units".to_string(), units);
+    }
+
+    /// NEB bead (image) index.
+    pub fn neb_bead(&self) -> Option<u64> {
+        self.metadata.get("neb_bead").and_then(|v| v.as_u64())
+    }
+
+    /// Sets the NEB bead index.
+    pub fn set_neb_bead(&mut self, bead: u64) {
+        self.metadata
+            .insert("neb_bead".to_string(), serde_json::Value::from(bead));
+    }
+
+    /// NEB band index.
+    pub fn neb_band(&self) -> Option<u64> {
+        self.metadata.get("neb_band").and_then(|v| v.as_u64())
+    }
+
+    /// Sets the NEB band index.
+    pub fn set_neb_band(&mut self, band: u64) {
+        self.metadata
+            .insert("neb_band".to_string(), serde_json::Value::from(band));
+    }
+}
+
 /// Represents the data for a single atom in a frame.
 #[derive(Debug, Clone)]
 pub struct AtomDatum {
@@ -364,5 +475,90 @@ mod tests {
         assert_eq!(&*frame.atom_data[0].symbol, "H");
         assert_eq!(&*frame.atom_data[1].symbol, "H");
         assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+    }
+
+    #[test]
+    fn test_metadata_helpers_energy() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 10.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+        };
+        assert_eq!(header.energy(), None);
+        header.set_energy(-42.5);
+        assert_eq!(header.energy(), Some(-42.5));
+    }
+
+    #[test]
+    fn test_metadata_helpers_potential() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 10.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+        };
+        assert_eq!(header.potential_type(), None);
+        header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
+        assert_eq!(header.potential_type(), Some("EMT"));
+        assert_eq!(
+            header.potential_params(),
+            Some(&serde_json::json!({"cutoff": 6.0}))
+        );
+    }
+
+    #[test]
+    fn test_metadata_helpers_trajectory() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 10.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+        };
+        header.set_frame_index(5);
+        header.set_time(2.5);
+        header.set_timestep(0.5);
+        header.set_neb_bead(3);
+        header.set_neb_band(1);
+        assert_eq!(header.frame_index(), Some(5));
+        assert_eq!(header.time(), Some(2.5));
+        assert_eq!(header.timestep(), Some(0.5));
+        assert_eq!(header.neb_bead(), Some(3));
+        assert_eq!(header.neb_band(), Some(1));
+    }
+
+    #[test]
+    fn test_metadata_helpers_units() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 10.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+        };
+        assert_eq!(header.units(), None);
+        header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
+        let units = header.units().unwrap();
+        assert_eq!(units["length"], "angstrom");
+        assert_eq!(units["energy"], "eV");
     }
 }
