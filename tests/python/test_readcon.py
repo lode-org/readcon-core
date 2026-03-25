@@ -226,3 +226,5 @@ class TestErrorHandling:
     def test_malformed_data(self):
         with pytest.raises(OSError):
             readcon.read_con_string("not a valid con file\n")
+
+
