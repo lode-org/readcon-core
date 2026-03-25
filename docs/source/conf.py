@@ -13,7 +13,10 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns = [
+    # Auto-generated binary docs (demo CLI tool, not part of library API)
+    "crates/readcon_core/main.rst",
+]
 
 # -- sphinxcontrib-rust configuration ----------------------------------------
 rust_crates = {
