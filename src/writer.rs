@@ -66,11 +66,23 @@ impl<W: Write> ConFrameWriter<W> {
         writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
 
         // Line 2: always serialize JSON metadata with con_spec_version.
+        // Auto-populate sections based on frame data.
         let mut meta_obj = serde_json::Map::new();
         meta_obj.insert(
             "con_spec_version".to_string(),
             json!(frame.header.spec_version),
         );
+        // Build sections array from actual data presence
+        let mut sections = Vec::new();
+        if frame.has_velocities() {
+            sections.push(json!("velocities"));
+        }
+        if frame.has_forces() {
+            sections.push(json!("forces"));
+        }
+        if !sections.is_empty() {
+            meta_obj.insert("sections".to_string(), json!(sections));
+        }
         for (k, v) in &frame.header.metadata {
             meta_obj.insert(k.clone(), v.clone());
         }
@@ -165,6 +177,38 @@ impl<W: Write> ConFrameWriter<W> {
                     )?;
                 }
                 vel_idx_offset += num_atoms_in_type;
+            }
+        }
+
+        // --- Write optional force section ---
+        if frame.has_forces() {
+            // Blank separator line
+            writeln!(self.writer)?;
+
+            let mut force_idx_offset = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[force_idx_offset].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Forces of Component {}", type_idx + 1)?;
+
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[force_idx_offset + i];
+                    writeln!(
+                        self.writer,
+                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag:.0} {atom_id}",
+                        prec = prec,
+                        fx = atom.fx.unwrap_or(0.0),
+                        fy = atom.fy.unwrap_or(0.0),
+                        fz = atom.fz.unwrap_or(0.0),
+                        fixed_flag = if atom.is_fixed {
+                            FIXED_ATOM_FLAG
+                        } else {
+                            FREE_ATOM_FLAG
+                        },
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                force_idx_offset += num_atoms_in_type;
             }
         }
 

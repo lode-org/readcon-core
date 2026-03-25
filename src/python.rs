@@ -30,12 +30,18 @@ pub struct PyAtomDatum {
     pub vy: Option<f64>,
     #[pyo3(get)]
     pub vz: Option<f64>,
+    #[pyo3(get)]
+    pub fx: Option<f64>,
+    #[pyo3(get)]
+    pub fy: Option<f64>,
+    #[pyo3(get)]
+    pub fz: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, is_fixed=false, atom_id=0, mass=None, vx=None, vy=None, vz=None))]
+    #[pyo3(signature = (symbol, x, y, z, is_fixed=false, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
     fn new(
         symbol: String,
         x: f64,
@@ -47,6 +53,9 @@ impl PyAtomDatum {
         vx: Option<f64>,
         vy: Option<f64>,
         vz: Option<f64>,
+        fx: Option<f64>,
+        fy: Option<f64>,
+        fz: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -59,12 +68,20 @@ impl PyAtomDatum {
             vx,
             vy,
             vz,
+            fx,
+            fy,
+            fz,
         }
     }
 
     #[getter]
     fn has_velocity(&self) -> bool {
         self.vx.is_some() && self.vy.is_some() && self.vz.is_some()
+    }
+
+    #[getter]
+    fn has_forces(&self) -> bool {
+        self.fx.is_some() && self.fy.is_some() && self.fz.is_some()
     }
 
     fn __repr__(&self) -> String {
@@ -88,6 +105,9 @@ impl PyAtomDatum {
             vx: atom.vx,
             vy: atom.vy,
             vz: atom.vz,
+            fx: atom.fx,
+            fy: atom.fy,
+            fz: atom.fz,
         }
     }
 }
@@ -108,6 +128,8 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub has_velocities: bool,
     #[pyo3(get)]
+    pub has_forces: bool,
+    #[pyo3(get)]
     pub spec_version: u32,
     /// Additional JSON metadata as a Python dict (str -> JSON-compatible value).
     #[pyo3(get)]
@@ -127,6 +149,7 @@ impl PyConFrame {
         metadata: Option<std::collections::BTreeMap<String, String>>,
     ) -> Self {
         let has_velocities = atoms.first().is_some_and(|a| a.has_velocity());
+        let has_forces = atoms.first().is_some_and(|a| a.has_forces());
         PyConFrame {
             cell,
             angles,
@@ -134,6 +157,7 @@ impl PyConFrame {
             postbox_header: postbox_header.unwrap_or_else(|| vec![String::new(), String::new()]),
             atoms_inner: atoms,
             has_velocities,
+            has_forces,
             spec_version: crate::CON_SPEC_VERSION,
             metadata: metadata.unwrap_or_default(),
         }
@@ -244,6 +268,7 @@ impl From<&ConFrame> for PyConFrame {
             postbox_header: frame.header.postbox_header.to_vec(),
             atoms_inner: atoms,
             has_velocities: frame.has_velocities(),
+            has_forces: frame.has_forces(),
             spec_version: frame.header.spec_version,
             metadata,
         }
@@ -273,28 +298,35 @@ impl PyConFrame {
 
         for py_atom in &self.atoms_inner {
             let mass = py_atom.mass.unwrap_or(0.0);
-            if py_atom.has_velocity() {
+            let has_vel = py_atom.has_velocity();
+            let has_frc = py_atom.has_forces();
+            if has_vel && has_frc {
+                builder.add_atom_with_velocity_and_forces(
+                    &py_atom.symbol,
+                    py_atom.x, py_atom.y, py_atom.z,
+                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
+                    py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
+                );
+            } else if has_vel {
                 builder.add_atom_with_velocity(
                     &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.is_fixed,
-                    py_atom.atom_id,
-                    mass,
-                    py_atom.vx.unwrap_or(0.0),
-                    py_atom.vy.unwrap_or(0.0),
-                    py_atom.vz.unwrap_or(0.0),
+                    py_atom.x, py_atom.y, py_atom.z,
+                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
+                );
+            } else if has_frc {
+                builder.add_atom_with_forces(
+                    &py_atom.symbol,
+                    py_atom.x, py_atom.y, py_atom.z,
+                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
                 );
             } else {
                 builder.add_atom(
                     &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.is_fixed,
-                    py_atom.atom_id,
-                    mass,
+                    py_atom.x, py_atom.y, py_atom.z,
+                    py_atom.is_fixed, py_atom.atom_id, mass,
                 );
             }
         }
@@ -431,6 +463,38 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_velocities", (vel_array,))?;
     }
 
+    // Set forces via SinglePointCalculator if present
+    if frame.has_forces {
+        let ase_calc = py.import("ase.calculators.singlepoint")?;
+        let forces: Vec<[f64; 3]> = frame
+            .atoms_inner
+            .iter()
+            .map(|a| [a.fx.unwrap_or(0.0), a.fy.unwrap_or(0.0), a.fz.unwrap_or(0.0)])
+            .collect();
+        let force_array = np.call_method1("array", (forces,))?;
+        // Get energy from metadata if present
+        let energy = frame.energy();
+        let calc = if let Some(e) = energy {
+            ase_calc.getattr("SinglePointCalculator")?.call1((
+                atoms.clone(),
+                e,
+                force_array,
+            ))?
+        } else {
+            ase_calc.getattr("SinglePointCalculator")?.call(
+                (),
+                Some(
+                    &[
+                        ("atoms", atoms.clone().into_any()),
+                        ("forces", force_array.into_any()),
+                    ]
+                    .into_py_dict(py)?,
+                ),
+            )?
+        };
+        atoms.setattr("calc", calc)?;
+    }
+
     // Set FixAtoms constraint for fixed atoms
     let fixed_indices: Vec<usize> = frame
         .atoms_inner
@@ -545,6 +609,20 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         .as_ref()
         .is_some_and(|vels| vels.iter().any(|v| v.iter().any(|&c| c != 0.0)));
 
+    // Extract forces from ASE (via calculator results, None if no calculator)
+    let forces: Option<Vec<Vec<f64>>> = ase_atoms
+        .call_method0("get_forces")
+        .ok()
+        .and_then(|f| {
+            if f.is_none() {
+                return None;
+            }
+            f.call_method0("tolist").ok()
+        })
+        .and_then(|f| f.extract().ok());
+
+    let has_forces = forces.as_ref().is_some_and(|frc| !frc.is_empty());
+
     // Build PyAtomDatum list
     let atoms: Vec<PyAtomDatum> = symbols
         .iter()
@@ -554,6 +632,12 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
             let (vx, vy, vz) = if has_velocities {
                 let v = &velocities.as_ref().unwrap()[i];
                 (Some(v[0]), Some(v[1]), Some(v[2]))
+            } else {
+                (None, None, None)
+            };
+            let (fx, fy, fz) = if has_forces {
+                let f = &forces.as_ref().unwrap()[i];
+                (Some(f[0]), Some(f[1]), Some(f[2]))
             } else {
                 (None, None, None)
             };
@@ -568,6 +652,9 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
                 vx,
                 vy,
                 vz,
+                fx,
+                fy,
+                fz,
             }
         })
         .collect();
@@ -579,6 +666,7 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         postbox_header: vec![String::new(), String::new()],
         atoms_inner: atoms,
         has_velocities,
+        has_forces,
         spec_version: crate::CON_SPEC_VERSION,
         metadata: std::collections::BTreeMap::new(),
     })

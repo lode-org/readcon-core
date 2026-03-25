@@ -123,6 +123,7 @@ pub struct CFrame {
     pub cell: [f64; 3],
     pub angles: [f64; 3],
     pub has_velocities: bool,
+    pub has_forces: bool,
 }
 
 #[repr(C)]
@@ -138,6 +139,10 @@ pub struct CAtom {
     pub vy: f64,
     pub vz: f64,
     pub has_velocity: bool,
+    pub fx: f64,
+    pub fy: f64,
+    pub fz: f64,
+    pub has_forces: bool,
 }
 
 #[repr(C)]
@@ -253,6 +258,10 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             vy: atom_datum.vy.unwrap_or(0.0),
             vz: atom_datum.vz.unwrap_or(0.0),
             has_velocity: atom_datum.has_velocity(),
+            fx: atom_datum.fx.unwrap_or(0.0),
+            fy: atom_datum.fy.unwrap_or(0.0),
+            fz: atom_datum.fz.unwrap_or(0.0),
+            has_forces: atom_datum.has_forces(),
         })
         .collect();
 
@@ -260,12 +269,15 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
     let num_atoms = c_atoms.len();
     std::mem::forget(c_atoms);
 
+    let has_forces = frame.has_forces();
+
     let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
         num_atoms,
         cell: frame.header.boxl,
         angles: frame.header.angles,
         has_velocities,
+        has_forces,
     });
 
     Box::into_raw(c_frame)

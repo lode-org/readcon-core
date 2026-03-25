@@ -142,7 +142,7 @@ pub fn parse_frame_header<'a>(
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
     let trimmed = prebox2_raw.trim();
-    let (spec_version, metadata) = if trimmed.starts_with('{') {
+    let (spec_version, metadata, sections) = if trimmed.starts_with('{') {
         let json_val: serde_json::Value = serde_json::from_str(trimmed)
             .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
         let json_obj = json_val
@@ -158,15 +158,27 @@ pub fn parse_frame_header<'a>(
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
         let mut meta = BTreeMap::new();
+        let mut secs = Vec::new();
         for (k, v) in json_obj {
-            if k != "con_spec_version" {
-                meta.insert(k.clone(), v.clone());
+            if k == "con_spec_version" {
+                continue;
             }
+            if k == "sections" {
+                if let Some(arr) = v.as_array() {
+                    secs = arr
+                        .iter()
+                        .filter_map(|s| s.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+                // Don't store sections in metadata -- it's in the dedicated field.
+                continue;
+            }
+            meta.insert(k.clone(), v.clone());
         }
-        (ver, meta)
+        (ver, meta, secs)
     } else {
         // Legacy file: no JSON metadata line.
-        (1_u32, BTreeMap::new())
+        (1_u32, BTreeMap::new(), Vec::new())
     };
     let prebox2 = prebox2_raw.to_string();
 
@@ -200,6 +212,7 @@ pub fn parse_frame_header<'a>(
         masses_per_type,
         spec_version,
         metadata,
+        sections,
     })
 }
 
@@ -286,6 +299,9 @@ pub fn parse_single_frame<'a>(
                 vx: None,
                 vy: None,
                 vz: None,
+                fx: None,
+                fy: None,
+                fz: None,
             });
             global_atom_idx += 1;
         }
@@ -358,6 +374,97 @@ where
     }
 
     Ok(true)
+}
+
+/// Attempts to parse a force section following coordinate (and optional velocity) blocks.
+///
+/// Force sections mirror velocity sections: a blank separator line followed by per-component
+/// force blocks (symbol line, "Forces of Component N" line, then atom lines with
+/// `fx fy fz fixed_flag atom_id`).
+///
+/// Returns `Ok(true)` if forces were found and parsed, `Ok(false)` otherwise.
+pub fn parse_force_section<'a, I>(
+    lines: &mut Peekable<I>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    // Peek at the next line to check for blank separator
+    match lines.peek() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let _symbol = lines
+            .next()
+            .ok_or(ParseError::IncompleteForceSection)?
+            .trim();
+
+        let comp_line = lines
+            .next()
+            .ok_or(ParseError::IncompleteForceSection)?;
+        if !comp_line.contains("Forces of Component") {
+            return Err(ParseError::IncompleteForceSection);
+        }
+        let _ = type_idx;
+
+        for _ in 0..num_atoms {
+            let force_line = lines
+                .next()
+                .ok_or(ParseError::IncompleteForceSection)?;
+            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
+            let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].fx = Some(vals[0]);
+                atom_data[atom_idx].fy = Some(vals[1]);
+                atom_data[atom_idx].fz = Some(vals[2]);
+            }
+            atom_idx += 1;
+        }
+    }
+
+    Ok(true)
+}
+
+/// Parses declared sections from a frame's header metadata.
+///
+/// If `header.sections` is non-empty (v2 file with `"sections"` key in JSON),
+/// parses each declared section in order. Otherwise falls back to legacy
+/// blank-separator velocity detection.
+pub fn parse_declared_sections<'a, I>(
+    lines: &mut Peekable<I>,
+    header: &mut FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<(), ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    if header.sections.is_empty() {
+        // Legacy: try velocity detection via blank separator
+        let found = parse_velocity_section(lines, header, atom_data)?;
+        if found {
+            header.sections.push("velocities".to_string());
+        }
+    } else {
+        for section in &header.sections {
+            match section.as_str() {
+                "velocities" => {
+                    parse_velocity_section(lines, header, atom_data)?;
+                }
+                "forces" => {
+                    parse_force_section(lines, header, atom_data)?;
+                }
+                other => return Err(ParseError::UnknownSection(other.to_string())),
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
