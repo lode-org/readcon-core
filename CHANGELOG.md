@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.1 - 2026-03-25
+#### Features
+- transfer atom_id to ASE tags and a custom `atom_id` array in `to_ase()`, enabling roundtrip preservation of original atom ordering through ASE Atoms objects - HaoZeke
+- read atom_id back from ASE Atoms in `from_ase()` with three-tier fallback: `atom_id` array, non-zero tags, sequential index - HaoZeke
+#### Tests
+- add ASE atom_id roundtrip tests (tags, custom array, fallback behavior, non-sequential ids) - HaoZeke
+
+- - -
 ## v0.5.0 - 2026-03-22
 #### Features
 - implement .con/.convel spec version 2: column 5 (atom_index) preserves the original atom index through type-based reordering (matching eOn 8b8d929) - HaoZeke

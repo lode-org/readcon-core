@@ -342,6 +342,13 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         ),
     )?;
 
+    // Store atom_id as both tags and a custom array for roundtrip fidelity
+    let atom_ids: Vec<u64> = frame.atoms_inner.iter().map(|a| a.atom_id).collect();
+    atoms.call_method1("set_tags", (atom_ids.clone(),))?;
+    let np = py.import("numpy")?;
+    let atom_id_array = np.call_method1("array", (atom_ids,))?;
+    atoms.call_method1("set_array", ("atom_id", atom_id_array))?;
+
     // Set FixAtoms constraint for fixed atoms
     let fixed_indices: Vec<usize> = frame
         .atoms_inner
@@ -416,6 +423,29 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         .and_then(|m| m.call_method0("tolist").ok())
         .and_then(|m| m.extract().ok());
 
+    // Extract atom_id: prefer custom array, fall back to tags, then sequential
+    let n_atoms = symbols.len();
+    let atom_ids: Vec<u64> = if let Ok(arr) = ase_atoms.call_method1("get_array", ("atom_id",)) {
+        arr.call_method0("tolist")?
+            .extract::<Vec<i64>>()?
+            .into_iter()
+            .map(|v| v as u64)
+            .collect()
+    } else if let Ok(tags_obj) = ase_atoms.call_method0("get_tags") {
+        let tags: Vec<i64> = tags_obj
+            .call_method0("tolist")
+            .ok()
+            .and_then(|t| t.extract().ok())
+            .unwrap_or_default();
+        if tags.iter().any(|&t| t != 0) {
+            tags.into_iter().map(|t| t as u64).collect()
+        } else {
+            (0..n_atoms).map(|i| i as u64).collect()
+        }
+    } else {
+        (0..n_atoms).map(|i| i as u64).collect()
+    };
+
     // Build PyAtomDatum list
     let atoms: Vec<PyAtomDatum> = symbols
         .iter()
@@ -427,7 +457,7 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
             y: pos[1],
             z: pos[2],
             is_fixed: fixed_set.contains(&i),
-            atom_id: i as u64,
+            atom_id: atom_ids[i],
             mass: masses.as_ref().map(|m| m[i]),
             vx: None,
             vy: None,

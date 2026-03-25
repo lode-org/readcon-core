@@ -302,7 +302,7 @@ output = readcon.write_con_string(frames, precision=17)
 
 ** ASE Atoms conversion
 
-/Added in v0.4.0./
+/Added in v0.4.0.  atom_id preservation added in v0.5.1./
 
 Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
 installed (it is an optional dependency).
@@ -320,6 +320,35 @@ frame = readcon.ConFrame.from_ase(ase_atoms)
 # Convenience: read a .con file directly as ase.Atoms list
 ase_list = readcon.read_con_as_ase("trajectory.con")
 #+end_src
+
+*** atom_id in ASE roundtrips
+
+=to_ase()= stores each atom's =atom_id= in two places on the ASE
+=Atoms= object: the standard =tags= array and a custom =atom_id=
+per-atom array.  This ensures the original atom ordering from the
+=.con= file survives conversion to ASE and back.
+
+#+begin_src python
+import readcon
+
+frames = readcon.read_con("saddle.con")
+ase_atoms = frames[0].to_ase()
+
+# atom_id is available as tags
+print(ase_atoms.get_tags())          # e.g. [3, 0, 1, 4, 2]
+
+# ... and as a named array
+print(ase_atoms.get_array("atom_id"))  # same values
+
+# Roundtrip preserves atom_id
+frame_back = readcon.ConFrame.from_ase(ase_atoms)
+assert [a.atom_id for a in frame_back.atoms] == [3, 0, 1, 4, 2]
+#+end_src
+
+When converting from an ASE =Atoms= object that was not created by
+readcon, =from_ase()= checks for the =atom_id= array first, then
+falls back to =tags= (if any are non-zero), and finally uses
+sequential indices.
 
 ** Roundtrip test pattern
 
