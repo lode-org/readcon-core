@@ -108,6 +108,39 @@ def bench_eon_python(path):
         return None
 
 
+def bench_c_reader(path):
+    """Standalone C reader (eOn-style sscanf parsing)."""
+    import subprocess
+    c_binary = REPO_ROOT / "addl" / "referenceImpls" / "eon_cpp" / "bench_con_reader"
+    if not c_binary.exists():
+        # Try to build it
+        c_src = c_binary.parent / "bench_con_reader.c"
+        if c_src.exists():
+            try:
+                subprocess.run(
+                    ["cc", "-O2", "-o", str(c_binary), str(c_src), "-lm"],
+                    check=True, capture_output=True,
+                )
+            except Exception as e:
+                print(f"  C reader: build failed ({e})")
+                return None
+        else:
+            print(f"  C reader: source not found")
+            return None
+
+    try:
+        result = subprocess.run(
+            [str(c_binary), path, str(REPEAT)],
+            capture_output=True, text=True, check=True,
+        )
+        # Output: "10.55 ms (best of 10 runs)"
+        ms = float(result.stdout.strip().split()[0])
+        return ms
+    except Exception as e:
+        print(f"  C reader: failed ({e})")
+        return None
+
+
 def bench_ase(path):
     """ASE's read_eon()."""
     try:
@@ -192,6 +225,11 @@ def main():
 
         print(f"\nBenchmarking ({REPEAT} repetitions, median)...")
         results = {}
+
+        t = bench_c_reader(traj_path)
+        if t is not None:
+            results["C (sscanf)\n(eOn-style)"] = t
+            print(f"  C (sscanf):        {t:.1f} ms")
 
         t = bench_eon_python(traj_path)
         if t is not None:

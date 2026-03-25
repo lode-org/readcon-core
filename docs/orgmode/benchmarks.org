@@ -74,18 +74,19 @@ Measured with =benches/compare_readers.py= on a 100-frame trajectory
 
 | Reader | Time (ms) | Speedup vs ASE |
 |----------------------------+-----------+----------------|
-| ASE (=ase.io.eon=) | 35.8 | 1.0x |
-| readcon-core (file path) | 4.3 | 8.3x |
-| readcon-core (from string) | 4.0 | 9.0x |
+| ASE (=ase.io.eon=) | 36.1 | 1.0x (baseline) |
+| C sscanf (eOn-style) | 10.6 | 3.4x |
+| readcon-core (file path) | 4.4 | 8.2x |
+| readcon-core (from string) | 4.1 | 8.7x |
 
 #+CAPTION: Parsing throughput: 100 frames x 218 atoms
 [[file:img/parsing_throughput.svg]]
 
-The speedup comes from:
-- Rust-native parsing (no interpreter overhead)
-- fast-float2 for float conversion
-- Zero-copy line iteration (borrows from input &str)
-- Minimal allocations (Rc<String> per atom type, not per atom)
+readcon-core outperforms even a C sscanf-based reader (2.5x) because:
+- *fast-float2*: SIMD-accelerated float parsing vs =sscanf= dispatch
+- *Zero-copy iteration*: borrows lines from the input =&str=, no =fgets= buffer copies
+- *Pre-allocated vectors*: atom count known from header before parsing
+- *No stdio overhead*: entire file in memory (mmap or read_to_string) vs per-line =fgets=
 
 For trajectory files with thousands of frames, the difference
 compounds: readcon-core's =forward()= skip mode processes frames it
