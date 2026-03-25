@@ -19,6 +19,7 @@ and Julia.
    :caption: Contents
 
    spec
+   evolution
    faq
    benchmarks
    tutorials
