@@ -1,4 +1,4 @@
-#+title: ~con~ File Format Specification
+#+title: con File Format Specification
 #+subtitle: Version 2
 #+date: 2026-03-25
 #+options: toc:2 num:t
