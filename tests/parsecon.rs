@@ -26,7 +26,7 @@ fn test_cuh2_parsing() {
         assert_eq!(first_atom.x, 0.63939999999999997);
         assert_eq!(first_atom.y, 0.90449999999999997);
         assert_eq!(first_atom.z, -0.00009999999999977);
-        assert_eq!(first_atom.is_fixed, true);
+        assert!(first_atom.is_fixed());
         assert_eq!(first_atom.atom_id, 0);
 
         // Check the last atom
@@ -35,7 +35,7 @@ fn test_cuh2_parsing() {
         assert_eq!(last_atom.x, 7.94209999999999994);
         assert_eq!(last_atom.y, 9.94699999999999918);
         assert_eq!(last_atom.z, 4.75760000000000094);
-        assert_eq!(last_atom.is_fixed, false);
+        assert!(!last_atom.is_fixed());
         assert_eq!(last_atom.atom_id, 217);
     }
 
@@ -68,7 +68,7 @@ fn test_multi_parsing() {
     assert_eq!(first_atom.x, 0.6394);
     assert_eq!(first_atom.y, 0.9045);
     assert_eq!(first_atom.z, 6.9753);
-    assert_eq!(first_atom.is_fixed, true);
+    assert!(first_atom.is_fixed());
     assert_eq!(first_atom.atom_id, 0);
 
     let last_atom = &first_frame.atom_data.last().unwrap();
@@ -76,7 +76,7 @@ fn test_multi_parsing() {
     assert_eq!(last_atom.x, 7.9421);
     assert_eq!(last_atom.y, 9.947);
     assert_eq!(last_atom.z, 11.733);
-    assert_eq!(last_atom.is_fixed, false);
+    assert!(!last_atom.is_fixed());
     assert_eq!(last_atom.atom_id, 3);
 
     let second_frame = &frames[1];
@@ -90,7 +90,7 @@ fn test_multi_parsing() {
     assert_eq!(second_atom.x, 3.1969);
     assert_eq!(second_atom.y, 0.9045);
     assert_eq!(second_atom.z, 6.9752);
-    assert_eq!(second_atom.is_fixed, true);
+    assert!(second_atom.is_fixed());
     assert_eq!(second_atom.atom_id, 1);
 }
 
@@ -122,7 +122,7 @@ fn test_iterator_forward() {
     assert_eq!(second_atom.x, 3.1969);
     assert_eq!(second_atom.y, 0.9045);
     assert_eq!(second_atom.z, 6.9752);
-    assert_eq!(second_atom.is_fixed, true);
+    assert!(second_atom.is_fixed());
     assert_eq!(second_atom.atom_id, 1);
     assert!(
         parser.next().is_none(),

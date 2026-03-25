@@ -48,7 +48,7 @@ fn main() {
         for (j, atom) in frame.atom_data.iter().take(5).enumerate() {
             print!(
                 "  Atom {}: {} ({:.4}, {:.4}, {:.4}) fixed={} id={}",
-                j, atom.symbol, atom.x, atom.y, atom.z, atom.is_fixed, atom.atom_id
+                j, atom.symbol, atom.x, atom.y, atom.z, atom.is_fixed(), atom.atom_id
             );
             if atom.has_velocity() {
                 print!(

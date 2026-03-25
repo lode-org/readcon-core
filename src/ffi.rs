@@ -123,6 +123,7 @@ pub struct CFrame {
     pub cell: [f64; 3],
     pub angles: [f64; 3],
     pub has_velocities: bool,
+    pub has_forces: bool,
 }
 
 #[repr(C)]
@@ -134,10 +135,17 @@ pub struct CAtom {
     pub atom_id: u64,
     pub mass: f64,
     pub is_fixed: bool,
+    pub fixed_x: bool,
+    pub fixed_y: bool,
+    pub fixed_z: bool,
     pub vx: f64,
     pub vy: f64,
     pub vz: f64,
     pub has_velocity: bool,
+    pub fx: f64,
+    pub fy: f64,
+    pub fz: f64,
+    pub has_forces: bool,
 }
 
 #[repr(C)]
@@ -246,13 +254,20 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             x: atom_datum.x,
             y: atom_datum.y,
             z: atom_datum.z,
-            is_fixed: atom_datum.is_fixed,
+            is_fixed: atom_datum.is_fixed(),
+            fixed_x: atom_datum.fixed[0],
+            fixed_y: atom_datum.fixed[1],
+            fixed_z: atom_datum.fixed[2],
             atom_id: atom_datum.atom_id,
             mass,
             vx: atom_datum.vx.unwrap_or(0.0),
             vy: atom_datum.vy.unwrap_or(0.0),
             vz: atom_datum.vz.unwrap_or(0.0),
             has_velocity: atom_datum.has_velocity(),
+            fx: atom_datum.fx.unwrap_or(0.0),
+            fy: atom_datum.fy.unwrap_or(0.0),
+            fz: atom_datum.fz.unwrap_or(0.0),
+            has_forces: atom_datum.has_forces(),
         })
         .collect();
 
@@ -260,12 +275,15 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
     let num_atoms = c_atoms.len();
     std::mem::forget(c_atoms);
 
+    let has_forces = frame.has_forces();
+
     let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
         num_atoms,
         cell: frame.header.boxl,
         angles: frame.header.angles,
         has_velocities,
+        has_forces,
     });
 
     Box::into_raw(c_frame)
@@ -517,7 +535,7 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
         Ok(s) => s,
         Err(_) => return -1,
     };
-    builder.add_atom(sym, x, y, z, is_fixed, atom_id, mass);
+    builder.add_atom(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass);
     0
 }
 
@@ -545,7 +563,7 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
         Ok(s) => s,
         Err(_) => return -1,
     };
-    builder.add_atom_with_velocity(sym, x, y, z, is_fixed, atom_id, mass, vx, vy, vz);
+    builder.add_atom_with_velocity(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass, vx, vy, vz);
     0
 }
 
@@ -570,6 +588,25 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
 pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrameBuilder) {
     if !builder_handle.is_null() {
         let _ = unsafe { Box::from_raw(builder_handle as *mut ConFrameBuilder) };
+    }
+}
+
+/// Creates a new gzip-compressed frame writer for the specified file.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_gzip_c(
+    filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match ConFrameWriter::from_path_gzip(filename) {
+        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+        Err(_) => ptr::null_mut(),
     }
 }
 

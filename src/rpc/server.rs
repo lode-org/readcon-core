@@ -63,7 +63,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 ab.set_x(atom.x);
                 ab.set_y(atom.y);
                 ab.set_z(atom.z);
-                ab.set_is_fixed(atom.is_fixed);
+                ab.set_is_fixed(atom.is_fixed());
                 ab.set_atom_id(atom.atom_id);
                 ab.set_vx(atom.vx.unwrap_or(0.0));
                 ab.set_vy(atom.vy.unwrap_or(0.0));
@@ -143,11 +143,14 @@ impl read_con_service::Server for ReadConServiceImpl {
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),
-                    is_fixed: a.get_is_fixed(),
+                    fixed: if a.get_is_fixed() { [true, true, true] } else { [false, false, false] },
                     atom_id: a.get_atom_id(),
                     vx: if has_vel { Some(a.get_vx()) } else { None },
                     vy: if has_vel { Some(a.get_vy()) } else { None },
                     vz: if has_vel { Some(a.get_vz()) } else { None },
+                    fx: None,
+                    fy: None,
+                    fz: None,
                 });
             }
             if current_count > 0 {
@@ -164,6 +167,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 masses_per_type,
                 spec_version: crate::CON_SPEC_VERSION,
                 metadata: std::collections::BTreeMap::new(),
+                sections: Vec::new(),
             };
 
             frames.push(ConFrame { header, atom_data });
