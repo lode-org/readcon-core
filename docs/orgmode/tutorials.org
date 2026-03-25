@@ -3,19 +3,30 @@
 
 * Querying the spec version
 
-/Added in v0.5.0./
+/Added in v0.5.0. Per-frame spec_version added in v0.6.0./
 
-All consumers can check which CON format spec version the library
-implements. This is useful for gating code that depends on atom_index
-semantics (spec version 2+).
+There are two distinct version queries:
+
+1. *Library spec version*: the highest spec version the library
+   implements (compile-time constant).
+2. *File spec version*: the version a particular file was written
+   with, parsed from the JSON metadata on line 2. Legacy files
+   without JSON metadata report version 1.
 
 ** Rust
 
 #+begin_src rust
 use readcon_core::{CON_SPEC_VERSION, VERSION};
 
+// Library version
 assert_eq!(CON_SPEC_VERSION, 2);
 println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
+
+// Per-frame version (from parsed file)
+use readcon_core::iterators::read_first_frame;
+let frame = read_first_frame(std::path::Path::new("input.con")).unwrap();
+println!("File spec version: {}", frame.header.spec_version);
+println!("Extra metadata: {:?}", frame.header.metadata);
 #+end_src
 
 ** C/C++
@@ -23,14 +34,24 @@ println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
 #+begin_src c
 #include "readcon-core.h"
 
-// Compile-time
+// Compile-time library version check
 #if RKR_CON_SPEC_VERSION >= 2
     // atom_index semantics available
 #endif
 
-// Runtime
+// Runtime library version
 printf("spec v%u, lib %s\n",
        rkr_con_spec_version(), rkr_library_version());
+
+// Per-frame version (from parsed file)
+RKRConFrame *handle = rkr_read_first_frame("input.con");
+printf("File spec version: %u\n", rkr_frame_spec_version(handle));
+
+// Full JSON metadata
+char *json = rkr_frame_metadata_json(handle);
+printf("Metadata: %s\n", json);
+rkr_free_string(json);
+free_rkr_frame(handle);
 #+end_src
 
 ** Python
@@ -38,8 +59,73 @@ printf("spec v%u, lib %s\n",
 #+begin_src python
 import readcon
 
-print(readcon.__version__)       # "0.5.0"
+# Library version
+print(readcon.__version__)       # e.g. "0.6.0"
 print(readcon.CON_SPEC_VERSION)  # 2
+
+# Per-frame version (from parsed file)
+frames = readcon.read_con("input.con")
+print(frames[0].spec_version)   # 2 for v2 files, 1 for legacy
+print(frames[0].metadata)       # dict of extra JSON keys
+#+end_src
+
+* Working with JSON metadata
+
+/Added in v0.6.0./
+
+Line 2 of every v2 CON file contains a JSON object. The writer always
+stamps =con_spec_version=; additional keys survive round-trips.
+
+** Rust: attaching custom metadata
+
+#+begin_src rust
+use readcon_core::types::ConFrameBuilder;
+use std::collections::BTreeMap;
+
+let mut meta = BTreeMap::new();
+meta.insert("generator".to_string(),
+            serde_json::Value::String("my-tool 1.0".to_string()));
+meta.insert("temperature_K".to_string(),
+            serde_json::json!(300.0));
+
+let builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
+    .metadata(meta);
+// ... add atoms, build, write ...
+// Line 2 of the output:
+// {"con_spec_version":2,"generator":"my-tool 1.0","temperature_K":300.0}
+#+end_src
+
+** Python: reading and attaching metadata
+
+#+begin_src python
+import readcon
+
+# Reading: metadata comes from the file's JSON line
+frames = readcon.read_con("input.con")
+print(frames[0].metadata)  # e.g. {"generator": "\"my-tool 1.0\""}
+
+# Writing: metadata dict is passed through to the JSON line
+frame = readcon.ConFrame(
+    cell=[10.0, 10.0, 10.0],
+    angles=[90.0, 90.0, 90.0],
+    atoms=[...],
+    metadata={"temperature_K": "300.0"},
+)
+readcon.write_con("output.con", [frame])
+#+end_src
+
+** Legacy file detection
+
+#+begin_src python
+import warnings
+import readcon
+
+frames = readcon.read_con("old_eon_file.con")
+if frames[0].spec_version < 2:
+    warnings.warn(
+        "Legacy CON file (spec v1): atom_index values may be sequential placeholders",
+        stacklevel=2,
+    )
 #+end_src
 
 * Rust

@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "readcon-core"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "capnp",
  "capnp-rpc",
@@ -782,6 +782,7 @@ dependencies = [
  "memmap2",
  "pyo3",
  "rayon",
+ "serde_json",
  "tokio",
  "tokio-util",
 ]

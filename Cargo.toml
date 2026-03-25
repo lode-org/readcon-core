@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
@@ -21,6 +21,7 @@ python = ["dep:pyo3"]
 
 [dependencies]
 fast-float2 = "0.2"
+serde_json = "1"
 memmap2 = "0.9"
 rayon = { version = "1.10", optional = true }
 capnp = { version = "0.20", optional = true }

@@ -8,6 +8,9 @@ pub enum ParseError {
     IncompleteVelocitySection,
     InvalidVectorLength { expected: usize, found: usize },
     InvalidNumberFormat(String),
+    MissingSpecVersion,
+    UnsupportedSpecVersion(u32),
+    InvalidMetadataJson(String),
 }
 
 impl fmt::Display for ParseError {
@@ -27,6 +30,18 @@ impl fmt::Display for ParseError {
             }
             ParseError::InvalidNumberFormat(msg) => {
                 write!(f, "invalid number format: {msg}")
+            }
+            ParseError::MissingSpecVersion => {
+                write!(
+                    f,
+                    "line 1 must be a JSON object containing \"con_spec_version\""
+                )
+            }
+            ParseError::UnsupportedSpecVersion(v) => {
+                write!(f, "unsupported con_spec_version: {v}")
+            }
+            ParseError::InvalidMetadataJson(msg) => {
+                write!(f, "invalid JSON metadata on line 1: {msg}")
             }
         }
     }

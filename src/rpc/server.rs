@@ -53,7 +53,7 @@ impl read_con_service::Server for ReadConServiceImpl {
             postbox.set(1, &*frame.header.postbox_header[1]);
 
             fb.set_has_velocities(frame.has_velocities());
-            fb.set_spec_version(crate::CON_SPEC_VERSION);
+            fb.set_spec_version(frame.header.spec_version);
 
             // Atoms
             let mut atoms_builder = fb.reborrow().init_atoms(frame.atom_data.len() as u32);
@@ -162,6 +162,8 @@ impl read_con_service::Server for ReadConServiceImpl {
                 natm_types: natms_per_type.len(),
                 natms_per_type,
                 masses_per_type,
+                spec_version: crate::CON_SPEC_VERSION,
+                metadata: std::collections::BTreeMap::new(),
             };
 
             frames.push(ConFrame { header, atom_data });

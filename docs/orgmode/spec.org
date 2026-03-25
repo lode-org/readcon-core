@@ -1,171 +1,301 @@
-#+title: CON and convel file format specification
+#+title: CON File Format Specification
+#+subtitle: Version 2
+#+date: 2026-03-25
 #+options: toc:2 num:t
+
+* Status
+
+This document specifies version 2 of the CON/convel file format. It
+supersedes all prior informal descriptions. The key words MUST, MUST
+NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY, and OPTIONAL follow
+RFC 2119 semantics.
 
 * Overview
 
-The CON file format originated in the eOn (Evolving Objects on
-Networks) saddle-point search code. It stores atomic configurations
-for molecular dynamics and transition-state search simulations. The
-convel extension adds per-atom velocity data.
+The CON format stores atomic configurations for molecular dynamics and
+transition-state search simulations. It originated in the eOn
+(Evolving Objects on Networks) saddle-point search code and has since
+been adopted by several computational chemistry tools.
 
-This document uses RFC 2119 keywords: MUST, MUST NOT, SHOULD, MAY.
-
-* Spec versions
-
-** Version 1 (original eOn behavior)
-
-The de facto format used by eOn before commit =8b8d929=. Column 5 of
-atom lines is present and contains a non-negative integer, but its
-value carries no defined semantics.
-
-Normative requirements for version 1 conformance:
-- Writers MUST emit 5 columns per atom line. The value of column 5 is
-  unspecified; a sequential counter (0, 1, 2, ...) is typical.
-- Readers MUST parse 5 columns per atom line. Readers MAY ignore the
-  value of column 5.
-
-** Version 2 (atom_index semantics, 2026-03-22)
-
-Column 5 is the *original atom index*: the position of this atom in
-the input structure before type-based grouping. This version was
-introduced to fix a data-loss bug where round-tripping .con files
-destroyed the original atom ordering.
-
-Normative requirements for version 2 conformance:
-- Writers MUST emit 5 columns per atom line. Column 5 MUST contain the
-  original atom index (the position of this atom before type-based
-  reordering). Writers MUST NOT substitute a sequential counter.
-- Readers MUST parse column 5 and store it as the atom index. Readers
-  MUST preserve this value through write-back.
-- Readers SHOULD also accept 4-column lines for backward compatibility
-  with hand-edited or third-party files. When column 5 is absent, the
-  reader MUST default to the sequential position within the frame
-  (0, 1, 2, ...).
-
-A version 2 reader that reads a version 1 file (sequential counters)
-will produce correct results: the sequential values are a valid
-atom_index for structures that were never reordered. No version marker
-exists in the file itself; the distinction is in the implementation.
-
-*** Why atom_index matters
-
-The .con format groups atoms by element type. A structure with atoms
-in order C, C, C, O, C, C (indices 0-5) gets written as five C atoms
-followed by one O atom. Without a meaningful column 5, the original
-ordering is lost. The =atom_index= field preserves the pre-grouping
-index so that the original atom sequence can be reconstructed after
-any number of read/write cycles.
-
-This is essential for comparing geometries against reference structures
-(e.g. Baker transition-state test set) after NEB or dimer calculations
-that read and rewrite .con files.
+A CON file contains one or more /frames/. Each frame encodes a
+simulation cell, per-type metadata (masses, atom counts), and
+per-atom data (coordinates, constraints, identity). The =.convel=
+extension adds per-atom velocity data after each frame's coordinates.
 
 * File extensions
 
 - =.con= :: Coordinate-only configuration files.
-- =.convel= :: Configuration files with velocity sections appended
-  after each frame's coordinate blocks.
+- =.convel= :: Configuration files with an appended velocity section
+  per frame.
+
+* Encoding
+
+CON files MUST use UTF-8 encoding. Line endings MAY be LF (=\n=) or
+CRLF (=\r\n=). Parsers MUST accept both. All numeric values use
+ASCII decimal representation (no locale-dependent formatting).
+
+* Frame structure
+
+Each frame consists of:
+
+1. A 9-line header.
+2. One coordinate block per atom type.
+3. (=.convel= only) A blank separator line followed by one velocity
+   block per atom type.
+
+Multiple frames are concatenated directly with no inter-frame
+separator. A parser detects a new frame by encountering a valid
+9-line header after the previous frame's data.
 
 * Header (9 lines)
 
-Every frame begins with a 9-line header:
+Every frame begins with a fixed 9-line header.
 
-| Line | Content | Example |
-|------+---------+---------|
-| 1 | Comment (often "Random Number Seed") | =Random Number Seed= |
-| 2 | Comment (often "Time") | =Time= |
-| 3 | Cell dimensions: Lx Ly Lz | =15.3456 21.702 100.0= |
-| 4 | Cell angles: alpha beta gamma | =90.0 90.0 90.0= |
-| 5 | Comment (reserved) | =0 0= |
-| 6 | Comment (reserved) | =218 0 1= |
-| 7 | Number of atom types (N) | =2= |
-| 8 | Atoms per type (N integers) | =216 2= |
-| 9 | Mass per type (N floats) | =63.546 1.00793= |
+| Line | Name | Content | Example |
+|------+-------------------+------------------------------+-------------------------------|
+|    1 | Generator comment | Free-form text | =Generated by eOn= |
+|    2 | Metadata          | JSON object or free-form text | ={"con_spec_version":2}= |
+|    3 | Cell dimensions   | 3 floats: Lx Ly Lz | =15.3456 21.702 100.0= |
+|    4 | Cell angles       | 3 floats: alpha beta gamma | =90.0 90.0 90.0= |
+|    5 | Reserved          | Free-form text (round-tripped) | =0 0= |
+|    6 | Reserved          | Free-form text (round-tripped) | =218 0 1= |
+|    7 | Atom type count   | 1 integer: N | =2= |
+|    8 | Atoms per type    | N integers | =216 2= |
+|    9 | Mass per type     | N floats (atomic mass units) | =63.546 1.00793= |
 
-Cell dimensions and angles are whitespace-separated floating-point
-values. Tabs and spaces are both valid separators throughout the format.
+** Line 1: Generator comment
+
+Free-form text identifying the tool that produced the file. Writers
+SHOULD set this to a human-readable identifier (e.g., =Generated by
+eOn=, =readcon-core=). Parsers MUST preserve this line through
+read-write cycles but MUST NOT assign it semantic meaning.
+
+** Line 2: Metadata
+
+Line 2 carries machine-readable metadata as a single-line JSON object.
+
+*** Version 2+ files
+
+A version 2 (or later) writer MUST emit a JSON object on line 2
+containing at least the key =con_spec_version= with an integer value:
+
+#+begin_example
+{"con_spec_version":2}
+#+end_example
+
+Additional keys MAY appear in the object for forward-compatible
+extension:
+
+#+begin_example
+{"con_spec_version":2,"generator":"readcon-core 0.6.0","timestamp":"2026-03-25T12:00:00Z"}
+#+end_example
+
+Parsers MUST preserve unrecognized keys through round-trips.
+
+*** Legacy (pre-v2) files
+
+Files produced before this specification may contain free-form text on
+line 2 (e.g., =Time=, =0.0000 TIME=, or an empty line). A conforming
+parser detects the format by checking whether line 2, after stripping
+leading and trailing whitespace, starts with the ={= character:
+
+- Starts with ={=: parse as JSON, extract =con_spec_version=.
+- Does not start with ={=: treat as a legacy file with an implicit
+  =spec_version= of 1. No error.
+
+If line 2 starts with ={= but contains malformed JSON, the parser
+MUST report an error.
+
+If the JSON object lacks =con_spec_version=, the parser MUST report
+an error.
+
+If =con_spec_version= exceeds the highest version the parser
+supports, the parser MUST report an error rather than silently
+misinterpreting the data.
+
+** Lines 3-4: Cell geometry
+
+Line 3 contains three whitespace-separated floats: the cell edge
+lengths Lx, Ly, Lz in angstroms.
+
+Line 4 contains three whitespace-separated floats: the cell angles
+alpha, beta, gamma in degrees.
+
+Tabs and spaces are both valid separators throughout the format.
+
+** Lines 5-6: Reserved
+
+These lines are free-form text with no defined semantics. Older eOn
+versions stored simulation state here (iteration counters, timestep
+data). Writers MAY emit empty lines. Parsers MUST read and preserve
+these lines for round-trip fidelity but MUST NOT depend on their
+content.
+
+** Lines 7-9: Type metadata
+
+Line 7: a single positive integer N, the number of distinct atom
+types in this frame.
+
+Line 8: exactly N whitespace-separated positive integers, giving the
+atom count for each type.
+
+Line 9: exactly N whitespace-separated floats, giving the atomic mass
+(in atomic mass units) for each type.
 
 * Coordinate blocks
 
-After the header, for each atom type i (1 to N):
+After the 9-line header, for each atom type /i/ (1 to N) in the order
+declared in lines 8-9:
 
-1. Symbol line :: The chemical symbol for this type (e.g., =Cu=, =H=).
-2. Label line :: =Coordinates of Component i=
-3. Atom lines :: One line per atom: =x y z fixed_flag atom_index=
+1. *Symbol line*: the chemical symbol for this type (e.g., =Cu=,
+   =H=). Trailing whitespace is ignored.
+2. *Label line*: =Coordinates of Component /i/=. Parsers SHOULD accept
+   minor variations in capitalization and spacing (e.g., =component=
+   vs. =Component=, variable spacing around the number).
+3. *Atom lines*: one line per atom in this type, containing:
 
-Where:
-- =x=, =y=, =z= are floating-point Cartesian coordinates.
-- =fixed_flag= is =0= (free) or =1= (fixed/frozen).
-- =atom_index= is a non-negative integer. See "Spec versions" for the
-  semantics and optionality requirements per version.
+| Column | Type | Description |
+|--------+-------+--------------------------------------|
+|      1 | float | x coordinate (angstroms) |
+|      2 | float | y coordinate (angstroms) |
+|      3 | float | z coordinate (angstroms) |
+|      4 | int | Fixed flag: 0 = free, 1 = frozen |
+|      5 | int | Atom index (see [[*Atom index]]) |
+
+Columns are whitespace-separated. Tabs and spaces are both valid.
+
+** Atom index (column 5)
+
+The atom index preserves the original position of each atom in the
+input structure before type-based grouping. This field solves a
+fundamental problem: the CON format groups atoms by element type,
+which reorders them relative to their original sequence. Without a
+persistent index, the original ordering cannot be recovered after a
+read-write cycle.
+
+*** Spec version 2 requirements
+
+- Writers MUST emit column 5 on every atom line.
+- Column 5 MUST contain the original atom index (the position of this
+  atom before type-based reordering). Writers MUST NOT substitute a
+  sequential counter that does not reflect the true pre-grouping
+  order.
+- Readers MUST parse and store column 5.
+- Readers MUST preserve the stored value through write-back.
+
+*** Spec version 1 behavior
+
+- Column 5 is present and contains a non-negative integer, but its
+  value carries no defined semantics. A sequential counter is typical.
+- Readers MAY ignore column 5.
+
+*** Backward compatibility for column 5
+
+Readers SHOULD accept 4-column atom lines for interoperability with
+hand-edited or third-party files. When column 5 is absent, the reader
+MUST default to the sequential position within the frame (0, 1, 2,
+...).
+
+A version 2 reader processing a version 1 file (sequential counters)
+produces correct results: sequential values constitute a valid
+atom_index for structures that were never reordered.
+
+*** Why atom_index matters
+
+A structure with atoms in order C, C, C, O, C, C (indices 0-5) gets
+written as five C atoms followed by one O atom. Without a meaningful
+column 5, the original ordering vanishes. The atom_index field
+preserves the pre-grouping index so that the original atom sequence
+can be reconstructed after any number of read/write cycles.
+
+This property matters for comparing geometries against reference
+structures (e.g., Baker transition-state test set) after NEB or dimer
+calculations that read and rewrite CON files.
 
 * Velocity blocks (convel only)
 
 In =.convel= files, a velocity section follows the coordinate blocks
-of each frame. The structure is:
+of each frame:
 
-1. Blank separator line :: An empty line (or whitespace-only) marking
-   the start of the velocity section.
-2. For each atom type i (1 to N):
-   a. Symbol line :: Same chemical symbol as in the coordinate block.
-   b. Label line :: =Velocities of Component i=
-   c. Atom lines :: One line per atom: =vx vy vz fixed_flag atom_index=
+1. *Blank separator*: one empty line (or whitespace-only) marking
+   the boundary between coordinates and velocities.
+2. For each atom type /i/ (1 to N):
+   a. *Symbol line*: same chemical symbol as in the coordinate block.
+   b. *Label line*: =Velocities of Component /i/=
+   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag atom_index=
 
 The velocity fields =vx=, =vy=, =vz= are floating-point velocity
-components. The =fixed_flag= and =atom_index= match those in the
-corresponding coordinate block. The same column 5 optionality rules
-apply as in coordinate blocks.
+components. The =fixed_flag= and =atom_index= follow the same rules
+as in coordinate blocks.
 
 If no blank line follows the coordinate blocks, the frame has no
-velocity data (standard =.con= behavior).
+velocity data (standard =.con= behavior). A parser SHOULD detect this
+by peeking at the next line: if it is blank (or only whitespace), a
+velocity section follows; otherwise the current frame ends and a new
+frame header (or end-of-file) follows.
 
 * Multi-frame files
 
-Multiple frames are concatenated directly with no separator. The
-parser detects a new frame by encountering a valid 9-line header
-after the previous frame's data (coordinate blocks, and velocity
-blocks if present).
+Multiple frames are concatenated with no explicit separator. After
+parsing a frame's coordinate blocks (and velocity blocks, if present),
+the parser attempts to read the next 9-line header. If fewer than 9
+lines remain, parsing ends.
 
-* Data types
+Writers MUST NOT insert extra blank lines or separators between
+frames. The only blank line in the format is the velocity separator
+within a =.convel= frame.
 
-- Floating-point values :: Written with at least 6 decimal places of
-  precision. Parsers should accept any valid floating-point
-  representation.
-- Integer values :: =fixed_flag= is 0 or 1. =atom_index= and
-  =natm_types= are non-negative integers. =natms_per_type= values
-  are positive integers.
+* Data types and precision
 
-* Constraints
+- *Floats*: any valid decimal floating-point representation. Writers
+  SHOULD emit at least 6 significant decimal digits for coordinates
+  and masses. For lossless f64 round-tripping, 17 decimal digits
+  suffice.
+- *Integers*: =fixed_flag= is 0 or 1. =atom_index=, =natm_types=,
+  and =natms_per_type= values are non-negative integers representable
+  as unsigned 64-bit values.
 
-- Atoms MUST be grouped by type in the order declared in the header.
-- Component numbering starts at 1.
-- The total number of atoms equals the sum of =natms_per_type=.
-- Maximum 100 atom types (practical limit from eOn).
-- Symbol strings SHOULD match standard chemical element symbols.
+* Constraints and limits
 
-* Implementation notes
+- Atoms MUST appear grouped by type, in the order declared in header
+  lines 8-9.
+- Component numbering in label lines starts at 1.
+- The total atom count equals the sum of values on line 8.
+- Symbol strings SHOULD match standard chemical element symbols (IUPAC
+  notation, 1-2 characters, first character uppercase).
+- No upper limit on atom types or atom count is imposed by this
+  specification. The eOn implementation historically supported up to
+  100 types; other implementations may differ.
 
-readcon-core v0.5.0+ implements spec version 2. It reads and
-preserves atom_index, accepts 4-column lines, and writes the stored
-atom_index value. Earlier readcon-core versions (< 0.5.0) also
-preserved column 5 values through roundtrips but did not enforce the
-semantic meaning; they are effectively version 2 conformant for the
-read/write path but were not tested against the reordering scenario.
+* Version history
 
-** Querying the spec version
+| Version | Date | Changes |
+|---------+------------+----------------------------------------------|
+|       1 | (original) | De facto format from eOn. Column 5 present, semantics undefined. |
+|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as atom_index. |
 
-The file format itself contains no version marker. The spec version is
-a property of the implementation, not the file. Consumers query it as
-follows:
+* Querying the spec version
+
+** From the file
+
+Read line 2. If it starts with ={=, parse as JSON and extract
+=con_spec_version=. Otherwise the file predates this specification
+(implicit version 1).
+
+** From the library
 
 | Language | Compile-time | Runtime |
-|----------+--------------+---------|
-| Rust | =readcon_core::CON_SPEC_VERSION= (u32) | same |
+|----------+----------------------------------+-----------------------------|
+| Rust | =readcon_core::CON_SPEC_VERSION= | same |
 | C/C++ | =#define RKR_CON_SPEC_VERSION= | =rkr_con_spec_version()= |
+| C/C++ | N/A | =rkr_frame_spec_version(h)= |
+| C/C++ | N/A | =rkr_frame_metadata_json(h)= |
 | Python | N/A | =readcon.CON_SPEC_VERSION= |
+| Python | N/A | =frame.spec_version= |
+| Python | N/A | =frame.metadata= |
 | Cap'n Proto | N/A | =specVersion= field on =ConFrameData= |
 
-C/C++ example for compile-time gating:
+C/C++ compile-time gating example:
 
 #+begin_src c
 #include <readcon-core.h>
@@ -173,3 +303,76 @@ C/C++ example for compile-time gating:
 #error "readcon-core spec v2 required for atom_index support"
 #endif
 #+end_src
+
+* Example files
+
+** Minimal v2 CON file (2 atoms, 1 type)
+
+#+begin_example
+Generated by readcon-core
+{"con_spec_version":2}
+10.000000 10.000000 10.000000
+90.000000 90.000000 90.000000
+
+
+1
+2
+63.546000
+Cu
+Coordinates of Component 1
+0.000000 0.000000 0.000000 1 0
+5.000000 5.000000 5.000000 0 1
+#+end_example
+
+** Minimal v2 convel file (2 atoms, 2 types, with velocities)
+
+#+begin_example
+Generated by readcon-core
+{"con_spec_version":2}
+15.345600 21.702000 100.000000
+90.000000 90.000000 90.000000
+0 0
+218 0 1
+2
+2 2
+63.546000 1.007930
+Cu
+Coordinates of Component 1
+   0.639400    0.904500    6.975300 1    0
+   3.196900    0.904500    6.975300 1    1
+H
+Coordinates of Component 2
+   8.682300    9.947000   11.733000 0  2
+   7.942100    9.947000   11.733000 0  3
+
+Cu
+Velocities of Component 1
+   0.001234    0.002345   -0.003456 1    0
+   0.004567   -0.005678    0.006789 1    1
+H
+Velocities of Component 2
+  -0.012345    0.023456    0.034567 0  2
+   0.045678   -0.056789   -0.067890 0  3
+#+end_example
+
+** Legacy (pre-v2) file
+
+#+begin_example
+Random Number Seed
+0.0000 TIME
+15.345600 21.702000 100.000000
+90.000000 90.000000 90.000000
+0 0
+0 0 0
+2
+216 2
+63.546 1.00793
+Cu
+Coordinates of Component 1
+   0.639400    0.904500   -0.000100 1    0
+   3.197000    0.904500   -0.000100 1    1
+...
+#+end_example
+
+A conforming v2 reader processes this file without error, assigning
+=spec_version = 1= because line 2 does not start with ={=.
