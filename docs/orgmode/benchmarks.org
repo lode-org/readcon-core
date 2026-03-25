@@ -79,7 +79,7 @@ Measured with =benches/compare_readers.py= on a 100-frame trajectory
 | readcon-core (file path) | 4.4 | 8.2x |
 | readcon-core (from string) | 4.1 | 8.7x |
 
-#+CAPTION: Parsing throughput: 100 frames x 218 atoms
+#+CAPTION: Parsing throughput across trajectory sizes (log scale)
 [[file:img/parsing_throughput.svg]]
 
 readcon-core outperforms even a C sscanf-based reader (2.5x) because:
@@ -126,6 +126,9 @@ ASE (70 vs 268 MiB). At 10k atoms, both converge because the atom
 data dominates (readcon stores ~120 bytes/atom, ASE stores similar
 plus numpy overhead).
 
+#+CAPTION: Peak memory usage with all frames loaded
+[[file:img/memory_usage.svg]]
+
 The C sscanf reader frees each frame immediately, so its peak RSS
 stays under 16 MiB regardless of trajectory length. readcon-core can
 achieve similar constant-memory usage via the iterator API:
@@ -170,3 +173,59 @@ footprint is approximately:
 
 The iterator API processes one frame at a time, so multi-frame files
 do not require loading the entire trajectory into memory.
+
+* Feature coverage vs other formats
+
+The CON v2 format covers features that typically require multiple
+formats or lossy workarounds in other ecosystems. The comparison below
+includes text-based and binary formats commonly used in computational
+chemistry.
+
+#+CAPTION: Feature matrix: CON v2 vs common atomic structure formats
+[[file:img/feature_comparison.svg]]
+
+CON v2 achieves full coverage (10/10) across: positions, velocities,
+forces, unit cell, per-direction constraints, atom identity
+(round-trip), structured metadata, compression, multi-frame support,
+and streaming iteration. No other single format covers all ten.
+
+The extxyz format comes closest (6/10 with partial metadata) but lacks
+per-direction constraints, atom identity tracking, and a formal
+specification. LAMMPS dump format supports many features but is
+tightly coupled to the LAMMPS ecosystem.
+
+#+CAPTION: Feature coverage vs parsing performance (Pareto front)
+[[file:img/pareto_features_vs_speed.svg]]
+
+readcon-core occupies the Pareto-optimal corner: maximum feature
+coverage at the fastest parse speed among text-based formats. Binary
+formats (DCD, TRR) trade features for raw throughput -- they lack
+metadata, constraints, and human readability.
+
+* Statistical analysis
+
+The point estimates above characterize typical performance. For
+publication-quality results with credible intervals, we use
+[[https://github.com/HaoZeke/bayescomp][bayescomp]] -- a Bayesian hierarchical comparison framework that fits
+Gamma-family models with random intercepts per test system. This
+provides posterior distributions for speedup factors rather than
+single numbers, accounting for system-to-system variation and
+measurement noise.
+
+The bayescomp analysis pipeline reads Criterion JSON output and
+=compare_readers.py= timing data, fits the model via =brms= /
+=cmdstanr=, and produces posterior predictive checks and effect size
+summaries suitable for JOSS or SoftwareX publication.
+
+* Reproducing these benchmarks
+
+#+begin_src shell
+# Cross-implementation speed comparison (ASE, C, readcon)
+uv run --with matplotlib --with numpy --with ase python benches/compare_readers.py
+
+# Generate publication plots
+uv run --with matplotlib --with numpy python benches/make_plots.py
+
+# Rust microbenchmarks (Criterion)
+cargo bench
+#+end_src
