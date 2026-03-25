@@ -47,7 +47,7 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          cargo bench -- --save-baseline ${{ matrix.label }}
+          cargo bench --bench iterator_bench -- --save-baseline ${{ matrix.label }}
 
       - name: Export Criterion results
         run: |
