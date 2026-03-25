@@ -6,10 +6,12 @@ Generates a test trajectory, times each reader, and produces comparison
 bar charts saved to docs/orgmode/img/.
 
 Usage:
-    pixi r -e python python benches/compare_readers.py
-    # or: uv run benches/compare_readers.py
+    uv run --with matplotlib --with numpy --with ase benches/compare_readers.py
+    # or: pixi r -e python python benches/compare_readers.py
 
-Requires: matplotlib, numpy. Optional: readcon (Python bindings), ase.
+Requires: matplotlib, numpy.
+Optional: readcon (Python bindings), ase (uv run --with ase).
+eOn Python reader: uses ~/Git/Github/TheochemUI/eOn if present.
 """
 
 import os
@@ -29,8 +31,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 IMG_DIR = REPO_ROOT / "docs" / "orgmode" / "img"
 IMG_DIR.mkdir(parents=True, exist_ok=True)
 
-# Use the archived reference implementations
-sys.path.insert(0, str(REPO_ROOT / "addl" / "referenceImpls" / "eon_python"))
+# eOn Python reader: use the actual eOn checkout if available
+EON_REPO = Path.home() / "Git" / "Github" / "TheochemUI" / "eOn"
+if EON_REPO.exists():
+    sys.path.insert(0, str(EON_REPO))
 
 # ---------------------------------------------------------------------------
 # Generate test trajectory
@@ -97,7 +101,7 @@ def time_fn(fn, repeat=REPEAT):
 def bench_eon_python(path):
     """eOn's pure-Python loadcons()."""
     try:
-        from fileio import loadcons
+        from eon.fileio import loadcons
         return time_fn(lambda: loadcons(path))
     except Exception as e:
         print(f"  eOn Python: skipped ({e})")
