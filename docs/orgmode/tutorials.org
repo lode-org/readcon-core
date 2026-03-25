@@ -323,10 +323,9 @@ ase_list = readcon.read_con_as_ase("trajectory.con")
 
 *** atom_id in ASE roundtrips
 
-=to_ase()= stores each atom's =atom_id= in two places on the ASE
-=Atoms= object: the standard =tags= array and a custom =atom_id=
-per-atom array.  This ensures the original atom ordering from the
-=.con= file survives conversion to ASE and back.
+=to_ase()= stores each atom's =atom_id= as a custom =atom_id=
+per-atom array on the ASE =Atoms= object.  Tags are left untouched
+so they remain available for other uses (slab layers, etc.).
 
 #+begin_src python
 import readcon
@@ -334,11 +333,8 @@ import readcon
 frames = readcon.read_con("saddle.con")
 ase_atoms = frames[0].to_ase()
 
-# atom_id is available as tags
-print(ase_atoms.get_tags())          # e.g. [3, 0, 1, 4, 2]
-
-# ... and as a named array
-print(ase_atoms.get_array("atom_id"))  # same values
+# atom_id is stored as a named per-atom array
+print(ase_atoms.get_array("atom_id"))  # e.g. [3, 0, 1, 4, 2]
 
 # Roundtrip preserves atom_id
 frame_back = readcon.ConFrame.from_ase(ase_atoms)

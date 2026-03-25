@@ -342,9 +342,8 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         ),
     )?;
 
-    // Store atom_id as both tags and a custom array for roundtrip fidelity
+    // Store atom_id as a custom per-atom array (not tags, which may be in use)
     let atom_ids: Vec<u64> = frame.atoms_inner.iter().map(|a| a.atom_id).collect();
-    atoms.call_method1("set_tags", (atom_ids.clone(),))?;
     let np = py.import("numpy")?;
     let atom_id_array = np.call_method1("array", (atom_ids,))?;
     atoms.call_method1("set_array", ("atom_id", atom_id_array))?;

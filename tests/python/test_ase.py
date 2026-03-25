@@ -17,12 +17,12 @@ def _resource(fname):
 class TestAseAtomId:
     """atom_id roundtrip through ASE Atoms."""
 
-    def test_to_ase_sets_tags(self):
+    def test_to_ase_does_not_modify_tags(self):
         frames = readcon.read_con(_resource("tiny_cuh2.con"))
         ase_atoms = frames[0].to_ase()
         tags = ase_atoms.get_tags()
-        for i, atom in enumerate(frames[0].atoms):
-            assert tags[i] == atom.atom_id
+        # tags must remain at default (all zeros), not overwritten
+        assert all(t == 0 for t in tags)
 
     def test_to_ase_sets_atom_id_array(self):
         frames = readcon.read_con(_resource("tiny_cuh2.con"))
