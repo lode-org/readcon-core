@@ -2,7 +2,7 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
-## v0.5.1 - 2026-03-25
+## v0.5.2 - 2026-03-25
 #### Features
 - transfer atom_id to ASE via custom `atom_id` per-atom array in `to_ase()` (tags left untouched); read it back in `from_ase()` with fallback to non-zero tags then sequential index - HaoZeke
 - transfer velocities bidirectionally: `to_ase()` calls `set_velocities()` for convel data, `from_ase()` extracts them when non-zero - HaoZeke
