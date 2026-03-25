@@ -67,13 +67,25 @@ without a full heap copy. readcon-core switches automatically at the
 Compressed files (=.con.gz=) always decompress to an in-memory buffer
 regardless of size, since mmap cannot decompress on the fly.
 
-* Comparison with Python readers
+* Cross-implementation comparison
 
-eOn's =fileio.py= (pure Python) reads the same 218-atom frame in
-approximately 1-2 ms (measured via =timeit=). readcon-core's Rust
-parser handles the same file in 42 us, including file I/O -- a
-*25-50x speedup*. The Python bindings add minimal overhead (PyO3
-type conversion), preserving most of this advantage.
+Measured with =benches/compare_readers.py= on a 100-frame trajectory
+(218 atoms per frame, 1.6 MiB file). Median of 5 runs.
+
+| Reader | Time (ms) | Speedup vs ASE |
+|----------------------------+-----------+----------------|
+| ASE (=ase.io.eon=) | 35.8 | 1.0x |
+| readcon-core (file path) | 4.3 | 8.3x |
+| readcon-core (from string) | 4.0 | 9.0x |
+
+#+CAPTION: Parsing throughput: 100 frames x 218 atoms
+[[file:img/parsing_throughput.svg]]
+
+The speedup comes from:
+- Rust-native parsing (no interpreter overhead)
+- fast-float2 for float conversion
+- Zero-copy line iteration (borrows from input &str)
+- Minimal allocations (Rc<String> per atom type, not per atom)
 
 For trajectory files with thousands of frames, the difference
 compounds: readcon-core's =forward()= skip mode processes frames it
