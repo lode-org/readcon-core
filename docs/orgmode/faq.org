@@ -1,0 +1,176 @@
+#+title: Frequently Asked Questions
+#+options: toc:2 num:t
+
+* Why another atomic structure format?
+
+The ~con~ format addresses a specific gap: lossless round-tripping of
+atomic configurations through saddle-point search, NEB, and dimer
+calculations. Existing formats lose information during read-write
+cycles:
+
+- *XYZ*: no cell data, no fixed-atom flags, no atom identity
+  tracking. A 218-atom slab written to XYZ and read back has lost
+  the original atom ordering, constraint information, and periodicity.
+- *POSCAR/CONTCAR*: VASP-specific. No velocity or force sections.
+  Selective dynamics is all-or-nothing per direction. No metadata
+  for potential parameters or convergence state.
+- *extxyz*: extensible but underspecified. Every tool invents its own
+  key names. No formal specification means round-trip fidelity depends
+  on implementation details. Parsing performance suffers from
+  per-atom key-value overhead.
+- *CIF*: designed for crystallography, not molecular dynamics. Verbose.
+  No velocity or force representation. Overkill for transient
+  simulation snapshots.
+
+The ~con~ format is deliberately minimal: a fixed 9-line header, typed
+atom blocks, and optional velocity/force sections. The v2 JSON
+metadata line adds extensibility without breaking the core simplicity.
+
+* What problems does atom_id solve?
+
+The ~con~ format groups atoms by element type. A structure with atoms
+C, C, C, O, C, C (indices 0-5) gets written as five C atoms followed
+by one O atom. Without a persistent identity field, the original
+ordering vanishes after one read-write cycle.
+
+This matters for:
+- *NEB calculations*: interpolated images must maintain consistent
+  atom ordering across the band. If atom ordering drifts, the
+  interpolation produces nonsense.
+- *Dimer searches*: the displacement vector references specific atom
+  indices. Reordering atoms invalidates the mode.
+- *Reference comparisons*: comparing a relaxed structure against a
+  reference (e.g., Baker test set) requires matching atoms by index.
+
+The =atom_id= field (column 5) stores the pre-grouping index,
+allowing exact reconstruction of the original ordering after any
+number of read-write cycles.
+
+* Why JSON on line 2?
+
+Line 2 was historically unused ("Time" or empty in eOn files). JSON
+provides:
+
+- *Forward compatibility*: new keys can be added without format
+  changes. Unknown keys are preserved through round-trips.
+- *Machine readability*: no custom parser needed. Every language has
+  a JSON library.
+- *Section declaration*: the =sections= key tells the parser exactly
+  what per-atom data to expect, eliminating ambiguity.
+- *Provenance*: =potential=, =energy=, =generator= keys make files
+  self-documenting.
+- *Backward compatibility*: pre-v2 files have non-JSON on line 2.
+  The parser detects this (line 2 does not start with ={=) and falls
+  back to legacy mode (=spec_version = 1=).
+
+* When should I use HDF5 instead?
+
+Use ~con~ for:
+- Single structures and short trajectories (< 10k frames)
+- Interoperability with eOn, readcon-core, and ASE
+- Human-readable files that can be inspected with =head=
+- Situations where simplicity and round-trip fidelity matter
+
+Use HDF5 for:
+- Large-scale MD trajectories (millions of frames, billions of atoms)
+- Random access by frame index without scanning
+- Binary data with native-endian floats (no parsing overhead)
+- Complex hierarchical data (multiple properties per frame, metadata
+  trees, datasets with different shapes)
+
+The two formats complement each other. readcon-core handles the
+~con~-to-data pipeline; HDF5 handles long-term archival and analysis.
+
+* How fast is readcon-core?
+
+readcon-core parses ~con~ files 10-30x faster than pure-Python
+readers (e.g., eOn's =fileio.py=) by using:
+
+- *fast-float2*: SIMD-accelerated float parsing (2-3x over =str::parse=)
+- *Memory-mapped I/O*: large files are mmap'd, avoiding heap copies
+- *Rc<String> symbols*: one allocation per atom type, not per atom
+- *Zero-copy iteration*: the =ConFrameIterator= borrows from the
+  input string without allocating per-line
+- *Forward skip*: =forward()= skips frames by line counting without
+  parsing atom data
+
+See [[file:benchmarks.org][benchmarks]] for measured numbers on real datasets.
+
+* What is the sections mechanism?
+
+Version 2 files can include per-atom data beyond coordinates. Each
+additional section (velocities, forces) follows the same block
+structure as coordinates: blank separator, symbol line, label line,
+data lines.
+
+The =sections= key in the JSON metadata declares which sections exist
+and their order:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities","forces"]}
+#+end_example
+
+This is more robust than the legacy approach (detecting velocities by
+peeking for a blank separator) because:
+- The parser knows exactly what to expect
+- New section types can be added without ambiguity
+- Section order is explicit
+
+Legacy =.convel= files without a =sections= key still work: the
+parser falls back to blank-separator velocity detection.
+
+* Can I store forces and energies?
+
+Yes. Forces are a per-atom section (declared via =sections=). Energy
+is per-frame, stored in the JSON metadata:
+
+#+begin_example
+{"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
+#+end_example
+
+Forces require potential identification (the =potential= key) so
+downstream tools know how to interpret the values.
+
+* Does readcon-core support compression?
+
+Yes. Files with a =.con.gz= extension (or gzip magic bytes =0x1f
+0x8b=) are transparently decompressed during reading. Writing supports
+gzip compression via dedicated constructors.
+
+Force data roughly triples per-atom file size. Gzip compression
+typically recovers 60-80% of that overhead, making it practical to
+store coordinates + velocities + forces in a single compressed file.
+
+* What languages are supported?
+
+| Language | Mechanism | Installation |
+|----------+--------------+-----------------------|
+| Rust | Native crate | =cargo add readcon-core= |
+| Python | PyO3 bindings | =pip install readcon= |
+| C | FFI (cdylib) | link =libreadcon_core= |
+| C++ | RAII header | =#include "readcon-core.hpp"= |
+| Julia | ccall wrapper | =using ReadCon= |
+
+All bindings share the same Rust core, ensuring identical parsing
+behavior across languages.
+
+* How do I convert between ASE and ~con~?
+
+#+begin_src python
+import readcon
+
+# con -> ASE Atoms (preserves atom_id, velocities, forces, masses)
+frames = readcon.read_con("input.con")
+ase_atoms = frames[0].to_ase()
+
+# ASE Atoms -> con
+frame = readcon.ConFrame.from_ase(ase_atoms)
+readcon.write_con("output.con", [frame])
+
+# Direct read to ASE list
+ase_list = readcon.read_con_as_ase("trajectory.con")
+#+end_src
+
+The conversion preserves =atom_id= (via a custom per-atom array),
+velocities, forces (via SinglePointCalculator), masses, and
+constraints (FixAtoms).

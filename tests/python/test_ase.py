@@ -66,9 +66,9 @@ class TestAseAtomId:
     def test_nonsequential_atom_id_roundtrip(self):
         atoms_list = [
             readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                         is_fixed=True, atom_id=3, mass=63.546),
+                         fixed=[True, True, True], atom_id=3, mass=63.546),
             readcon.Atom(symbol="H", x=1.0, y=2.0, z=3.0,
-                         is_fixed=False, atom_id=1, mass=1.008),
+                         fixed=[False, False, False], atom_id=1, mass=1.008),
         ]
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],

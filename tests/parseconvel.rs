@@ -23,7 +23,7 @@ fn test_convel_single_frame() {
     let first_atom = &frame.atom_data[0];
     assert_eq!(&*first_atom.symbol, "Cu");
     assert!((first_atom.x - 0.6394).abs() < 1e-4);
-    assert!(first_atom.is_fixed);
+    assert!(first_atom.is_fixed());
 
     // Check velocity data
     assert_eq!(first_atom.vx, Some(0.001234));
@@ -35,7 +35,7 @@ fn test_convel_single_frame() {
     assert_eq!(last_atom.vx, Some(0.045678));
     assert_eq!(last_atom.vy, Some(-0.056789));
     assert_eq!(last_atom.vz, Some(-0.06789));
-    assert!(!last_atom.is_fixed);
+    assert!(!last_atom.is_fixed());
 }
 
 #[test]

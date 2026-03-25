@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod error;
 pub mod ffi;
 pub mod helpers;
@@ -43,6 +44,6 @@ mod tests {
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.6.0");
+        assert_eq!(VERSION, "0.7.0");
     }
 }

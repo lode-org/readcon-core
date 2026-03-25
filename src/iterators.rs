@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_single_frame, parse_velocity_section};
+use crate::parser::{parse_declared_sections, parse_single_frame};
 use crate::{error, types};
 use std::iter::Peekable;
 use std::path::Path;
@@ -94,19 +94,22 @@ impl<'a> ConFrameIterator<'a> {
             }
         }
 
-        // Check for an optional velocity section (blank separator followed by
-        // velocity blocks with the same structure as coordinate blocks).
-        if let Some(line) = self.lines.peek() {
-            if line.trim().is_empty() {
-                // Consume the blank separator
-                self.lines.next();
-                // Skip the velocity blocks: same structure as coordinate blocks
-                let vel_lines_to_skip = total_atoms + non_atom_lines;
-                for _ in 0..vel_lines_to_skip {
-                    if self.lines.next().is_none() {
-                        return Some(Err(error::ParseError::IncompleteVelocitySection));
+        // Skip additional sections (velocities, forces).
+        // Each section has: blank separator + same structure as coordinate blocks.
+        // We don't have access to the parsed sections list here (we only parsed
+        // the header minimally), so we detect sections by peeking for blank separators.
+        loop {
+            match self.lines.peek() {
+                Some(line) if line.trim().is_empty() => {
+                    self.lines.next(); // consume blank separator
+                    let section_lines = total_atoms + non_atom_lines;
+                    for _ in 0..section_lines {
+                        if self.lines.next().is_none() {
+                            return Some(Err(error::ParseError::IncompleteFrame));
+                        }
                     }
                 }
+                _ => break,
             }
         }
 
@@ -136,47 +139,12 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             Ok(f) => f,
             Err(e) => return Some(Err(e)),
         };
-        // Attempt to parse optional velocity section
-        match parse_velocity_section(&mut self.lines, &frame.header, &mut frame.atom_data) {
+        // Parse declared sections (velocities, forces) or fall back to legacy velocity detection
+        match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data) {
             Ok(_) => {}
             Err(e) => return Some(Err(e)),
         }
         Some(Ok(frame))
-    }
-}
-
-/// Size threshold below which we use `read_to_string` instead of mmap.
-/// For small files, the fixed overhead of mmap (VMA creation, page fault,
-/// munmap) exceeds the cost of a simple `read` syscall + heap allocation.
-/// 64 KiB is a conservative cutoff used by ripgrep and similar tools.
-const MMAP_THRESHOLD: u64 = 64 * 1024;
-
-/// Reads file contents, choosing between `read_to_string` (small files) and
-/// mmap (large files) based on [`MMAP_THRESHOLD`].
-fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::error::Error>> {
-    let file = std::fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    if metadata.len() < MMAP_THRESHOLD {
-        let contents = std::fs::read_to_string(path)?;
-        Ok(FileContents::Owned(contents))
-    } else {
-        let mmap = unsafe { memmap2::Mmap::map(&file)? };
-        Ok(FileContents::Mapped(mmap))
-    }
-}
-
-/// Holds file contents either as an owned String or a memory-mapped region.
-enum FileContents {
-    Owned(String),
-    Mapped(memmap2::Mmap),
-}
-
-impl FileContents {
-    fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
-        match self {
-            FileContents::Owned(s) => Ok(s.as_str()),
-            FileContents::Mapped(m) => std::str::from_utf8(m),
-        }
     }
 }
 
@@ -187,7 +155,7 @@ impl FileContents {
 /// trajectory files, uses memory-mapped I/O to let the OS page cache handle
 /// the data.
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let contents = read_file_contents(path)?;
+    let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
     let iter = ConFrameIterator::new(text);
     let frames: Result<Vec<_>, _> = iter.collect();
@@ -199,7 +167,7 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
 /// More efficient than `read_all_frames` for single-frame access because it
 /// stops parsing after the first frame rather than collecting all of them.
 pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
-    let contents = read_file_contents(path)?;
+    let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
     let mut iter = ConFrameIterator::new(text);
     match iter.next() {
@@ -287,13 +255,19 @@ pub fn parse_frames_parallel(
         let coord_lines = total_atoms + natm_types * 2;
         line_idx += coord_lines;
 
-        // Check for velocity section (blank separator)
-        if line_idx < total_lines {
+        // Skip any additional sections (velocities, forces, etc.)
+        // Each section starts with a blank separator followed by the same
+        // number of lines as coordinate blocks.
+        while line_idx < total_lines {
             if let Some(l) = lines.get(line_idx) {
                 if l.trim().is_empty() {
                     line_idx += 1; // blank separator
-                    line_idx += coord_lines; // velocity blocks same size
+                    line_idx += coord_lines; // section blocks same size
+                } else {
+                    break;
                 }
+            } else {
+                break;
             }
         }
     }

@@ -1,4 +1,4 @@
-use crate::types::ConFrame;
+use crate::types::{encode_fixed_bitmask, ConFrame};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -6,11 +6,6 @@ use std::path::Path;
 
 /// Default floating-point precision used for writing coordinates, cell dimensions, and masses.
 const DEFAULT_FLOAT_PRECISION: usize = 6;
-/// Always 0 or 1
-/// The value used to indicate a fixed atom in the output file.
-const FIXED_ATOM_FLAG: usize = 1;
-/// The value used to indicate a non-fixed (free) atom in the output file.
-const FREE_ATOM_FLAG: usize = 0;
 
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
@@ -66,11 +61,23 @@ impl<W: Write> ConFrameWriter<W> {
         writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
 
         // Line 2: always serialize JSON metadata with con_spec_version.
+        // Auto-populate sections based on frame data.
         let mut meta_obj = serde_json::Map::new();
         meta_obj.insert(
             "con_spec_version".to_string(),
             json!(frame.header.spec_version),
         );
+        // Build sections array from actual data presence
+        let mut sections = Vec::new();
+        if frame.has_velocities() {
+            sections.push(json!("velocities"));
+        }
+        if frame.has_forces() {
+            sections.push(json!("forces"));
+        }
+        if !sections.is_empty() {
+            meta_obj.insert("sections".to_string(), json!(sections));
+        }
         for (k, v) in &frame.header.metadata {
             meta_obj.insert(k.clone(), v.clone());
         }
@@ -125,11 +132,7 @@ impl<W: Write> ConFrameWriter<W> {
                     x = atom.x,
                     y = atom.y,
                     z = atom.z,
-                    fixed_flag = if atom.is_fixed {
-                        FIXED_ATOM_FLAG
-                    } else {
-                        FREE_ATOM_FLAG
-                    },
+                    fixed_flag = encode_fixed_bitmask(atom.fixed),
                     atom_id = atom.atom_id
                 )?;
             }
@@ -156,15 +159,39 @@ impl<W: Write> ConFrameWriter<W> {
                         vx = atom.vx.unwrap_or(0.0),
                         vy = atom.vy.unwrap_or(0.0),
                         vz = atom.vz.unwrap_or(0.0),
-                        fixed_flag = if atom.is_fixed {
-                            FIXED_ATOM_FLAG
-                        } else {
-                            FREE_ATOM_FLAG
-                        },
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;
                 }
                 vel_idx_offset += num_atoms_in_type;
+            }
+        }
+
+        // --- Write optional force section ---
+        if frame.has_forces() {
+            // Blank separator line
+            writeln!(self.writer)?;
+
+            let mut force_idx_offset = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[force_idx_offset].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Forces of Component {}", type_idx + 1)?;
+
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[force_idx_offset + i];
+                    writeln!(
+                        self.writer,
+                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag:.0} {atom_id}",
+                        prec = prec,
+                        fx = atom.fx.unwrap_or(0.0),
+                        fy = atom.fy.unwrap_or(0.0),
+                        fz = atom.fz.unwrap_or(0.0),
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                force_idx_offset += num_atoms_in_type;
             }
         }
 
@@ -196,5 +223,23 @@ impl ConFrameWriter<File> {
     pub fn from_path_with_precision<P: AsRef<Path>>(path: P, precision: usize) -> io::Result<Self> {
         let file = File::create(path)?;
         Ok(Self::with_precision(file, precision))
+    }
+}
+
+// Gzip-compressed writer constructors.
+impl ConFrameWriter<flate2::write::GzEncoder<File>> {
+    /// Creates a gzip-compressed writer for the given path.
+    pub fn from_path_gzip<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let encoder = crate::compression::gzip_writer(path.as_ref())?;
+        Ok(Self::new(encoder))
+    }
+
+    /// Creates a gzip-compressed writer with custom precision.
+    pub fn from_path_gzip_with_precision<P: AsRef<Path>>(
+        path: P,
+        precision: usize,
+    ) -> io::Result<Self> {
+        let encoder = crate::compression::gzip_writer(path.as_ref())?;
+        Ok(Self::with_precision(encoder, precision))
     }
 }
