@@ -159,11 +159,14 @@ declared in lines 8-9:
 |      2 | float | y coordinate (angstroms) |
 |      3 | float | z coordinate (angstroms) |
 |      4 | int | Fixed flag: 0 = free, 1 = frozen |
-|      5 | int | Atom index (see [[*Atom index]]) |
+|      5 | int | Atom index (see [[#atom-index]]) |
 
 Columns are whitespace-separated. Tabs and spaces are both valid.
 
 ** Atom index (column 5)
+:PROPERTIES:
+:CUSTOM_ID: atom-index
+:END:
 
 The atom index preserves the original position of each atom in the
 input structure before type-based grouping. This field solves a
