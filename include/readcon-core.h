@@ -68,10 +68,17 @@ typedef struct CAtom {
     uint64_t atom_id;
     double mass;
     bool is_fixed;
+    bool fixed_x;
+    bool fixed_y;
+    bool fixed_z;
     double vx;
     double vy;
     double vz;
     bool has_velocity;
+    double fx;
+    double fy;
+    double fz;
+    bool has_forces;
 } CAtom;
 
 /**
@@ -85,6 +92,7 @@ typedef struct CFrame {
     double cell[3];
     double angles[3];
     bool has_velocities;
+    bool has_forces;
 } CFrame;
 
 /**
@@ -281,6 +289,36 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
  * Each frame is freed individually, then the array itself.
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
+
+/**
+ * Returns the spec version stored in a parsed frame's header.
+ * Returns 0 on error (null handle).
+ */
+uint32_t rkr_frame_spec_version(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the JSON metadata line from a parsed frame as a heap-allocated
+ * null-terminated C string. The caller MUST free with `rkr_free_string`.
+ * Returns NULL on error.
+ */
+char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the per-frame energy from metadata, or NaN if absent.
+ */
+double rkr_frame_energy(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the potential type string from metadata. The caller MUST free
+ * with `rkr_free_string`. Returns NULL if absent.
+ */
+char *rkr_frame_potential_type(const struct RKRConFrame *frame_handle);
+
+/**
+ * Creates a new gzip-compressed frame writer.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ */
+struct RKRConFrameWriter *create_writer_gzip_c(const char *filename_c);
 
 #ifdef __cplusplus
 }  // extern "C"

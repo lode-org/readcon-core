@@ -26,10 +26,17 @@ struct Atom {
     uint64_t atom_id;
     double mass;
     bool is_fixed;
+    bool fixed_x;
+    bool fixed_y;
+    bool fixed_z;
     double vx;
     double vy;
     double vz;
     bool has_velocity;
+    double fx;
+    double fy;
+    double fz;
+    bool has_forces;
 };
 
 // Forward declarations
@@ -360,7 +367,9 @@ inline void ConFrame::cache_data() const {
         atoms_cache_.emplace_back(
             Atom{c_atom.atomic_number, c_atom.x, c_atom.y, c_atom.z,
                  c_atom.atom_id, c_atom.mass, c_atom.is_fixed,
-                 c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity});
+                 c_atom.fixed_x, c_atom.fixed_y, c_atom.fixed_z,
+                 c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity,
+                 c_atom.fx, c_atom.fy, c_atom.fz, c_atom.has_forces});
     }
 
     free_c_frame(c_frame);
