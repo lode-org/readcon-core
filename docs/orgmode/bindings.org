@@ -117,7 +117,7 @@ end
 
 // Compile-time check
 #if RKR_CON_SPEC_VERSION < 2
-#error "readcon-core spec v2 required for atom_index support"
+#error "readcon-core spec v2 required for atom_id support"
 #endif
 
 // Runtime queries

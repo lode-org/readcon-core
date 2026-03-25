@@ -43,7 +43,7 @@ within a type block.
   coordinate/velocity hot path.
 - =parse_line_of_range_f64= :: Flexible parser accepting between
   =min= and =max= columns, padding from defaults. Used for atom
-  lines where column 5 (atom_index) is optional.
+  lines where column 5 (atom_id) is optional.
 - =parse_frame_header= :: Consumes 9 header lines. Detects JSON
   metadata on line 2 (starts with ={=) for spec v2+; non-JSON line 2
   triggers legacy mode (=spec_version = 1=). Malformed JSON (starts

@@ -11,7 +11,7 @@
 This document defines version 2 of the con file format specification.
 It supersedes all prior informal descriptions. New implementations SHOULD
 target this version. Existing implementations SHOULD upgrade to support
-version 2 features, particularly the =original_atom_index= field.
+version 2 features, particularly the =atom_id= field.
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY,
 and OPTIONAL follow [[https://www.rfc-editor.org/rfc/rfc2119][RFC 2119]] semantics.
@@ -206,13 +206,13 @@ MUST default to the sequential position within the frame (0, 1, 2,
 
 A version 2 reader processing a version 1 file (sequential counters)
 produces correct results: sequential values constitute a valid
-original_atom_index for structures that were never reordered.
+atom_id for structures that were never reordered.
 
-*** Why original_atom_index matters
+*** Why atom_id matters
 
 A structure with atoms in order C, C, C, O, C, C (indices 0-5) gets
 written as five C atoms followed by one O atom. Without a meaningful
-column 5, the original ordering vanishes. The original_atom_index field
+column 5, the original ordering vanishes. The atom_id field
 preserves the pre-grouping index so that the original atom sequence
 can be reconstructed after any number of read/write cycles.
 
@@ -230,10 +230,10 @@ of each frame:
 2. For each atom type /i/ (1 to N):
    a. *Symbol line*: same chemical symbol as in the coordinate block.
    b. *Label line*: =Velocities of Component /i/=
-   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag original_atom_index=
+   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag atom_id=
 
 The velocity fields =vx=, =vy=, =vz= are floating-point velocity
-components. The =fixed_flag= and =original_atom_index= follow the same rules
+components. The =fixed_flag= and =atom_id= follow the same rules
 as in coordinate blocks.
 
 If no blank line follows the coordinate blocks, the frame has no
@@ -259,7 +259,7 @@ within a =.convel (coordinates + velocities)= frame.
   SHOULD emit at least 6 significant decimal digits for coordinates
   and masses. For lossless f64 round-tripping, 17 decimal digits
   suffice.
-- *Integers*: =fixed_flag= is 0 or 1. =original_atom_index=, =natm_types=,
+- *Integers*: =fixed_flag= is 0 or 1. =atom_id=, =natm_types=,
   and =natms_per_type= values are non-negative integers representable
   as unsigned 64-bit values.
 
@@ -280,7 +280,7 @@ within a =.convel (coordinates + velocities)= frame.
 | Version | Date | Changes |
 |---------+------------+----------------------------------------------|
 |       1 | (original) | De facto format from eOn. Column 5 present, semantics undefined. |
-|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as original_atom_index. |
+|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as atom_id. |
 
 * Querying the spec version
 
@@ -308,7 +308,7 @@ C/C++ compile-time gating example:
 #+begin_src c
 #include <readcon-core.h>
 #if RKR_con_SPEC_VERSION < 2
-#error "readcon-core spec v2 required for original_atom_index support"
+#error "readcon-core spec v2 required for atom_id support"
 #endif
 #+end_src
 
