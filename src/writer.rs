@@ -242,3 +242,21 @@ impl ConFrameWriter<File> {
         Ok(Self::with_precision(file, precision))
     }
 }
+
+// Gzip-compressed writer constructors.
+impl ConFrameWriter<flate2::write::GzEncoder<File>> {
+    /// Creates a gzip-compressed writer for the given path.
+    pub fn from_path_gzip<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let encoder = crate::compression::gzip_writer(path.as_ref())?;
+        Ok(Self::new(encoder))
+    }
+
+    /// Creates a gzip-compressed writer with custom precision.
+    pub fn from_path_gzip_with_precision<P: AsRef<Path>>(
+        path: P,
+        precision: usize,
+    ) -> io::Result<Self> {
+        let encoder = crate::compression::gzip_writer(path.as_ref())?;
+        Ok(Self::with_precision(encoder, precision))
+    }
+}
