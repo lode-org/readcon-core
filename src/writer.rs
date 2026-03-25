@@ -1,4 +1,5 @@
 use crate::types::ConFrame;
+use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
@@ -63,7 +64,21 @@ impl<W: Write> ConFrameWriter<W> {
 
         // --- Write the 9-line Header ---
         writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
-        writeln!(self.writer, "{}", frame.header.prebox_header[1])?;
+
+        // Line 2: always serialize JSON metadata with con_spec_version.
+        let mut meta_obj = serde_json::Map::new();
+        meta_obj.insert(
+            "con_spec_version".to_string(),
+            json!(frame.header.spec_version),
+        );
+        for (k, v) in &frame.header.metadata {
+            meta_obj.insert(k.clone(), v.clone());
+        }
+        writeln!(
+            self.writer,
+            "{}",
+            serde_json::Value::Object(meta_obj)
+        )?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",

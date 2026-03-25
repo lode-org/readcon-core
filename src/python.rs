@@ -107,18 +107,24 @@ pub struct PyConFrame {
     atoms_inner: Vec<PyAtomDatum>,
     #[pyo3(get)]
     pub has_velocities: bool,
+    #[pyo3(get)]
+    pub spec_version: u32,
+    /// Additional JSON metadata as a Python dict (str -> JSON-compatible value).
+    #[pyo3(get)]
+    pub metadata: std::collections::BTreeMap<String, String>,
 }
 
 #[pymethods]
 impl PyConFrame {
     #[new]
-    #[pyo3(signature = (cell, angles, atoms, prebox_header=None, postbox_header=None))]
+    #[pyo3(signature = (cell, angles, atoms, prebox_header=None, postbox_header=None, metadata=None))]
     fn new(
         cell: [f64; 3],
         angles: [f64; 3],
         atoms: Vec<PyAtomDatum>,
         prebox_header: Option<Vec<String>>,
         postbox_header: Option<Vec<String>>,
+        metadata: Option<std::collections::BTreeMap<String, String>>,
     ) -> Self {
         let has_velocities = atoms.first().is_some_and(|a| a.has_velocity());
         PyConFrame {
@@ -128,6 +134,8 @@ impl PyConFrame {
             postbox_header: postbox_header.unwrap_or_else(|| vec![String::new(), String::new()]),
             atoms_inner: atoms,
             has_velocities,
+            spec_version: crate::CON_SPEC_VERSION,
+            metadata: metadata.unwrap_or_default(),
         }
     }
 
@@ -188,6 +196,13 @@ impl From<&ConFrame> for PyConFrame {
             })
             .collect();
 
+        let metadata = frame
+            .header
+            .metadata
+            .iter()
+            .map(|(k, v)| (k.clone(), v.to_string()))
+            .collect();
+
         PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -195,12 +210,22 @@ impl From<&ConFrame> for PyConFrame {
             postbox_header: frame.header.postbox_header.to_vec(),
             atoms_inner: atoms,
             has_velocities: frame.has_velocities(),
+            spec_version: frame.header.spec_version,
+            metadata,
         }
     }
 }
 
 impl PyConFrame {
     fn to_con_frame(&self) -> ConFrame {
+        let meta: std::collections::BTreeMap<String, serde_json::Value> = self
+            .metadata
+            .iter()
+            .filter_map(|(k, v)| {
+                serde_json::from_str(v).ok().map(|val| (k.clone(), val))
+            })
+            .collect();
+
         let mut builder = ConFrameBuilder::new(self.cell, self.angles)
             .prebox_header([
                 self.prebox_header.first().cloned().unwrap_or_default(),
@@ -209,7 +234,8 @@ impl PyConFrame {
             .postbox_header([
                 self.postbox_header.first().cloned().unwrap_or_default(),
                 self.postbox_header.get(1).cloned().unwrap_or_default(),
-            ]);
+            ])
+            .metadata(meta);
 
         for py_atom in &self.atoms_inner {
             let mass = py_atom.mass.unwrap_or(0.0);
@@ -519,6 +545,8 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         postbox_header: vec![String::new(), String::new()],
         atoms_inner: atoms,
         has_velocities,
+        spec_version: crate::CON_SPEC_VERSION,
+        metadata: std::collections::BTreeMap::new(),
     })
 }
 

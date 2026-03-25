@@ -19,11 +19,18 @@ thin FFI and language-specific wrapper layers.
 * Core types (types.rs)
 
 - =FrameHeader= :: 9-line header metadata (cell, angles, atom counts,
-  masses).
+  masses, spec_version, metadata). The =spec_version= field (=u32=)
+  records the CON spec version from the JSON metadata line. The
+  =metadata= field (=BTreeMap<String, serde_json::Value>=) holds
+  additional key-value pairs from the JSON, preserving unrecognized
+  keys through round-trips.
 - =AtomDatum= :: Single atom data (symbol, coordinates, fixed flag,
   atom_id (original atom index before type-based reordering),
   optional velocities).
 - =ConFrame= :: Complete frame (header + atom data vector).
+- =ConFrameBuilder= :: Builder pattern for constructing frames
+  programmatically. Accepts an optional =metadata= map; the builder
+  always sets =spec_version= to =CON_SPEC_VERSION=.
 
 Symbol strings use =Rc<String>= to avoid per-atom string clones
 within a type block.
@@ -37,7 +44,10 @@ within a type block.
 - =parse_line_of_range_f64= :: Flexible parser accepting between
   =min= and =max= columns, padding from defaults. Used for atom
   lines where column 5 (atom_index) is optional.
-- =parse_frame_header= :: Consumes 9 header lines.
+- =parse_frame_header= :: Consumes 9 header lines. Detects JSON
+  metadata on line 2 (starts with ={=) for spec v2+; non-JSON line 2
+  triggers legacy mode (=spec_version = 1=). Malformed JSON (starts
+  with ={= but invalid) produces an error.
 - =parse_single_frame= :: Header + coordinate blocks. Accepts
   4-column atom lines (column 5 defaults to sequential index).
 - =parse_velocity_section= :: Optional velocity blocks after
@@ -46,6 +56,9 @@ within a type block.
 * Writer (writer.rs)
 
 - =ConFrameWriter<W: Write>= :: Generic buffered writer.
+- Line 2 is always serialized as a JSON object containing
+  =con_spec_version= plus any entries from =frame.header.metadata=.
+  The original =prebox_header[1]= value is overwritten.
 - Writes header, coordinate blocks, and velocity blocks (if
   =frame.has_velocities()=).
 
@@ -70,9 +83,17 @@ Opaque handle pattern:
 Version and spec constants:
 - =#define RKR_CON_SPEC_VERSION 2= :: Compile-time spec version for
   =#if= guards.
-- =rkr_con_spec_version()= :: Runtime spec version query.
+- =rkr_con_spec_version()= :: Runtime library spec version query.
 - =rkr_library_version()= :: Returns library version string (e.g.
-  ="0.5.0"=). The pointer is static; do not free it.
+  ="0.5.2"=). The pointer is static; do not free it.
+
+Per-frame metadata accessors:
+- =rkr_frame_spec_version(handle)= :: Returns the spec version stored
+  in a parsed frame's header (the version the file was written with,
+  not the library's version).
+- =rkr_frame_metadata_json(handle)= :: Returns the full JSON metadata
+  line as a heap-allocated C string. The caller must free with
+  =rkr_free_string()=.
 
 * C++ wrapper (readcon-core.hpp)
 

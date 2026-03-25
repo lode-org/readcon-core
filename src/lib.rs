@@ -18,9 +18,14 @@ pub mod python;
 
 /// CON/convel format spec version implemented by this build.
 ///
-/// - Version 1: column 5 present but semantics undefined. Readers MAY ignore it.
-/// - Version 2: column 5 is the original atom index before type-based grouping.
-///   Readers MUST parse and preserve it. Writers MUST write the stored value.
+/// - Version 1: column 5 present but semantics undefined. Readers MAY
+///   ignore it. No JSON metadata line.
+/// - Version 2: column 5 is the original atom index before type-based
+///   grouping. Readers MUST parse and preserve it. Writers MUST write
+///   the stored value. Line 2 of the header carries a JSON object
+///   with at least `{"con_spec_version": 2}`.
+///
+/// See `docs/orgmode/spec.org` for the full specification.
 pub const CON_SPEC_VERSION: u32 = 2;
 
 /// Library version string, injected from Cargo.toml at compile time.
@@ -38,6 +43,6 @@ mod tests {
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.5.2");
+        assert_eq!(VERSION, "0.6.0");
     }
 }

@@ -30,6 +30,42 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     VERSION_NUL.as_ptr() as *const c_char
 }
 
+/// Returns the spec version stored in a parsed frame's header.
+/// Returns 0 on error (null handle).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u32 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.spec_version,
+        None => 0,
+    }
+}
+
+/// Returns the JSON metadata line from a parsed frame as a heap-allocated
+/// null-terminated C string. The caller MUST free with `rkr_free_string`.
+/// Returns NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metadata_json(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        "con_spec_version".to_string(),
+        serde_json::Value::from(frame.header.spec_version),
+    );
+    for (k, v) in &frame.header.metadata {
+        obj.insert(k.clone(), v.clone());
+    }
+    let json_str = serde_json::Value::Object(obj).to_string();
+    match CString::new(json_str) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 //=============================================================================
 // C-Compatible Structs & Handles
 //=============================================================================

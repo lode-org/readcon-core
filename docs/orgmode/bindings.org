@@ -67,8 +67,9 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
   Properties: symbol, x, y, z, is_fixed, atom_id, mass (v0.4.2+),
   vx, vy, vz, has_velocity
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
-  optional headers (v0.4.0+).  Properties: cell, angles, atoms,
-  has_velocities, prebox_header, postbox_header.
+  optional headers and metadata (v0.4.0+).  Properties: cell, angles,
+  atoms, has_velocities, prebox_header, postbox_header, spec_version
+  (v0.6.0+), metadata (v0.6.0+, dict of extra JSON keys).
   Methods: to_ase(), from_ase() (v0.4.0+)
 
 * Julia (ccall)
