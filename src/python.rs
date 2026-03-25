@@ -158,6 +158,40 @@ impl PyConFrame {
         self.atoms_inner.len()
     }
 
+    // --- Typed metadata accessors ---
+
+    /// Per-frame total energy (from JSON metadata), or None.
+    #[getter]
+    fn energy(&self) -> Option<f64> {
+        self.metadata
+            .get("energy")
+            .and_then(|v| v.parse::<f64>().ok())
+    }
+
+    /// Potential type string (e.g. "EMT"), or None.
+    #[getter]
+    fn potential_type(&self) -> Option<String> {
+        let pot_str = self.metadata.get("potential")?;
+        let val: serde_json::Value = serde_json::from_str(pot_str).ok()?;
+        val.as_object()?.get("type")?.as_str().map(|s| s.to_string())
+    }
+
+    /// Zero-based frame index within a trajectory, or None.
+    #[getter]
+    fn frame_index(&self) -> Option<u64> {
+        self.metadata
+            .get("frame_index")
+            .and_then(|v| v.parse::<u64>().ok())
+    }
+
+    /// Simulation time of this frame, or None.
+    #[getter]
+    fn time(&self) -> Option<f64> {
+        self.metadata
+            .get("time")
+            .and_then(|v| v.parse::<f64>().ok())
+    }
+
     /// Convert this frame to an ASE Atoms object (requires ase package).
     fn to_ase(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         ase_from_pyconframe(py, self)
