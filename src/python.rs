@@ -356,15 +356,45 @@ fn read_con_string(contents: &str) -> PyResult<Vec<PyConFrame>> {
 }
 
 /// Write frames to a .con or .convel file path.
+///
+/// The `compression` argument controls output compression:
+/// - `None` (default): auto-detect from extension (.gz = gzip, else uncompressed)
+/// - `"gzip"`: force gzip compression
+/// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=6))]
-fn write_con(path: &str, frames: Vec<PyConFrame>, precision: usize) -> PyResult<()> {
+#[pyo3(signature = (path, frames, precision=6, compression=None))]
+fn write_con(
+    path: &str,
+    frames: Vec<PyConFrame>,
+    precision: usize,
+    compression: Option<&str>,
+) -> PyResult<()> {
     let rust_frames: Vec<ConFrame> = frames.iter().map(|f| f.to_con_frame()).collect();
-    let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
-        .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?;
-    writer
-        .extend(rust_frames.iter())
-        .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+
+    let use_gzip = match compression {
+        Some("gzip") => true,
+        Some("none") => false,
+        Some(other) => {
+            return Err(PyIOError::new_err(format!(
+                "unknown compression: {other}. Use \"gzip\" or \"none\"."
+            )));
+        }
+        None => path.ends_with(".gz"),
+    };
+
+    if use_gzip {
+        let mut writer = ConFrameWriter::from_path_gzip_with_precision(path, precision)
+            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?;
+        writer
+            .extend(rust_frames.iter())
+            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+    } else {
+        let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
+            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?;
+        writer
+            .extend(rust_frames.iter())
+            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+    }
     Ok(())
 }
 

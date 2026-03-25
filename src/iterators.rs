@@ -148,41 +148,6 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     }
 }
 
-/// Size threshold below which we use `read_to_string` instead of mmap.
-/// For small files, the fixed overhead of mmap (VMA creation, page fault,
-/// munmap) exceeds the cost of a simple `read` syscall + heap allocation.
-/// 64 KiB is a conservative cutoff used by ripgrep and similar tools.
-const MMAP_THRESHOLD: u64 = 64 * 1024;
-
-/// Reads file contents, choosing between `read_to_string` (small files) and
-/// mmap (large files) based on [`MMAP_THRESHOLD`].
-fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::error::Error>> {
-    let file = std::fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    if metadata.len() < MMAP_THRESHOLD {
-        let contents = std::fs::read_to_string(path)?;
-        Ok(FileContents::Owned(contents))
-    } else {
-        let mmap = unsafe { memmap2::Mmap::map(&file)? };
-        Ok(FileContents::Mapped(mmap))
-    }
-}
-
-/// Holds file contents either as an owned String or a memory-mapped region.
-enum FileContents {
-    Owned(String),
-    Mapped(memmap2::Mmap),
-}
-
-impl FileContents {
-    fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
-        match self {
-            FileContents::Owned(s) => Ok(s.as_str()),
-            FileContents::Mapped(m) => std::str::from_utf8(m),
-        }
-    }
-}
-
 /// Reads all frames from a file.
 ///
 /// For files smaller than 64 KiB, uses a simple `read_to_string` to avoid
@@ -190,7 +155,7 @@ impl FileContents {
 /// trajectory files, uses memory-mapped I/O to let the OS page cache handle
 /// the data.
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let contents = read_file_contents(path)?;
+    let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
     let iter = ConFrameIterator::new(text);
     let frames: Result<Vec<_>, _> = iter.collect();
@@ -202,7 +167,7 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
 /// More efficient than `read_all_frames` for single-frame access because it
 /// stops parsing after the first frame rather than collecting all of them.
 pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
-    let contents = read_file_contents(path)?;
+    let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
     let mut iter = ConFrameIterator::new(text);
     match iter.next() {

@@ -585,6 +585,25 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
     }
 }
 
+/// Creates a new gzip-compressed frame writer for the specified file.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_gzip_c(
+    filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match ConFrameWriter::from_path_gzip(filename) {
+        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 //=============================================================================
 // Direct mmap-based Reader FFI
 //=============================================================================
