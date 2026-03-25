@@ -160,14 +160,40 @@ declared in lines 8-9:
 3. *Atom lines*: one line per atom in this type, containing:
 
 | Column | Type | Description |
-|--------+-------+--------------------------------------|
+|--------+-------+-----------------------------------------------|
 |      1 | float | x coordinate (angstroms) |
 |      2 | float | y coordinate (angstroms) |
 |      3 | float | z coordinate (angstroms) |
-|      4 | int | Fixed flag: 0 = free, 1 = frozen |
+|      4 | int | Constraint bitmask (see [[#constraints]]) |
 |      5 | int | Atom index (see [[#atom-index]]) |
 
 Columns are whitespace-separated. Tabs and spaces are both valid.
+
+** Per-direction constraints (column 4)
+:PROPERTIES:
+:CUSTOM_ID: constraints
+:END:
+
+Column 4 encodes per-direction constraint flags as a bitmask integer.
+Bit 0 controls x, bit 1 controls y, bit 2 controls z.
+
+| Value | Binary | Meaning |
+|-------+--------+---------------------------------|
+|     0 | 000 | Free (all directions) |
+|     1 | --- | All-fixed (legacy, treated as 7) |
+|     2 | 010 | Fixed in y only |
+|     3 | 011 | Fixed in x and y |
+|     4 | 100 | Fixed in z only |
+|     5 | 101 | Fixed in x and z |
+|     6 | 110 | Fixed in y and z |
+|     7 | 111 | Fixed in all directions |
+
+Value 1 exists for backward compatibility with legacy files that used
+0/1 as a boolean. Readers MUST treat value 1 as equivalent to 7
+(all-fixed). Writers MUST emit 7 for all-fixed atoms, never 1.
+
+This encoding supports VASP-style selective dynamics where individual
+Cartesian directions can be independently constrained.
 
 ** Atom index (column 5)
 :PROPERTIES:
