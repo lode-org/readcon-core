@@ -143,7 +143,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),
-                    is_fixed: a.get_is_fixed(),
+                    fixed: if a.get_is_fixed() { [true, true, true] } else { [false, false, false] },
                     atom_id: a.get_atom_id(),
                     vx: if has_vel { Some(a.get_vx()) } else { None },
                     vy: if has_vel { Some(a.get_vy()) } else { None },

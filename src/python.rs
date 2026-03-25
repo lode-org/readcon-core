@@ -19,7 +19,7 @@ pub struct PyAtomDatum {
     #[pyo3(get)]
     pub z: f64,
     #[pyo3(get)]
-    pub is_fixed: bool,
+    pub fixed: [bool; 3],
     #[pyo3(get)]
     pub atom_id: u64,
     #[pyo3(get)]
@@ -41,13 +41,13 @@ pub struct PyAtomDatum {
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, is_fixed=false, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
     fn new(
         symbol: String,
         x: f64,
         y: f64,
         z: f64,
-        is_fixed: bool,
+        fixed: Option<[bool; 3]>,
         atom_id: u64,
         mass: Option<f64>,
         vx: Option<f64>,
@@ -62,7 +62,7 @@ impl PyAtomDatum {
             x,
             y,
             z,
-            is_fixed,
+            fixed: fixed.unwrap_or([false, false, false]),
             atom_id,
             mass,
             vx,
@@ -72,6 +72,12 @@ impl PyAtomDatum {
             fy,
             fz,
         }
+    }
+
+    /// Backward-compatible property: true if any direction is fixed.
+    #[getter]
+    fn is_fixed(&self) -> bool {
+        self.fixed[0] || self.fixed[1] || self.fixed[2]
     }
 
     #[getter]
@@ -99,7 +105,7 @@ impl PyAtomDatum {
             x: atom.x,
             y: atom.y,
             z: atom.z,
-            is_fixed: atom.is_fixed,
+            fixed: atom.fixed,
             atom_id: atom.atom_id,
             mass: Some(mass),
             vx: atom.vx,
@@ -304,7 +310,7 @@ impl PyConFrame {
                 builder.add_atom_with_velocity_and_forces(
                     &py_atom.symbol,
                     py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.fixed, py_atom.atom_id, mass,
                     py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
                     py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
                 );
@@ -312,21 +318,21 @@ impl PyConFrame {
                 builder.add_atom_with_velocity(
                     &py_atom.symbol,
                     py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.fixed, py_atom.atom_id, mass,
                     py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
                 );
             } else if has_frc {
                 builder.add_atom_with_forces(
                     &py_atom.symbol,
                     py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.fixed, py_atom.atom_id, mass,
                     py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
                 );
             } else {
                 builder.add_atom(
                     &py_atom.symbol,
                     py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.is_fixed, py_atom.atom_id, mass,
+                    py_atom.fixed, py_atom.atom_id, mass,
                 );
             }
         }
@@ -530,7 +536,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         .atoms_inner
         .iter()
         .enumerate()
-        .filter(|(_, a)| a.is_fixed)
+        .filter(|(_, a)| a.is_fixed())
         .map(|(i, _)| i)
         .collect();
 
@@ -676,7 +682,7 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
                 x: pos[0],
                 y: pos[1],
                 z: pos[2],
-                is_fixed: fixed_set.contains(&i),
+                fixed: if fixed_set.contains(&i) { [true, true, true] } else { [false, false, false] },
                 atom_id: atom_ids[i],
                 mass: masses.as_ref().map(|m| m[i]),
                 vx,

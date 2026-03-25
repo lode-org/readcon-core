@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::types::{AtomDatum, ConFrame, FrameHeader};
+use crate::types::{decode_fixed_bitmask, AtomDatum, ConFrame, FrameHeader};
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::rc::Rc;
@@ -294,7 +294,7 @@ pub fn parse_single_frame<'a>(
                 x: vals[0],
                 y: vals[1],
                 z: vals[2],
-                is_fixed: vals[3] != 0.0,
+                fixed: decode_fixed_bitmask(vals[3] as u8),
                 atom_id: vals[4] as u64,
                 vx: None,
                 vy: None,
@@ -948,6 +948,6 @@ mod tests {
         assert_eq!(frame.atom_data[0].atom_id, 0);
         assert_eq!(frame.atom_data[1].atom_id, 1);
         assert_eq!(frame.atom_data[2].atom_id, 2);
-        assert_eq!(frame.atom_data[2].is_fixed, true);
+        assert!(frame.atom_data[2].is_fixed());
     }
 }

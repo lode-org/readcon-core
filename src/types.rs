@@ -175,8 +175,14 @@ pub struct AtomDatum {
     pub y: f64,
     /// The Cartesian z-coordinate.
     pub z: f64,
-    /// A flag indicating if the atom's position is fixed during a simulation.
-    pub is_fixed: bool,
+    /// Per-direction constraint flags: [fixed_x, fixed_y, fixed_z].
+    ///
+    /// Encoded as a bitmask in column 4 of the file format:
+    /// - 0 = free (all false)
+    /// - 1 = all-fixed (legacy, treated as [true, true, true])
+    /// - 2-6 = per-direction combinations (bit 0=y, bit 1=x+y, bit 2=z, ...)
+    /// - 7 = all-fixed (canonical)
+    pub fixed: [bool; 3],
     /// The original atom index (column 5 in .con format).
     ///
     /// The .con format groups atoms by element type, which reorders them
@@ -202,6 +208,16 @@ pub struct AtomDatum {
 }
 
 impl AtomDatum {
+    /// Returns `true` if any direction is fixed.
+    pub fn is_fixed(&self) -> bool {
+        self.fixed[0] || self.fixed[1] || self.fixed[2]
+    }
+
+    /// Returns `true` if all three directions are fixed.
+    pub fn is_fully_fixed(&self) -> bool {
+        self.fixed[0] && self.fixed[1] && self.fixed[2]
+    }
+
     /// Returns `true` if this atom has velocity data.
     pub fn has_velocity(&self) -> bool {
         self.vx.is_some() && self.vy.is_some() && self.vz.is_some()
@@ -213,6 +229,36 @@ impl AtomDatum {
     }
 }
 
+/// Decode a column-4 bitmask value to per-direction fixed flags.
+///
+/// - 0 = free
+/// - 1 = all-fixed (legacy, treated as [true, true, true])
+/// - 2-7 = bitmask (bit 0 = x, bit 1 = y, bit 2 = z)
+pub fn decode_fixed_bitmask(val: u8) -> [bool; 3] {
+    match val {
+        0 => [false, false, false],
+        1 => [true, true, true], // legacy: treat as fully fixed
+        v => [v & 1 != 0, v & 2 != 0, v & 4 != 0],
+    }
+}
+
+/// Encode per-direction fixed flags to a column-4 bitmask value.
+///
+/// Always emits 7 for all-fixed (never legacy value 1).
+pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
+    let mut val: u8 = 0;
+    if fixed[0] {
+        val |= 1;
+    }
+    if fixed[1] {
+        val |= 2;
+    }
+    if fixed[2] {
+        val |= 4;
+    }
+    val
+}
+
 // Manual implementation of PartialEq because Rc<T> doesn't derive it by default.
 impl PartialEq for AtomDatum {
     fn eq(&self, other: &Self) -> bool {
@@ -221,7 +267,7 @@ impl PartialEq for AtomDatum {
             && self.x == other.x
             && self.y == other.y
             && self.z == other.z
-            && self.is_fixed == other.is_fixed
+            && self.fixed == other.fixed
             && self.atom_id == other.atom_id
             && self.vx == other.vx
             && self.vy == other.vy
@@ -271,8 +317,8 @@ impl PartialEq for ConFrame {
 /// use readcon_core::types::ConFrameBuilder;
 ///
 /// let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-/// builder.add_atom("Cu", 0.0, 0.0, 0.0, true, 0, 63.546);
-/// builder.add_atom("H", 1.0, 2.0, 3.0, false, 1, 1.008);
+/// builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
+/// builder.add_atom("H", 1.0, 2.0, 3.0, [false, false, false], 1, 1.008);
 /// let frame = builder.build();
 /// assert_eq!(frame.header.natm_types, 2);
 /// assert_eq!(frame.atom_data.len(), 2);
@@ -291,7 +337,7 @@ struct BuilderAtom {
     x: f64,
     y: f64,
     z: f64,
-    is_fixed: bool,
+    fixed: [bool; 3],
     atom_id: u64,
     mass: f64,
     vx: Option<f64>,
@@ -341,7 +387,7 @@ impl ConFrameBuilder {
         x: f64,
         y: f64,
         z: f64,
-        is_fixed: bool,
+        fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
     ) {
@@ -350,7 +396,7 @@ impl ConFrameBuilder {
             x,
             y,
             z,
-            is_fixed,
+            fixed,
             atom_id,
             mass,
             vx: None,
@@ -369,7 +415,7 @@ impl ConFrameBuilder {
         x: f64,
         y: f64,
         z: f64,
-        is_fixed: bool,
+        fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
         vx: f64,
@@ -381,7 +427,7 @@ impl ConFrameBuilder {
             x,
             y,
             z,
-            is_fixed,
+            fixed,
             atom_id,
             mass,
             vx: Some(vx),
@@ -400,7 +446,7 @@ impl ConFrameBuilder {
         x: f64,
         y: f64,
         z: f64,
-        is_fixed: bool,
+        fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
         fx: f64,
@@ -412,7 +458,7 @@ impl ConFrameBuilder {
             x,
             y,
             z,
-            is_fixed,
+            fixed,
             atom_id,
             mass,
             vx: None,
@@ -431,7 +477,7 @@ impl ConFrameBuilder {
         x: f64,
         y: f64,
         z: f64,
-        is_fixed: bool,
+        fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
         vx: f64,
@@ -446,7 +492,7 @@ impl ConFrameBuilder {
             x,
             y,
             z,
-            is_fixed,
+            fixed,
             atom_id,
             mass,
             vx: Some(vx),
@@ -497,7 +543,7 @@ impl ConFrameBuilder {
                     x: a.x,
                     y: a.y,
                     z: a.z,
-                    is_fixed: a.is_fixed,
+                    fixed: a.fixed,
                     atom_id: a.atom_id,
                     vx: a.vx,
                     vy: a.vy,
@@ -551,9 +597,9 @@ mod tests {
     #[test]
     fn test_builder_basic() {
         let mut builder = ConFrameBuilder::new([10.0, 20.0, 30.0], [90.0, 90.0, 90.0]);
-        builder.add_atom("Cu", 0.0, 0.0, 0.0, true, 0, 63.546);
-        builder.add_atom("Cu", 1.0, 0.0, 0.0, true, 1, 63.546);
-        builder.add_atom("H", 2.0, 3.0, 4.0, false, 2, 1.008);
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
+        builder.add_atom("H", 2.0, 3.0, 4.0, [false, false, false], 2, 1.008);
         let frame = builder.build();
 
         assert_eq!(frame.header.natm_types, 2);
@@ -567,7 +613,7 @@ mod tests {
     #[test]
     fn test_builder_with_velocities() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        builder.add_atom_with_velocity("Cu", 0.0, 0.0, 0.0, true, 0, 63.546, 0.1, 0.2, 0.3);
+        builder.add_atom_with_velocity("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546, 0.1, 0.2, 0.3);
         let frame = builder.build();
 
         assert!(frame.has_velocities());
@@ -591,9 +637,9 @@ mod tests {
     fn test_builder_groups_atoms_by_symbol() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         // Add interleaved symbols
-        builder.add_atom("H", 0.0, 0.0, 0.0, false, 0, 1.008);
-        builder.add_atom("Cu", 1.0, 0.0, 0.0, true, 1, 63.546);
-        builder.add_atom("H", 2.0, 0.0, 0.0, false, 2, 1.008);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false, false, false], 0, 1.008);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 2, 1.008);
         let frame = builder.build();
 
         // H appears first, so it should be first type

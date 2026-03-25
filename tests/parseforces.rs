@@ -146,8 +146,8 @@ fn test_builder_with_forces() {
 
     let mut builder =
         ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom_with_forces("Cu", 0.0, 0.0, 0.0, false, 0, 63.546, 1.0, 2.0, 3.0);
-    builder.add_atom_with_forces("Cu", 1.0, 0.0, 0.0, false, 1, 63.546, 4.0, 5.0, 6.0);
+    builder.add_atom_with_forces("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546, 1.0, 2.0, 3.0);
+    builder.add_atom_with_forces("Cu", 1.0, 0.0, 0.0, [false, false, false], 1, 63.546, 4.0, 5.0, 6.0);
     let frame = builder.build();
 
     assert!(frame.has_forces());
@@ -164,7 +164,7 @@ fn test_builder_with_velocity_and_forces() {
     let mut builder =
         ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
     builder.add_atom_with_velocity_and_forces(
-        "Cu", 0.0, 0.0, 0.0, false, 0, 63.546,
+        "Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546,
         0.1, 0.2, 0.3, 1.0, 2.0, 3.0,
     );
     let frame = builder.build();
