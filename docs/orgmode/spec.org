@@ -220,38 +220,91 @@ This property matters for comparing geometries against reference
 structures (e.g., [[https://github.com/HaoZeke/nebmmf_repro][Baker transition-state test set]]) after [[https://arxiv.org/abs/2601.12630][NEB]] or [[https://doi.org/10.1002/cphc.70329][dimer]]
 calculations that read and rewrite ~con~ files.
 
-* Velocity blocks (convel only)
+* Additional per-atom sections
 
-In =.convel (coordinates + velocities)= files, a velocity section follows the coordinate blocks
-of each frame:
+After coordinate blocks, a frame MAY contain zero or more additional
+per-atom data sections. Each section has the same block structure as
+coordinates: a blank separator line, then per-component blocks with a
+symbol line, a label line, and one data line per atom.
 
-1. *Blank separator*: one empty line (or whitespace-only) marking
-   the boundary between coordinates and velocities.
-2. For each atom type /i/ (1 to N):
-   a. *Symbol line*: same chemical symbol as in the coordinate block.
-   b. *Label line*: =Velocities of Component /i/=
-   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag atom_id=
+** Section discovery
+
+Version 2 files declare their sections in the JSON metadata line
+using the =sections= key:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities","forces"]}
+#+end_example
+
+The value is a JSON array of strings. The parser reads sections in the
+declared order, each preceded by a blank separator line.
+
+| Section name | Label pattern | Columns | Description |
+|--------------+---------------------------------+---------+-------------------------------|
+| =velocities= | =Velocities of Component /i/= | 5 | vx vy vz fixed_flag atom_id |
+| =forces= | =Forces of Component /i/= | 5 | fx fy fz fixed_flag atom_id |
+
+*** Legacy section detection
+
+Files without a =sections= key (including all pre-v2 files and
+=.convel= files from older tools) use blank-separator detection: if a
+blank line follows the coordinate blocks, the parser attempts to parse
+a velocity section. This preserves backward compatibility with
+existing =.convel= files.
+
+Writers SHOULD always emit the =sections= key when writing additional
+sections. The writer auto-populates this key based on which per-atom
+data is present in the frame.
+
+** Velocity section
+
+Structure per component /i/:
+
+1. *Blank separator*: one empty line (or whitespace-only).
+2. *Symbol line*: same chemical symbol as in the coordinate block.
+3. *Label line*: =Velocities of Component /i/=
+4. *Atom lines*: one per atom: =vx vy vz fixed_flag atom_id=
 
 The velocity fields =vx=, =vy=, =vz= are floating-point velocity
 components. The =fixed_flag= and =atom_id= follow the same rules
 as in coordinate blocks.
 
-If no blank line follows the coordinate blocks, the frame has no
-velocity data (standard =.con= behavior). A parser SHOULD detect this
-by peeking at the next line: if it is blank (or only whitespace), a
-velocity section follows; otherwise the current frame ends and a new
-frame header (or end-of-file) follows.
+** Force section
+
+/Added in v0.7.0./
+
+Structure per component /i/:
+
+1. *Blank separator*: one empty line.
+2. *Symbol line*: same chemical symbol as in the coordinate block.
+3. *Label line*: =Forces of Component /i/=
+4. *Atom lines*: one per atom: =fx fy fz fixed_flag atom_id=
+
+The force fields =fx=, =fy=, =fz= are floating-point force
+components. Units depend on the =units= metadata key (default: eV/angstrom).
+
+Forces require potential identification: any frame with a =forces=
+section SHOULD include the =potential= and =energy= metadata keys so
+that the force data can be interpreted correctly.
+
+** Adding new section types
+
+New section types follow the same pattern: declare the name in the
+=sections= array, use a blank separator, symbol line,
+"<Name> of Component /i/" label, and per-atom data lines. Parsers
+MUST reject unknown section names with an error rather than silently
+skipping them.
 
 * Multi-frame files
 
 Multiple frames are concatenated with no explicit separator. After
-parsing a frame's coordinate blocks (and velocity blocks, if present),
-the parser attempts to read the next 9-line header. If fewer than 9
+parsing a frame's coordinate blocks (and any declared sections), the
+parser attempts to read the next 9-line header. If fewer than 9
 lines remain, parsing ends.
 
 Writers MUST NOT insert extra blank lines or separators between
-frames. The only blank line in the format is the velocity separator
-within a =.convel (coordinates + velocities)= frame.
+frames. The only blank lines in the format are section separators
+within a frame.
 
 * Data types and precision
 
@@ -262,6 +315,22 @@ within a =.convel (coordinates + velocities)= frame.
 - *Integers*: =fixed_flag= is 0 or 1. =atom_id=, =natm_types=,
   and =natms_per_type= values are non-negative integers representable
   as unsigned 64-bit values.
+
+* Compression
+
+~con~ files MAY be compressed with gzip. Compressed files use the
+standard =.con.gz= extension. Readers SHOULD detect gzip compression
+by checking the first two bytes for the gzip magic number (=0x1f
+0x8b=) rather than relying solely on the file extension.
+
+The compressed content MUST be a valid ~con~ file when decompressed.
+Compression is transparent: the format, header structure, and section
+layout remain identical inside the compressed stream.
+
+Force sections approximately triple per-atom data volume relative to
+coordinate-only files. Compression typically reduces trajectory files
+by 60-80%, making it practical to store forces alongside coordinates
+without prohibitive storage costs.
 
 * Constraints and limits
 
@@ -280,7 +349,7 @@ within a =.convel (coordinates + velocities)= frame.
 | Version | Date       | Changes                                                          |
 |---------+------------+------------------------------------------------------------------|
 |       1 | (original) | De facto format from eOn. Column 5 present, semantics undefined. |
-|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as atom_id.            |
+|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as atom_id. Force sections. Compression. |
 
 * Querying the spec version
 
@@ -319,15 +388,22 @@ keys that implementations SHOULD recognize when present. All keys are
 OPTIONAL; omitting a key carries no penalty. Unrecognized keys MUST
 be preserved through round-trips.
 
-| Key           | Type   | Description                                                   |
-|---------------+--------+---------------------------------------------------------------|
-| =generator=   | string | Tool name and version that wrote this file.                   |
-| =units=       | object | Unit system (see below).                                      |
-| =frame_index= | int    | Zero-based frame number within a trajectory.                  |
-| =time=        | float  | Simulation time of this frame, in the declared time unit.     |
-| =timestep=    | float  | Integration timestep, in the declared time unit.              |
-| =neb_bead=    | int    | Bead (image) index within an NEB band.                        |
-| =neb_band=    | int    | Band index within an optimization path.                       |
+| Key                 | Type   | Description                                                           |
+|---------------------+--------+-----------------------------------------------------------------------|
+| =sections=          | array  | Declared per-atom data sections (see [[*Additional per-atom sections]]). |
+| =generator=         | string | Tool name and version that wrote this file.                           |
+| =units=             | object | Unit system (see below).                                              |
+| =energy=            | float  | Per-frame total energy, in the declared energy unit.                  |
+| =potential=         | object | Potential identifier: ={"type":"EMT","params":{"cutoff":6.0}}=.      |
+| =frame_index=       | int    | Zero-based frame number within a trajectory.                          |
+| =time=              | float  | Simulation time of this frame, in the declared time unit.             |
+| =timestep=          | float  | Integration timestep, in the declared time unit.                      |
+| =neb_bead=          | int    | Bead (image) index within an NEB band.                                |
+| =neb_band=          | int    | Band index within an optimization path.                               |
+| =convergence_fmax=  | float  | Convergence criterion: maximum force component (eV/angstrom).         |
+| =convergence_energy= | float | Convergence criterion: energy change threshold (eV).                  |
+| =converged=         | bool   | Whether the current frame meets all convergence criteria.             |
+| =fmax=              | float  | Current maximum force component across all free atoms.                |
 
 ** Units
 

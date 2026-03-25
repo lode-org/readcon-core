@@ -1,0 +1,113 @@
+#+title: Performance Benchmarks
+#+options: toc:2 num:t
+
+* Methodology
+
+All benchmarks use [[https://bheisler.github.io/criterion.rs/book/][Criterion.rs]] with default settings (100 iterations,
+5-second warm-up). Measurements taken on a single core. Times report
+the median of the sample distribution. Source: =benches/iterator_bench.rs=.
+
+Run benchmarks locally:
+
+#+begin_src shell
+cargo bench
+# or: pixi r bench
+#+end_src
+
+* Frame parsing throughput
+
+| Benchmark | Dataset | Time | Throughput |
+|--------------------------+-----------+-----------+--------------------------|
+| Single frame parse | 4 atoms | 1.5 us | 2.7M atoms/s |
+| 2-frame parse (next) | 2x4 atoms | 2.3 us | 3.5M atoms/s |
+| 2-frame skip (forward) | 2x4 atoms | 0.6 us | 13M atoms/s (skip mode) |
+| 100-frame sequential | 100x4 atoms | 212 us | 1.9M atoms/s |
+| 100-frame forward skip | 100x4 atoms | 29 us | 14M atoms/s (skip mode) |
+| 218-atom frame (cuh2) | 218 atoms | 42 us | 5.2M atoms/s |
+
+=forward()= skips frames by line counting without parsing atom data,
+achieving 7x higher throughput than full parsing. This matters for
+trajectory analysis that only needs specific frames (e.g., every 10th).
+
+* Velocity parsing overhead
+
+| Benchmark | Time | Overhead vs coords-only |
+|---------------------+--------+-------------------------|
+| Coords only (2x4) | 2.3 us | (baseline) |
+| Coords + vel (2x4) | 3.9 us | +70% |
+| Vel skip (forward) | 0.9 us | (skip mode) |
+
+Velocity sections add roughly 70% parsing time (same line count, same
+float parsing). The =forward()= skip mode handles velocity sections
+with minimal overhead.
+
+* Float parsing: fast-float2 vs stdlib
+
+| Parser | 5-column line | Speedup |
+|-----------------+---------------+---------|
+| fast-float2 | 100 ns | 2.0x |
+| str::parse::<f64> | 202 ns | 1.0x |
+
+readcon-core uses [[https://github.com/aldanor/fast-float-rust][fast-float2]] for all coordinate, velocity, and force
+line parsing. This provides a consistent 2x speedup over Rust's
+standard library float parser on the hot path.
+
+* I/O strategy: mmap vs read_to_string
+
+| Strategy | 218-atom file (16 KiB) | Notes |
+|-----------------+------------------------+--------------------------------------|
+| read_to_string | 42 us | Slight edge for small files |
+| mmap | 44 us | Fixed overhead (VMA, page fault) |
+
+For files under 64 KiB, =read_to_string= avoids mmap overhead. For
+larger trajectory files, mmap lets the OS page cache handle data
+without a full heap copy. readcon-core switches automatically at the
+64 KiB threshold.
+
+Compressed files (=.con.gz=) always decompress to an in-memory buffer
+regardless of size, since mmap cannot decompress on the fly.
+
+* Comparison with Python readers
+
+eOn's =fileio.py= (pure Python) reads the same 218-atom frame in
+approximately 1-2 ms (measured via =timeit=). readcon-core's Rust
+parser handles the same file in 42 us, including file I/O -- a
+*25-50x speedup*. The Python bindings add minimal overhead (PyO3
+type conversion), preserving most of this advantage.
+
+For trajectory files with thousands of frames, the difference
+compounds: readcon-core's =forward()= skip mode processes frames it
+does not need at 14M atoms/s, while Python readers must parse every
+line.
+
+* Scaling considerations
+
+The per-atom parsing cost is dominated by float conversion (5 columns
+per atom line). With fast-float2, each atom line takes roughly 100 ns
+to parse. For a 10,000-atom frame:
+
+- Coordinates: ~1 ms
+- Coordinates + velocities: ~1.7 ms
+- Coordinates + velocities + forces: ~2.4 ms
+- With gzip decompression overhead: +10-30% (depends on compression ratio)
+
+For trajectory files with many frames, the =parallel= feature gate
+enables rayon-based frame-level parallelism, scaling linearly with
+core count for the parsing phase.
+
+* Memory profile
+
+readcon-core allocates:
+- One =Rc<String>= per atom type (not per atom) for symbol storage
+- One =Vec<AtomDatum>= per frame (pre-allocated from header counts)
+- No intermediate string allocations for atom line parsing (fast-float2
+  parses directly from the borrowed =&str= slice)
+
+For a 10,000-atom frame with velocities and forces, the in-memory
+footprint is approximately:
+- 10,000 atoms x 120 bytes/atom (coords + vel + forces + metadata) = 1.2 MB
+- Header overhead: negligible
+- Total: ~1.2 MB per frame in memory
+
+The iterator API processes one frame at a time, so multi-frame files
+do not require loading the entire trajectory into memory.

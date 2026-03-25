@@ -19,6 +19,8 @@ and Julia.
    :caption: Contents
 
    spec
+   faq
+   benchmarks
    tutorials
    architecture
    bindings
