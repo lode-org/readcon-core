@@ -4,10 +4,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 ## v0.5.1 - 2026-03-25
 #### Features
-- transfer atom_id to ASE tags and a custom `atom_id` array in `to_ase()`, enabling roundtrip preservation of original atom ordering through ASE Atoms objects - HaoZeke
-- read atom_id back from ASE Atoms in `from_ase()` with three-tier fallback: `atom_id` array, non-zero tags, sequential index - HaoZeke
+- transfer atom_id to ASE via custom `atom_id` per-atom array in `to_ase()` (tags left untouched); read it back in `from_ase()` with fallback to non-zero tags then sequential index - HaoZeke
+- transfer velocities bidirectionally: `to_ase()` calls `set_velocities()` for convel data, `from_ase()` extracts them when non-zero - HaoZeke
+- transfer masses bidirectionally: `to_ase()` calls `set_masses()` when custom masses are present, `from_ase()` reads them back - HaoZeke
 #### Tests
-- add ASE atom_id roundtrip tests (tags, custom array, fallback behavior, non-sequential ids) - HaoZeke
+- add ASE roundtrip tests for atom_id, velocities, masses, and full convel roundtrip - HaoZeke
 
 - - -
 ## v0.5.0 - 2026-03-22

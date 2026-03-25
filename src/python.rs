@@ -342,11 +342,34 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         ),
     )?;
 
+    let np = py.import("numpy")?;
+
     // Store atom_id as a custom per-atom array (not tags, which may be in use)
     let atom_ids: Vec<u64> = frame.atoms_inner.iter().map(|a| a.atom_id).collect();
-    let np = py.import("numpy")?;
     let atom_id_array = np.call_method1("array", (atom_ids,))?;
     atoms.call_method1("set_array", ("atom_id", atom_id_array))?;
+
+    // Set masses if present (overrides ASE's atomic-number defaults)
+    if frame.atoms_inner.iter().any(|a| a.mass.is_some()) {
+        let masses: Vec<f64> = frame
+            .atoms_inner
+            .iter()
+            .map(|a| a.mass.unwrap_or(0.0))
+            .collect();
+        let mass_array = np.call_method1("array", (masses,))?;
+        atoms.call_method1("set_masses", (mass_array,))?;
+    }
+
+    // Set velocities if present
+    if frame.has_velocities {
+        let velocities: Vec<[f64; 3]> = frame
+            .atoms_inner
+            .iter()
+            .map(|a| [a.vx.unwrap_or(0.0), a.vy.unwrap_or(0.0), a.vz.unwrap_or(0.0)])
+            .collect();
+        let vel_array = np.call_method1("array", (velocities,))?;
+        atoms.call_method1("set_velocities", (vel_array,))?;
+    }
 
     // Set FixAtoms constraint for fixed atoms
     let fixed_indices: Vec<usize> = frame
@@ -445,26 +468,50 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
         (0..n_atoms).map(|i| i as u64).collect()
     };
 
+    // Extract velocities from ASE (None if not set or all zero)
+    let velocities: Option<Vec<Vec<f64>>> = ase_atoms
+        .call_method0("get_velocities")
+        .ok()
+        .and_then(|v| {
+            // get_velocities() returns None when not set
+            if v.is_none() {
+                return None;
+            }
+            v.call_method0("tolist").ok()
+        })
+        .and_then(|v| v.extract().ok());
+
+    let has_velocities = velocities
+        .as_ref()
+        .is_some_and(|vels| vels.iter().any(|v| v.iter().any(|&c| c != 0.0)));
+
     // Build PyAtomDatum list
     let atoms: Vec<PyAtomDatum> = symbols
         .iter()
         .zip(positions.iter())
         .enumerate()
-        .map(|(i, (sym, pos))| PyAtomDatum {
-            symbol: sym.clone(),
-            x: pos[0],
-            y: pos[1],
-            z: pos[2],
-            is_fixed: fixed_set.contains(&i),
-            atom_id: atom_ids[i],
-            mass: masses.as_ref().map(|m| m[i]),
-            vx: None,
-            vy: None,
-            vz: None,
+        .map(|(i, (sym, pos))| {
+            let (vx, vy, vz) = if has_velocities {
+                let v = &velocities.as_ref().unwrap()[i];
+                (Some(v[0]), Some(v[1]), Some(v[2]))
+            } else {
+                (None, None, None)
+            };
+            PyAtomDatum {
+                symbol: sym.clone(),
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+                is_fixed: fixed_set.contains(&i),
+                atom_id: atom_ids[i],
+                mass: masses.as_ref().map(|m| m[i]),
+                vx,
+                vy,
+                vz,
+            }
         })
         .collect();
 
-    let has_velocities = false;
     Ok(PyConFrame {
         cell,
         angles,

@@ -302,10 +302,12 @@ output = readcon.write_con_string(frames, precision=17)
 
 ** ASE Atoms conversion
 
-/Added in v0.4.0.  atom_id preservation added in v0.5.1./
+/Added in v0.4.0.  atom_id, velocity, and mass transfer added in v0.5.1./
 
 Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
-installed (it is an optional dependency).
+installed (it is an optional dependency).  As of v0.5.1, the
+conversion preserves atom_id (via a custom per-atom array),
+velocities (for convel data), and masses.
 
 #+begin_src python
 import readcon
@@ -345,6 +347,26 @@ When converting from an ASE =Atoms= object that was not created by
 readcon, =from_ase()= checks for the =atom_id= array first, then
 falls back to =tags= (if any are non-zero), and finally uses
 sequential indices.
+
+*** Velocities and masses in ASE roundtrips
+
+Velocities from =.convel= files are transferred via
+=set_velocities()= / =get_velocities()=.  Custom masses (when present
+on the =ConFrame=) override ASE's atomic-number defaults via
+=set_masses()=.
+
+#+begin_src python
+import readcon
+
+# convel -> ASE preserves velocities
+frames = readcon.read_con("trajectory.convel")
+ase_atoms = frames[0].to_ase()
+print(ase_atoms.get_velocities())  # non-zero velocity array
+
+# Roundtrip back to ConFrame
+frame_back = readcon.ConFrame.from_ase(ase_atoms)
+assert frame_back.has_velocities
+#+end_src
 
 ** Roundtrip test pattern
 
