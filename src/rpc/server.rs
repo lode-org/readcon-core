@@ -63,7 +63,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 ab.set_x(atom.x);
                 ab.set_y(atom.y);
                 ab.set_z(atom.z);
-                ab.set_is_fixed(atom.is_fixed);
+                ab.set_is_fixed(atom.is_fixed());
                 ab.set_atom_id(atom.atom_id);
                 ab.set_vx(atom.vx.unwrap_or(0.0));
                 ab.set_vy(atom.vy.unwrap_or(0.0));
