@@ -162,13 +162,15 @@ Degradation is safe: the reader gets coordinates and constraints
 
 ** Reference implementations
 
-Archived reference readers for comparison and testing:
+| Implementation | Source | Lines | Language |
+|----------------+---------------------------------------------+-------+----------|
+| eOn C++ | =addl/referenceImpls/eon_cpp/= (archived) | 592 | C++ |
+| eOn Python | =pip install eon= / eOn repo =eon/fileio.py= | 760 | Python |
+| ASE | =pip install ase= / =ase.io.eon= | 307 | Python |
 
-| Implementation | Path | Lines | Language |
-|----------------+--------------------------------------+-------+----------|
-| eOn C++ | =addl/referenceImpls/eon_cpp/= | 592 | C++ |
-| eOn Python | =addl/referenceImpls/eon_python/= | 760 | Python |
-| ASE | =addl/referenceImpls/ase/= | 307 | Python |
+The C++ implementation is archived (March 2026 snapshot) because it
+requires the full eOn build system. The Python implementations are
+installable packages and do not need archiving.
 
-These are snapshots from March 2026. They implement v1 (no JSON
-metadata, no sections, no bitmask constraints).
+All reference implementations support v1 only (no JSON metadata, no
+sections, no bitmask constraints).
