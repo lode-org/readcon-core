@@ -148,6 +148,9 @@ impl read_con_service::Server for ReadConServiceImpl {
                     vx: if has_vel { Some(a.get_vx()) } else { None },
                     vy: if has_vel { Some(a.get_vy()) } else { None },
                     vz: if has_vel { Some(a.get_vz()) } else { None },
+                    fx: None,
+                    fy: None,
+                    fz: None,
                 });
             }
             if current_count > 0 {
@@ -164,6 +167,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 masses_per_type,
                 spec_version: crate::CON_SPEC_VERSION,
                 metadata: std::collections::BTreeMap::new(),
+                sections: Vec::new(),
             };
 
             frames.push(ConFrame { header, atom_data });

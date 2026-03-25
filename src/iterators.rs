@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_single_frame, parse_velocity_section};
+use crate::parser::{parse_declared_sections, parse_single_frame};
 use crate::{error, types};
 use std::iter::Peekable;
 use std::path::Path;
@@ -94,19 +94,22 @@ impl<'a> ConFrameIterator<'a> {
             }
         }
 
-        // Check for an optional velocity section (blank separator followed by
-        // velocity blocks with the same structure as coordinate blocks).
-        if let Some(line) = self.lines.peek() {
-            if line.trim().is_empty() {
-                // Consume the blank separator
-                self.lines.next();
-                // Skip the velocity blocks: same structure as coordinate blocks
-                let vel_lines_to_skip = total_atoms + non_atom_lines;
-                for _ in 0..vel_lines_to_skip {
-                    if self.lines.next().is_none() {
-                        return Some(Err(error::ParseError::IncompleteVelocitySection));
+        // Skip additional sections (velocities, forces).
+        // Each section has: blank separator + same structure as coordinate blocks.
+        // We don't have access to the parsed sections list here (we only parsed
+        // the header minimally), so we detect sections by peeking for blank separators.
+        loop {
+            match self.lines.peek() {
+                Some(line) if line.trim().is_empty() => {
+                    self.lines.next(); // consume blank separator
+                    let section_lines = total_atoms + non_atom_lines;
+                    for _ in 0..section_lines {
+                        if self.lines.next().is_none() {
+                            return Some(Err(error::ParseError::IncompleteFrame));
+                        }
                     }
                 }
+                _ => break,
             }
         }
 
@@ -136,8 +139,8 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             Ok(f) => f,
             Err(e) => return Some(Err(e)),
         };
-        // Attempt to parse optional velocity section
-        match parse_velocity_section(&mut self.lines, &frame.header, &mut frame.atom_data) {
+        // Parse declared sections (velocities, forces) or fall back to legacy velocity detection
+        match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data) {
             Ok(_) => {}
             Err(e) => return Some(Err(e)),
         }
@@ -287,13 +290,19 @@ pub fn parse_frames_parallel(
         let coord_lines = total_atoms + natm_types * 2;
         line_idx += coord_lines;
 
-        // Check for velocity section (blank separator)
-        if line_idx < total_lines {
+        // Skip any additional sections (velocities, forces, etc.)
+        // Each section starts with a blank separator followed by the same
+        // number of lines as coordinate blocks.
+        while line_idx < total_lines {
             if let Some(l) = lines.get(line_idx) {
                 if l.trim().is_empty() {
                     line_idx += 1; // blank separator
-                    line_idx += coord_lines; // velocity blocks same size
+                    line_idx += coord_lines; // section blocks same size
+                } else {
+                    break;
                 }
+            } else {
+                break;
             }
         }
     }
