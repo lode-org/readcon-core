@@ -1,31 +1,37 @@
-#+title: con File Format Specification
-#+subtitle: Version 2
+#+title: The con File Format Specification
 #+date: 2026-03-25
 #+options: toc:2 num:t
 
-* Status
+* Specification
 
-This document specifies version 2 of the con/convel file format. It
-supersedes all prior informal descriptions. The key words MUST, MUST
-NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY, and OPTIONAL follow
-RFC 2119 semantics.
+** Version**: 2
+** Date**: 2026-03-25
+** Status**: Stable
+
+This document defines version 2 of the con file format specification.
+It supersedes all prior informal descriptions. New implementations SHOULD
+target this version. Existing implementations SHOULD upgrade to support
+version 2 features, particularly the =original_atom_index= field.
+
+The key words MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY,
+and OPTIONAL follow [[https://www.rfc-editor.org/rfc/rfc2119][RFC 2119]] semantics.
 
 * Overview
 
-The ~con~ format stores atomic configurations for molecular dynamics and
-transition-state search simulations. It originated in the [[https://eondocs.org][eOn code]] and has since
-been adopted by several computational chemistry tools.
+The con file format stores atomic configurations for molecular dynamics
+and transition-state search simulations. It originated in the [[https://eondocs.org][eOn code]] and
+is now used across multiple computational chemistry tools including
+[[https://wiki.fysik.dtu.dk/ase/][ASE]] for structure manipulation.
 
 A ~con~ file contains one or more /frames/. Each frame encodes a
 simulation cell, per-type metadata (masses, atom counts), and
-per-atom data (coordinates, constraints, identity). The =.convel=
+per-atom data (coordinates, constraints, identity). The .convel
 extension adds per-atom velocity data after each frame's coordinates.
 
 * File extensions
 
 - =.con= :: Coordinate-only configuration files.
-- =.convel= :: Configuration files with an appended velocity section
-  per frame.
+- .convel :: Configuration files with velocity data appended per frame.
 
 * Encoding
 
@@ -39,7 +45,7 @@ Each frame consists of:
 
 1. A 9-line header.
 2. One coordinate block per atom type.
-3. (=.convel= only) A blank separator line followed by one velocity
+3. (.convel only) A blank separator line followed by one velocity
    block per atom type.
 
 Multiple frames are concatenated directly with no inter-frame
@@ -71,7 +77,7 @@ read-write cycles but MUST NOT assign it semantic meaning.
 
 ** Line 2: Metadata
 
-Line 2 carries machine-readable metadata as a single-line JSON object.
+Line 2 carries machine-readable metadata as a single-line [[https://www.json.org][JSON]] object.
 
 *** Version 2+ files
 
@@ -125,7 +131,7 @@ Tabs and spaces are both valid separators throughout the format.
 ** Lines 5-6: Reserved
 
 These lines are free-form text with no defined semantics. Older eOn
-versions stored simulation state here (iteration counters, timestep
+versions stored simulation state here (iteration counters, time step
 data). Writers MAY emit empty lines. Parsers MUST read and preserve
 these lines for round-trip fidelity but MUST NOT depend on their
 content.
@@ -200,23 +206,23 @@ MUST default to the sequential position within the frame (0, 1, 2,
 
 A version 2 reader processing a version 1 file (sequential counters)
 produces correct results: sequential values constitute a valid
-atom_index for structures that were never reordered.
+original_atom_index for structures that were never reordered.
 
-*** Why atom_index matters
+*** Why original_atom_index matters
 
 A structure with atoms in order C, C, C, O, C, C (indices 0-5) gets
 written as five C atoms followed by one O atom. Without a meaningful
-column 5, the original ordering vanishes. The atom_index field
+column 5, the original ordering vanishes. The original_atom_index field
 preserves the pre-grouping index so that the original atom sequence
 can be reconstructed after any number of read/write cycles.
 
 This property matters for comparing geometries against reference
-structures (e.g., Baker transition-state test set) after NEB or dimer
+structures (e.g., [[https://github.com/HaoZeke/nebmmf_repro][Baker transition-state test set]]) after [[https://arxiv.org/abs/2601.12630][NEB]] or [[https://doi.org/10.1002/cphc.70329][dimer]]
 calculations that read and rewrite ~con~ files.
 
 * Velocity blocks (convel only)
 
-In =.convel= files, a velocity section follows the coordinate blocks
+In =.convel (coordinates + velocities)= files, a velocity section follows the coordinate blocks
 of each frame:
 
 1. *Blank separator*: one empty line (or whitespace-only) marking
@@ -224,10 +230,10 @@ of each frame:
 2. For each atom type /i/ (1 to N):
    a. *Symbol line*: same chemical symbol as in the coordinate block.
    b. *Label line*: =Velocities of Component /i/=
-   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag atom_index=
+   c. *Atom lines*: one line per atom: =vx vy vz fixed_flag original_atom_index=
 
 The velocity fields =vx=, =vy=, =vz= are floating-point velocity
-components. The =fixed_flag= and =atom_index= follow the same rules
+components. The =fixed_flag= and =original_atom_index= follow the same rules
 as in coordinate blocks.
 
 If no blank line follows the coordinate blocks, the frame has no
@@ -245,7 +251,7 @@ lines remain, parsing ends.
 
 Writers MUST NOT insert extra blank lines or separators between
 frames. The only blank line in the format is the velocity separator
-within a =.convel= frame.
+within a =.convel (coordinates + velocities)= frame.
 
 * Data types and precision
 
@@ -253,7 +259,7 @@ within a =.convel= frame.
   SHOULD emit at least 6 significant decimal digits for coordinates
   and masses. For lossless f64 round-tripping, 17 decimal digits
   suffice.
-- *Integers*: =fixed_flag= is 0 or 1. =atom_index=, =natm_types=,
+- *Integers*: =fixed_flag= is 0 or 1. =original_atom_index=, =natm_types=,
   and =natms_per_type= values are non-negative integers representable
   as unsigned 64-bit values.
 
@@ -263,7 +269,7 @@ within a =.convel= frame.
   lines 8-9.
 - Component numbering in label lines starts at 1.
 - The total atom count equals the sum of values on line 8.
-- Symbol strings SHOULD match standard chemical element symbols (IUPAC
+- Symbol strings SHOULD match standard chemical element symbols ([[https://iupac.org][IUPAC]]
   notation, 1-2 characters, first character uppercase).
 - No upper limit on atom types or atom count is imposed by this
   specification. The eOn implementation historically supported up to
@@ -274,7 +280,7 @@ within a =.convel= frame.
 | Version | Date | Changes |
 |---------+------------+----------------------------------------------|
 |       1 | (original) | De facto format from eOn. Column 5 present, semantics undefined. |
-|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as atom_index. |
+|       2 | 2026-03-25 | JSON metadata on line 2. Column 5 defined as original_atom_index. |
 
 * Querying the spec version
 
@@ -286,7 +292,7 @@ Read line 2. If it starts with ={=, parse as JSON and extract
 
 ** From the library
 
-| Language | Compile-time | Runtime |
+| Language | Compile-time | runtime |
 |----------+----------------------------------+-----------------------------|
 | Rust | =readcon_core::con_SPEC_VERSION= | same |
 | C/C++ | =#define RKR_con_SPEC_VERSION= | =rkr_con_spec_version()= |
@@ -302,7 +308,7 @@ C/C++ compile-time gating example:
 #+begin_src c
 #include <readcon-core.h>
 #if RKR_con_SPEC_VERSION < 2
-#error "readcon-core spec v2 required for atom_index support"
+#error "readcon-core spec v2 required for original_atom_index support"
 #endif
 #+end_src
 
