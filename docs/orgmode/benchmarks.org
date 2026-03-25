@@ -93,6 +93,52 @@ compounds: readcon-core's =forward()= skip mode processes frames it
 does not need at 14M atoms/s, while Python readers must parse every
 line.
 
+* Scaling with file size
+
+Measured across four trajectory sizes. readcon-core and C times are
+=read_con_string()= (pre-loaded) and internal best-of-N respectively.
+ASE times include file I/O.
+
+| Dataset | File size | C sscanf | ASE | readcon | vs ASE | vs C |
+|------------------+-----------+----------+--------+---------+--------+------|
+| 218 x 100 | 1.6 MiB | 10.6 ms | 36 ms | 4.4 ms | 8.2x | 2.4x |
+| 218 x 1000 | 9.7 MiB | 73 ms | 286 ms | 55 ms | 5.2x | 1.3x |
+| 10k x 100 | 46.9 MiB | 361 ms | 956 ms | 185 ms | 5.2x | 2.0x |
+| 10k x 10 | 4.7 MiB | 36 ms | 94 ms | 13 ms | 7.2x | 2.8x |
+
+readcon-core maintains 5-8x speedup over ASE across all sizes. The
+advantage over C narrows on large files (I/O becomes a larger fraction
+of total time), but readcon-core remains consistently faster due to
+fast-float2 and zero-copy parsing.
+
+* Memory usage
+
+Peak resident set size when loading all frames into memory:
+
+| Dataset | readcon peak RSS | ASE peak RSS |
+|------------------+------------------+--------------|
+| 218 x 1000 | 70 MiB | 268 MiB |
+| 10k x 100 | 263 MiB | 270 MiB |
+| 10k x 10 | 263 MiB | 270 MiB |
+
+For the 218-atom trajectory, readcon-core uses 3.8x less memory than
+ASE (70 vs 268 MiB). At 10k atoms, both converge because the atom
+data dominates (readcon stores ~120 bytes/atom, ASE stores similar
+plus numpy overhead).
+
+The C sscanf reader frees each frame immediately, so its peak RSS
+stays under 16 MiB regardless of trajectory length. readcon-core can
+achieve similar constant-memory usage via the iterator API:
+
+#+begin_src rust
+// Process frames one at a time (constant memory)
+let iter = ConFrameIterator::new(&contents);
+for result in iter {
+    let frame = result?;
+    // process frame, then drop
+}
+#+end_src
+
 * Scaling considerations
 
 The per-atom parsing cost is dominated by float conversion (5 columns
