@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
@@ -35,6 +35,7 @@ pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 [dev-dependencies]
 cog = "0.1.0"
 criterion = { version = "0.6.0", features = ["html_reports"] }
+tempfile = "3"
 
 [[example]]
 name = "rust_usage"
