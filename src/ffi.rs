@@ -135,6 +135,9 @@ pub struct CAtom {
     pub atom_id: u64,
     pub mass: f64,
     pub is_fixed: bool,
+    pub fixed_x: bool,
+    pub fixed_y: bool,
+    pub fixed_z: bool,
     pub vx: f64,
     pub vy: f64,
     pub vz: f64,
@@ -251,7 +254,10 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             x: atom_datum.x,
             y: atom_datum.y,
             z: atom_datum.z,
-            is_fixed: atom_datum.is_fixed,
+            is_fixed: atom_datum.is_fixed(),
+            fixed_x: atom_datum.fixed[0],
+            fixed_y: atom_datum.fixed[1],
+            fixed_z: atom_datum.fixed[2],
             atom_id: atom_datum.atom_id,
             mass,
             vx: atom_datum.vx.unwrap_or(0.0),
@@ -529,7 +535,7 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
         Ok(s) => s,
         Err(_) => return -1,
     };
-    builder.add_atom(sym, x, y, z, is_fixed, atom_id, mass);
+    builder.add_atom(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass);
     0
 }
 
@@ -557,7 +563,7 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
         Ok(s) => s,
         Err(_) => return -1,
     };
-    builder.add_atom_with_velocity(sym, x, y, z, is_fixed, atom_id, mass, vx, vy, vz);
+    builder.add_atom_with_velocity(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass, vx, vy, vz);
     0
 }
 

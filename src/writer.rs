@@ -1,4 +1,4 @@
-use crate::types::ConFrame;
+use crate::types::{encode_fixed_bitmask, ConFrame};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -6,11 +6,6 @@ use std::path::Path;
 
 /// Default floating-point precision used for writing coordinates, cell dimensions, and masses.
 const DEFAULT_FLOAT_PRECISION: usize = 6;
-/// Always 0 or 1
-/// The value used to indicate a fixed atom in the output file.
-const FIXED_ATOM_FLAG: usize = 1;
-/// The value used to indicate a non-fixed (free) atom in the output file.
-const FREE_ATOM_FLAG: usize = 0;
 
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
@@ -137,11 +132,7 @@ impl<W: Write> ConFrameWriter<W> {
                     x = atom.x,
                     y = atom.y,
                     z = atom.z,
-                    fixed_flag = if atom.is_fixed {
-                        FIXED_ATOM_FLAG
-                    } else {
-                        FREE_ATOM_FLAG
-                    },
+                    fixed_flag = encode_fixed_bitmask(atom.fixed),
                     atom_id = atom.atom_id
                 )?;
             }
@@ -168,11 +159,7 @@ impl<W: Write> ConFrameWriter<W> {
                         vx = atom.vx.unwrap_or(0.0),
                         vy = atom.vy.unwrap_or(0.0),
                         vz = atom.vz.unwrap_or(0.0),
-                        fixed_flag = if atom.is_fixed {
-                            FIXED_ATOM_FLAG
-                        } else {
-                            FREE_ATOM_FLAG
-                        },
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;
                 }
@@ -200,11 +187,7 @@ impl<W: Write> ConFrameWriter<W> {
                         fx = atom.fx.unwrap_or(0.0),
                         fy = atom.fy.unwrap_or(0.0),
                         fz = atom.fz.unwrap_or(0.0),
-                        fixed_flag = if atom.is_fixed {
-                            FIXED_ATOM_FLAG
-                        } else {
-                            FREE_ATOM_FLAG
-                        },
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;
                 }
