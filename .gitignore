@@ -2,6 +2,9 @@
 *.profraw
 compile_commands.json
 
+# Compiled benchmark binaries
+addl/referenceImpls/eon_cpp/bench_con_reader
+
 # Documentation build artifacts
 docs/build/
 docs/doctrees/
