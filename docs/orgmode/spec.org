@@ -4,16 +4,16 @@
 
 * Specification
 
-** Version**: 2
-** Date**: 2026-03-25
-** Status**: Stable
+- Version :: 2
+- Date :: 2026-03-25
+- Status :: Stable
 
 This document defines version 2 of the con file format specification.
 It supersedes all prior informal descriptions. New implementations SHOULD
 target this version. Existing implementations SHOULD upgrade to support
 version 2 features, particularly the =atom_id= field.
 
-The key words MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY,
+The keywords MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT, MAY,
 and OPTIONAL follow [[https://www.rfc-editor.org/rfc/rfc2119][RFC 2119]] semantics.
 
 * Overview
@@ -45,8 +45,8 @@ Each frame consists of:
 
 1. A 9-line header.
 2. One coordinate block per atom type.
-3. (.convel only) A blank separator line followed by one velocity
-   block per atom type.
+3. (.convel only) A blank separator line followed by one velocity block per atom
+   type.
 
 Multiple frames are concatenated directly with no inter-frame
 separator. A parser detects a new frame by encountering a valid
