@@ -258,7 +258,7 @@ class ConFrameBuilder {
  * @throws std::runtime_error on failure.
  */
 inline ConFrame read_first_frame(const std::filesystem::path &path) {
-    RKRConFrame *handle = rkr_read_first_frame(path.c_str());
+    RKRConFrame *handle = rkr_read_first_frame(path.string().c_str());
     if (!handle) {
         throw std::runtime_error("Failed to read first frame from: " +
                                  path.string());
@@ -272,7 +272,7 @@ inline ConFrame read_first_frame(const std::filesystem::path &path) {
  */
 inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) {
     size_t num_frames = 0;
-    RKRConFrame **handles = rkr_read_all_frames(path.c_str(), &num_frames);
+    RKRConFrame **handles = rkr_read_all_frames(path.string().c_str(), &num_frames);
     if (!handles) {
         throw std::runtime_error("Failed to read frames from: " +
                                  path.string());
@@ -294,7 +294,7 @@ inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) 
 // --- Implementation of ConFrameIterator and its nested Iterator ---
 
 inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {
-    CConFrameIterator *iter_ptr = read_con_file_iterator(path.c_str());
+    CConFrameIterator *iter_ptr = read_con_file_iterator(path.string().c_str());
     if (!iter_ptr) {
         throw std::runtime_error("Failed to open .con file for iteration: " +
                                  path.string());
@@ -432,10 +432,10 @@ inline bool ConFrame::has_velocities() const {
 inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
                                       uint8_t precision) {
     if (precision == 6) {
-        writer_handle_.reset(create_writer_from_path_c(path.c_str()));
+        writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
     } else {
         writer_handle_.reset(
-            create_writer_from_path_with_precision_c(path.c_str(), precision));
+            create_writer_from_path_with_precision_c(path.string().c_str(), precision));
     }
     if (!writer_handle_) {
         throw std::runtime_error("Failed to create writer for file: " +
