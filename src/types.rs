@@ -140,6 +140,53 @@ impl FrameHeader {
             .insert("units".to_string(), units);
     }
 
+    /// Periodic boundary conditions as `[pbc_x, pbc_y, pbc_z]`.
+    /// Returns `None` if not set (callers should default to `[true, true, true]`).
+    pub fn pbc(&self) -> Option<[bool; 3]> {
+        let arr = self.metadata.get("pbc")?.as_array()?;
+        if arr.len() != 3 {
+            return None;
+        }
+        Some([arr[0].as_bool()?, arr[1].as_bool()?, arr[2].as_bool()?])
+    }
+
+    /// Sets the periodic boundary conditions.
+    pub fn set_pbc(&mut self, pbc: [bool; 3]) {
+        self.metadata.insert(
+            "pbc".to_string(),
+            serde_json::json!([pbc[0], pbc[1], pbc[2]]),
+        );
+    }
+
+    /// Exact 3x3 lattice vector matrix (row-major, angstroms).
+    /// When present, takes precedence over the length/angle values on lines 3-4.
+    pub fn lattice_vectors(&self) -> Option<[[f64; 3]; 3]> {
+        let arr = self.metadata.get("lattice_vectors")?.as_array()?;
+        if arr.len() != 3 {
+            return None;
+        }
+        let row = |i: usize| -> Option<[f64; 3]> {
+            let r = arr[i].as_array()?;
+            if r.len() != 3 {
+                return None;
+            }
+            Some([r[0].as_f64()?, r[1].as_f64()?, r[2].as_f64()?])
+        };
+        Some([row(0)?, row(1)?, row(2)?])
+    }
+
+    /// Sets the exact lattice vector matrix.
+    pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
+        self.metadata.insert(
+            "lattice_vectors".to_string(),
+            serde_json::json!([
+                [vecs[0][0], vecs[0][1], vecs[0][2]],
+                [vecs[1][0], vecs[1][1], vecs[1][2]],
+                [vecs[2][0], vecs[2][1], vecs[2][2]],
+            ]),
+        );
+    }
+
     /// NEB bead (image) index.
     pub fn neb_bead(&self) -> Option<u64> {
         self.metadata.get("neb_bead").and_then(|v| v.as_u64())
@@ -738,5 +785,44 @@ mod tests {
         let units = header.units().unwrap();
         assert_eq!(units["length"], "angstrom");
         assert_eq!(units["energy"], "eV");
+    }
+
+    #[test]
+    fn test_metadata_helpers_pbc() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 20.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+            sections: Vec::new(),
+        };
+        assert_eq!(header.pbc(), None);
+        header.set_pbc([true, true, false]);
+        assert_eq!(header.pbc(), Some([true, true, false]));
+    }
+
+    #[test]
+    fn test_metadata_helpers_lattice_vectors() {
+        let mut header = FrameHeader {
+            prebox_header: [String::new(), String::new()],
+            boxl: [10.0, 10.0, 10.0],
+            angles: [90.0, 90.0, 90.0],
+            postbox_header: [String::new(), String::new()],
+            natm_types: 0,
+            natms_per_type: vec![],
+            masses_per_type: vec![],
+            spec_version: 2,
+            metadata: BTreeMap::new(),
+            sections: Vec::new(),
+        };
+        assert_eq!(header.lattice_vectors(), None);
+        let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
+        header.set_lattice_vectors(vecs);
+        assert_eq!(header.lattice_vectors(), Some(vecs));
     }
 }
