@@ -112,6 +112,13 @@ Line 3: three whitespace-separated floats (cell edge lengths in
 angstroms). Line 4: three whitespace-separated floats (cell angles in
 degrees). Tabs and spaces are both valid separators.
 
+For non-orthogonal cells, the angle-based representation introduces
+floating-point drift through trigonometric round-trips. Writers
+SHOULD include the exact 3x3 lattice vector matrix in the JSON
+metadata via the =lattice_vectors= key (see [[#lattice-vectors][Lattice vectors]]).
+When =lattice_vectors= is present, readers SHOULD prefer it over the
+length/angle values on lines 3-4.
+
 ** Lines 5-6: Reserved
 
 Free-form text with no defined semantics. Writers MAY emit empty
@@ -276,20 +283,22 @@ content MUST be a valid CON file.
 
 All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 
-| Key                  | Type   | Description                                              |
-|----------------------+--------+----------------------------------------------------------|
-| =sections=           | array  | Declared per-atom sections (see [[#sections]])               |
-| =generator=          | string | Tool name and version                                    |
-| =units=              | object | Unit system (see [[#units]])                                 |
-| =energy=             | float  | Per-frame total energy                                   |
-| =potential=          | object | ={"type":"EMT","params":{...}}=                          |
-| =frame_index=        | int    | Zero-based frame number in trajectory                    |
-| =time=               | float  | Simulation time                                          |
-| =timestep=           | float  | Integration timestep                                     |
-| =neb_bead=           | int    | NEB bead (image) index                                   |
-| =neb_band=           | int    | NEB band index                                           |
-| =convergence_fmax=   | float  | Convergence criterion: max force component               |
-| =convergence_energy= | float  | Convergence criterion: energy change threshold           |
+| Key                  | Type    | Description                                              |
+|----------------------+---------+----------------------------------------------------------|
+| =sections=           | array   | Declared per-atom sections (see [[#sections]])               |
+| =generator=          | string  | Tool name and version                                    |
+| =units=              | object  | Unit system (see [[#units]])                                 |
+| =pbc=                | array   | Periodic boundary conditions (see [[#pbc]])                  |
+| =lattice_vectors=    | array   | Exact 3x3 cell matrix (see [[#lattice-vectors]])             |
+| =energy=             | float   | Per-frame total energy                                   |
+| =potential=          | object  | ={"type":"EMT","params":{...}}=                          |
+| =frame_index=        | int     | Zero-based frame number in trajectory                    |
+| =time=               | float   | Simulation time                                          |
+| =timestep=           | float   | Integration timestep                                     |
+| =neb_bead=           | int     | NEB bead (image) index                                   |
+| =neb_band=           | int     | NEB band index                                           |
+| =convergence_fmax=   | float   | Convergence criterion: max force component               |
+| =convergence_energy= | float   | Convergence criterion: energy change threshold           |
 | =converged=          | bool   | Whether convergence criteria are met                     |
 | =fmax=               | float  | Current maximum force component across free atoms        |
 
@@ -310,6 +319,39 @@ The =units= key maps physical dimensions to unit strings:
 
 Omitted dimensions default to the values above. Implementations that
 do not perform unit conversion SHOULD preserve the key.
+
+** Periodic boundary conditions
+:PROPERTIES:
+:CUSTOM_ID: pbc
+:END:
+
+The =pbc= key declares which cell directions are periodic as a
+3-element boolean array: =[true, true, true]= for full 3D periodicity,
+=[true, true, false]= for a slab model with vacuum in z.
+
+When absent, readers SHOULD assume =[true, true, true]= (the default
+for bulk simulations).
+
+#+begin_example
+{"con_spec_version":2,"pbc":[true,true,false]}
+#+end_example
+
+** Lattice vectors
+:PROPERTIES:
+:CUSTOM_ID: lattice-vectors
+:END:
+
+The =lattice_vectors= key provides the exact 3x3 cell matrix as a
+nested array of three row vectors (angstroms):
+
+#+begin_example
+{"con_spec_version":2,"lattice_vectors":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,20.0]]}
+#+end_example
+
+When present, readers SHOULD prefer this over the length/angle values
+on lines 3-4, which may lose precision through trigonometric
+round-trips. Writers that emit =lattice_vectors= MUST also write
+consistent length/angle values to lines 3-4 for legacy compatibility.
 
 ** Frame ordering
 
