@@ -2,6 +2,59 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.7.2 - 2026-03-27
+#### Features
+- add `pbc` metadata key for per-direction periodic boundary conditions (`[true, true, false]` for slab models)
+- add `lattice_vectors` metadata key for exact 3x3 cell matrix (avoids trig precision loss from lines 3-4)
+- typed helpers: `pbc()`, `set_pbc()`, `lattice_vectors()`, `set_lattice_vectors()` on FrameHeader
+
+- - -
+## v0.7.0 - 2026-03-25
+#### Features
+- **per-atom force sections**: `forces` declared via `sections` JSON key, parsed in declared order
+- **JSON-declared sections**: `{"sections":["velocities","forces"]}` replaces positional detection
+- **per-direction constraint bitmask**: column 4 values 0-7 (bit 0=x, bit 1=y, bit 2=z); legacy value 1 treated as 7
+- **transparent gzip compression**: magic-byte detection for `.con.gz` read, compressed writer constructors
+- **typed metadata helpers**: `energy()`, `potential_type()`, `frame_index()`, `time()`, `timestep()`, `units()`, `neb_bead()`, `neb_band()` on FrameHeader
+- Python: `has_forces`, `fixed: [bool; 3]`, `is_fixed` compat property, `compression` kwarg on `write_con()`
+- C FFI: `rkr_frame_spec_version()`, `rkr_frame_metadata_json()`, `rkr_frame_energy()`, `rkr_frame_potential_type()`, `create_writer_gzip_c()`
+- C/C++ headers: `CAtom` gains `fixed_x/y/z`, `fx/fy/fz`, `has_forces`
+- builder: `add_atom_with_forces()`, `add_atom_with_velocity_and_forces()`, `fixed: [bool; 3]` parameter
+- ASE conversion: force transfer via `SinglePointCalculator`
+#### Documentation
+- **spec.org rewritten as implementation-neutral format standard** (no library-specific API tables)
+- **evolution.org**: design rationale for every v2 decision (JSON line 2, bitmask, sections, gzip)
+- **faq.org**: why CON, atom_id, when HDF5, forces/energy, compression, language support
+- **benchmarks.org**: measured Criterion numbers, cross-implementation comparison (8-9x vs ASE, 2.5x vs C sscanf), scaling data, memory profiles, 4 SVG plots (throughput, memory, feature matrix, Pareto front)
+- spec: recommended metadata keys (`sections`, `energy`, `potential`, `convergence_fmax`, `convergence_energy`, `converged`, `fmax`, `generator`, `units`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band`)
+#### Tests
+- 8 new integration tests: force parsing, roundtrips, legacy .convel compat, gzip roundtrip, builder with forces
+- Python tests updated for `fixed: [bool; 3]` API
+#### Buildsystem
+- `flate2` dependency for gzip compression
+- `.gitignore` rebuilt with gibo (Rust, C++, C, Python, CMake, macOS, Linux)
+- benchmark CI: fix `--save-baseline` targeting bench binary only
+- doc preview commenter workflow for PRs
+
+- - -
+## v0.6.0 - 2026-03-25
+#### Features
+- **JSON metadata on line 2** of every v2 `.con` file: `{"con_spec_version":2}`
+- parser detects JSON (line starts with `{`) for v2+; non-JSON falls back to spec_version=1
+- writer always stamps JSON metadata line; `prebox_header[1]` is managed automatically
+- `FrameHeader` gains `spec_version: u32` and `metadata: BTreeMap<String, serde_json::Value>`
+- `serde_json` dependency added
+- error variants: `MissingSpecVersion`, `UnsupportedSpecVersion`, `InvalidMetadataJson`
+- Python: `frame.spec_version`, `frame.metadata` properties
+- C FFI: `rkr_frame_spec_version()`, `rkr_frame_metadata_json()`
+#### Documentation
+- spec.org: full rewrite as RFC 2119-style specification
+- recommended metadata keys section in spec
+#### Tests
+- parser tests for JSON validation, legacy fallback, malformed JSON, unsupported version, extra metadata preservation
+- all test fixtures updated with `{"con_spec_version":2}` on line 2
+
+- - -
 ## v0.5.2 - 2026-03-25
 #### Features
 - transfer atom_id to ASE via custom `atom_id` per-atom array in `to_ase()` (tags left untouched); read it back in `from_ase()` with fallback to non-zero tags then sequential index - HaoZeke
