@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::helpers;
 use crate::types::{decode_fixed_bitmask, AtomDatum, ConFrame, FrameHeader};
 use std::collections::BTreeMap;
 use std::iter::Peekable;
@@ -272,15 +273,21 @@ pub fn parse_single_frame<'a>(
     let mut atom_data = Vec::with_capacity(total_atoms);
 
     let mut global_atom_idx: u64 = 0;
-    for num_atoms in &header.natms_per_type {
+    for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         // Create a reference-counted string for the symbol once per component.
-        let symbol = Rc::new(
-            lines
-                .next()
-                .ok_or(ParseError::IncompleteFrame)?
-                .trim()
-                .to_string(),
-        );
+        let symbol_str = lines
+            .next()
+            .ok_or(ParseError::IncompleteFrame)?
+            .trim()
+            .to_string();
+
+        // Validate element symbol against the periodic table.
+        // Accept isotope labels like "D" (deuterium) and "T" (tritium) as hydrogen.
+        if !helpers::is_valid_symbol(&symbol_str) {
+            return Err(ParseError::InvalidElementSymbol(symbol_str));
+        }
+
+        let symbol = Rc::new(symbol_str);
         // Consume and discard the "Coordinates of Component X" line.
         lines.next().ok_or(ParseError::IncompleteFrame)?;
         for _ in 0..*num_atoms {
