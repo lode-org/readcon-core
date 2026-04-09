@@ -13,6 +13,12 @@ pub enum ParseError {
     InvalidMetadataJson(String),
     IncompleteForceSection,
     UnknownSection(String),
+    InvalidElementSymbol(String),
+    MassInconsistency {
+        symbol: String,
+        header_mass: f64,
+        expected_mass: f64,
+    },
 }
 
 impl fmt::Display for ParseError {
@@ -50,6 +56,20 @@ impl fmt::Display for ParseError {
             }
             ParseError::UnknownSection(name) => {
                 write!(f, "unknown section type in metadata: {name}")
+            }
+            ParseError::InvalidElementSymbol(sym) => {
+                write!(f, "unrecognized element symbol: \"{sym}\"")
+            }
+            ParseError::MassInconsistency {
+                symbol,
+                header_mass,
+                expected_mass,
+            } => {
+                write!(
+                    f,
+                    "mass for {symbol} in header ({header_mass:.3}) differs from \
+                     standard mass ({expected_mass:.3}) by more than 10%"
+                )
             }
         }
     }
