@@ -224,6 +224,73 @@ struct RKRConFrameBuilder *rkr_frame_new(const double *cell,
                                          const char *postbox1);
 
 /**
+ * Parses and sets JSON metadata on an existing frame builder.
+ * The JSON must be an object. `con_spec_version` and `sections` are ignored
+ * because they are managed automatically by the writer.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_metadata_json(struct RKRConFrameBuilder *builder_handle,
+                                            const char *metadata_json);
+
+/**
+ * Sets a numeric metadata key on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_scalar_metadata(struct RKRConFrameBuilder *builder_handle,
+                                              const char *key,
+                                              double value);
+
+/**
+ * Sets a string metadata key on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_string_metadata(struct RKRConFrameBuilder *builder_handle,
+                                              const char *key,
+                                              const char *value);
+
+/**
+ * Sets the per-frame total energy metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_energy(struct RKRConFrameBuilder *builder_handle,
+                                     double energy);
+
+/**
+ * Sets the zero-based frame index metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_frame_index(struct RKRConFrameBuilder *builder_handle,
+                                          uint64_t idx);
+
+/**
+ * Sets the simulation time metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_time(struct RKRConFrameBuilder *builder_handle,
+                                   double time);
+
+/**
+ * Sets the timestep metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_timestep(struct RKRConFrameBuilder *builder_handle,
+                                       double dt);
+
+/**
+ * Sets the NEB bead index metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_neb_bead(struct RKRConFrameBuilder *builder_handle,
+                                       uint64_t bead);
+
+/**
+ * Sets the NEB band index metadata on an existing frame builder.
+ * Returns 0 on success, -1 on error.
+ */
+int32_t rkr_frame_builder_set_neb_band(struct RKRConFrameBuilder *builder_handle,
+                                       uint64_t band);
+
+/**
  * Adds an atom (without velocity) to the frame builder.
  * Returns 0 on success, -1 on error.
  */

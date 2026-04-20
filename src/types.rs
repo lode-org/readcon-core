@@ -427,6 +427,69 @@ impl ConFrameBuilder {
         self
     }
 
+    /// Parses and sets JSON metadata for the frame header.
+    ///
+    /// The input must be a JSON object. The `con_spec_version` and
+    /// `sections` keys are ignored because they are managed by the
+    /// builder/writer.
+    pub fn set_metadata_json(&mut self, metadata_json: &str) -> Result<(), serde_json::Error> {
+        let object: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(metadata_json)?;
+        self.metadata.clear();
+        for (key, value) in object {
+            if key == "con_spec_version" || key == "sections" {
+                continue;
+            }
+            self.metadata.insert(key, value);
+        }
+        Ok(())
+    }
+
+    /// Sets a numeric metadata key.
+    pub fn set_scalar_metadata(&mut self, key: &str, value: f64) {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value));
+    }
+
+    /// Sets a string metadata key.
+    pub fn set_string_metadata(&mut self, key: &str, value: &str) {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value));
+    }
+
+    /// Sets the per-frame total energy metadata.
+    pub fn set_energy(&mut self, energy: f64) {
+        self.set_scalar_metadata("energy", energy);
+    }
+
+    /// Sets the zero-based frame index metadata.
+    pub fn set_frame_index(&mut self, idx: u64) {
+        self.metadata
+            .insert("frame_index".to_string(), serde_json::Value::from(idx));
+    }
+
+    /// Sets the simulation time metadata.
+    pub fn set_time(&mut self, time: f64) {
+        self.set_scalar_metadata("time", time);
+    }
+
+    /// Sets the timestep metadata.
+    pub fn set_timestep(&mut self, dt: f64) {
+        self.set_scalar_metadata("timestep", dt);
+    }
+
+    /// Sets the NEB bead index metadata.
+    pub fn set_neb_bead(&mut self, bead: u64) {
+        self.metadata
+            .insert("neb_bead".to_string(), serde_json::Value::from(bead));
+    }
+
+    /// Sets the NEB band index metadata.
+    pub fn set_neb_band(&mut self, band: u64) {
+        self.metadata
+            .insert("neb_band".to_string(), serde_json::Value::from(band));
+    }
+
     /// Adds an atom without velocity data.
     pub fn add_atom(
         &mut self,
@@ -824,5 +887,56 @@ mod tests {
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
         header.set_lattice_vectors(vecs);
         assert_eq!(header.lattice_vectors(), Some(vecs));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .set_metadata_json(
+                r#"{"con_spec_version":2,"frame_index":5,"energy":-42.5,"sections":["forces"],"generator":"test"}"#,
+            )
+            .unwrap();
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
+
+        let frame = builder.build();
+        assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
+        assert_eq!(frame.header.frame_index(), Some(5));
+        assert_eq!(frame.header.energy(), Some(-42.5));
+        assert_eq!(
+            frame.header.metadata.get("generator"),
+            Some(&serde_json::Value::String("test".to_string()))
+        );
+        assert!(frame.header.sections.is_empty());
+    }
+
+    #[test]
+    fn test_builder_typed_metadata_setters() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.set_frame_index(7);
+        builder.set_energy(-1.25);
+        builder.set_time(3.5);
+        builder.set_timestep(0.2);
+        builder.set_neb_bead(4);
+        builder.set_neb_band(2);
+        builder.set_scalar_metadata("convergence", 1.0e-3);
+        builder.set_string_metadata("generator", "eon");
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
+
+        let frame = builder.build();
+        assert_eq!(frame.header.frame_index(), Some(7));
+        assert_eq!(frame.header.energy(), Some(-1.25));
+        assert_eq!(frame.header.time(), Some(3.5));
+        assert_eq!(frame.header.timestep(), Some(0.2));
+        assert_eq!(frame.header.neb_bead(), Some(4));
+        assert_eq!(frame.header.neb_band(), Some(2));
+        assert_eq!(
+            frame.header.metadata.get("convergence"),
+            Some(&serde_json::Value::from(1.0e-3))
+        );
+        assert_eq!(
+            frame.header.metadata.get("generator"),
+            Some(&serde_json::Value::from("eon"))
+        );
     }
 }
