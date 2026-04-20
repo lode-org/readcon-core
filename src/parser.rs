@@ -2,7 +2,7 @@ use crate::error::ParseError;
 use crate::types::{decode_fixed_bitmask, AtomDatum, ConFrame, FrameHeader};
 use std::collections::BTreeMap;
 use std::iter::Peekable;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Parses a line of whitespace-separated f64 values using fast-float2.
 ///
@@ -273,8 +273,8 @@ pub fn parse_single_frame<'a>(
 
     let mut global_atom_idx: u64 = 0;
     for num_atoms in &header.natms_per_type {
-        // Create a reference-counted string for the symbol once per component.
-        let symbol = Rc::new(
+        // Create a shared string for the symbol once per component.
+        let symbol = Arc::new(
             lines
                 .next()
                 .ok_or(ParseError::IncompleteFrame)?
@@ -289,8 +289,8 @@ pub fn parse_single_frame<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             atom_data.push(AtomDatum {
-                // This is now a cheap reference-count increment, not a full string clone.
-                symbol: Rc::clone(&symbol),
+                // This is a cheap reference-count increment, not a full string clone.
+                symbol: Arc::clone(&symbol),
                 x: vals[0],
                 y: vals[1],
                 z: vals[2],

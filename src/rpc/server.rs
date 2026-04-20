@@ -81,7 +81,7 @@ impl read_con_service::Server for ReadConServiceImpl {
         mut results: read_con_service::WriteFramesResults,
     ) -> Promise<(), capnp::Error> {
         use crate::types::{AtomDatum, ConFrame, FrameHeader};
-        use std::rc::Rc;
+        use std::sync::Arc;
 
         let req = pry!(params.get());
         let frame_data_list = pry!(pry!(req.get_req()).get_frames());
@@ -139,7 +139,7 @@ impl read_con_service::Server for ReadConServiceImpl {
 
                 let has_vel = a.get_has_velocity();
                 atom_data.push(AtomDatum {
-                    symbol: Rc::new(sym),
+                    symbol: Arc::new(sym),
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),

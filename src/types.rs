@@ -3,7 +3,7 @@
 //=============================================================================
 
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Holds all metadata from the 9-line header of a simulation frame.
 #[derive(Debug, Clone)]
@@ -214,8 +214,9 @@ impl FrameHeader {
 #[derive(Debug, Clone)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
-    /// Using Rc<String> to avoid expensive clones for each atom of the same type.
-    pub symbol: Rc<String>,
+    /// Using Arc<String> to avoid expensive clones for each atom of the same type
+    /// while keeping the frame data Send-safe for parallel parsing.
+    pub symbol: Arc<String>,
     /// The Cartesian x-coordinate.
     pub x: f64,
     /// The Cartesian y-coordinate.
@@ -306,7 +307,7 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
     val
 }
 
-// Manual implementation of PartialEq because Rc<T> doesn't derive it by default.
+// Manual implementation of PartialEq because Arc<T> doesn't derive it by default.
 impl PartialEq for AtomDatum {
     fn eq(&self, other: &Self) -> bool {
         // Compare the string values, not the pointers.
@@ -647,7 +648,7 @@ impl ConFrameBuilder {
         let atom_data: Vec<AtomDatum> = sorted_atoms
             .iter()
             .map(|a| {
-                let symbol = Rc::new(a.symbol.clone());
+                let symbol = Arc::new(a.symbol.clone());
                 AtomDatum {
                     symbol,
                     x: a.x,
