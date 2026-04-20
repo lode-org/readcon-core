@@ -15,6 +15,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
+capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
 python = ["dep:pyo3"]
@@ -47,6 +48,26 @@ harness = false
 [build-dependencies]
 cbindgen = "0.29.0"
 capnpc = { version = "0.20", optional = true }
+
+[package.metadata.capi]
+min_version = "0.10.17"
+
+[package.metadata.capi.header]
+name = "readcon-core.h"
+subdirectory = ""
+generation = true
+enabled = true
+
+[package.metadata.capi.pkg_config]
+name = "readcon-core"
+filename = "readcon-core"
+description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
+
+[package.metadata.capi.library]
+name = "readcon_core"
+
+[package.metadata.capi.install.include]
+asset = [{ from = "include/readcon-core.hpp", to = "." }]
 
 # The profile that 'dist' will build with
 [profile.dist]
