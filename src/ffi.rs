@@ -514,6 +514,161 @@ pub unsafe extern "C" fn rkr_frame_new(
     Box::into_raw(Box::new(builder)) as *mut RKRConFrameBuilder
 }
 
+/// Parses and sets JSON metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
+    builder_handle: *mut RKRConFrameBuilder,
+    metadata_json: *const c_char,
+) -> i32 {
+    if builder_handle.is_null() || metadata_json.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let metadata_json = match unsafe { CStr::from_ptr(metadata_json).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    match builder.set_metadata_json(metadata_json) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
+}
+
+/// Sets a numeric metadata key on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
+    builder_handle: *mut RKRConFrameBuilder,
+    key: *const c_char,
+    value: f64,
+) -> i32 {
+    if builder_handle.is_null() || key.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let key = match unsafe { CStr::from_ptr(key).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    builder.set_scalar_metadata(key, value);
+    0
+}
+
+/// Sets a string metadata key on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
+    builder_handle: *mut RKRConFrameBuilder,
+    key: *const c_char,
+    value: *const c_char,
+) -> i32 {
+    if builder_handle.is_null() || key.is_null() || value.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let key = match unsafe { CStr::from_ptr(key).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let value = match unsafe { CStr::from_ptr(value).to_str() } {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    builder.set_string_metadata(key, value);
+    0
+}
+
+/// Sets the per-frame total energy metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_energy(
+    builder_handle: *mut RKRConFrameBuilder,
+    energy: f64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_energy(energy);
+    0
+}
+
+/// Sets the zero-based frame index metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
+    builder_handle: *mut RKRConFrameBuilder,
+    idx: u64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_frame_index(idx);
+    0
+}
+
+/// Sets the simulation time metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_time(
+    builder_handle: *mut RKRConFrameBuilder,
+    time: f64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_time(time);
+    0
+}
+
+/// Sets the timestep metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
+    builder_handle: *mut RKRConFrameBuilder,
+    dt: f64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_timestep(dt);
+    0
+}
+
+/// Sets the NEB bead index metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
+    builder_handle: *mut RKRConFrameBuilder,
+    bead: u64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_neb_bead(bead);
+    0
+}
+
+/// Sets the NEB band index metadata on an existing frame builder.
+/// Returns 0 on success, -1 on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
+    builder_handle: *mut RKRConFrameBuilder,
+    band: u64,
+) -> i32 {
+    if builder_handle.is_null() {
+        return -1;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_neb_band(band);
+    0
+}
+
 /// Adds an atom (without velocity) to the frame builder.
 /// Returns 0 on success, -1 on error.
 #[unsafe(no_mangle)]

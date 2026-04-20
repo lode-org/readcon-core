@@ -229,6 +229,54 @@ class ConFrameBuilder {
     ConFrameBuilder &operator=(ConFrameBuilder &&other) noexcept;
 
     /**
+     * @brief Parses and sets JSON metadata for the generated header line 2.
+     *
+     * The JSON must be an object. `con_spec_version` and `sections` are
+     * managed automatically by the writer and ignored if present.
+     */
+    void set_metadata_json(const std::string &metadata_json);
+
+    /**
+     * @brief Sets a numeric metadata key.
+     */
+    void set_scalar_metadata(const std::string &key, double value);
+
+    /**
+     * @brief Sets a string metadata key.
+     */
+    void set_string_metadata(const std::string &key, const std::string &value);
+
+    /**
+     * @brief Sets the per-frame total energy metadata.
+     */
+    void set_energy(double energy);
+
+    /**
+     * @brief Sets the zero-based frame index metadata.
+     */
+    void set_frame_index(uint64_t idx);
+
+    /**
+     * @brief Sets the simulation time metadata.
+     */
+    void set_time(double time);
+
+    /**
+     * @brief Sets the timestep metadata.
+     */
+    void set_timestep(double dt);
+
+    /**
+     * @brief Sets the NEB bead index metadata.
+     */
+    void set_neb_bead(uint64_t bead);
+
+    /**
+     * @brief Sets the NEB band index metadata.
+     */
+    void set_neb_band(uint64_t band);
+
+    /**
      * @brief Adds an atom without velocity data.
      */
     void add_atom(const std::string &symbol, double x, double y, double z,
@@ -502,6 +550,66 @@ inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
     if (rkr_frame_add_atom(builder_handle_, symbol.c_str(), x, y, z, is_fixed,
                            atom_id, mass) != 0) {
         throw std::runtime_error("Failed to add atom to frame builder.");
+    }
+}
+
+inline void ConFrameBuilder::set_metadata_json(
+    const std::string &metadata_json) {
+    if (rkr_frame_builder_set_metadata_json(builder_handle_,
+                                            metadata_json.c_str()) != 0) {
+        throw std::runtime_error("Failed to set builder metadata JSON.");
+    }
+}
+
+inline void ConFrameBuilder::set_scalar_metadata(const std::string &key,
+                                                 double value) {
+    if (rkr_frame_builder_set_scalar_metadata(builder_handle_, key.c_str(),
+                                              value) != 0) {
+        throw std::runtime_error("Failed to set builder scalar metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_string_metadata(const std::string &key,
+                                                 const std::string &value) {
+    if (rkr_frame_builder_set_string_metadata(builder_handle_, key.c_str(),
+                                              value.c_str()) != 0) {
+        throw std::runtime_error("Failed to set builder string metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_energy(double energy) {
+    if (rkr_frame_builder_set_energy(builder_handle_, energy) != 0) {
+        throw std::runtime_error("Failed to set builder energy metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_frame_index(uint64_t idx) {
+    if (rkr_frame_builder_set_frame_index(builder_handle_, idx) != 0) {
+        throw std::runtime_error("Failed to set builder frame_index metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_time(double time) {
+    if (rkr_frame_builder_set_time(builder_handle_, time) != 0) {
+        throw std::runtime_error("Failed to set builder time metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_timestep(double dt) {
+    if (rkr_frame_builder_set_timestep(builder_handle_, dt) != 0) {
+        throw std::runtime_error("Failed to set builder timestep metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_neb_bead(uint64_t bead) {
+    if (rkr_frame_builder_set_neb_bead(builder_handle_, bead) != 0) {
+        throw std::runtime_error("Failed to set builder neb_bead metadata.");
+    }
+}
+
+inline void ConFrameBuilder::set_neb_band(uint64_t band) {
+    if (rkr_frame_builder_set_neb_band(builder_handle_, band) != 0) {
+        throw std::runtime_error("Failed to set builder neb_band metadata.");
     }
 }
 
