@@ -67,6 +67,9 @@ print(readcon.CON_SPEC_VERSION)  # 2
 frames = readcon.read_con("input.con")
 print(frames[0].spec_version)   # 2 for v2 files, 1 for legacy
 print(frames[0].metadata)       # dict of extra JSON keys
+print(frames[0].energy)         # typed helper for common keys
+print(frames[0].frame_index)
+print(frames[0].timestep)
 #+end_src
 
 * Working with JSON metadata
@@ -103,13 +106,27 @@ import readcon
 # Reading: metadata comes from the file's JSON line
 frames = readcon.read_con("input.con")
 print(frames[0].metadata)  # e.g. {"generator": "\"my-tool 1.0\""}
+print(frames[0].energy)    # typed accessors for common keys
+print(frames[0].frame_index)
 
-# Writing: metadata dict is passed through to the JSON line
+# Writing: metadata can be attached via typed setters
 frame = readcon.ConFrame(
     cell=[10.0, 10.0, 10.0],
     angles=[90.0, 90.0, 90.0],
     atoms=[...],
-    metadata={"temperature_K": "300.0"},
+)
+frame.set_energy(-42.5)
+frame.set_frame_index(5)
+frame.set_time(2.5)
+frame.set_timestep(0.5)
+frame.set_neb_bead(3)
+frame.set_neb_band(1)
+frame.set_scalar_metadata("temperature_K", 300.0)
+frame.set_string_metadata("generator", "my-tool 1.0")
+
+# Or replace metadata from a raw JSON object
+frame.set_metadata_json(
+    '{"generator":"my-tool 1.0","temperature_K":300.0}'
 )
 readcon.write_con("output.con", [frame])
 #+end_src
