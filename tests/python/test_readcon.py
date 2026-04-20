@@ -169,6 +169,45 @@ class TestConFrameConstructor:
         r = repr(frame)
         assert "natoms=1" in r
 
+    def test_typed_metadata_helpers(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0)],
+        )
+        frame.set_energy(-1.25)
+        frame.set_frame_index(7)
+        frame.set_time(3.5)
+        frame.set_timestep(0.2)
+        frame.set_neb_bead(4)
+        frame.set_neb_band(2)
+        frame.set_scalar_metadata("convergence", 1.0e-3)
+        frame.set_string_metadata("generator", "eon")
+
+        assert frame.energy == pytest.approx(-1.25)
+        assert frame.frame_index == 7
+        assert frame.time == pytest.approx(3.5)
+        assert frame.timestep == pytest.approx(0.2)
+        assert frame.neb_bead == 4
+        assert frame.neb_band == 2
+        assert frame.metadata["convergence"] == "0.001"
+        assert frame.metadata["generator"] == "\"eon\""
+
+    def test_set_metadata_json(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0)],
+        )
+        frame.set_metadata_json(
+            '{"con_spec_version":2,"frame_index":5,"energy":-42.5,"generator":"test","sections":["forces"]}'
+        )
+
+        assert frame.frame_index == 5
+        assert frame.energy == pytest.approx(-42.5)
+        assert frame.metadata["generator"] == "\"test\""
+        assert "sections" not in frame.metadata
+
 
 class TestMass:
     def test_mass_from_file(self):
@@ -228,5 +267,4 @@ class TestErrorHandling:
     def test_malformed_data(self):
         with pytest.raises(OSError):
             readcon.read_con_string("not a valid con file\n")
-
 

@@ -69,8 +69,12 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
   atoms, has_velocities, prebox_header, postbox_header, spec_version
-  (v0.6.0+), metadata (v0.6.0+, dict of extra JSON keys).
-  Methods: to_ase(), from_ase() (v0.4.0+)
+  (v0.6.0+), metadata (v0.6.0+, dict of extra JSON keys), energy,
+  frame_index, time, timestep, neb_bead, neb_band.
+  Methods: to_ase(), from_ase() (v0.4.0+), set_metadata_json(),
+  set_scalar_metadata(), set_string_metadata(), set_energy(),
+  set_frame_index(), set_time(), set_timestep(), set_neb_bead(),
+  set_neb_band().
 
 * Julia (ccall)
 
@@ -150,6 +154,20 @@ while ((handle = con_frame_iterator_next(iter)) != NULL) {
 free_con_frame_iterator(iter);
 #+end_src
 
+Metadata builder helpers:
+
+#+begin_src c
+RKRConFrameBuilder *builder = rkr_frame_new(cell, angles, "", "", "", "");
+rkr_frame_builder_set_energy(builder, -42.5);
+rkr_frame_builder_set_frame_index(builder, 7);
+rkr_frame_builder_set_time(builder, 3.5);
+rkr_frame_builder_set_timestep(builder, 0.2);
+rkr_frame_builder_set_neb_bead(builder, 4);
+rkr_frame_builder_set_neb_band(builder, 1);
+rkr_frame_builder_set_scalar_metadata(builder, "convergence", 1.0e-3);
+rkr_frame_builder_set_string_metadata(builder, "generator", "eon");
+#+end_src
+
 ** C++ API
 
 Include =readcon-core.hpp= for RAII wrappers.
@@ -168,6 +186,21 @@ for (auto&& frame : frames) {
         }
     }
 }
+#+end_src
+
+Builder metadata helpers:
+
+#+begin_src cpp
+readcon::ConFrameBuilder builder({10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
+builder.set_energy(-42.5);
+builder.set_frame_index(7);
+builder.set_time(3.5);
+builder.set_timestep(0.2);
+builder.set_neb_bead(4);
+builder.set_neb_band(1);
+builder.set_scalar_metadata("convergence", 1.0e-3);
+builder.set_string_metadata("generator", "eon");
+builder.set_metadata_json(R"({"custom_key":"custom_value"})");
 #+end_src
 
 ** Build system integration

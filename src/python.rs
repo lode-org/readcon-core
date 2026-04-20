@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyIOError;
+use pyo3::exceptions::PyValueError;
 use pyo3::types::IntoPyDict;
 
 use crate::iterators::ConFrameIterator;
@@ -220,6 +221,96 @@ impl PyConFrame {
         self.metadata
             .get("time")
             .and_then(|v| v.parse::<f64>().ok())
+    }
+
+    /// Integration timestep of this frame, or None.
+    #[getter]
+    fn timestep(&self) -> Option<f64> {
+        self.metadata
+            .get("timestep")
+            .and_then(|v| v.parse::<f64>().ok())
+    }
+
+    /// NEB bead index for this frame, or None.
+    #[getter]
+    fn neb_bead(&self) -> Option<u64> {
+        self.metadata
+            .get("neb_bead")
+            .and_then(|v| v.parse::<u64>().ok())
+    }
+
+    /// NEB band index for this frame, or None.
+    #[getter]
+    fn neb_band(&self) -> Option<u64> {
+        self.metadata
+            .get("neb_band")
+            .and_then(|v| v.parse::<u64>().ok())
+    }
+
+    /// Replace metadata from a raw JSON object string.
+    fn set_metadata_json(&mut self, metadata_json: &str) -> PyResult<()> {
+        let obj: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(metadata_json)
+                .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
+        self.metadata.clear();
+        for (key, value) in obj {
+            if key == "con_spec_version" || key == "sections" {
+                continue;
+            }
+            self.metadata.insert(key, value.to_string());
+        }
+        Ok(())
+    }
+
+    /// Set a numeric metadata key.
+    fn set_scalar_metadata(&mut self, key: &str, value: f64) {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value).to_string());
+    }
+
+    /// Set a string metadata key.
+    fn set_string_metadata(&mut self, key: &str, value: &str) {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value).to_string());
+    }
+
+    /// Set the per-frame total energy metadata.
+    fn set_energy(&mut self, energy: f64) {
+        self.set_scalar_metadata("energy", energy);
+    }
+
+    /// Set the zero-based frame index metadata.
+    fn set_frame_index(&mut self, idx: u64) {
+        self.metadata.insert(
+            "frame_index".to_string(),
+            serde_json::Value::from(idx).to_string(),
+        );
+    }
+
+    /// Set the simulation time metadata.
+    fn set_time(&mut self, time: f64) {
+        self.set_scalar_metadata("time", time);
+    }
+
+    /// Set the integration timestep metadata.
+    fn set_timestep(&mut self, dt: f64) {
+        self.set_scalar_metadata("timestep", dt);
+    }
+
+    /// Set the NEB bead index metadata.
+    fn set_neb_bead(&mut self, bead: u64) {
+        self.metadata.insert(
+            "neb_bead".to_string(),
+            serde_json::Value::from(bead).to_string(),
+        );
+    }
+
+    /// Set the NEB band index metadata.
+    fn set_neb_band(&mut self, band: u64) {
+        self.metadata.insert(
+            "neb_band".to_string(),
+            serde_json::Value::from(band).to_string(),
+        );
     }
 
     /// Convert this frame to an ASE Atoms object (requires ase package).
