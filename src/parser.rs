@@ -131,30 +131,27 @@ fn validate_metadata_schema(
                 validate_metadata_number(key, value)?
             }
             "frame_index" | "neb_bead" | "neb_band" => validate_metadata_integer(key, value)?,
-            "generator" => {
-                if !value.is_string() {
-                    return Err(metadata_json_error("generator must be a string"));
+            "generator" if !value.is_string() => {
+                return Err(metadata_json_error("generator must be a string"));
+            }
+            "generator" => {}
+            "units" | "potential" if !value.is_object() => {
+                return Err(metadata_json_error(format!("{key} must be an object")));
+            }
+            "potential" => {
+                if let Some(potential_type) = value.get("type")
+                    && !potential_type.is_string()
+                {
+                    return Err(metadata_json_error("potential.type must be a string"));
                 }
             }
-            "units" | "potential" => {
-                if !value.is_object() {
-                    return Err(metadata_json_error(format!("{key} must be an object")));
-                }
-                if key == "potential" {
-                    if let Some(potential_type) = value.get("type") {
-                        if !potential_type.is_string() {
-                            return Err(metadata_json_error("potential.type must be a string"));
-                        }
-                    }
-                }
-            }
+            "units" => {}
             "pbc" => validate_pbc_metadata(value)?,
             "lattice_vectors" => validate_lattice_vectors_metadata(value)?,
-            "converged" => {
-                if !value.is_boolean() {
-                    return Err(metadata_json_error("converged must be a boolean"));
-                }
+            "converged" if !value.is_boolean() => {
+                return Err(metadata_json_error("converged must be a boolean"));
             }
+            "converged" => {}
             _ => {}
         }
     }
@@ -469,7 +466,7 @@ fn validate_header_geometry(
                 .to_string(),
         ));
     }
-    if natm_types == 0 || natms_per_type.iter().any(|count| *count == 0) {
+    if natm_types == 0 || natms_per_type.contains(&0) {
         return Err(ParseError::ValidationError(
             "atom counts must contain at least one atom per component".to_string(),
         ));

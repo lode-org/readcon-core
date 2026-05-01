@@ -116,8 +116,9 @@ peeking for a blank separator) because:
 - New section types can be added without ambiguity
 - Section order is explicit
 
-Declared sections must be present at the declared position. Use
-=sections=[]= to state that no additional per-atom sections follow.
+Declared sections must be present at the declared position. Use an
+empty =sections= array (=[]=) to state that no additional per-atom
+sections follow.
 When the key is absent, the reader keeps the blank-separator fallback
 for existing =.convel= files.
 
