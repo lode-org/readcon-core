@@ -1,7 +1,9 @@
-use pyo3::prelude::*;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder};
@@ -119,6 +121,33 @@ impl PyAtomDatum {
     }
 }
 
+fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, Value>> {
+    if obj.is_none() {
+        return Ok(BTreeMap::new());
+    }
+
+    let json = obj.py().import("json")?;
+    let dumped: String = json.call_method1("dumps", (obj,))?.extract()?;
+    let value: Value = serde_json::from_str(&dumped)
+        .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
+    let map = value
+        .as_object()
+        .ok_or_else(|| PyValueError::new_err("metadata must be a JSON object"))?;
+
+    Ok(map
+        .iter()
+        .filter(|(key, _)| key.as_str() != "con_spec_version" && key.as_str() != "sections")
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect())
+}
+
+fn json_map_to_py(py: Python<'_>, metadata: &BTreeMap<String, Value>) -> PyResult<Py<PyAny>> {
+    let json = py.import("json")?;
+    let dumped = serde_json::to_string(metadata)
+        .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
+    Ok(json.call_method1("loads", (dumped,))?.unbind())
+}
+
 /// Python-visible simulation frame.
 #[pyclass(name = "ConFrame", from_py_object)]
 #[derive(Clone)]
@@ -138,9 +167,7 @@ pub struct PyConFrame {
     pub has_forces: bool,
     #[pyo3(get)]
     pub spec_version: u32,
-    /// Additional JSON metadata as a Python dict (str -> JSON-compatible value).
-    #[pyo3(get)]
-    pub metadata: std::collections::BTreeMap<String, String>,
+    metadata: BTreeMap<String, Value>,
 }
 
 #[pymethods]
@@ -153,11 +180,11 @@ impl PyConFrame {
         atoms: Vec<PyAtomDatum>,
         prebox_header: Option<Vec<String>>,
         postbox_header: Option<Vec<String>>,
-        metadata: Option<std::collections::BTreeMap<String, String>>,
-    ) -> Self {
+        metadata: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
         let has_velocities = atoms.first().is_some_and(|a| a.has_velocity());
         let has_forces = atoms.first().is_some_and(|a| a.has_forces());
-        PyConFrame {
+        Ok(PyConFrame {
             cell,
             angles,
             prebox_header: prebox_header.unwrap_or_else(|| vec![String::new(), String::new()]),
@@ -166,13 +193,21 @@ impl PyConFrame {
             has_velocities,
             has_forces,
             spec_version: crate::CON_SPEC_VERSION,
-            metadata: metadata.unwrap_or_default(),
-        }
+            metadata: match metadata {
+                Some(obj) => py_metadata_to_json_map(obj)?,
+                None => BTreeMap::new(),
+            },
+        })
     }
 
     #[getter]
     fn atoms(&self) -> Vec<PyAtomDatum> {
         self.atoms_inner.clone()
+    }
+
+    #[getter]
+    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_map_to_py(py, &self.metadata)
     }
 
     fn __repr__(&self) -> String {
@@ -194,57 +229,48 @@ impl PyConFrame {
     /// Per-frame total energy (from JSON metadata), or None.
     #[getter]
     fn energy(&self) -> Option<f64> {
-        self.metadata
-            .get("energy")
-            .and_then(|v| v.parse::<f64>().ok())
+        self.metadata.get("energy").and_then(Value::as_f64)
     }
 
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self) -> Option<String> {
-        let pot_str = self.metadata.get("potential")?;
-        let val: serde_json::Value = serde_json::from_str(pot_str).ok()?;
-        val.as_object()?.get("type")?.as_str().map(|s| s.to_string())
+        self.metadata
+            .get("potential")?
+            .as_object()?
+            .get("type")?
+            .as_str()
+            .map(|s| s.to_string())
     }
 
     /// Zero-based frame index within a trajectory, or None.
     #[getter]
     fn frame_index(&self) -> Option<u64> {
-        self.metadata
-            .get("frame_index")
-            .and_then(|v| v.parse::<u64>().ok())
+        self.metadata.get("frame_index").and_then(Value::as_u64)
     }
 
     /// Simulation time of this frame, or None.
     #[getter]
     fn time(&self) -> Option<f64> {
-        self.metadata
-            .get("time")
-            .and_then(|v| v.parse::<f64>().ok())
+        self.metadata.get("time").and_then(Value::as_f64)
     }
 
     /// Integration timestep of this frame, or None.
     #[getter]
     fn timestep(&self) -> Option<f64> {
-        self.metadata
-            .get("timestep")
-            .and_then(|v| v.parse::<f64>().ok())
+        self.metadata.get("timestep").and_then(Value::as_f64)
     }
 
     /// NEB bead index for this frame, or None.
     #[getter]
     fn neb_bead(&self) -> Option<u64> {
-        self.metadata
-            .get("neb_bead")
-            .and_then(|v| v.parse::<u64>().ok())
+        self.metadata.get("neb_bead").and_then(Value::as_u64)
     }
 
     /// NEB band index for this frame, or None.
     #[getter]
     fn neb_band(&self) -> Option<u64> {
-        self.metadata
-            .get("neb_band")
-            .and_then(|v| v.parse::<u64>().ok())
+        self.metadata.get("neb_band").and_then(Value::as_u64)
     }
 
     /// Replace metadata from a raw JSON object string.
@@ -257,21 +283,19 @@ impl PyConFrame {
             if key == "con_spec_version" || key == "sections" {
                 continue;
             }
-            self.metadata.insert(key, value.to_string());
+            self.metadata.insert(key, value);
         }
         Ok(())
     }
 
     /// Set a numeric metadata key.
     fn set_scalar_metadata(&mut self, key: &str, value: f64) {
-        self.metadata
-            .insert(key.to_string(), serde_json::Value::from(value).to_string());
+        self.metadata.insert(key.to_string(), Value::from(value));
     }
 
     /// Set a string metadata key.
     fn set_string_metadata(&mut self, key: &str, value: &str) {
-        self.metadata
-            .insert(key.to_string(), serde_json::Value::from(value).to_string());
+        self.metadata.insert(key.to_string(), Value::from(value));
     }
 
     /// Set the per-frame total energy metadata.
@@ -281,10 +305,8 @@ impl PyConFrame {
 
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, idx: u64) {
-        self.metadata.insert(
-            "frame_index".to_string(),
-            serde_json::Value::from(idx).to_string(),
-        );
+        self.metadata
+            .insert("frame_index".to_string(), Value::from(idx));
     }
 
     /// Set the simulation time metadata.
@@ -299,18 +321,14 @@ impl PyConFrame {
 
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, bead: u64) {
-        self.metadata.insert(
-            "neb_bead".to_string(),
-            serde_json::Value::from(bead).to_string(),
-        );
+        self.metadata
+            .insert("neb_bead".to_string(), Value::from(bead));
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, band: u64) {
-        self.metadata.insert(
-            "neb_band".to_string(),
-            serde_json::Value::from(band).to_string(),
-        );
+        self.metadata
+            .insert("neb_band".to_string(), Value::from(band));
     }
 
     /// Convert this frame to an ASE Atoms object (requires ase package).
@@ -355,7 +373,7 @@ impl From<&ConFrame> for PyConFrame {
             .header
             .metadata
             .iter()
-            .map(|(k, v)| (k.clone(), v.to_string()))
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
         PyConFrame {
@@ -374,13 +392,7 @@ impl From<&ConFrame> for PyConFrame {
 
 impl PyConFrame {
     fn to_con_frame(&self) -> ConFrame {
-        let meta: std::collections::BTreeMap<String, serde_json::Value> = self
-            .metadata
-            .iter()
-            .filter_map(|(k, v)| {
-                serde_json::from_str(v).ok().map(|val| (k.clone(), val))
-            })
-            .collect();
+        let meta = self.metadata.clone();
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles)
             .prebox_header([
@@ -400,30 +412,54 @@ impl PyConFrame {
             if has_vel && has_frc {
                 builder.add_atom_with_velocity_and_forces(
                     &py_atom.symbol,
-                    py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.fixed, py_atom.atom_id, mass,
-                    py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
-                    py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
+                    py_atom.x,
+                    py_atom.y,
+                    py_atom.z,
+                    py_atom.fixed,
+                    py_atom.atom_id,
+                    mass,
+                    py_atom.vx.unwrap_or(0.0),
+                    py_atom.vy.unwrap_or(0.0),
+                    py_atom.vz.unwrap_or(0.0),
+                    py_atom.fx.unwrap_or(0.0),
+                    py_atom.fy.unwrap_or(0.0),
+                    py_atom.fz.unwrap_or(0.0),
                 );
             } else if has_vel {
                 builder.add_atom_with_velocity(
                     &py_atom.symbol,
-                    py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.fixed, py_atom.atom_id, mass,
-                    py_atom.vx.unwrap_or(0.0), py_atom.vy.unwrap_or(0.0), py_atom.vz.unwrap_or(0.0),
+                    py_atom.x,
+                    py_atom.y,
+                    py_atom.z,
+                    py_atom.fixed,
+                    py_atom.atom_id,
+                    mass,
+                    py_atom.vx.unwrap_or(0.0),
+                    py_atom.vy.unwrap_or(0.0),
+                    py_atom.vz.unwrap_or(0.0),
                 );
             } else if has_frc {
                 builder.add_atom_with_forces(
                     &py_atom.symbol,
-                    py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.fixed, py_atom.atom_id, mass,
-                    py_atom.fx.unwrap_or(0.0), py_atom.fy.unwrap_or(0.0), py_atom.fz.unwrap_or(0.0),
+                    py_atom.x,
+                    py_atom.y,
+                    py_atom.z,
+                    py_atom.fixed,
+                    py_atom.atom_id,
+                    mass,
+                    py_atom.fx.unwrap_or(0.0),
+                    py_atom.fy.unwrap_or(0.0),
+                    py_atom.fz.unwrap_or(0.0),
                 );
             } else {
                 builder.add_atom(
                     &py_atom.symbol,
-                    py_atom.x, py_atom.y, py_atom.z,
-                    py_atom.fixed, py_atom.atom_id, mass,
+                    py_atom.x,
+                    py_atom.y,
+                    py_atom.z,
+                    py_atom.fixed,
+                    py_atom.atom_id,
+                    mass,
                 );
             }
         }
@@ -515,10 +551,7 @@ fn write_con_string(frames: Vec<PyConFrame>, precision: usize) -> PyResult<Strin
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
     let frames = read_con(path)?;
-    frames
-        .iter()
-        .map(|f| ase_from_pyconframe(py, f))
-        .collect()
+    frames.iter().map(|f| ase_from_pyconframe(py, f)).collect()
 }
 
 // --- ASE conversion helpers (runtime import, no compile-time dep) ---
@@ -528,12 +561,12 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     let ase_atoms_cls = ase.getattr("Atoms")?;
 
     // Build symbols list and positions array
-    let symbols: Vec<&str> = frame.atoms_inner.iter().map(|a| a.symbol.as_str()).collect();
-    let positions: Vec<[f64; 3]> = frame
+    let symbols: Vec<&str> = frame
         .atoms_inner
         .iter()
-        .map(|a| [a.x, a.y, a.z])
+        .map(|a| a.symbol.as_str())
         .collect();
+    let positions: Vec<[f64; 3]> = frame.atoms_inner.iter().map(|a| [a.x, a.y, a.z]).collect();
 
     // Build cell from lengths + angles using ASE's cellpar_to_cell
     let cellpar: Vec<f64> = frame
@@ -544,9 +577,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         .collect();
 
     let ase_cell_mod = py.import("ase.geometry.cell")?;
-    let cell = ase_cell_mod
-        .getattr("cellpar_to_cell")?
-        .call1((cellpar,))?;
+    let cell = ase_cell_mod.getattr("cellpar_to_cell")?.call1((cellpar,))?;
 
     let atoms = ase_atoms_cls.call(
         (),
@@ -584,7 +615,13 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         let velocities: Vec<[f64; 3]> = frame
             .atoms_inner
             .iter()
-            .map(|a| [a.vx.unwrap_or(0.0), a.vy.unwrap_or(0.0), a.vz.unwrap_or(0.0)])
+            .map(|a| {
+                [
+                    a.vx.unwrap_or(0.0),
+                    a.vy.unwrap_or(0.0),
+                    a.vz.unwrap_or(0.0),
+                ]
+            })
             .collect();
         let vel_array = np.call_method1("array", (velocities,))?;
         atoms.call_method1("set_velocities", (vel_array,))?;
@@ -596,17 +633,21 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         let forces: Vec<[f64; 3]> = frame
             .atoms_inner
             .iter()
-            .map(|a| [a.fx.unwrap_or(0.0), a.fy.unwrap_or(0.0), a.fz.unwrap_or(0.0)])
+            .map(|a| {
+                [
+                    a.fx.unwrap_or(0.0),
+                    a.fy.unwrap_or(0.0),
+                    a.fz.unwrap_or(0.0),
+                ]
+            })
             .collect();
         let force_array = np.call_method1("array", (forces,))?;
         // Get energy from metadata if present
         let energy = frame.energy();
         let calc = if let Some(e) = energy {
-            ase_calc.getattr("SinglePointCalculator")?.call1((
-                atoms.clone(),
-                e,
-                force_array,
-            ))?
+            ase_calc
+                .getattr("SinglePointCalculator")?
+                .call1((atoms.clone(), e, force_array))?
         } else {
             ase_calc.getattr("SinglePointCalculator")?.call(
                 (),
@@ -633,15 +674,10 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
 
     if !fixed_indices.is_empty() {
         let ase_constraints = py.import("ase.constraints")?;
-        let fix_atoms = ase_constraints
-            .getattr("FixAtoms")?
-            .call(
-                (),
-                Some(
-                    &[("indices", fixed_indices.into_pyobject(py)?.into_any())]
-                        .into_py_dict(py)?,
-                ),
-            )?;
+        let fix_atoms = ase_constraints.getattr("FixAtoms")?.call(
+            (),
+            Some(&[("indices", fixed_indices.into_pyobject(py)?.into_any())].into_py_dict(py)?),
+        )?;
         atoms.call_method1("set_constraint", (vec![fix_atoms],))?;
     }
 
@@ -650,9 +686,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
 
 fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult<PyConFrame> {
     // Extract symbols
-    let symbols: Vec<String> = ase_atoms
-        .call_method0("get_chemical_symbols")?
-        .extract()?;
+    let symbols: Vec<String> = ase_atoms.call_method0("get_chemical_symbols")?.extract()?;
 
     // Extract positions
     let positions: Vec<Vec<f64>> = ase_atoms
@@ -773,7 +807,11 @@ fn pyconframe_from_ase(_py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResul
                 x: pos[0],
                 y: pos[1],
                 z: pos[2],
-                fixed: if fixed_set.contains(&i) { [true, true, true] } else { [false, false, false] },
+                fixed: if fixed_set.contains(&i) {
+                    [true, true, true]
+                } else {
+                    [false, false, false]
+                },
                 atom_id: atom_ids[i],
                 mass: masses.as_ref().map(|m| m[i]),
                 vx,
