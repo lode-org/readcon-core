@@ -401,20 +401,20 @@ impl ConFrameBuilder {
     }
 
     /// Sets the two pre-box header lines.
-    pub fn prebox_header(mut self, h: [String; 2]) -> Self {
+    pub fn prebox_header(&mut self, h: [String; 2]) -> &mut Self {
         self.prebox_header = h;
         self
     }
 
     /// Sets the two post-box header lines.
-    pub fn postbox_header(mut self, h: [String; 2]) -> Self {
+    pub fn postbox_header(&mut self, h: [String; 2]) -> &mut Self {
         self.postbox_header = h;
         self
     }
 
     /// Adds extra key-value pairs to the JSON metadata line.
     /// The `con_spec_version` key is always set automatically.
-    pub fn metadata(mut self, m: BTreeMap<String, serde_json::Value>) -> Self {
+    pub fn metadata(&mut self, m: BTreeMap<String, serde_json::Value>) -> &mut Self {
         self.metadata = m;
         self
     }
@@ -444,48 +444,53 @@ impl ConFrameBuilder {
     }
 
     /// Sets a numeric metadata key.
-    pub fn set_scalar_metadata(&mut self, key: &str, value: f64) {
+    pub fn set_scalar_metadata(&mut self, key: &str, value: f64) -> &mut Self {
         self.metadata
             .insert(key.to_string(), serde_json::Value::from(value));
+        self
     }
 
     /// Sets a string metadata key.
-    pub fn set_string_metadata(&mut self, key: &str, value: &str) {
+    pub fn set_string_metadata(&mut self, key: &str, value: &str) -> &mut Self {
         self.metadata
             .insert(key.to_string(), serde_json::Value::from(value));
+        self
     }
 
     /// Sets the per-frame total energy metadata.
-    pub fn set_energy(&mut self, energy: f64) {
-        self.set_scalar_metadata(meta::ENERGY, energy);
+    pub fn set_energy(&mut self, energy: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::ENERGY, energy)
     }
 
     /// Sets the zero-based frame index metadata.
-    pub fn set_frame_index(&mut self, idx: u64) {
+    pub fn set_frame_index(&mut self, idx: u64) -> &mut Self {
         self.metadata
             .insert(meta::FRAME_INDEX.into(), serde_json::Value::from(idx));
+        self
     }
 
     /// Sets the simulation time metadata.
-    pub fn set_time(&mut self, time: f64) {
-        self.set_scalar_metadata(meta::TIME, time);
+    pub fn set_time(&mut self, time: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::TIME, time)
     }
 
     /// Sets the timestep metadata.
-    pub fn set_timestep(&mut self, dt: f64) {
-        self.set_scalar_metadata(meta::TIMESTEP, dt);
+    pub fn set_timestep(&mut self, dt: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::TIMESTEP, dt)
     }
 
     /// Sets the NEB bead index metadata.
-    pub fn set_neb_bead(&mut self, bead: u64) {
+    pub fn set_neb_bead(&mut self, bead: u64) -> &mut Self {
         self.metadata
             .insert(meta::NEB_BEAD.into(), serde_json::Value::from(bead));
+        self
     }
 
     /// Sets the NEB band index metadata.
-    pub fn set_neb_band(&mut self, band: u64) {
+    pub fn set_neb_band(&mut self, band: u64) -> &mut Self {
         self.metadata
             .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
+        self
     }
 
     /// Adds an atom with no velocity or force data and returns `&mut self`
@@ -663,10 +668,11 @@ mod tests {
 
     #[test]
     fn test_builder_with_headers() {
-        let frame = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
             .prebox_header(["line1".to_string(), "line2".to_string()])
-            .postbox_header(["line3".to_string(), "line4".to_string()])
-            .build();
+            .postbox_header(["line3".to_string(), "line4".to_string()]);
+        let frame = builder.build();
 
         assert_eq!(frame.header.prebox_header, ["line1", "line2"]);
         assert_eq!(frame.header.postbox_header, ["line3", "line4"]);

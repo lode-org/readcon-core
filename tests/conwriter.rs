@@ -45,7 +45,9 @@ fn test_writer_roundtrip() {
 
 #[test]
 fn test_builder_roundtrip() {
-    let mut builder = ConFrameBuilder::new([15.345600, 21.702000, 100.000000], [90.0, 90.0, 90.0])
+    let mut builder =
+        ConFrameBuilder::new([15.345600, 21.702000, 100.000000], [90.0, 90.0, 90.0]);
+    builder
         .prebox_header(["Random Number Seed".to_string(), "Time".to_string()])
         .postbox_header(["0 0".to_string(), "218 0 1".to_string()]);
     builder.add_atom(
@@ -166,8 +168,8 @@ fn test_builder_velocity_roundtrip() {
 fn test_writer_emits_empty_sections_when_validate_true() {
     let mut metadata = BTreeMap::new();
     metadata.insert("validate".to_string(), serde_json::json!(true));
-    let mut builder =
-        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]).metadata(metadata);
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder.metadata(metadata);
     builder.add_atom("Cu", 1.0, 2.0, 3.0, [false, false, false], 0, 63.546);
     let frame = builder.build();
 

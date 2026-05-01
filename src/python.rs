@@ -568,7 +568,8 @@ impl PyConFrame {
         let meta = self.metadata_map(py)?;
         let atoms = self.py_atoms(py)?;
 
-        let mut builder = ConFrameBuilder::new(self.cell, self.angles)
+        let mut builder = ConFrameBuilder::new(self.cell, self.angles);
+        builder
             .prebox_header(self.prebox_header.clone())
             .postbox_header(self.postbox_header.clone())
             .metadata(meta);
