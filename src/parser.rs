@@ -93,37 +93,34 @@ fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError>
 
 /// Validates a parsed metadata JSON object against the spec v2 schema.
 ///
-/// Returns `(validate, sections)` where `validate` is the value of the
-/// `validate` key (default `false`) and `sections` is the parsed
-/// `sections` array. Used by the parser on read and by builder/frame
-/// authoring paths to fail fast on malformed metadata.
+/// Type-checks the `validate` and `sections` keys, then runs per-key
+/// schema checks for the recommended metadata keys. Used by the
+/// builder/Python `set_metadata_json` paths to fail fast on malformed
+/// input, and by the parser when the file requested strict validation
+/// via `"validate": true`.
 pub fn validate_metadata_schema(
     json_obj: &serde_json::Map<String, Value>,
-) -> Result<(bool, Vec<String>), ParseError> {
-    let validate = match json_obj.get(meta::VALIDATE) {
-        Some(Value::Bool(value)) => *value,
+) -> Result<(), ParseError> {
+    let strict_requested = match json_obj.get(meta::VALIDATE) {
+        Some(Value::Bool(b)) => *b,
         Some(_) => return Err(metadata_json_error("validate must be a boolean")),
         None => false,
     };
 
-    let sections = match json_obj.get(meta::SECTIONS) {
-        Some(Value::Array(values)) => values
-            .iter()
-            .map(|value| {
-                value
-                    .as_str()
-                    .map(str::to_string)
-                    .ok_or_else(|| metadata_json_error("sections must be an array of strings"))
-            })
-            .collect::<Result<Vec<_>, _>>()?,
+    match json_obj.get(meta::SECTIONS) {
+        Some(Value::Array(values)) => {
+            if values.iter().any(|entry| !entry.is_string()) {
+                return Err(metadata_json_error("sections must be an array of strings"));
+            }
+        }
         Some(_) => return Err(metadata_json_error("sections must be an array of strings")),
-        None if validate => {
+        None if strict_requested => {
             return Err(metadata_json_error(
                 "validate=true requires a sections array, even when empty",
             ));
         }
-        None => Vec::new(),
-    };
+        None => {}
+    }
 
     for (key, value) in json_obj {
         match key.as_str() {
@@ -162,7 +159,7 @@ pub fn validate_metadata_schema(
         }
     }
 
-    Ok((validate, sections))
+    Ok(())
 }
 
 fn validate_pbc_metadata(value: &Value) -> Result<(), ParseError> {
@@ -292,19 +289,50 @@ pub fn parse_frame_header<'a>(
         if ver > crate::CON_SPEC_VERSION {
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
-        let (validate, secs) = validate_metadata_schema(json_obj)?;
+
+        // Pre-extract the validate flag with a type check; this is the only
+        // metadata check that always runs. The full schema validation only
+        // fires when validate=true (see below).
+        let validate = match json_obj.get(meta::VALIDATE) {
+            Some(Value::Bool(b)) => *b,
+            Some(_) => return Err(metadata_json_error("validate must be a boolean")),
+            None => false,
+        };
+
+        // When strict validation is requested, run the full schema check
+        // first. That covers the validate-bool and sections-required rules,
+        // so the single-pass loop below can stay narrow.
+        if validate {
+            validate_metadata_schema(json_obj)?;
+        }
+
+        // Single pass over the JSON object: collect sections, copy the rest
+        // into metadata. Replaces the previous "validate then re-iterate"
+        // pattern that walked the map twice on every frame.
+        let mut sections: Vec<String> = Vec::new();
         let mut metadata = BTreeMap::new();
         for (k, v) in json_obj {
-            if k == meta::CON_SPEC_VERSION {
-                continue;
+            match k.as_str() {
+                meta::CON_SPEC_VERSION => {}
+                meta::SECTIONS => {
+                    let arr = v.as_array().ok_or_else(|| {
+                        metadata_json_error("sections must be an array of strings")
+                    })?;
+                    sections.reserve(arr.len());
+                    for entry in arr {
+                        let s = entry.as_str().ok_or_else(|| {
+                            metadata_json_error("sections must be an array of strings")
+                        })?;
+                        sections.push(s.to_string());
+                    }
+                }
+                _ => {
+                    metadata.insert(k.clone(), v.clone());
+                }
             }
-            if k == meta::SECTIONS {
-                // Don't store sections in metadata -- it's in the dedicated field.
-                continue;
-            }
-            metadata.insert(k.clone(), v.clone());
         }
-        (ver, metadata, secs, validate)
+
+        (ver, metadata, sections, validate)
     } else {
         // Legacy file: no JSON metadata line.
         (1_u32, BTreeMap::new(), Vec::new(), false)
