@@ -32,6 +32,9 @@ import readcon
 
 # Read frames
 frames = readcon.read_con("path/to/file.con")
+first = readcon.read_first_frame("path/to/file.con")
+for frame in readcon.iter_con("path/to/file.con"):
+    pass
 frames = readcon.read_con_string(contents)
 
 # Access data
@@ -46,10 +49,12 @@ for frame in frames:
 
 # Construct frames (v0.4.0+)
 atom = readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                    is_fixed=False, atom_id=1)
+                    fixed=[False, False, False], atom_id=1)
 frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0],
                          angles=[90.0, 90.0, 90.0],
                          atoms=[atom])
+frame.metadata["generator"] = "my-tool 1.0"
+frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0))
 
 # Write frames (with optional precision)
 readcon.write_con("output.con", frames)
@@ -66,16 +71,26 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 - =readcon.Atom= :: Constructable with keyword arguments (v0.4.0+).
   Properties: symbol, x, y, z, fixed, is_fixed, atom_id, mass
   (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces.
+  Data fields are writable.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-  atoms, has_velocities, has_forces, prebox_header, postbox_header,
-  spec_version (v0.6.0+), metadata (v0.6.0+, dict of native
-  JSON-compatible values), energy, frame_index, time, timestep,
-  neb_bead, neb_band.
+  atoms (live list), has_velocities, has_forces, prebox_header,
+  postbox_header, spec_version (v0.6.0+), metadata (v0.6.0+, live
+  dict of native JSON-compatible values), energy, frame_index, time,
+  timestep, neb_bead, neb_band.
   Methods: to_ase(), from_ase() (v0.4.0+), set_metadata_json(),
   set_scalar_metadata(), set_string_metadata(), set_energy(),
   set_frame_index(), set_time(), set_timestep(), set_neb_bead(),
   set_neb_band().
+- =readcon.read_first_frame(path)= :: Parse and return only the first
+  frame.
+- =readcon.iter_con(path)= :: Return a Python iterator over frames.
+  The iterator API avoids indexing into =read_con(path)= for
+  first-frame and loop-based workflows.
+- ASE conversion preserves =atom_id= through an =atom_id= array,
+  velocities through ASE velocities, forces through a
+  =SinglePointCalculator=, and per-axis fixed masks through
+  =FixCartesian= / =FixAtoms= constraints.
 
 * Julia (ccall)
 
@@ -100,10 +115,14 @@ for frame in frames
     println(frame.cell)
     println(frame.angles)
     println(frame.has_velocities)
+    println(frame.spec_version)
+    println(frame.energy)
     for atom in frame.atoms
         println(atom.x, " ", atom.y, " ", atom.z)
     end
 end
+
+write_con("roundtrip.con", frames)
 #+end_src
 
 ** Types
@@ -111,7 +130,12 @@ end
 - =ReadCon.Atom= :: atomic_number, x, y, z, atom_id, mass, is_fixed,
   fixed, vx, vy, vz, has_velocity, fx, fy, fz, has_forces
 - =ReadCon.ConFrame= :: cell, angles, atoms, has_velocities,
-  has_forces, prebox_header, postbox_header
+  has_forces, prebox_header, postbox_header, spec_version,
+  metadata_json, energy, frame_index, time, timestep, neb_bead,
+  neb_band
+- =ReadCon.write_con(path, frames; precision=6)= :: Writes Julia
+  frames through the C FFI builder/writer path, preserving velocities,
+  forces, per-axis fixed masks, atom ids, masses, and JSON metadata.
 
 * C/C++ (FFI)
 
@@ -173,6 +197,13 @@ rkr_frame_builder_set_neb_bead(builder, 4);
 rkr_frame_builder_set_neb_band(builder, 1);
 rkr_frame_builder_set_scalar_metadata(builder, "convergence", 1.0e-3);
 rkr_frame_builder_set_string_metadata(builder, "generator", "eon");
+rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+    builder, "Cu", 0.0, 0.0, 0.0,
+    true, false, true,
+    0, 63.546,
+    0.1, 0.2, 0.3,
+    -0.1, -0.2, -0.3);
+printf("status: %s\n", rkr_status_message(RKR_STATUS_SUCCESS));
 #+end_src
 
 ** C++ API
@@ -208,6 +239,12 @@ builder.set_neb_band(1);
 builder.set_scalar_metadata("convergence", 1.0e-3);
 builder.set_string_metadata("generator", "eon");
 builder.set_metadata_json(R"({"custom_key":"custom_value"})");
+builder.add_atom_with_velocity_and_forces(
+    "Cu", 0.0, 0.0, 0.0,
+    {true, false, true},
+    0, 63.546,
+    0.1, 0.2, 0.3,
+    -0.1, -0.2, -0.3);
 #+end_src
 
 ** Build system integration

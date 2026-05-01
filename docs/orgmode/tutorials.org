@@ -105,7 +105,7 @@ import readcon
 
 # Reading: metadata comes from the file's JSON line
 frames = readcon.read_con("input.con")
-print(frames[0].metadata)  # e.g. {"generator": "\"my-tool 1.0\""}
+print(frames[0].metadata)  # e.g. {"generator": "my-tool 1.0"}
 print(frames[0].energy)    # typed accessors for common keys
 print(frames[0].frame_index)
 
@@ -123,6 +123,10 @@ frame.set_neb_bead(3)
 frame.set_neb_band(1)
 frame.set_scalar_metadata("temperature_K", 300.0)
 frame.set_string_metadata("generator", "my-tool 1.0")
+
+# Direct item assignment uses the live metadata dict and is validated
+# when the frame is written.
+frame.metadata["workflow"] = {"name": "neb", "bead": 3}
 
 # Or replace metadata from a raw JSON object
 frame.set_metadata_json(
@@ -315,6 +319,11 @@ import readcon
 
 # Read from file
 frames = readcon.read_con("trajectory.con")
+first = readcon.read_first_frame("trajectory.con")
+
+# Iterate over frames
+for frame in readcon.iter_con("trajectory.con"):
+    print(len(frame))
 
 # Read from string
 with open("trajectory.con") as f:
@@ -359,15 +368,17 @@ import readcon
 
 atoms = [
     readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                 is_fixed=False, atom_id=1),
+                 fixed=[False, False, False], atom_id=1),
     readcon.Atom(symbol="Cu", x=2.55, y=2.55, z=0.0,
-                 is_fixed=False, atom_id=2),
+                 fixed=[False, False, False], atom_id=2),
 ]
 frame = readcon.ConFrame(
     cell=[10.0, 10.0, 10.0],
     angles=[90.0, 90.0, 90.0],
     atoms=atoms,
 )
+frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0))
+frame.atoms[0].fixed = [True, False, True]
 #+end_src
 
 ** Writing frames
@@ -405,12 +416,13 @@ output = readcon.write_con_string(frames, precision=17)
 
 ** ASE Atoms conversion
 
-/Added in v0.4.0.  atom_id, velocity, and mass transfer added in v0.5.1./
+/Added in v0.4.0.  atom_id, velocity, mass, forces, and per-axis
+fixed-mask transfer are preserved./
 
 Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
-installed (it is an optional dependency).  As of v0.5.1, the
-conversion preserves atom_id (via a custom per-atom array),
-velocities (for convel data), and masses.
+installed (it is an optional dependency).  The conversion preserves
+atom_id (via a custom per-atom array), velocities, forces, masses,
+and per-axis fixed masks.
 
 #+begin_src python
 import readcon
@@ -469,6 +481,7 @@ print(ase_atoms.get_velocities())  # non-zero velocity array
 # Roundtrip back to ConFrame
 frame_back = readcon.ConFrame.from_ase(ase_atoms)
 assert frame_back.has_velocities
+assert frame_back.atoms[0].fixed == frames[0].atoms[0].fixed
 #+end_src
 
 ** Roundtrip test pattern
@@ -536,13 +549,21 @@ double cell[3] = {10.0, 10.0, 10.0};
 double angles[3] = {90.0, 90.0, 90.0};
 RKRConFrameBuilder *builder =
     rkr_frame_new(cell, angles, "", "", "", "");
-if (rkr_frame_add_atom(builder, "Cu", 0.0, 0.0, 0.0,
-                       false, 1, 63.546) != RKR_STATUS_SUCCESS) {
+RKRStatus status = rkr_frame_add_atom(builder, "Cu", 0.0, 0.0, 0.0,
+                                      false, 1, 63.546);
+if (status != RKR_STATUS_SUCCESS) {
+    fprintf(stderr, "%s\n", rkr_status_message(status));
     free_rkr_frame_builder(builder);
     return 1;
 }
-if (rkr_frame_add_atom(builder, "Cu", 2.55, 2.55, 0.0,
-                       false, 2, 63.546) != RKR_STATUS_SUCCESS) {
+status = rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+        builder, "Cu", 2.55, 2.55, 0.0,
+        true, false, true,
+        2, 63.546,
+        0.1, 0.2, 0.3,
+        -0.1, -0.2, -0.3);
+if (status != RKR_STATUS_SUCCESS) {
+    fprintf(stderr, "%s\n", rkr_status_message(status));
     free_rkr_frame_builder(builder);
     return 1;
 }
@@ -586,7 +607,7 @@ RKRStatus result = rkr_writer_extend(writer,
                                      (const RKRConFrame **)handles,
                                      num_frames);
 if (result != RKR_STATUS_SUCCESS) {
-    fprintf(stderr, "write failed: %d\n", result);
+    fprintf(stderr, "write failed: %s\n", rkr_status_message(result));
 }
 free_rkr_writer(writer);
 #+end_src
@@ -645,7 +666,12 @@ int main(int argc, char *argv[]) {
 readcon::ConFrameBuilder builder(
     {10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
 builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
-builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
+builder.add_atom_with_velocity_and_forces(
+    "Cu", 2.55, 2.55, 0.0,
+    {true, false, true},
+    2, 63.546,
+    0.1, 0.2, 0.3,
+    -0.1, -0.2, -0.3);
 auto frame = builder.build();
 #+end_src
 
@@ -687,12 +713,12 @@ The C++ RAII API is used by eOn for all =.con= and =.convel= I/O:
 #+begin_src cpp
 // Reading: mmap-based single frame read
 auto frame = readcon::read_first_frame(con_path);
-// frame.cell(), frame.atoms(), frame.has_velocities()
+// frame.cell(), frame.atoms(), frame.has_velocities(), frame.has_forces()
 
 // Writing: builder with precision control
 readcon::ConFrameBuilder builder(lengths, angles);
 for (int i = 0; i < nAtoms; i++) {
-    builder.add_atom(symbol, x, y, z, is_fixed, id, mass);
+    builder.add_atom(symbol, x, y, z, fixed_mask, id, mass);
 }
 auto out_frame = builder.build();
 readcon::ConFrameWriter writer(path, 17);  // 17 digits for lossless roundtrip
@@ -724,6 +750,9 @@ for frame in frames
     println("Angles: ", frame.angles)
     println("Atoms: ", length(frame.atoms))
     println("Has velocities: ", frame.has_velocities)
+    println("Has forces: ", frame.has_forces)
+    println("Spec version: ", frame.spec_version)
+    println("Energy: ", frame.energy)
     println("Header: ", frame.prebox_header)
 
     for atom in frame.atoms
@@ -732,6 +761,20 @@ for frame in frames
     end
 end
 #+end_src
+
+** Writing frames
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("trajectory.con")
+write_con("roundtrip.con", frames)
+write_con("precise.con", frames; precision=17)
+#+end_src
+
+Julia writes through the C FFI builder and writer. The path preserves
+velocities, forces, per-axis fixed masks, masses, atom ids, and JSON
+metadata exposed by =metadata_json=.
 
 ** Working with convel velocity data
 

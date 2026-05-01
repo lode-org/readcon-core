@@ -214,6 +214,12 @@ unknown section names with an error.
 | =velocities= | =Velocities of Component /i/=  |       5 | vx vy vz fixed_flag atom_id |
 | =forces=     | =Forces of Component /i/=      |       5 | fx fy fz fixed_flag atom_id |
 
+The =fixed_flag= and =atom_id= columns in additional sections repeat
+the coordinate block identity data for the same atom ordering. Writers
+SHOULD emit the same values as the coordinate block. Readers associate
+section rows by component order and MAY ignore these duplicate identity
+columns after parsing the row shape.
+
 ** Legacy section detection
 
 Files without a =sections= key use blank-separator detection: if a
