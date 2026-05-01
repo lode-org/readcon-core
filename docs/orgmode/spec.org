@@ -269,6 +269,31 @@ is absent or false, readers MAY parse files by associating section
 rows by component order and ignoring duplicate identity column
 mismatches after parsing the row shape.
 
+*** Error paths and ParseError variants
+
+The reference reader (~readcon-core~) surfaces validation failures as
+typed ~ParseError~ variants. Other implementations are expected to
+return analogous structured errors, but the variant names below are
+specific to ~readcon-core~ and are listed here so that the spec and
+the reference implementation stay in sync.
+
+| ParseError variant | Fires when |
+|--------------------+-----------|
+| ~MissingSpecVersion~ | Line 2 starts with ={= but no ~con_spec_version~ key. |
+| ~UnsupportedSpecVersion(v)~ | ~con_spec_version~ exceeds ~CON_SPEC_VERSION~. |
+| ~InvalidMetadataJson(msg)~ | JSON is malformed, ~validate~ is not a boolean, ~sections~ is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ~validate=true~ omits the ~sections~ key. |
+| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, ~fixed_flag~ / ~atom_id~ integer tokens, section component symbol, section label, or per-row identity columns mismatch the rules above. Numeric tokens that are not finite are rejected here as well, after parse-time tokenization. |
+| ~UnknownSection(name)~ | A name in the ~sections~ array does not match a known section. |
+| ~IncompleteHeader~ | Fewer than 9 header lines remain. |
+| ~IncompleteFrame~ | Coordinate block ends short. |
+| ~IncompleteVelocitySection~ | Declared velocity section ends short or is absent. |
+| ~IncompleteForceSection~ | Declared force section ends short or is absent. |
+
+A minimal example of each path: the file
+=resources/test/tiny_cuh2_strict_invalid.con= (if present) and the
+test cases under =src/parser.rs::tests= and =tests/parseforces.rs=
+exercise these branches and serve as executable references.
+
 ** Legacy section detection
 
 Files without a =sections= key use blank-separator detection: if a
