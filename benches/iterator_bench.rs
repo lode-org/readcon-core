@@ -1,11 +1,11 @@
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-use std::path::Path;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use readcon_core::iterators::ConFrameIterator;
 use std::fs;
 use std::hint::black_box;
+use std::path::Path;
 
 fn generate_large_file(num_frames: usize) -> String {
     let single_frame = fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find test.");

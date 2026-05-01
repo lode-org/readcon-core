@@ -1,7 +1,4 @@
-#![allow(
-    clippy::too_many_arguments,
-    clippy::question_mark
-)]
+#![allow(clippy::too_many_arguments, clippy::question_mark)]
 
 pub mod compression;
 pub mod error;

@@ -6,8 +6,8 @@ use std::path::Path;
 
 #[test]
 fn test_convel_writer_roundtrip() {
-    let fdat = fs::read_to_string(test_case!("tiny_cuh2.convel"))
-        .expect("Can't find convel test file.");
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2.convel")).expect("Can't find convel test file.");
     let parser = ConFrameIterator::new(&fdat);
     let frames_original: Vec<_> = parser.map(|r| r.unwrap()).collect();
 

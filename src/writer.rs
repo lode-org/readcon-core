@@ -1,4 +1,4 @@
-use crate::types::{encode_fixed_bitmask, ConFrame};
+use crate::types::{ConFrame, encode_fixed_bitmask};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -81,11 +81,7 @@ impl<W: Write> ConFrameWriter<W> {
         for (k, v) in &frame.header.metadata {
             meta_obj.insert(k.clone(), v.clone());
         }
-        writeln!(
-            self.writer,
-            "{}",
-            serde_json::Value::Object(meta_obj)
-        )?;
+        writeln!(self.writer, "{}", serde_json::Value::Object(meta_obj))?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",

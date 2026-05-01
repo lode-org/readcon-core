@@ -2,7 +2,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
 use crate::types::{ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::fs::{self, File};
 use std::path::Path;
 use std::ptr;
@@ -47,9 +47,7 @@ pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u3
 /// # Safety
 /// frame_handle must be valid. The caller takes ownership of the returned string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_frame_metadata_json(
-    frame_handle: *const RKRConFrame,
-) -> *mut c_char {
+pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFrame) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
         None => return ptr::null_mut(),
@@ -85,9 +83,7 @@ pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
 /// # Safety
 /// frame_handle must be valid. The caller takes ownership of the returned string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_frame_potential_type(
-    frame_handle: *const RKRConFrame,
-) -> *mut c_char {
+pub unsafe extern "C" fn rkr_frame_potential_type(frame_handle: *const RKRConFrame) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
         None => return ptr::null_mut(),
@@ -875,7 +871,18 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
         Ok(s) => s,
         Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
     };
-    builder.add_atom_with_velocity(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass, vx, vy, vz);
+    builder.add_atom_with_velocity(
+        sym,
+        x,
+        y,
+        z,
+        [is_fixed, is_fixed, is_fixed],
+        atom_id,
+        mass,
+        vx,
+        vy,
+        vz,
+    );
     RKRStatus::RKR_STATUS_SUCCESS
 }
 
@@ -915,9 +922,7 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
 /// # Safety
 /// filename_c must be valid. The caller takes ownership of the returned writer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn create_writer_gzip_c(
-    filename_c: *const c_char,
-) -> *mut RKRConFrameWriter {
+pub unsafe extern "C" fn create_writer_gzip_c(filename_c: *const c_char) -> *mut RKRConFrameWriter {
     if filename_c.is_null() {
         return ptr::null_mut();
     }
@@ -944,9 +949,7 @@ pub unsafe extern "C" fn create_writer_gzip_c(
 /// # Safety
 /// filename_c must be valid. The caller takes ownership of the returned frame.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_read_first_frame(
-    filename_c: *const c_char,
-) -> *mut RKRConFrame {
+pub unsafe extern "C" fn rkr_read_first_frame(filename_c: *const c_char) -> *mut RKRConFrame {
     if filename_c.is_null() {
         return ptr::null_mut();
     }
@@ -1002,10 +1005,7 @@ pub unsafe extern "C" fn rkr_read_all_frames(
 /// # Safety
 /// frames must be valid or null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_rkr_frame_array(
-    frames: *mut *mut RKRConFrame,
-    num_frames: usize,
-) {
+pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num_frames: usize) {
     if frames.is_null() {
         return;
     }
@@ -1035,8 +1035,7 @@ mod tests {
     #[test]
     fn header_line_rejects_null_buffer() {
         let frame = test_frame_handle();
-        let status =
-            unsafe { rkr_frame_get_header_line(frame, true, 0, std::ptr::null_mut(), 16) };
+        let status = unsafe { rkr_frame_get_header_line(frame, true, 0, std::ptr::null_mut(), 16) };
         unsafe { free_rkr_frame(frame) };
 
         assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
@@ -1056,9 +1055,8 @@ mod tests {
     fn header_line_truncates_and_terminates_buffer() {
         let frame = test_frame_handle();
         let mut buffer = [0 as c_char; 10];
-        let status = unsafe {
-            rkr_frame_get_header_line(frame, true, 0, buffer.as_mut_ptr(), buffer.len())
-        };
+        let status =
+            unsafe { rkr_frame_get_header_line(frame, true, 0, buffer.as_mut_ptr(), buffer.len()) };
         unsafe { free_rkr_frame(frame) };
 
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
