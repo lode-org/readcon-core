@@ -137,30 +137,12 @@ fn test_writer_precision_default_vs_high() {
 #[test]
 fn test_builder_velocity_roundtrip() {
     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom_with_velocity(
-        "Cu",
-        1.0,
-        2.0,
-        3.0,
-        [true, true, true],
-        0,
-        63.546,
-        0.1,
-        0.2,
-        0.3,
-    );
-    builder.add_atom_with_velocity(
-        "H",
-        4.0,
-        5.0,
-        6.0,
-        [false, false, false],
-        1,
-        1.008,
-        0.4,
-        0.5,
-        0.6,
-    );
+    builder
+        .add_atom("Cu", 1.0, 2.0, 3.0, [true, true, true], 0, 63.546)
+        .with_velocity([0.1, 0.2, 0.3]);
+    builder
+        .add_atom("H", 4.0, 5.0, 6.0, [false, false, false], 1, 1.008)
+        .with_velocity([0.4, 0.5, 0.6]);
     let frame = builder.build();
 
     assert!(frame.has_velocities());

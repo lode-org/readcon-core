@@ -488,7 +488,17 @@ impl ConFrameBuilder {
             .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
     }
 
-    /// Adds an atom without velocity data.
+    /// Adds an atom with no velocity or force data and returns `&mut self`
+    /// for chaining `with_velocity` / `with_force` on the just-added atom.
+    ///
+    /// # Example
+    /// ```
+    /// use readcon_core::types::ConFrameBuilder;
+    /// let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    /// b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546)
+    ///  .with_velocity([0.1, 0.2, 0.3])
+    ///  .with_force([1.0, 0.0, 0.0]);
+    /// ```
     #[allow(clippy::too_many_arguments)]
     pub fn add_atom(
         &mut self,
@@ -499,7 +509,7 @@ impl ConFrameBuilder {
         fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
-    ) {
+    ) -> &mut Self {
         self.atoms.push(BuilderAtom {
             symbol: symbol.to_string(),
             x,
@@ -511,93 +521,25 @@ impl ConFrameBuilder {
             velocity: None,
             force: None,
         });
+        self
     }
 
-    /// Adds an atom with velocity data (for .convel output).
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_atom_with_velocity(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        vx: f64,
-        vy: f64,
-        vz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            velocity: Some([vx, vy, vz]),
-            force: None,
-        });
+    /// Attaches velocity data to the most recently added atom.
+    /// No-op (silently) if no atom has been added yet.
+    pub fn with_velocity(&mut self, velocity: [f64; 3]) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.velocity = Some(velocity);
+        }
+        self
     }
 
-    /// Adds an atom with force data.
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_atom_with_forces(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        fx: f64,
-        fy: f64,
-        fz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            velocity: None,
-            force: Some([fx, fy, fz]),
-        });
-    }
-
-    /// Adds an atom with both velocity and force data.
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_atom_with_velocity_and_forces(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        vx: f64,
-        vy: f64,
-        vz: f64,
-        fx: f64,
-        fy: f64,
-        fz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            velocity: Some([vx, vy, vz]),
-            force: Some([fx, fy, fz]),
-        });
+    /// Attaches force data to the most recently added atom.
+    /// No-op (silently) if no atom has been added yet.
+    pub fn with_force(&mut self, force: [f64; 3]) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.force = Some(force);
+        }
+        self
     }
 
     /// Consumes the builder and produces a `ConFrame`.
@@ -710,18 +652,9 @@ mod tests {
     #[test]
     fn test_builder_with_velocities() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        builder.add_atom_with_velocity(
-            "Cu",
-            0.0,
-            0.0,
-            0.0,
-            [true, true, true],
-            0,
-            63.546,
-            0.1,
-            0.2,
-            0.3,
-        );
+        builder
+            .add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546)
+            .with_velocity([0.1, 0.2, 0.3]);
         let frame = builder.build();
 
         assert!(frame.has_velocities());

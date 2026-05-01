@@ -635,20 +635,67 @@ unsafe fn add_builder_atom(
         Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
     };
 
-    match (velocity, forces) {
-        (None, None) => builder.add_atom(sym, x, y, z, fixed, atom_id, mass),
-        (Some([vx, vy, vz]), None) => {
-            builder.add_atom_with_velocity(sym, x, y, z, fixed, atom_id, mass, vx, vy, vz);
-        }
-        (None, Some([fx, fy, fz])) => {
-            builder.add_atom_with_forces(sym, x, y, z, fixed, atom_id, mass, fx, fy, fz);
-        }
-        (Some([vx, vy, vz]), Some([fx, fy, fz])) => builder.add_atom_with_velocity_and_forces(
-            sym, x, y, z, fixed, atom_id, mass, vx, vy, vz, fx, fy, fz,
-        ),
+    builder.add_atom(sym, x, y, z, fixed, atom_id, mass);
+    if let Some(v) = velocity {
+        builder.with_velocity(v);
+    }
+    if let Some(f) = forces {
+        builder.with_force(f);
     }
 
     RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
+///
+/// `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
+/// absent. This is the unified entry point that replaces the eight
+/// `rkr_frame_add_atom_*` convenience functions; callers may continue using
+/// those for source compatibility.
+///
+/// # Safety
+/// builder_handle and symbol must be valid. velocity (if non-null) must point
+/// to 3 contiguous f64 values, and force (if non-null) likewise.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rkr_frame_add_atom_full(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+    atom_id: u64,
+    mass: f64,
+    velocity: *const f64,
+    force: *const f64,
+) -> RKRStatus {
+    let velocity = if velocity.is_null() {
+        None
+    } else {
+        Some(unsafe { [*velocity, *velocity.add(1), *velocity.add(2)] })
+    };
+    let force = if force.is_null() {
+        None
+    } else {
+        Some(unsafe { [*force, *force.add(1), *force.add(2)] })
+    };
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [fixed_x, fixed_y, fixed_z],
+            atom_id,
+            mass,
+            velocity,
+            force,
+        )
+    }
 }
 
 /// Creates a new frame builder with the given cell dimensions, angles, and header lines.
