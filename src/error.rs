@@ -72,3 +72,9 @@ impl From<ParseIntError> for ParseError {
         ParseError::InvalidNumberFormat(e.to_string())
     }
 }
+
+impl From<serde_json::Error> for ParseError {
+    fn from(e: serde_json::Error) -> Self {
+        ParseError::InvalidMetadataJson(e.to_string())
+    }
+}

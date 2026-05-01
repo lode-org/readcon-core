@@ -435,10 +435,16 @@ impl ConFrameBuilder {
     ///
     /// The input must be a JSON object. The `con_spec_version` and
     /// `sections` keys are ignored because they are managed by the
-    /// builder/writer.
-    pub fn set_metadata_json(&mut self, metadata_json: &str) -> Result<(), serde_json::Error> {
+    /// builder/writer. The schema is validated up front (matching what
+    /// the parser checks on read), so authoring with bad metadata fails
+    /// fast.
+    pub fn set_metadata_json(
+        &mut self,
+        metadata_json: &str,
+    ) -> Result<(), crate::error::ParseError> {
         let object: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(metadata_json)?;
+        crate::parser::validate_metadata_schema(&object)?;
         self.metadata.clear();
         for (key, value) in object {
             if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
@@ -911,6 +917,24 @@ mod tests {
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
         header.set_lattice_vectors(vecs);
         assert_eq!(header.lattice_vectors(), Some(vecs));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json_rejects_bad_pbc() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let err = builder
+            .set_metadata_json(r#"{"pbc":[1, 2, 3]}"#)
+            .expect_err("non-bool pbc must be rejected");
+        assert!(err.to_string().contains("pbc"));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json_rejects_bad_lattice() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let err = builder
+            .set_metadata_json(r#"{"lattice_vectors":[[1,2,3],[4,5,6]]}"#)
+            .expect_err("3x2 lattice_vectors must be rejected");
+        assert!(err.to_string().contains("lattice_vectors"));
     }
 
     #[test]
