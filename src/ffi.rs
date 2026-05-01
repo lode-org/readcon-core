@@ -1258,10 +1258,15 @@ pub unsafe extern "C" fn rkr_read_all_frames(
     match iterators::read_all_frames(Path::new(filename)) {
         Ok(frames) => {
             let count = frames.len();
+            // shrink_to_fit ensures len == capacity so the matching
+            // free_rkr_frame_array can soundly call Vec::from_raw_parts
+            // with len == cap.
             let mut handles: Vec<*mut RKRConFrame> = frames
                 .into_iter()
                 .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
                 .collect();
+            handles.shrink_to_fit();
+            debug_assert_eq!(handles.len(), handles.capacity());
             let ptr = handles.as_mut_ptr();
             std::mem::forget(handles);
             unsafe { *num_frames = count };
