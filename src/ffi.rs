@@ -169,6 +169,22 @@ pub enum RKRStatus {
     RKR_STATUS_INTERNAL_ERROR = -7,
 }
 
+/// Returns a stable, static message for a status code.
+/// The returned pointer is valid for the lifetime of the process. Do NOT free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
+    match status {
+        RKRStatus::RKR_STATUS_SUCCESS => c"success".as_ptr(),
+        RKRStatus::RKR_STATUS_NULL_POINTER => c"null pointer".as_ptr(),
+        RKRStatus::RKR_STATUS_INVALID_UTF8 => c"invalid UTF-8".as_ptr(),
+        RKRStatus::RKR_STATUS_INVALID_JSON => c"invalid JSON".as_ptr(),
+        RKRStatus::RKR_STATUS_IO_ERROR => c"I/O error".as_ptr(),
+        RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS => c"index out of bounds".as_ptr(),
+        RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL => c"buffer too small".as_ptr(),
+        RKRStatus::RKR_STATUS_INTERNAL_ERROR => c"internal error".as_ptr(),
+    }
+}
+
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
 #[repr(C)]
@@ -593,6 +609,43 @@ pub struct RKRConFrameBuilder {
     _private: [u8; 0],
 }
 
+unsafe fn add_builder_atom(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed: [bool; 3],
+    atom_id: u64,
+    mass: f64,
+    velocity: Option<[f64; 3]>,
+    forces: Option<[f64; 3]>,
+) -> RKRStatus {
+    if builder_handle.is_null() || symbol.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+    };
+
+    match (velocity, forces) {
+        (None, None) => builder.add_atom(sym, x, y, z, fixed, atom_id, mass),
+        (Some([vx, vy, vz]), None) => {
+            builder.add_atom_with_velocity(sym, x, y, z, fixed, atom_id, mass, vx, vy, vz);
+        }
+        (None, Some([fx, fy, fz])) => {
+            builder.add_atom_with_forces(sym, x, y, z, fixed, atom_id, mass, fx, fy, fz);
+        }
+        (Some([vx, vy, vz]), Some([fx, fy, fz])) => builder.add_atom_with_velocity_and_forces(
+            sym, x, y, z, fixed, atom_id, mass, vx, vy, vz, fx, fy, fz,
+        ),
+    }
+
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
 /// Creates a new frame builder with the given cell dimensions, angles, and header lines.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
 /// `rkr_frame_builder_build`.
@@ -832,16 +885,54 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
     atom_id: u64,
     mass: f64,
 ) -> RKRStatus {
-    if builder_handle.is_null() || symbol.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [is_fixed; 3],
+            atom_id,
+            mass,
+            None,
+            None,
+        )
     }
-    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
-    let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
-        Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
-    };
-    builder.add_atom(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass);
-    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Adds an atom (without velocity) to the frame builder using per-axis fixed flags.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_fixed_mask(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+    atom_id: u64,
+    mass: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [fixed_x, fixed_y, fixed_z],
+            atom_id,
+            mass,
+            None,
+            None,
+        )
+    }
 }
 
 /// Adds an atom with velocity data to the frame builder.
@@ -863,27 +954,207 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
     vy: f64,
     vz: f64,
 ) -> RKRStatus {
-    if builder_handle.is_null() || symbol.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [is_fixed; 3],
+            atom_id,
+            mass,
+            Some([vx, vy, vz]),
+            None,
+        )
     }
-    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
-    let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
-        Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
-    };
-    builder.add_atom_with_velocity(
-        sym,
-        x,
-        y,
-        z,
-        [is_fixed, is_fixed, is_fixed],
-        atom_id,
-        mass,
-        vx,
-        vy,
-        vz,
-    );
-    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Adds an atom with velocity data to the frame builder using per-axis fixed flags.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_fixed_mask(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+    atom_id: u64,
+    mass: f64,
+    vx: f64,
+    vy: f64,
+    vz: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [fixed_x, fixed_y, fixed_z],
+            atom_id,
+            mass,
+            Some([vx, vy, vz]),
+            None,
+        )
+    }
+}
+
+/// Adds an atom with force data to the frame builder.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_forces(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    is_fixed: bool,
+    atom_id: u64,
+    mass: f64,
+    fx: f64,
+    fy: f64,
+    fz: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [is_fixed; 3],
+            atom_id,
+            mass,
+            None,
+            Some([fx, fy, fz]),
+        )
+    }
+}
+
+/// Adds an atom with force data to the frame builder using per-axis fixed flags.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_forces_fixed_mask(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+    atom_id: u64,
+    mass: f64,
+    fx: f64,
+    fy: f64,
+    fz: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [fixed_x, fixed_y, fixed_z],
+            atom_id,
+            mass,
+            None,
+            Some([fx, fy, fz]),
+        )
+    }
+}
+
+/// Adds an atom with velocity and force data to the frame builder.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    is_fixed: bool,
+    atom_id: u64,
+    mass: f64,
+    vx: f64,
+    vy: f64,
+    vz: f64,
+    fx: f64,
+    fy: f64,
+    fz: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [is_fixed; 3],
+            atom_id,
+            mass,
+            Some([vx, vy, vz]),
+            Some([fx, fy, fz]),
+        )
+    }
+}
+
+/// Adds an atom with velocity and force data using per-axis fixed flags.
+/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+    builder_handle: *mut RKRConFrameBuilder,
+    symbol: *const c_char,
+    x: f64,
+    y: f64,
+    z: f64,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+    atom_id: u64,
+    mass: f64,
+    vx: f64,
+    vy: f64,
+    vz: f64,
+    fx: f64,
+    fy: f64,
+    fz: f64,
+) -> RKRStatus {
+    unsafe {
+        add_builder_atom(
+            builder_handle,
+            symbol,
+            x,
+            y,
+            z,
+            [fixed_x, fixed_y, fixed_z],
+            atom_id,
+            mass,
+            Some([vx, vy, vz]),
+            Some([fx, fy, fz]),
+        )
+    }
 }
 
 /// Consumes the builder and returns a finalized RKRConFrame handle.
@@ -1022,7 +1293,7 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CStr;
+    use std::ffi::{CStr, CString};
 
     fn test_frame_handle() -> *mut RKRConFrame {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
@@ -1062,5 +1333,243 @@ mod tests {
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
         let copied = unsafe { CStr::from_ptr(buffer.as_ptr()) };
         assert_eq!(copied.to_str().unwrap(), "Generated");
+    }
+
+    fn test_builder_handle() -> *mut RKRConFrameBuilder {
+        let cell = [10.0, 11.0, 12.0];
+        let angles = [90.0, 91.0, 92.0];
+        unsafe {
+            rkr_frame_new(
+                cell.as_ptr(),
+                angles.as_ptr(),
+                ptr::null(),
+                ptr::null(),
+                ptr::null(),
+                ptr::null(),
+            )
+        }
+    }
+
+    fn c_string(s: &str) -> CString {
+        CString::new(s).unwrap()
+    }
+
+    unsafe fn assert_single_atom(
+        frame: *mut RKRConFrame,
+        fixed: [bool; 3],
+        velocity: Option<[f64; 3]>,
+        forces: Option<[f64; 3]>,
+    ) {
+        let c_frame = unsafe { rkr_frame_to_c_frame(frame) };
+        assert!(!c_frame.is_null());
+        let c_frame_ref = unsafe { &*c_frame };
+        assert_eq!(c_frame_ref.num_atoms, 1);
+        assert_eq!(c_frame_ref.has_velocities, velocity.is_some());
+        assert_eq!(c_frame_ref.has_forces, forces.is_some());
+
+        let atom = unsafe { &*c_frame_ref.atoms };
+        assert_eq!(atom.fixed_x, fixed[0]);
+        assert_eq!(atom.fixed_y, fixed[1]);
+        assert_eq!(atom.fixed_z, fixed[2]);
+        assert_eq!(atom.is_fixed, fixed.iter().any(|&value| value));
+        assert_eq!(atom.has_velocity, velocity.is_some());
+        assert_eq!(atom.has_forces, forces.is_some());
+        if let Some([vx, vy, vz]) = velocity {
+            assert_eq!([atom.vx, atom.vy, atom.vz], [vx, vy, vz]);
+        }
+        if let Some([fx, fy, fz]) = forces {
+            assert_eq!([atom.fx, atom.fy, atom.fz], [fx, fy, fz]);
+        }
+
+        unsafe { free_c_frame(c_frame) };
+        unsafe { free_rkr_frame(frame) };
+    }
+
+    #[test]
+    fn builder_preserves_fixed_mask_for_atom_without_velocity_or_forces() {
+        let builder = test_builder_handle();
+        let symbol = c_string("Cu");
+
+        let status = unsafe {
+            rkr_frame_add_atom_with_fixed_mask(
+                builder,
+                symbol.as_ptr(),
+                1.0,
+                2.0,
+                3.0,
+                true,
+                false,
+                true,
+                7,
+                63.546,
+            )
+        };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        unsafe { assert_single_atom(frame, [true, false, true], None, None) };
+    }
+
+    #[test]
+    fn builder_preserves_fixed_mask_for_atom_with_velocity() {
+        let builder = test_builder_handle();
+        let symbol = c_string("H");
+
+        let status = unsafe {
+            rkr_frame_add_atom_with_velocity_fixed_mask(
+                builder,
+                symbol.as_ptr(),
+                1.0,
+                2.0,
+                3.0,
+                false,
+                true,
+                false,
+                9,
+                1.008,
+                0.1,
+                0.2,
+                0.3,
+            )
+        };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        unsafe { assert_single_atom(frame, [false, true, false], Some([0.1, 0.2, 0.3]), None) };
+    }
+
+    #[test]
+    fn builder_preserves_fixed_mask_for_atom_with_forces() {
+        let builder = test_builder_handle();
+        let symbol = c_string("O");
+
+        let status = unsafe {
+            rkr_frame_add_atom_with_forces_fixed_mask(
+                builder,
+                symbol.as_ptr(),
+                1.0,
+                2.0,
+                3.0,
+                true,
+                true,
+                false,
+                11,
+                15.999,
+                -0.1,
+                -0.2,
+                -0.3,
+            )
+        };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        unsafe { assert_single_atom(frame, [true, true, false], None, Some([-0.1, -0.2, -0.3])) };
+    }
+
+    #[test]
+    fn builder_preserves_fixed_mask_for_atom_with_velocity_and_forces() {
+        let builder = test_builder_handle();
+        let symbol = c_string("N");
+
+        let status = unsafe {
+            rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+                builder,
+                symbol.as_ptr(),
+                1.0,
+                2.0,
+                3.0,
+                false,
+                true,
+                true,
+                13,
+                14.007,
+                0.4,
+                0.5,
+                0.6,
+                -0.4,
+                -0.5,
+                -0.6,
+            )
+        };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        unsafe {
+            assert_single_atom(
+                frame,
+                [false, true, true],
+                Some([0.4, 0.5, 0.6]),
+                Some([-0.4, -0.5, -0.6]),
+            )
+        };
+    }
+
+    #[test]
+    fn builder_bool_fixed_functions_set_all_axes_together() {
+        let builder = test_builder_handle();
+        let cu = c_string("Cu");
+        let h = c_string("H");
+
+        let atom_status =
+            unsafe { rkr_frame_add_atom(builder, cu.as_ptr(), 1.0, 2.0, 3.0, true, 1, 63.546) };
+        assert_eq!(atom_status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let velocity_status = unsafe {
+            rkr_frame_add_atom_with_velocity(
+                builder,
+                h.as_ptr(),
+                4.0,
+                5.0,
+                6.0,
+                false,
+                2,
+                1.008,
+                0.7,
+                0.8,
+                0.9,
+            )
+        };
+        assert_eq!(velocity_status, RKRStatus::RKR_STATUS_SUCCESS);
+
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let c_frame = unsafe { rkr_frame_to_c_frame(frame) };
+        assert!(!c_frame.is_null());
+        let c_frame_ref = unsafe { &*c_frame };
+        assert_eq!(c_frame_ref.num_atoms, 2);
+
+        let atoms = unsafe { std::slice::from_raw_parts(c_frame_ref.atoms, c_frame_ref.num_atoms) };
+        assert_eq!(
+            [atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z],
+            [true, true, true]
+        );
+        assert_eq!(
+            [atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z],
+            [false, false, false]
+        );
+
+        unsafe { free_c_frame(c_frame) };
+        unsafe { free_rkr_frame(frame) };
+    }
+
+    #[test]
+    fn status_message_returns_static_strings_for_all_status_values() {
+        let cases = [
+            (RKRStatus::RKR_STATUS_SUCCESS, "success"),
+            (RKRStatus::RKR_STATUS_NULL_POINTER, "null pointer"),
+            (RKRStatus::RKR_STATUS_INVALID_UTF8, "invalid UTF-8"),
+            (RKRStatus::RKR_STATUS_INVALID_JSON, "invalid JSON"),
+            (RKRStatus::RKR_STATUS_IO_ERROR, "I/O error"),
+            (
+                RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS,
+                "index out of bounds",
+            ),
+            (RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL, "buffer too small"),
+            (RKRStatus::RKR_STATUS_INTERNAL_ERROR, "internal error"),
+        ];
+
+        for (status, expected) in cases {
+            let message = unsafe { CStr::from_ptr(rkr_status_message(status)) };
+            assert_eq!(message.to_str().unwrap(), expected);
+        }
     }
 }

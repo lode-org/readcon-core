@@ -37,6 +37,10 @@ struct Atom {
     double fy;
     double fz;
     bool has_forces;
+
+    std::array<bool, 3> fixed_mask() const {
+        return {fixed_x, fixed_y, fixed_z};
+    }
 };
 
 // Forward declarations
@@ -141,6 +145,7 @@ class ConFrame {
     const std::array<std::string, 2> &prebox_header() const;
     const std::array<std::string, 2> &postbox_header() const;
     bool has_velocities() const;
+    bool has_forces() const;
 
     uint32_t spec_version() const;
     std::string metadata_json() const;
@@ -172,6 +177,7 @@ class ConFrame {
     mutable std::array<std::string, 2> prebox_header_cache_;
     mutable std::array<std::string, 2> postbox_header_cache_;
     mutable bool has_velocities_cache_ = false;
+    mutable bool has_forces_cache_ = false;
 };
 
 /**
@@ -290,6 +296,9 @@ class ConFrameBuilder {
      */
     void add_atom(const std::string &symbol, double x, double y, double z,
                   bool is_fixed, uint64_t atom_id, double mass);
+    void add_atom(const std::string &symbol, double x, double y, double z,
+                  const std::array<bool, 3> &fixed, uint64_t atom_id,
+                  double mass);
 
     /**
      * @brief Adds an atom with velocity data.
@@ -297,6 +306,34 @@ class ConFrameBuilder {
     void add_atom_with_velocity(const std::string &symbol, double x, double y,
                                 double z, bool is_fixed, uint64_t atom_id,
                                 double mass, double vx, double vy, double vz);
+    void add_atom_with_velocity(const std::string &symbol, double x, double y,
+                                double z,
+                                const std::array<bool, 3> &fixed,
+                                uint64_t atom_id, double mass, double vx,
+                                double vy, double vz);
+
+    /**
+     * @brief Adds an atom with force data.
+     */
+    void add_atom_with_forces(const std::string &symbol, double x, double y,
+                              double z, bool is_fixed, uint64_t atom_id,
+                              double mass, double fx, double fy, double fz);
+    void add_atom_with_forces(const std::string &symbol, double x, double y,
+                              double z, const std::array<bool, 3> &fixed,
+                              uint64_t atom_id, double mass, double fx,
+                              double fy, double fz);
+
+    /**
+     * @brief Adds an atom with velocity and force data.
+     */
+    void add_atom_with_velocity_and_forces(
+        const std::string &symbol, double x, double y, double z, bool is_fixed,
+        uint64_t atom_id, double mass, double vx, double vy, double vz,
+        double fx, double fy, double fz);
+    void add_atom_with_velocity_and_forces(
+        const std::string &symbol, double x, double y, double z,
+        const std::array<bool, 3> &fixed, uint64_t atom_id, double mass,
+        double vx, double vy, double vz, double fx, double fy, double fz);
 
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
@@ -309,6 +346,17 @@ class ConFrameBuilder {
 };
 
 // --- Convenience free functions ---
+
+inline std::string status_message(RKRStatus status) {
+    const char *message = rkr_status_message(status);
+    return message ? std::string(message) : std::string("unknown status");
+}
+
+inline void throw_on_error(RKRStatus status, const std::string &operation) {
+    if (status != RKRStatus::RKR_STATUS_SUCCESS) {
+        throw std::runtime_error(operation + ": " + status_message(status));
+    }
+}
 
 /**
  * @brief Reads the first frame from a .con file using mmap.
@@ -417,6 +465,7 @@ inline void ConFrame::cache_data() const {
                      c_frame->angles[2]};
 
     has_velocities_cache_ = c_frame->has_velocities;
+    has_forces_cache_ = c_frame->has_forces;
 
     atoms_cache_.reserve(c_frame->num_atoms);
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
@@ -484,6 +533,11 @@ inline bool ConFrame::has_velocities() const {
     return has_velocities_cache_;
 }
 
+inline bool ConFrame::has_forces() const {
+    cache_data();
+    return has_forces_cache_;
+}
+
 inline uint32_t ConFrame::spec_version() const {
     return rkr_frame_spec_version(frame_handle_.get());
 }
@@ -547,10 +601,9 @@ inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
         handles.push_back(frame.get_handle());
     }
 
-    if (rkr_writer_extend(writer_handle_.get(), handles.data(),
-                          handles.size()) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to write multiple frames.");
-    }
+    throw_on_error(
+        rkr_writer_extend(writer_handle_.get(), handles.data(), handles.size()),
+        "Failed to write multiple frames");
 }
 
 // --- Implementation of ConFrameBuilder methods ---
@@ -593,81 +646,122 @@ ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
 inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
                                       double y, double z, bool is_fixed,
                                       uint64_t atom_id, double mass) {
-    if (rkr_frame_add_atom(builder_handle_, symbol.c_str(), x, y, z, is_fixed,
-                           atom_id, mass) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to add atom to frame builder.");
-    }
+    add_atom(symbol, x, y, z, {is_fixed, is_fixed, is_fixed}, atom_id, mass);
+}
+
+inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
+                                      double y, double z,
+                                      const std::array<bool, 3> &fixed,
+                                      uint64_t atom_id, double mass) {
+    throw_on_error(rkr_frame_add_atom_with_fixed_mask(
+                       builder_handle_, symbol.c_str(), x, y, z, fixed[0],
+                       fixed[1], fixed[2], atom_id, mass),
+                   "Failed to add atom to frame builder");
 }
 
 inline void ConFrameBuilder::set_metadata_json(
     const std::string &metadata_json) {
-    if (rkr_frame_builder_set_metadata_json(builder_handle_,
-                                            metadata_json.c_str()) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder metadata JSON.");
-    }
+    throw_on_error(rkr_frame_builder_set_metadata_json(builder_handle_,
+                                                       metadata_json.c_str()),
+                   "Failed to set builder metadata JSON");
 }
 
 inline void ConFrameBuilder::set_scalar_metadata(const std::string &key,
                                                  double value) {
-    if (rkr_frame_builder_set_scalar_metadata(builder_handle_, key.c_str(),
-                                              value) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder scalar metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_scalar_metadata(
+                       builder_handle_, key.c_str(), value),
+                   "Failed to set builder scalar metadata");
 }
 
 inline void ConFrameBuilder::set_string_metadata(const std::string &key,
                                                  const std::string &value) {
-    if (rkr_frame_builder_set_string_metadata(builder_handle_, key.c_str(),
-                                              value.c_str()) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder string metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_string_metadata(
+                       builder_handle_, key.c_str(), value.c_str()),
+                   "Failed to set builder string metadata");
 }
 
 inline void ConFrameBuilder::set_energy(double energy) {
-    if (rkr_frame_builder_set_energy(builder_handle_, energy) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder energy metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_energy(builder_handle_, energy),
+                   "Failed to set builder energy metadata");
 }
 
 inline void ConFrameBuilder::set_frame_index(uint64_t idx) {
-    if (rkr_frame_builder_set_frame_index(builder_handle_, idx) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder frame_index metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_frame_index(builder_handle_, idx),
+                   "Failed to set builder frame_index metadata");
 }
 
 inline void ConFrameBuilder::set_time(double time) {
-    if (rkr_frame_builder_set_time(builder_handle_, time) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder time metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_time(builder_handle_, time),
+                   "Failed to set builder time metadata");
 }
 
 inline void ConFrameBuilder::set_timestep(double dt) {
-    if (rkr_frame_builder_set_timestep(builder_handle_, dt) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder timestep metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_timestep(builder_handle_, dt),
+                   "Failed to set builder timestep metadata");
 }
 
 inline void ConFrameBuilder::set_neb_bead(uint64_t bead) {
-    if (rkr_frame_builder_set_neb_bead(builder_handle_, bead) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder neb_bead metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_neb_bead(builder_handle_, bead),
+                   "Failed to set builder neb_bead metadata");
 }
 
 inline void ConFrameBuilder::set_neb_band(uint64_t band) {
-    if (rkr_frame_builder_set_neb_band(builder_handle_, band) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error("Failed to set builder neb_band metadata.");
-    }
+    throw_on_error(rkr_frame_builder_set_neb_band(builder_handle_, band),
+                   "Failed to set builder neb_band metadata");
 }
 
 inline void ConFrameBuilder::add_atom_with_velocity(
     const std::string &symbol, double x, double y, double z, bool is_fixed,
     uint64_t atom_id, double mass, double vx, double vy, double vz) {
-    if (rkr_frame_add_atom_with_velocity(builder_handle_, symbol.c_str(), x, y,
-                                         z, is_fixed, atom_id, mass, vx, vy,
-                                         vz) != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error(
-            "Failed to add atom with velocity to frame builder.");
-    }
+    add_atom_with_velocity(symbol, x, y, z, {is_fixed, is_fixed, is_fixed},
+                           atom_id, mass, vx, vy, vz);
+}
+
+inline void ConFrameBuilder::add_atom_with_velocity(
+    const std::string &symbol, double x, double y, double z,
+    const std::array<bool, 3> &fixed, uint64_t atom_id, double mass, double vx,
+    double vy, double vz) {
+    throw_on_error(rkr_frame_add_atom_with_velocity_fixed_mask(
+                       builder_handle_, symbol.c_str(), x, y, z, fixed[0],
+                       fixed[1], fixed[2], atom_id, mass, vx, vy, vz),
+                   "Failed to add atom with velocity to frame builder");
+}
+
+inline void ConFrameBuilder::add_atom_with_forces(
+    const std::string &symbol, double x, double y, double z, bool is_fixed,
+    uint64_t atom_id, double mass, double fx, double fy, double fz) {
+    add_atom_with_forces(symbol, x, y, z, {is_fixed, is_fixed, is_fixed},
+                         atom_id, mass, fx, fy, fz);
+}
+
+inline void ConFrameBuilder::add_atom_with_forces(
+    const std::string &symbol, double x, double y, double z,
+    const std::array<bool, 3> &fixed, uint64_t atom_id, double mass, double fx,
+    double fy, double fz) {
+    throw_on_error(rkr_frame_add_atom_with_forces_fixed_mask(
+                       builder_handle_, symbol.c_str(), x, y, z, fixed[0],
+                       fixed[1], fixed[2], atom_id, mass, fx, fy, fz),
+                   "Failed to add atom with forces to frame builder");
+}
+
+inline void ConFrameBuilder::add_atom_with_velocity_and_forces(
+    const std::string &symbol, double x, double y, double z, bool is_fixed,
+    uint64_t atom_id, double mass, double vx, double vy, double vz, double fx,
+    double fy, double fz) {
+    add_atom_with_velocity_and_forces(
+        symbol, x, y, z, {is_fixed, is_fixed, is_fixed}, atom_id, mass, vx, vy,
+        vz, fx, fy, fz);
+}
+
+inline void ConFrameBuilder::add_atom_with_velocity_and_forces(
+    const std::string &symbol, double x, double y, double z,
+    const std::array<bool, 3> &fixed, uint64_t atom_id, double mass, double vx,
+    double vy, double vz, double fx, double fy, double fz) {
+    throw_on_error(rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+                       builder_handle_, symbol.c_str(), x, y, z, fixed[0],
+                       fixed[1], fixed[2], atom_id, mass, vx, vy, vz, fx, fy,
+                       fz),
+                   "Failed to add atom with velocity and forces to frame builder");
 }
 
 inline ConFrame ConFrameBuilder::build() {
