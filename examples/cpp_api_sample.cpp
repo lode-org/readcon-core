@@ -44,9 +44,9 @@ void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
                   << ", Pos: (" << atom.x << ", " << atom.y << ", " << atom.z
                   << ")"
                   << ", Fixed: " << atom.is_fixed;
-        if (atom.has_velocity) {
-            std::cout << ", Vel: (" << atom.vx << ", " << atom.vy << ", "
-                      << atom.vz << ")";
+        if (auto v = atom.velocity()) {
+            std::cout << ", Vel: (" << (*v)[0] << ", " << (*v)[1] << ", "
+                      << (*v)[2] << ")";
         }
         std::cout << std::endl;
         atoms_to_print++;

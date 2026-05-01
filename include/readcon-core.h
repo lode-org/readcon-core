@@ -356,6 +356,51 @@ struct RKRConFrameWriter *create_writer_from_path_with_precision_c(const char *f
                                                                    uint8_t precision);
 
 /**
+ * Attaches a velocity vector to the most recently added atom on a builder.
+ * No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid. velocity must point to 3 contiguous f64 values.
+ */
+enum RKRStatus rkr_frame_builder_set_last_velocity(struct RKRConFrameBuilder *builder_handle,
+                                                   const double *velocity);
+
+/**
+ * Attaches a force vector to the most recently added atom on a builder.
+ * No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid. force must point to 3 contiguous f64 values.
+ */
+enum RKRStatus rkr_frame_builder_set_last_force(struct RKRConFrameBuilder *builder_handle,
+                                                const double *force);
+
+/**
+ * Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
+ *
+ * `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
+ * absent. This is the unified entry point that replaces the eight
+ * `rkr_frame_add_atom_*` convenience functions; callers may continue using
+ * those for source compatibility.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid. velocity (if non-null) must point
+ * to 3 contiguous f64 values, and force (if non-null) likewise.
+ */
+enum RKRStatus rkr_frame_add_atom_full(struct RKRConFrameBuilder *builder_handle,
+                                       const char *symbol,
+                                       double x,
+                                       double y,
+                                       double z,
+                                       bool fixed_x,
+                                       bool fixed_y,
+                                       bool fixed_z,
+                                       uint64_t atom_id,
+                                       double mass,
+                                       const double *velocity,
+                                       const double *force);
+
+/**
  * Creates a new frame builder with the given cell dimensions, angles, and header lines.
  * The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
  * `rkr_frame_builder_build`.
