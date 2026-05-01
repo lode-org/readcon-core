@@ -42,14 +42,11 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 
     # Rust
     cargo run --example rust_usage -- resources/test/tiny_cuh2.con
-    
     # Python
     pip install readcon
     python -c "import readcon; print(readcon.read_con('file.con'))"
-    
     # C/C++ (via meson subproject or cmake)
     meson setup builddir -Dwith_examples=True && meson test -C builddir
-    
     # cargo-c install layout
     cargo cinstall --prefix /tmp/readcon-install
 
