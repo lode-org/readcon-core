@@ -749,7 +749,8 @@ where
             header.sections.push("velocities".to_string());
         }
     } else {
-        for section in header.sections.clone() {
+        let sections = std::mem::take(&mut header.sections);
+        for section in &sections {
             match section.as_str() {
                 "velocities" => {
                     let found = parse_velocity_section(lines, header, atom_data)?;
@@ -766,6 +767,7 @@ where
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
+        header.sections = sections;
     }
     Ok(())
 }
