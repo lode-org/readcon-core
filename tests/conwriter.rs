@@ -49,7 +49,7 @@ fn test_builder_roundtrip() {
         .postbox_header(["0 0".to_string(), "218 0 1".to_string()]);
     builder.add_atom("Cu", 0.639400000000001, 0.904500000000000, 6.975299999999995, [true, true, true], 0, 63.546);
     builder.add_atom("Cu", 3.196999999999999, 0.904500000000000, 6.975299999999995, [true, true, true], 1, 63.546);
-    builder.add_atom("H", 8.682299999999999, 9.946999999999997, 11.732999999999993, [false, false, false], 2, 1.008);
+    builder.add_atom("H", 8.682_3, 9.946999999999997, 11.732999999999993, [false, false, false], 2, 1.008);
     let frame = builder.build();
 
     let mut buffer: Vec<u8> = Vec::new();
@@ -69,14 +69,14 @@ fn test_builder_roundtrip() {
     // Verify precision 17 roundtrip preserves coordinates
     assert_eq!(rt.atom_data[0].x, 0.639400000000001);
     assert_eq!(rt.atom_data[0].y, 0.904500000000000);
-    assert_eq!(rt.atom_data[2].x, 8.682299999999999);
+    assert_eq!(rt.atom_data[2].x, 8.682_3);
 }
 
 #[test]
 fn test_writer_precision_default_vs_high() {
     let mut builder =
         ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom("Cu", 1.23456789012345678, 0.0, 0.0, [false, false, false], 0, 63.546);
+    builder.add_atom("Cu", 1.234_567_890_123_456_7, 0.0, 0.0, [false, false, false], 0, 63.546);
     let frame = builder.build();
 
     // Default precision (6)
@@ -103,7 +103,7 @@ fn test_writer_precision_default_vs_high() {
         .map(|r| r.unwrap())
         .collect();
     // 17 decimal places preserves the full f64
-    assert!((frames17[0].atom_data[0].x - 1.23456789012345678).abs() < 1e-14);
+    assert!((frames17[0].atom_data[0].x - 1.234_567_890_123_456_7).abs() < 1e-14);
 }
 
 #[test]
