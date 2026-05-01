@@ -2,6 +2,7 @@ mod common;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::writer::ConFrameWriter;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -177,6 +178,32 @@ fn test_builder_velocity_roundtrip() {
     assert!(frames[0].has_velocities());
     assert_eq!(frames[0].atom_data[0].vx, Some(0.1));
     assert_eq!(frames[0].atom_data[1].vz, Some(0.6));
+}
+
+#[test]
+fn test_writer_emits_empty_sections_when_validate_true() {
+    let mut metadata = BTreeMap::new();
+    metadata.insert("validate".to_string(), serde_json::json!(true));
+    let mut builder =
+        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]).metadata(metadata);
+    builder.add_atom("Cu", 1.0, 2.0, 3.0, [false, false, false], 0, 63.546);
+    let frame = builder.build();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        writer.write_frame(&frame).expect("Failed to write frame.");
+    }
+
+    let fdat = String::from_utf8(buffer).expect("Buffer is not valid UTF-8.");
+    let metadata: serde_json::Value = serde_json::from_str(fdat.lines().nth(1).unwrap()).unwrap();
+
+    assert_eq!(metadata.get("sections"), Some(&serde_json::json!([])));
+
+    let frames: Vec<_> = ConFrameIterator::new(&fdat)
+        .map(|result| result.unwrap())
+        .collect();
+    assert_eq!(frames.len(), 1);
 }
 
 /// Verifies that non-sequential atom_id values (representing the original

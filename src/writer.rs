@@ -75,10 +75,19 @@ impl<W: Write> ConFrameWriter<W> {
         if frame.has_forces() {
             sections.push(json!("forces"));
         }
-        if !sections.is_empty() {
+        let validate = frame
+            .header
+            .metadata
+            .get("validate")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !sections.is_empty() || validate {
             meta_obj.insert("sections".to_string(), json!(sections));
         }
         for (k, v) in &frame.header.metadata {
+            if k == "con_spec_version" || k == "sections" {
+                continue;
+            }
             meta_obj.insert(k.clone(), v.clone());
         }
         writeln!(self.writer, "{}", serde_json::Value::Object(meta_obj))?;
