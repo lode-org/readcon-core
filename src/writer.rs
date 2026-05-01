@@ -132,7 +132,7 @@ impl<W: Write> ConFrameWriter<W> {
                 let atom = &frame.atom_data[atom_idx_offset + i];
                 writeln!(
                     self.writer,
-                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag:.0} {atom_id}",
+                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag} {atom_id}",
                     prec = prec,
                     x = atom.x,
                     y = atom.y,
@@ -159,7 +159,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let atom = &frame.atom_data[vel_idx_offset + i];
                     writeln!(
                         self.writer,
-                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag:.0} {atom_id}",
+                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
                         vx = atom.vx.unwrap_or(0.0),
                         vy = atom.vy.unwrap_or(0.0),
@@ -187,7 +187,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let atom = &frame.atom_data[force_idx_offset + i];
                     writeln!(
                         self.writer,
-                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag:.0} {atom_id}",
+                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
                         fx = atom.fx.unwrap_or(0.0),
                         fy = atom.fy.unwrap_or(0.0),

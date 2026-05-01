@@ -595,37 +595,42 @@ impl ConFrameBuilder {
     /// Atoms are grouped by symbol (in encounter order) to compute
     /// `natm_types`, `natms_per_type`, and `masses_per_type`.
     pub fn build(self) -> ConFrame {
-        // Group atoms by symbol in encounter order
+        // Single-pass grouping: assign each atom a type index in encounter
+        // order and bucket its position. The buckets preserve per-symbol
+        // input order so the final flatten yields atoms grouped by type.
         let mut type_order: Vec<String> = Vec::new();
         let mut type_counts: Vec<usize> = Vec::new();
         let mut type_masses: Vec<f64> = Vec::new();
+        let mut buckets: Vec<Vec<usize>> = Vec::new();
 
-        for atom in &self.atoms {
-            if let Some(idx) = type_order.iter().position(|s| s == &atom.symbol) {
-                type_counts[idx] += 1;
-            } else {
-                type_order.push(atom.symbol.clone());
-                type_counts.push(1);
-                type_masses.push(atom.mass);
-            }
-        }
-
-        // Sort atoms by type order (group same symbols together)
-        let mut sorted_atoms: Vec<&BuilderAtom> = Vec::with_capacity(self.atoms.len());
-        for symbol in &type_order {
-            for atom in &self.atoms {
-                if &atom.symbol == symbol {
-                    sorted_atoms.push(atom);
+        for (i, atom) in self.atoms.iter().enumerate() {
+            let idx = match type_order.iter().position(|s| s == &atom.symbol) {
+                Some(idx) => {
+                    type_counts[idx] += 1;
+                    idx
                 }
-            }
+                None => {
+                    type_order.push(atom.symbol.clone());
+                    type_counts.push(1);
+                    type_masses.push(atom.mass);
+                    buckets.push(Vec::new());
+                    type_order.len() - 1
+                }
+            };
+            buckets[idx].push(i);
         }
 
-        let atom_data: Vec<AtomDatum> = sorted_atoms
-            .iter()
-            .map(|a| {
-                let symbol: Arc<str> = Arc::from(a.symbol.clone());
-                AtomDatum {
-                    symbol,
+        // One Arc<str> per type so all atoms of the same symbol share storage.
+        let type_symbols: Vec<Arc<str>> =
+            type_order.iter().map(|s| Arc::from(s.as_str())).collect();
+
+        let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(self.atoms.len());
+        for (type_idx, indices) in buckets.iter().enumerate() {
+            let symbol = &type_symbols[type_idx];
+            for &i in indices {
+                let a = &self.atoms[i];
+                atom_data.push(AtomDatum {
+                    symbol: Arc::clone(symbol),
                     x: a.x,
                     y: a.y,
                     z: a.z,
@@ -637,9 +642,9 @@ impl ConFrameBuilder {
                     fx: a.fx,
                     fy: a.fy,
                     fz: a.fz,
-                }
-            })
-            .collect();
+                });
+            }
+        }
 
         // Auto-populate sections based on what data is present.
         let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
