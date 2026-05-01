@@ -270,18 +270,10 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    /// The x-component of velocity (present only in `.convel` files).
-    pub vx: Option<f64>,
-    /// The y-component of velocity (present only in `.convel` files).
-    pub vy: Option<f64>,
-    /// The z-component of velocity (present only in `.convel` files).
-    pub vz: Option<f64>,
-    /// The x-component of force (present when `"forces"` section declared).
-    pub fx: Option<f64>,
-    /// The y-component of force (present when `"forces"` section declared).
-    pub fy: Option<f64>,
-    /// The z-component of force (present when `"forces"` section declared).
-    pub fz: Option<f64>,
+    /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
+    pub velocity: Option<[f64; 3]>,
+    /// Force vector `[fx, fy, fz]` (present when `"forces"` section declared).
+    pub force: Option<[f64; 3]>,
 }
 
 impl AtomDatum {
@@ -297,12 +289,12 @@ impl AtomDatum {
 
     /// Returns `true` if this atom has velocity data.
     pub fn has_velocity(&self) -> bool {
-        self.vx.is_some() && self.vy.is_some() && self.vz.is_some()
+        self.velocity.is_some()
     }
 
     /// Returns `true` if this atom has force data.
     pub fn has_forces(&self) -> bool {
-        self.fx.is_some() && self.fy.is_some() && self.fz.is_some()
+        self.force.is_some()
     }
 }
 
@@ -391,12 +383,8 @@ struct BuilderAtom {
     fixed: [bool; 3],
     atom_id: u64,
     mass: f64,
-    vx: Option<f64>,
-    vy: Option<f64>,
-    vz: Option<f64>,
-    fx: Option<f64>,
-    fy: Option<f64>,
-    fz: Option<f64>,
+    velocity: Option<[f64; 3]>,
+    force: Option<[f64; 3]>,
 }
 
 impl ConFrameBuilder {
@@ -520,12 +508,8 @@ impl ConFrameBuilder {
             fixed,
             atom_id,
             mass,
-            vx: None,
-            vy: None,
-            vz: None,
-            fx: None,
-            fy: None,
-            fz: None,
+            velocity: None,
+            force: None,
         });
     }
 
@@ -552,12 +536,8 @@ impl ConFrameBuilder {
             fixed,
             atom_id,
             mass,
-            vx: Some(vx),
-            vy: Some(vy),
-            vz: Some(vz),
-            fx: None,
-            fy: None,
-            fz: None,
+            velocity: Some([vx, vy, vz]),
+            force: None,
         });
     }
 
@@ -584,12 +564,8 @@ impl ConFrameBuilder {
             fixed,
             atom_id,
             mass,
-            vx: None,
-            vy: None,
-            vz: None,
-            fx: Some(fx),
-            fy: Some(fy),
-            fz: Some(fz),
+            velocity: None,
+            force: Some([fx, fy, fz]),
         });
     }
 
@@ -619,12 +595,8 @@ impl ConFrameBuilder {
             fixed,
             atom_id,
             mass,
-            vx: Some(vx),
-            vy: Some(vy),
-            vz: Some(vz),
-            fx: Some(fx),
-            fy: Some(fy),
-            fz: Some(fz),
+            velocity: Some([vx, vy, vz]),
+            force: Some([fx, fy, fz]),
         });
     }
 
@@ -674,12 +646,8 @@ impl ConFrameBuilder {
                     z: a.z,
                     fixed: a.fixed,
                     atom_id: a.atom_id,
-                    vx: a.vx,
-                    vy: a.vy,
-                    vz: a.vz,
-                    fx: a.fx,
-                    fy: a.fy,
-                    fz: a.fz,
+                    velocity: a.velocity,
+                    force: a.force,
                 });
             }
         }
@@ -757,9 +725,7 @@ mod tests {
         let frame = builder.build();
 
         assert!(frame.has_velocities());
-        assert_eq!(frame.atom_data[0].vx, Some(0.1));
-        assert_eq!(frame.atom_data[0].vy, Some(0.2));
-        assert_eq!(frame.atom_data[0].vz, Some(0.3));
+        assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
     }
 
     #[test]

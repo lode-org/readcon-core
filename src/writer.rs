@@ -157,13 +157,11 @@ impl<W: Write> ConFrameWriter<W> {
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[vel_idx_offset + i];
+                    let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
                     writeln!(
                         self.writer,
                         "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
-                        vx = atom.vx.unwrap_or(0.0),
-                        vy = atom.vy.unwrap_or(0.0),
-                        vz = atom.vz.unwrap_or(0.0),
                         fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;
@@ -185,13 +183,11 @@ impl<W: Write> ConFrameWriter<W> {
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[force_idx_offset + i];
+                    let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
                     writeln!(
                         self.writer,
                         "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
-                        fx = atom.fx.unwrap_or(0.0),
-                        fy = atom.fy.unwrap_or(0.0),
-                        fz = atom.fz.unwrap_or(0.0),
                         fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;

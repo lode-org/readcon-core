@@ -56,13 +56,8 @@ fn main() {
                 atom.is_fixed(),
                 atom.atom_id
             );
-            if atom.has_velocity() {
-                print!(
-                    " vel=({:.6}, {:.6}, {:.6})",
-                    atom.vx.unwrap(),
-                    atom.vy.unwrap(),
-                    atom.vz.unwrap()
-                );
+            if let Some([vx, vy, vz]) = atom.velocity {
+                print!(" vel=({vx:.6}, {vy:.6}, {vz:.6})");
             }
             println!();
         }

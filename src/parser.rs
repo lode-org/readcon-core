@@ -445,12 +445,8 @@ pub fn parse_single_frame<'a>(
                 z: vals[2],
                 fixed,
                 atom_id,
-                vx: None,
-                vy: None,
-                vz: None,
-                fx: None,
-                fy: None,
-                fz: None,
+                velocity: None,
+                force: None,
             });
             global_atom_idx += 1;
         }
@@ -671,9 +667,7 @@ where
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].vx = Some(vals[0]);
-                atom_data[atom_idx].vy = Some(vals[1]);
-                atom_data[atom_idx].vz = Some(vals[2]);
+                atom_data[atom_idx].velocity = Some([vals[0], vals[1], vals[2]]);
             }
             atom_idx += 1;
         }
@@ -732,9 +726,7 @@ where
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].fx = Some(vals[0]);
-                atom_data[atom_idx].fy = Some(vals[1]);
-                atom_data[atom_idx].fz = Some(vals[2]);
+                atom_data[atom_idx].force = Some([vals[0], vals[1], vals[2]]);
             }
             atom_idx += 1;
         }
@@ -1199,12 +1191,8 @@ mod tests {
         let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
             .expect("velocity parsing should succeed");
         assert!(has_vel);
-        assert_eq!(frame.atom_data[0].vx, Some(0.1));
-        assert_eq!(frame.atom_data[0].vy, Some(0.2));
-        assert_eq!(frame.atom_data[0].vz, Some(0.3));
-        assert_eq!(frame.atom_data[1].vx, Some(0.4));
-        assert_eq!(frame.atom_data[1].vy, Some(0.5));
-        assert_eq!(frame.atom_data[1].vz, Some(0.6));
+        assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
+        assert_eq!(frame.atom_data[1].velocity, Some([0.4, 0.5, 0.6]));
     }
 
     #[test]
@@ -1561,7 +1549,7 @@ Coordinates of Component 1
         let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
             .expect("should succeed with no velocities");
         assert!(!has_vel);
-        assert_eq!(frame.atom_data[0].vx, None);
+        assert_eq!(frame.atom_data[0].velocity, None);
     }
 
     #[test]

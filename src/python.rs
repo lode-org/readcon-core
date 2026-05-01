@@ -107,6 +107,14 @@ impl PyAtomDatum {
 
 impl PyAtomDatum {
     fn from_atom_with_mass(atom: &AtomDatum, mass: f64) -> Self {
+        let (vx, vy, vz) = match atom.velocity {
+            Some([x, y, z]) => (Some(x), Some(y), Some(z)),
+            None => (None, None, None),
+        };
+        let (fx, fy, fz) = match atom.force {
+            Some([x, y, z]) => (Some(x), Some(y), Some(z)),
+            None => (None, None, None),
+        };
         PyAtomDatum {
             symbol: atom.symbol.to_string(),
             x: atom.x,
@@ -115,12 +123,12 @@ impl PyAtomDatum {
             fixed: atom.fixed,
             atom_id: atom.atom_id,
             mass: Some(mass),
-            vx: atom.vx,
-            vy: atom.vy,
-            vz: atom.vz,
-            fx: atom.fx,
-            fy: atom.fy,
-            fz: atom.fz,
+            vx,
+            vy,
+            vz,
+            fx,
+            fy,
+            fz,
         }
     }
 }
