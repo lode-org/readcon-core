@@ -235,6 +235,27 @@ class TestConFrameConstructor:
         assert frame.metadata["generator"] == "pytest"
         assert frame.metadata["nested"]["ok"] is True
 
+    def test_metadata_property_setter(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0)],
+        )
+
+        frame.metadata = {"generator": "setter", "values": [1, 2.5, None]}
+
+        assert frame.metadata == {"generator": "setter", "values": [1, 2.5, None]}
+
+    def test_metadata_rejects_non_json_values(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0)],
+        )
+
+        with pytest.raises(ValueError):
+            frame.metadata = {"bad": object()}
+
 
 class TestMass:
     def test_mass_from_file(self):
