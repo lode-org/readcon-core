@@ -78,7 +78,7 @@ impl PartialEq for PreboxHeader {
 }
 
 /// Holds all metadata from the 9-line header of a simulation frame.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct FrameHeader {
     /// The two text lines preceding the box dimension data: a user line
     /// plus a managed JSON metadata line.
@@ -113,6 +113,28 @@ pub struct FrameHeader {
     /// "key absent" (try blank-separator velocity detection). Cached at
     /// parse time so the section dispatch does not re-parse the JSON.
     pub(crate) sections_declared: bool,
+}
+
+impl PartialEq for FrameHeader {
+    /// Frame identity excludes the cached `strict_validation` and
+    /// `sections_declared` flags. Both are derived from the metadata at
+    /// parse time and exist purely as a perf shortcut, so two frames
+    /// that hold the same metadata + sections compare equal even when
+    /// one came from a legacy blank-separator detection (cached=false)
+    /// and the other from a re-read of an explicitly-declared v2 file
+    /// (cached=true).
+    fn eq(&self, other: &Self) -> bool {
+        self.prebox_header == other.prebox_header
+            && self.boxl == other.boxl
+            && self.angles == other.angles
+            && self.postbox_header == other.postbox_header
+            && self.natm_types == other.natm_types
+            && self.natms_per_type == other.natms_per_type
+            && self.masses_per_type == other.masses_per_type
+            && self.spec_version == other.spec_version
+            && self.metadata == other.metadata
+            && self.sections == other.sections
+    }
 }
 
 /// Typed accessors for recommended JSON metadata keys.
