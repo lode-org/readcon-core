@@ -609,6 +609,7 @@ pub struct RKRConFrameBuilder {
     _private: [u8; 0],
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn add_builder_atom(
     builder_handle: *mut RKRConFrameBuilder,
     symbol: *const c_char,
