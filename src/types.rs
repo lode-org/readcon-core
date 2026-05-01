@@ -463,6 +463,7 @@ impl ConFrameBuilder {
     }
 
     /// Adds an atom without velocity data.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_atom(
         &mut self,
         symbol: &str,
@@ -491,6 +492,7 @@ impl ConFrameBuilder {
     }
 
     /// Adds an atom with velocity data (for .convel output).
+    #[allow(clippy::too_many_arguments)]
     pub fn add_atom_with_velocity(
         &mut self,
         symbol: &str,
@@ -522,6 +524,7 @@ impl ConFrameBuilder {
     }
 
     /// Adds an atom with force data.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_atom_with_forces(
         &mut self,
         symbol: &str,
@@ -553,6 +556,7 @@ impl ConFrameBuilder {
     }
 
     /// Adds an atom with both velocity and force data.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_atom_with_velocity_and_forces(
         &mut self,
         symbol: &str,
