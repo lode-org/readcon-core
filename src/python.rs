@@ -258,9 +258,9 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub angles: [f64; 3],
     #[pyo3(get)]
-    pub prebox_header: Vec<String>,
+    pub prebox_header: [String; 2],
     #[pyo3(get)]
-    pub postbox_header: Vec<String>,
+    pub postbox_header: [String; 2],
     atoms: Py<PyList>,
     #[pyo3(get)]
     pub spec_version: u32,
@@ -276,8 +276,8 @@ impl PyConFrame {
         cell: [f64; 3],
         angles: [f64; 3],
         atoms: Vec<PyAtomDatum>,
-        prebox_header: Option<Vec<String>>,
-        postbox_header: Option<Vec<String>>,
+        prebox_header: Option<[String; 2]>,
+        postbox_header: Option<[String; 2]>,
         metadata: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let atoms = py_atoms_to_list(py, atoms)?;
@@ -288,8 +288,8 @@ impl PyConFrame {
         Ok(PyConFrame {
             cell,
             angles,
-            prebox_header: prebox_header.unwrap_or_else(|| vec![String::new(), String::new()]),
-            postbox_header: postbox_header.unwrap_or_else(|| vec![String::new(), String::new()]),
+            prebox_header: prebox_header.unwrap_or_default(),
+            postbox_header: postbox_header.unwrap_or_default(),
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
             metadata,
@@ -506,8 +506,8 @@ impl PyConFrame {
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
-            prebox_header: frame.header.prebox_header.to_vec(),
-            postbox_header: frame.header.postbox_header.to_vec(),
+            prebox_header: frame.header.prebox_header.clone(),
+            postbox_header: frame.header.postbox_header.clone(),
             atoms: py_atoms_to_list(py, atoms)?,
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
@@ -543,14 +543,8 @@ impl PyConFrame {
         let atoms = self.py_atoms(py)?;
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles)
-            .prebox_header([
-                self.prebox_header.first().cloned().unwrap_or_default(),
-                self.prebox_header.get(1).cloned().unwrap_or_default(),
-            ])
-            .postbox_header([
-                self.postbox_header.first().cloned().unwrap_or_default(),
-                self.postbox_header.get(1).cloned().unwrap_or_default(),
-            ])
+            .prebox_header(self.prebox_header.clone())
+            .postbox_header(self.postbox_header.clone())
             .metadata(meta);
 
         for py_atom in &atoms {
@@ -1073,8 +1067,8 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
     Ok(PyConFrame {
         cell,
         angles,
-        prebox_header: vec![String::new(), String::new()],
-        postbox_header: vec![String::new(), String::new()],
+        prebox_header: Default::default(),
+        postbox_header: Default::default(),
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
         metadata: PyDict::new(py).unbind(),
