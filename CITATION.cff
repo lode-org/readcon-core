@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "readcon-core: a CON/convel reader/writer with FFI bindings"
+message: "If you use readcon-core, please cite it using the metadata below."
+type: software
+authors:
+  - given-names: Rohit
+    family-names: Goswami
+    email: rgoswami@ieee.org
+    orcid: "https://orcid.org/0000-0002-2393-8056"
+license: MIT
+repository-code: "https://github.com/lode-org/readcon-core"
+url: "https://lode-org.github.io/readcon-core"
+version: 0.8.0
+date-released: "2026-04-30"
+keywords:
+  - parser
+  - computational chemistry
+  - molecular dynamics
+  - file format
+  - CON
+  - convel
+abstract: >-
+  readcon-core is a Rust library that parses and writes EON .con and
+  .convel trajectory files. It exposes a stable C API via cbindgen, an
+  ergonomic C++ header-only wrapper, and bindings for Python and Julia.
+  The library implements CON spec v2 (JSON metadata header, declared
+  sections array, optional strict validation) while remaining
+  source-compatible with legacy v1 readers.
