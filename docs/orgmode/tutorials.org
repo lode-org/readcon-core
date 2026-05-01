@@ -66,7 +66,7 @@ print(readcon.CON_SPEC_VERSION)  # 2
 # Per-frame version (from parsed file)
 frames = readcon.read_con("input.con")
 print(frames[0].spec_version)   # 2 for v2 files, 1 for legacy
-print(frames[0].metadata)       # dict of extra JSON keys
+print(frames[0].metadata)       # dict of native JSON-compatible values
 print(frames[0].energy)         # typed helper for common keys
 print(frames[0].frame_index)
 print(frames[0].timestep)
@@ -534,15 +534,29 @@ int main(int argc, char *argv[]) {
 
 double cell[3] = {10.0, 10.0, 10.0};
 double angles[3] = {90.0, 90.0, 90.0};
-RKRConFrame *frame = rkr_frame_new(cell, angles, "", "", "", "");
-rkr_frame_add_atom(frame, "Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
-rkr_frame_add_atom(frame, "Cu", 2.55, 2.55, 0.0, false, 2, 63.546);
-rkr_frame_finalize(frame);
+RKRConFrameBuilder *builder =
+    rkr_frame_new(cell, angles, "", "", "", "");
+if (rkr_frame_add_atom(builder, "Cu", 0.0, 0.0, 0.0,
+                       false, 1, 63.546) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
+if (rkr_frame_add_atom(builder, "Cu", 2.55, 2.55, 0.0,
+                       false, 2, 63.546) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
+RKRConFrame *frame = rkr_frame_builder_build(builder);
+if (!frame) {
+    return 1;
+}
 
 // Write with custom precision
 RKRConFrameWriter *writer =
     create_writer_from_path_with_precision_c("output.con", 17);
-rkr_writer_extend(writer, (const RKRConFrame **)&frame, 1);
+if (writer) {
+    rkr_writer_extend(writer, (const RKRConFrame **)&frame, 1);
+}
 free_rkr_writer(writer);
 free_rkr_frame(frame);
 #+end_src
@@ -568,9 +582,12 @@ if (frame) {
 
 // After collecting handles into an array:
 RKRConFrameWriter *writer = create_writer_from_path_c("output.con");
-int result = rkr_writer_extend(writer,
-                               (const RKRConFrame **)handles,
-                               num_frames);
+RKRStatus result = rkr_writer_extend(writer,
+                                     (const RKRConFrame **)handles,
+                                     num_frames);
+if (result != RKR_STATUS_SUCCESS) {
+    fprintf(stderr, "write failed: %d\n", result);
+}
 free_rkr_writer(writer);
 #+end_src
 

@@ -64,13 +64,14 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 ** Types
 
 - =readcon.Atom= :: Constructable with keyword arguments (v0.4.0+).
-  Properties: symbol, x, y, z, is_fixed, atom_id, mass (v0.4.2+),
-  vx, vy, vz, has_velocity
+  Properties: symbol, x, y, z, fixed, is_fixed, atom_id, mass
+  (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-  atoms, has_velocities, prebox_header, postbox_header, spec_version
-  (v0.6.0+), metadata (v0.6.0+, dict of extra JSON keys), energy,
-  frame_index, time, timestep, neb_bead, neb_band.
+  atoms, has_velocities, has_forces, prebox_header, postbox_header,
+  spec_version (v0.6.0+), metadata (v0.6.0+, dict of native
+  JSON-compatible values), energy, frame_index, time, timestep,
+  neb_bead, neb_band.
   Methods: to_ase(), from_ase() (v0.4.0+), set_metadata_json(),
   set_scalar_metadata(), set_string_metadata(), set_energy(),
   set_frame_index(), set_time(), set_timestep(), set_neb_bead(),
@@ -108,9 +109,9 @@ end
 ** Types
 
 - =ReadCon.Atom= :: atomic_number, x, y, z, atom_id, mass, is_fixed,
-  vx, vy, vz, has_velocity
+  fixed, vx, vy, vz, has_velocity, fx, fy, fz, has_forces
 - =ReadCon.ConFrame= :: cell, angles, atoms, has_velocities,
-  prebox_header, postbox_header
+  has_forces, prebox_header, postbox_header
 
 * C/C++ (FFI)
 
@@ -158,8 +159,14 @@ Metadata builder helpers:
 
 #+begin_src c
 RKRConFrameBuilder *builder = rkr_frame_new(cell, angles, "", "", "", "");
-rkr_frame_builder_set_energy(builder, -42.5);
-rkr_frame_builder_set_frame_index(builder, 7);
+if (rkr_frame_builder_set_energy(builder, -42.5) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
+if (rkr_frame_builder_set_frame_index(builder, 7) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
 rkr_frame_builder_set_time(builder, 3.5);
 rkr_frame_builder_set_timestep(builder, 0.2);
 rkr_frame_builder_set_neb_bead(builder, 4);

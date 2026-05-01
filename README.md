@@ -75,7 +75,7 @@ A key challenge in designing an FFI is deciding how data is exposed to the C-com
     frame data is through an opaque pointer, represented as `RKRConFrame*` in C.
     The C/C++ client holds this "handle" but cannot inspect its contents
     directly. Instead, it must call Rust functions to interact with the data
-    (e.g., `rkr_frame_get_header_line(frame_handle, ...`)). This is the safest
+    (e.g., `rkr_frame_get_header_line(frame_handle, ...)`). This is the safest
     and most flexible pattern, as it completely hides Rust's internal data
     structures and memory layout, preventing ABI breakage if the Rust code is
     updated.
@@ -132,4 +132,3 @@ Speed, correctness, and multi-language bindings.
 # License
 
 MIT.
-
