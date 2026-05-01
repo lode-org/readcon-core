@@ -99,7 +99,13 @@ fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError>
     }
 }
 
-fn validate_metadata_schema(
+/// Validates a parsed metadata JSON object against the spec v2 schema.
+///
+/// Returns `(validate, sections)` where `validate` is the value of the
+/// `validate` key (default `false`) and `sections` is the parsed
+/// `sections` array. Used by the parser on read and by builder/frame
+/// authoring paths to fail fast on malformed metadata.
+pub fn validate_metadata_schema(
     json_obj: &serde_json::Map<String, Value>,
 ) -> Result<(bool, Vec<String>), ParseError> {
     let validate = match json_obj.get(meta::VALIDATE) {

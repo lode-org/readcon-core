@@ -401,10 +401,16 @@ impl PyConFrame {
     }
 
     /// Replace metadata from a raw JSON object string.
+    ///
+    /// The schema is validated up front: malformed entries (e.g. a
+    /// non-bool `pbc`, a 3x4 `lattice_vectors`) raise ValueError rather
+    /// than silently dropping the value.
     fn set_metadata_json(&mut self, py: Python<'_>, metadata_json: &str) -> PyResult<()> {
         let obj: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(metadata_json)
                 .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
+        crate::parser::validate_metadata_schema(&obj)
+            .map_err(|e| PyValueError::new_err(format!("invalid metadata: {e}")))?;
         let mut metadata = BTreeMap::new();
         for (key, value) in obj {
             if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
