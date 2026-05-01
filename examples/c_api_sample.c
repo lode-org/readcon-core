@@ -142,9 +142,9 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Failed to create writer for file '%s'.\n",
                     output_filename);
         } else {
-            int result = rkr_writer_extend(
+            RKRStatus result = rkr_writer_extend(
                 writer, (const RKRConFrame **)handles_array, frame_count);
-            if (result == 0) {
+            if (result == RKR_STATUS_SUCCESS) {
                 printf("Successfully wrote all frames.\n");
             } else {
                 fprintf(stderr, "An error occurred while writing the file.\n");

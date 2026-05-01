@@ -51,8 +51,10 @@ within a type block and ensure thread-safety for parallel parsing.
   with ={= but invalid) produces an error.
 - =parse_single_frame= :: Header + coordinate blocks. Accepts
   4-column atom lines (column 5 defaults to sequential index).
-- =parse_velocity_section= :: Optional velocity blocks after
-  coordinates (detected by blank separator).
+- =parse_velocity_section= / =parse_force_section= :: Optional
+  velocity and force blocks after coordinates. Spec-v2 files declare
+  sections in JSON metadata; legacy files can still auto-detect
+  velocities by blank separator.
 
 * Writer (writer.rs)
 
@@ -60,8 +62,9 @@ within a type block and ensure thread-safety for parallel parsing.
 - Line 2 is always serialized as a JSON object containing
   =con_spec_version= plus any entries from =frame.header.metadata=.
   The original =prebox_header[1]= value is overwritten.
-- Writes header, coordinate blocks, and velocity blocks (if
-  =frame.has_velocities()=).
+- Writes header, coordinate blocks, velocity blocks (if
+  =frame.has_velocities()=), and force blocks (if
+  =frame.has_forces()=).
 
 * Iterators (iterators.rs)
 
@@ -97,6 +100,9 @@ Per-frame metadata accessors:
   =rkr_free_string()=.
 - =rkr_frame_energy(handle)=, =rkr_frame_time(handle)=, etc. :: Typed
   accessors for common metadata keys.
+- =RKRStatus= :: Prefixed C-compatible status codes such as
+  =RKR_STATUS_SUCCESS=, =RKR_STATUS_NULL_POINTER=, and
+  =RKR_STATUS_BUFFER_TOO_SMALL=.
 
 * C++ wrapper (readcon-core.hpp)
 

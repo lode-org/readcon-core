@@ -88,7 +88,7 @@ readers (e.g., eOn's =fileio.py=) by using:
 
 - *fast-float2*: SIMD-accelerated float parsing (2-3x over =str::parse=)
 - *Memory-mapped I/O*: large files are mmap'd, avoiding heap copies
-- *Rc<String> symbols*: one allocation per atom type, not per atom
+- *Arc<str> symbols*: one allocation per atom type, not per atom
 - *Zero-copy iteration*: the =ConFrameIterator= borrows from the
   input string without allocating per-line
 - *Forward skip*: =forward()= skips frames by line counting without
