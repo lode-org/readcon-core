@@ -209,7 +209,7 @@ impl FrameHeader {
 }
 
 /// Represents the data for a single atom in a frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
     /// Using Arc<str> to avoid expensive clones for each atom of the same type.
@@ -304,27 +304,8 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
     val
 }
 
-// Manual implementation of PartialEq because Arc<T> doesn't derive it by default.
-impl PartialEq for AtomDatum {
-    fn eq(&self, other: &Self) -> bool {
-        // Compare the string values, not the pointers.
-        *self.symbol == *other.symbol
-            && self.x == other.x
-            && self.y == other.y
-            && self.z == other.z
-            && self.fixed == other.fixed
-            && self.atom_id == other.atom_id
-            && self.vx == other.vx
-            && self.vy == other.vy
-            && self.vz == other.vz
-            && self.fx == other.fx
-            && self.fy == other.fy
-            && self.fz == other.fz
-    }
-}
-
 /// Represents a single, complete simulation frame, including header and all atomic data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
@@ -341,13 +322,6 @@ impl ConFrame {
     /// Returns `true` if any atom in this frame has force data.
     pub fn has_forces(&self) -> bool {
         self.atom_data.first().is_some_and(|a| a.has_forces())
-    }
-}
-
-// Manual implementation of PartialEq because of the change to AtomDatum.
-impl PartialEq for ConFrame {
-    fn eq(&self, other: &Self) -> bool {
-        self.header == other.header && self.atom_data == other.atom_data
     }
 }
 
