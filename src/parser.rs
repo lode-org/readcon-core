@@ -276,7 +276,7 @@ pub fn parse_frame_header<'a>(
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
     let trimmed = prebox2_raw.trim();
-    let (spec_version, metadata, sections, validate) = if trimmed.starts_with('{') {
+    let (spec_version, metadata, sections, validate, sections_declared) = if trimmed.starts_with('{') {
         let json_val: serde_json::Value = serde_json::from_str(trimmed)
             .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
         let json_obj = json_val
@@ -311,10 +311,12 @@ pub fn parse_frame_header<'a>(
         // pattern that walked the map twice on every frame.
         let mut sections: Vec<String> = Vec::new();
         let mut metadata = BTreeMap::new();
+        let mut sections_declared = false;
         for (k, v) in json_obj {
             match k.as_str() {
                 meta::CON_SPEC_VERSION => {}
                 meta::SECTIONS => {
+                    sections_declared = true;
                     let arr = v.as_array().ok_or_else(|| {
                         metadata_json_error("sections must be an array of strings")
                     })?;
@@ -332,10 +334,10 @@ pub fn parse_frame_header<'a>(
             }
         }
 
-        (ver, metadata, sections, validate)
+        (ver, metadata, sections, validate, sections_declared)
     } else {
         // Legacy file: no JSON metadata line.
-        (1_u32, BTreeMap::new(), Vec::new(), false)
+        (1_u32, BTreeMap::new(), Vec::new(), false, false)
     };
     let prebox2 = prebox2_raw.to_string();
 
@@ -378,6 +380,7 @@ pub fn parse_frame_header<'a>(
         metadata,
         sections,
         strict_validation: validate,
+        sections_declared,
     })
 }
 
@@ -769,7 +772,7 @@ pub fn parse_declared_sections<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
-    if header.sections.is_empty() && !sections_key_declared(header) {
+    if !header.sections_declared && header.sections.is_empty() {
         // Legacy: try velocity detection via blank separator
         let found = parse_velocity_section(lines, header, atom_data)?;
         if found {
@@ -797,17 +800,6 @@ where
         header.sections = sections;
     }
     Ok(())
-}
-
-fn sections_key_declared(header: &FrameHeader) -> bool {
-    serde_json::from_str::<Value>(header.prebox_header.metadata_line())
-        .ok()
-        .and_then(|value| {
-            value
-                .as_object()
-                .map(|object| object.contains_key(meta::SECTIONS))
-        })
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

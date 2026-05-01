@@ -183,6 +183,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 metadata: std::collections::BTreeMap::new(),
                 sections: Vec::new(),
                 strict_validation: false,
+                sections_declared: false,
             };
 
             frames.push(ConFrame { header, atom_data });
