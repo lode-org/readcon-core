@@ -214,9 +214,8 @@ impl FrameHeader {
 #[derive(Debug, Clone)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
-    /// Using Arc<String> to avoid expensive clones for each atom of the same type
-    /// while keeping the frame data Send-safe for parallel parsing.
-    pub symbol: Arc<String>,
+    /// Using Arc<str> to avoid expensive clones for each atom of the same type.
+    pub symbol: Arc<str>,
     /// The Cartesian x-coordinate.
     pub x: f64,
     /// The Cartesian y-coordinate.
@@ -648,7 +647,7 @@ impl ConFrameBuilder {
         let atom_data: Vec<AtomDatum> = sorted_atoms
             .iter()
             .map(|a| {
-                let symbol = Arc::new(a.symbol.clone());
+                let symbol: Arc<str> = Arc::from(a.symbol.clone());
                 AtomDatum {
                     symbol,
                     x: a.x,
