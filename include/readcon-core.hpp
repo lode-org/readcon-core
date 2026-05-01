@@ -3,6 +3,13 @@
 
 #pragma once
 
+// readcon-core C++ wrapper. Header-only RAII layer over the C API in
+// readcon-core.h. Requires C++17 (uses std::optional, std::filesystem,
+// and structured bindings).
+#if defined(__cplusplus) && __cplusplus < 201703L
+#error "readcon-core.hpp requires C++17 or later"
+#endif
+
 #include <array>
 #include <cmath>
 #include <filesystem>
@@ -34,17 +41,28 @@ struct Atom {
     double z;
     uint64_t atom_id;
     double mass;
+    /// Legacy aggregate fixed flag. True when any axis is fixed.
+    /// Prefer `fixed_x`/`fixed_y`/`fixed_z` or `fixed_mask()`.
+    [[deprecated("Use fixed_x/fixed_y/fixed_z or fixed_mask() instead")]]
     bool is_fixed;
     bool fixed_x;
     bool fixed_y;
     bool fixed_z;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vx;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vy;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vz;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     bool has_velocity;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fx;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fy;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fz;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     bool has_forces;
 
     std::array<bool, 3> fixed_mask() const {
@@ -53,15 +71,32 @@ struct Atom {
 
     /// Velocity vector if present, else std::nullopt.
     std::optional<std::array<double, 3>> velocity() const {
+        // Suppress the deprecation warning for the internal conversion;
+        // public callers reaching the legacy fields directly will still
+        // see it.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
         if (has_velocity)
             return std::array<double, 3>{vx, vy, vz};
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         return std::nullopt;
     }
 
     /// Force vector if present, else std::nullopt.
     std::optional<std::array<double, 3>> force() const {
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
         if (has_forces)
             return std::array<double, 3>{fx, fy, fz};
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         return std::nullopt;
     }
 };
@@ -103,6 +138,10 @@ class ConFrameIterator {
         pointer operator->();
         /** @brief Pre-increment operator to advance to the next frame. */
         Iterator &operator++();
+        /** @brief Equality. Both iterators are equal when both reference the
+         *  same iterator handle and both have an empty current frame
+         *  (the post-end / sentinel state). */
+        bool operator==(const Iterator &other) const;
         /** @brief Comparison operator to check for the end of the iteration. */
         bool operator!=(const Iterator &other) const;
 
@@ -356,7 +395,14 @@ class ConFrameBuilder {
 
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
-     * @throws std::runtime_error if the build fails.
+     *
+     * The builder is invalidated after this call: every subsequent
+     * method (add_atom, set_*, with_*, build) is a no-op or throws.
+     * Construct a new ConFrameBuilder if you need to author another
+     * frame.
+     *
+     * @throws std::runtime_error if the build fails or if `build()`
+     *         is called on an already-consumed builder.
      */
     ConFrame build();
 
@@ -433,8 +479,12 @@ inline ConFrameIterator::Iterator ConFrameIterator::end() {
     return Iterator(nullptr);
 }
 inline bool
+ConFrameIterator::Iterator::operator==(const Iterator &other) const {
+    return current_frame_ == other.current_frame_;
+}
+inline bool
 ConFrameIterator::Iterator::operator!=(const Iterator &other) const {
-    return current_frame_ != other.current_frame_;
+    return !(*this == other);
 }
 inline ConFrameIterator::Iterator::Iterator(CConFrameIterator *iterator_ptr)
     : iterator_ptr_(iterator_ptr) {
@@ -487,6 +537,16 @@ inline void ConFrame::cache_data() const {
     has_forces_cache_ = c_frame->has_forces;
 
     atoms_cache_.reserve(c_frame->num_atoms);
+    // The legacy Atom fields (vx/vy/vz, fx/fy/fz, has_velocity,
+    // has_forces, is_fixed) carry [[deprecated]] markers so external
+    // callers get a compile-time nudge toward velocity()/force() and
+    // the per-axis flags. The wrapper still populates them here as the
+    // single source of truth that the new accessors read from, so the
+    // deprecation warning is suppressed locally.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
         const CAtom &c_atom = c_frame->atoms[i];
         atoms_cache_.emplace_back(
@@ -496,6 +556,9 @@ inline void ConFrame::cache_data() const {
                  c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity,
                  c_atom.fx, c_atom.fy, c_atom.fz, c_atom.has_forces});
     }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
     free_c_frame(c_frame);
 
