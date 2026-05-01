@@ -575,60 +575,28 @@ impl PyConFrame {
 
         for py_atom in &atoms {
             let mass = py_atom.mass.unwrap_or(0.0);
-            let has_vel = py_atom.has_velocity();
-            let has_frc = py_atom.has_forces();
-            if has_vel && has_frc {
-                builder.add_atom_with_velocity_and_forces(
-                    &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.fixed,
-                    py_atom.atom_id,
-                    mass,
+            builder.add_atom(
+                &py_atom.symbol,
+                py_atom.x,
+                py_atom.y,
+                py_atom.z,
+                py_atom.fixed,
+                py_atom.atom_id,
+                mass,
+            );
+            if py_atom.has_velocity() {
+                builder.with_velocity([
                     py_atom.vx.unwrap_or(0.0),
                     py_atom.vy.unwrap_or(0.0),
                     py_atom.vz.unwrap_or(0.0),
+                ]);
+            }
+            if py_atom.has_forces() {
+                builder.with_force([
                     py_atom.fx.unwrap_or(0.0),
                     py_atom.fy.unwrap_or(0.0),
                     py_atom.fz.unwrap_or(0.0),
-                );
-            } else if has_vel {
-                builder.add_atom_with_velocity(
-                    &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.fixed,
-                    py_atom.atom_id,
-                    mass,
-                    py_atom.vx.unwrap_or(0.0),
-                    py_atom.vy.unwrap_or(0.0),
-                    py_atom.vz.unwrap_or(0.0),
-                );
-            } else if has_frc {
-                builder.add_atom_with_forces(
-                    &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.fixed,
-                    py_atom.atom_id,
-                    mass,
-                    py_atom.fx.unwrap_or(0.0),
-                    py_atom.fy.unwrap_or(0.0),
-                    py_atom.fz.unwrap_or(0.0),
-                );
-            } else {
-                builder.add_atom(
-                    &py_atom.symbol,
-                    py_atom.x,
-                    py_atom.y,
-                    py_atom.z,
-                    py_atom.fixed,
-                    py_atom.atom_id,
-                    mass,
-                );
+                ]);
             }
         }
 
