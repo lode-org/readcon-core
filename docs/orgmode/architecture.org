@@ -26,14 +26,15 @@ thin FFI and language-specific wrapper layers.
   keys through round-trips.
 - =AtomDatum= :: Single atom data (symbol, coordinates, fixed flag,
   atom_id (original atom index before type-based reordering),
-  optional velocities).
+  optional velocities, optional forces).
 - =ConFrame= :: Complete frame (header + atom data vector).
 - =ConFrameBuilder= :: Builder pattern for constructing frames
   programmatically. Accepts an optional =metadata= map; the builder
-  always sets =spec_version= to =CON_SPEC_VERSION=.
+  always sets =spec_version= to =CON_SPEC_VERSION=. Exposes typed
+  setters for common keys like =energy=, =frame_index=, =time=, etc.
 
-Symbol strings use =Rc<String>= to avoid per-atom string clones
-within a type block.
+Symbol strings use =Arc<str>= to avoid per-atom string clones
+within a type block and ensure thread-safety for parallel parsing.
 
 * Parser (parser.rs)
 
@@ -94,6 +95,8 @@ Per-frame metadata accessors:
 - =rkr_frame_metadata_json(handle)= :: Returns the full JSON metadata
   line as a heap-allocated C string. The caller must free with
   =rkr_free_string()=.
+- =rkr_frame_energy(handle)=, =rkr_frame_time(handle)=, etc. :: Typed
+  accessors for common metadata keys.
 
 * C++ wrapper (readcon-core.hpp)
 
