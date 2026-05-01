@@ -54,7 +54,10 @@ within a type block and ensure thread-safety for parallel parsing.
 - =parse_velocity_section= / =parse_force_section= :: Optional
   velocity and force blocks after coordinates. Spec-v2 files declare
   sections in JSON metadata; legacy files can still auto-detect
-  velocities by blank separator.
+  velocities by blank separator. If JSON metadata sets =validate= to
+  =true=, section parser paths verify component symbols, exact labels,
+  fixed masks, and atom ids against the coordinate blocks before
+  attaching velocities or forces.
 
 * Writer (writer.rs)
 

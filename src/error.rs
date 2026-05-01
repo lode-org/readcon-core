@@ -13,6 +13,7 @@ pub enum ParseError {
     InvalidMetadataJson(String),
     IncompleteForceSection,
     UnknownSection(String),
+    ValidationError(String),
 }
 
 impl fmt::Display for ParseError {
@@ -50,6 +51,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::UnknownSection(name) => {
                 write!(f, "unknown section type in metadata: {name}")
+            }
+            ParseError::ValidationError(msg) => {
+                write!(f, "CON validation failed: {msg}")
             }
         }
     }

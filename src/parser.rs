@@ -305,6 +305,82 @@ pub fn parse_single_frame<'a>(
     Ok(ConFrame { header, atom_data })
 }
 
+fn strict_validation_enabled(header: &FrameHeader) -> bool {
+    header
+        .metadata
+        .get("validate")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+fn validate_section_component(
+    section: &str,
+    type_idx: usize,
+    atom_idx: usize,
+    symbol: &str,
+    label: &str,
+    header: &FrameHeader,
+    atom_data: &[AtomDatum],
+) -> Result<(), ParseError> {
+    let expected_label = format!("{section} of Component {}", type_idx + 1);
+    if label.trim() != expected_label {
+        return Err(ParseError::ValidationError(format!(
+            "expected section label {expected_label:?}, found {label:?}"
+        )));
+    }
+
+    if header.natms_per_type[type_idx] == 0 {
+        return Ok(());
+    }
+
+    let expected_symbol = atom_data
+        .get(atom_idx)
+        .map(|atom| atom.symbol.as_ref())
+        .ok_or_else(|| {
+            ParseError::ValidationError(format!(
+                "{section} component {} has no coordinate atom to validate against",
+                type_idx + 1
+            ))
+        })?;
+    if symbol != expected_symbol {
+        return Err(ParseError::ValidationError(format!(
+            "{section} component {} symbol mismatch: expected {expected_symbol}, found {symbol}",
+            type_idx + 1
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_section_atom_identity(
+    section: &str,
+    atom_idx: usize,
+    fixed: [bool; 3],
+    atom_id: u64,
+    atom_data: &[AtomDatum],
+) -> Result<(), ParseError> {
+    let atom = atom_data.get(atom_idx).ok_or_else(|| {
+        ParseError::ValidationError(format!(
+            "{section} row {atom_idx} has no coordinate atom to validate against"
+        ))
+    })?;
+
+    if atom.fixed != fixed {
+        return Err(ParseError::ValidationError(format!(
+            "{section} row {atom_idx} fixed mask mismatch for atom_id {}",
+            atom.atom_id
+        )));
+    }
+    if atom.atom_id != atom_id {
+        return Err(ParseError::ValidationError(format!(
+            "{section} row {atom_idx} atom_id mismatch: expected {}, found {atom_id}",
+            atom.atom_id
+        )));
+    }
+
+    Ok(())
+}
+
 /// Attempts to parse an optional velocity section following coordinate blocks.
 ///
 /// In `.convel` files, after all coordinate blocks there is a blank separator line
@@ -325,6 +401,7 @@ pub fn parse_velocity_section<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
+    let validate = strict_validation_enabled(header);
     // Peek at the next line to check for blank separator
     match lines.peek() {
         Some(line) if line.trim().is_empty() => {
@@ -337,7 +414,7 @@ where
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         // Symbol line
-        let _symbol = lines
+        let symbol = lines
             .next()
             .ok_or(ParseError::IncompleteVelocitySection)?
             .trim();
@@ -348,18 +425,36 @@ where
         if !comp_line.contains("Velocities of Component") {
             return Err(ParseError::IncompleteVelocitySection);
         }
-        let _ = type_idx; // suppress unused warning
+        if validate {
+            validate_section_component(
+                "Velocities",
+                type_idx,
+                atom_idx,
+                symbol,
+                comp_line,
+                header,
+                atom_data,
+            )?;
+        }
 
         for _ in 0..num_atoms {
             let vel_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
             // Column 5 (atom_index) is optional in velocity lines too.
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
+            if validate {
+                validate_section_atom_identity(
+                    "velocities",
+                    atom_idx,
+                    decode_fixed_bitmask(vals[3] as u8),
+                    vals[4] as u64,
+                    atom_data,
+                )?;
+            }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].vx = Some(vals[0]);
                 atom_data[atom_idx].vy = Some(vals[1]);
                 atom_data[atom_idx].vz = Some(vals[2]);
-                // vals[3] is fixed flag, vals[4] is atom_index (redundant with coords)
             }
             atom_idx += 1;
         }
@@ -383,6 +478,7 @@ pub fn parse_force_section<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
+    let validate = strict_validation_enabled(header);
     // Peek at the next line to check for blank separator
     match lines.peek() {
         Some(line) if line.trim().is_empty() => {
@@ -393,7 +489,7 @@ where
 
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        let _symbol = lines
+        let symbol = lines
             .next()
             .ok_or(ParseError::IncompleteForceSection)?
             .trim();
@@ -402,12 +498,25 @@ where
         if !comp_line.contains("Forces of Component") {
             return Err(ParseError::IncompleteForceSection);
         }
-        let _ = type_idx;
+        if validate {
+            validate_section_component(
+                "Forces", type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+        }
 
         for _ in 0..num_atoms {
             let force_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
+            if validate {
+                validate_section_atom_identity(
+                    "forces",
+                    atom_idx,
+                    decode_fixed_bitmask(vals[3] as u8),
+                    vals[4] as u64,
+                    atom_data,
+                )?;
+            }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].fx = Some(vals[0]);
                 atom_data[atom_idx].fy = Some(vals[1]);
@@ -458,6 +567,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::iterators::ConFrameIterator;
 
     #[test]
     fn test_parse_line_of_n_success() {
@@ -862,6 +972,128 @@ mod tests {
         assert_eq!(frame.atom_data[1].vx, Some(0.4));
         assert_eq!(frame.atom_data[1].vy, Some(0.5));
         assert_eq!(frame.atom_data[1].vz, Some(0.6));
+    }
+
+    #[test]
+    fn test_validate_true_accepts_matching_section_identity() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":["velocities"],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+2
+1 1
+63.546 1.008
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 5 0
+H
+Coordinates of Component 2
+1.0 2.0 3.0 0 1
+
+Cu
+Velocities of Component 1
+0.1 0.2 0.3 5 0
+H
+Velocities of Component 2
+0.4 0.5 0.6 0 1
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let frame = iter.next().unwrap().unwrap();
+
+        assert!(frame.has_velocities());
+        assert_eq!(
+            frame
+                .header
+                .metadata
+                .get("validate")
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn test_validate_true_rejects_section_atom_id_mismatch() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":["velocities"],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 5 0
+
+Cu
+Velocities of Component 1
+0.1 0.2 0.3 5 99
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("atom_id mismatch"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_section_symbol_mismatch() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":["forces"],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 5 0
+
+H
+Forces of Component 1
+0.1 0.2 0.3 5 0
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("symbol mismatch"));
+    }
+
+    #[test]
+    fn test_validate_absent_allows_legacy_duplicate_identity_mismatch() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":["velocities"]}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 5 0
+
+Cu
+Velocities of Component 1
+0.1 0.2 0.3 0 99
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let frame = iter.next().unwrap().unwrap();
+
+        assert!(frame.has_velocities());
+        assert_eq!(frame.atom_data[0].atom_id, 0);
+        assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
     }
 
     #[test]
