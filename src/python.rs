@@ -266,7 +266,7 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub angles: [f64; 3],
     #[pyo3(get)]
-    pub prebox_header: String,
+    pub prebox_header: [String; 2],
     #[pyo3(get)]
     pub postbox_header: [String; 2],
     atoms: Py<PyList>,
@@ -284,7 +284,7 @@ impl PyConFrame {
         cell: [f64; 3],
         angles: [f64; 3],
         atoms: Vec<PyAtomDatum>,
-        prebox_header: Option<String>,
+        prebox_header: Option<[String; 2]>,
         postbox_header: Option<[String; 2]>,
         metadata: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
@@ -520,7 +520,10 @@ impl PyConFrame {
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
-            prebox_header: frame.header.prebox_header.user.clone(),
+            prebox_header: [
+                frame.header.prebox_header.user.clone(),
+                frame.header.prebox_header.metadata_line().to_string(),
+            ],
             postbox_header: frame.header.postbox_header.clone(),
             atoms: py_atoms_to_list(py, atoms)?,
             spec_version: frame.header.spec_version,
@@ -570,7 +573,7 @@ impl PyConFrame {
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles);
         builder
-            .prebox_header(self.prebox_header.as_str())
+            .prebox_header(self.prebox_header[0].as_str())
             .postbox_header(self.postbox_header.clone())
             .metadata(meta);
 
