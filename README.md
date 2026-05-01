@@ -32,7 +32,8 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 -   **Performance:** Uses [fast-float2](https://github.com/aldanor/fast-float-rust) (Eisel-Lemire algorithm) for the f64 parsing hot path and [memmap2](https://docs.rs/memmap2) for large trajectory files.
 -   **Parallel parsing:** Optional rayon-based parallel frame parsing behind the `parallel` feature gate.
 -   **Language bindings:** Python (PyO3), Julia (ccall), C (cbindgen FFI), and C++ (RAII header-only wrapper), following the hourglass design from [Metatensor](https://github.com/metatensor/metatensor).
--   **Spec-v2 metadata helpers:** Rust, Python, C, and C++ bindings all expose typed helpers for common JSON metadata keys like `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, and `neb_band`, while still allowing raw JSON metadata when needed.
+-   **Spec-v2 metadata helpers:** Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, and `neb_band`, while still allowing raw JSON metadata when needed.
+-   **Force and constraint fidelity:** Writers preserve velocities, forces, original atom ids, and per-axis fixed masks across Rust, Python, Julia, C, and C++.
 -   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
 
 
@@ -45,6 +46,8 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
     # Python
     pip install readcon
     python -c "import readcon; print(readcon.read_con('file.con'))"
+    # Julia
+    julia --project=julia/ReadCon -e 'using ReadCon; println(read_con("file.con"))'
     # C/C++ (via meson subproject or cmake)
     meson setup builddir -Dwith_examples=True && meson test -C builddir
     # cargo-c install layout

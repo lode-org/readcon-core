@@ -103,10 +103,40 @@ Per-frame metadata accessors:
 - =RKRStatus= :: Prefixed C-compatible status codes such as
   =RKR_STATUS_SUCCESS=, =RKR_STATUS_NULL_POINTER=, and
   =RKR_STATUS_BUFFER_TOO_SMALL=.
+- =rkr_status_message(status)= :: Returns a static human-readable
+  message for every status value.
+- Builder FFI functions preserve the full atom payload. Existing
+  boolean fixed helpers remain available, while =*_fixed_mask=
+  variants accept per-axis fixed flags. Force and velocity+force
+  variants call the same Rust =ConFrameBuilder= paths as native Rust.
 
 * C++ wrapper (readcon-core.hpp)
 
 Header-only RAII wrappers with lazy caching:
 - =ConFrameIterator= :: Range-based for loop support.
-- =ConFrame= :: Cached accessors for cell, angles, atoms, headers.
+- =ConFrame= :: Cached accessors for cell, angles, atoms, headers,
+  velocities, forces, and metadata helpers.
 - =ConFrameWriter= :: RAII file writer.
+- =ConFrameBuilder= :: Overloads for boolean fixed flags and
+  =std::array<bool, 3>= masks, with velocity, force, and
+  velocity+force atom constructors.
+
+* Python wrapper (python.rs)
+
+The PyO3 layer stores =ConFrame.atoms= as a live Python list and
+=ConFrame.metadata= as a live Python dict. Writers validate metadata
+as JSON-compatible values and convert the live atom list into a Rust
+=ConFrame= at write time. =read_first_frame(path)= uses the Rust
+first-frame reader; =iter_con(path)= exposes a Python iterator for
+loop-oriented frame processing.
+
+ASE conversion maps all-fixed atoms to =FixAtoms= and partial masks to
+=FixCartesian=, preserving =atom_id= through a named ASE array.
+
+* Julia wrapper (wrapper.jl)
+
+The Julia ccall layer exposes typed frame metadata fields populated
+from C FFI accessors. =write_con(path, frames; precision=6)=
+reconstructs opaque frame handles through the C builder API and writes
+them through the Rust writer, preserving velocities, forces, per-axis
+fixed masks, masses, atom ids, and JSON metadata.
