@@ -1,3 +1,9 @@
+#![allow(
+    clippy::missing_safety_doc,
+    clippy::too_many_arguments,
+    clippy::question_mark
+)]
+
 pub mod compression;
 pub mod error;
 pub mod ffi;
