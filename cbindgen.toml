@@ -2,7 +2,46 @@ language = "C"
 
 ############## Options for Wrapping the Contents of the Header #################
 
-# header = "/* Automatically generated, DO NOT EDIT. */"
+header = """
+/*
+ * readcon-core C API.
+ *
+ * Memory ownership
+ *   - Opaque handles (RKRConFrame, RKRConFrameWriter, RKRConFrameBuilder,
+ *     CConFrameIterator) are caller-owned. Free each with its dedicated
+ *     destructor: free_rkr_frame, free_rkr_frame_writer,
+ *     free_rkr_frame_builder, free_con_frame_iterator.
+ *   - rkr_read_all_frames returns a heap-allocated array of RKRConFrame*
+ *     handles together with the frame count via the *num_frames out-param.
+ *     The array's capacity equals the count (shrunk to fit). Free with
+ *     free_rkr_frame_array(frames, *num_frames). Each individual frame is
+ *     released by free_rkr_frame_array; do NOT also call free_rkr_frame.
+ *   - char* values returned by rkr_frame_metadata_json,
+ *     rkr_frame_potential_type, and rkr_frame_get_header_line_cpp are heap
+ *     allocated; free them with rkr_free_string. rkr_free_string is safe
+ *     to call with NULL (no-op).
+ *   - const char* returned by rkr_library_version is process-static; do
+ *     NOT free it.
+ *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
+ *     by the caller; release with free_c_frame.
+ *
+ * Sentinel values for absent metadata
+ *   - Floating-point getters (rkr_frame_energy, rkr_frame_time,
+ *     rkr_frame_timestep, etc.) return NaN when the metadata key is
+ *     absent. Test with isnan() from <math.h>.
+ *   - Unsigned-integer getters (rkr_frame_frame_index, rkr_frame_neb_bead,
+ *     rkr_frame_neb_band) return UINT64_MAX when absent.
+ *   - String getters return NULL when absent.
+ *
+ * Thread safety
+ *   - Opaque handles are NOT Sync. Do not share a single
+ *     RKRConFrame/RKRConFrameWriter/RKRConFrameBuilder across threads
+ *     without external synchronization. Distinct handles are independent.
+ *   - rkr_read_all_frames internally uses sequential parsing; the
+ *     `parallel` Cargo feature is exposed only through the Rust API and
+ *     is not surfaced via this C header.
+ */
+"""
 include_guard = "READCON_H"
 include_version = true
 pragma_once = true
