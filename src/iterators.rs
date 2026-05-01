@@ -194,7 +194,6 @@ pub fn parse_frames_parallel(
     // We identify boundaries by walking through the file with a ConFrameIterator
     // and recording byte positions.
     let mut boundaries: Vec<usize> = Vec::new();
-    let mut offset = 0;
     boundaries.push(0);
 
     // Walk through the file using the forward() method to find frame boundaries
