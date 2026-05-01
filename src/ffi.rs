@@ -350,25 +350,29 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         .atom_data
         .iter()
         .zip(masses_iter)
-        .map(|(atom_datum, mass)| CAtom {
-            atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
-            x: atom_datum.x,
-            y: atom_datum.y,
-            z: atom_datum.z,
-            is_fixed: atom_datum.is_fixed(),
-            fixed_x: atom_datum.fixed[0],
-            fixed_y: atom_datum.fixed[1],
-            fixed_z: atom_datum.fixed[2],
-            atom_id: atom_datum.atom_id,
-            mass,
-            vx: atom_datum.vx.unwrap_or(0.0),
-            vy: atom_datum.vy.unwrap_or(0.0),
-            vz: atom_datum.vz.unwrap_or(0.0),
-            has_velocity: atom_datum.has_velocity(),
-            fx: atom_datum.fx.unwrap_or(0.0),
-            fy: atom_datum.fy.unwrap_or(0.0),
-            fz: atom_datum.fz.unwrap_or(0.0),
-            has_forces: atom_datum.has_forces(),
+        .map(|(atom_datum, mass)| {
+            let [vx, vy, vz] = atom_datum.velocity.unwrap_or([0.0; 3]);
+            let [fx, fy, fz] = atom_datum.force.unwrap_or([0.0; 3]);
+            CAtom {
+                atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
+                x: atom_datum.x,
+                y: atom_datum.y,
+                z: atom_datum.z,
+                is_fixed: atom_datum.is_fixed(),
+                fixed_x: atom_datum.fixed[0],
+                fixed_y: atom_datum.fixed[1],
+                fixed_z: atom_datum.fixed[2],
+                atom_id: atom_datum.atom_id,
+                mass,
+                vx,
+                vy,
+                vz,
+                has_velocity: atom_datum.has_velocity(),
+                fx,
+                fy,
+                fz,
+                has_forces: atom_datum.has_forces(),
+            }
         })
         .collect();
 

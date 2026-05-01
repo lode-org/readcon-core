@@ -176,8 +176,8 @@ fn test_builder_velocity_roundtrip() {
     let frames: Vec<_> = parser.map(|r| r.unwrap()).collect();
     assert_eq!(frames.len(), 1);
     assert!(frames[0].has_velocities());
-    assert_eq!(frames[0].atom_data[0].vx, Some(0.1));
-    assert_eq!(frames[0].atom_data[1].vz, Some(0.6));
+    assert_eq!(frames[0].atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
+    assert_eq!(frames[0].atom_data[1].velocity, Some([0.4, 0.5, 0.6]));
 }
 
 #[test]

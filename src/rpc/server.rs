@@ -59,15 +59,16 @@ impl read_con_service::Server for ReadConServiceImpl {
             let mut atoms_builder = fb.reborrow().init_atoms(frame.atom_data.len() as u32);
             for (k, atom) in frame.atom_data.iter().enumerate() {
                 let mut ab = atoms_builder.reborrow().get(k as u32);
+                let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
                 ab.set_symbol(&*atom.symbol);
                 ab.set_x(atom.x);
                 ab.set_y(atom.y);
                 ab.set_z(atom.z);
                 ab.set_is_fixed(atom.is_fixed());
                 ab.set_atom_id(atom.atom_id);
-                ab.set_vx(atom.vx.unwrap_or(0.0));
-                ab.set_vy(atom.vy.unwrap_or(0.0));
-                ab.set_vz(atom.vz.unwrap_or(0.0));
+                ab.set_vx(vx);
+                ab.set_vy(vy);
+                ab.set_vz(vz);
                 ab.set_has_velocity(atom.has_velocity());
             }
         }
@@ -156,12 +157,12 @@ impl read_con_service::Server for ReadConServiceImpl {
                         [false, false, false]
                     },
                     atom_id: a.get_atom_id(),
-                    vx: if has_vel { Some(a.get_vx()) } else { None },
-                    vy: if has_vel { Some(a.get_vy()) } else { None },
-                    vz: if has_vel { Some(a.get_vz()) } else { None },
-                    fx: None,
-                    fy: None,
-                    fz: None,
+                    velocity: if has_vel {
+                        Some([a.get_vx(), a.get_vy(), a.get_vz()])
+                    } else {
+                        None
+                    },
+                    force: None,
                 });
             }
             if current_count > 0 {
