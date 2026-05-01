@@ -58,7 +58,7 @@ impl<W: Write> ConFrameWriter<W> {
         let prec = self.precision;
 
         // --- Write the 9-line Header ---
-        writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
+        writeln!(self.writer, "{}", frame.header.prebox_header.user)?;
 
         // Line 2: always serialize JSON metadata with con_spec_version.
         // Auto-populate sections based on frame data.
