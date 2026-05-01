@@ -654,6 +654,44 @@ unsafe fn add_builder_atom(
     RKRStatus::RKR_STATUS_SUCCESS
 }
 
+/// Attaches a velocity vector to the most recently added atom on a builder.
+/// No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid. velocity must point to 3 contiguous f64 values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_velocity(
+    builder_handle: *mut RKRConFrameBuilder,
+    velocity: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || velocity.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let v = unsafe { [*velocity, *velocity.add(1), *velocity.add(2)] };
+    builder.with_velocity(v);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Attaches a force vector to the most recently added atom on a builder.
+/// No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid. force must point to 3 contiguous f64 values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
+    builder_handle: *mut RKRConFrameBuilder,
+    force: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || force.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let f = unsafe { [*force, *force.add(1), *force.add(2)] };
+    builder.with_force(f);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
 ///
 /// `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
