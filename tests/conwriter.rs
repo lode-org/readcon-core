@@ -48,7 +48,7 @@ fn test_builder_roundtrip() {
     let mut builder =
         ConFrameBuilder::new([15.345600, 21.702000, 100.000000], [90.0, 90.0, 90.0]);
     builder
-        .prebox_header(["Random Number Seed".to_string(), "Time".to_string()])
+        .prebox_header("Random Number Seed")
         .postbox_header(["0 0".to_string(), "218 0 1".to_string()]);
     builder.add_atom(
         "Cu",

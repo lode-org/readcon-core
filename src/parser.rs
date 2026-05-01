@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
-    AtomDatum, ConFrame, FrameHeader, SECTION_FORCES, SECTION_VELOCITIES, decode_fixed_bitmask,
-    meta,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_FORCES, SECTION_VELOCITIES,
+    decode_fixed_bitmask, meta,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -344,7 +344,10 @@ pub fn parse_frame_header<'a>(
         validate_masses(&masses_per_type)?;
     }
     Ok(FrameHeader {
-        prebox_header: [prebox1, prebox2],
+        prebox_header: PreboxHeader {
+            user: prebox1,
+            metadata_line: prebox2,
+        },
         boxl: boxl_vec.try_into().unwrap(),
         angles: angles_vec.try_into().unwrap(),
         postbox_header: [postbox1, postbox2],
@@ -779,7 +782,7 @@ where
 }
 
 fn sections_key_declared(header: &FrameHeader) -> bool {
-    serde_json::from_str::<Value>(&header.prebox_header[1])
+    serde_json::from_str::<Value>(header.prebox_header.metadata_line())
         .ok()
         .and_then(|value| {
             value
@@ -856,7 +859,7 @@ mod tests {
         let mut line_it = lines.iter().copied();
         match parse_frame_header(&mut line_it) {
             Ok(header) => {
-                assert_eq!(header.prebox_header[0], "PREBOX1");
+                assert_eq!(header.prebox_header.user, "PREBOX1");
                 assert_eq!(header.spec_version, 2);
                 assert_eq!(header.boxl, [10.0, 20.0, 30.0]);
                 assert_eq!(header.angles, [90.0, 90.0, 90.0]);

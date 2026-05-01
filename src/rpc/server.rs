@@ -45,8 +45,8 @@ impl read_con_service::Server for ReadConServiceImpl {
 
             // Headers
             let mut prebox = fb.reborrow().init_prebox_header(2);
-            prebox.set(0, &*frame.header.prebox_header[0]);
-            prebox.set(1, &*frame.header.prebox_header[1]);
+            prebox.set(0, frame.header.prebox_header.user.as_str());
+            prebox.set(1, frame.header.prebox_header.metadata_line());
 
             let mut postbox = fb.reborrow().init_postbox_header(2);
             postbox.set(0, &*frame.header.postbox_header[0]);
@@ -100,16 +100,18 @@ impl read_con_service::Server for ReadConServiceImpl {
             let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
             let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
 
-            let prebox_header = [
-                pry!(prebox_list.get(0))
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                pry!(prebox_list.get(1))
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string(),
-            ];
+            let prebox_user = pry!(prebox_list.get(0))
+                .to_str()
+                .unwrap_or_default()
+                .to_string();
+            let prebox_metadata_line = pry!(prebox_list.get(1))
+                .to_str()
+                .unwrap_or_default()
+                .to_string();
+            let prebox_header = crate::types::PreboxHeader {
+                user: prebox_user,
+                metadata_line: prebox_metadata_line,
+            };
             let postbox_header = [
                 pry!(postbox_list.get(0))
                     .to_str()
