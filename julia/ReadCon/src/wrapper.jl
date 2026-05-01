@@ -40,6 +40,94 @@ function _lib_symbol(name::Symbol)
     return Libdl.dlsym(_get_lib(), name)
 end
 
+const RKR_STATUS_SUCCESS = Cint(0)
+const RKR_UINT64_SENTINEL = typemax(UInt64)
+
+const _ATOMIC_SYMBOLS = [
+    "X",
+    "H", "He",
+    "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+    "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar",
+    "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+    "Ga", "Ge", "As", "Se", "Br", "Kr",
+    "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
+    "In", "Sn", "Sb", "Te", "I", "Xe",
+    "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy",
+    "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt",
+    "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn",
+    "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf",
+    "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
+]
+
+function _atomic_symbol(atomic_number::UInt64)
+    idx = Int(atomic_number) + 1
+    if idx < 2 || idx > length(_ATOMIC_SYMBOLS)
+        error("unsupported atomic number for writing: $atomic_number")
+    end
+    return _ATOMIC_SYMBOLS[idx]
+end
+
+function _status_message(status::Cint)
+    c_str = ccall(_lib_symbol(:rkr_status_message), Cstring, (Cint,), status)
+    c_str == C_NULL && return "unknown status"
+    return unsafe_string(c_str)
+end
+
+function _check_status(status::Cint, operation::String)
+    status == RKR_STATUS_SUCCESS && return nothing
+    error("$operation: $(_status_message(status))")
+end
+
+function _take_string(c_str::Ptr{UInt8})
+    c_str == C_NULL && return ""
+    value = unsafe_string(c_str)
+    ccall(_lib_symbol(:rkr_free_string), Cvoid, (Ptr{UInt8},), c_str)
+    return value
+end
+
+_maybe_float(value::Float64) = isnan(value) ? nothing : value
+_maybe_uint64(value::UInt64) = value == RKR_UINT64_SENTINEL ? nothing : value
+
+function _frame_metadata(frame_handle::Ptr{Cvoid})
+    spec_version = ccall(
+        _lib_symbol(:rkr_frame_spec_version),
+        UInt32, (Ptr{Cvoid},), frame_handle
+    )
+    metadata_json = _take_string(ccall(
+        _lib_symbol(:rkr_frame_metadata_json),
+        Ptr{UInt8}, (Ptr{Cvoid},), frame_handle
+    ))
+    energy = _maybe_float(ccall(
+        _lib_symbol(:rkr_frame_energy),
+        Float64, (Ptr{Cvoid},), frame_handle
+    ))
+    frame_index = _maybe_uint64(ccall(
+        _lib_symbol(:rkr_frame_frame_index),
+        UInt64, (Ptr{Cvoid},), frame_handle
+    ))
+    time = _maybe_float(ccall(
+        _lib_symbol(:rkr_frame_time),
+        Float64, (Ptr{Cvoid},), frame_handle
+    ))
+    timestep = _maybe_float(ccall(
+        _lib_symbol(:rkr_frame_timestep),
+        Float64, (Ptr{Cvoid},), frame_handle
+    ))
+    neb_bead = _maybe_uint64(ccall(
+        _lib_symbol(:rkr_frame_neb_bead),
+        UInt64, (Ptr{Cvoid},), frame_handle
+    ))
+    neb_band = _maybe_uint64(ccall(
+        _lib_symbol(:rkr_frame_neb_band),
+        UInt64, (Ptr{Cvoid},), frame_handle
+    ))
+    return (
+        spec_version, metadata_json, energy, frame_index,
+        time, timestep, neb_bead, neb_band,
+    )
+end
+
 """
     read_con(path::String) -> Vector{ConFrame}
 
@@ -90,11 +178,13 @@ function read_con(path::String)
 
                     prebox = _get_headers(frame_handle, true)
                     postbox = _get_headers(frame_handle, false)
+                    metadata = _frame_metadata(frame_handle)
 
                     push!(frames, ConFrame(
                         c_frame.cell, c_frame.angles,
                         atoms, c_frame.has_velocities,
                         prebox, postbox, c_frame.has_forces,
+                        metadata...,
                     ))
                 finally
                     ccall(_lib_symbol(:free_c_frame), Cvoid, (Ptr{CFrame},), c_frame_ptr)
@@ -129,18 +219,149 @@ function _get_headers(frame_handle, is_prebox::Bool)
 end
 
 """
-    write_con(path::String, frames::Vector{ConFrame})
+    write_con(path::String, frames::Vector{ConFrame}; precision=6)
 
-Write frames to a .con file. Frames must have been read via `read_con`.
-
-Note: This writes through the FFI by first writing each frame via the
-Rust writer. For the initial implementation, we serialize back to text
-and use the Rust writer through the C API.
+Write frames to a .con file.
 """
-function write_con(path::String, frames::Vector{ConFrame})
-    # For a full FFI write, we would need to reconstruct RKRConFrame handles.
-    # For now, use a simple approach: serialize to string via Rust
-    # This requires reconstructing the text format, which is complex.
-    # A simpler approach: write through the file-based API by roundtripping.
-    error("write_con is not yet implemented for Julia. Use the Rust or Python API.")
+function write_con(path::String, frames::Vector{ConFrame}; precision::Integer=6)
+    writer = if precision == 6
+        ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
+    else
+        ccall(
+            _lib_symbol(:create_writer_from_path_with_precision_c),
+            Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
+        )
+    end
+    writer == C_NULL && error("failed to create writer for file: $path")
+
+    handles = Ptr{Cvoid}[]
+    try
+        for frame in frames
+            push!(handles, _build_frame_handle(frame))
+        end
+        status = ccall(
+            _lib_symbol(:rkr_writer_extend),
+            Cint, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),
+            writer, handles, length(handles)
+        )
+        _check_status(status, "failed to write frames")
+        return nothing
+    finally
+        for handle in handles
+            handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
+        end
+        ccall(_lib_symbol(:free_rkr_writer), Cvoid, (Ptr{Cvoid},), writer)
+    end
+end
+
+function _build_frame_handle(frame::ConFrame)
+    cell = Float64[frame.cell...]
+    angles = Float64[frame.angles...]
+    builder = ccall(
+        _lib_symbol(:rkr_frame_new),
+        Ptr{Cvoid},
+        (Ptr{Float64}, Ptr{Float64}, Cstring, Cstring, Cstring, Cstring),
+        cell, angles,
+        frame.prebox_header[1], frame.prebox_header[2],
+        frame.postbox_header[1], frame.postbox_header[2],
+    )
+    builder == C_NULL && error("failed to create frame builder")
+
+    try
+        if !isempty(frame.metadata_json)
+            status = ccall(
+                _lib_symbol(:rkr_frame_builder_set_metadata_json),
+                Cint, (Ptr{Cvoid}, Cstring), builder, frame.metadata_json
+            )
+            _check_status(status, "failed to set frame metadata")
+        end
+
+        for atom in frame.atoms
+            _add_atom(builder, atom)
+        end
+
+        handle = ccall(_lib_symbol(:rkr_frame_builder_build), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
+        builder = C_NULL
+        handle == C_NULL && error("failed to build frame")
+        return handle
+    finally
+        builder != C_NULL && ccall(_lib_symbol(:free_rkr_frame_builder), Cvoid, (Ptr{Cvoid},), builder)
+    end
+end
+
+function _add_atom(builder::Ptr{Cvoid}, atom::Atom)
+    symbol = _atomic_symbol(atom.atomic_number)
+    fixed_x, fixed_y, fixed_z = atom.fixed
+
+    status = if atom.has_velocity && atom.has_forces
+        ccall(
+            _lib_symbol(:rkr_frame_add_atom_with_velocity_and_forces_fixed_mask),
+            Cint,
+            (
+                Ptr{Cvoid}, Cstring,
+                Float64, Float64, Float64,
+                Bool, Bool, Bool,
+                UInt64, Float64,
+                Float64, Float64, Float64,
+                Float64, Float64, Float64,
+            ),
+            builder, symbol,
+            atom.x, atom.y, atom.z,
+            fixed_x, fixed_y, fixed_z,
+            atom.atom_id, atom.mass,
+            atom.vx, atom.vy, atom.vz,
+            atom.fx, atom.fy, atom.fz,
+        )
+    elseif atom.has_velocity
+        ccall(
+            _lib_symbol(:rkr_frame_add_atom_with_velocity_fixed_mask),
+            Cint,
+            (
+                Ptr{Cvoid}, Cstring,
+                Float64, Float64, Float64,
+                Bool, Bool, Bool,
+                UInt64, Float64,
+                Float64, Float64, Float64,
+            ),
+            builder, symbol,
+            atom.x, atom.y, atom.z,
+            fixed_x, fixed_y, fixed_z,
+            atom.atom_id, atom.mass,
+            atom.vx, atom.vy, atom.vz,
+        )
+    elseif atom.has_forces
+        ccall(
+            _lib_symbol(:rkr_frame_add_atom_with_forces_fixed_mask),
+            Cint,
+            (
+                Ptr{Cvoid}, Cstring,
+                Float64, Float64, Float64,
+                Bool, Bool, Bool,
+                UInt64, Float64,
+                Float64, Float64, Float64,
+            ),
+            builder, symbol,
+            atom.x, atom.y, atom.z,
+            fixed_x, fixed_y, fixed_z,
+            atom.atom_id, atom.mass,
+            atom.fx, atom.fy, atom.fz,
+        )
+    else
+        ccall(
+            _lib_symbol(:rkr_frame_add_atom_with_fixed_mask),
+            Cint,
+            (
+                Ptr{Cvoid}, Cstring,
+                Float64, Float64, Float64,
+                Bool, Bool, Bool,
+                UInt64, Float64,
+            ),
+            builder, symbol,
+            atom.x, atom.y, atom.z,
+            fixed_x, fixed_y, fixed_z,
+            atom.atom_id, atom.mass,
+        )
+    end
+
+    _check_status(status, "failed to add atom")
 end
