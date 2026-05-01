@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_success() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 20.0 30.0",
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_missing_line() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 20.0 30.0",
