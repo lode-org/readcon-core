@@ -101,9 +101,74 @@ pub unsafe extern "C" fn rkr_frame_potential_type(
     }
 }
 
+/// Returns the zero-based frame index from metadata, or UINT64_MAX if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_frame_index(frame_handle: *const RKRConFrame) -> u64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.frame_index().unwrap_or(u64::MAX),
+        None => u64::MAX,
+    }
+}
+
+/// Returns the simulation time from metadata, or NaN if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_time(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.time().unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Returns the integration timestep from metadata, or NaN if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_timestep(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.timestep().unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Returns the NEB bead index from metadata, or UINT64_MAX if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_neb_bead(frame_handle: *const RKRConFrame) -> u64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.neb_bead().unwrap_or(u64::MAX),
+        None => u64::MAX,
+    }
+}
+
+/// Returns the NEB band index from metadata, or UINT64_MAX if absent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_neb_band(frame_handle: *const RKRConFrame) -> u64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.header.neb_band().unwrap_or(u64::MAX),
+        None => u64::MAX,
+    }
+}
+
 //=============================================================================
 // C-Compatible Structs & Handles
 //=============================================================================
+
+/// Error codes for RKR functions.
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum RKRStatus {
+    /// Function completed successfully.
+    Success = 0,
+    /// A null pointer was passed for a required argument.
+    NullHandle = -1,
+    /// An input string was not valid UTF-8.
+    InvalidUtf8 = -2,
+    /// JSON parsing or serialization failed.
+    InvalidJson = -3,
+    /// File I/O error.
+    IoError = -4,
+    /// Index out of bounds.
+    IndexOutOfBounds = -5,
+    /// An internal logic error or unhandled state.
+    InternalError = -6,
+}
 
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
@@ -327,7 +392,7 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
 
 /// Copies a header string line into a user-provided buffer.
 /// This is a C style helper... where the user explicitly sets the buffer.
-/// Returns the number of bytes written (excluding null terminator), or -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// frame_handle must be valid. buffer must be at least buffer_len bytes.
@@ -338,10 +403,10 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
     line_index: usize,
     buffer: *mut c_char,
     buffer_len: usize,
-) -> i32 {
+) -> RKRStatus {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return -1,
+        None => return RKRStatus::NullHandle,
     };
     let line_to_copy = if is_prebox {
         frame.header.prebox_header.get(line_index)
@@ -355,9 +420,9 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
             ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, len_to_copy);
             *buffer.add(len_to_copy) = 0;
         }
-        len_to_copy as i32
+        RKRStatus::Success
     } else {
-        -1
+        RKRStatus::IndexOutOfBounds
     }
 }
 
@@ -446,6 +511,7 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
 }
 
 /// Writes multiple frames from an array of handles to the file managed by the writer.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// writer_handle and frame_handles must be valid.
@@ -454,13 +520,13 @@ pub unsafe extern "C" fn rkr_writer_extend(
     writer_handle: *mut RKRConFrameWriter,
     frame_handles: *const *const RKRConFrame,
     num_frames: usize,
-) -> i32 {
+) -> RKRStatus {
     let writer = match unsafe { (writer_handle as *mut ConFrameWriter<File>).as_mut() } {
         Some(w) => w,
-        None => return -1,
+        None => return RKRStatus::NullHandle,
     };
     if frame_handles.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
 
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
@@ -468,20 +534,20 @@ pub unsafe extern "C" fn rkr_writer_extend(
     if handles_slice.iter().any(|&handle| handle.is_null()) {
         // Fail fast if any handle is null, as this indicates a bug on the
         // caller's side.
-        return -1;
+        return RKRStatus::NullHandle;
     }
     for &handle in handles_slice.iter() {
         // Assume the handle is valid.
         match unsafe { (handle as *const ConFrame).as_ref() } {
             Some(frame) => rust_frames.push(frame),
             // This case should be unreachable if the handle is not null, but we handle it for safety.
-            None => return -1,
+            None => return RKRStatus::NullHandle,
         }
     }
 
     match writer.extend(rust_frames.into_iter()) {
-        Ok(_) => 0,
-        Err(_) => -1,
+        Ok(_) => RKRStatus::Success,
+        Err(_) => RKRStatus::IoError,
     }
 }
 
@@ -564,7 +630,7 @@ pub unsafe extern "C" fn rkr_frame_new(
 }
 
 /// Parses and sets JSON metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle and metadata_json must be valid.
@@ -572,23 +638,23 @@ pub unsafe extern "C" fn rkr_frame_new(
 pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
     builder_handle: *mut RKRConFrameBuilder,
     metadata_json: *const c_char,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() || metadata_json.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let metadata_json = match unsafe { CStr::from_ptr(metadata_json).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     match builder.set_metadata_json(metadata_json) {
-        Ok(()) => 0,
-        Err(_) => -1,
+        Ok(()) => RKRStatus::Success,
+        Err(_) => RKRStatus::InvalidJson,
     }
 }
 
 /// Sets a numeric metadata key on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle and key must be valid.
@@ -597,21 +663,21 @@ pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
     builder_handle: *mut RKRConFrameBuilder,
     key: *const c_char,
     value: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() || key.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let key = match unsafe { CStr::from_ptr(key).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     builder.set_scalar_metadata(key, value);
-    0
+    RKRStatus::Success
 }
 
 /// Sets a string metadata key on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle, key, and value must be valid.
@@ -620,25 +686,25 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
     builder_handle: *mut RKRConFrameBuilder,
     key: *const c_char,
     value: *const c_char,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() || key.is_null() || value.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let key = match unsafe { CStr::from_ptr(key).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     let value = match unsafe { CStr::from_ptr(value).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     builder.set_string_metadata(key, value);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the per-frame total energy metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -646,17 +712,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
 pub unsafe extern "C" fn rkr_frame_builder_set_energy(
     builder_handle: *mut RKRConFrameBuilder,
     energy: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_energy(energy);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the zero-based frame index metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -664,17 +730,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_energy(
 pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
     builder_handle: *mut RKRConFrameBuilder,
     idx: u64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_frame_index(idx);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the simulation time metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -682,17 +748,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
 pub unsafe extern "C" fn rkr_frame_builder_set_time(
     builder_handle: *mut RKRConFrameBuilder,
     time: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_time(time);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the timestep metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -700,17 +766,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_time(
 pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
     builder_handle: *mut RKRConFrameBuilder,
     dt: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_timestep(dt);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the NEB bead index metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -718,17 +784,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
 pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
     builder_handle: *mut RKRConFrameBuilder,
     bead: u64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_neb_bead(bead);
-    0
+    RKRStatus::Success
 }
 
 /// Sets the NEB band index metadata on an existing frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle must be valid.
@@ -736,17 +802,17 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
 pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
     builder_handle: *mut RKRConFrameBuilder,
     band: u64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_neb_band(band);
-    0
+    RKRStatus::Success
 }
 
 /// Adds an atom (without velocity) to the frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle and symbol must be valid.
@@ -760,21 +826,21 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
     is_fixed: bool,
     atom_id: u64,
     mass: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() || symbol.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     builder.add_atom(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass);
-    0
+    RKRStatus::Success
 }
 
 /// Adds an atom with velocity data to the frame builder.
-/// Returns 0 on success, -1 on error.
+/// Returns `RKRStatus::Success` on success, or an error code.
 ///
 /// # Safety
 /// builder_handle and symbol must be valid.
@@ -791,17 +857,17 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
     vx: f64,
     vy: f64,
     vz: f64,
-) -> i32 {
+) -> RKRStatus {
     if builder_handle.is_null() || symbol.is_null() {
-        return -1;
+        return RKRStatus::NullHandle;
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return RKRStatus::InvalidUtf8,
     };
     builder.add_atom_with_velocity(sym, x, y, z, [is_fixed, is_fixed, is_fixed], atom_id, mass, vx, vy, vz);
-    0
+    RKRStatus::Success
 }
 
 /// Consumes the builder and returns a finalized RKRConFrame handle.

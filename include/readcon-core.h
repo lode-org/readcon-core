@@ -19,9 +19,14 @@ namespace readcon {
 /**
  * CON/convel format spec version implemented by this build.
  *
- * - Version 1: column 5 present but semantics undefined. Readers MAY ignore it.
- * - Version 2: column 5 is the original atom index before type-based grouping.
- *   Readers MUST parse and preserve it. Writers MUST write the stored value.
+ * - Version 1: column 5 present but semantics undefined. Readers MAY
+ *   ignore it. No JSON metadata line.
+ * - Version 2: column 5 is the original atom index before type-based
+ *   grouping. Readers MUST parse and preserve it. Writers MUST write
+ *   the stored value. Line 2 of the header carries a JSON object
+ *   with at least `{"con_spec_version": 2}`.
+ *
+ * See `docs/orgmode/spec.org` for the full specification.
  */
 #define CON_SPEC_VERSION 2
 
@@ -30,6 +35,40 @@ namespace readcon {
  * to gate code that depends on atom_index semantics.
  */
 #define RKR_CON_SPEC_VERSION 2
+
+/**
+ * Error codes for RKR functions.
+ */
+typedef enum RKRStatus {
+    /**
+     * Function completed successfully.
+     */
+    Success = 0,
+    /**
+     * A null pointer was passed for a required argument.
+     */
+    NullHandle = -1,
+    /**
+     * An input string was not valid UTF-8.
+     */
+    InvalidUtf8 = -2,
+    /**
+     * JSON parsing or serialization failed.
+     */
+    InvalidJson = -3,
+    /**
+     * File I/O error.
+     */
+    IoError = -4,
+    /**
+     * Index out of bounds.
+     */
+    IndexOutOfBounds = -5,
+    /**
+     * An internal logic error or unhandled state.
+     */
+    InternalError = -6,
+} RKRStatus;
 
 /**
  * An iterator that lazily parses simulation frames from a `.con` or `.convel`
@@ -47,11 +86,6 @@ typedef struct ConFrameIterator ConFrameIterator;
 
 typedef struct String String;
 
-typedef struct CConFrameIterator {
-    struct ConFrameIterator *iterator;
-    struct String *file_contents;
-} CConFrameIterator;
-
 /**
  * An opaque handle to a full, lossless Rust `ConFrame` object.
  * The C/C++ side needs to treat this as a void pointer
@@ -59,6 +93,11 @@ typedef struct CConFrameIterator {
 typedef struct RKRConFrame {
     uint8_t _private[0];
 } RKRConFrame;
+
+typedef struct CConFrameIterator {
+    struct ConFrameIterator *iterator;
+    struct String *file_contents;
+} CConFrameIterator;
 
 typedef struct CAtom {
     uint64_t atomic_number;
@@ -126,55 +165,135 @@ uint32_t rkr_con_spec_version(void);
 const char *rkr_library_version(void);
 
 /**
+ * Returns the spec version stored in a parsed frame's header.
+ * Returns 0 on error (null handle).
+ */
+uint32_t rkr_frame_spec_version(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the JSON metadata line from a parsed frame as a heap-allocated
+ * null-terminated C string. The caller MUST free with `rkr_free_string`.
+ * Returns NULL on error.
+ *
+ * # Safety
+ * frame_handle must be valid. The caller takes ownership of the returned string.
+ */
+char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the per-frame energy from metadata, or NaN if absent.
+ */
+double rkr_frame_energy(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the potential type string from metadata as a heap-allocated
+ * null-terminated C string. The caller MUST free with `rkr_free_string`.
+ * Returns NULL if absent or on error.
+ *
+ * # Safety
+ * frame_handle must be valid. The caller takes ownership of the returned string.
+ */
+char *rkr_frame_potential_type(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the zero-based frame index from metadata, or UINT64_MAX if absent.
+ */
+uint64_t rkr_frame_frame_index(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the simulation time from metadata, or NaN if absent.
+ */
+double rkr_frame_time(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the integration timestep from metadata, or NaN if absent.
+ */
+double rkr_frame_timestep(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the NEB bead index from metadata, or UINT64_MAX if absent.
+ */
+uint64_t rkr_frame_neb_bead(const struct RKRConFrame *frame_handle);
+
+/**
+ * Returns the NEB band index from metadata, or UINT64_MAX if absent.
+ */
+uint64_t rkr_frame_neb_band(const struct RKRConFrame *frame_handle);
+
+/**
  * Creates a new iterator for a .con file.
  * The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
  * Returns NULL if there are no more frames or on error.
+ *
+ * # Safety
+ * filename_c must be valid. The caller takes ownership of the returned iterator.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
 
 /**
  * Reads the next frame from the iterator, returning an opaque handle.
  * The caller OWNS the returned handle and must free it with `free_rkr_frame`.
+ *
+ * # Safety
+ * iterator must be valid. The caller takes ownership of the returned frame.
  */
 struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
 
 /**
  * Frees the memory for an opaque `RKRConFrame` handle.
+ *
+ * # Safety
+ * frame_handle must be valid or null.
  */
 void free_rkr_frame(struct RKRConFrame *frame_handle);
 
 /**
  * Frees the memory for a `CConFrameIterator`.
+ *
+ * # Safety
+ * iterator must be valid or null.
  */
 void free_con_frame_iterator(struct CConFrameIterator *iterator);
 
 /**
  * Extracts the core atomic data into a transparent `CFrame` struct.
  * The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+ *
+ * # Safety
+ * frame_handle must be valid. The caller takes ownership of the returned CFrame.
  */
 struct CFrame *rkr_frame_to_c_frame(const struct RKRConFrame *frame_handle);
 
 /**
  * Frees the memory of a `CFrame` struct, including its internal atoms array.
+ *
+ * # Safety
+ * frame must be valid or null.
  */
 void free_c_frame(struct CFrame *frame);
 
 /**
  * Copies a header string line into a user-provided buffer.
  * This is a C style helper... where the user explicitly sets the buffer.
- * Returns the number of bytes written (excluding null terminator), or -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * frame_handle must be valid. buffer must be at least buffer_len bytes.
  */
-int32_t rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
-                                  bool is_prebox,
-                                  uintptr_t line_index,
-                                  char *buffer,
-                                  uintptr_t buffer_len);
+enum RKRStatus rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
+                                         bool is_prebox,
+                                         uintptr_t line_index,
+                                         char *buffer,
+                                         uintptr_t buffer_len);
 
 /**
  * Gets a header string line as a newly allocated, null-terminated C string.
  *
  * The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
  * to prevent a memory leak. Returns NULL on error or if the index is invalid.
+ *
+ * # Safety
+ * frame_handle must be valid. The caller takes ownership of the returned string.
  */
 char *rkr_frame_get_header_line_cpp(const struct RKRConFrame *frame_handle,
                                     bool is_prebox,
@@ -182,30 +301,46 @@ char *rkr_frame_get_header_line_cpp(const struct RKRConFrame *frame_handle,
 
 /**
  * Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+ *
+ * # Safety
+ * s must be valid or null.
  */
 void rkr_free_string(char *s);
 
 /**
  * Creates a new frame writer for the specified file.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 
 /**
  * Frees the memory for an `RKRConFrameWriter`, closing the associated file.
+ *
+ * # Safety
+ * writer_handle must be valid or null.
  */
 void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 
 /**
  * Writes multiple frames from an array of handles to the file managed by the writer.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * writer_handle and frame_handles must be valid.
  */
-int32_t rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
-                          const struct RKRConFrame *const *frame_handles,
-                          uintptr_t num_frames);
+enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
+                                 const struct RKRConFrame *const *frame_handles,
+                                 uintptr_t num_frames);
 
 /**
  * Creates a new frame writer with custom floating-point precision.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_from_path_with_precision_c(const char *filename_c,
                                                                    uint8_t precision);
@@ -215,6 +350,10 @@ struct RKRConFrameWriter *create_writer_from_path_with_precision_c(const char *f
  * The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
  * `rkr_frame_builder_build`.
  * Returns NULL on error.
+ *
+ * # Safety
+ * cell and angles must point to 3 doubles. prebox0, prebox1, postbox0, postbox1 must be valid.
+ * The caller takes ownership of the returned builder.
  */
 struct RKRConFrameBuilder *rkr_frame_new(const double *cell,
                                          const double *angles,
@@ -225,112 +364,158 @@ struct RKRConFrameBuilder *rkr_frame_new(const double *cell,
 
 /**
  * Parses and sets JSON metadata on an existing frame builder.
- * The JSON must be an object. `con_spec_version` and `sections` are ignored
- * because they are managed automatically by the writer.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and metadata_json must be valid.
  */
-int32_t rkr_frame_builder_set_metadata_json(struct RKRConFrameBuilder *builder_handle,
-                                            const char *metadata_json);
+enum RKRStatus rkr_frame_builder_set_metadata_json(struct RKRConFrameBuilder *builder_handle,
+                                                   const char *metadata_json);
 
 /**
  * Sets a numeric metadata key on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and key must be valid.
  */
-int32_t rkr_frame_builder_set_scalar_metadata(struct RKRConFrameBuilder *builder_handle,
-                                              const char *key,
-                                              double value);
+enum RKRStatus rkr_frame_builder_set_scalar_metadata(struct RKRConFrameBuilder *builder_handle,
+                                                     const char *key,
+                                                     double value);
 
 /**
  * Sets a string metadata key on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle, key, and value must be valid.
  */
-int32_t rkr_frame_builder_set_string_metadata(struct RKRConFrameBuilder *builder_handle,
-                                              const char *key,
-                                              const char *value);
+enum RKRStatus rkr_frame_builder_set_string_metadata(struct RKRConFrameBuilder *builder_handle,
+                                                     const char *key,
+                                                     const char *value);
 
 /**
  * Sets the per-frame total energy metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_energy(struct RKRConFrameBuilder *builder_handle,
-                                     double energy);
+enum RKRStatus rkr_frame_builder_set_energy(struct RKRConFrameBuilder *builder_handle,
+                                            double energy);
 
 /**
  * Sets the zero-based frame index metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_frame_index(struct RKRConFrameBuilder *builder_handle,
-                                          uint64_t idx);
+enum RKRStatus rkr_frame_builder_set_frame_index(struct RKRConFrameBuilder *builder_handle,
+                                                 uint64_t idx);
 
 /**
  * Sets the simulation time metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_time(struct RKRConFrameBuilder *builder_handle,
-                                   double time);
+enum RKRStatus rkr_frame_builder_set_time(struct RKRConFrameBuilder *builder_handle,
+                                          double time);
 
 /**
  * Sets the timestep metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_timestep(struct RKRConFrameBuilder *builder_handle,
-                                       double dt);
+enum RKRStatus rkr_frame_builder_set_timestep(struct RKRConFrameBuilder *builder_handle,
+                                              double dt);
 
 /**
  * Sets the NEB bead index metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_neb_bead(struct RKRConFrameBuilder *builder_handle,
-                                       uint64_t bead);
+enum RKRStatus rkr_frame_builder_set_neb_bead(struct RKRConFrameBuilder *builder_handle,
+                                              uint64_t bead);
 
 /**
  * Sets the NEB band index metadata on an existing frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle must be valid.
  */
-int32_t rkr_frame_builder_set_neb_band(struct RKRConFrameBuilder *builder_handle,
-                                       uint64_t band);
+enum RKRStatus rkr_frame_builder_set_neb_band(struct RKRConFrameBuilder *builder_handle,
+                                              uint64_t band);
 
 /**
  * Adds an atom (without velocity) to the frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
  */
-int32_t rkr_frame_add_atom(struct RKRConFrameBuilder *builder_handle,
-                           const char *symbol,
-                           double x,
-                           double y,
-                           double z,
-                           bool is_fixed,
-                           uint64_t atom_id,
-                           double mass);
+enum RKRStatus rkr_frame_add_atom(struct RKRConFrameBuilder *builder_handle,
+                                  const char *symbol,
+                                  double x,
+                                  double y,
+                                  double z,
+                                  bool is_fixed,
+                                  uint64_t atom_id,
+                                  double mass);
 
 /**
  * Adds an atom with velocity data to the frame builder.
- * Returns 0 on success, -1 on error.
+ * Returns `RKRStatus::Success` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
  */
-int32_t rkr_frame_add_atom_with_velocity(struct RKRConFrameBuilder *builder_handle,
-                                         const char *symbol,
-                                         double x,
-                                         double y,
-                                         double z,
-                                         bool is_fixed,
-                                         uint64_t atom_id,
-                                         double mass,
-                                         double vx,
-                                         double vy,
-                                         double vz);
+enum RKRStatus rkr_frame_add_atom_with_velocity(struct RKRConFrameBuilder *builder_handle,
+                                                const char *symbol,
+                                                double x,
+                                                double y,
+                                                double z,
+                                                bool is_fixed,
+                                                uint64_t atom_id,
+                                                double mass,
+                                                double vx,
+                                                double vy,
+                                                double vz);
 
 /**
  * Consumes the builder and returns a finalized RKRConFrame handle.
  * The builder handle is invalidated after this call.
  * The caller OWNS the returned frame and MUST call `free_rkr_frame`.
  * Returns NULL on error.
+ *
+ * # Safety
+ * builder_handle must be valid. The caller takes ownership of the returned frame.
  */
 struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder *builder_handle);
 
 /**
  * Frees a frame builder without building.
+ *
+ * # Safety
+ * builder_handle must be valid or null.
  */
 void free_rkr_frame_builder(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Creates a new gzip-compressed frame writer for the specified file.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be valid. The caller takes ownership of the returned writer.
+ */
+struct RKRConFrameWriter *create_writer_gzip_c(const char *filename_c);
 
 /**
  * Reads the first frame from a .con file.
@@ -338,6 +523,9 @@ void free_rkr_frame_builder(struct RKRConFrameBuilder *builder_handle);
  * Stops after the first frame rather than parsing the entire file.
  * The caller OWNS the returned handle and MUST call `free_rkr_frame`.
  * Returns NULL on error.
+ *
+ * # Safety
+ * filename_c must be valid. The caller takes ownership of the returned frame.
  */
 struct RKRConFrame *rkr_read_first_frame(const char *filename_c);
 
@@ -347,6 +535,9 @@ struct RKRConFrame *rkr_read_first_frame(const char *filename_c);
  * The caller OWNS both the array and each frame handle.
  * Free frames with `free_rkr_frame` and the array with `free_rkr_frame_array`.
  * Returns NULL on error.
+ *
+ * # Safety
+ * filename_c and num_frames must be valid. The caller takes ownership of the returned handles and array.
  */
 struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
                                          uintptr_t *num_frames);
@@ -354,38 +545,11 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
 /**
  * Frees an array of frame handles returned by `rkr_read_all_frames`.
  * Each frame is freed individually, then the array itself.
+ *
+ * # Safety
+ * frames must be valid or null.
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
-
-/**
- * Returns the spec version stored in a parsed frame's header.
- * Returns 0 on error (null handle).
- */
-uint32_t rkr_frame_spec_version(const struct RKRConFrame *frame_handle);
-
-/**
- * Returns the JSON metadata line from a parsed frame as a heap-allocated
- * null-terminated C string. The caller MUST free with `rkr_free_string`.
- * Returns NULL on error.
- */
-char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
-
-/**
- * Returns the per-frame energy from metadata, or NaN if absent.
- */
-double rkr_frame_energy(const struct RKRConFrame *frame_handle);
-
-/**
- * Returns the potential type string from metadata. The caller MUST free
- * with `rkr_free_string`. Returns NULL if absent.
- */
-char *rkr_frame_potential_type(const struct RKRConFrame *frame_handle);
-
-/**
- * Creates a new gzip-compressed frame writer.
- * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
- */
-struct RKRConFrameWriter *create_writer_gzip_c(const char *filename_c);
 
 #ifdef __cplusplus
 }  // extern "C"
