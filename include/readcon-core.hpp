@@ -548,7 +548,7 @@ inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
     }
 
     if (rkr_writer_extend(writer_handle_.get(), handles.data(),
-                          handles.size()) != RKRStatus::Success) {
+                          handles.size()) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to write multiple frames.");
     }
 }
@@ -594,7 +594,7 @@ inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
                                       double y, double z, bool is_fixed,
                                       uint64_t atom_id, double mass) {
     if (rkr_frame_add_atom(builder_handle_, symbol.c_str(), x, y, z, is_fixed,
-                           atom_id, mass) != RKRStatus::Success) {
+                           atom_id, mass) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to add atom to frame builder.");
     }
 }
@@ -602,7 +602,7 @@ inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
 inline void ConFrameBuilder::set_metadata_json(
     const std::string &metadata_json) {
     if (rkr_frame_builder_set_metadata_json(builder_handle_,
-                                            metadata_json.c_str()) != RKRStatus::Success) {
+                                            metadata_json.c_str()) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder metadata JSON.");
     }
 }
@@ -610,7 +610,7 @@ inline void ConFrameBuilder::set_metadata_json(
 inline void ConFrameBuilder::set_scalar_metadata(const std::string &key,
                                                  double value) {
     if (rkr_frame_builder_set_scalar_metadata(builder_handle_, key.c_str(),
-                                              value) != RKRStatus::Success) {
+                                              value) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder scalar metadata.");
     }
 }
@@ -618,43 +618,43 @@ inline void ConFrameBuilder::set_scalar_metadata(const std::string &key,
 inline void ConFrameBuilder::set_string_metadata(const std::string &key,
                                                  const std::string &value) {
     if (rkr_frame_builder_set_string_metadata(builder_handle_, key.c_str(),
-                                              value.c_str()) != RKRStatus::Success) {
+                                              value.c_str()) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder string metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_energy(double energy) {
-    if (rkr_frame_builder_set_energy(builder_handle_, energy) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_energy(builder_handle_, energy) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder energy metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_frame_index(uint64_t idx) {
-    if (rkr_frame_builder_set_frame_index(builder_handle_, idx) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_frame_index(builder_handle_, idx) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder frame_index metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_time(double time) {
-    if (rkr_frame_builder_set_time(builder_handle_, time) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_time(builder_handle_, time) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder time metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_timestep(double dt) {
-    if (rkr_frame_builder_set_timestep(builder_handle_, dt) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_timestep(builder_handle_, dt) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder timestep metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_neb_bead(uint64_t bead) {
-    if (rkr_frame_builder_set_neb_bead(builder_handle_, bead) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_neb_bead(builder_handle_, bead) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder neb_bead metadata.");
     }
 }
 
 inline void ConFrameBuilder::set_neb_band(uint64_t band) {
-    if (rkr_frame_builder_set_neb_band(builder_handle_, band) != RKRStatus::Success) {
+    if (rkr_frame_builder_set_neb_band(builder_handle_, band) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error("Failed to set builder neb_band metadata.");
     }
 }
@@ -664,7 +664,7 @@ inline void ConFrameBuilder::add_atom_with_velocity(
     uint64_t atom_id, double mass, double vx, double vy, double vz) {
     if (rkr_frame_add_atom_with_velocity(builder_handle_, symbol.c_str(), x, y,
                                          z, is_fixed, atom_id, mass, vx, vy,
-                                         vz) != RKRStatus::Success) {
+                                         vz) != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error(
             "Failed to add atom with velocity to frame builder.");
     }
