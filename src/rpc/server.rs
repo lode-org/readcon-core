@@ -1,5 +1,5 @@
 use capnp::capability::Promise;
-use capnp_rpc::{pry, RpcSystem, twoparty, rpc_twoparty_capnp};
+use capnp_rpc::{RpcSystem, pry, rpc_twoparty_capnp, twoparty};
 use futures::AsyncReadExt;
 
 use crate::iterators::ConFrameIterator;
@@ -96,24 +96,28 @@ impl read_con_service::Server for ReadConServiceImpl {
             let postbox_list = pry!(fd.get_postbox_header());
             let atoms_list = pry!(fd.get_atoms());
 
-            let boxl = [
-                cell_list.get(0),
-                cell_list.get(1),
-                cell_list.get(2),
-            ];
-            let angles = [
-                angles_list.get(0),
-                angles_list.get(1),
-                angles_list.get(2),
-            ];
+            let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
+            let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
 
             let prebox_header = [
-                pry!(prebox_list.get(0)).to_str().unwrap_or_default().to_string(),
-                pry!(prebox_list.get(1)).to_str().unwrap_or_default().to_string(),
+                pry!(prebox_list.get(0))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                pry!(prebox_list.get(1))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
             ];
             let postbox_header = [
-                pry!(postbox_list.get(0)).to_str().unwrap_or_default().to_string(),
-                pry!(postbox_list.get(1)).to_str().unwrap_or_default().to_string(),
+                pry!(postbox_list.get(0))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                pry!(postbox_list.get(1))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
             ];
 
             // Reconstruct atom data
@@ -125,7 +129,10 @@ impl read_con_service::Server for ReadConServiceImpl {
 
             for j in 0..atoms_list.len() {
                 let a = atoms_list.get(j);
-                let sym = pry!(a.get_symbol()).to_str().unwrap_or_default().to_string();
+                let sym = pry!(a.get_symbol())
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string();
 
                 if sym != current_symbol {
                     if current_count > 0 {
@@ -143,7 +150,11 @@ impl read_con_service::Server for ReadConServiceImpl {
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),
-                    fixed: if a.get_is_fixed() { [true, true, true] } else { [false, false, false] },
+                    fixed: if a.get_is_fixed() {
+                        [true, true, true]
+                    } else {
+                        [false, false, false]
+                    },
                     atom_id: a.get_atom_id(),
                     vx: if has_vel { Some(a.get_vx()) } else { None },
                     vy: if has_vel { Some(a.get_vy()) } else { None },
@@ -181,10 +192,7 @@ impl read_con_service::Server for ReadConServiceImpl {
             }
         }
 
-        results
-            .get()
-            .init_result()
-            .set_file_contents(&buffer);
+        results.get().init_result().set_file_contents(&buffer);
 
         Promise::ok(())
     }

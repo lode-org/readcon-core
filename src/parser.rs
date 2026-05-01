@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::types::{decode_fixed_bitmask, AtomDatum, ConFrame, FrameHeader};
+use crate::types::{AtomDatum, ConFrame, FrameHeader, decode_fixed_bitmask};
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
@@ -135,9 +135,7 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    let prebox2_raw = lines
-        .next()
-        .ok_or(ParseError::IncompleteHeader)?;
+    let prebox2_raw = lines.next().ok_or(ParseError::IncompleteHeader)?;
 
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
@@ -147,9 +145,7 @@ pub fn parse_frame_header<'a>(
             .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
         let json_obj = json_val
             .as_object()
-            .ok_or_else(|| {
-                ParseError::InvalidMetadataJson("expected a JSON object".to_string())
-            })?;
+            .ok_or_else(|| ParseError::InvalidMetadataJson("expected a JSON object".to_string()))?;
         let ver = json_obj
             .get("con_spec_version")
             .and_then(|v| v.as_u64())
@@ -347,9 +343,7 @@ where
             .trim();
 
         // "Velocities of Component N" line
-        let comp_line = lines
-            .next()
-            .ok_or(ParseError::IncompleteVelocitySection)?;
+        let comp_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
         // Validate it looks like a velocity header (optional strictness)
         if !comp_line.contains("Velocities of Component") {
             return Err(ParseError::IncompleteVelocitySection);
@@ -357,9 +351,7 @@ where
         let _ = type_idx; // suppress unused warning
 
         for _ in 0..num_atoms {
-            let vel_line = lines
-                .next()
-                .ok_or(ParseError::IncompleteVelocitySection)?;
+            let vel_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
             // Column 5 (atom_index) is optional in velocity lines too.
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
@@ -406,18 +398,14 @@ where
             .ok_or(ParseError::IncompleteForceSection)?
             .trim();
 
-        let comp_line = lines
-            .next()
-            .ok_or(ParseError::IncompleteForceSection)?;
+        let comp_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
         if !comp_line.contains("Forces of Component") {
             return Err(ParseError::IncompleteForceSection);
         }
         let _ = type_idx;
 
         for _ in 0..num_atoms {
-            let force_line = lines
-                .next()
-                .ok_or(ParseError::IncompleteForceSection)?;
+            let force_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if atom_idx < atom_data.len() {
@@ -586,7 +574,10 @@ mod tests {
         let mut line_it = lines.iter().copied();
         let result = parse_frame_header(&mut line_it);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ParseError::MissingSpecVersion));
+        assert!(matches!(
+            result.unwrap_err(),
+            ParseError::MissingSpecVersion
+        ));
     }
 
     #[test]
@@ -785,7 +776,7 @@ mod tests {
             "Coordinates of Component 2",
             "5.0 5.0 5.0 0.0",       // No atom_index: defaults to 3
             "6.0940 5.0 5.0 0.0 10", // Explicit atom_index: 10
-            "5.5470 5.9499 5.0 0.0",  // No atom_index: defaults to 5
+            "5.5470 5.9499 5.0 0.0", // No atom_index: defaults to 5
         ];
         let mut line_it = lines.iter().copied();
         let frame = parse_single_frame(&mut line_it).unwrap();
@@ -862,9 +853,8 @@ mod tests {
         assert!(!frame.has_velocities());
 
         // Now parse the velocity section
-        let has_vel =
-            parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
-                .expect("velocity parsing should succeed");
+        let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
+            .expect("velocity parsing should succeed");
         assert!(has_vel);
         assert_eq!(frame.atom_data[0].vx, Some(0.1));
         assert_eq!(frame.atom_data[0].vy, Some(0.2));
@@ -892,9 +882,8 @@ mod tests {
         ];
         let mut line_it = lines.iter().copied().peekable();
         let mut frame = parse_single_frame(&mut line_it).expect("parse should succeed");
-        let has_vel =
-            parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
-                .expect("should succeed with no velocities");
+        let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
+            .expect("should succeed with no velocities");
         assert!(!has_vel);
         assert_eq!(frame.atom_data[0].vx, None);
     }

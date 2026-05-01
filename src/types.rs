@@ -92,8 +92,7 @@ impl FrameHeader {
             "type": pot_type,
             "params": params,
         });
-        self.metadata
-            .insert("potential".to_string(), obj);
+        self.metadata.insert("potential".to_string(), obj);
     }
 
     /// Zero-based frame index within a trajectory.
@@ -136,8 +135,7 @@ impl FrameHeader {
 
     /// Sets the unit system.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        self.metadata
-            .insert("units".to_string(), units);
+        self.metadata.insert("units".to_string(), units);
     }
 
     /// Periodic boundary conditions as `[pbc_x, pbc_y, pbc_z]`.
@@ -723,7 +721,18 @@ mod tests {
     #[test]
     fn test_builder_with_velocities() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        builder.add_atom_with_velocity("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546, 0.1, 0.2, 0.3);
+        builder.add_atom_with_velocity(
+            "Cu",
+            0.0,
+            0.0,
+            0.0,
+            [true, true, true],
+            0,
+            63.546,
+            0.1,
+            0.2,
+            0.3,
+        );
         let frame = builder.build();
 
         assert!(frame.has_velocities());

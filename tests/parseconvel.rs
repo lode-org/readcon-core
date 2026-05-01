@@ -47,11 +47,7 @@ fn test_convel_multi_frame() {
     let frames: Vec<_> = parser
         .map(|r| r.expect("Failed to parse convel frame"))
         .collect();
-    assert_eq!(
-        frames.len(),
-        2,
-        "Expected 2 frames in multi-frame convel"
-    );
+    assert_eq!(frames.len(), 2, "Expected 2 frames in multi-frame convel");
 
     // Both frames should have velocities
     assert!(frames[0].has_velocities());
@@ -74,8 +70,7 @@ fn test_convel_multi_frame() {
 
 #[test]
 fn test_con_files_have_no_velocities() {
-    let fdat =
-        fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find con test file.");
+    let fdat = fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find con test file.");
     let parser = ConFrameIterator::new(&fdat);
 
     let frames: Vec<_> = parser
