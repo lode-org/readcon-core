@@ -220,6 +220,35 @@ SHOULD emit the same values as the coordinate block. Readers associate
 section rows by component order and MAY ignore these duplicate identity
 columns after parsing the row shape.
 
+** Validation mode
+:PROPERTIES:
+:CUSTOM_ID: validation-mode
+:END:
+
+Version 2 files MAY set =validate= to =true= in the JSON metadata:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities","forces"],"validate":true}
+#+end_example
+
+When =validate= is =true=, conforming readers MUST verify that every
+declared per-atom section is in the same component and atom order as
+the coordinate blocks. At minimum, this validation MUST check:
+
+- The section component symbol matches the coordinate component
+  symbol.
+- The section label exactly matches the declared section and component
+  number (for example, =Velocities of Component 1=).
+- Each section row's =fixed_flag= decodes to the same per-axis fixed
+  mask as the corresponding coordinate row.
+- Each section row's =atom_id= equals the corresponding coordinate
+  row's =atom_id=.
+
+If any check fails, the reader MUST reject the frame. When =validate=
+is absent or false, readers MAY parse legacy files by associating
+section rows by component order and ignoring duplicate identity column
+mismatches after parsing the row shape.
+
 ** Legacy section detection
 
 Files without a =sections= key use blank-separator detection: if a
@@ -292,6 +321,7 @@ All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 | Key                  | Type    | Description                                              |
 |----------------------+---------+----------------------------------------------------------|
 | =sections=           | array   | Declared per-atom sections (see [[#sections]])               |
+| =validate=           | bool    | Enable strict section identity checks (see [[#validation-mode]]) |
 | =generator=          | string  | Tool name and version                                    |
 | =units=              | object  | Unit system (see [[#units]])                                 |
 | =pbc=                | array   | Periodic boundary conditions (see [[#pbc]])                  |
