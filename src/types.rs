@@ -108,6 +108,11 @@ pub struct FrameHeader {
     /// parse_velocity_section / parse_force_section can avoid a BTreeMap
     /// lookup on every call.
     pub(crate) strict_validation: bool,
+    /// Whether the parsed metadata explicitly listed a `sections` key.
+    /// Distinguishes "declared as empty array" (no legacy fallback) from
+    /// "key absent" (try blank-separator velocity detection). Cached at
+    /// parse time so the section dispatch does not re-parse the JSON.
+    pub(crate) sections_declared: bool,
 }
 
 /// Typed accessors for recommended JSON metadata keys.
@@ -641,6 +646,7 @@ impl ConFrameBuilder {
             self.metadata.get(meta::VALIDATE),
             Some(serde_json::Value::Bool(true))
         );
+        let sections_declared = !sections.is_empty();
         let header = FrameHeader {
             prebox_header: PreboxHeader::new(self.prebox_user),
             boxl: self.cell,
@@ -653,6 +659,7 @@ impl ConFrameBuilder {
             metadata: self.metadata,
             sections,
             strict_validation,
+            sections_declared,
         };
 
         ConFrame { header, atom_data }
@@ -742,6 +749,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -762,6 +770,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -786,6 +795,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -813,6 +823,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -835,6 +846,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -855,6 +867,7 @@ mod tests {
             metadata: BTreeMap::new(),
             sections: Vec::new(),
             strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
