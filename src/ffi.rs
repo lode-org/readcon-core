@@ -43,6 +43,9 @@ pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u3
 /// Returns the JSON metadata line from a parsed frame as a heap-allocated
 /// null-terminated C string. The caller MUST free with `rkr_free_string`.
 /// Returns NULL on error.
+///
+/// # Safety
+/// frame_handle must be valid. The caller takes ownership of the returned string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metadata_json(
     frame_handle: *const RKRConFrame,
@@ -78,6 +81,9 @@ pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
 /// Returns the potential type string from metadata as a heap-allocated
 /// null-terminated C string. The caller MUST free with `rkr_free_string`.
 /// Returns NULL if absent or on error.
+///
+/// # Safety
+/// frame_handle must be valid. The caller takes ownership of the returned string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_potential_type(
     frame_handle: *const RKRConFrame,
@@ -161,6 +167,9 @@ pub struct CConFrameIterator {
 /// Creates a new iterator for a .con file.
 /// The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
 /// Returns NULL if there are no more frames or on error.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned iterator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
@@ -188,6 +197,9 @@ pub unsafe extern "C" fn read_con_file_iterator(
 
 /// Reads the next frame from the iterator, returning an opaque handle.
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
+///
+/// # Safety
+/// iterator must be valid. The caller takes ownership of the returned frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_next(
     iterator: *mut CConFrameIterator,
@@ -203,6 +215,9 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 }
 
 /// Frees the memory for an opaque `RKRConFrame` handle.
+///
+/// # Safety
+/// frame_handle must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
     if !frame_handle.is_null() {
@@ -211,6 +226,9 @@ pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
 }
 
 /// Frees the memory for a `CConFrameIterator`.
+///
+/// # Safety
+/// iterator must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterator) {
     if iterator.is_null() {
@@ -229,6 +247,9 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 /// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+///
+/// # Safety
+/// frame_handle must be valid. The caller takes ownership of the returned CFrame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) -> *mut CFrame {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
@@ -290,6 +311,9 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 }
 
 /// Frees the memory of a `CFrame` struct, including its internal atoms array.
+///
+/// # Safety
+/// frame must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
     if frame.is_null() {
@@ -304,6 +328,9 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
 /// Copies a header string line into a user-provided buffer.
 /// This is a C style helper... where the user explicitly sets the buffer.
 /// Returns the number of bytes written (excluding null terminator), or -1 on error.
+///
+/// # Safety
+/// frame_handle must be valid. buffer must be at least buffer_len bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_get_header_line(
     frame_handle: *const RKRConFrame,
@@ -338,6 +365,9 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
 ///
 /// The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
 /// to prevent a memory leak. Returns NULL on error or if the index is invalid.
+///
+/// # Safety
+/// frame_handle must be valid. The caller takes ownership of the returned string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
     frame_handle: *const RKRConFrame,
@@ -367,6 +397,9 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
 }
 
 /// Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+///
+/// # Safety
+/// s must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
     if !s.is_null() {
@@ -381,6 +414,9 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 
 /// Creates a new frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_from_path_c(
     filename_c: *const c_char,
@@ -399,6 +435,9 @@ pub unsafe extern "C" fn create_writer_from_path_c(
 }
 
 /// Frees the memory for an `RKRConFrameWriter`, closing the associated file.
+///
+/// # Safety
+/// writer_handle must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) {
     if !writer_handle.is_null() {
@@ -407,6 +446,9 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
 }
 
 /// Writes multiple frames from an array of handles to the file managed by the writer.
+///
+/// # Safety
+/// writer_handle and frame_handles must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_writer_extend(
     writer_handle: *mut RKRConFrameWriter,
@@ -449,6 +491,9 @@ pub unsafe extern "C" fn rkr_writer_extend(
 
 /// Creates a new frame writer with custom floating-point precision.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
     filename_c: *const c_char,
@@ -481,6 +526,10 @@ pub struct RKRConFrameBuilder {
 /// The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
 /// `rkr_frame_builder_build`.
 /// Returns NULL on error.
+///
+/// # Safety
+/// cell and angles must point to 3 doubles. prebox0, prebox1, postbox0, postbox1 must be valid.
+/// The caller takes ownership of the returned builder.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_new(
     cell: *const f64,
@@ -516,6 +565,9 @@ pub unsafe extern "C" fn rkr_frame_new(
 
 /// Parses and sets JSON metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle and metadata_json must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
     builder_handle: *mut RKRConFrameBuilder,
@@ -537,6 +589,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
 
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle and key must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
     builder_handle: *mut RKRConFrameBuilder,
@@ -557,6 +612,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
 
 /// Sets a string metadata key on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle, key, and value must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
     builder_handle: *mut RKRConFrameBuilder,
@@ -581,6 +639,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
 
 /// Sets the per-frame total energy metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_energy(
     builder_handle: *mut RKRConFrameBuilder,
@@ -596,6 +657,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_energy(
 
 /// Sets the zero-based frame index metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
     builder_handle: *mut RKRConFrameBuilder,
@@ -611,6 +675,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
 
 /// Sets the simulation time metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_time(
     builder_handle: *mut RKRConFrameBuilder,
@@ -626,6 +693,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_time(
 
 /// Sets the timestep metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
     builder_handle: *mut RKRConFrameBuilder,
@@ -641,6 +711,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
 
 /// Sets the NEB bead index metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
     builder_handle: *mut RKRConFrameBuilder,
@@ -656,6 +729,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
 
 /// Sets the NEB band index metadata on an existing frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
     builder_handle: *mut RKRConFrameBuilder,
@@ -671,6 +747,9 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
 
 /// Adds an atom (without velocity) to the frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_add_atom(
     builder_handle: *mut RKRConFrameBuilder,
@@ -696,6 +775,9 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
 
 /// Adds an atom with velocity data to the frame builder.
 /// Returns 0 on success, -1 on error.
+///
+/// # Safety
+/// builder_handle and symbol must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
     builder_handle: *mut RKRConFrameBuilder,
@@ -726,6 +808,9 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
 /// The builder handle is invalidated after this call.
 /// The caller OWNS the returned frame and MUST call `free_rkr_frame`.
 /// Returns NULL on error.
+///
+/// # Safety
+/// builder_handle must be valid. The caller takes ownership of the returned frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_build(
     builder_handle: *mut RKRConFrameBuilder,
@@ -739,6 +824,9 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
 }
 
 /// Frees a frame builder without building.
+///
+/// # Safety
+/// builder_handle must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrameBuilder) {
     if !builder_handle.is_null() {
@@ -748,6 +836,9 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
 
 /// Creates a new gzip-compressed frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_gzip_c(
     filename_c: *const c_char,
@@ -774,6 +865,9 @@ pub unsafe extern "C" fn create_writer_gzip_c(
 /// Stops after the first frame rather than parsing the entire file.
 /// The caller OWNS the returned handle and MUST call `free_rkr_frame`.
 /// Returns NULL on error.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_read_first_frame(
     filename_c: *const c_char,
@@ -796,6 +890,9 @@ pub unsafe extern "C" fn rkr_read_first_frame(
 /// The caller OWNS both the array and each frame handle.
 /// Free frames with `free_rkr_frame` and the array with `free_rkr_frame_array`.
 /// Returns NULL on error.
+///
+/// # Safety
+/// filename_c and num_frames must be valid. The caller takes ownership of the returned handles and array.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_read_all_frames(
     filename_c: *const c_char,
@@ -826,6 +923,9 @@ pub unsafe extern "C" fn rkr_read_all_frames(
 
 /// Frees an array of frame handles returned by `rkr_read_all_frames`.
 /// Each frame is freed individually, then the array itself.
+///
+/// # Safety
+/// frames must be valid or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_frame_array(
     frames: *mut *mut RKRConFrame,

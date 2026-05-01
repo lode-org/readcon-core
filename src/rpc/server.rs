@@ -139,7 +139,7 @@ impl read_con_service::Server for ReadConServiceImpl {
 
                 let has_vel = a.get_has_velocity();
                 atom_data.push(AtomDatum {
-                    symbol: Arc::new(sym),
+                    symbol: Arc::from(sym),
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),

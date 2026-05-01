@@ -273,8 +273,8 @@ pub fn parse_single_frame<'a>(
 
     let mut global_atom_idx: u64 = 0;
     for num_atoms in &header.natms_per_type {
-        // Create a shared string for the symbol once per component.
-        let symbol = Arc::new(
+        // Create a reference-counted string for the symbol once per component.
+        let symbol: Arc<str> = Arc::from(
             lines
                 .next()
                 .ok_or(ParseError::IncompleteFrame)?

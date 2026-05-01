@@ -1,5 +1,4 @@
 #![allow(
-    clippy::missing_safety_doc,
     clippy::too_many_arguments,
     clippy::question_mark
 )]

@@ -102,7 +102,7 @@ impl PyAtomDatum {
 impl PyAtomDatum {
     fn from_atom_with_mass(atom: &AtomDatum, mass: f64) -> Self {
         PyAtomDatum {
-            symbol: (*atom.symbol).clone(),
+            symbol: atom.symbol.to_string(),
             x: atom.x,
             y: atom.y,
             z: atom.z,
