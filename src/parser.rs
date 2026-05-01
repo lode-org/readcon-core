@@ -1,5 +1,7 @@
 use crate::error::ParseError;
+use crate::helpers::symbol_to_atomic_number;
 use crate::types::{AtomDatum, ConFrame, FrameHeader, decode_fixed_bitmask};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
@@ -17,9 +19,7 @@ use std::sync::Arc;
 pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
     let mut values = Vec::with_capacity(n);
     for token in line.split_ascii_whitespace() {
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-        values.push(val);
+        values.push(parse_finite_f64(token)?);
     }
     if values.len() == n {
         Ok(values)
@@ -44,9 +44,7 @@ pub fn parse_line_of_range_f64(
 ) -> Result<Vec<f64>, ParseError> {
     let mut values = Vec::with_capacity(max);
     for token in line.split_ascii_whitespace() {
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-        values.push(val);
+        values.push(parse_finite_f64(token)?);
     }
     if values.len() < min || values.len() > max {
         return Err(ParseError::InvalidVectorLength {
@@ -60,6 +58,144 @@ pub fn parse_line_of_range_f64(
         values.push(defaults[idx]);
     }
     Ok(values)
+}
+
+fn parse_finite_f64(token: &str) -> Result<f64, ParseError> {
+    let val: f64 = fast_float2::parse(token)
+        .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+    if val.is_finite() {
+        Ok(val)
+    } else {
+        Err(ParseError::InvalidNumberFormat(format!(
+            "non-finite float: {token}"
+        )))
+    }
+}
+
+fn metadata_json_error(message: impl Into<String>) -> ParseError {
+    ParseError::InvalidMetadataJson(message.into())
+}
+
+fn validate_metadata_number(key: &str, value: &Value) -> Result<(), ParseError> {
+    if value.as_f64().is_some() {
+        Ok(())
+    } else {
+        Err(metadata_json_error(format!(
+            "{key} must be a finite number"
+        )))
+    }
+}
+
+fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError> {
+    if value.as_u64().is_some() {
+        Ok(())
+    } else {
+        Err(metadata_json_error(format!(
+            "{key} must be a non-negative integer"
+        )))
+    }
+}
+
+fn validate_metadata_schema(
+    json_obj: &serde_json::Map<String, Value>,
+) -> Result<(bool, Vec<String>), ParseError> {
+    let validate = match json_obj.get("validate") {
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(metadata_json_error("validate must be a boolean")),
+        None => false,
+    };
+
+    let sections = match json_obj.get("sections") {
+        Some(Value::Array(values)) => values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| metadata_json_error("sections must be an array of strings"))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err(metadata_json_error("sections must be an array of strings")),
+        None if validate => {
+            return Err(metadata_json_error(
+                "validate=true requires a sections array, even when empty",
+            ));
+        }
+        None => Vec::new(),
+    };
+
+    for (key, value) in json_obj {
+        match key.as_str() {
+            "con_spec_version" | "sections" | "validate" => {}
+            "energy" | "time" | "timestep" | "convergence_fmax" | "convergence_energy" | "fmax" => {
+                validate_metadata_number(key, value)?
+            }
+            "frame_index" | "neb_bead" | "neb_band" => validate_metadata_integer(key, value)?,
+            "generator" => {
+                if !value.is_string() {
+                    return Err(metadata_json_error("generator must be a string"));
+                }
+            }
+            "units" | "potential" => {
+                if !value.is_object() {
+                    return Err(metadata_json_error(format!("{key} must be an object")));
+                }
+                if key == "potential" {
+                    if let Some(potential_type) = value.get("type") {
+                        if !potential_type.is_string() {
+                            return Err(metadata_json_error("potential.type must be a string"));
+                        }
+                    }
+                }
+            }
+            "pbc" => validate_pbc_metadata(value)?,
+            "lattice_vectors" => validate_lattice_vectors_metadata(value)?,
+            "converged" => {
+                if !value.is_boolean() {
+                    return Err(metadata_json_error("converged must be a boolean"));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok((validate, sections))
+}
+
+fn validate_pbc_metadata(value: &Value) -> Result<(), ParseError> {
+    let Some(values) = value.as_array() else {
+        return Err(metadata_json_error("pbc must be a length-3 boolean array"));
+    };
+    if values.len() != 3 || values.iter().any(|entry| !entry.is_boolean()) {
+        return Err(metadata_json_error("pbc must be a length-3 boolean array"));
+    }
+    Ok(())
+}
+
+fn validate_lattice_vectors_metadata(value: &Value) -> Result<(), ParseError> {
+    let Some(rows) = value.as_array() else {
+        return Err(metadata_json_error(
+            "lattice_vectors must be a 3x3 numeric array",
+        ));
+    };
+    if rows.len() != 3 {
+        return Err(metadata_json_error(
+            "lattice_vectors must be a 3x3 numeric array",
+        ));
+    }
+    for row in rows {
+        let Some(entries) = row.as_array() else {
+            return Err(metadata_json_error(
+                "lattice_vectors must be a 3x3 numeric array",
+            ));
+        };
+        if entries.len() != 3 || entries.iter().any(|entry| entry.as_f64().is_none()) {
+            return Err(metadata_json_error(
+                "lattice_vectors must be a 3x3 numeric array",
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Parses a line of whitespace-separated values into a vector of a specific type.
@@ -140,7 +276,7 @@ pub fn parse_frame_header<'a>(
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
     let trimmed = prebox2_raw.trim();
-    let (spec_version, metadata, sections) = if trimmed.starts_with('{') {
+    let (spec_version, metadata, sections, validate) = if trimmed.starts_with('{') {
         let json_val: serde_json::Value = serde_json::from_str(trimmed)
             .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
         let json_obj = json_val
@@ -153,28 +289,22 @@ pub fn parse_frame_header<'a>(
         if ver > crate::CON_SPEC_VERSION {
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
+        let (validate, secs) = validate_metadata_schema(json_obj)?;
         let mut meta = BTreeMap::new();
-        let mut secs = Vec::new();
         for (k, v) in json_obj {
             if k == "con_spec_version" {
                 continue;
             }
             if k == "sections" {
-                if let Some(arr) = v.as_array() {
-                    secs = arr
-                        .iter()
-                        .filter_map(|s| s.as_str().map(|s| s.to_string()))
-                        .collect();
-                }
                 // Don't store sections in metadata -- it's in the dedicated field.
                 continue;
             }
             meta.insert(k.clone(), v.clone());
         }
-        (ver, meta, secs)
+        (ver, meta, secs, validate)
     } else {
         // Legacy file: no JSON metadata line.
-        (1_u32, BTreeMap::new(), Vec::new())
+        (1_u32, BTreeMap::new(), Vec::new(), false)
     };
     let prebox2 = prebox2_raw.to_string();
 
@@ -198,6 +328,10 @@ pub fn parse_frame_header<'a>(
         lines.next().ok_or(ParseError::IncompleteHeader)?,
         natm_types,
     )?;
+    if validate {
+        validate_header_geometry(&boxl_vec, &angles_vec, natm_types, &natms_per_type)?;
+        validate_masses(&masses_per_type)?;
+    }
     Ok(FrameHeader {
         prebox_header: [prebox1, prebox2],
         boxl: boxl_vec.try_into().unwrap(),
@@ -264,11 +398,12 @@ pub fn parse_single_frame<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<ConFrame, ParseError> {
     let header = parse_frame_header(lines)?;
+    let validate = strict_validation_enabled(&header);
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
 
     let mut global_atom_idx: u64 = 0;
-    for num_atoms in &header.natms_per_type {
+    for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         // Create a reference-counted string for the symbol once per component.
         let symbol: Arc<str> = Arc::from(
             lines
@@ -277,21 +412,28 @@ pub fn parse_single_frame<'a>(
                 .trim()
                 .to_string(),
         );
-        // Consume and discard the "Coordinates of Component X" line.
-        lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        if validate {
+            validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
+        }
         for _ in 0..*num_atoms {
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
             // Column 5 (atom_index) is optional; defaults to sequential index.
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
+            let (fixed, atom_id) = if validate {
+                parse_identity_columns(coord_line, "coordinate")?
+            } else {
+                (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
+            };
             atom_data.push(AtomDatum {
                 // This is a cheap reference-count increment, not a full string clone.
                 symbol: Arc::clone(&symbol),
                 x: vals[0],
                 y: vals[1],
                 z: vals[2],
-                fixed: decode_fixed_bitmask(vals[3] as u8),
-                atom_id: vals[4] as u64,
+                fixed,
+                atom_id,
                 vx: None,
                 vy: None,
                 vz: None,
@@ -311,6 +453,77 @@ fn strict_validation_enabled(header: &FrameHeader) -> bool {
         .get("validate")
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
+}
+
+fn validate_header_geometry(
+    boxl: &[f64],
+    angles: &[f64],
+    natm_types: usize,
+    natms_per_type: &[usize],
+) -> Result<(), ParseError> {
+    if boxl.iter().any(|length| *length <= 0.0)
+        || angles.iter().any(|angle| *angle <= 0.0 || *angle >= 180.0)
+    {
+        return Err(ParseError::ValidationError(
+            "cell geometry must have positive lengths and angles between 0 and 180 degrees"
+                .to_string(),
+        ));
+    }
+    if natm_types == 0 || natms_per_type.iter().any(|count| *count == 0) {
+        return Err(ParseError::ValidationError(
+            "atom counts must contain at least one atom per component".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_masses(masses_per_type: &[f64]) -> Result<(), ParseError> {
+    if masses_per_type.iter().any(|mass| *mass <= 0.0) {
+        return Err(ParseError::ValidationError(
+            "component masses must be positive".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_coordinate_component(
+    type_idx: usize,
+    symbol: &str,
+    label: &str,
+) -> Result<(), ParseError> {
+    let expected_label = format!("Coordinates of Component {}", type_idx + 1);
+    if label.trim() != expected_label {
+        return Err(ParseError::ValidationError(format!(
+            "expected coordinate label {expected_label:?}, found {label:?}"
+        )));
+    }
+    if symbol != "X" && symbol_to_atomic_number(symbol) == 0 {
+        return Err(ParseError::ValidationError(format!(
+            "unknown component symbol {symbol}"
+        )));
+    }
+    Ok(())
+}
+
+fn parse_identity_columns(line: &str, row_kind: &str) -> Result<([bool; 3], u64), ParseError> {
+    let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
+    if columns.len() != 5 {
+        return Err(ParseError::ValidationError(format!(
+            "{row_kind} rows require fixed_flag and atom_id columns in validate mode"
+        )));
+    }
+    let fixed_flag = columns[3].parse::<u8>().map_err(|_| {
+        ParseError::ValidationError(format!("{row_kind} fixed_flag must be an integer bitmask"))
+    })?;
+    if fixed_flag > 7 {
+        return Err(ParseError::ValidationError(format!(
+            "{row_kind} fixed_flag must be between 0 and 7"
+        )));
+    }
+    let atom_id = columns[4].parse::<u64>().map_err(|_| {
+        ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
+    })?;
+    Ok((decode_fixed_bitmask(fixed_flag), atom_id))
 }
 
 fn validate_section_component(
@@ -443,13 +656,8 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if validate {
-                validate_section_atom_identity(
-                    "velocities",
-                    atom_idx,
-                    decode_fixed_bitmask(vals[3] as u8),
-                    vals[4] as u64,
-                    atom_data,
-                )?;
+                let (fixed, atom_id) = parse_identity_columns(vel_line, "velocities")?;
+                validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].vx = Some(vals[0]);
@@ -509,13 +717,8 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if validate {
-                validate_section_atom_identity(
-                    "forces",
-                    atom_idx,
-                    decode_fixed_bitmask(vals[3] as u8),
-                    vals[4] as u64,
-                    atom_data,
-                )?;
+                let (fixed, atom_id) = parse_identity_columns(force_line, "forces")?;
+                validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].fx = Some(vals[0]);
@@ -542,26 +745,43 @@ pub fn parse_declared_sections<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
-    if header.sections.is_empty() {
+    if header.sections.is_empty() && !sections_key_declared(header) {
         // Legacy: try velocity detection via blank separator
         let found = parse_velocity_section(lines, header, atom_data)?;
         if found {
             header.sections.push("velocities".to_string());
         }
     } else {
-        for section in &header.sections {
+        for section in header.sections.clone() {
             match section.as_str() {
                 "velocities" => {
-                    parse_velocity_section(lines, header, atom_data)?;
+                    let found = parse_velocity_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteVelocitySection);
+                    }
                 }
                 "forces" => {
-                    parse_force_section(lines, header, atom_data)?;
+                    let found = parse_force_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteForceSection);
+                    }
                 }
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
     }
     Ok(())
+}
+
+fn sections_key_declared(header: &FrameHeader) -> bool {
+    serde_json::from_str::<Value>(&header.prebox_header[1])
+        .ok()
+        .and_then(|value| {
+            value
+                .as_object()
+                .map(|object| object.contains_key("sections"))
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -1094,6 +1314,217 @@ Velocities of Component 1
         assert!(frame.has_velocities());
         assert_eq!(frame.atom_data[0].atom_id, 0);
         assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
+    }
+
+    #[test]
+    fn test_validate_must_be_boolean_when_present() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"validate\":\"yes\",\"sections\":[]}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
+        assert!(err.to_string().contains("validate"));
+    }
+
+    #[test]
+    fn test_validate_true_requires_sections_key() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"validate\":true}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
+        assert!(err.to_string().contains("sections"));
+    }
+
+    #[test]
+    fn test_sections_must_be_string_array_when_present() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"sections\":[\"velocities\",7]}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
+        assert!(err.to_string().contains("sections"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_non_integer_coordinate_identity_columns() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":[],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 5.0 0
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("fixed_flag"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_non_exact_coordinate_label() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":[],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates Component 1
+0.0 0.0 0.0 5 0
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("Coordinates of Component 1"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_unknown_component_symbol() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":[],"validate":true}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Qq
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("symbol"));
+    }
+
+    #[test]
+    fn test_declared_section_must_be_present() {
+        let text = r#"
+PREBOX1
+{"con_spec_version":2,"sections":["velocities"]}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POSTBOX1
+POSTBOX2
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+"#;
+        let mut iter = ConFrameIterator::new(text.trim());
+        let err = iter.next().unwrap().unwrap_err();
+
+        assert!(matches!(err, ParseError::IncompleteVelocitySection));
+    }
+
+    #[test]
+    fn test_non_finite_numeric_tokens_are_rejected() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2}",
+            "10.0 NaN 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::InvalidNumberFormat(_)));
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_non_physical_cell_geometry() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
+            "0.0 20.0 30.0",
+            "90.0 180.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("cell"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_reserved_metadata_type_mismatch() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"sections\":[],\"validate\":true,\"energy\":\"low\"}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+
+        assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
+        assert!(err.to_string().contains("energy"));
     }
 
     #[test]

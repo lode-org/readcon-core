@@ -33,6 +33,7 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 -   **Parallel parsing:** Optional rayon-based parallel frame parsing behind the `parallel` feature gate.
 -   **Language bindings:** Python (PyO3), Julia (ccall), C (cbindgen FFI), and C++ (RAII header-only wrapper), following the hourglass design from [Metatensor](https://github.com/metatensor/metatensor).
 -   **Spec-v2 metadata helpers:** Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, and `neb_band`, while still allowing raw JSON metadata when needed.
+-   **Spec-v2 validation:** `validate=true` enforces finite numeric values, reserved metadata schema, physical header geometry, exact component labels, valid symbols, declared section presence, and matching per-atom identity columns.
 -   **Force and constraint fidelity:** Writers preserve velocities, forces, original atom ids, and per-axis fixed masks across Rust, Python, Julia, C, and C++.
 -   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
 
@@ -107,6 +108,7 @@ See the [formal specification](https://lode-org.github.io/readcon-core/spec.html
 -   A 9-line header (comments, cell dimensions, cell angles, atom type/count/mass metadata)
 -   Line 2 is reserved for spec-v2 JSON metadata
 -   Per-type coordinate blocks (symbol, label, atom lines with x y z fixed atomID)
+-   Optional spec-v2 `sections` and `validate` metadata for declared per-atom sections and strict validation
 -   Multiple frames are concatenated directly with no separator
 
 
