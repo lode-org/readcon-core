@@ -5,31 +5,82 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-/// JSON metadata key names for the spec v2 header line.
+/// JSON metadata key names recognized by spec v2.
 ///
-/// Centralized so that key strings are not duplicated across the parser,
-/// writer, builder, FFI, and Python layers.
+/// Each constant is the exact string that appears on the second header
+/// line. The constants are centralized so the parser, writer, builder,
+/// FFI, and Python layers all reference the same key spellings.
+///
+/// Reserved key schema, as enforced by [`crate::parser::validate_metadata_schema`]
+/// when `validate=true`:
+///
+/// | Constant | JSON type | Required | Notes |
+/// |----------|-----------|----------|-------|
+/// | [`CON_SPEC_VERSION`] | unsigned integer | yes | The spec version this frame conforms to. The reader rejects values greater than [`crate::CON_SPEC_VERSION`]. |
+/// | [`SECTIONS`] | array of strings | required when `validate=true` | Declares per-atom section blocks that follow the coordinates (e.g. `["velocities", "forces"]`). When absent, legacy blank-separator velocity detection applies. |
+/// | [`VALIDATE`] | boolean | optional | When `true`, the reader runs the strict v2 schema and structural checks. |
+/// | [`ENERGY`] | finite number | optional | Per-frame total energy in the units declared by [`UNITS`]. |
+/// | [`TIME`] | finite number | optional | Simulation time. |
+/// | [`TIMESTEP`] | finite number | optional | Integration timestep. |
+/// | [`CONVERGENCE_FMAX`] | finite number | optional | Max-force convergence threshold. |
+/// | [`CONVERGENCE_ENERGY`] | finite number | optional | Energy convergence threshold. |
+/// | [`FMAX`] | finite number | optional | Per-frame max force magnitude. |
+/// | [`FRAME_INDEX`] | non-negative integer | optional | Zero-based frame index in the trajectory. |
+/// | [`NEB_BEAD`] | non-negative integer | optional | Bead index along an NEB band. |
+/// | [`NEB_BAND`] | non-negative integer | optional | NEB band index. |
+/// | [`GENERATOR`] | string | optional | Producing tool name (e.g. `"eOn 0.4.2"`). |
+/// | [`UNITS`] | object | optional | Unit identifiers, typically with `length`, `energy`, `time` keys. |
+/// | [`POTENTIAL`] | object | optional | Force-field descriptor; if a `type` field is present it must be a string. |
+/// | [`PBC`] | length-3 array of booleans | optional | Periodic-boundary flags per cell axis. |
+/// | [`LATTICE_VECTORS`] | 3x3 numeric array | optional | Full lattice basis when `boxl`/`angles` is insufficient. |
+/// | [`CONVERGED`] | boolean | optional | Whether the producing tool considers this frame converged. |
+///
+/// Keys not listed above are accepted on read and round-tripped on
+/// write but receive no schema check, even under `validate=true`.
 pub mod meta {
+    /// Required JSON key carrying the spec version (unsigned integer).
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
+    /// Array of declared section names (strings). Required when
+    /// `validate=true`; absent triggers the legacy blank-separator
+    /// velocity detection.
     pub const SECTIONS: &str = "sections";
+    /// Boolean. When `true`, the reader applies strict v2 validation.
     pub const VALIDATE: &str = "validate";
 
+    /// Per-frame total energy (finite number, units declared by
+    /// [`UNITS`]).
     pub const ENERGY: &str = "energy";
+    /// Simulation time (finite number).
     pub const TIME: &str = "time";
+    /// Integration timestep (finite number).
     pub const TIMESTEP: &str = "timestep";
+    /// Max-force convergence threshold (finite number).
     pub const CONVERGENCE_FMAX: &str = "convergence_fmax";
+    /// Energy convergence threshold (finite number).
     pub const CONVERGENCE_ENERGY: &str = "convergence_energy";
+    /// Per-frame max force magnitude (finite number).
     pub const FMAX: &str = "fmax";
 
+    /// Zero-based frame index along a trajectory (non-negative integer).
     pub const FRAME_INDEX: &str = "frame_index";
+    /// NEB bead index (non-negative integer).
     pub const NEB_BEAD: &str = "neb_bead";
+    /// NEB band index (non-negative integer).
     pub const NEB_BAND: &str = "neb_band";
 
+    /// Producing tool name (string).
     pub const GENERATOR: &str = "generator";
+    /// Unit identifiers (object). Common subkeys: `length`, `energy`,
+    /// `time`.
     pub const UNITS: &str = "units";
+    /// Force-field descriptor (object). When a `type` field is
+    /// present it must be a string.
     pub const POTENTIAL: &str = "potential";
+    /// Periodic-boundary flags (length-3 boolean array, x/y/z order).
     pub const PBC: &str = "pbc";
+    /// Full lattice basis (3x3 numeric array).
     pub const LATTICE_VECTORS: &str = "lattice_vectors";
+    /// Convergence flag (boolean).
     pub const CONVERGED: &str = "converged";
 }
 
