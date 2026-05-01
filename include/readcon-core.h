@@ -43,31 +43,35 @@ typedef enum RKRStatus {
     /**
      * Function completed successfully.
      */
-    Success = 0,
+    RKR_STATUS_SUCCESS = 0,
     /**
      * A null pointer was passed for a required argument.
      */
-    NullHandle = -1,
+    RKR_STATUS_NULL_POINTER = -1,
     /**
      * An input string was not valid UTF-8.
      */
-    InvalidUtf8 = -2,
+    RKR_STATUS_INVALID_UTF8 = -2,
     /**
      * JSON parsing or serialization failed.
      */
-    InvalidJson = -3,
+    RKR_STATUS_INVALID_JSON = -3,
     /**
      * File I/O error.
      */
-    IoError = -4,
+    RKR_STATUS_IO_ERROR = -4,
     /**
      * Index out of bounds.
      */
-    IndexOutOfBounds = -5,
+    RKR_STATUS_INDEX_OUT_OF_BOUNDS = -5,
+    /**
+     * The destination buffer cannot hold a null-terminated string.
+     */
+    RKR_STATUS_BUFFER_TOO_SMALL = -6,
     /**
      * An internal logic error or unhandled state.
      */
-    InternalError = -6,
+    RKR_STATUS_INTERNAL_ERROR = -7,
 } RKRStatus;
 
 /**
@@ -275,7 +279,7 @@ void free_c_frame(struct CFrame *frame);
 /**
  * Copies a header string line into a user-provided buffer.
  * This is a C style helper... where the user explicitly sets the buffer.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * frame_handle must be valid. buffer must be at least buffer_len bytes.
@@ -326,7 +330,7 @@ void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 
 /**
  * Writes multiple frames from an array of handles to the file managed by the writer.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * writer_handle and frame_handles must be valid.
@@ -364,7 +368,7 @@ struct RKRConFrameBuilder *rkr_frame_new(const double *cell,
 
 /**
  * Parses and sets JSON metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle and metadata_json must be valid.
@@ -374,7 +378,7 @@ enum RKRStatus rkr_frame_builder_set_metadata_json(struct RKRConFrameBuilder *bu
 
 /**
  * Sets a numeric metadata key on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle and key must be valid.
@@ -385,7 +389,7 @@ enum RKRStatus rkr_frame_builder_set_scalar_metadata(struct RKRConFrameBuilder *
 
 /**
  * Sets a string metadata key on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle, key, and value must be valid.
@@ -396,7 +400,7 @@ enum RKRStatus rkr_frame_builder_set_string_metadata(struct RKRConFrameBuilder *
 
 /**
  * Sets the per-frame total energy metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -406,7 +410,7 @@ enum RKRStatus rkr_frame_builder_set_energy(struct RKRConFrameBuilder *builder_h
 
 /**
  * Sets the zero-based frame index metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -416,7 +420,7 @@ enum RKRStatus rkr_frame_builder_set_frame_index(struct RKRConFrameBuilder *buil
 
 /**
  * Sets the simulation time metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -426,7 +430,7 @@ enum RKRStatus rkr_frame_builder_set_time(struct RKRConFrameBuilder *builder_han
 
 /**
  * Sets the timestep metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -436,7 +440,7 @@ enum RKRStatus rkr_frame_builder_set_timestep(struct RKRConFrameBuilder *builder
 
 /**
  * Sets the NEB bead index metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -446,7 +450,7 @@ enum RKRStatus rkr_frame_builder_set_neb_bead(struct RKRConFrameBuilder *builder
 
 /**
  * Sets the NEB band index metadata on an existing frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle must be valid.
@@ -456,7 +460,7 @@ enum RKRStatus rkr_frame_builder_set_neb_band(struct RKRConFrameBuilder *builder
 
 /**
  * Adds an atom (without velocity) to the frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle and symbol must be valid.
@@ -472,7 +476,7 @@ enum RKRStatus rkr_frame_add_atom(struct RKRConFrameBuilder *builder_handle,
 
 /**
  * Adds an atom with velocity data to the frame builder.
- * Returns `RKRStatus::Success` on success, or an error code.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
  * builder_handle and symbol must be valid.

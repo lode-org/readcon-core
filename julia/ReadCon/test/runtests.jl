@@ -4,6 +4,18 @@ using ReadCon
 const TEST_DIR = joinpath(dirname(dirname(dirname(@__DIR__))), "resources", "test")
 
 @testset "ReadCon.jl" begin
+    @testset "C ABI mirror" begin
+        @test fieldnames(ReadCon.CAtom) == (
+            :atomic_number, :x, :y, :z, :atom_id, :mass,
+            :is_fixed, :fixed_x, :fixed_y, :fixed_z,
+            :vx, :vy, :vz, :has_velocity,
+            :fx, :fy, :fz, :has_forces,
+        )
+        @test fieldnames(ReadCon.CFrame) == (
+            :atoms, :num_atoms, :cell, :angles, :has_velocities, :has_forces,
+        )
+    end
+
     @testset "Read .con file" begin
         frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
         @test length(frames) == 1
@@ -31,6 +43,19 @@ const TEST_DIR = joinpath(dirname(dirname(dirname(@__DIR__))), "resources", "tes
         @test atom.vx ≈ 0.001234 atol=1e-6
     end
 
+    @testset "Read force section" begin
+        frames = read_con(joinpath(TEST_DIR, "tiny_cuh2_forces.con"))
+        @test length(frames) == 1
+        frame = frames[1]
+        @test frame.has_forces
+        atom = frame.atoms[1]
+        @test atom.has_forces
+        @test atom.fixed == (true, true, true)
+        @test atom.fx ≈ 0.123456 atol=1e-6
+        @test atom.fy ≈ 0.234567 atol=1e-6
+        @test atom.fz ≈ -0.345678 atol=1e-6
+    end
+
     @testset "Read multi-frame .convel" begin
         frames = read_con(joinpath(TEST_DIR, "tiny_multi_cuh2.convel"))
         @test length(frames) == 2
@@ -45,6 +70,6 @@ const TEST_DIR = joinpath(dirname(dirname(dirname(@__DIR__))), "resources", "tes
     @testset "Header strings" begin
         frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
         @test frames[1].prebox_header[1] == "Random Number Seed"
-        @test frames[1].prebox_header[2] == "Time"
+        @test frames[1].prebox_header[2] == "{\"con_spec_version\":2}"
     end
 end

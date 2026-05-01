@@ -1,3 +1,5 @@
+const Libdl = Base.Libc.Libdl
+
 """
     _lib_handle()
 
@@ -11,7 +13,7 @@ function _lib_handle()
         return lib_env
     end
     # Fall back to looking relative to this package
-    pkg_dir = dirname(dirname(@__DIR__))
+    pkg_dir = dirname(@__DIR__)
     for candidate in [
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.dylib"),
@@ -25,13 +27,17 @@ function _lib_handle()
     error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
 end
 
-const _LIB = Ref{String}("")
+const _LIB = Ref{Ptr{Cvoid}}(C_NULL)
 
 function _get_lib()
-    if isempty(_LIB[])
-        _LIB[] = _lib_handle()
+    if _LIB[] == C_NULL
+        _LIB[] = Libdl.dlopen(_lib_handle())
     end
     return _LIB[]
+end
+
+function _lib_symbol(name::Symbol)
+    return Libdl.dlsym(_get_lib(), name)
 end
 
 """
@@ -40,10 +46,8 @@ end
 Read all frames from a .con or .convel file.
 """
 function read_con(path::String)
-    lib = _get_lib()
-
     iter_ptr = ccall(
-        (:read_con_file_iterator, lib),
+        _lib_symbol(:read_con_file_iterator),
         Ptr{Cvoid}, (Cstring,), path
     )
     iter_ptr == C_NULL && error("Failed to open file: $path")
@@ -53,14 +57,14 @@ function read_con(path::String)
     try
         while true
             frame_handle = ccall(
-                (:con_frame_iterator_next, lib),
+                _lib_symbol(:con_frame_iterator_next),
                 Ptr{Cvoid}, (Ptr{Cvoid},), iter_ptr
             )
             frame_handle == C_NULL && break
 
             try
                 c_frame_ptr = ccall(
-                    (:rkr_frame_to_c_frame, lib),
+                    _lib_symbol(:rkr_frame_to_c_frame),
                     Ptr{CFrame}, (Ptr{Cvoid},), frame_handle
                 )
                 c_frame_ptr == C_NULL && continue
@@ -76,44 +80,46 @@ function read_con(path::String)
                             c_atom.x, c_atom.y, c_atom.z,
                             c_atom.atom_id, c_atom.mass,
                             c_atom.is_fixed,
+                            (c_atom.fixed_x, c_atom.fixed_y, c_atom.fixed_z),
                             c_atom.vx, c_atom.vy, c_atom.vz,
                             c_atom.has_velocity,
+                            c_atom.fx, c_atom.fy, c_atom.fz,
+                            c_atom.has_forces,
                         ))
                     end
 
-                    # Get header strings
-                    prebox = _get_headers(lib, frame_handle, true)
-                    postbox = _get_headers(lib, frame_handle, false)
+                    prebox = _get_headers(frame_handle, true)
+                    postbox = _get_headers(frame_handle, false)
 
                     push!(frames, ConFrame(
                         c_frame.cell, c_frame.angles,
                         atoms, c_frame.has_velocities,
-                        prebox, postbox,
+                        prebox, postbox, c_frame.has_forces,
                     ))
                 finally
-                    ccall((:free_c_frame, lib), Cvoid, (Ptr{CFrame},), c_frame_ptr)
+                    ccall(_lib_symbol(:free_c_frame), Cvoid, (Ptr{CFrame},), c_frame_ptr)
                 end
             finally
-                ccall((:free_rkr_frame, lib), Cvoid, (Ptr{Cvoid},), frame_handle)
+                ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), frame_handle)
             end
         end
     finally
-        ccall((:free_con_frame_iterator, lib), Cvoid, (Ptr{Cvoid},), iter_ptr)
+        ccall(_lib_symbol(:free_con_frame_iterator), Cvoid, (Ptr{Cvoid},), iter_ptr)
     end
 
     return frames
 end
 
-function _get_headers(lib, frame_handle, is_prebox::Bool)
+function _get_headers(frame_handle, is_prebox::Bool)
     lines = String[]
     for idx in 0:1
         c_str = ccall(
-            (:rkr_frame_get_header_line_cpp, lib),
+            _lib_symbol(:rkr_frame_get_header_line_cpp),
             Ptr{UInt8}, (Ptr{Cvoid}, Bool, UInt), frame_handle, is_prebox, idx
         )
         if c_str != C_NULL
             s = unsafe_string(c_str)
-            ccall((:rkr_free_string, lib), Cvoid, (Ptr{UInt8},), c_str)
+            ccall(_lib_symbol(:rkr_free_string), Cvoid, (Ptr{UInt8},), c_str)
             push!(lines, s)
         else
             push!(lines, "")
