@@ -1,19 +1,21 @@
 
 # Table of Contents
 
-1.  [About](#orge287174)
-    1.  [Features](#orgf6dccfc)
-    2.  [Quick start](#org2330582)
-    3.  [Design Decisions](#org53f108b)
-        1.  [FFI Layer](#orgc5e5085)
-    4.  [Specification](#orgbaeb465)
-        1.  [CON format](#org3dbc655)
-        2.  [convel format](#org09c8cc4)
-    5.  [Why use this over readCon?](#org15ab7f7)
-2.  [License](#org608925e)
+1.  [About](#orgbcd2647)
+    1.  [Features](#org93a0855)
+    2.  [Install](#org29a00d1)
+    3.  [Tutorial](#orga829836)
+    4.  [Design Decisions](#orgb609e8b)
+        1.  [FFI Layer](#orgc2bb27b)
+    5.  [Specification](#org22d1d1c)
+        1.  [CON format](#orgd5cfb7b)
+        2.  [convel format](#org1f19b36)
+    6.  [Why use this over readCon?](#org205efed)
+    7.  [Citation](#orgee361c6)
+2.  [License](#org51219f7)
 
 
-<a id="orge287174"></a>
+<a id="orgbcd2647"></a>
 
 # About
 
@@ -23,7 +25,7 @@ Reads and writes both `.con` (coordinate-only) and `.convel` (coordinates
 plus velocities) simulation configuration files used by [eOn](https://theory.cm.utexas.edu/eon/).
 
 
-<a id="orgf6dccfc"></a>
+<a id="org93a0855"></a>
 
 ## Features
 
@@ -38,24 +40,107 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 -   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
 
 
-<a id="org2330582"></a>
+<a id="org29a00d1"></a>
 
-## Quick start
+## Install
 
-    # Rust
-    cargo run --example rust_usage -- resources/test/tiny_cuh2.con
-    # Python
-    pip install readcon
-    python -c "import readcon; print(readcon.read_con('file.con'))"
-    # Julia
-    julia --project=julia/ReadCon -e 'using ReadCon; println(read_con("file.con"))'
-    # C/C++ (via meson subproject or cmake)
-    meson setup builddir -Dwith_examples=True && meson test -C builddir
-    # cargo-c install layout
-    cargo cinstall --prefix /tmp/readcon-install
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
-<a id="org53f108b"></a>
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Language</th>
+<th scope="col" class="org-left">Install command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">Rust</td>
+<td class="org-left"><code>cargo add readcon-core</code></td>
+</tr>
+
+<tr>
+<td class="org-left">Python</td>
+<td class="org-left"><code>pip install readcon</code></td>
+</tr>
+
+<tr>
+<td class="org-left">Julia</td>
+<td class="org-left"><code>julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'</code></td>
+</tr>
+
+<tr>
+<td class="org-left">C / C++ system</td>
+<td class="org-left"><code>cargo cinstall --release --prefix /usr/local</code> (installs <code>libreadcon_core.{so,a}</code>, <code>readcon-core.h</code>, <code>readcon-core.hpp</code>, and a pkg-config file)</td>
+</tr>
+
+<tr>
+<td class="org-left">C / C++ via meson subproject</td>
+<td class="org-left">drop the repository under <code>subprojects/readcon-core/</code> and link against the <code>readcon_core_dep</code> dependency</td>
+</tr>
+</tbody>
+</table>
+
+The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
+
+
+<a id="orga829836"></a>
+
+## Tutorial
+
+A copy-pasteable walkthrough that parses a multi-frame trajectory, inspects metadata, builds a new frame, and writes it back. Run it as-is.
+
+    cargo run --example rust_usage -- resources/test/tiny_multi_cuh2.con
+
+The example above iterates lazily over every frame, prints atom counts plus the per-frame energy if present, and exits. Equivalent flows in the other bindings:
+
+    import readcon
+    
+    # Read every frame; the iterator yields PyConFrame objects
+    for frame in readcon.iter_frames("resources/test/tiny_multi_cuh2.con"):
+        print(frame.natms_per_type, frame.energy())  # energy() is None when absent
+    
+    # Build and write a new frame
+    b = readcon.ConFrameBuilder(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0])
+    b.set_energy(-42.5).add_atom("Cu", 0.0, 0.0, 0.0, 1, 63.546)
+    b.write("out.con")
+
+    using ReadCon
+    for frame in iter_frames("resources/test/tiny_multi_cuh2.con")
+        println(frame.natms_per_type, " ", energy(frame))
+    end
+
+    #include <readcon-core.hpp>
+    #include <iostream>
+    
+    int main() {
+        readcon::ConFrameIterator it("resources/test/tiny_multi_cuh2.con");
+        for (const auto &frame : it) {
+            std::cout << frame.atoms().size() << " atoms";
+            if (auto e = frame.energy_opt()) std::cout << " E=" << *e;
+            std::cout << "\n";
+        }
+    }
+
+    #include <readcon-core.h>
+    #include <stdio.h>
+    
+    int main(void) {
+        uintptr_t n = 0;
+        RKRConFrame **frames = rkr_read_all_frames("resources/test/tiny_multi_cuh2.con", &n);
+        for (uintptr_t i = 0; i < n; ++i) {
+            printf("frame %zu energy=%f\n", i, rkr_frame_energy(frames[i]));
+        }
+        free_rkr_frame_array(frames, n);
+    }
+
+
+<a id="orgb609e8b"></a>
 
 ## Design Decisions
 
@@ -66,7 +151,7 @@ The library is designed with the following principles in mind:
 -   **Interoperability:** The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a `C` header is auto-generated along with a hand-crafted `C++` interface, following the hourglass design from [Metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="orgc5e5085"></a>
+<a id="orgc2bb27b"></a>
 
 ### FFI Layer
 
@@ -94,14 +179,14 @@ forward-compatibility of opaque handles for general use, and the performance of
 direct data access for the most common computational tasks.
 
 
-<a id="orgbaeb465"></a>
+<a id="org22d1d1c"></a>
 
 ## Specification
 
-See the [formal specification](https://lode-org.github.io/readcon-core/spec.html) for full details. A summary follows.
+See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org3dbc655"></a>
+<a id="orgd5cfb7b"></a>
 
 ### CON format
 
@@ -112,7 +197,7 @@ See the [formal specification](https://lode-org.github.io/readcon-core/spec.html
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org09c8cc4"></a>
+<a id="org1f19b36"></a>
 
 ### convel format
 
@@ -122,15 +207,23 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org15ab7f7"></a>
+<a id="org205efed"></a>
 
 ## Why use this over [readCon](https://github.com/HaoZeke/readCon)?
 
 Speed, correctness, and multi-language bindings.
 
 
-<a id="org608925e"></a>
+<a id="orgee361c6"></a>
+
+## Citation
+
+If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
+
+
+<a id="org51219f7"></a>
 
 # License
 
 MIT.
+
