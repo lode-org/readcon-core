@@ -13,6 +13,11 @@ use std::ptr;
 
 /// CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
 /// to gate code that depends on atom_index semantics.
+///
+/// Tracks `crate::CON_SPEC_VERSION` (which the Rust API exposes as
+/// `CON_SPEC_VERSION`). Both macros are emitted into the C header for
+/// the convenience of either naming convention; they always carry the
+/// same value.
 pub const RKR_CON_SPEC_VERSION: u32 = 2;
 
 /// Returns the spec version at runtime (for dynamically linked consumers).
@@ -212,6 +217,15 @@ pub struct CFrame {
     pub has_forces: bool,
 }
 
+/// Transparent atom record extracted via [`rkr_frame_to_c_frame`].
+///
+/// `is_fixed` is the OR of `fixed_x`, `fixed_y`, `fixed_z`; it is kept
+/// for source compatibility with pre-spec-v2 callers that did not have
+/// per-axis flags. New code should use the per-axis fields.
+///
+/// `vx`/`vy`/`vz` and `fx`/`fy`/`fz` carry meaningful values only when
+/// `has_velocity` or `has_forces` is true respectively; the values are
+/// zeroed otherwise.
 #[repr(C)]
 pub struct CAtom {
     pub atomic_number: u64,
@@ -220,6 +234,8 @@ pub struct CAtom {
     pub z: f64,
     pub atom_id: u64,
     pub mass: f64,
+    /// True when any of `fixed_x`, `fixed_y`, `fixed_z` is true.
+    /// Kept for source compatibility; prefer the per-axis fields.
     pub is_fixed: bool,
     pub fixed_x: bool,
     pub fixed_y: bool,
@@ -244,12 +260,17 @@ pub struct CConFrameIterator {
 // Iterator and Memory Management
 //=============================================================================
 
-/// Creates a new iterator for a .con file.
-/// The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
-/// Returns NULL if there are no more frames or on error.
+/// Creates a new iterator for a .con or .convel file.
+///
+/// Returns NULL if the file cannot be read (missing, unreadable, or
+/// not valid UTF-8). A successfully-opened file with zero frames
+/// returns a non-NULL iterator that yields NULL on the first call to
+/// [`con_frame_iterator_next`]. The caller OWNS the returned pointer
+/// and MUST call [`free_con_frame_iterator`].
 ///
 /// # Safety
-/// filename_c must be valid. The caller takes ownership of the returned iterator.
+/// filename_c must be a valid null-terminated string. The caller takes
+/// ownership of the returned iterator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
@@ -409,9 +430,21 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
     }
 }
 
-/// Copies a header string line into a user-provided buffer.
-/// This is a C style helper... where the user explicitly sets the buffer.
-/// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+/// Copies a header string line into a caller-provided buffer.
+///
+/// `is_prebox=true` selects from the two prebox lines (line 0 = user
+/// text, line 1 = JSON metadata); `false` selects from the two postbox
+/// lines. Strings longer than `buffer_len - 1` bytes are truncated; the
+/// final byte is always set to NUL.
+///
+/// Returns `RKR_STATUS_SUCCESS` on success,
+/// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` if `line_index >= 2`,
+/// `RKR_STATUS_NULL_POINTER` if `frame_handle` or `buffer` is NULL,
+/// `RKR_STATUS_BUFFER_TOO_SMALL` if `buffer_len == 0`.
+///
+/// Pair with [`rkr_frame_get_header_line_cpp`] when the caller prefers
+/// an allocated string with no fixed length cap; that variant returns
+/// NULL for the same out-of-bounds condition.
 ///
 /// # Safety
 /// frame_handle must be valid. buffer must be at least buffer_len bytes.
@@ -457,8 +490,13 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
 
 /// Gets a header string line as a newly allocated, null-terminated C string.
 ///
-/// The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
-/// to prevent a memory leak. Returns NULL on error or if the index is invalid.
+/// The caller OWNS the returned pointer and MUST call `rkr_free_string`
+/// on it to prevent a memory leak. Returns NULL on error or if the
+/// index is invalid (use [`rkr_frame_get_header_line`] when a status
+/// code is preferred to NULL-vs-success disambiguation).
+///
+/// The `_cpp` suffix is historical; the function is callable from both
+/// C and C++.
 ///
 /// # Safety
 /// frame_handle must be valid. The caller takes ownership of the returned string.
@@ -494,10 +532,13 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
     }
 }
 
-/// Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+/// Frees a C string that was allocated by Rust (e.g., from
+/// `rkr_frame_metadata_json`, `rkr_frame_potential_type`, or
+/// `rkr_frame_get_header_line_cpp`). Safe to call with NULL (no-op).
 ///
 /// # Safety
-/// s must be valid or null.
+/// s must be either NULL or a pointer previously returned by an
+/// allocating Rust FFI function in this crate.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
     if !s.is_null() {
@@ -744,14 +785,21 @@ pub unsafe extern "C" fn rkr_frame_add_atom_full(
     }
 }
 
-/// Creates a new frame builder with the given cell dimensions, angles, and header lines.
-/// The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
-/// `rkr_frame_builder_build`.
+/// Creates a new frame builder with the given cell dimensions, angles,
+/// and header lines.
+///
+/// `prebox1` is accepted for source compatibility but ignored: the
+/// JSON metadata line is regenerated by the writer from the builder's
+/// `spec_version`, `metadata`, and `sections`. Pass NULL or any string.
+/// The caller OWNS the returned pointer and MUST call
+/// `free_rkr_frame_builder` or consume it via `rkr_frame_builder_build`.
 /// Returns NULL on error.
 ///
 /// # Safety
-/// cell and angles must point to 3 doubles. prebox0, prebox1, postbox0, postbox1 must be valid.
-/// The caller takes ownership of the returned builder.
+/// cell and angles must point to 3 doubles. prebox0, postbox0, and
+/// postbox1 must be NULL or valid null-terminated strings; prebox1 is
+/// not dereferenced. The caller takes ownership of the returned
+/// builder.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_new(
     cell: *const f64,
@@ -971,7 +1019,19 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
     RKRStatus::RKR_STATUS_SUCCESS
 }
 
-/// Adds an atom (without velocity) to the frame builder.
+// -----------------------------------------------------------------------------
+// Legacy add_atom variants (kept for source compatibility)
+//
+// The unified entry point is `rkr_frame_add_atom_full`, which accepts
+// optional velocity and force pointers. The eight functions below
+// pre-date the unified call and remain in the API for code that was
+// written against earlier 0.x releases. New callers should prefer
+// `rkr_frame_add_atom_full`.
+// -----------------------------------------------------------------------------
+
+/// **Deprecated**: prefer `rkr_frame_add_atom_full` with NULL velocity
+/// and force pointers. Adds an atom (no velocity, no forces) to the
+/// builder using a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1003,7 +1063,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
     }
 }
 
-/// Adds an atom (without velocity) to the frame builder using per-axis fixed flags.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom (no
+/// velocity, no forces) using per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1037,7 +1098,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_fixed_mask(
     }
 }
 
-/// Adds an atom with velocity data to the frame builder.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// a velocity vector and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1072,7 +1134,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
     }
 }
 
-/// Adds an atom with velocity data to the frame builder using per-axis fixed flags.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// a velocity vector and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1109,7 +1172,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_fixed_mask(
     }
 }
 
-/// Adds an atom with force data to the frame builder.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// a force vector and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1144,7 +1208,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces(
     }
 }
 
-/// Adds an atom with force data to the frame builder using per-axis fixed flags.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// a force vector and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1181,7 +1246,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces_fixed_mask(
     }
 }
 
-/// Adds an atom with velocity and force data to the frame builder.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// both velocity and force vectors and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety
@@ -1219,7 +1285,8 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces(
     }
 }
 
-/// Adds an atom with velocity and force data using per-axis fixed flags.
+/// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+/// both velocity and force vectors and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
 /// # Safety

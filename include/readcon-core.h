@@ -1,3 +1,43 @@
+/*
+ * readcon-core C API.
+ *
+ * Memory ownership
+ *   - Opaque handles (RKRConFrame, RKRConFrameWriter, RKRConFrameBuilder,
+ *     CConFrameIterator) are caller-owned. Free each with its dedicated
+ *     destructor: free_rkr_frame, free_rkr_frame_writer,
+ *     free_rkr_frame_builder, free_con_frame_iterator.
+ *   - rkr_read_all_frames returns a heap-allocated array of RKRConFrame*
+ *     handles together with the frame count via the *num_frames out-param.
+ *     The array's capacity equals the count (shrunk to fit). Free with
+ *     free_rkr_frame_array(frames, *num_frames). Each individual frame is
+ *     released by free_rkr_frame_array; do NOT also call free_rkr_frame.
+ *   - char* values returned by rkr_frame_metadata_json,
+ *     rkr_frame_potential_type, and rkr_frame_get_header_line_cpp are heap
+ *     allocated; free them with rkr_free_string. rkr_free_string is safe
+ *     to call with NULL (no-op).
+ *   - const char* returned by rkr_library_version is process-static; do
+ *     NOT free it.
+ *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
+ *     by the caller; release with free_c_frame.
+ *
+ * Sentinel values for absent metadata
+ *   - Floating-point getters (rkr_frame_energy, rkr_frame_time,
+ *     rkr_frame_timestep, etc.) return NaN when the metadata key is
+ *     absent. Test with isnan() from <math.h>.
+ *   - Unsigned-integer getters (rkr_frame_frame_index, rkr_frame_neb_bead,
+ *     rkr_frame_neb_band) return UINT64_MAX when absent.
+ *   - String getters return NULL when absent.
+ *
+ * Thread safety
+ *   - Opaque handles are NOT Sync. Do not share a single
+ *     RKRConFrame/RKRConFrameWriter/RKRConFrameBuilder across threads
+ *     without external synchronization. Distinct handles are independent.
+ *   - rkr_read_all_frames internally uses sequential parsing; the
+ *     `parallel` Cargo feature is exposed only through the Rust API and
+ *     is not surfaced via this C header.
+ */
+
+
 #ifndef READCON_H
 #define READCON_H
 
@@ -33,6 +73,11 @@ namespace readcon {
 /**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
  * to gate code that depends on atom_index semantics.
+ *
+ * Tracks `crate::CON_SPEC_VERSION` (which the Rust API exposes as
+ * `CON_SPEC_VERSION`). Both macros are emitted into the C header for
+ * the convenience of either naming convention; they always carry the
+ * same value.
  */
 #define RKR_CON_SPEC_VERSION 2
 
@@ -103,6 +148,17 @@ typedef struct CConFrameIterator {
     struct String *file_contents;
 } CConFrameIterator;
 
+/**
+ * Transparent atom record extracted via [`rkr_frame_to_c_frame`].
+ *
+ * `is_fixed` is the OR of `fixed_x`, `fixed_y`, `fixed_z`; it is kept
+ * for source compatibility with pre-spec-v2 callers that did not have
+ * per-axis flags. New code should use the per-axis fields.
+ *
+ * `vx`/`vy`/`vz` and `fx`/`fy`/`fz` carry meaningful values only when
+ * `has_velocity` or `has_forces` is true respectively; the values are
+ * zeroed otherwise.
+ */
 typedef struct CAtom {
     uint64_t atomic_number;
     double x;
@@ -110,6 +166,10 @@ typedef struct CAtom {
     double z;
     uint64_t atom_id;
     double mass;
+    /**
+     * True when any of `fixed_x`, `fixed_y`, `fixed_z` is true.
+     * Kept for source compatibility; prefer the per-axis fields.
+     */
     bool is_fixed;
     bool fixed_x;
     bool fixed_y;
@@ -231,12 +291,17 @@ uint64_t rkr_frame_neb_band(const struct RKRConFrame *frame_handle);
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Creates a new iterator for a .con file.
- * The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
- * Returns NULL if there are no more frames or on error.
+ * Creates a new iterator for a .con or .convel file.
+ *
+ * Returns NULL if the file cannot be read (missing, unreadable, or
+ * not valid UTF-8). A successfully-opened file with zero frames
+ * returns a non-NULL iterator that yields NULL on the first call to
+ * [`con_frame_iterator_next`]. The caller OWNS the returned pointer
+ * and MUST call [`free_con_frame_iterator`].
  *
  * # Safety
- * filename_c must be valid. The caller takes ownership of the returned iterator.
+ * filename_c must be a valid null-terminated string. The caller takes
+ * ownership of the returned iterator.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
 
@@ -283,9 +348,21 @@ struct CFrame *rkr_frame_to_c_frame(const struct RKRConFrame *frame_handle);
 void free_c_frame(struct CFrame *frame);
 
 /**
- * Copies a header string line into a user-provided buffer.
- * This is a C style helper... where the user explicitly sets the buffer.
- * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ * Copies a header string line into a caller-provided buffer.
+ *
+ * `is_prebox=true` selects from the two prebox lines (line 0 = user
+ * text, line 1 = JSON metadata); `false` selects from the two postbox
+ * lines. Strings longer than `buffer_len - 1` bytes are truncated; the
+ * final byte is always set to NUL.
+ *
+ * Returns `RKR_STATUS_SUCCESS` on success,
+ * `RKR_STATUS_INDEX_OUT_OF_BOUNDS` if `line_index >= 2`,
+ * `RKR_STATUS_NULL_POINTER` if `frame_handle` or `buffer` is NULL,
+ * `RKR_STATUS_BUFFER_TOO_SMALL` if `buffer_len == 0`.
+ *
+ * Pair with [`rkr_frame_get_header_line_cpp`] when the caller prefers
+ * an allocated string with no fixed length cap; that variant returns
+ * NULL for the same out-of-bounds condition.
  *
  * # Safety
  * frame_handle must be valid. buffer must be at least buffer_len bytes.
@@ -299,8 +376,13 @@ enum RKRStatus rkr_frame_get_header_line(const struct RKRConFrame *frame_handle,
 /**
  * Gets a header string line as a newly allocated, null-terminated C string.
  *
- * The caller OWNS the returned pointer and MUST call `rkr_free_string` on it
- * to prevent a memory leak. Returns NULL on error or if the index is invalid.
+ * The caller OWNS the returned pointer and MUST call `rkr_free_string`
+ * on it to prevent a memory leak. Returns NULL on error or if the
+ * index is invalid (use [`rkr_frame_get_header_line`] when a status
+ * code is preferred to NULL-vs-success disambiguation).
+ *
+ * The `_cpp` suffix is historical; the function is callable from both
+ * C and C++.
  *
  * # Safety
  * frame_handle must be valid. The caller takes ownership of the returned string.
@@ -310,10 +392,13 @@ char *rkr_frame_get_header_line_cpp(const struct RKRConFrame *frame_handle,
                                     uintptr_t line_index);
 
 /**
- * Frees a C string that was allocated by Rust (e.g., from `rkr_frame_get_header_line`).
+ * Frees a C string that was allocated by Rust (e.g., from
+ * `rkr_frame_metadata_json`, `rkr_frame_potential_type`, or
+ * `rkr_frame_get_header_line_cpp`). Safe to call with NULL (no-op).
  *
  * # Safety
- * s must be valid or null.
+ * s must be either NULL or a pointer previously returned by an
+ * allocating Rust FFI function in this crate.
  */
 void rkr_free_string(char *s);
 
@@ -401,14 +486,21 @@ enum RKRStatus rkr_frame_add_atom_full(struct RKRConFrameBuilder *builder_handle
                                        const double *force);
 
 /**
- * Creates a new frame builder with the given cell dimensions, angles, and header lines.
- * The caller OWNS the returned pointer and MUST call `free_rkr_frame_builder` or
- * `rkr_frame_builder_build`.
+ * Creates a new frame builder with the given cell dimensions, angles,
+ * and header lines.
+ *
+ * `prebox1` is accepted for source compatibility but ignored: the
+ * JSON metadata line is regenerated by the writer from the builder's
+ * `spec_version`, `metadata`, and `sections`. Pass NULL or any string.
+ * The caller OWNS the returned pointer and MUST call
+ * `free_rkr_frame_builder` or consume it via `rkr_frame_builder_build`.
  * Returns NULL on error.
  *
  * # Safety
- * cell and angles must point to 3 doubles. prebox0, prebox1, postbox0, postbox1 must be valid.
- * The caller takes ownership of the returned builder.
+ * cell and angles must point to 3 doubles. prebox0, postbox0, and
+ * postbox1 must be NULL or valid null-terminated strings; prebox1 is
+ * not dereferenced. The caller takes ownership of the returned
+ * builder.
  */
 struct RKRConFrameBuilder *rkr_frame_new(const double *cell,
                                          const double *angles,
@@ -510,7 +602,9 @@ enum RKRStatus rkr_frame_builder_set_neb_band(struct RKRConFrameBuilder *builder
                                               uint64_t band);
 
 /**
- * Adds an atom (without velocity) to the frame builder.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full` with NULL velocity
+ * and force pointers. Adds an atom (no velocity, no forces) to the
+ * builder using a single uniform fixed flag.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -526,7 +620,8 @@ enum RKRStatus rkr_frame_add_atom(struct RKRConFrameBuilder *builder_handle,
                                   double mass);
 
 /**
- * Adds an atom (without velocity) to the frame builder using per-axis fixed flags.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom (no
+ * velocity, no forces) using per-axis fixed flags.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -544,7 +639,8 @@ enum RKRStatus rkr_frame_add_atom_with_fixed_mask(struct RKRConFrameBuilder *bui
                                                   double mass);
 
 /**
- * Adds an atom with velocity data to the frame builder.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * a velocity vector and a single uniform fixed flag.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -563,7 +659,8 @@ enum RKRStatus rkr_frame_add_atom_with_velocity(struct RKRConFrameBuilder *build
                                                 double vz);
 
 /**
- * Adds an atom with velocity data to the frame builder using per-axis fixed flags.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * a velocity vector and per-axis fixed flags.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -584,7 +681,8 @@ enum RKRStatus rkr_frame_add_atom_with_velocity_fixed_mask(struct RKRConFrameBui
                                                            double vz);
 
 /**
- * Adds an atom with force data to the frame builder.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * a force vector and a single uniform fixed flag.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -603,7 +701,8 @@ enum RKRStatus rkr_frame_add_atom_with_forces(struct RKRConFrameBuilder *builder
                                               double fz);
 
 /**
- * Adds an atom with force data to the frame builder using per-axis fixed flags.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * a force vector and per-axis fixed flags.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -624,7 +723,8 @@ enum RKRStatus rkr_frame_add_atom_with_forces_fixed_mask(struct RKRConFrameBuild
                                                          double fz);
 
 /**
- * Adds an atom with velocity and force data to the frame builder.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * both velocity and force vectors and a single uniform fixed flag.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
@@ -646,7 +746,8 @@ enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces(struct RKRConFrameBui
                                                            double fz);
 
 /**
- * Adds an atom with velocity and force data using per-axis fixed flags.
+ * **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
+ * both velocity and force vectors and per-axis fixed flags.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
  * # Safety
