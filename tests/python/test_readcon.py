@@ -58,6 +58,22 @@ class TestReadConvel:
         assert frames[1].has_velocities
 
 
+class TestReadForces:
+    def test_read_force_section(self):
+        frames = readcon.read_con(_resource("tiny_cuh2_forces.con"))
+        assert len(frames) == 1
+        frame = frames[0]
+        assert frame.has_forces
+        assert frame.energy == pytest.approx(-42.5)
+        assert frame.metadata["potential"]["type"] == "EMT"
+        atom = frame.atoms[0]
+        assert atom.has_forces
+        assert atom.fixed == [True, True, True]
+        assert atom.fx == pytest.approx(0.123456, abs=1e-6)
+        assert atom.fy == pytest.approx(0.234567, abs=1e-6)
+        assert atom.fz == pytest.approx(-0.345678, abs=1e-6)
+
+
 class TestReadConString:
     def test_read_string(self):
         with open(_resource("tiny_cuh2.con")) as f:
@@ -190,8 +206,8 @@ class TestConFrameConstructor:
         assert frame.timestep == pytest.approx(0.2)
         assert frame.neb_bead == 4
         assert frame.neb_band == 2
-        assert frame.metadata["convergence"] == "0.001"
-        assert frame.metadata["generator"] == "\"eon\""
+        assert frame.metadata["convergence"] == pytest.approx(0.001)
+        assert frame.metadata["generator"] == "eon"
 
     def test_set_metadata_json(self):
         frame = readcon.ConFrame(
@@ -205,8 +221,19 @@ class TestConFrameConstructor:
 
         assert frame.frame_index == 5
         assert frame.energy == pytest.approx(-42.5)
-        assert frame.metadata["generator"] == "\"test\""
+        assert frame.metadata["generator"] == "test"
         assert "sections" not in frame.metadata
+
+    def test_constructor_metadata(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0)],
+            metadata={"generator": "pytest", "nested": {"ok": True}},
+        )
+
+        assert frame.metadata["generator"] == "pytest"
+        assert frame.metadata["nested"]["ok"] is True
 
 
 class TestMass:
@@ -267,4 +294,3 @@ class TestErrorHandling:
     def test_malformed_data(self):
         with pytest.raises(OSError):
             readcon.read_con_string("not a valid con file\n")
-
