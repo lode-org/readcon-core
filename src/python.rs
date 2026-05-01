@@ -347,57 +347,57 @@ impl PyConFrame {
     /// Per-frame total energy (from JSON metadata), or None.
     #[getter]
     fn energy(&self, py: Python<'_>) -> PyResult<Option<f64>> {
-        Ok(self
-            .metadata_value(py, meta::ENERGY)?
-            .and_then(|v| v.as_f64()))
+        self.metadata_get_f64(py, meta::ENERGY)
     }
 
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
-        Ok(self
-            .metadata_value(py, meta::POTENTIAL)?
-            .and_then(|v| v.as_object()?.get("type")?.as_str().map(|s| s.to_string())))
+        let dict = self.metadata.bind(py);
+        let Some(potential) = dict.get_item(meta::POTENTIAL)? else {
+            return Ok(None);
+        };
+        if potential.is_none() {
+            return Ok(None);
+        }
+        let pot_dict = match potential.cast::<PyDict>() {
+            Ok(d) => d,
+            Err(_) => return Ok(None),
+        };
+        match pot_dict.get_item("type")? {
+            Some(value) if !value.is_none() => Ok(Some(value.extract()?)),
+            _ => Ok(None),
+        }
     }
 
     /// Zero-based frame index within a trajectory, or None.
     #[getter]
     fn frame_index(&self, py: Python<'_>) -> PyResult<Option<u64>> {
-        Ok(self
-            .metadata_value(py, meta::FRAME_INDEX)?
-            .and_then(|v| v.as_u64()))
+        self.metadata_get_u64(py, meta::FRAME_INDEX)
     }
 
     /// Simulation time of this frame, or None.
     #[getter]
     fn time(&self, py: Python<'_>) -> PyResult<Option<f64>> {
-        Ok(self
-            .metadata_value(py, meta::TIME)?
-            .and_then(|v| v.as_f64()))
+        self.metadata_get_f64(py, meta::TIME)
     }
 
     /// Integration timestep of this frame, or None.
     #[getter]
     fn timestep(&self, py: Python<'_>) -> PyResult<Option<f64>> {
-        Ok(self
-            .metadata_value(py, meta::TIMESTEP)?
-            .and_then(|v| v.as_f64()))
+        self.metadata_get_f64(py, meta::TIMESTEP)
     }
 
     /// NEB bead index for this frame, or None.
     #[getter]
     fn neb_bead(&self, py: Python<'_>) -> PyResult<Option<u64>> {
-        Ok(self
-            .metadata_value(py, meta::NEB_BEAD)?
-            .and_then(|v| v.as_u64()))
+        self.metadata_get_u64(py, meta::NEB_BEAD)
     }
 
     /// NEB band index for this frame, or None.
     #[getter]
     fn neb_band(&self, py: Python<'_>) -> PyResult<Option<u64>> {
-        Ok(self
-            .metadata_value(py, meta::NEB_BAND)?
-            .and_then(|v| v.as_u64()))
+        self.metadata_get_u64(py, meta::NEB_BAND)
     }
 
     /// Replace metadata from a raw JSON object string.
@@ -536,11 +536,23 @@ impl PyConFrame {
         py_metadata_to_json_map(self.metadata.bind(py).as_any())
     }
 
-    fn metadata_value(&self, py: Python<'_>, key: &str) -> PyResult<Option<Value>> {
+    /// Extract an `Option<f64>` metadata value directly from the underlying
+    /// PyDict, without round-tripping through serde_json::Value.
+    fn metadata_get_f64(&self, py: Python<'_>, key: &str) -> PyResult<Option<f64>> {
         let dict = self.metadata.bind(py);
         match dict.get_item(key)? {
-            Some(value) => Ok(Some(py_to_json_value(&value)?)),
-            None => Ok(None),
+            Some(value) if !value.is_none() => Ok(Some(value.extract::<f64>()?)),
+            _ => Ok(None),
+        }
+    }
+
+    /// Extract an `Option<u64>` metadata value directly from the underlying
+    /// PyDict, without round-tripping through serde_json::Value.
+    fn metadata_get_u64(&self, py: Python<'_>, key: &str) -> PyResult<Option<u64>> {
+        let dict = self.metadata.bind(py);
+        match dict.get_item(key)? {
+            Some(value) if !value.is_none() => Ok(Some(value.extract::<u64>()?)),
+            _ => Ok(None),
         }
     }
 
