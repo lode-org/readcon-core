@@ -174,3 +174,57 @@ class TestAseMasses:
             assert back.vx == pytest.approx(orig.vx, abs=1e-8)
             assert back.vy == pytest.approx(orig.vy, abs=1e-8)
             assert back.vz == pytest.approx(orig.vz, abs=1e-8)
+
+
+class TestAseConstraints:
+    """Fixed-coordinate masks roundtrip through ASE constraints."""
+
+    def test_to_ase_uses_fixcartesian_for_partial_masks(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[
+                readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
+                             fixed=[True, False, True], atom_id=0),
+                readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0,
+                             fixed=[True, True, True], atom_id=1),
+            ],
+        )
+
+        ase_atoms = frame.to_ase()
+        fix_cartesian = [
+            constraint for constraint in ase_atoms.constraints
+            if constraint.__class__.__name__ == "FixCartesian"
+        ]
+        fix_atoms = [
+            constraint for constraint in ase_atoms.constraints
+            if constraint.__class__.__name__ == "FixAtoms"
+        ]
+
+        assert len(fix_cartesian) == 1
+        assert fix_cartesian[0].index.tolist() == [0]
+        assert fix_cartesian[0].mask.tolist() == [True, False, True]
+        assert len(fix_atoms) == 1
+        assert fix_atoms[0].index.tolist() == [1]
+
+    def test_partial_fixed_masks_roundtrip_via_ase(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[
+                readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
+                             fixed=[True, False, True], atom_id=0),
+                readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0,
+                             fixed=[False, True, False], atom_id=1),
+                readcon.Atom(symbol="H", x=2.0, y=2.0, z=2.0,
+                             fixed=[True, True, True], atom_id=2),
+            ],
+        )
+
+        frame_back = readcon.ConFrame.from_ase(frame.to_ase())
+
+        assert [atom.fixed for atom in frame_back.atoms] == [
+            [True, False, True],
+            [False, True, False],
+            [True, True, True],
+        ]
