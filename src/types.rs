@@ -103,6 +103,11 @@ pub struct FrameHeader {
     /// Declared data sections from JSON metadata or detected from data presence. (e.g. `["velocities", "forces"]`).
     /// Empty for legacy files (parser falls back to blank-separator velocity detection).
     pub sections: Vec<String>,
+    /// Cached value of the `validate` JSON metadata key, captured at parse
+    /// time so the per-frame strict-mode dispatch in parse_single_frame /
+    /// parse_velocity_section / parse_force_section can avoid a BTreeMap
+    /// lookup on every call.
+    pub(crate) strict_validation: bool,
 }
 
 /// Typed accessors for recommended JSON metadata keys.
@@ -632,6 +637,10 @@ impl ConFrameBuilder {
             sections.push(SECTION_FORCES.into());
         }
 
+        let strict_validation = matches!(
+            self.metadata.get(meta::VALIDATE),
+            Some(serde_json::Value::Bool(true))
+        );
         let header = FrameHeader {
             prebox_header: PreboxHeader::new(self.prebox_user),
             boxl: self.cell,
@@ -643,6 +652,7 @@ impl ConFrameBuilder {
             spec_version: crate::CON_SPEC_VERSION,
             metadata: self.metadata,
             sections,
+            strict_validation,
         };
 
         ConFrame { header, atom_data }
@@ -731,6 +741,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -750,6 +761,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -773,6 +785,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -799,6 +812,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -820,6 +834,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -839,6 +854,7 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];

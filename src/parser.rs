@@ -377,6 +377,7 @@ pub fn parse_frame_header<'a>(
         spec_version,
         metadata,
         sections,
+        strict_validation: validate,
     })
 }
 
@@ -432,7 +433,7 @@ pub fn parse_single_frame<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<ConFrame, ParseError> {
     let header = parse_frame_header(lines)?;
-    let validate = strict_validation_enabled(&header);
+    let validate = header.strict_validation;
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
 
@@ -475,14 +476,6 @@ pub fn parse_single_frame<'a>(
         }
     }
     Ok(ConFrame { header, atom_data })
-}
-
-fn strict_validation_enabled(header: &FrameHeader) -> bool {
-    header
-        .metadata
-        .get(meta::VALIDATE)
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
 }
 
 fn validate_header_geometry(
@@ -649,7 +642,7 @@ pub fn parse_velocity_section<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
-    let validate = strict_validation_enabled(header);
+    let validate = header.strict_validation;
     // Peek at the next line to check for blank separator
     match lines.peek() {
         Some(line) if line.trim().is_empty() => {
@@ -719,7 +712,7 @@ pub fn parse_force_section<'a, I>(
 where
     I: Iterator<Item = &'a str>,
 {
-    let validate = strict_validation_enabled(header);
+    let validate = header.strict_validation;
     // Peek at the next line to check for blank separator
     match lines.peek() {
         Some(line) if line.trim().is_empty() => {
