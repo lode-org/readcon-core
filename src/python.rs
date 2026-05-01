@@ -1,8 +1,9 @@
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
-use serde_json::Value;
+use pyo3::types::{IntoPyDict, PyDict, PyList, PyTuple};
+use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 
 use crate::iterators::ConFrameIterator;
@@ -126,26 +127,111 @@ fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, 
         return Ok(BTreeMap::new());
     }
 
-    let json = obj.py().import("json")?;
-    let dumped: String = json.call_method1("dumps", (obj,))?.extract()?;
-    let value: Value = serde_json::from_str(&dumped)
-        .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
-    let map = value
-        .as_object()
-        .ok_or_else(|| PyValueError::new_err("metadata must be a JSON object"))?;
+    let dict = obj
+        .cast::<PyDict>()
+        .map_err(|_| PyValueError::new_err("metadata must be a dict"))?;
 
-    Ok(map
-        .iter()
-        .filter(|(key, _)| key.as_str() != "con_spec_version" && key.as_str() != "sections")
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect())
+    let mut metadata = BTreeMap::new();
+    for (key, value) in dict.iter() {
+        let key: String = key
+            .extract()
+            .map_err(|_| PyValueError::new_err("metadata keys must be strings"))?;
+        if key == "con_spec_version" || key == "sections" {
+            continue;
+        }
+        metadata.insert(key, py_to_json_value(&value)?);
+    }
+    Ok(metadata)
+}
+
+fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
+    if obj.is_none() {
+        return Ok(Value::Null);
+    }
+    if let Ok(value) = obj.extract::<bool>() {
+        return Ok(Value::Bool(value));
+    }
+    if let Ok(value) = obj.extract::<i64>() {
+        return Ok(Value::Number(Number::from(value)));
+    }
+    if let Ok(value) = obj.extract::<u64>() {
+        return Ok(Value::Number(Number::from(value)));
+    }
+    if let Ok(value) = obj.extract::<f64>() {
+        let number = Number::from_f64(value)
+            .ok_or_else(|| PyValueError::new_err("metadata floats must be finite"))?;
+        return Ok(Value::Number(number));
+    }
+    if let Ok(value) = obj.extract::<String>() {
+        return Ok(Value::String(value));
+    }
+    if let Ok(dict) = obj.cast::<PyDict>() {
+        let entries: PyResult<serde_json::Map<String, Value>> = dict
+            .iter()
+            .map(|(key, value)| {
+                let key: String = key
+                    .extract()
+                    .map_err(|_| PyValueError::new_err("metadata keys must be strings"))?;
+                Ok((key, py_to_json_value(&value)?))
+            })
+            .collect();
+        return Ok(Value::Object(entries?));
+    }
+    if let Ok(list) = obj.cast::<PyList>() {
+        let values: PyResult<Vec<Value>> =
+            list.iter().map(|item| py_to_json_value(&item)).collect();
+        return Ok(Value::Array(values?));
+    }
+    if let Ok(tuple) = obj.cast::<PyTuple>() {
+        let values: PyResult<Vec<Value>> =
+            tuple.iter().map(|item| py_to_json_value(&item)).collect();
+        return Ok(Value::Array(values?));
+    }
+
+    Err(PyValueError::new_err(
+        "metadata values must be JSON-compatible",
+    ))
 }
 
 fn json_map_to_py(py: Python<'_>, metadata: &BTreeMap<String, Value>) -> PyResult<Py<PyAny>> {
-    let json = py.import("json")?;
-    let dumped = serde_json::to_string(metadata)
-        .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
-    Ok(json.call_method1("loads", (dumped,))?.unbind())
+    let dict = PyDict::new(py);
+    for (key, value) in metadata {
+        dict.set_item(key, json_value_to_py(py, value)?)?;
+    }
+    Ok(dict.into_any().unbind())
+}
+
+fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    match value {
+        Value::Null => Ok(py.None()),
+        Value::Bool(value) => value.into_py_any(py),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                value.into_py_any(py)
+            } else if let Some(value) = value.as_u64() {
+                value.into_py_any(py)
+            } else if let Some(value) = value.as_f64() {
+                value.into_py_any(py)
+            } else {
+                Err(PyValueError::new_err("unsupported metadata number"))
+            }
+        }
+        Value::String(value) => value.into_py_any(py),
+        Value::Array(values) => {
+            let list = PyList::empty(py);
+            for value in values {
+                list.append(json_value_to_py(py, value)?)?;
+            }
+            Ok(list.into_any().unbind())
+        }
+        Value::Object(values) => {
+            let dict = PyDict::new(py);
+            for (key, value) in values {
+                dict.set_item(key, json_value_to_py(py, value)?)?;
+            }
+            Ok(dict.into_any().unbind())
+        }
+    }
 }
 
 /// Python-visible simulation frame.
@@ -208,6 +294,12 @@ impl PyConFrame {
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_map_to_py(py, &self.metadata)
+    }
+
+    #[setter]
+    fn set_metadata(&mut self, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.metadata = py_metadata_to_json_map(metadata)?;
+        Ok(())
     }
 
     fn __repr__(&self) -> String {
