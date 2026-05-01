@@ -22,7 +22,9 @@ use std::sync::Arc;
 pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
     let mut values = Vec::with_capacity(n);
     for token in line.split_ascii_whitespace() {
-        values.push(parse_finite_f64(token)?);
+        let val: f64 = fast_float2::parse(token)
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        values.push(val);
     }
     if values.len() == n {
         Ok(values)
@@ -47,7 +49,9 @@ pub fn parse_line_of_range_f64(
 ) -> Result<Vec<f64>, ParseError> {
     let mut values = Vec::with_capacity(max);
     for token in line.split_ascii_whitespace() {
-        values.push(parse_finite_f64(token)?);
+        let val: f64 = fast_float2::parse(token)
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        values.push(val);
     }
     if values.len() < min || values.len() > max {
         return Err(ParseError::InvalidVectorLength {
@@ -61,18 +65,6 @@ pub fn parse_line_of_range_f64(
         values.push(defaults[idx]);
     }
     Ok(values)
-}
-
-fn parse_finite_f64(token: &str) -> Result<f64, ParseError> {
-    let val: f64 = fast_float2::parse(token)
-        .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-    if val.is_finite() {
-        Ok(val)
-    } else {
-        Err(ParseError::InvalidNumberFormat(format!(
-            "non-finite float: {token}"
-        )))
-    }
 }
 
 fn metadata_json_error(message: impl Into<String>) -> ParseError {
@@ -471,8 +463,10 @@ fn validate_header_geometry(
     natm_types: usize,
     natms_per_type: &[usize],
 ) -> Result<(), ParseError> {
-    if boxl.iter().any(|length| *length <= 0.0)
-        || angles.iter().any(|angle| *angle <= 0.0 || *angle >= 180.0)
+    if boxl.iter().any(|length| !length.is_finite() || *length <= 0.0)
+        || angles
+            .iter()
+            .any(|angle| !angle.is_finite() || *angle <= 0.0 || *angle >= 180.0)
     {
         return Err(ParseError::ValidationError(
             "cell geometry must have positive lengths and angles between 0 and 180 degrees"
@@ -488,7 +482,10 @@ fn validate_header_geometry(
 }
 
 fn validate_masses(masses_per_type: &[f64]) -> Result<(), ParseError> {
-    if masses_per_type.iter().any(|mass| *mass <= 0.0) {
+    if masses_per_type
+        .iter()
+        .any(|mass| !mass.is_finite() || *mass <= 0.0)
+    {
         return Err(ParseError::ValidationError(
             "component masses must be positive".to_string(),
         ));
@@ -1472,10 +1469,10 @@ Coordinates of Component 1
     }
 
     #[test]
-    fn test_non_finite_numeric_tokens_are_rejected() {
+    fn test_non_finite_cell_geometry_rejected_in_strict_mode() {
         let lines = vec![
             "PREBOX1",
-            "{\"con_spec_version\":2}",
+            "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
             "10.0 NaN 30.0",
             "90.0 90.0 90.0",
             "POSTBOX1",
@@ -1487,8 +1484,8 @@ Coordinates of Component 1
         let mut line_it = lines.iter().copied();
         let err = parse_frame_header(&mut line_it).unwrap_err();
 
-        assert!(matches!(err, ParseError::InvalidNumberFormat(_)));
-        assert!(err.to_string().contains("finite"));
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("cell"));
     }
 
     #[test]
