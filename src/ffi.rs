@@ -1,6 +1,6 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
-use crate::types::{ConFrame, ConFrameBuilder};
+use crate::types::{ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 use std::ffi::{CStr, CString, c_char};
 use std::fs::{self, File};
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFram
     };
     let mut obj = serde_json::Map::new();
     obj.insert(
-        "con_spec_version".to_string(),
+        meta::CON_SPEC_VERSION.into(),
         serde_json::Value::from(frame.header.spec_version),
     );
     for (k, v) in &frame.header.metadata {

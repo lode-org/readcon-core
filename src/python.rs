@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::Path;
 
 use crate::iterators::ConFrameIterator;
-use crate::types::{AtomDatum, ConFrame, ConFrameBuilder};
+use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -48,6 +48,7 @@ pub struct PyAtomDatum {
 impl PyAtomDatum {
     #[new]
     #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
         x: f64,
@@ -138,7 +139,7 @@ fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, 
         let key: String = key
             .extract()
             .map_err(|_| PyValueError::new_err("metadata keys must be strings"))?;
-        if key == "con_spec_version" || key == "sections" {
+        if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
             continue;
         }
         metadata.insert(key, py_to_json_value(&value)?);
@@ -346,14 +347,16 @@ impl PyConFrame {
     /// Per-frame total energy (from JSON metadata), or None.
     #[getter]
     fn energy(&self, py: Python<'_>) -> PyResult<Option<f64>> {
-        Ok(self.metadata_value(py, "energy")?.and_then(|v| v.as_f64()))
+        Ok(self
+            .metadata_value(py, meta::ENERGY)?
+            .and_then(|v| v.as_f64()))
     }
 
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
         Ok(self
-            .metadata_value(py, "potential")?
+            .metadata_value(py, meta::POTENTIAL)?
             .and_then(|v| v.as_object()?.get("type")?.as_str().map(|s| s.to_string())))
     }
 
@@ -361,21 +364,23 @@ impl PyConFrame {
     #[getter]
     fn frame_index(&self, py: Python<'_>) -> PyResult<Option<u64>> {
         Ok(self
-            .metadata_value(py, "frame_index")?
+            .metadata_value(py, meta::FRAME_INDEX)?
             .and_then(|v| v.as_u64()))
     }
 
     /// Simulation time of this frame, or None.
     #[getter]
     fn time(&self, py: Python<'_>) -> PyResult<Option<f64>> {
-        Ok(self.metadata_value(py, "time")?.and_then(|v| v.as_f64()))
+        Ok(self
+            .metadata_value(py, meta::TIME)?
+            .and_then(|v| v.as_f64()))
     }
 
     /// Integration timestep of this frame, or None.
     #[getter]
     fn timestep(&self, py: Python<'_>) -> PyResult<Option<f64>> {
         Ok(self
-            .metadata_value(py, "timestep")?
+            .metadata_value(py, meta::TIMESTEP)?
             .and_then(|v| v.as_f64()))
     }
 
@@ -383,7 +388,7 @@ impl PyConFrame {
     #[getter]
     fn neb_bead(&self, py: Python<'_>) -> PyResult<Option<u64>> {
         Ok(self
-            .metadata_value(py, "neb_bead")?
+            .metadata_value(py, meta::NEB_BEAD)?
             .and_then(|v| v.as_u64()))
     }
 
@@ -391,7 +396,7 @@ impl PyConFrame {
     #[getter]
     fn neb_band(&self, py: Python<'_>) -> PyResult<Option<u64>> {
         Ok(self
-            .metadata_value(py, "neb_band")?
+            .metadata_value(py, meta::NEB_BAND)?
             .and_then(|v| v.as_u64()))
     }
 
@@ -402,7 +407,7 @@ impl PyConFrame {
                 .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
         let mut metadata = BTreeMap::new();
         for (key, value) in obj {
-            if key == "con_spec_version" || key == "sections" {
+            if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
                 continue;
             }
             metadata.insert(key, value);
@@ -429,34 +434,34 @@ impl PyConFrame {
 
     /// Set the per-frame total energy metadata.
     fn set_energy(&mut self, py: Python<'_>, energy: f64) -> PyResult<()> {
-        self.set_scalar_metadata(py, "energy", energy)
+        self.set_scalar_metadata(py, meta::ENERGY, energy)
     }
 
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, py: Python<'_>, idx: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item("frame_index", idx)?;
+        self.metadata.bind(py).set_item(meta::FRAME_INDEX, idx)?;
         Ok(())
     }
 
     /// Set the simulation time metadata.
     fn set_time(&mut self, py: Python<'_>, time: f64) -> PyResult<()> {
-        self.set_scalar_metadata(py, "time", time)
+        self.set_scalar_metadata(py, meta::TIME, time)
     }
 
     /// Set the integration timestep metadata.
     fn set_timestep(&mut self, py: Python<'_>, dt: f64) -> PyResult<()> {
-        self.set_scalar_metadata(py, "timestep", dt)
+        self.set_scalar_metadata(py, meta::TIMESTEP, dt)
     }
 
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, py: Python<'_>, bead: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item("neb_bead", bead)?;
+        self.metadata.bind(py).set_item(meta::NEB_BEAD, bead)?;
         Ok(())
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, py: Python<'_>, band: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item("neb_band", band)?;
+        self.metadata.bind(py).set_item(meta::NEB_BAND, band)?;
         Ok(())
     }
 

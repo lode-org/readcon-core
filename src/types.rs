@@ -5,6 +5,38 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+/// JSON metadata key names for the spec v2 header line.
+///
+/// Centralized so that key strings are not duplicated across the parser,
+/// writer, builder, FFI, and Python layers.
+pub mod meta {
+    pub const CON_SPEC_VERSION: &str = "con_spec_version";
+    pub const SECTIONS: &str = "sections";
+    pub const VALIDATE: &str = "validate";
+
+    pub const ENERGY: &str = "energy";
+    pub const TIME: &str = "time";
+    pub const TIMESTEP: &str = "timestep";
+    pub const CONVERGENCE_FMAX: &str = "convergence_fmax";
+    pub const CONVERGENCE_ENERGY: &str = "convergence_energy";
+    pub const FMAX: &str = "fmax";
+
+    pub const FRAME_INDEX: &str = "frame_index";
+    pub const NEB_BEAD: &str = "neb_bead";
+    pub const NEB_BAND: &str = "neb_band";
+
+    pub const GENERATOR: &str = "generator";
+    pub const UNITS: &str = "units";
+    pub const POTENTIAL: &str = "potential";
+    pub const PBC: &str = "pbc";
+    pub const LATTICE_VECTORS: &str = "lattice_vectors";
+    pub const CONVERGED: &str = "converged";
+}
+
+/// Canonical section names used in the JSON `sections` array and label lines.
+pub const SECTION_VELOCITIES: &str = "velocities";
+pub const SECTION_FORCES: &str = "forces";
+
 /// Holds all metadata from the 9-line header of a simulation frame.
 #[derive(Debug, Clone)]
 pub struct FrameHeader {
@@ -60,19 +92,19 @@ impl PartialEq for FrameHeader {
 impl FrameHeader {
     /// Per-frame total energy (in the units declared by the `units` key).
     pub fn energy(&self) -> Option<f64> {
-        self.metadata.get("energy").and_then(|v| v.as_f64())
+        self.metadata.get(meta::ENERGY).and_then(|v| v.as_f64())
     }
 
     /// Sets the per-frame total energy.
     pub fn set_energy(&mut self, e: f64) {
         self.metadata
-            .insert("energy".to_string(), serde_json::Value::from(e));
+            .insert(meta::ENERGY.into(), serde_json::Value::from(e));
     }
 
     /// Potential type string (e.g. "EMT", "LJ").
     pub fn potential_type(&self) -> Option<&str> {
         self.metadata
-            .get("potential")
+            .get(meta::POTENTIAL)
             .and_then(|v| v.as_object())
             .and_then(|obj| obj.get("type"))
             .and_then(|v| v.as_str())
@@ -81,7 +113,7 @@ impl FrameHeader {
     /// Potential parameters as a JSON value.
     pub fn potential_params(&self) -> Option<&serde_json::Value> {
         self.metadata
-            .get("potential")
+            .get(meta::POTENTIAL)
             .and_then(|v| v.as_object())
             .and_then(|obj| obj.get("params"))
     }
@@ -92,56 +124,58 @@ impl FrameHeader {
             "type": pot_type,
             "params": params,
         });
-        self.metadata.insert("potential".to_string(), obj);
+        self.metadata.insert(meta::POTENTIAL.into(), obj);
     }
 
     /// Zero-based frame index within a trajectory.
     pub fn frame_index(&self) -> Option<u64> {
-        self.metadata.get("frame_index").and_then(|v| v.as_u64())
+        self.metadata
+            .get(meta::FRAME_INDEX)
+            .and_then(|v| v.as_u64())
     }
 
     /// Sets the frame index.
     pub fn set_frame_index(&mut self, idx: u64) {
         self.metadata
-            .insert("frame_index".to_string(), serde_json::Value::from(idx));
+            .insert(meta::FRAME_INDEX.into(), serde_json::Value::from(idx));
     }
 
     /// Simulation time of this frame (in the declared time unit).
     pub fn time(&self) -> Option<f64> {
-        self.metadata.get("time").and_then(|v| v.as_f64())
+        self.metadata.get(meta::TIME).and_then(|v| v.as_f64())
     }
 
     /// Sets the simulation time.
     pub fn set_time(&mut self, t: f64) {
         self.metadata
-            .insert("time".to_string(), serde_json::Value::from(t));
+            .insert(meta::TIME.into(), serde_json::Value::from(t));
     }
 
     /// Integration timestep (in the declared time unit).
     pub fn timestep(&self) -> Option<f64> {
-        self.metadata.get("timestep").and_then(|v| v.as_f64())
+        self.metadata.get(meta::TIMESTEP).and_then(|v| v.as_f64())
     }
 
     /// Sets the integration timestep.
     pub fn set_timestep(&mut self, dt: f64) {
         self.metadata
-            .insert("timestep".to_string(), serde_json::Value::from(dt));
+            .insert(meta::TIMESTEP.into(), serde_json::Value::from(dt));
     }
 
     /// Unit system as a JSON object (e.g. `{"length":"angstrom","energy":"eV"}`).
     pub fn units(&self) -> Option<&serde_json::Value> {
-        self.metadata.get("units")
+        self.metadata.get(meta::UNITS)
     }
 
     /// Sets the unit system.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        self.metadata.insert("units".to_string(), units);
+        self.metadata.insert(meta::UNITS.into(), units);
     }
 
     /// Periodic boundary conditions as `[pbc_x, pbc_y, pbc_z]`.
     /// Returns `None` if not set (callers should default to `[true, true, true]`).
     pub fn pbc(&self) -> Option<[bool; 3]> {
-        let arr = self.metadata.get("pbc")?.as_array()?;
+        let arr = self.metadata.get(meta::PBC)?.as_array()?;
         if arr.len() != 3 {
             return None;
         }
@@ -150,16 +184,14 @@ impl FrameHeader {
 
     /// Sets the periodic boundary conditions.
     pub fn set_pbc(&mut self, pbc: [bool; 3]) {
-        self.metadata.insert(
-            "pbc".to_string(),
-            serde_json::json!([pbc[0], pbc[1], pbc[2]]),
-        );
+        self.metadata
+            .insert(meta::PBC.into(), serde_json::json!([pbc[0], pbc[1], pbc[2]]));
     }
 
     /// Exact 3x3 lattice vector matrix (row-major, angstroms).
     /// When present, takes precedence over the length/angle values on lines 3-4.
     pub fn lattice_vectors(&self) -> Option<[[f64; 3]; 3]> {
-        let arr = self.metadata.get("lattice_vectors")?.as_array()?;
+        let arr = self.metadata.get(meta::LATTICE_VECTORS)?.as_array()?;
         if arr.len() != 3 {
             return None;
         }
@@ -176,7 +208,7 @@ impl FrameHeader {
     /// Sets the exact lattice vector matrix.
     pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
         self.metadata.insert(
-            "lattice_vectors".to_string(),
+            meta::LATTICE_VECTORS.into(),
             serde_json::json!([
                 [vecs[0][0], vecs[0][1], vecs[0][2]],
                 [vecs[1][0], vecs[1][1], vecs[1][2]],
@@ -187,24 +219,24 @@ impl FrameHeader {
 
     /// NEB bead (image) index.
     pub fn neb_bead(&self) -> Option<u64> {
-        self.metadata.get("neb_bead").and_then(|v| v.as_u64())
+        self.metadata.get(meta::NEB_BEAD).and_then(|v| v.as_u64())
     }
 
     /// Sets the NEB bead index.
     pub fn set_neb_bead(&mut self, bead: u64) {
         self.metadata
-            .insert("neb_bead".to_string(), serde_json::Value::from(bead));
+            .insert(meta::NEB_BEAD.into(), serde_json::Value::from(bead));
     }
 
     /// NEB band index.
     pub fn neb_band(&self) -> Option<u64> {
-        self.metadata.get("neb_band").and_then(|v| v.as_u64())
+        self.metadata.get(meta::NEB_BAND).and_then(|v| v.as_u64())
     }
 
     /// Sets the NEB band index.
     pub fn set_neb_band(&mut self, band: u64) {
         self.metadata
-            .insert("neb_band".to_string(), serde_json::Value::from(band));
+            .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
     }
 }
 
@@ -409,7 +441,7 @@ impl ConFrameBuilder {
             serde_json::from_str(metadata_json)?;
         self.metadata.clear();
         for (key, value) in object {
-            if key == "con_spec_version" || key == "sections" {
+            if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
                 continue;
             }
             self.metadata.insert(key, value);
@@ -431,35 +463,35 @@ impl ConFrameBuilder {
 
     /// Sets the per-frame total energy metadata.
     pub fn set_energy(&mut self, energy: f64) {
-        self.set_scalar_metadata("energy", energy);
+        self.set_scalar_metadata(meta::ENERGY, energy);
     }
 
     /// Sets the zero-based frame index metadata.
     pub fn set_frame_index(&mut self, idx: u64) {
         self.metadata
-            .insert("frame_index".to_string(), serde_json::Value::from(idx));
+            .insert(meta::FRAME_INDEX.into(), serde_json::Value::from(idx));
     }
 
     /// Sets the simulation time metadata.
     pub fn set_time(&mut self, time: f64) {
-        self.set_scalar_metadata("time", time);
+        self.set_scalar_metadata(meta::TIME, time);
     }
 
     /// Sets the timestep metadata.
     pub fn set_timestep(&mut self, dt: f64) {
-        self.set_scalar_metadata("timestep", dt);
+        self.set_scalar_metadata(meta::TIMESTEP, dt);
     }
 
     /// Sets the NEB bead index metadata.
     pub fn set_neb_bead(&mut self, bead: u64) {
         self.metadata
-            .insert("neb_bead".to_string(), serde_json::Value::from(bead));
+            .insert(meta::NEB_BEAD.into(), serde_json::Value::from(bead));
     }
 
     /// Sets the NEB band index metadata.
     pub fn set_neb_band(&mut self, band: u64) {
         self.metadata
-            .insert("neb_band".to_string(), serde_json::Value::from(band));
+            .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
     }
 
     /// Adds an atom without velocity data.
@@ -651,10 +683,10 @@ impl ConFrameBuilder {
         let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
         let mut sections = Vec::new();
         if has_vel {
-            sections.push("velocities".to_string());
+            sections.push(SECTION_VELOCITIES.into());
         }
         if has_frc {
-            sections.push("forces".to_string());
+            sections.push(SECTION_FORCES.into());
         }
 
         let header = FrameHeader {

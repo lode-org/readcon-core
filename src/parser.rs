@@ -1,6 +1,9 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
-use crate::types::{AtomDatum, ConFrame, FrameHeader, decode_fixed_bitmask};
+use crate::types::{
+    AtomDatum, ConFrame, FrameHeader, SECTION_FORCES, SECTION_VELOCITIES, decode_fixed_bitmask,
+    meta,
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
@@ -99,13 +102,13 @@ fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError>
 fn validate_metadata_schema(
     json_obj: &serde_json::Map<String, Value>,
 ) -> Result<(bool, Vec<String>), ParseError> {
-    let validate = match json_obj.get("validate") {
+    let validate = match json_obj.get(meta::VALIDATE) {
         Some(Value::Bool(value)) => *value,
         Some(_) => return Err(metadata_json_error("validate must be a boolean")),
         None => false,
     };
 
-    let sections = match json_obj.get("sections") {
+    let sections = match json_obj.get(meta::SECTIONS) {
         Some(Value::Array(values)) => values
             .iter()
             .map(|value| {
@@ -126,32 +129,37 @@ fn validate_metadata_schema(
 
     for (key, value) in json_obj {
         match key.as_str() {
-            "con_spec_version" | "sections" | "validate" => {}
-            "energy" | "time" | "timestep" | "convergence_fmax" | "convergence_energy" | "fmax" => {
-                validate_metadata_number(key, value)?
+            meta::CON_SPEC_VERSION | meta::SECTIONS | meta::VALIDATE => {}
+            meta::ENERGY
+            | meta::TIME
+            | meta::TIMESTEP
+            | meta::CONVERGENCE_FMAX
+            | meta::CONVERGENCE_ENERGY
+            | meta::FMAX => validate_metadata_number(key, value)?,
+            meta::FRAME_INDEX | meta::NEB_BEAD | meta::NEB_BAND => {
+                validate_metadata_integer(key, value)?
             }
-            "frame_index" | "neb_bead" | "neb_band" => validate_metadata_integer(key, value)?,
-            "generator" if !value.is_string() => {
+            meta::GENERATOR if !value.is_string() => {
                 return Err(metadata_json_error("generator must be a string"));
             }
-            "generator" => {}
-            "units" | "potential" if !value.is_object() => {
+            meta::GENERATOR => {}
+            meta::UNITS | meta::POTENTIAL if !value.is_object() => {
                 return Err(metadata_json_error(format!("{key} must be an object")));
             }
-            "potential" => {
+            meta::POTENTIAL => {
                 if let Some(potential_type) = value.get("type")
                     && !potential_type.is_string()
                 {
                     return Err(metadata_json_error("potential.type must be a string"));
                 }
             }
-            "units" => {}
-            "pbc" => validate_pbc_metadata(value)?,
-            "lattice_vectors" => validate_lattice_vectors_metadata(value)?,
-            "converged" if !value.is_boolean() => {
+            meta::UNITS => {}
+            meta::PBC => validate_pbc_metadata(value)?,
+            meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
+            meta::CONVERGED if !value.is_boolean() => {
                 return Err(metadata_json_error("converged must be a boolean"));
             }
-            "converged" => {}
+            meta::CONVERGED => {}
             _ => {}
         }
     }
@@ -280,25 +288,25 @@ pub fn parse_frame_header<'a>(
             .as_object()
             .ok_or_else(|| ParseError::InvalidMetadataJson("expected a JSON object".to_string()))?;
         let ver = json_obj
-            .get("con_spec_version")
+            .get(meta::CON_SPEC_VERSION)
             .and_then(|v| v.as_u64())
             .ok_or(ParseError::MissingSpecVersion)? as u32;
         if ver > crate::CON_SPEC_VERSION {
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
         let (validate, secs) = validate_metadata_schema(json_obj)?;
-        let mut meta = BTreeMap::new();
+        let mut metadata = BTreeMap::new();
         for (k, v) in json_obj {
-            if k == "con_spec_version" {
+            if k == meta::CON_SPEC_VERSION {
                 continue;
             }
-            if k == "sections" {
+            if k == meta::SECTIONS {
                 // Don't store sections in metadata -- it's in the dedicated field.
                 continue;
             }
-            meta.insert(k.clone(), v.clone());
+            metadata.insert(k.clone(), v.clone());
         }
-        (ver, meta, secs, validate)
+        (ver, metadata, secs, validate)
     } else {
         // Legacy file: no JSON metadata line.
         (1_u32, BTreeMap::new(), Vec::new(), false)
@@ -447,7 +455,7 @@ pub fn parse_single_frame<'a>(
 fn strict_validation_enabled(header: &FrameHeader) -> bool {
     header
         .metadata
-        .get("validate")
+        .get(meta::VALIDATE)
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
 }
@@ -746,19 +754,19 @@ where
         // Legacy: try velocity detection via blank separator
         let found = parse_velocity_section(lines, header, atom_data)?;
         if found {
-            header.sections.push("velocities".to_string());
+            header.sections.push(SECTION_VELOCITIES.into());
         }
     } else {
         let sections = std::mem::take(&mut header.sections);
         for section in &sections {
             match section.as_str() {
-                "velocities" => {
+                SECTION_VELOCITIES => {
                     let found = parse_velocity_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteVelocitySection);
                     }
                 }
-                "forces" => {
+                SECTION_FORCES => {
                     let found = parse_force_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteForceSection);
@@ -778,7 +786,7 @@ fn sections_key_declared(header: &FrameHeader) -> bool {
         .and_then(|value| {
             value
                 .as_object()
-                .map(|object| object.contains_key("sections"))
+                .map(|object| object.contains_key(meta::SECTIONS))
         })
         .unwrap_or(false)
 }
