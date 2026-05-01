@@ -225,6 +225,12 @@ uint64_t rkr_frame_neb_bead(const struct RKRConFrame *frame_handle);
 uint64_t rkr_frame_neb_band(const struct RKRConFrame *frame_handle);
 
 /**
+ * Returns a stable, static message for a status code.
+ * The returned pointer is valid for the lifetime of the process. Do NOT free it.
+ */
+const char *rkr_status_message(enum RKRStatus status);
+
+/**
  * Creates a new iterator for a .con file.
  * The caller OWNS the returned pointer and MUST call `free_con_frame_iterator`.
  * Returns NULL if there are no more frames or on error.
@@ -475,6 +481,24 @@ enum RKRStatus rkr_frame_add_atom(struct RKRConFrameBuilder *builder_handle,
                                   double mass);
 
 /**
+ * Adds an atom (without velocity) to the frame builder using per-axis fixed flags.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_fixed_mask(struct RKRConFrameBuilder *builder_handle,
+                                                  const char *symbol,
+                                                  double x,
+                                                  double y,
+                                                  double z,
+                                                  bool fixed_x,
+                                                  bool fixed_y,
+                                                  bool fixed_z,
+                                                  uint64_t atom_id,
+                                                  double mass);
+
+/**
  * Adds an atom with velocity data to the frame builder.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
@@ -492,6 +516,113 @@ enum RKRStatus rkr_frame_add_atom_with_velocity(struct RKRConFrameBuilder *build
                                                 double vx,
                                                 double vy,
                                                 double vz);
+
+/**
+ * Adds an atom with velocity data to the frame builder using per-axis fixed flags.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_velocity_fixed_mask(struct RKRConFrameBuilder *builder_handle,
+                                                           const char *symbol,
+                                                           double x,
+                                                           double y,
+                                                           double z,
+                                                           bool fixed_x,
+                                                           bool fixed_y,
+                                                           bool fixed_z,
+                                                           uint64_t atom_id,
+                                                           double mass,
+                                                           double vx,
+                                                           double vy,
+                                                           double vz);
+
+/**
+ * Adds an atom with force data to the frame builder.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_forces(struct RKRConFrameBuilder *builder_handle,
+                                              const char *symbol,
+                                              double x,
+                                              double y,
+                                              double z,
+                                              bool is_fixed,
+                                              uint64_t atom_id,
+                                              double mass,
+                                              double fx,
+                                              double fy,
+                                              double fz);
+
+/**
+ * Adds an atom with force data to the frame builder using per-axis fixed flags.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_forces_fixed_mask(struct RKRConFrameBuilder *builder_handle,
+                                                         const char *symbol,
+                                                         double x,
+                                                         double y,
+                                                         double z,
+                                                         bool fixed_x,
+                                                         bool fixed_y,
+                                                         bool fixed_z,
+                                                         uint64_t atom_id,
+                                                         double mass,
+                                                         double fx,
+                                                         double fy,
+                                                         double fz);
+
+/**
+ * Adds an atom with velocity and force data to the frame builder.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces(struct RKRConFrameBuilder *builder_handle,
+                                                           const char *symbol,
+                                                           double x,
+                                                           double y,
+                                                           double z,
+                                                           bool is_fixed,
+                                                           uint64_t atom_id,
+                                                           double mass,
+                                                           double vx,
+                                                           double vy,
+                                                           double vz,
+                                                           double fx,
+                                                           double fy,
+                                                           double fz);
+
+/**
+ * Adds an atom with velocity and force data using per-axis fixed flags.
+ * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ *
+ * # Safety
+ * builder_handle and symbol must be valid.
+ */
+enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(struct RKRConFrameBuilder *builder_handle,
+                                                                      const char *symbol,
+                                                                      double x,
+                                                                      double y,
+                                                                      double z,
+                                                                      bool fixed_x,
+                                                                      bool fixed_y,
+                                                                      bool fixed_z,
+                                                                      uint64_t atom_id,
+                                                                      double mass,
+                                                                      double vx,
+                                                                      double vy,
+                                                                      double vz,
+                                                                      double fx,
+                                                                      double fy,
+                                                                      double fz);
 
 /**
  * Consumes the builder and returns a finalized RKRConFrame handle.
