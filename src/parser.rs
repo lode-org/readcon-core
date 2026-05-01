@@ -290,28 +290,13 @@ pub fn parse_frame_header<'a>(
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
 
-        // Pre-extract the validate flag with a type check; this is the only
-        // metadata check that always runs. The full schema validation only
-        // fires when validate=true (see below).
-        let validate = match json_obj.get(meta::VALIDATE) {
-            Some(Value::Bool(b)) => *b,
-            Some(_) => return Err(metadata_json_error("validate must be a boolean")),
-            None => false,
-        };
-
-        // When strict validation is requested, run the full schema check
-        // first. That covers the validate-bool and sections-required rules,
-        // so the single-pass loop below can stay narrow.
-        if validate {
-            validate_metadata_schema(json_obj)?;
-        }
-
-        // Single pass over the JSON object: collect sections, copy the rest
-        // into metadata. Replaces the previous "validate then re-iterate"
-        // pattern that walked the map twice on every frame.
+        // Single pass over the JSON object: collect sections, capture the
+        // validate flag, copy the rest into metadata. Folds the previous
+        // pre-extract get(validate) + re-iterate pattern into one walk.
         let mut sections: Vec<String> = Vec::new();
         let mut metadata = BTreeMap::new();
         let mut sections_declared = false;
+        let mut validate = false;
         for (k, v) in json_obj {
             match k.as_str() {
                 meta::CON_SPEC_VERSION => {}
@@ -328,10 +313,23 @@ pub fn parse_frame_header<'a>(
                         sections.push(s.to_string());
                     }
                 }
+                meta::VALIDATE => {
+                    validate = match v {
+                        Value::Bool(b) => *b,
+                        _ => return Err(metadata_json_error("validate must be a boolean")),
+                    };
+                    metadata.insert(k.clone(), v.clone());
+                }
                 _ => {
                     metadata.insert(k.clone(), v.clone());
                 }
             }
+        }
+
+        // Strict-mode schema check fires only when the file requested
+        // it. Hot-path parses (validate=false) skip the per-key match.
+        if validate {
+            validate_metadata_schema(json_obj)?;
         }
 
         (ver, metadata, sections, validate, sections_declared)
@@ -442,14 +440,11 @@ pub fn parse_single_frame<'a>(
 
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
-        // Create a reference-counted string for the symbol once per component.
-        let symbol: Arc<str> = Arc::from(
-            lines
-                .next()
-                .ok_or(ParseError::IncompleteFrame)?
-                .trim()
-                .to_string(),
-        );
+        // Allocate the per-component Arc<str> directly from the trimmed
+        // line; going through a String intermediate would add a second
+        // allocation and copy for no semantic gain.
+        let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let symbol: Arc<str> = Arc::from(symbol_line.trim());
         let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
         if validate {
             validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
