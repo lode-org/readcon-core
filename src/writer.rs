@@ -1,4 +1,4 @@
-use crate::types::{ConFrame, encode_fixed_bitmask};
+use crate::types::{ConFrame, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -64,28 +64,28 @@ impl<W: Write> ConFrameWriter<W> {
         // Auto-populate sections based on frame data.
         let mut meta_obj = serde_json::Map::new();
         meta_obj.insert(
-            "con_spec_version".to_string(),
+            meta::CON_SPEC_VERSION.into(),
             json!(frame.header.spec_version),
         );
         // Build sections array from actual data presence
         let mut sections = Vec::new();
         if frame.has_velocities() {
-            sections.push(json!("velocities"));
+            sections.push(json!(SECTION_VELOCITIES));
         }
         if frame.has_forces() {
-            sections.push(json!("forces"));
+            sections.push(json!(SECTION_FORCES));
         }
         let validate = frame
             .header
             .metadata
-            .get("validate")
+            .get(meta::VALIDATE)
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
         if !sections.is_empty() || validate {
-            meta_obj.insert("sections".to_string(), json!(sections));
+            meta_obj.insert(meta::SECTIONS.into(), json!(sections));
         }
         for (k, v) in &frame.header.metadata {
-            if k == "con_spec_version" || k == "sections" {
+            if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
                 continue;
             }
             meta_obj.insert(k.clone(), v.clone());
