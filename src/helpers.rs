@@ -1,16 +1,30 @@
 //! Element symbol and atomic number lookup.
 //!
-//! Both lookups cover hydrogen through uranium (Z = 1..=92). Unknown
-//! inputs return a stable sentinel: [`symbol_to_atomic_number`] returns
-//! 0 for unknown symbols and [`atomic_number_to_symbol`] returns "X"
-//! for unknown atomic numbers. The same lookup is exposed to C/C++ via
-//! [`crate::ffi::rkr_symbol_to_z`] and [`crate::ffi::rkr_z_to_symbol`]
-//! so downstream tools can drop their own copies of the periodic table.
+//! Both lookups cover hydrogen through uranium (Z = 1..=92) plus the
+//! hydrogen isotopes deuterium ("D") and tritium ("T") which both
+//! map to Z = 1 since they share hydrogen's nucleon charge. The
+//! reverse lookup ([`atomic_number_to_symbol`]) returns the standard
+//! "H" for Z = 1; callers that need to distinguish isotopes do so out
+//! of band (e.g. an `isotope` metadata key on the frame, or by
+//! storing "D" / "T" as the per-atom symbol).
+//!
+//! The mapping is *informational, not binding*. The CON spec does not
+//! mandate that an atom's symbol correspond to any periodic-table
+//! element; consumers commonly store ghost atoms (e.g. for QM/MM
+//! link atoms, virtual sites, dummy positions in NEB chains) with
+//! whatever symbol fits their workflow. Unknown inputs return a
+//! stable sentinel: [`symbol_to_atomic_number`] returns 0 for
+//! unknown symbols and [`atomic_number_to_symbol`] returns "X" for
+//! unknown atomic numbers.
+//!
+//! The same lookup is exposed to C/C++ via [`crate::ffi::rkr_symbol_to_z`]
+//! and [`crate::ffi::rkr_z_to_symbol`] so downstream tools can drop
+//! their own copies of the periodic table.
 
 /// Returns the atomic number for a chemical symbol, or 0 if unknown.
 pub fn symbol_to_atomic_number(symbol: &str) -> u64 {
     match symbol {
-        "H" => 1,
+        "H" | "D" | "T" => 1,
         "He" => 2,
         "Li" => 3,
         "Be" => 4,
@@ -226,6 +240,21 @@ mod tests {
         assert_eq!(symbol_to_atomic_number(""), 0);
         assert_eq!(symbol_to_atomic_number("Xx"), 0);
         assert_eq!(symbol_to_atomic_number("h"), 0); // case-sensitive
+    }
+
+    #[test]
+    fn hydrogen_isotopes_map_to_z_one() {
+        // Deuterium and tritium share hydrogen's nucleon charge; the
+        // reverse lookup uses canonical "H" so callers that need to
+        // round-trip isotope identity store it out of band.
+        assert_eq!(symbol_to_atomic_number("D"), 1);
+        assert_eq!(symbol_to_atomic_number("T"), 1);
+        // Ghost-atom / dummy-site placeholders (anything outside
+        // H..U plus D/T) stay sentinel-0 so consumers can detect
+        // and route them differently.
+        assert_eq!(symbol_to_atomic_number("Gh"), 0);
+        assert_eq!(symbol_to_atomic_number("Dum"), 0);
+        assert_eq!(symbol_to_atomic_number("M"), 0);
     }
 
     #[test]
