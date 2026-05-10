@@ -377,6 +377,45 @@ class TestPrecision:
         assert frames2[0].atoms[0].x == pytest.approx(1.23456789012345, abs=1e-14)
 
 
+class TestNumpyArrays:
+    def test_coords_array_shape(self):
+        np = pytest.importorskip("numpy")
+        frame = readcon.read_con(_resource("tiny_cuh2.con"))[0]
+        coords = frame.coords_array()
+        assert coords.shape == (len(frame), 3)
+        assert coords.dtype == np.float64
+        # First atom's x matches the AoS getter.
+        assert coords[0, 0] == pytest.approx(frame.atoms[0].x)
+
+    def test_velocities_array_returns_none_without_velocities(self):
+        frame = readcon.read_con(_resource("tiny_cuh2.con"))[0]
+        assert frame.velocities_array() is None
+
+    def test_forces_array_round_trips(self):
+        np = pytest.importorskip("numpy")
+        frame = readcon.read_con(_resource("tiny_cuh2_forces.con"))[0]
+        forces = frame.forces_array()
+        assert forces is not None
+        assert forces.shape == (len(frame), 3)
+        # Forces match the AoS atom view.
+        assert forces[0, 0] == pytest.approx(frame.atoms[0].fx)
+
+    def test_atom_ids_array(self):
+        np = pytest.importorskip("numpy")
+        frame = readcon.read_con(_resource("tiny_cuh2.con"))[0]
+        ids = frame.atom_ids_array()
+        assert ids.dtype == np.uint64
+        assert ids.shape == (len(frame),)
+
+    def test_build_atom_id_index(self):
+        frame = readcon.read_con(_resource("tiny_cuh2.con"))[0]
+        idx = frame.build_atom_id_index()
+        assert isinstance(idx, dict)
+        assert len(idx) == len(frame)
+        for atom_id, position in idx.items():
+            assert frame.atoms[position].atom_id == atom_id
+
+
 class TestErrorHandling:
     def test_bad_file_path(self):
         with pytest.raises(OSError):
