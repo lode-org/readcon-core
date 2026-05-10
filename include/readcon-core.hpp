@@ -443,6 +443,10 @@ class ConFrameBuilder {
     ConFrameBuilder &set_atom_fixed(size_t i, const std::array<bool, 3> &fixed);
     /// Updates the mass of an existing atom.
     ConFrameBuilder &set_atom_mass(size_t i, double mass);
+    /// Updates the atom_id (.con column 5 pre-grouping index) of an
+    /// existing atom. The atom_ids buffer's data pointer stays stable
+    /// across this call.
+    ConFrameBuilder &set_atom_id(size_t i, uint64_t atom_id);
 
     /// Removes velocity / force / energy data from an existing atom.
     ConFrameBuilder &clear_atom_velocity(size_t i);
@@ -1012,6 +1016,14 @@ ConFrameBuilder::set_atom_fixed(size_t i, const std::array<bool, 3> &fixed) {
 inline ConFrameBuilder &ConFrameBuilder::set_atom_mass(size_t i, double mass) {
     throw_on_error(rkr_frame_builder_set_atom_mass(builder_handle_, i, mass),
                    "Failed to set atom mass");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_id(size_t i, uint64_t atom_id) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_id(builder_handle_, i, atom_id),
+        "Failed to set atom id");
     return *this;
 }
 

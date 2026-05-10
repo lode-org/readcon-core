@@ -1005,6 +1005,28 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_mass(
     }
 }
 
+/// Updates the atom_id (pre-grouping index from .con column 5) of an
+/// existing atom. The underlying `Array1<u64>` buffer pointer stays
+/// stable; callers that hold a raw `*const u64` via
+/// `rkr_frame_builder_atom_ids_data` do not need to refresh after this.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_id(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    atom_id: u64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.set_atom_id(index, atom_id) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
 /// Removes velocity / force / energy data from an existing atom.
 /// # Safety
 /// builder_handle must be valid.

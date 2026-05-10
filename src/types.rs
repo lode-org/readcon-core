@@ -962,6 +962,26 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Updates the atom_id (the pre-grouping index from .con column 5)
+    /// of an existing atom. The atom_id is the only per-atom field that
+    /// `add_atom` set once and offered no post-add mutator for, which
+    /// forced downstream consumers (eOn's `ConFileIO::con2matter`) to
+    /// rebuild the builder from scratch whenever they wanted to install
+    /// non-sequential ids. This setter lets callers mutate one slot in
+    /// place; the underlying `Array1<u64>` buffer pointer stays stable.
+    pub fn set_atom_id(
+        &mut self,
+        i: usize,
+        atom_id: u64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        self.atom_ids[i] = atom_id;
+        Ok(self)
+    }
+
     /// Removes velocity data from an existing atom by zeroing the slot.
     /// If every atom subsequently lacks a meaningful velocity (the section
     /// can be cleared via `clear_velocities_section`) the next `build()`
@@ -1976,6 +1996,51 @@ mod tests {
         // type-grouped: index 0 in atom_data is the first "Cu" entry which
         // started life at builder index 0; mass survives via masses_per_type.
         assert_eq!(frame.header.masses_per_type[0], 100.0);
+    }
+
+    #[test]
+    fn builder_set_atom_id_overrides_sequential_default() {
+        let mut b = three_atom_builder();
+        // three_atom_builder seeds atom_ids 0..3 via add_atom; override
+        // them with non-sequential values (simulating .con column-5
+        // load) and verify the build round-trips them.
+        b.set_atom_id(0, 42).unwrap();
+        b.set_atom_id(1, 7).unwrap();
+        b.set_atom_id(2, 99).unwrap();
+        // Buffer pointer stability: mutation should not reallocate.
+        let ptr_before = b.atom_ids().as_ptr();
+        b.set_atom_id(0, 1234).unwrap();
+        let ptr_after = b.atom_ids().as_ptr();
+        assert_eq!(ptr_before, ptr_after);
+        // Restore the test fixture's id 42 so the build round-trip
+        // check below still asserts the documented value.
+        b.set_atom_id(0, 42).unwrap();
+        let frame = b.build();
+        // Type-grouping reorders atom_data; locate ids via the symbol.
+        let cu_ids: Vec<u64> = frame
+            .atom_data
+            .iter()
+            .filter(|a| a.symbol.as_ref() == "Cu")
+            .map(|a| a.atom_id)
+            .collect();
+        let h_ids: Vec<u64> = frame
+            .atom_data
+            .iter()
+            .filter(|a| a.symbol.as_ref() == "H")
+            .map(|a| a.atom_id)
+            .collect();
+        assert_eq!(cu_ids, vec![42, 7]);
+        assert_eq!(h_ids, vec![99]);
+    }
+
+    #[test]
+    fn builder_set_atom_id_out_of_bounds_is_loud() {
+        let mut b = three_atom_builder();
+        let err = b.set_atom_id(99, 0).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::ParseError::IndexOutOfBounds { index: 99, len: 3 }
+        ));
     }
 
     #[test]
