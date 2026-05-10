@@ -2013,4 +2013,96 @@ mod tests {
         assert_eq!(frame.atom_data[0].force, Some([1.0, 0.0, 0.0]));
         assert_eq!(frame.atom_data[2].force, Some([0.0, 0.0, 1.0]));
     }
+
+    // ----- DLPack export tier tests -----------------------------------------
+    //
+    // These tests pin the cross-language zero-copy contract: every per-atom
+    // field surfaces as a DLPackTensorRef with the right shape, dtype, and
+    // device, and a mutable view writes back to the builder's storage with
+    // no intermediate copy.
+
+    #[test]
+    fn dlpack_positions_shape_dtype_device() {
+        let b = three_atom_builder();
+        let t = b.positions_dlpack().expect("positions_dlpack");
+        // (N, 3) f64 on CPU is the spec contract for v0.11.
+        assert_eq!(t.shape(), &[3, 3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+        assert_eq!(dt.lanes, 1);
+        assert_eq!(t.device(), dlpk::sys::DLDevice::cpu());
+    }
+
+    #[test]
+    fn dlpack_velocities_absent_returns_none() {
+        let b = three_atom_builder();
+        assert!(b.velocities_dlpack().expect("velocities_dlpack").is_none());
+        assert!(b.forces_dlpack().expect("forces_dlpack").is_none());
+        assert!(
+            b.atom_energies_dlpack()
+                .expect("atom_energies_dlpack")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn dlpack_velocities_present_after_declaration() {
+        let mut b = three_atom_builder();
+        b.set_atom_velocity(1, [1.5, 2.5, 3.5]).unwrap();
+        let t = b
+            .velocities_dlpack()
+            .expect("velocities_dlpack ok")
+            .expect("section present");
+        assert_eq!(t.shape(), &[3, 3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn dlpack_atom_ids_dtype_is_uint64() {
+        let b = three_atom_builder();
+        let t = b.atom_ids_dlpack().expect("atom_ids_dlpack");
+        assert_eq!(t.shape(), &[3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLUInt);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn dlpack_masses_shape_and_values() {
+        let b = three_atom_builder();
+        let t = b.masses_dlpack().expect("masses_dlpack");
+        assert_eq!(t.shape(), &[3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn dlpack_positions_mut_writes_back() {
+        // Mutating through the DLPack view must show up in the builder's
+        // ndarray storage. This is the property eOn's Matter, MD
+        // integrators, and ML potentials rely on.
+        let mut b = three_atom_builder();
+        {
+            let mut t = b.positions_dlpack_mut().expect("positions_dlpack_mut");
+            // For row-major (N, 3) f64 the (i, j) element is at index
+            // `3 * i + j` in the contiguous block.
+            let ptr = t.data_ptr_mut::<f64>().expect("data_ptr_mut f64");
+            unsafe {
+                *ptr.add(3 * 1) = 42.0;
+                *ptr.add(3 * 1 + 1) = 43.0;
+                *ptr.add(3 * 1 + 2) = 44.0;
+            }
+        }
+        // Read back through the builder's typed accessor.
+        assert_eq!(b.get_atom_position(1).unwrap(), (42.0, 43.0, 44.0));
+        // And through the typed 2D view, confirming the same memory.
+        let v = b.positions_view();
+        assert_eq!(v[[1, 0]], 42.0);
+        assert_eq!(v[[1, 1]], 43.0);
+        assert_eq!(v[[1, 2]], 44.0);
+    }
 }
