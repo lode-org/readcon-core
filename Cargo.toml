@@ -28,7 +28,6 @@ zstd = ["dep:zstd"]
 metatensor = ["dep:metatensor", "dep:ndarray"]
 
 [dependencies]
-bumpalo = { version = "3", features = ["collections"] }
 fast-float2 = "0.2"
 flate2 = "1"
 serde_json = "1"
