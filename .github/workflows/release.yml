@@ -98,7 +98,13 @@ jobs:
         id: check
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if curl -sfL "https://crates.io/api/v1/crates/readcon-core/${version}" \
+          # crates.io API requires a User-Agent header; default curl UA
+          # gets rejected silently and the curl exits non-zero, which
+          # made the previous false-negative path fall through to a
+          # cargo publish that errored on "already exists".
+          if curl -sfL \
+              -H "User-Agent: readcon-core-release-check (lode-org)" \
+              "https://crates.io/api/v1/crates/readcon-core/${version}" \
               -o /dev/null; then
               echo "already_published=true" >> "$GITHUB_OUTPUT"
               echo "readcon-core ${version} is already published; skipping."
