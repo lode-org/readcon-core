@@ -218,10 +218,17 @@ unknown section names with an error. Every declared section MUST be
 present, complete, and parseable at its declared position. An empty
 =sections= array declares that no additional per-atom sections follow.
 
-| Section name | Label pattern                   | Columns | Data                        |
-|--------------+---------------------------------+---------+-----------------------------|
-| =velocities= | =Velocities of Component /i/=  |       5 | vx vy vz fixed_flag atom_id |
-| =forces=     | =Forces of Component /i/=      |       5 | fx fy fz fixed_flag atom_id |
+| Section name | Label pattern                    | Columns | Data                        |
+|--------------+----------------------------------+---------+-----------------------------|
+| =velocities= | =Velocities of Component /i/=    |       5 | vx vy vz fixed_flag atom_id |
+| =forces=     | =Forces of Component /i/=        |       5 | fx fy fz fixed_flag atom_id |
+| =energies=   | =Energies of Component /i/=      |       3 | energy fixed_flag atom_id   |
+
+The =energies= section carries one scalar per atom, useful for ML
+potentials that decompose total energy into local contributions. The
+per-frame total still lives in =FrameHeader.metadata= under the
+=energy= key; the section, when present, is the per-atom decomposition
+of that total.
 
 The =fixed_flag= and =atom_id= columns in additional sections repeat
 the coordinate block identity data for the same atom ordering. Writers
