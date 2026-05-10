@@ -111,6 +111,14 @@ fn large_file_bench(c: &mut Criterion) {
         })
     });
 
+    #[cfg(feature = "parallel")]
+    group.bench_function("100_frames_parallel_parse", |b| {
+        b.iter(|| {
+            let frames = readcon_core::iterators::parse_frames_parallel(&large);
+            let _ = black_box(frames);
+        })
+    });
+
     group.finish();
 }
 
