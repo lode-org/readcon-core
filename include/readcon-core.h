@@ -229,6 +229,26 @@ uint32_t rkr_con_spec_version(void);
 const char *rkr_library_version(void);
 
 /**
+ * Returns the atomic number for a chemical symbol, or 0 if the symbol
+ * is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
+ * is case-sensitive: "Fe" works, "fe" does not.
+ *
+ * # Safety
+ *
+ * `symbol` must be either NULL or a pointer to a NUL-terminated UTF-8
+ * C string valid for reads up to the terminating NUL byte.
+ */
+uint64_t rkr_symbol_to_z(const char *symbol);
+
+/**
+ * Returns a pointer to a static, NUL-terminated chemical symbol for an
+ * atomic number, or "X" for unknown values. Coverage is H..U
+ * (Z = 1..=92). The returned pointer is valid for the lifetime of the
+ * process; do NOT free it.
+ */
+const char *rkr_z_to_symbol(uint64_t z);
+
+/**
  * Returns the spec version stored in a parsed frame's header.
  * Returns 0 on error (null handle).
  */
