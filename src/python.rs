@@ -363,6 +363,57 @@ impl PyConFrame {
         self.atoms.bind(py).len()
     }
 
+    // --- Spatial sort + atom_id index ---
+
+    /// Sorts atoms within each type group by 3D Morton (Z-order) curve
+    /// position. Atom-type grouping (and therefore the index ranges of
+    /// each species) is preserved; only the order within each type
+    /// changes.
+    ///
+    /// In-place. Returns None.
+    fn morton_sort(&mut self, py: Python<'_>) -> PyResult<()> {
+        let mut frame = self.to_con_frame(py)?;
+        frame.morton_sort_in_place();
+        // Rebuild the live PyList from the sorted ConFrame, expanding
+        // masses_per_type back to per-atom values for PyAtomDatum.
+        let mut py_atoms: Vec<PyAtomDatum> = Vec::with_capacity(frame.atom_data.len());
+        let mut atom_idx = 0;
+        for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
+            let mass = frame.header.masses_per_type[type_idx];
+            for _ in 0..count {
+                py_atoms.push(PyAtomDatum::from_atom_with_mass(
+                    &frame.atom_data[atom_idx],
+                    mass,
+                ));
+                atom_idx += 1;
+            }
+        }
+        self.atoms = py_atoms_to_list(py, py_atoms)?;
+        Ok(())
+    }
+
+    /// Returns the position of an atom in the frame's atom list whose
+    /// `atom_id` equals the given id, or None if no such atom exists.
+    ///
+    /// O(N) per call. For repeated lookups, build a dict once with
+    /// `build_atom_id_index()` and look up there.
+    fn atom_index_by_id(&self, py: Python<'_>, atom_id: u64) -> PyResult<Option<usize>> {
+        Ok(self
+            .py_atoms(py)?
+            .iter()
+            .position(|a| a.atom_id == atom_id))
+    }
+
+    /// Builds a fresh `dict[int, int]` mapping `atom_id -> position`
+    /// for every atom in the frame.
+    fn build_atom_id_index<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (i, atom) in self.py_atoms(py)?.iter().enumerate() {
+            dict.set_item(atom.atom_id, i)?;
+        }
+        Ok(dict)
+    }
+
     // --- Typed metadata accessors ---
 
     /// Per-frame total energy (from JSON metadata), or None.
