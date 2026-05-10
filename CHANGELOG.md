@@ -1,9 +1,76 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## v0.8.0 - 2026-04-20
+## Unreleased (f43728d..9d9fabf)
+#### Buildsystem
+- (**capi**) trim cargo-c metadata to defaults, fold drift check into script - (71c1380) - *HaoZeke*
+- (**capi**) ship pre-generated header, drop cbindgen build dep - (c4379bd) - *HaoZeke*
+#### Features
+- (**builder**) validate metadata schema in set_metadata_json - (ed1b470) - *HaoZeke*
+- (**cpp**) mark legacy fields deprecated, document standard, polish iterator - (df5f6b4) - *HaoZeke*
+- (**cpp**) improve C++ wrapper ergonomics - (d81eefd) - *HaoZeke*
+- (**ffi**) preserve builder masks and forces - (c849c90) - *HaoZeke*
+- (**ffi**) use structured RKRStatus enum for error handling - (184c0ba) - *HaoZeke*
+- (**julia**) add metadata and writer support - (7b936d1) - *HaoZeke*
+- (**parser**) enforce strict v2 validation - (f55e4e4) - *HaoZeke*
+- (**parser**) validate section identity on request - (758a30f) - *HaoZeke*
+- (**python**) expose live frame containers - (cb22ebf) - *HaoZeke*
+- (**repo**) add CITATION.cff - (d76985e) - *HaoZeke*
+#### Bug Fixes
+- (**capi**) restore pkg_config filename so install drops readcon-core.pc - (c98224b) - *HaoZeke*
+- (**ffi**) harden status and Julia ABI bindings - (f110726) - *HaoZeke*
+- (**python**) preserve [String; 2] prebox_header for Python ABI - (f11a565) - *HaoZeke*
+- (**python**) convert metadata through native objects - (172a422) - *HaoZeke*
+- (**python**) expose native metadata values - (4232740) - *HaoZeke*
+- (**types**) exclude cached fields from FrameHeader equality - (f7ce57f) - *HaoZeke*
+#### Performance Improvements
+- (**parser**) drop intermediate String for Arc<str> symbol; fold validate extraction - (bde2fce) - *HaoZeke*
+- (**parser**) cache sections_declared flag instead of re-parsing JSON - (cb1e4b9) - *HaoZeke*
+- (**parser**) cache validate flag on FrameHeader - (aa68afa) - *HaoZeke*
+- (**parser**) single-pass metadata extraction in parse_frame_header - (3520198) - *HaoZeke*
+- (**parser**) drop unconditional is_finite from float parsers - (18a28ab) - *HaoZeke*
+- (**parser**) swap sections vec via mem::take instead of clone - (1959da5) - *HaoZeke*
+- (**python**) drop serde_json::Value roundtrip in metadata getters - (fdfe6ed) - *HaoZeke*
+#### Documentation
+- (**analytics**) replace dead Umami snippet with antics tracker - (35007b8) - *HaoZeke*
+- (**analytics**) replace dead Umami snippet with antics tracker - (1bff978) - *HaoZeke*
+- (**bindings**) add parity matrix; document Python and Julia typed metadata setters - (5fefc40) - *HaoZeke*
+- (**bindings**) document ergonomic binding parity - (20620ce) - *HaoZeke*
+- (**bindings**) refresh FFI and metadata references - (d94412d) - *HaoZeke*
+- (**ffi**) document ownership, sentinels, threading, error signaling - (33d0a81) - *HaoZeke*
+- (**ffi**) add safety sections and optimize symbol storage with Arc<str> - (db2a680) - *HaoZeke*
+- (**readme**) expand to Diataxis structure - (86c4ca2) - *HaoZeke*
+- (**readme**) remove quick-start trailing whitespace - (63a9a6e) - *HaoZeke*
+- (**spec**) enumerate validation rules with ParseError variants - (cfabf9c) - *HaoZeke*
+- (**types**) document each meta:: constant with JSON type and semantics - (52ff5ca) - *HaoZeke*
+#### Tests
+- (**lint**) satisfy strict clippy checks - (08acf7f) - *HaoZeke*
+#### Refactoring
+- (**builder**) unify ConFrameBuilder on &mut self -> &mut Self - (1df0561) - *HaoZeke*
+- (**builder,ffi**) collapse add_atom fan-out - (afffbc5) - *HaoZeke*
+- (**core**) drive-by ergonomic cleanups - (1082d72) - *HaoZeke*
+- (**core**) replace Rc with Arc for thread-safety and fix clippy warnings - (f43728d) - *HaoZeke*
+- (**python**) use [String; 2] for prebox/postbox header in PyConFrame - (0f73aca) - *HaoZeke*
+- (**types**) wrap managed JSON line in PreboxHeader struct - (d04620b) - *HaoZeke*
+- (**types**) collapse per-axis Option<f64> velocity/force fields - (3893985) - *HaoZeke*
+- (**types**) centralize JSON metadata key constants - (ece4d94) - *HaoZeke*
+- (**types**) derive PartialEq for AtomDatum and ConFrame - (c4f429b) - *HaoZeke*
+#### Miscellaneous Chores
+- (**julia**) ignore local test manifest - (321cd28) - *HaoZeke*
+#### Style
+- (**lints**) scope clippy allows from crate-level to call sites - (334aaec) - *HaoZeke*
+- (**parser**) satisfy strict validation lints - (36dbb89) - *HaoZeke*
+- apply rustfmt - (76e4aa8) - *HaoZeke*
+
+- - -
+
+## v0.8.0 - 2026-05-10
 #### Buildsystem
 - (**capi**) add cargo-c metadata and compatibility feature - (f776281) - *HaoZeke*
+#### Maintenance
+- bump to v0.8.0 - (f5b14a8) - *HaoZeke*
+#### Generated
+- regenerate CHANGELOG.md from cog - (4520b3e) - *HaoZeke*
 #### Features
 - (**ffi**) add builder metadata setters and JSON escape hatch - (75a756e) - *HaoZeke*
 - (**python**) add metadata helper parity across bindings - (3d6ca04) - *HaoZeke*
@@ -12,32 +79,42 @@ All notable changes to this project will be documented in this file. See [conven
 #### Documentation
 - (**readme**) regenerate from readme_src.org - (ec03eb9) - *HaoZeke*
 
+- - -
 
+## v0.7.3 - 2026-05-10
+#### Generated
+- regenerate CHANGELOG.md from cog - (0cc3353) - *HaoZeke*
+#### Miscellaneous Chores
+- bump to v0.7.3 - (180a49d) - *HaoZeke*
 
 - - -
 
-## v0.7.2 - 2026-03-27
+## v0.7.2 - 2026-05-10
 #### Features
 - pbc + lattice_vectors metadata, changelog catch-up, v0.7.2 - (e2df964) - *HaoZeke*
 - pbc and lattice_vectors metadata keys, bump to v0.7.1 - (c370728) - *HaoZeke*
+
+- - -
+
+## v0.7.1 - 2026-05-10
 #### Bug Fixes
 - use path.string().c_str() for Windows wchar_t compatibility - (ce8f6ba) - *HaoZeke*
 
 - - -
 
-## v0.7.0 - 2026-03-27
+## v0.7.0 - 2026-05-10
 #### Maintenance
 - rebuild .gitignore with gibo (Rust, C++, C, Python, CMake, macOS, Linux) - (e4458cb) - *HaoZeke*
-#### Documentation
-- rewrite spec.org as implementation-neutral format standard - (75f55b6) - *HaoZeke*
-- evolution rationale, reference impls, benchmark script, spec bitmask table - (06c26d2) - *HaoZeke*
-- spec update for forces/sections/compression, FAQ, benchmarks - (73e4edd) - *HaoZeke*
-- add recommended metadata keys to CON spec - (389d16f) - *HaoZeke*
 #### Benchmarks
 - publication-quality plots, feature matrix, Pareto front - (a44e269) - *HaoZeke*
 - scaling benchmarks with memory usage across file sizes - (851076a) - *HaoZeke*
 - add C sscanf reader, real 4-way comparison - (861191e) - *HaoZeke*
 - real cross-implementation numbers (readcon 8-9x faster than ASE) - (3e40cdd) - *HaoZeke*
+#### Documentation
+- rewrite spec.org as implementation-neutral format standard - (75f55b6) - *HaoZeke*
+- evolution rationale, reference impls, benchmark script, spec bitmask table - (06c26d2) - *HaoZeke*
+- spec update for forces/sections/compression, FAQ, benchmarks - (73e4edd) - *HaoZeke*
+- add recommended metadata keys to CON spec - (389d16f) - *HaoZeke*
 #### Features
 - per-direction constraint bitmask (column 4) - (c67a499) - *HaoZeke*
 - test fixtures, integration tests, version bump to v0.7.0 - (e018c08) - *HaoZeke*
@@ -64,13 +141,13 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.6.0 - 2026-03-27
+## v0.6.0 - 2026-05-10
 #### Features
 - JSON metadata line on line 2 of CON header (spec v2) - (ac94cd1) - *HaoZeke*
 
 - - -
 
-## v0.5.2 - 2026-03-27
+## v0.5.2 - 2026-05-10
 #### Features
 - transfer velocities and masses in ASE conversion - (633adfa) - *HaoZeke*
 #### Miscellaneous Chores
@@ -78,7 +155,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.5.1 - 2026-03-27
+## v0.5.1 - 2026-05-10
 #### Features
 - transfer atom_id to/from ASE Atoms via tags and custom array - (75fc1ef) - *HaoZeke*
 #### Bug Fixes
@@ -86,7 +163,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.5.0 - 2026-03-27
+## v0.5.0 - 2026-05-10
 #### Features
 - (**spec**) clarify column 5 as original atom index, make optional - (b9df215) - *HaoZeke*
 - expose spec version as compile-time and runtime constants - (be99967) - *HaoZeke*
@@ -100,7 +177,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.4.4 - 2026-03-27
+## v0.4.4 - 2026-05-10
 #### Documentation
 - add v0.4.0-v0.4.3 changelog, update tutorials and bindings - (3eed202) - *HaoZeke*
 #### Features
@@ -114,7 +191,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.4.3 - 2026-03-27
+## v0.4.3 - 2026-05-10
 #### Bug Fixes
 - (**ci**) set PYO3_PYTHON for coverage with --all-features - (7ebbd3c) - *HaoZeke*
 #### Performance Improvements
@@ -124,7 +201,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.4.2 - 2026-03-27
+## v0.4.2 - 2026-05-10
 #### Tests
 - add coverage for precision, constructors, mass roundtrip - (ebc3873) - *HaoZeke*
 #### Features
@@ -134,7 +211,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.4.1 - 2026-03-27
+## v0.4.1 - 2026-05-10
 #### Bug Fixes
 - (**docs**) toctree rendering, add sphinxcontrib-rust for Rust API docs - (1f5aa2b) - *HaoZeke*
 #### Continuous Integration
@@ -144,7 +221,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.4.0 - 2026-03-27
+## v0.4.0 - 2026-05-10
 #### Buildsystem
 - modernize CI workflows - (5b93a7f) - *HaoZeke*
 #### Features
@@ -162,7 +239,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.3.2 - 2026-03-27
+## v0.3.2 - 2026-05-10
 #### Buildsystem
 - add benchmark regression CI, fix wheel builds, update README - (317258f) - *HaoZeke*
 #### Miscellaneous Chores
@@ -170,23 +247,23 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.3.1 - 2026-03-27
+## v0.3.1 - 2026-05-10
 #### Miscellaneous Chores
 - (**version**) v0.3.1 - (46d9b38) - *HaoZeke*
 
 - - -
 
-## v0.3.0 - 2026-03-27
-#### Enhancements
-- update C/C++ examples with velocity field access - (d37ac52) - *HaoZeke*
-- integrate fast-float2, memmap2 reader, and parallel parsing - (13dc682) - *HaoZeke*
+## v0.3.0 - 2026-05-10
+#### Buildsystem
+- add CMakeLists.txt and update meson.build for subproject use - (01738af) - *HaoZeke*
 #### Documentation
 - add developer workflow, release guidelines, contributing guide - (7792fe3) - *HaoZeke*
 - update README source with convel, bindings, and performance features - (eda3109) - *HaoZeke*
 - add tutorials page with examples for all languages - (931823a) - *HaoZeke*
 - add Sphinx docs site with org-mode source and con/convel spec - (e6c8c23) - *HaoZeke*
-#### Buildsystem
-- add CMakeLists.txt and update meson.build for subproject use - (01738af) - *HaoZeke*
+#### Enhancements
+- update C/C++ examples with velocity field access - (d37ac52) - *HaoZeke*
+- integrate fast-float2, memmap2 reader, and parallel parsing - (13dc682) - *HaoZeke*
 #### Features
 - add Rust standalone usage example - (f4d2838) - *HaoZeke*
 - add Julia ccall bindings package - (07e0288) - *HaoZeke*
@@ -203,7 +280,9 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.2.0 - 2026-03-27
+## v0.2.0 - 2026-05-10
+#### Documentation
+- Discuss the design.. - (9229f0d) - *HaoZeke*
 #### Enhancements
 - Single pass for the writer - (ae39401) - *HaoZeke*
 - More ergonomic without constants for C++ - (7d78227) - *HaoZeke*
@@ -216,8 +295,6 @@ All notable changes to this project will be documented in this file. See [conven
 - Update the C API sample - (5854ccc) - *HaoZeke*
 - Rework CLI to test things a bit - (a1177b6) - *HaoZeke*
 - Add a basic writer - (9b825f8) - *HaoZeke*
-#### Tests
-- Add some for writers - (0a59fcd) - *HaoZeke*
 #### Generated
 - Update generated readme - (0277e8b) - *HaoZeke*
 - Update with a void pointer - (f415740) - *HaoZeke*
@@ -240,8 +317,8 @@ All notable changes to this project will be documented in this file. See [conven
 - Update gitig - (64e9a79) - *HaoZeke*
 - Add an inverse helper for writes - (6170681) - *HaoZeke*
 - Minor documentation update - (b89931a) - *HaoZeke*
-#### Documentation
-- Discuss the design.. - (9229f0d) - *HaoZeke*
+#### Tests
+- Add some for writers - (0a59fcd) - *HaoZeke*
 #### Continuous Integration
 - Try to run benchmarks more - (049c077) - *HaoZeke*
 #### Miscellaneous Chores
@@ -249,9 +326,23 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.1.1 - 2026-03-27
+## v0.1.1 - 2026-05-10
+#### Bugfixes
+- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
+#### Tests
+- Add a test for the forward iterator - (0917875) - *HaoZeke*
+#### Buildsystem
+- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
 #### Benchmarks
 - Add iterator validation - (9c49c86) - *HaoZeke*
+#### Generated
+- Update for criterion - (f1fcfa2) - *HaoZeke*
+#### Enhancements
+- Demonstrate more of the C++ usage - (f9f838c) - *HaoZeke*
+- Setup the iterator usage in the C example - (596f65a) - *HaoZeke*
+- Add a more elegant iterator interface to C++ - (706f14b) - *HaoZeke*
+- Expose iterators through C interface - (aad794a) - *HaoZeke*
+- Implement a basic forward skipper - (6e2c8a4) - *HaoZeke*
 #### Maintenance
 - Fix category tags - (19b7499) - *HaoZeke*
 - Bump version - (09ae400) - *HaoZeke*
@@ -261,20 +352,6 @@ All notable changes to this project will be documented in this file. See [conven
 - Rework to better explain behavior - (d65634a) - *HaoZeke*
 - Try to use cargo-dist for generating things - (2ff5ce6) - *HaoZeke*
 - Fix license and keywords - (aa016b2) - *HaoZeke*
-#### Generated
-- Update for criterion - (f1fcfa2) - *HaoZeke*
-#### Enhancements
-- Demonstrate more of the C++ usage - (f9f838c) - *HaoZeke*
-- Setup the iterator usage in the C example - (596f65a) - *HaoZeke*
-- Add a more elegant iterator interface to C++ - (706f14b) - *HaoZeke*
-- Expose iterators through C interface - (aad794a) - *HaoZeke*
-- Implement a basic forward skipper - (6e2c8a4) - *HaoZeke*
-#### Tests
-- Add a test for the forward iterator - (0917875) - *HaoZeke*
-#### Buildsystem
-- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
-#### Bugfixes
-- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
 #### Continuous Integration
 - Only run benchmarks on request - (222d727) - *HaoZeke*
 - Kill useless release thing - (96aa79a) - *HaoZeke*
@@ -285,7 +362,19 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## v0.1.0 - 2026-03-27
+## v0.1.0 - 2026-05-10
+#### Generated
+- Update readme - (6524e55) - *HaoZeke*
+- Vendor a copy of the generated header - (127dd98) - *HaoZeke*
+#### Documentation
+- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
+- Minor updates - (f46b178) - *HaoZeke*
+- Minor updates - (bcd4df7) - *HaoZeke*
+- Add some more - (6529b22) - *HaoZeke*
+- Add a bunch - (0ba1212) - *HaoZeke*
+- Minor note - (1ecc856) - *HaoZeke*
+- Minor update - (489e9df) - *HaoZeke*
+- Update readme from readCon - (7751124) - *HaoZeke*
 #### Maintenance
 - Use a tag prefix - (f1f68af) - *HaoZeke*
 - Minor renaming - (a871512) - *HaoZeke*
@@ -312,19 +401,6 @@ All notable changes to this project will be documented in this file. See [conven
 - Add a test helper - (c896963) - *HaoZeke*
 - Start with a project configuration - (5730540) - *HaoZeke*
 - Initialize with cargo new - (059e4eb) - *HaoZeke*
-#### Documentation
-- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
-- Minor updates - (f46b178) - *HaoZeke*
-- Minor updates - (bcd4df7) - *HaoZeke*
-- Add some more - (6529b22) - *HaoZeke*
-- Add a bunch - (0ba1212) - *HaoZeke*
-- Minor note - (1ecc856) - *HaoZeke*
-- Minor update - (489e9df) - *HaoZeke*
-- Update readme from readCon - (7751124) - *HaoZeke*
-#### Buildsystem
-- Remove unstable rust module for stable - (bb7a200) - *HaoZeke*
-- Let meson run cargo tests too - (99d4362) - *HaoZeke*
-- Finalize first pass for readcon core - (ddff2bc) - *HaoZeke*
 #### Data
 - Import test data from readCon - (c5cf85e) - *HaoZeke*
 #### Enhancements
@@ -339,14 +415,15 @@ All notable changes to this project will be documented in this file. See [conven
 - Start with error types and a parser - (817e8a8) - *HaoZeke*
 - Setup some nicer error handling - (f054edd) - *HaoZeke*
 - Use cog - (7d09a68) - *HaoZeke*
-#### Generated
-- Update readme - (6524e55) - *HaoZeke*
-- Vendor a copy of the generated header - (127dd98) - *HaoZeke*
 #### Tests
 - Update for multi con reads - (6590e83) - *HaoZeke*
 - Add more unit tests - (7cd595d) - *HaoZeke*
 - Add a more interesting test - (b4c0049) - *HaoZeke*
 - Start with a simple test - (fbd71c7) - *HaoZeke*
+#### Buildsystem
+- Remove unstable rust module for stable - (bb7a200) - *HaoZeke*
+- Let meson run cargo tests too - (99d4362) - *HaoZeke*
+- Finalize first pass for readcon core - (ddff2bc) - *HaoZeke*
 #### Continuous Integration
 - Check commits too - (0f636f1) - *HaoZeke*
 - Setup a basic build and run workflow - (ff9be41) - *HaoZeke*

@@ -1,21 +1,21 @@
 
 # Table of Contents
 
-1.  [About](#orgbcd2647)
-    1.  [Features](#org93a0855)
-    2.  [Install](#org29a00d1)
-    3.  [Tutorial](#orga829836)
-    4.  [Design Decisions](#orgb609e8b)
-        1.  [FFI Layer](#orgc2bb27b)
-    5.  [Specification](#org22d1d1c)
-        1.  [CON format](#orgd5cfb7b)
-        2.  [convel format](#org1f19b36)
-    6.  [Why use this over readCon?](#org205efed)
-    7.  [Citation](#orgee361c6)
-2.  [License](#org51219f7)
+1.  [About](#org41f9059)
+    1.  [Features](#org77dafee)
+    2.  [Install](#org38c3b50)
+    3.  [Tutorial](#org80adc79)
+    4.  [Design Decisions](#org25f748a)
+        1.  [FFI Layer](#orgc250e4d)
+    5.  [Specification](#org5237637)
+        1.  [CON format](#orgb7656d8)
+        2.  [convel format](#org6ed99ea)
+    6.  [Why use this over readCon?](#org5c1e956)
+    7.  [Citation](#org82b7f9f)
+2.  [License](#org766e5aa)
 
 
-<a id="orgbcd2647"></a>
+<a id="org41f9059"></a>
 
 # About
 
@@ -25,7 +25,7 @@ Reads and writes both `.con` (coordinate-only) and `.convel` (coordinates
 plus velocities) simulation configuration files used by [eOn](https://theory.cm.utexas.edu/eon/).
 
 
-<a id="org93a0855"></a>
+<a id="org77dafee"></a>
 
 ## Features
 
@@ -40,7 +40,7 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 -   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
 
 
-<a id="org29a00d1"></a>
+<a id="org38c3b50"></a>
 
 ## Install
 
@@ -89,7 +89,7 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orga829836"></a>
+<a id="org80adc79"></a>
 
 ## Tutorial
 
@@ -140,7 +140,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="orgb609e8b"></a>
+<a id="org25f748a"></a>
 
 ## Design Decisions
 
@@ -151,7 +151,7 @@ The library is designed with the following principles in mind:
 -   **Interoperability:** The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a `C` header is auto-generated along with a hand-crafted `C++` interface, following the hourglass design from [Metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="orgc2bb27b"></a>
+<a id="orgc250e4d"></a>
 
 ### FFI Layer
 
@@ -179,14 +179,14 @@ forward-compatibility of opaque handles for general use, and the performance of
 direct data access for the most common computational tasks.
 
 
-<a id="org22d1d1c"></a>
+<a id="org5237637"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orgd5cfb7b"></a>
+<a id="orgb7656d8"></a>
 
 ### CON format
 
@@ -197,7 +197,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org1f19b36"></a>
+<a id="org6ed99ea"></a>
 
 ### convel format
 
@@ -207,21 +207,21 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org205efed"></a>
+<a id="org5c1e956"></a>
 
 ## Why use this over [readCon](https://github.com/HaoZeke/readCon)?
 
 Speed, correctness, and multi-language bindings.
 
 
-<a id="orgee361c6"></a>
+<a id="org82b7f9f"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org51219f7"></a>
+<a id="org766e5aa"></a>
 
 # License
 
