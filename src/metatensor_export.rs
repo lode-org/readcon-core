@@ -149,3 +149,55 @@ impl ConFrame {
         frame_positions_block(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ConFrameBuilder;
+
+    fn small_frame() -> crate::types::ConFrame {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .add_atom("Cu", 0.1, 0.2, 0.3, [false, false, false], 0, 63.546)
+            .with_velocity([1.0, 0.0, 0.0])
+            .with_force([0.5, 0.0, 0.0])
+            .with_energy(-0.42);
+        builder
+            .add_atom("H", 1.1, 1.2, 1.3, [false, false, false], 1, 1.008)
+            .with_velocity([0.0, 1.0, 0.0])
+            .with_force([0.0, 0.5, 0.0])
+            .with_energy(0.13);
+        builder.build()
+    }
+
+    #[test]
+    fn positions_block_has_expected_shape_and_samples() {
+        let frame = small_frame();
+        let block = frame.to_metatensor_positions_block().unwrap();
+        let values = block.values();
+        let shape = values.as_array().shape().to_vec();
+        assert_eq!(shape, vec![2, 3]);
+        let samples = block.samples();
+        assert_eq!(samples.size(), 2);
+        let properties = block.properties();
+        assert_eq!(properties.size(), 3);
+    }
+
+    #[test]
+    fn velocities_forces_energies_present_when_data_present() {
+        let frame = small_frame();
+        assert!(frame_velocities_block(&frame).unwrap().is_some());
+        assert!(frame_forces_block(&frame).unwrap().is_some());
+        assert!(frame_energies_block(&frame).unwrap().is_some());
+    }
+
+    #[test]
+    fn velocities_block_is_none_when_data_absent() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.1, 0.2, 0.3, [false, false, false], 0, 63.546);
+        let frame = builder.build();
+        assert!(frame_velocities_block(&frame).unwrap().is_none());
+        assert!(frame_forces_block(&frame).unwrap().is_none());
+        assert!(frame_energies_block(&frame).unwrap().is_none());
+    }
+}
