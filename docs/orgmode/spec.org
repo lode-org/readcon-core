@@ -583,3 +583,60 @@ Coordinates of Component 1
 
 A conforming v2 reader processes this without error, assigning
 =spec_version = 1= because line 2 does not start with ={=.
+
+* Builder mutation surface (informative)
+:PROPERTIES:
+:CUSTOM_ID: builder-mutation
+:END:
+
+This section is informative; it describes the /reference
+implementation's/ in-memory authoring API rather than the on-disk
+format itself, but is recorded here so that conforming bindings can
+expose the same surface.
+
+The reference Rust =ConFrameBuilder= exposes per-atom and bulk
+in-place mutation in addition to the append-only =add_atom= /
+=with_*= flow. These are intended for hot-loop consumers (MD
+integrators, saddle-search drivers, NEB image updaters) that hold a
+single builder across many simulation steps and serialise to disk
+only at I/O boundaries:
+
+- Per-atom mutators MUST validate the index against the current atom
+  count and SHOULD return a typed /index out of bounds/ error
+  (=ParseError::IndexOutOfBounds= in the Rust core; mapped to
+  =RKR_STATUS_INDEX_OUT_OF_BOUNDS= in the C ABI; raised as
+  =IndexError= in PyO3 / equivalent in Julia).
+- Bulk mutators take a flat row-major buffer
+  (=[x0, y0, z0, x1, y1, z1, ...]= for positions / forces;
+  =[e0, e1, ..., e(N-1)]= for energies). They MUST validate the
+  buffer length against the expected size (3 N for vector buffers,
+  N for energies) and SHOULD reuse the existing length-mismatch
+  error path (=ParseError::InvalidVectorLength=).
+- Setting force / velocity / energy on any atom MUST cause the next
+  =build()= to declare the corresponding section
+  (="forces"= / ="velocities"= / ="energies"=). Implementations
+  MUST NOT short-circuit on inspecting only atom 0; the section flag
+  is set when /any/ atom carries the field.
+- =clear_atom_velocity= / =_force= / =_energy= MUST remove the
+  field from the named atom only. If every atom subsequently lacks
+  the field, the next =build()= MUST NOT declare the section.
+- =set_atom_mass= updates the per-type =masses_per_type= entry on
+  =build()=. The .con format binds one mass per element type, so
+  if multiple atoms of the same symbol carry different masses, the
+  last value wins. Bindings SHOULD document this; future spec
+  versions MAY tighten it.
+
+The reference implementation surface (Rust + C ABI + C++ + Python +
+Julia) is enumerated in =CHANGELOG.md= under v0.11.0. Bindings
+for other languages SHOULD follow the same naming pattern
+(=set_atom_position= / =set_atom_velocity= / ...) for
+discoverability.
+
+Rationale (non-normative): the append-only authoring path forced
+every step of a long simulation to allocate a fresh builder, push
+N atoms, and discard. Reusing one builder across the simulation
+loop and serialising only at trajectory boundaries reduces
+allocation pressure to the /output/ cadence rather than the
+/integration/ cadence. The mutation API is purely additive; the
+existing =add_atom= + =with_*= flow continues to work and remains
+the recommended path for one-shot frame authoring.
