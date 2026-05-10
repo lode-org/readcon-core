@@ -2482,11 +2482,96 @@ mod tests {
             ),
             (RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL, "buffer too small"),
             (RKRStatus::RKR_STATUS_INTERNAL_ERROR, "internal error"),
+            (RKRStatus::RKR_STATUS_SECTION_ABSENT, "section absent"),
+            (RKRStatus::RKR_STATUS_VALIDATION_ERROR, "validation error"),
         ];
 
         for (status, expected) in cases {
             let message = unsafe { CStr::from_ptr(rkr_status_message(status)) };
             assert_eq!(message.to_str().unwrap(), expected);
         }
+    }
+
+    // ----- DLPack FFI smoke tests ----------------------------------------------
+
+    #[test]
+    fn ffi_positions_dlpack_round_trip() {
+        let handle = test_builder_handle();
+        let sym = c_string("Cu");
+        unsafe {
+            rkr_frame_add_atom_full(
+                handle,
+                sym.as_ptr(),
+                1.0,
+                2.0,
+                3.0,
+                false,
+                false,
+                false,
+                7,
+                63.5,
+                ptr::null(),
+                ptr::null(),
+            )
+        };
+
+        let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
+        let status = unsafe { rkr_frame_builder_positions_dlpack(handle, &mut t) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(!t.is_null());
+
+        // Inspect the DLPack tensor: shape (1, 3), dtype kDLFloat / 64, CPU.
+        let dl = unsafe { &(*t).dl_tensor };
+        assert_eq!(dl.ndim, 2);
+        let shape = unsafe { std::slice::from_raw_parts(dl.shape, 2) };
+        assert_eq!(shape, &[1, 3]);
+        assert_eq!(dl.dtype.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dl.dtype.bits, 64);
+        assert_eq!(dl.dtype.lanes, 1);
+        assert_eq!(dl.device, dlpk::sys::DLDevice::cpu());
+        let data = unsafe { std::slice::from_raw_parts(dl.data as *const f64, 3) };
+        assert_eq!(data, &[1.0, 2.0, 3.0]);
+
+        // Invoke the deleter the same way a C consumer would.
+        let deleter = unsafe { (*t).deleter };
+        if let Some(del) = deleter {
+            unsafe { del(t) };
+        }
+
+        unsafe { free_rkr_frame_builder(handle) };
+    }
+
+    #[test]
+    fn ffi_velocities_dlpack_section_absent() {
+        let handle = test_builder_handle();
+        let sym = c_string("Cu");
+        unsafe {
+            rkr_frame_add_atom_full(
+                handle,
+                sym.as_ptr(),
+                0.0,
+                0.0,
+                0.0,
+                false,
+                false,
+                false,
+                0,
+                63.5,
+                ptr::null(),
+                ptr::null(),
+            )
+        };
+        let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
+        let status = unsafe { rkr_frame_builder_velocities_dlpack(handle, &mut t) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SECTION_ABSENT);
+        assert!(t.is_null());
+        unsafe { free_rkr_frame_builder(handle) };
+    }
+
+    #[test]
+    fn ffi_dlpack_null_handle_rejects() {
+        let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
+        let status = unsafe { rkr_frame_builder_positions_dlpack(ptr::null(), &mut t) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
     }
 }
