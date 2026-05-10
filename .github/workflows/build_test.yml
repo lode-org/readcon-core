@@ -37,6 +37,12 @@ jobs:
           sudo snap install valgrind --classic
           sudo apt-get update && sudo apt-get install -y libc6-dbg --fix-missing
 
+      - name: Verify shipped C header matches cbindgen output
+        run: |
+          tmp=$(mktemp)
+          cbindgen --config cbindgen.toml --crate readcon-core --output "$tmp"
+          diff -u include/readcon-core.h "$tmp"
+
       - name: Run Rust tests
         run: cargo test
 
