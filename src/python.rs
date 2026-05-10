@@ -42,12 +42,17 @@ pub struct PyAtomDatum {
     pub fy: Option<f64>,
     #[pyo3(get, set)]
     pub fz: Option<f64>,
+    /// Per-atom energy contribution; populated when the file declares an
+    /// `"energies"` section. None for ordinary frames where only the
+    /// per-frame total energy (`metadata['energy']`) is meaningful.
+    #[pyo3(get, set)]
+    pub energy: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
@@ -63,6 +68,7 @@ impl PyAtomDatum {
         fx: Option<f64>,
         fy: Option<f64>,
         fz: Option<f64>,
+        energy: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -78,6 +84,7 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
+            energy,
         }
     }
 
@@ -95,6 +102,11 @@ impl PyAtomDatum {
     #[getter]
     fn has_forces(&self) -> bool {
         self.fx.is_some() && self.fy.is_some() && self.fz.is_some()
+    }
+
+    #[getter]
+    fn has_energy(&self) -> bool {
+        self.energy.is_some()
     }
 
     fn __repr__(&self) -> String {
@@ -129,6 +141,7 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
+            energy: atom.energy,
         }
     }
 }
@@ -602,6 +615,9 @@ impl PyConFrame {
                     py_atom.fz.unwrap_or(0.0),
                 ]);
             }
+            if let Some(energy) = py_atom.energy {
+                builder.with_energy(energy);
+            }
         }
 
         Ok(builder.build())
@@ -1058,6 +1074,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 fx,
                 fy,
                 fz,
+                energy: None,
             }
         })
         .collect();
