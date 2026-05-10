@@ -179,9 +179,9 @@ mod tests {
         let array = array_lock.read().expect("positions array lock");
         assert_eq!(array.shape(), &[2, 3]);
         let samples = block.samples();
-        assert_eq!(samples.size(), 2);
+        assert_eq!(samples.count(), 2); // 2 atoms
         let properties = block.properties();
-        assert_eq!(properties.size(), 3);
+        assert_eq!(properties.count(), 3); // x, y, z columns
     }
 
     #[test]
