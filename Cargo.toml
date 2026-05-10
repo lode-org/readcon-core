@@ -69,7 +69,12 @@ asset = [
     { from = "include/readcon-core.hpp" },
 ]
 
-# The profile that 'dist' will build with
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# The profile that 'dist' / cargo-c builds use for shipping binaries.
 [profile.dist]
 inherits = "release"
-lto = "thin"
+lto = "fat"
+strip = "symbols"
