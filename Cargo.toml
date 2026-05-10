@@ -58,6 +58,7 @@ generation = false
 
 [package.metadata.capi.pkg_config]
 name = "readcon-core"
+filename = "readcon-core"
 description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
 
 [package.metadata.capi.install.include]
