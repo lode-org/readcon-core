@@ -279,7 +279,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "386227244f7a28d62e9ba18049ce4721828dbe637c91d2b86dffd620e544df85"
 dependencies = [
  "half 1.8.3",
- "ndarray 0.17.2",
+ "ndarray",
  "ouroboros",
 ]
 
@@ -622,7 +622,7 @@ dependencies = [
  "dlpk",
  "half 1.8.3",
  "metatensor-sys",
- "ndarray 0.17.2",
+ "ndarray",
  "once_cell",
 ]
 
@@ -656,21 +656,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys",
-]
-
-[[package]]
-name = "ndarray"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
-dependencies = [
- "matrixmultiply",
- "num-complex",
- "num-integer",
- "num-traits",
- "portable-atomic",
- "portable-atomic-util",
- "rawpointer",
 ]
 
 [[package]]
@@ -722,7 +707,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778da78c64ddc928ebf5ad9df5edf0789410ff3bdbf3619aed51cd789a6af1e2"
 dependencies = [
  "libc",
- "ndarray 0.17.2",
+ "ndarray",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -973,7 +958,7 @@ dependencies = [
  "futures",
  "memmap2",
  "metatensor",
- "ndarray 0.16.1",
+ "ndarray",
  "numpy",
  "pyo3",
  "rayon",
