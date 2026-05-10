@@ -11,20 +11,79 @@ plus velocities) simulation configuration files used by [[https://theory.cm.utex
 - *Performance:* Uses [[https://github.com/aldanor/fast-float-rust][fast-float2]] (Eisel-Lemire algorithm) for the f64 parsing hot path and [[https://docs.rs/memmap2][memmap2]] for large trajectory files.
 - *Parallel parsing:* Optional rayon-based parallel frame parsing behind the ~parallel~ feature gate.
 - *Language bindings:* Python (PyO3), Julia (ccall), C (cbindgen FFI), and C++ (RAII header-only wrapper), following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+- *Spec-v2 metadata helpers:* Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, and =neb_band=, while still allowing raw JSON metadata when needed.
+- *Spec-v2 validation:* =validate=true= enforces finite numeric values, reserved metadata schema, physical header geometry, exact component labels, valid symbols, declared section presence, and matching per-atom identity columns.
+- *Force and constraint fidelity:* Writers preserve velocities, forces, original atom ids, and per-axis fixed masks across Rust, Python, Julia, C, and C++.
 - *RPC serving:* Optional Cap'n Proto RPC interface (~rpc~ feature) for network-accessible parsing.
 
-** Quick start
+** Install
+
+| Language | Install command |
+|----------+-----------------|
+| Rust | =cargo add readcon-core= |
+| Python | =pip install readcon= |
+| Julia | =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= |
+| C / C++ system | =cargo cinstall --release --prefix /usr/local= (installs =libreadcon_core.{so,a}=, =readcon-core.h=, =readcon-core.hpp=, and a pkg-config file) |
+| C / C++ via meson subproject | drop the repository under =subprojects/readcon-core/= and link against the =readcon_core_dep= dependency |
+
+The C/C++ headers require a C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=, for =std::optional= and =std::filesystem=) compiler.
+
+** Tutorial
+
+A copy-pasteable walkthrough that parses a multi-frame trajectory, inspects metadata, builds a new frame, and writes it back. Run it as-is.
 
 #+begin_src shell
-# Rust
-cargo run --example rust_usage -- resources/test/tiny_cuh2.con
+cargo run --example rust_usage -- resources/test/tiny_multi_cuh2.con
+#+end_src
 
-# Python
-pip install readcon
-python -c "import readcon; print(readcon.read_con('file.con'))"
+The example above iterates lazily over every frame, prints atom counts plus the per-frame energy if present, and exits. Equivalent flows in the other bindings:
 
-# C/C++ (via meson subproject or cmake)
-meson setup builddir -Dwith_examples=True && meson test -C builddir
+#+begin_src python :exports code
+import readcon
+
+# Read every frame; the iterator yields PyConFrame objects
+for frame in readcon.iter_frames("resources/test/tiny_multi_cuh2.con"):
+    print(frame.natms_per_type, frame.energy())  # energy() is None when absent
+
+# Build and write a new frame
+b = readcon.ConFrameBuilder(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0])
+b.set_energy(-42.5).add_atom("Cu", 0.0, 0.0, 0.0, 1, 63.546)
+b.write("out.con")
+#+end_src
+
+#+begin_src julia :exports code
+using ReadCon
+for frame in iter_frames("resources/test/tiny_multi_cuh2.con")
+    println(frame.natms_per_type, " ", energy(frame))
+end
+#+end_src
+
+#+begin_src cpp :exports code
+#include <readcon-core.hpp>
+#include <iostream>
+
+int main() {
+    readcon::ConFrameIterator it("resources/test/tiny_multi_cuh2.con");
+    for (const auto &frame : it) {
+        std::cout << frame.atoms().size() << " atoms";
+        if (auto e = frame.energy_opt()) std::cout << " E=" << *e;
+        std::cout << "\n";
+    }
+}
+#+end_src
+
+#+begin_src c :exports code
+#include <readcon-core.h>
+#include <stdio.h>
+
+int main(void) {
+    uintptr_t n = 0;
+    RKRConFrame **frames = rkr_read_all_frames("resources/test/tiny_multi_cuh2.con", &n);
+    for (uintptr_t i = 0; i < n; ++i) {
+        printf("frame %zu energy=%f\n", i, rkr_frame_energy(frames[i]));
+    }
+    free_rkr_frame_array(frames, n);
+}
 #+end_src
 
 ** Design Decisions
@@ -40,7 +99,7 @@ A key challenge in designing an FFI is deciding how data is exposed to the C-com
    frame data is through an opaque pointer, represented as ~RKRConFrame*~ in C.
    The C/C++ client holds this "handle" but cannot inspect its contents
    directly. Instead, it must call Rust functions to interact with the data
-   (e.g., ~rkr_frame_get_header_line(frame_handle, ...~)). This is the safest
+   (e.g., ~rkr_frame_get_header_line(frame_handle, ...)~). This is the safest
    and most flexible pattern, as it completely hides Rust's internal data
    structures and memory layout, preventing ABI breakage if the Rust code is
    updated.
@@ -59,11 +118,13 @@ direct data access for the most common computational tasks.
 
 ** Specification
 
-See the [[https://lode-org.github.io/readcon-core/spec.html][formal specification]] for full details. A summary follows.
+See [[file:docs/orgmode/spec.org][docs/orgmode/spec.org]] (or the [[https://lode-org.github.io/readcon-core/spec.html][published HTML build]]) for the full specification. A summary follows.
 
 *** CON format
 - A 9-line header (comments, cell dimensions, cell angles, atom type/count/mass metadata)
+- Line 2 is reserved for spec-v2 JSON metadata
 - Per-type coordinate blocks (symbol, label, atom lines with x y z fixed atomID)
+- Optional spec-v2 =sections= and =validate= metadata for declared per-atom sections and strict validation
 - Multiple frames are concatenated directly with no separator
 
 *** convel format
@@ -72,5 +133,9 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 - Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 ** Why use this over [[https://github.com/HaoZeke/readCon][readCon]]?
 Speed, correctness, and multi-language bindings.
+
+** Citation
+If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. The Zenodo DOI tracks the latest release.
+
 * License
 MIT.

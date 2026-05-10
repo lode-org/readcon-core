@@ -1,5 +1,5 @@
 use capnp::capability::Promise;
-use capnp_rpc::{pry, RpcSystem, twoparty, rpc_twoparty_capnp};
+use capnp_rpc::{RpcSystem, pry, rpc_twoparty_capnp, twoparty};
 use futures::AsyncReadExt;
 
 use crate::iterators::ConFrameIterator;
@@ -45,8 +45,8 @@ impl read_con_service::Server for ReadConServiceImpl {
 
             // Headers
             let mut prebox = fb.reborrow().init_prebox_header(2);
-            prebox.set(0, &*frame.header.prebox_header[0]);
-            prebox.set(1, &*frame.header.prebox_header[1]);
+            prebox.set(0, frame.header.prebox_header.user.as_str());
+            prebox.set(1, frame.header.prebox_header.metadata_line());
 
             let mut postbox = fb.reborrow().init_postbox_header(2);
             postbox.set(0, &*frame.header.postbox_header[0]);
@@ -59,15 +59,16 @@ impl read_con_service::Server for ReadConServiceImpl {
             let mut atoms_builder = fb.reborrow().init_atoms(frame.atom_data.len() as u32);
             for (k, atom) in frame.atom_data.iter().enumerate() {
                 let mut ab = atoms_builder.reborrow().get(k as u32);
+                let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
                 ab.set_symbol(&*atom.symbol);
                 ab.set_x(atom.x);
                 ab.set_y(atom.y);
                 ab.set_z(atom.z);
                 ab.set_is_fixed(atom.is_fixed());
                 ab.set_atom_id(atom.atom_id);
-                ab.set_vx(atom.vx.unwrap_or(0.0));
-                ab.set_vy(atom.vy.unwrap_or(0.0));
-                ab.set_vz(atom.vz.unwrap_or(0.0));
+                ab.set_vx(vx);
+                ab.set_vy(vy);
+                ab.set_vz(vz);
                 ab.set_has_velocity(atom.has_velocity());
             }
         }
@@ -81,7 +82,7 @@ impl read_con_service::Server for ReadConServiceImpl {
         mut results: read_con_service::WriteFramesResults,
     ) -> Promise<(), capnp::Error> {
         use crate::types::{AtomDatum, ConFrame, FrameHeader};
-        use std::rc::Rc;
+        use std::sync::Arc;
 
         let req = pry!(params.get());
         let frame_data_list = pry!(pry!(req.get_req()).get_frames());
@@ -96,24 +97,30 @@ impl read_con_service::Server for ReadConServiceImpl {
             let postbox_list = pry!(fd.get_postbox_header());
             let atoms_list = pry!(fd.get_atoms());
 
-            let boxl = [
-                cell_list.get(0),
-                cell_list.get(1),
-                cell_list.get(2),
-            ];
-            let angles = [
-                angles_list.get(0),
-                angles_list.get(1),
-                angles_list.get(2),
-            ];
+            let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
+            let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
 
-            let prebox_header = [
-                pry!(prebox_list.get(0)).to_str().unwrap_or_default().to_string(),
-                pry!(prebox_list.get(1)).to_str().unwrap_or_default().to_string(),
-            ];
+            let prebox_user = pry!(prebox_list.get(0))
+                .to_str()
+                .unwrap_or_default()
+                .to_string();
+            let prebox_metadata_line = pry!(prebox_list.get(1))
+                .to_str()
+                .unwrap_or_default()
+                .to_string();
+            let prebox_header = crate::types::PreboxHeader {
+                user: prebox_user,
+                metadata_line: prebox_metadata_line,
+            };
             let postbox_header = [
-                pry!(postbox_list.get(0)).to_str().unwrap_or_default().to_string(),
-                pry!(postbox_list.get(1)).to_str().unwrap_or_default().to_string(),
+                pry!(postbox_list.get(0))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                pry!(postbox_list.get(1))
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string(),
             ];
 
             // Reconstruct atom data
@@ -125,7 +132,10 @@ impl read_con_service::Server for ReadConServiceImpl {
 
             for j in 0..atoms_list.len() {
                 let a = atoms_list.get(j);
-                let sym = pry!(a.get_symbol()).to_str().unwrap_or_default().to_string();
+                let sym = pry!(a.get_symbol())
+                    .to_str()
+                    .unwrap_or_default()
+                    .to_string();
 
                 if sym != current_symbol {
                     if current_count > 0 {
@@ -139,18 +149,22 @@ impl read_con_service::Server for ReadConServiceImpl {
 
                 let has_vel = a.get_has_velocity();
                 atom_data.push(AtomDatum {
-                    symbol: Rc::new(sym),
+                    symbol: Arc::from(sym),
                     x: a.get_x(),
                     y: a.get_y(),
                     z: a.get_z(),
-                    fixed: if a.get_is_fixed() { [true, true, true] } else { [false, false, false] },
+                    fixed: if a.get_is_fixed() {
+                        [true, true, true]
+                    } else {
+                        [false, false, false]
+                    },
                     atom_id: a.get_atom_id(),
-                    vx: if has_vel { Some(a.get_vx()) } else { None },
-                    vy: if has_vel { Some(a.get_vy()) } else { None },
-                    vz: if has_vel { Some(a.get_vz()) } else { None },
-                    fx: None,
-                    fy: None,
-                    fz: None,
+                    velocity: if has_vel {
+                        Some([a.get_vx(), a.get_vy(), a.get_vz()])
+                    } else {
+                        None
+                    },
+                    force: None,
                 });
             }
             if current_count > 0 {
@@ -168,6 +182,8 @@ impl read_con_service::Server for ReadConServiceImpl {
                 spec_version: crate::CON_SPEC_VERSION,
                 metadata: std::collections::BTreeMap::new(),
                 sections: Vec::new(),
+                strict_validation: false,
+                sections_declared: false,
             };
 
             frames.push(ConFrame { header, atom_data });
@@ -181,10 +197,7 @@ impl read_con_service::Server for ReadConServiceImpl {
             }
         }
 
-        results
-            .get()
-            .init_result()
-            .set_file_contents(&buffer);
+        results.get().init_result().set_file_contents(&buffer);
 
         Promise::ok(())
     }

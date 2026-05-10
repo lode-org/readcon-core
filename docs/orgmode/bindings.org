@@ -1,6 +1,29 @@
 #+title: Language bindings
 #+options: toc:2 num:t
 
+* Feature parity matrix
+
+The five surfaces (Rust, Python, Julia, C, C++) cover the same core
+read/write/build functionality. The table below maps coarse features
+to bindings; each binding's section below has runnable examples.
+
+| Feature | Rust | Python | Julia | C | C++ |
+|---------+------+--------+-------+---+-----|
+| Lazy frame iterator | yes | yes | yes | yes | yes |
+| Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~ConFrameIterator::read_all_frames~ (planned) |
+| Parallel iterator | yes (~parallel~ feature) | no | no | no | no |
+| Builder API | ~ConFrameBuilder~ | ~PyConFrameBuilder~ | ~ConFrameBuilder~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~readcon::ConFrameBuilder~ |
+| Writer API | ~ConFrameWriter~ | ~write_frames~ | ~write_frames~ | ~create_writer_from_path_c~ + ~rkr_writer_extend~ | ~readcon::ConFrameWriter~ |
+| Velocity / force sections | yes | yes | yes | yes | yes |
+| Per-axis fixed mask | yes | yes | yes | yes | yes |
+| Typed metadata getters (energy, time, frame_index, neb_*) | yes | yes | yes | yes | yes |
+| Typed metadata setters (set_energy, set_frame_index, ...) | yes | yes | yes | yes | yes |
+| Raw JSON metadata getter | ~FrameHeader::metadata~ | ~PyConFrame.metadata~ | ~metadata~ | ~rkr_frame_metadata_json~ | ~ConFrame::metadata_json~ |
+| Strict validation (~validate=true~) | yes | yes | yes | yes | yes |
+| RPC server | yes (~rpc~ feature) | no | no | no | no |
+| Cap'n Proto serialization | yes (~rpc~ feature) | no | no | no | no |
+| gzip / .gz round-trip | yes | yes | yes | yes | yes |
+
 * Python (PyO3)
 
 ** Installation
@@ -32,6 +55,9 @@ import readcon
 
 # Read frames
 frames = readcon.read_con("path/to/file.con")
+first = readcon.read_first_frame("path/to/file.con")
+for frame in readcon.iter_con("path/to/file.con"):
+    pass
 frames = readcon.read_con_string(contents)
 
 # Access data
@@ -46,10 +72,12 @@ for frame in frames:
 
 # Construct frames (v0.4.0+)
 atom = readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                    is_fixed=False, atom_id=1)
+                    fixed=[False, False, False], atom_id=1)
 frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0],
                          angles=[90.0, 90.0, 90.0],
                          atoms=[atom])
+frame.metadata["generator"] = "my-tool 1.0"
+frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0))
 
 # Write frames (with optional precision)
 readcon.write_con("output.con", frames)
@@ -64,13 +92,58 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 ** Types
 
 - =readcon.Atom= :: Constructable with keyword arguments (v0.4.0+).
-  Properties: symbol, x, y, z, is_fixed, atom_id, mass (v0.4.2+),
-  vx, vy, vz, has_velocity
+  Properties: symbol, x, y, z, fixed, is_fixed, atom_id, mass
+  (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces.
+  Data fields are writable.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-  atoms, has_velocities, prebox_header, postbox_header, spec_version
-  (v0.6.0+), metadata (v0.6.0+, dict of extra JSON keys).
-  Methods: to_ase(), from_ase() (v0.4.0+)
+  atoms (live list), has_velocities, has_forces, prebox_header,
+  postbox_header, spec_version (v0.6.0+), metadata (v0.6.0+, live
+  dict of native JSON-compatible values), energy, frame_index, time,
+  timestep, neb_bead, neb_band.
+  Methods: to_ase(), from_ase() (v0.4.0+), set_metadata_json(),
+  set_scalar_metadata(), set_string_metadata(), set_energy(),
+  set_frame_index(), set_time(), set_timestep(), set_neb_bead(),
+  set_neb_band().
+- =readcon.read_first_frame(path)= :: Parse and return only the first
+  frame.
+- =readcon.iter_con(path)= :: Return a Python iterator over frames.
+  The iterator API avoids indexing into =read_con(path)= for
+  first-frame and loop-based workflows.
+- ASE conversion preserves =atom_id= through an =atom_id= array,
+  velocities through ASE velocities, forces through a
+  =SinglePointCalculator=, and per-axis fixed masks through
+  =FixCartesian= / =FixAtoms= constraints.
+
+** Typed metadata accessors
+
+Every reserved JSON key has a typed setter in addition to the live
+~metadata~ dict. The setters validate the input type up front so
+authoring with bad metadata fails immediately, while the dict path
+remains available for raw escape-hatch use.
+
+#+begin_src python
+import readcon
+
+frame = readcon.read_first_frame("traj.con")
+
+# Read: typed getter returns None when absent
+print(frame.energy)           # Optional[float]
+print(frame.frame_index)      # Optional[int]
+print(frame.neb_bead)         # Optional[int]
+
+# Write: typed setters validate input shape
+frame.set_energy(-42.5)
+frame.set_frame_index(7)
+frame.set_neb_bead(3)
+
+# Object-shaped keys still go through the dict
+frame.metadata["potential"] = {"type": "EMT", "cutoff": 6.0}
+frame.metadata["units"] = {"length": "angstrom", "energy": "eV"}
+
+# Bulk-replace metadata from a JSON string (validated against the schema)
+frame.set_metadata_json('{"con_spec_version": 2, "energy": -1.0}')
+#+end_src
 
 * Julia (ccall)
 
@@ -95,18 +168,56 @@ for frame in frames
     println(frame.cell)
     println(frame.angles)
     println(frame.has_velocities)
+    println(frame.spec_version)
+    println(frame.energy)
     for atom in frame.atoms
         println(atom.x, " ", atom.y, " ", atom.z)
     end
 end
+
+write_con("roundtrip.con", frames)
 #+end_src
 
 ** Types
 
 - =ReadCon.Atom= :: atomic_number, x, y, z, atom_id, mass, is_fixed,
-  vx, vy, vz, has_velocity
+  fixed, vx, vy, vz, has_velocity, fx, fy, fz, has_forces
 - =ReadCon.ConFrame= :: cell, angles, atoms, has_velocities,
-  prebox_header, postbox_header
+  has_forces, prebox_header, postbox_header, spec_version,
+  metadata_json, energy, frame_index, time, timestep, neb_bead,
+  neb_band
+- =ReadCon.write_con(path, frames; precision=6)= :: Writes Julia
+  frames through the C FFI builder/writer path, preserving velocities,
+  forces, per-axis fixed masks, atom ids, masses, and JSON metadata.
+
+** Typed metadata accessors
+
+Mirrors the Rust and Python typed-setter helpers. Reserved keys are
+addressable by named getters and setters; arbitrary keys go through
+~metadata_json~.
+
+#+begin_src julia
+using ReadCon
+
+frames = read_con("traj.con")
+frame = first(frames)
+
+# Read: typed getters return Union{Nothing, T}
+println(frame.energy)        # Union{Nothing, Float64}
+println(frame.frame_index)   # Union{Nothing, UInt64}
+println(frame.time)          # Union{Nothing, Float64}
+
+# Write: typed setters
+ReadCon.set_energy!(frame, -42.5)
+ReadCon.set_frame_index!(frame, 7)
+ReadCon.set_neb_bead!(frame, 3)
+
+# Bulk: replace from a JSON string (validated against the schema)
+ReadCon.set_metadata_json!(
+    frame,
+    "{\"con_spec_version\": 2, \"sections\": [\"velocities\"], \"energy\": -1.0}",
+)
+#+end_src
 
 * C/C++ (FFI)
 
@@ -150,6 +261,33 @@ while ((handle = con_frame_iterator_next(iter)) != NULL) {
 free_con_frame_iterator(iter);
 #+end_src
 
+Metadata builder helpers:
+
+#+begin_src c
+RKRConFrameBuilder *builder = rkr_frame_new(cell, angles, "", "", "", "");
+if (rkr_frame_builder_set_energy(builder, -42.5) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
+if (rkr_frame_builder_set_frame_index(builder, 7) != RKR_STATUS_SUCCESS) {
+    free_rkr_frame_builder(builder);
+    return 1;
+}
+rkr_frame_builder_set_time(builder, 3.5);
+rkr_frame_builder_set_timestep(builder, 0.2);
+rkr_frame_builder_set_neb_bead(builder, 4);
+rkr_frame_builder_set_neb_band(builder, 1);
+rkr_frame_builder_set_scalar_metadata(builder, "convergence", 1.0e-3);
+rkr_frame_builder_set_string_metadata(builder, "generator", "eon");
+rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+    builder, "Cu", 0.0, 0.0, 0.0,
+    true, false, true,
+    0, 63.546,
+    0.1, 0.2, 0.3,
+    -0.1, -0.2, -0.3);
+printf("status: %s\n", rkr_status_message(RKR_STATUS_SUCCESS));
+#+end_src
+
 ** C++ API
 
 Include =readcon-core.hpp= for RAII wrappers.
@@ -168,6 +306,27 @@ for (auto&& frame : frames) {
         }
     }
 }
+#+end_src
+
+Builder metadata helpers:
+
+#+begin_src cpp
+readcon::ConFrameBuilder builder({10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
+builder.set_energy(-42.5);
+builder.set_frame_index(7);
+builder.set_time(3.5);
+builder.set_timestep(0.2);
+builder.set_neb_bead(4);
+builder.set_neb_band(1);
+builder.set_scalar_metadata("convergence", 1.0e-3);
+builder.set_string_metadata("generator", "eon");
+builder.set_metadata_json(R"({"custom_key":"custom_value"})");
+builder.add_atom_with_velocity_and_forces(
+    "Cu", 0.0, 0.0, 0.0,
+    {true, false, true},
+    0, 63.546,
+    0.1, 0.2, 0.3,
+    -0.1, -0.2, -0.3);
 #+end_src
 
 ** Build system integration

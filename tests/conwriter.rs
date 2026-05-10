@@ -2,6 +2,7 @@ mod common;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::writer::ConFrameWriter;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -44,12 +45,38 @@ fn test_writer_roundtrip() {
 
 #[test]
 fn test_builder_roundtrip() {
-    let mut builder = ConFrameBuilder::new([15.345600, 21.702000, 100.000000], [90.0, 90.0, 90.0])
-        .prebox_header(["Random Number Seed".to_string(), "Time".to_string()])
+    let mut builder =
+        ConFrameBuilder::new([15.345600, 21.702000, 100.000000], [90.0, 90.0, 90.0]);
+    builder
+        .prebox_header("Random Number Seed")
         .postbox_header(["0 0".to_string(), "218 0 1".to_string()]);
-    builder.add_atom("Cu", 0.639400000000001, 0.904500000000000, 6.975299999999995, [true, true, true], 0, 63.546);
-    builder.add_atom("Cu", 3.196999999999999, 0.904500000000000, 6.975299999999995, [true, true, true], 1, 63.546);
-    builder.add_atom("H", 8.682299999999999, 9.946999999999997, 11.732999999999993, [false, false, false], 2, 1.008);
+    builder.add_atom(
+        "Cu",
+        0.639400000000001,
+        0.904500000000000,
+        6.975299999999995,
+        [true, true, true],
+        0,
+        63.546,
+    );
+    builder.add_atom(
+        "Cu",
+        3.196999999999999,
+        0.904500000000000,
+        6.975299999999995,
+        [true, true, true],
+        1,
+        63.546,
+    );
+    builder.add_atom(
+        "H",
+        8.682_3,
+        9.946999999999997,
+        11.732999999999993,
+        [false, false, false],
+        2,
+        1.008,
+    );
     let frame = builder.build();
 
     let mut buffer: Vec<u8> = Vec::new();
@@ -69,14 +96,21 @@ fn test_builder_roundtrip() {
     // Verify precision 17 roundtrip preserves coordinates
     assert_eq!(rt.atom_data[0].x, 0.639400000000001);
     assert_eq!(rt.atom_data[0].y, 0.904500000000000);
-    assert_eq!(rt.atom_data[2].x, 8.682299999999999);
+    assert_eq!(rt.atom_data[2].x, 8.682_3);
 }
 
 #[test]
 fn test_writer_precision_default_vs_high() {
-    let mut builder =
-        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom("Cu", 1.23456789012345678, 0.0, 0.0, [false, false, false], 0, 63.546);
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder.add_atom(
+        "Cu",
+        1.234_567_890_123_456_7,
+        0.0,
+        0.0,
+        [false, false, false],
+        0,
+        63.546,
+    );
     let frame = builder.build();
 
     // Default precision (6)
@@ -86,9 +120,7 @@ fn test_writer_precision_default_vs_high() {
         w.write_frame(&frame).unwrap();
     }
     let s6 = String::from_utf8(buf6).unwrap();
-    let frames6: Vec<_> = ConFrameIterator::new(&s6)
-        .map(|r| r.unwrap())
-        .collect();
+    let frames6: Vec<_> = ConFrameIterator::new(&s6).map(|r| r.unwrap()).collect();
     // 6 decimal places means ~1e-6 precision loss
     assert!((frames6[0].atom_data[0].x - 1.234568).abs() < 1e-5);
 
@@ -99,18 +131,20 @@ fn test_writer_precision_default_vs_high() {
         w.write_frame(&frame).unwrap();
     }
     let s17 = String::from_utf8(buf17).unwrap();
-    let frames17: Vec<_> = ConFrameIterator::new(&s17)
-        .map(|r| r.unwrap())
-        .collect();
+    let frames17: Vec<_> = ConFrameIterator::new(&s17).map(|r| r.unwrap()).collect();
     // 17 decimal places preserves the full f64
-    assert!((frames17[0].atom_data[0].x - 1.23456789012345678).abs() < 1e-14);
+    assert!((frames17[0].atom_data[0].x - 1.234_567_890_123_456_7).abs() < 1e-14);
 }
 
 #[test]
 fn test_builder_velocity_roundtrip() {
     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom_with_velocity("Cu", 1.0, 2.0, 3.0, [true, true, true], 0, 63.546, 0.1, 0.2, 0.3);
-    builder.add_atom_with_velocity("H", 4.0, 5.0, 6.0, [false, false, false], 1, 1.008, 0.4, 0.5, 0.6);
+    builder
+        .add_atom("Cu", 1.0, 2.0, 3.0, [true, true, true], 0, 63.546)
+        .with_velocity([0.1, 0.2, 0.3]);
+    builder
+        .add_atom("H", 4.0, 5.0, 6.0, [false, false, false], 1, 1.008)
+        .with_velocity([0.4, 0.5, 0.6]);
     let frame = builder.build();
 
     assert!(frame.has_velocities());
@@ -126,8 +160,34 @@ fn test_builder_velocity_roundtrip() {
     let frames: Vec<_> = parser.map(|r| r.unwrap()).collect();
     assert_eq!(frames.len(), 1);
     assert!(frames[0].has_velocities());
-    assert_eq!(frames[0].atom_data[0].vx, Some(0.1));
-    assert_eq!(frames[0].atom_data[1].vz, Some(0.6));
+    assert_eq!(frames[0].atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
+    assert_eq!(frames[0].atom_data[1].velocity, Some([0.4, 0.5, 0.6]));
+}
+
+#[test]
+fn test_writer_emits_empty_sections_when_validate_true() {
+    let mut metadata = BTreeMap::new();
+    metadata.insert("validate".to_string(), serde_json::json!(true));
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder.metadata(metadata);
+    builder.add_atom("Cu", 1.0, 2.0, 3.0, [false, false, false], 0, 63.546);
+    let frame = builder.build();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        writer.write_frame(&frame).expect("Failed to write frame.");
+    }
+
+    let fdat = String::from_utf8(buffer).expect("Buffer is not valid UTF-8.");
+    let metadata: serde_json::Value = serde_json::from_str(fdat.lines().nth(1).unwrap()).unwrap();
+
+    assert_eq!(metadata.get("sections"), Some(&serde_json::json!([])));
+
+    let frames: Vec<_> = ConFrameIterator::new(&fdat)
+        .map(|result| result.unwrap())
+        .collect();
+    assert_eq!(frames.len(), 1);
 }
 
 /// Verifies that non-sequential atom_id values (representing the original

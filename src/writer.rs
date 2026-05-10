@@ -1,4 +1,4 @@
-use crate::types::{encode_fixed_bitmask, ConFrame};
+use crate::types::{ConFrame, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -58,34 +58,39 @@ impl<W: Write> ConFrameWriter<W> {
         let prec = self.precision;
 
         // --- Write the 9-line Header ---
-        writeln!(self.writer, "{}", frame.header.prebox_header[0])?;
+        writeln!(self.writer, "{}", frame.header.prebox_header.user)?;
 
         // Line 2: always serialize JSON metadata with con_spec_version.
         // Auto-populate sections based on frame data.
         let mut meta_obj = serde_json::Map::new();
         meta_obj.insert(
-            "con_spec_version".to_string(),
+            meta::CON_SPEC_VERSION.into(),
             json!(frame.header.spec_version),
         );
         // Build sections array from actual data presence
         let mut sections = Vec::new();
         if frame.has_velocities() {
-            sections.push(json!("velocities"));
+            sections.push(json!(SECTION_VELOCITIES));
         }
         if frame.has_forces() {
-            sections.push(json!("forces"));
+            sections.push(json!(SECTION_FORCES));
         }
-        if !sections.is_empty() {
-            meta_obj.insert("sections".to_string(), json!(sections));
+        let validate = frame
+            .header
+            .metadata
+            .get(meta::VALIDATE)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !sections.is_empty() || validate {
+            meta_obj.insert(meta::SECTIONS.into(), json!(sections));
         }
         for (k, v) in &frame.header.metadata {
+            if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
+                continue;
+            }
             meta_obj.insert(k.clone(), v.clone());
         }
-        writeln!(
-            self.writer,
-            "{}",
-            serde_json::Value::Object(meta_obj)
-        )?;
+        writeln!(self.writer, "{}", serde_json::Value::Object(meta_obj))?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",
@@ -127,7 +132,7 @@ impl<W: Write> ConFrameWriter<W> {
                 let atom = &frame.atom_data[atom_idx_offset + i];
                 writeln!(
                     self.writer,
-                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag:.0} {atom_id}",
+                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag} {atom_id}",
                     prec = prec,
                     x = atom.x,
                     y = atom.y,
@@ -152,13 +157,11 @@ impl<W: Write> ConFrameWriter<W> {
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[vel_idx_offset + i];
+                    let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
                     writeln!(
                         self.writer,
-                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag:.0} {atom_id}",
+                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
-                        vx = atom.vx.unwrap_or(0.0),
-                        vy = atom.vy.unwrap_or(0.0),
-                        vz = atom.vz.unwrap_or(0.0),
                         fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;
@@ -180,13 +183,11 @@ impl<W: Write> ConFrameWriter<W> {
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[force_idx_offset + i];
+                    let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
                     writeln!(
                         self.writer,
-                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag:.0} {atom_id}",
+                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag} {atom_id}",
                         prec = prec,
-                        fx = atom.fx.unwrap_or(0.0),
-                        fy = atom.fy.unwrap_or(0.0),
-                        fz = atom.fz.unwrap_or(0.0),
                         fixed_flag = encode_fixed_bitmask(atom.fixed),
                         atom_id = atom.atom_id
                     )?;

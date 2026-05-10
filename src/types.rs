@@ -3,16 +3,137 @@
 //=============================================================================
 
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::Arc;
+
+/// JSON metadata key names recognized by spec v2.
+///
+/// Each constant is the exact string that appears on the second header
+/// line. The constants are centralized so the parser, writer, builder,
+/// FFI, and Python layers all reference the same key spellings.
+///
+/// Reserved key schema, as enforced by [`crate::parser::validate_metadata_schema`]
+/// when `validate=true`:
+///
+/// | Constant | JSON type | Required | Notes |
+/// |----------|-----------|----------|-------|
+/// | [`CON_SPEC_VERSION`] | unsigned integer | yes | The spec version this frame conforms to. The reader rejects values greater than [`crate::CON_SPEC_VERSION`]. |
+/// | [`SECTIONS`] | array of strings | required when `validate=true` | Declares per-atom section blocks that follow the coordinates (e.g. `["velocities", "forces"]`). When absent, legacy blank-separator velocity detection applies. |
+/// | [`VALIDATE`] | boolean | optional | When `true`, the reader runs the strict v2 schema and structural checks. |
+/// | [`ENERGY`] | finite number | optional | Per-frame total energy in the units declared by [`UNITS`]. |
+/// | [`TIME`] | finite number | optional | Simulation time. |
+/// | [`TIMESTEP`] | finite number | optional | Integration timestep. |
+/// | [`CONVERGENCE_FMAX`] | finite number | optional | Max-force convergence threshold. |
+/// | [`CONVERGENCE_ENERGY`] | finite number | optional | Energy convergence threshold. |
+/// | [`FMAX`] | finite number | optional | Per-frame max force magnitude. |
+/// | [`FRAME_INDEX`] | non-negative integer | optional | Zero-based frame index in the trajectory. |
+/// | [`NEB_BEAD`] | non-negative integer | optional | Bead index along an NEB band. |
+/// | [`NEB_BAND`] | non-negative integer | optional | NEB band index. |
+/// | [`GENERATOR`] | string | optional | Producing tool name (e.g. `"eOn 0.4.2"`). |
+/// | [`UNITS`] | object | optional | Unit identifiers, typically with `length`, `energy`, `time` keys. |
+/// | [`POTENTIAL`] | object | optional | Force-field descriptor; if a `type` field is present it must be a string. |
+/// | [`PBC`] | length-3 array of booleans | optional | Periodic-boundary flags per cell axis. |
+/// | [`LATTICE_VECTORS`] | 3x3 numeric array | optional | Full lattice basis when `boxl`/`angles` is insufficient. |
+/// | [`CONVERGED`] | boolean | optional | Whether the producing tool considers this frame converged. |
+///
+/// Keys not listed above are accepted on read and round-tripped on
+/// write but receive no schema check, even under `validate=true`.
+pub mod meta {
+    /// Required JSON key carrying the spec version (unsigned integer).
+    pub const CON_SPEC_VERSION: &str = "con_spec_version";
+    /// Array of declared section names (strings). Required when
+    /// `validate=true`; absent triggers the legacy blank-separator
+    /// velocity detection.
+    pub const SECTIONS: &str = "sections";
+    /// Boolean. When `true`, the reader applies strict v2 validation.
+    pub const VALIDATE: &str = "validate";
+
+    /// Per-frame total energy (finite number, units declared by
+    /// [`UNITS`]).
+    pub const ENERGY: &str = "energy";
+    /// Simulation time (finite number).
+    pub const TIME: &str = "time";
+    /// Integration timestep (finite number).
+    pub const TIMESTEP: &str = "timestep";
+    /// Max-force convergence threshold (finite number).
+    pub const CONVERGENCE_FMAX: &str = "convergence_fmax";
+    /// Energy convergence threshold (finite number).
+    pub const CONVERGENCE_ENERGY: &str = "convergence_energy";
+    /// Per-frame max force magnitude (finite number).
+    pub const FMAX: &str = "fmax";
+
+    /// Zero-based frame index along a trajectory (non-negative integer).
+    pub const FRAME_INDEX: &str = "frame_index";
+    /// NEB bead index (non-negative integer).
+    pub const NEB_BEAD: &str = "neb_bead";
+    /// NEB band index (non-negative integer).
+    pub const NEB_BAND: &str = "neb_band";
+
+    /// Producing tool name (string).
+    pub const GENERATOR: &str = "generator";
+    /// Unit identifiers (object). Common subkeys: `length`, `energy`,
+    /// `time`.
+    pub const UNITS: &str = "units";
+    /// Force-field descriptor (object). When a `type` field is
+    /// present it must be a string.
+    pub const POTENTIAL: &str = "potential";
+    /// Periodic-boundary flags (length-3 boolean array, x/y/z order).
+    pub const PBC: &str = "pbc";
+    /// Full lattice basis (3x3 numeric array).
+    pub const LATTICE_VECTORS: &str = "lattice_vectors";
+    /// Convergence flag (boolean).
+    pub const CONVERGED: &str = "converged";
+}
+
+/// Canonical section names used in the JSON `sections` array and label lines.
+pub const SECTION_VELOCITIES: &str = "velocities";
+pub const SECTION_FORCES: &str = "forces";
+
+/// The two-line block preceding the box dimensions.
+///
+/// Line 0 is free-form user text. Line 1 is reserved for machine-readable
+/// JSON metadata; it is read by the parser and rebuilt by the writer from
+/// `FrameHeader.spec_version + metadata + sections`. External callers
+/// cannot set the metadata line directly -- they should mutate
+/// `FrameHeader.metadata` instead and let the writer regenerate it.
+#[derive(Debug, Clone, Default)]
+pub struct PreboxHeader {
+    /// User-supplied free-form text (e.g. "Generated by eOn").
+    pub user: String,
+    /// JSON metadata line as stored on disk; rebuilt on write.
+    pub(crate) metadata_line: String,
+}
+
+impl PreboxHeader {
+    /// Construct from the user-facing text only. The metadata line is
+    /// initialized empty and will be filled in by the writer.
+    pub fn new(user: impl Into<String>) -> Self {
+        Self {
+            user: user.into(),
+            metadata_line: String::new(),
+        }
+    }
+
+    /// Read-only access to the JSON metadata line as it was last parsed
+    /// or written.
+    pub fn metadata_line(&self) -> &str {
+        &self.metadata_line
+    }
+}
+
+impl PartialEq for PreboxHeader {
+    /// Compare only the user line; the metadata line is regenerated on
+    /// write and is not part of frame identity.
+    fn eq(&self, other: &Self) -> bool {
+        self.user == other.user
+    }
+}
 
 /// Holds all metadata from the 9-line header of a simulation frame.
 #[derive(Debug, Clone)]
 pub struct FrameHeader {
-    /// The two text lines preceding the box dimension data.
-    /// Line 0 is free-form text (e.g. "Generated by eOn").
-    /// Line 1 is reserved for machine-readable JSON metadata and is
-    /// managed automatically by the parser/writer -- do not set directly.
-    pub prebox_header: [String; 2],
+    /// The two text lines preceding the box dimension data: a user line
+    /// plus a managed JSON metadata line.
+    pub prebox_header: PreboxHeader,
     /// The three box dimensions, typically Lx, Ly, and Lz.
     pub boxl: [f64; 3],
     /// The three box angles, typically alpha, beta, and gamma.
@@ -33,13 +154,28 @@ pub struct FrameHeader {
     /// Declared data sections from JSON metadata or detected from data presence. (e.g. `["velocities", "forces"]`).
     /// Empty for legacy files (parser falls back to blank-separator velocity detection).
     pub sections: Vec<String>,
+    /// Cached value of the `validate` JSON metadata key, captured at parse
+    /// time so the per-frame strict-mode dispatch in parse_single_frame /
+    /// parse_velocity_section / parse_force_section can avoid a BTreeMap
+    /// lookup on every call.
+    pub(crate) strict_validation: bool,
+    /// Whether the parsed metadata explicitly listed a `sections` key.
+    /// Distinguishes "declared as empty array" (no legacy fallback) from
+    /// "key absent" (try blank-separator velocity detection). Cached at
+    /// parse time so the section dispatch does not re-parse the JSON.
+    pub(crate) sections_declared: bool,
 }
 
-// Manual PartialEq: skip prebox_header[1] (the JSON metadata line) since
-// the writer always regenerates it from spec_version + metadata + sections.
 impl PartialEq for FrameHeader {
+    /// Frame identity excludes the cached `strict_validation` and
+    /// `sections_declared` flags. Both are derived from the metadata at
+    /// parse time and exist purely as a perf shortcut, so two frames
+    /// that hold the same metadata + sections compare equal even when
+    /// one came from a legacy blank-separator detection (cached=false)
+    /// and the other from a re-read of an explicitly-declared v2 file
+    /// (cached=true).
     fn eq(&self, other: &Self) -> bool {
-        self.prebox_header[0] == other.prebox_header[0]
+        self.prebox_header == other.prebox_header
             && self.boxl == other.boxl
             && self.angles == other.angles
             && self.postbox_header == other.postbox_header
@@ -60,19 +196,19 @@ impl PartialEq for FrameHeader {
 impl FrameHeader {
     /// Per-frame total energy (in the units declared by the `units` key).
     pub fn energy(&self) -> Option<f64> {
-        self.metadata.get("energy").and_then(|v| v.as_f64())
+        self.metadata.get(meta::ENERGY).and_then(|v| v.as_f64())
     }
 
     /// Sets the per-frame total energy.
     pub fn set_energy(&mut self, e: f64) {
         self.metadata
-            .insert("energy".to_string(), serde_json::Value::from(e));
+            .insert(meta::ENERGY.into(), serde_json::Value::from(e));
     }
 
     /// Potential type string (e.g. "EMT", "LJ").
     pub fn potential_type(&self) -> Option<&str> {
         self.metadata
-            .get("potential")
+            .get(meta::POTENTIAL)
             .and_then(|v| v.as_object())
             .and_then(|obj| obj.get("type"))
             .and_then(|v| v.as_str())
@@ -81,7 +217,7 @@ impl FrameHeader {
     /// Potential parameters as a JSON value.
     pub fn potential_params(&self) -> Option<&serde_json::Value> {
         self.metadata
-            .get("potential")
+            .get(meta::POTENTIAL)
             .and_then(|v| v.as_object())
             .and_then(|obj| obj.get("params"))
     }
@@ -92,58 +228,58 @@ impl FrameHeader {
             "type": pot_type,
             "params": params,
         });
-        self.metadata
-            .insert("potential".to_string(), obj);
+        self.metadata.insert(meta::POTENTIAL.into(), obj);
     }
 
     /// Zero-based frame index within a trajectory.
     pub fn frame_index(&self) -> Option<u64> {
-        self.metadata.get("frame_index").and_then(|v| v.as_u64())
+        self.metadata
+            .get(meta::FRAME_INDEX)
+            .and_then(|v| v.as_u64())
     }
 
     /// Sets the frame index.
     pub fn set_frame_index(&mut self, idx: u64) {
         self.metadata
-            .insert("frame_index".to_string(), serde_json::Value::from(idx));
+            .insert(meta::FRAME_INDEX.into(), serde_json::Value::from(idx));
     }
 
     /// Simulation time of this frame (in the declared time unit).
     pub fn time(&self) -> Option<f64> {
-        self.metadata.get("time").and_then(|v| v.as_f64())
+        self.metadata.get(meta::TIME).and_then(|v| v.as_f64())
     }
 
     /// Sets the simulation time.
     pub fn set_time(&mut self, t: f64) {
         self.metadata
-            .insert("time".to_string(), serde_json::Value::from(t));
+            .insert(meta::TIME.into(), serde_json::Value::from(t));
     }
 
     /// Integration timestep (in the declared time unit).
     pub fn timestep(&self) -> Option<f64> {
-        self.metadata.get("timestep").and_then(|v| v.as_f64())
+        self.metadata.get(meta::TIMESTEP).and_then(|v| v.as_f64())
     }
 
     /// Sets the integration timestep.
     pub fn set_timestep(&mut self, dt: f64) {
         self.metadata
-            .insert("timestep".to_string(), serde_json::Value::from(dt));
+            .insert(meta::TIMESTEP.into(), serde_json::Value::from(dt));
     }
 
     /// Unit system as a JSON object (e.g. `{"length":"angstrom","energy":"eV"}`).
     pub fn units(&self) -> Option<&serde_json::Value> {
-        self.metadata.get("units")
+        self.metadata.get(meta::UNITS)
     }
 
     /// Sets the unit system.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        self.metadata
-            .insert("units".to_string(), units);
+        self.metadata.insert(meta::UNITS.into(), units);
     }
 
     /// Periodic boundary conditions as `[pbc_x, pbc_y, pbc_z]`.
     /// Returns `None` if not set (callers should default to `[true, true, true]`).
     pub fn pbc(&self) -> Option<[bool; 3]> {
-        let arr = self.metadata.get("pbc")?.as_array()?;
+        let arr = self.metadata.get(meta::PBC)?.as_array()?;
         if arr.len() != 3 {
             return None;
         }
@@ -152,16 +288,14 @@ impl FrameHeader {
 
     /// Sets the periodic boundary conditions.
     pub fn set_pbc(&mut self, pbc: [bool; 3]) {
-        self.metadata.insert(
-            "pbc".to_string(),
-            serde_json::json!([pbc[0], pbc[1], pbc[2]]),
-        );
+        self.metadata
+            .insert(meta::PBC.into(), serde_json::json!([pbc[0], pbc[1], pbc[2]]));
     }
 
     /// Exact 3x3 lattice vector matrix (row-major, angstroms).
     /// When present, takes precedence over the length/angle values on lines 3-4.
     pub fn lattice_vectors(&self) -> Option<[[f64; 3]; 3]> {
-        let arr = self.metadata.get("lattice_vectors")?.as_array()?;
+        let arr = self.metadata.get(meta::LATTICE_VECTORS)?.as_array()?;
         if arr.len() != 3 {
             return None;
         }
@@ -178,7 +312,7 @@ impl FrameHeader {
     /// Sets the exact lattice vector matrix.
     pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
         self.metadata.insert(
-            "lattice_vectors".to_string(),
+            meta::LATTICE_VECTORS.into(),
             serde_json::json!([
                 [vecs[0][0], vecs[0][1], vecs[0][2]],
                 [vecs[1][0], vecs[1][1], vecs[1][2]],
@@ -189,33 +323,33 @@ impl FrameHeader {
 
     /// NEB bead (image) index.
     pub fn neb_bead(&self) -> Option<u64> {
-        self.metadata.get("neb_bead").and_then(|v| v.as_u64())
+        self.metadata.get(meta::NEB_BEAD).and_then(|v| v.as_u64())
     }
 
     /// Sets the NEB bead index.
     pub fn set_neb_bead(&mut self, bead: u64) {
         self.metadata
-            .insert("neb_bead".to_string(), serde_json::Value::from(bead));
+            .insert(meta::NEB_BEAD.into(), serde_json::Value::from(bead));
     }
 
     /// NEB band index.
     pub fn neb_band(&self) -> Option<u64> {
-        self.metadata.get("neb_band").and_then(|v| v.as_u64())
+        self.metadata.get(meta::NEB_BAND).and_then(|v| v.as_u64())
     }
 
     /// Sets the NEB band index.
     pub fn set_neb_band(&mut self, band: u64) {
         self.metadata
-            .insert("neb_band".to_string(), serde_json::Value::from(band));
+            .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
     }
 }
 
 /// Represents the data for a single atom in a frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
-    /// Using Rc<String> to avoid expensive clones for each atom of the same type.
-    pub symbol: Rc<String>,
+    /// Using Arc<str> to avoid expensive clones for each atom of the same type.
+    pub symbol: Arc<str>,
     /// The Cartesian x-coordinate.
     pub x: f64,
     /// The Cartesian y-coordinate.
@@ -240,18 +374,10 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    /// The x-component of velocity (present only in `.convel` files).
-    pub vx: Option<f64>,
-    /// The y-component of velocity (present only in `.convel` files).
-    pub vy: Option<f64>,
-    /// The z-component of velocity (present only in `.convel` files).
-    pub vz: Option<f64>,
-    /// The x-component of force (present when `"forces"` section declared).
-    pub fx: Option<f64>,
-    /// The y-component of force (present when `"forces"` section declared).
-    pub fy: Option<f64>,
-    /// The z-component of force (present when `"forces"` section declared).
-    pub fz: Option<f64>,
+    /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
+    pub velocity: Option<[f64; 3]>,
+    /// Force vector `[fx, fy, fz]` (present when `"forces"` section declared).
+    pub force: Option<[f64; 3]>,
 }
 
 impl AtomDatum {
@@ -267,12 +393,12 @@ impl AtomDatum {
 
     /// Returns `true` if this atom has velocity data.
     pub fn has_velocity(&self) -> bool {
-        self.vx.is_some() && self.vy.is_some() && self.vz.is_some()
+        self.velocity.is_some()
     }
 
     /// Returns `true` if this atom has force data.
     pub fn has_forces(&self) -> bool {
-        self.fx.is_some() && self.fy.is_some() && self.fz.is_some()
+        self.force.is_some()
     }
 }
 
@@ -306,27 +432,8 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
     val
 }
 
-// Manual implementation of PartialEq because Rc<T> doesn't derive it by default.
-impl PartialEq for AtomDatum {
-    fn eq(&self, other: &Self) -> bool {
-        // Compare the string values, not the pointers.
-        *self.symbol == *other.symbol
-            && self.x == other.x
-            && self.y == other.y
-            && self.z == other.z
-            && self.fixed == other.fixed
-            && self.atom_id == other.atom_id
-            && self.vx == other.vx
-            && self.vy == other.vy
-            && self.vz == other.vz
-            && self.fx == other.fx
-            && self.fy == other.fy
-            && self.fz == other.fz
-    }
-}
-
 /// Represents a single, complete simulation frame, including header and all atomic data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
@@ -343,13 +450,6 @@ impl ConFrame {
     /// Returns `true` if any atom in this frame has force data.
     pub fn has_forces(&self) -> bool {
         self.atom_data.first().is_some_and(|a| a.has_forces())
-    }
-}
-
-// Manual implementation of PartialEq because of the change to AtomDatum.
-impl PartialEq for ConFrame {
-    fn eq(&self, other: &Self) -> bool {
-        self.header == other.header && self.atom_data == other.atom_data
     }
 }
 
@@ -371,7 +471,7 @@ impl PartialEq for ConFrame {
 /// assert_eq!(frame.atom_data.len(), 2);
 /// ```
 pub struct ConFrameBuilder {
-    prebox_header: [String; 2],
+    prebox_user: String,
     cell: [f64; 3],
     angles: [f64; 3],
     postbox_header: [String; 2],
@@ -387,19 +487,15 @@ struct BuilderAtom {
     fixed: [bool; 3],
     atom_id: u64,
     mass: f64,
-    vx: Option<f64>,
-    vy: Option<f64>,
-    vz: Option<f64>,
-    fx: Option<f64>,
-    fy: Option<f64>,
-    fz: Option<f64>,
+    velocity: Option<[f64; 3]>,
+    force: Option<[f64; 3]>,
 }
 
 impl ConFrameBuilder {
     /// Creates a new builder with the given cell dimensions and angles.
     pub fn new(cell: [f64; 3], angles: [f64; 3]) -> Self {
         Self {
-            prebox_header: [String::new(), String::new()],
+            prebox_user: String::new(),
             cell,
             angles,
             postbox_header: [String::new(), String::new()],
@@ -408,26 +504,112 @@ impl ConFrameBuilder {
         }
     }
 
-    /// Sets the two pre-box header lines.
-    pub fn prebox_header(mut self, h: [String; 2]) -> Self {
-        self.prebox_header = h;
+    /// Sets the user-facing pre-box header line. The JSON metadata line is
+    /// regenerated by the writer from `metadata`/`sections`.
+    pub fn prebox_header(&mut self, line: impl Into<String>) -> &mut Self {
+        self.prebox_user = line.into();
         self
     }
 
     /// Sets the two post-box header lines.
-    pub fn postbox_header(mut self, h: [String; 2]) -> Self {
+    pub fn postbox_header(&mut self, h: [String; 2]) -> &mut Self {
         self.postbox_header = h;
         self
     }
 
     /// Adds extra key-value pairs to the JSON metadata line.
     /// The `con_spec_version` key is always set automatically.
-    pub fn metadata(mut self, m: BTreeMap<String, serde_json::Value>) -> Self {
+    pub fn metadata(&mut self, m: BTreeMap<String, serde_json::Value>) -> &mut Self {
         self.metadata = m;
         self
     }
 
-    /// Adds an atom without velocity data.
+    /// Parses and sets JSON metadata for the frame header.
+    ///
+    /// The input must be a JSON object. The `con_spec_version` and
+    /// `sections` keys are ignored because they are managed by the
+    /// builder/writer. The schema is validated up front (matching what
+    /// the parser checks on read), so authoring with bad metadata fails
+    /// fast.
+    pub fn set_metadata_json(
+        &mut self,
+        metadata_json: &str,
+    ) -> Result<(), crate::error::ParseError> {
+        let object: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(metadata_json)?;
+        crate::parser::validate_metadata_schema(&object)?;
+        self.metadata.clear();
+        for (key, value) in object {
+            if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
+                continue;
+            }
+            self.metadata.insert(key, value);
+        }
+        Ok(())
+    }
+
+    /// Sets a numeric metadata key.
+    pub fn set_scalar_metadata(&mut self, key: &str, value: f64) -> &mut Self {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value));
+        self
+    }
+
+    /// Sets a string metadata key.
+    pub fn set_string_metadata(&mut self, key: &str, value: &str) -> &mut Self {
+        self.metadata
+            .insert(key.to_string(), serde_json::Value::from(value));
+        self
+    }
+
+    /// Sets the per-frame total energy metadata.
+    pub fn set_energy(&mut self, energy: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::ENERGY, energy)
+    }
+
+    /// Sets the zero-based frame index metadata.
+    pub fn set_frame_index(&mut self, idx: u64) -> &mut Self {
+        self.metadata
+            .insert(meta::FRAME_INDEX.into(), serde_json::Value::from(idx));
+        self
+    }
+
+    /// Sets the simulation time metadata.
+    pub fn set_time(&mut self, time: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::TIME, time)
+    }
+
+    /// Sets the timestep metadata.
+    pub fn set_timestep(&mut self, dt: f64) -> &mut Self {
+        self.set_scalar_metadata(meta::TIMESTEP, dt)
+    }
+
+    /// Sets the NEB bead index metadata.
+    pub fn set_neb_bead(&mut self, bead: u64) -> &mut Self {
+        self.metadata
+            .insert(meta::NEB_BEAD.into(), serde_json::Value::from(bead));
+        self
+    }
+
+    /// Sets the NEB band index metadata.
+    pub fn set_neb_band(&mut self, band: u64) -> &mut Self {
+        self.metadata
+            .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
+        self
+    }
+
+    /// Adds an atom with no velocity or force data and returns `&mut self`
+    /// for chaining `with_velocity` / `with_force` on the just-added atom.
+    ///
+    /// # Example
+    /// ```
+    /// use readcon_core::types::ConFrameBuilder;
+    /// let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    /// b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546)
+    ///  .with_velocity([0.1, 0.2, 0.3])
+    ///  .with_force([1.0, 0.0, 0.0]);
+    /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn add_atom(
         &mut self,
         symbol: &str,
@@ -437,7 +619,7 @@ impl ConFrameBuilder {
         fixed: [bool; 3],
         atom_id: u64,
         mass: f64,
-    ) {
+    ) -> &mut Self {
         self.atoms.push(BuilderAtom {
             symbol: symbol.to_string(),
             x,
@@ -446,109 +628,28 @@ impl ConFrameBuilder {
             fixed,
             atom_id,
             mass,
-            vx: None,
-            vy: None,
-            vz: None,
-            fx: None,
-            fy: None,
-            fz: None,
+            velocity: None,
+            force: None,
         });
+        self
     }
 
-    /// Adds an atom with velocity data (for .convel output).
-    pub fn add_atom_with_velocity(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        vx: f64,
-        vy: f64,
-        vz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            vx: Some(vx),
-            vy: Some(vy),
-            vz: Some(vz),
-            fx: None,
-            fy: None,
-            fz: None,
-        });
+    /// Attaches velocity data to the most recently added atom.
+    /// No-op (silently) if no atom has been added yet.
+    pub fn with_velocity(&mut self, velocity: [f64; 3]) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.velocity = Some(velocity);
+        }
+        self
     }
 
-    /// Adds an atom with force data.
-    pub fn add_atom_with_forces(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        fx: f64,
-        fy: f64,
-        fz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            vx: None,
-            vy: None,
-            vz: None,
-            fx: Some(fx),
-            fy: Some(fy),
-            fz: Some(fz),
-        });
-    }
-
-    /// Adds an atom with both velocity and force data.
-    pub fn add_atom_with_velocity_and_forces(
-        &mut self,
-        symbol: &str,
-        x: f64,
-        y: f64,
-        z: f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-        mass: f64,
-        vx: f64,
-        vy: f64,
-        vz: f64,
-        fx: f64,
-        fy: f64,
-        fz: f64,
-    ) {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            vx: Some(vx),
-            vy: Some(vy),
-            vz: Some(vz),
-            fx: Some(fx),
-            fy: Some(fy),
-            fz: Some(fz),
-        });
+    /// Attaches force data to the most recently added atom.
+    /// No-op (silently) if no atom has been added yet.
+    pub fn with_force(&mut self, force: [f64; 3]) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.force = Some(force);
+        }
+        self
     }
 
     /// Consumes the builder and produces a `ConFrame`.
@@ -556,65 +657,71 @@ impl ConFrameBuilder {
     /// Atoms are grouped by symbol (in encounter order) to compute
     /// `natm_types`, `natms_per_type`, and `masses_per_type`.
     pub fn build(self) -> ConFrame {
-        // Group atoms by symbol in encounter order
+        // Single-pass grouping: assign each atom a type index in encounter
+        // order and bucket its position. The buckets preserve per-symbol
+        // input order so the final flatten yields atoms grouped by type.
         let mut type_order: Vec<String> = Vec::new();
         let mut type_counts: Vec<usize> = Vec::new();
         let mut type_masses: Vec<f64> = Vec::new();
+        let mut buckets: Vec<Vec<usize>> = Vec::new();
 
-        for atom in &self.atoms {
-            if let Some(idx) = type_order.iter().position(|s| s == &atom.symbol) {
-                type_counts[idx] += 1;
-            } else {
-                type_order.push(atom.symbol.clone());
-                type_counts.push(1);
-                type_masses.push(atom.mass);
-            }
-        }
-
-        // Sort atoms by type order (group same symbols together)
-        let mut sorted_atoms: Vec<&BuilderAtom> = Vec::with_capacity(self.atoms.len());
-        for symbol in &type_order {
-            for atom in &self.atoms {
-                if &atom.symbol == symbol {
-                    sorted_atoms.push(atom);
+        for (i, atom) in self.atoms.iter().enumerate() {
+            let idx = match type_order.iter().position(|s| s == &atom.symbol) {
+                Some(idx) => {
+                    type_counts[idx] += 1;
+                    idx
                 }
-            }
+                None => {
+                    type_order.push(atom.symbol.clone());
+                    type_counts.push(1);
+                    type_masses.push(atom.mass);
+                    buckets.push(Vec::new());
+                    type_order.len() - 1
+                }
+            };
+            buckets[idx].push(i);
         }
 
-        let atom_data: Vec<AtomDatum> = sorted_atoms
-            .iter()
-            .map(|a| {
-                let symbol = Rc::new(a.symbol.clone());
-                AtomDatum {
-                    symbol,
+        // One Arc<str> per type so all atoms of the same symbol share storage.
+        let type_symbols: Vec<Arc<str>> =
+            type_order.iter().map(|s| Arc::from(s.as_str())).collect();
+
+        let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(self.atoms.len());
+        for (type_idx, indices) in buckets.iter().enumerate() {
+            let symbol = &type_symbols[type_idx];
+            for &i in indices {
+                let a = &self.atoms[i];
+                atom_data.push(AtomDatum {
+                    symbol: Arc::clone(symbol),
                     x: a.x,
                     y: a.y,
                     z: a.z,
                     fixed: a.fixed,
                     atom_id: a.atom_id,
-                    vx: a.vx,
-                    vy: a.vy,
-                    vz: a.vz,
-                    fx: a.fx,
-                    fy: a.fy,
-                    fz: a.fz,
-                }
-            })
-            .collect();
+                    velocity: a.velocity,
+                    force: a.force,
+                });
+            }
+        }
 
         // Auto-populate sections based on what data is present.
         let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
         let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
         let mut sections = Vec::new();
         if has_vel {
-            sections.push("velocities".to_string());
+            sections.push(SECTION_VELOCITIES.into());
         }
         if has_frc {
-            sections.push("forces".to_string());
+            sections.push(SECTION_FORCES.into());
         }
 
+        let strict_validation = matches!(
+            self.metadata.get(meta::VALIDATE),
+            Some(serde_json::Value::Bool(true))
+        );
+        let sections_declared = !sections.is_empty();
         let header = FrameHeader {
-            prebox_header: self.prebox_header,
+            prebox_header: PreboxHeader::new(self.prebox_user),
             boxl: self.cell,
             angles: self.angles,
             postbox_header: self.postbox_header,
@@ -624,6 +731,8 @@ impl ConFrameBuilder {
             spec_version: crate::CON_SPEC_VERSION,
             metadata: self.metadata,
             sections,
+            strict_validation,
+            sections_declared,
         };
 
         ConFrame { header, atom_data }
@@ -660,23 +769,24 @@ mod tests {
     #[test]
     fn test_builder_with_velocities() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        builder.add_atom_with_velocity("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546, 0.1, 0.2, 0.3);
+        builder
+            .add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546)
+            .with_velocity([0.1, 0.2, 0.3]);
         let frame = builder.build();
 
         assert!(frame.has_velocities());
-        assert_eq!(frame.atom_data[0].vx, Some(0.1));
-        assert_eq!(frame.atom_data[0].vy, Some(0.2));
-        assert_eq!(frame.atom_data[0].vz, Some(0.3));
+        assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
     }
 
     #[test]
     fn test_builder_with_headers() {
-        let frame = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
-            .prebox_header(["line1".to_string(), "line2".to_string()])
-            .postbox_header(["line3".to_string(), "line4".to_string()])
-            .build();
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .prebox_header("line1")
+            .postbox_header(["line3".to_string(), "line4".to_string()]);
+        let frame = builder.build();
 
-        assert_eq!(frame.header.prebox_header, ["line1", "line2"]);
+        assert_eq!(frame.header.prebox_header.user, "line1");
         assert_eq!(frame.header.postbox_header, ["line3", "line4"]);
     }
 
@@ -701,7 +811,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_energy() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 10.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -711,6 +821,8 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -720,7 +832,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_potential() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 10.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -730,6 +842,8 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -743,7 +857,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_trajectory() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 10.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -753,6 +867,8 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -769,7 +885,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_units() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 10.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -779,6 +895,8 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -790,7 +908,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_pbc() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 20.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -800,6 +918,8 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -809,7 +929,7 @@ mod tests {
     #[test]
     fn test_metadata_helpers_lattice_vectors() {
         let mut header = FrameHeader {
-            prebox_header: [String::new(), String::new()],
+            prebox_header: PreboxHeader::default(),
             boxl: [10.0, 10.0, 10.0],
             angles: [90.0, 90.0, 90.0],
             postbox_header: [String::new(), String::new()],
@@ -819,10 +939,81 @@ mod tests {
             spec_version: 2,
             metadata: BTreeMap::new(),
             sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
         header.set_lattice_vectors(vecs);
         assert_eq!(header.lattice_vectors(), Some(vecs));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json_rejects_bad_pbc() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let err = builder
+            .set_metadata_json(r#"{"pbc":[1, 2, 3]}"#)
+            .expect_err("non-bool pbc must be rejected");
+        assert!(err.to_string().contains("pbc"));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json_rejects_bad_lattice() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let err = builder
+            .set_metadata_json(r#"{"lattice_vectors":[[1,2,3],[4,5,6]]}"#)
+            .expect_err("3x2 lattice_vectors must be rejected");
+        assert!(err.to_string().contains("lattice_vectors"));
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .set_metadata_json(
+                r#"{"con_spec_version":2,"frame_index":5,"energy":-42.5,"sections":["forces"],"generator":"test"}"#,
+            )
+            .unwrap();
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
+
+        let frame = builder.build();
+        assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
+        assert_eq!(frame.header.frame_index(), Some(5));
+        assert_eq!(frame.header.energy(), Some(-42.5));
+        assert_eq!(
+            frame.header.metadata.get("generator"),
+            Some(&serde_json::Value::String("test".to_string()))
+        );
+        assert!(frame.header.sections.is_empty());
+    }
+
+    #[test]
+    fn test_builder_typed_metadata_setters() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.set_frame_index(7);
+        builder.set_energy(-1.25);
+        builder.set_time(3.5);
+        builder.set_timestep(0.2);
+        builder.set_neb_bead(4);
+        builder.set_neb_band(2);
+        builder.set_scalar_metadata("convergence", 1.0e-3);
+        builder.set_string_metadata("generator", "eon");
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
+
+        let frame = builder.build();
+        assert_eq!(frame.header.frame_index(), Some(7));
+        assert_eq!(frame.header.energy(), Some(-1.25));
+        assert_eq!(frame.header.time(), Some(3.5));
+        assert_eq!(frame.header.timestep(), Some(0.2));
+        assert_eq!(frame.header.neb_bead(), Some(4));
+        assert_eq!(frame.header.neb_band(), Some(2));
+        assert_eq!(
+            frame.header.metadata.get("convergence"),
+            Some(&serde_json::Value::from(1.0e-3))
+        );
+        assert_eq!(
+            frame.header.metadata.get("generator"),
+            Some(&serde_json::Value::from("eon"))
+        );
     }
 }

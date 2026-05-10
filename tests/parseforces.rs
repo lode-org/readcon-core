@@ -22,10 +22,11 @@ fn test_forces_only() {
     assert_eq!(frame.header.sections, vec!["forces"]);
 
     // Check force values
-    assert_eq!(frame.atom_data[0].fx, Some(0.123456));
-    assert_eq!(frame.atom_data[0].fy, Some(0.234567));
-    assert_eq!(frame.atom_data[0].fz, Some(-0.345678));
-    assert_eq!(frame.atom_data[3].fx, Some(4.567890));
+    assert_eq!(
+        frame.atom_data[0].force,
+        Some([0.123456, 0.234567, -0.345678])
+    );
+    assert_eq!(frame.atom_data[3].force.unwrap()[0], 4.567890);
 
     // Check metadata helpers
     assert_eq!(frame.header.energy(), Some(-42.5));
@@ -34,8 +35,8 @@ fn test_forces_only() {
 
 #[test]
 fn test_velocities_and_forces() {
-    let fdat = fs::read_to_string(test_case!("tiny_cuh2_vel_forces.con"))
-        .expect("Can't find test file.");
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2_vel_forces.con")).expect("Can't find test file.");
     let parser = ConFrameIterator::new(&fdat);
     let frames: Vec<_> = parser.map(|r| r.unwrap()).collect();
 
@@ -47,9 +48,9 @@ fn test_velocities_and_forces() {
     assert_eq!(frame.header.sections, vec!["velocities", "forces"]);
 
     // Velocity values
-    assert_eq!(frame.atom_data[0].vx, Some(0.001234));
+    assert_eq!(frame.atom_data[0].velocity.unwrap()[0], 0.001234);
     // Force values
-    assert_eq!(frame.atom_data[0].fx, Some(0.123456));
+    assert_eq!(frame.atom_data[0].force.unwrap()[0], 0.123456);
     // Both present on same atom
     assert!(frame.atom_data[0].has_velocity());
     assert!(frame.atom_data[0].has_forces());
@@ -80,8 +81,8 @@ fn test_forces_roundtrip() {
 
 #[test]
 fn test_vel_forces_roundtrip() {
-    let fdat = fs::read_to_string(test_case!("tiny_cuh2_vel_forces.con"))
-        .expect("Can't find test file.");
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2_vel_forces.con")).expect("Can't find test file.");
     let parser = ConFrameIterator::new(&fdat);
     let frames_original: Vec<_> = parser.map(|r| r.unwrap()).collect();
 
@@ -104,8 +105,7 @@ fn test_vel_forces_roundtrip() {
 #[test]
 fn test_legacy_convel_still_works() {
     // Legacy .convel files without sections key must still parse correctly.
-    let fdat =
-        fs::read_to_string(test_case!("tiny_cuh2.convel")).expect("Can't find test file.");
+    let fdat = fs::read_to_string(test_case!("tiny_cuh2.convel")).expect("Can't find test file.");
     let parser = ConFrameIterator::new(&fdat);
     let frames: Vec<_> = parser.map(|r| r.unwrap()).collect();
 
@@ -134,8 +134,7 @@ fn test_gzip_roundtrip() {
     }
 
     // Read back -- transparent decompression
-    let frames_rt =
-        readcon_core::iterators::read_all_frames(&path).expect("Failed to read gzip.");
+    let frames_rt = readcon_core::iterators::read_all_frames(&path).expect("Failed to read gzip.");
     assert_eq!(frames_original.len(), frames_rt.len());
     assert_eq!(frames_original, frames_rt);
 }
@@ -144,29 +143,31 @@ fn test_gzip_roundtrip() {
 fn test_builder_with_forces() {
     use readcon_core::types::ConFrameBuilder;
 
-    let mut builder =
-        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom_with_forces("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546, 1.0, 2.0, 3.0);
-    builder.add_atom_with_forces("Cu", 1.0, 0.0, 0.0, [false, false, false], 1, 63.546, 4.0, 5.0, 6.0);
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder
+        .add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546)
+        .with_force([1.0, 2.0, 3.0]);
+    builder
+        .add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 1, 63.546)
+        .with_force([4.0, 5.0, 6.0]);
     let frame = builder.build();
 
     assert!(frame.has_forces());
     assert!(!frame.has_velocities());
     assert_eq!(frame.header.sections, vec!["forces"]);
-    assert_eq!(frame.atom_data[0].fx, Some(1.0));
-    assert_eq!(frame.atom_data[1].fz, Some(6.0));
+    assert_eq!(frame.atom_data[0].force.unwrap()[0], 1.0);
+    assert_eq!(frame.atom_data[1].force.unwrap()[2], 6.0);
 }
 
 #[test]
 fn test_builder_with_velocity_and_forces() {
     use readcon_core::types::ConFrameBuilder;
 
-    let mut builder =
-        ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    builder.add_atom_with_velocity_and_forces(
-        "Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546,
-        0.1, 0.2, 0.3, 1.0, 2.0, 3.0,
-    );
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder
+        .add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546)
+        .with_velocity([0.1, 0.2, 0.3])
+        .with_force([1.0, 2.0, 3.0]);
     let frame = builder.build();
 
     assert!(frame.has_velocities());

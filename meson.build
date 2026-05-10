@@ -1,12 +1,13 @@
 project(
     'readcon-core',
     ['rust', 'c'],
-    version: '0.7.3',
+    version: '0.8.0',
     meson_version: '>=1.8.0',
     default_options: [
         'buildtype=debugoptimized',
         'warning_level=3',
         'c_std=c99',
+        'cpp_std=c++17',
         'rust_std=2024',
         'b_ndebug=if-release',
     ],

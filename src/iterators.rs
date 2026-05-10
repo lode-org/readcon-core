@@ -46,9 +46,7 @@ impl<'a> ConFrameIterator<'a> {
     /// * `None` if the iterator is already at the end.
     pub fn forward(&mut self) -> Option<Result<(), error::ParseError>> {
         // Skip frame by parsing only required header fields to avoid full parsing overhead
-        if self.lines.peek().is_none() {
-            return None;
-        }
+        self.lines.peek()?;
 
         // Manually consume the first 6 lines of the header, which we don't need for skipping.
         for _ in 0..6 {
@@ -131,9 +129,7 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     /// `Some(Err(ParseError::...))`.
     fn next(&mut self) -> Option<Self::Item> {
         // If there are no more lines at all, the iterator is exhausted.
-        if self.lines.peek().is_none() {
-            return None;
-        }
+        self.lines.peek()?;
         // Otherwise, attempt to parse the next frame from the available lines.
         let mut frame = match parse_single_frame(&mut self.lines) {
             Ok(f) => f,
@@ -194,7 +190,6 @@ pub fn parse_frames_parallel(
     // We identify boundaries by walking through the file with a ConFrameIterator
     // and recording byte positions.
     let mut boundaries: Vec<usize> = Vec::new();
-    let mut offset = 0;
     boundaries.push(0);
 
     // Walk through the file using the forward() method to find frame boundaries

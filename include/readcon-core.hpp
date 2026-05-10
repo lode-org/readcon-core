@@ -3,10 +3,19 @@
 
 #pragma once
 
+// readcon-core C++ wrapper. Header-only RAII layer over the C API in
+// readcon-core.h. Requires C++17 (uses std::optional, std::filesystem,
+// and structured bindings).
+#if defined(__cplusplus) && __cplusplus < 201703L
+#error "readcon-core.hpp requires C++17 or later"
+#endif
+
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -17,6 +26,13 @@ namespace readcon {
 
 /**
  * @brief C++ representation of a single atom's core data.
+ *
+ * Velocity and force components are exposed as a single
+ * `std::optional<std::array<double, 3>>` each, matching the Rust
+ * `AtomDatum::velocity` / `AtomDatum::force` shape. The legacy
+ * per-axis fields (`vx`, `vy`, ..., `has_velocity`, ...) are still
+ * present for backward compatibility with existing C++ consumers and
+ * are kept in sync on construction.
  */
 struct Atom {
     uint64_t atomic_number;
@@ -25,18 +41,64 @@ struct Atom {
     double z;
     uint64_t atom_id;
     double mass;
+    /// Legacy aggregate fixed flag. True when any axis is fixed.
+    /// Prefer `fixed_x`/`fixed_y`/`fixed_z` or `fixed_mask()`.
+    [[deprecated("Use fixed_x/fixed_y/fixed_z or fixed_mask() instead")]]
     bool is_fixed;
     bool fixed_x;
     bool fixed_y;
     bool fixed_z;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vx;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vy;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     double vz;
+    [[deprecated("Use velocity() (returns std::optional) instead")]]
     bool has_velocity;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fx;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fy;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     double fz;
+    [[deprecated("Use force() (returns std::optional) instead")]]
     bool has_forces;
+
+    std::array<bool, 3> fixed_mask() const {
+        return {fixed_x, fixed_y, fixed_z};
+    }
+
+    /// Velocity vector if present, else std::nullopt.
+    std::optional<std::array<double, 3>> velocity() const {
+        // Suppress the deprecation warning for the internal conversion;
+        // public callers reaching the legacy fields directly will still
+        // see it.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+        if (has_velocity)
+            return std::array<double, 3>{vx, vy, vz};
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+        return std::nullopt;
+    }
+
+    /// Force vector if present, else std::nullopt.
+    std::optional<std::array<double, 3>> force() const {
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+        if (has_forces)
+            return std::array<double, 3>{fx, fy, fz};
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+        return std::nullopt;
+    }
 };
 
 // Forward declarations
@@ -76,6 +138,10 @@ class ConFrameIterator {
         pointer operator->();
         /** @brief Pre-increment operator to advance to the next frame. */
         Iterator &operator++();
+        /** @brief Equality. Both iterators are equal when both reference the
+         *  same iterator handle and both have an empty current frame
+         *  (the post-end / sentinel state). */
+        bool operator==(const Iterator &other) const;
         /** @brief Comparison operator to check for the end of the iteration. */
         bool operator!=(const Iterator &other) const;
 
@@ -141,6 +207,44 @@ class ConFrame {
     const std::array<std::string, 2> &prebox_header() const;
     const std::array<std::string, 2> &postbox_header() const;
     bool has_velocities() const;
+    bool has_forces() const;
+
+    uint32_t spec_version() const;
+    std::string metadata_json() const;
+
+    /// Per-frame total energy. Returns NaN if absent (legacy, prefer
+    /// `energy_opt()`).
+    double energy() const;
+    /// Zero-based frame index. Returns UINT64_MAX if absent (legacy,
+    /// prefer `frame_index_opt()`).
+    uint64_t frame_index() const;
+    /// Simulation time. Returns NaN if absent (legacy, prefer
+    /// `time_opt()`).
+    double time() const;
+    /// Integration timestep. Returns NaN if absent (legacy, prefer
+    /// `timestep_opt()`).
+    double timestep() const;
+    /// NEB bead index. Returns UINT64_MAX if absent (legacy, prefer
+    /// `neb_bead_opt()`).
+    uint64_t neb_bead() const;
+    /// NEB band index. Returns UINT64_MAX if absent (legacy, prefer
+    /// `neb_band_opt()`).
+    uint64_t neb_band() const;
+
+    /// Per-frame total energy if present, else nullopt.
+    std::optional<double> energy_opt() const;
+    /// Zero-based frame index if present, else nullopt.
+    std::optional<uint64_t> frame_index_opt() const;
+    /// Simulation time if present, else nullopt.
+    std::optional<double> time_opt() const;
+    /// Integration timestep if present, else nullopt.
+    std::optional<double> timestep_opt() const;
+    /// NEB bead index if present, else nullopt.
+    std::optional<uint64_t> neb_bead_opt() const;
+    /// NEB band index if present, else nullopt.
+    std::optional<uint64_t> neb_band_opt() const;
+    /// Potential type string (e.g. "EMT") if present, else nullopt.
+    std::optional<std::string> potential_type() const;
 
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
@@ -163,6 +267,7 @@ class ConFrame {
     mutable std::array<std::string, 2> prebox_header_cache_;
     mutable std::array<std::string, 2> postbox_header_cache_;
     mutable bool has_velocities_cache_ = false;
+    mutable bool has_forces_cache_ = false;
 };
 
 /**
@@ -229,21 +334,75 @@ class ConFrameBuilder {
     ConFrameBuilder &operator=(ConFrameBuilder &&other) noexcept;
 
     /**
-     * @brief Adds an atom without velocity data.
+     * @brief Parses and sets JSON metadata for the generated header line 2.
+     *
+     * The JSON must be an object. `con_spec_version` and `sections` are
+     * managed automatically by the writer and ignored if present.
      */
-    void add_atom(const std::string &symbol, double x, double y, double z,
-                  bool is_fixed, uint64_t atom_id, double mass);
+    ConFrameBuilder &set_metadata_json(const std::string &metadata_json);
+
+    /// Sets a numeric metadata key.
+    ConFrameBuilder &set_scalar_metadata(const std::string &key, double value);
+    /// Sets a string metadata key.
+    ConFrameBuilder &set_string_metadata(const std::string &key,
+                                         const std::string &value);
+    /// Sets the per-frame total energy metadata.
+    ConFrameBuilder &set_energy(double energy);
+    /// Sets the zero-based frame index metadata.
+    ConFrameBuilder &set_frame_index(uint64_t idx);
+    /// Sets the simulation time metadata.
+    ConFrameBuilder &set_time(double time);
+    /// Sets the timestep metadata.
+    ConFrameBuilder &set_timestep(double dt);
+    /// Sets the NEB bead index metadata.
+    ConFrameBuilder &set_neb_bead(uint64_t bead);
+    /// Sets the NEB band index metadata.
+    ConFrameBuilder &set_neb_band(uint64_t band);
 
     /**
-     * @brief Adds an atom with velocity data.
+     * @brief Adds an atom and returns *this for chaining.
+     *
+     * Optional `velocity` and `force` parameters carry the per-atom
+     * vector data. Pass `std::nullopt` (or rely on the default) for atoms
+     * without that section.
+     *
+     * Example:
+     * @code
+     *   builder.add_atom("Cu", 0, 0, 0, {true, true, true}, 0, 63.546,
+     *                    {{0.1, 0.2, 0.3}});
+     * @endcode
+     *
+     * For chained per-atom attachment use the legacy `with_velocity` /
+     * `with_force` helpers, which mutate the most recently added atom.
      */
-    void add_atom_with_velocity(const std::string &symbol, double x, double y,
-                                double z, bool is_fixed, uint64_t atom_id,
-                                double mass, double vx, double vy, double vz);
+    ConFrameBuilder &add_atom(
+        const std::string &symbol, double x, double y, double z,
+        const std::array<bool, 3> &fixed, uint64_t atom_id, double mass,
+        std::optional<std::array<double, 3>> velocity = std::nullopt,
+        std::optional<std::array<double, 3>> force = std::nullopt);
+
+    /// Convenience overload for the all-axes-fixed boolean shorthand.
+    ConFrameBuilder &add_atom(
+        const std::string &symbol, double x, double y, double z, bool is_fixed,
+        uint64_t atom_id, double mass,
+        std::optional<std::array<double, 3>> velocity = std::nullopt,
+        std::optional<std::array<double, 3>> force = std::nullopt);
+
+    /// Attaches velocity to the most recently added atom (chainable).
+    ConFrameBuilder &with_velocity(const std::array<double, 3> &v);
+    /// Attaches force to the most recently added atom (chainable).
+    ConFrameBuilder &with_force(const std::array<double, 3> &f);
 
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
-     * @throws std::runtime_error if the build fails.
+     *
+     * The builder is invalidated after this call: every subsequent
+     * method (add_atom, set_*, with_*, build) is a no-op or throws.
+     * Construct a new ConFrameBuilder if you need to author another
+     * frame.
+     *
+     * @throws std::runtime_error if the build fails or if `build()`
+     *         is called on an already-consumed builder.
      */
     ConFrame build();
 
@@ -252,6 +411,17 @@ class ConFrameBuilder {
 };
 
 // --- Convenience free functions ---
+
+inline std::string status_message(RKRStatus status) {
+    const char *message = rkr_status_message(status);
+    return message ? std::string(message) : std::string("unknown status");
+}
+
+inline void throw_on_error(RKRStatus status, const std::string &operation) {
+    if (status != RKRStatus::RKR_STATUS_SUCCESS) {
+        throw std::runtime_error(operation + ": " + status_message(status));
+    }
+}
 
 /**
  * @brief Reads the first frame from a .con file using mmap.
@@ -309,8 +479,12 @@ inline ConFrameIterator::Iterator ConFrameIterator::end() {
     return Iterator(nullptr);
 }
 inline bool
+ConFrameIterator::Iterator::operator==(const Iterator &other) const {
+    return current_frame_ == other.current_frame_;
+}
+inline bool
 ConFrameIterator::Iterator::operator!=(const Iterator &other) const {
-    return current_frame_ != other.current_frame_;
+    return !(*this == other);
 }
 inline ConFrameIterator::Iterator::Iterator(CConFrameIterator *iterator_ptr)
     : iterator_ptr_(iterator_ptr) {
@@ -360,8 +534,19 @@ inline void ConFrame::cache_data() const {
                      c_frame->angles[2]};
 
     has_velocities_cache_ = c_frame->has_velocities;
+    has_forces_cache_ = c_frame->has_forces;
 
     atoms_cache_.reserve(c_frame->num_atoms);
+    // The legacy Atom fields (vx/vy/vz, fx/fy/fz, has_velocity,
+    // has_forces, is_fixed) carry [[deprecated]] markers so external
+    // callers get a compile-time nudge toward velocity()/force() and
+    // the per-axis flags. The wrapper still populates them here as the
+    // single source of truth that the new accessors read from, so the
+    // deprecation warning is suppressed locally.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     for (size_t i = 0; i < c_frame->num_atoms; ++i) {
         const CAtom &c_atom = c_frame->atoms[i];
         atoms_cache_.emplace_back(
@@ -371,6 +556,9 @@ inline void ConFrame::cache_data() const {
                  c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity,
                  c_atom.fx, c_atom.fy, c_atom.fz, c_atom.has_forces});
     }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
     free_c_frame(c_frame);
 
@@ -427,6 +615,99 @@ inline bool ConFrame::has_velocities() const {
     return has_velocities_cache_;
 }
 
+inline bool ConFrame::has_forces() const {
+    cache_data();
+    return has_forces_cache_;
+}
+
+inline uint32_t ConFrame::spec_version() const {
+    return rkr_frame_spec_version(frame_handle_.get());
+}
+
+inline std::string ConFrame::metadata_json() const {
+    char *json = rkr_frame_metadata_json(frame_handle_.get());
+    if (!json)
+        return "";
+    std::string result(json);
+    rkr_free_string(json);
+    return result;
+}
+
+inline double ConFrame::energy() const {
+    return rkr_frame_energy(frame_handle_.get());
+}
+
+inline uint64_t ConFrame::frame_index() const {
+    return rkr_frame_frame_index(frame_handle_.get());
+}
+
+inline double ConFrame::time() const {
+    return rkr_frame_time(frame_handle_.get());
+}
+
+inline double ConFrame::timestep() const {
+    return rkr_frame_timestep(frame_handle_.get());
+}
+
+inline uint64_t ConFrame::neb_bead() const {
+    return rkr_frame_neb_bead(frame_handle_.get());
+}
+
+inline uint64_t ConFrame::neb_band() const {
+    return rkr_frame_neb_band(frame_handle_.get());
+}
+
+inline std::optional<double> ConFrame::energy_opt() const {
+    double v = rkr_frame_energy(frame_handle_.get());
+    if (std::isnan(v))
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<uint64_t> ConFrame::frame_index_opt() const {
+    uint64_t v = rkr_frame_frame_index(frame_handle_.get());
+    if (v == UINT64_MAX)
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<double> ConFrame::time_opt() const {
+    double v = rkr_frame_time(frame_handle_.get());
+    if (std::isnan(v))
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<double> ConFrame::timestep_opt() const {
+    double v = rkr_frame_timestep(frame_handle_.get());
+    if (std::isnan(v))
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<uint64_t> ConFrame::neb_bead_opt() const {
+    uint64_t v = rkr_frame_neb_bead(frame_handle_.get());
+    if (v == UINT64_MAX)
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<uint64_t> ConFrame::neb_band_opt() const {
+    uint64_t v = rkr_frame_neb_band(frame_handle_.get());
+    if (v == UINT64_MAX)
+        return std::nullopt;
+    return v;
+}
+
+inline std::optional<std::string> ConFrame::potential_type() const {
+    char *p = rkr_frame_potential_type(frame_handle_.get());
+    if (!p)
+        return std::nullopt;
+    std::string s(p);
+    rkr_free_string(p);
+    return s;
+}
+
 // --- Implementation of ConFrameWriter methods ---
 
 inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
@@ -453,10 +734,9 @@ inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
         handles.push_back(frame.get_handle());
     }
 
-    if (rkr_writer_extend(writer_handle_.get(), handles.data(),
-                          handles.size()) != 0) {
-        throw std::runtime_error("Failed to write multiple frames.");
-    }
+    throw_on_error(
+        rkr_writer_extend(writer_handle_.get(), handles.data(), handles.size()),
+        "Failed to write multiple frames");
 }
 
 // --- Implementation of ConFrameBuilder methods ---
@@ -496,24 +776,107 @@ ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
     return *this;
 }
 
-inline void ConFrameBuilder::add_atom(const std::string &symbol, double x,
-                                      double y, double z, bool is_fixed,
-                                      uint64_t atom_id, double mass) {
-    if (rkr_frame_add_atom(builder_handle_, symbol.c_str(), x, y, z, is_fixed,
-                           atom_id, mass) != 0) {
-        throw std::runtime_error("Failed to add atom to frame builder.");
-    }
+inline ConFrameBuilder &
+ConFrameBuilder::add_atom(const std::string &symbol, double x, double y,
+                          double z, const std::array<bool, 3> &fixed,
+                          uint64_t atom_id, double mass,
+                          std::optional<std::array<double, 3>> velocity,
+                          std::optional<std::array<double, 3>> force) {
+    const double *vptr = velocity ? velocity->data() : nullptr;
+    const double *fptr = force ? force->data() : nullptr;
+    throw_on_error(rkr_frame_add_atom_full(builder_handle_, symbol.c_str(), x,
+                                           y, z, fixed[0], fixed[1], fixed[2],
+                                           atom_id, mass, vptr, fptr),
+                   "Failed to add atom to frame builder");
+    return *this;
 }
 
-inline void ConFrameBuilder::add_atom_with_velocity(
-    const std::string &symbol, double x, double y, double z, bool is_fixed,
-    uint64_t atom_id, double mass, double vx, double vy, double vz) {
-    if (rkr_frame_add_atom_with_velocity(builder_handle_, symbol.c_str(), x, y,
-                                         z, is_fixed, atom_id, mass, vx, vy,
-                                         vz) != 0) {
-        throw std::runtime_error(
-            "Failed to add atom with velocity to frame builder.");
-    }
+inline ConFrameBuilder &
+ConFrameBuilder::add_atom(const std::string &symbol, double x, double y,
+                          double z, bool is_fixed, uint64_t atom_id,
+                          double mass,
+                          std::optional<std::array<double, 3>> velocity,
+                          std::optional<std::array<double, 3>> force) {
+    return add_atom(symbol, x, y, z,
+                    {is_fixed, is_fixed, is_fixed}, atom_id, mass,
+                    std::move(velocity), std::move(force));
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::with_velocity(const std::array<double, 3> &v) {
+    throw_on_error(
+        rkr_frame_builder_set_last_velocity(builder_handle_, v.data()),
+        "Failed to attach velocity to last atom");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::with_force(const std::array<double, 3> &f) {
+    throw_on_error(
+        rkr_frame_builder_set_last_force(builder_handle_, f.data()),
+        "Failed to attach force to last atom");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_metadata_json(const std::string &metadata_json) {
+    throw_on_error(rkr_frame_builder_set_metadata_json(builder_handle_,
+                                                       metadata_json.c_str()),
+                   "Failed to set builder metadata JSON");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_scalar_metadata(const std::string &key, double value) {
+    throw_on_error(rkr_frame_builder_set_scalar_metadata(
+                       builder_handle_, key.c_str(), value),
+                   "Failed to set builder scalar metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_string_metadata(const std::string &key,
+                                     const std::string &value) {
+    throw_on_error(rkr_frame_builder_set_string_metadata(
+                       builder_handle_, key.c_str(), value.c_str()),
+                   "Failed to set builder string metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_energy(double energy) {
+    throw_on_error(rkr_frame_builder_set_energy(builder_handle_, energy),
+                   "Failed to set builder energy metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_frame_index(uint64_t idx) {
+    throw_on_error(rkr_frame_builder_set_frame_index(builder_handle_, idx),
+                   "Failed to set builder frame_index metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_time(double time) {
+    throw_on_error(rkr_frame_builder_set_time(builder_handle_, time),
+                   "Failed to set builder time metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_timestep(double dt) {
+    throw_on_error(rkr_frame_builder_set_timestep(builder_handle_, dt),
+                   "Failed to set builder timestep metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_neb_bead(uint64_t bead) {
+    throw_on_error(rkr_frame_builder_set_neb_bead(builder_handle_, bead),
+                   "Failed to set builder neb_bead metadata");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_neb_band(uint64_t band) {
+    throw_on_error(rkr_frame_builder_set_neb_band(builder_handle_, band),
+                   "Failed to set builder neb_band metadata");
+    return *this;
 }
 
 inline ConFrame ConFrameBuilder::build() {
