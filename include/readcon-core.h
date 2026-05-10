@@ -603,6 +603,18 @@ enum RKRStatus rkr_frame_builder_set_atom_mass(struct RKRConFrameBuilder *builde
                                                double mass);
 
 /**
+ * Updates the atom_id (pre-grouping index from .con column 5) of an
+ * existing atom. The underlying `Array1<u64>` buffer pointer stays
+ * stable; callers that hold a raw `*const u64` via
+ * `rkr_frame_builder_atom_ids_data` do not need to refresh after this.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_id(struct RKRConFrameBuilder *builder_handle,
+                                             uintptr_t index,
+                                             uint64_t atom_id);
+
+/**
  * Removes velocity / force / energy data from an existing atom.
  * # Safety
  * builder_handle must be valid.
