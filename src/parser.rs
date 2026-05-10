@@ -68,38 +68,6 @@ pub fn parse_line_of_range_f64(
     Ok(values)
 }
 
-/// Bumpalo-arena variant of [`parse_line_of_range_f64`].
-///
-/// Allocates the returned slice from `bump` instead of the global
-/// allocator, so callers that parse many atom lines per frame can
-/// reuse the same arena (and call [`bumpalo::Bump::reset`] between
-/// frames) to avoid per-line alloc/free pairs.
-pub fn parse_line_of_range_f64_in<'b>(
-    bump: &'b bumpalo::Bump,
-    line: &str,
-    min: usize,
-    max: usize,
-    defaults: &[f64],
-) -> Result<&'b mut [f64], ParseError> {
-    let mut values = bumpalo::collections::Vec::with_capacity_in(max, bump);
-    for token in line.split_ascii_whitespace() {
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-        values.push(val);
-    }
-    if values.len() < min || values.len() > max {
-        return Err(ParseError::InvalidVectorLength {
-            expected: max,
-            found: values.len(),
-        });
-    }
-    while values.len() < max {
-        let idx = values.len();
-        values.push(defaults[idx]);
-    }
-    Ok(values.into_bump_slice_mut())
-}
-
 fn metadata_json_error(message: impl Into<String>) -> ParseError {
     ParseError::InvalidMetadataJson(message.into())
 }
@@ -471,12 +439,6 @@ pub fn parse_single_frame<'a>(
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
 
-    // Per-frame arena that backs every atom-line parse buffer. The
-    // intermediate `Vec<f64>` of size <= 5 that the row parser used to
-    // return per atom now lives in this arena and is freed when the
-    // arena is dropped (i.e. on frame completion).
-    let bump = bumpalo::Bump::new();
-
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         // Allocate the per-component Arc<str> directly from the trimmed
@@ -492,7 +454,7 @@ pub fn parse_single_frame<'a>(
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
             // Column 5 (atom_index) is optional; defaults to sequential index.
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
-            let vals = parse_line_of_range_f64_in(&bump, coord_line, 4, 5, &defaults)?;
+            let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             let (fixed, atom_id) = if validate {
                 parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
             } else {

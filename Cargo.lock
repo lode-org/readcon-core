@@ -948,7 +948,6 @@ dependencies = [
 name = "readcon-core"
 version = "0.10.0"
 dependencies = [
- "bumpalo",
  "capnp",
  "capnp-rpc",
  "capnpc",
