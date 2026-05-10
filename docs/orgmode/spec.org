@@ -697,6 +697,13 @@ Pandas v2, Parquet, PyTorch, JAX, DGL (the canonical columnar /
 ML stacks). It is the layout NumPy /recommends against/ structured
 arrays for, on the same SIMD-throughput grounds.
 
+The =Arc<RwLock<ndarray::ArrayD<T>>>= storage hook + DLPack 1.0
+export pattern adopted here mirrors the design described in
+@@rst::cite:t:`bigiMetatensorMetatomicFoundational2026`@@, where
+the same layout serves as the foundational data exchange surface
+across the metatensor / metatomic atomistic machine-learning
+libraries.
+
 ** Section presence semantics (normative)
 :PROPERTIES:
 :CUSTOM_ID: builder-section-presence
@@ -785,3 +792,13 @@ DLPack view becomes invalid).
 Bulk and per-element mutation (=set_atom_*=, =set_*_from_flat=,
 =clear_atom_*=) MUST NOT reallocate the underlying buffer and the
 data pointer MUST stay stable across these operations.
+
+* References
+:PROPERTIES:
+:CUSTOM_ID: references
+:END:
+
+#+begin_export rst
+.. bibliography::
+   :style: alpha
+#+end_export
