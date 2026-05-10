@@ -418,6 +418,58 @@ class ConFrameBuilder {
     /// section on `build()` if any atom carries an energy.
     ConFrameBuilder &with_energy(double energy);
 
+    // --- v0.11.0 in-place mutation API --------------------------------------
+    //
+    // Allows long-lived consumers to bulk-load atoms once and then update
+    // positions / velocities / forces / energies in place across many
+    // simulation steps, calling build() only at I/O boundaries.
+    // Out-of-range index errors raise std::runtime_error via throw_on_error.
+
+    /// Number of atoms currently held in the builder.
+    [[nodiscard]] size_t atom_count() const;
+
+    /// Updates the Cartesian position of an existing atom. Throws on
+    /// out-of-range index.
+    ConFrameBuilder &set_atom_position(size_t i, double x, double y, double z);
+    /// Sets the velocity of an existing atom (auto-declares "velocities"
+    /// section on build() if any atom carries a velocity).
+    ConFrameBuilder &set_atom_velocity(size_t i,
+                                       const std::array<double, 3> &v);
+    /// Sets the force on an existing atom.
+    ConFrameBuilder &set_atom_force(size_t i, const std::array<double, 3> &f);
+    /// Sets the per-atom energy contribution of an existing atom.
+    ConFrameBuilder &set_atom_energy(size_t i, double energy);
+    /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
+    ConFrameBuilder &set_atom_fixed(size_t i, const std::array<bool, 3> &fixed);
+    /// Updates the mass of an existing atom.
+    ConFrameBuilder &set_atom_mass(size_t i, double mass);
+
+    /// Removes velocity / force / energy data from an existing atom.
+    ConFrameBuilder &clear_atom_velocity(size_t i);
+    ConFrameBuilder &clear_atom_force(size_t i);
+    ConFrameBuilder &clear_atom_energy(size_t i);
+
+    /// Bulk-update positions for every atom from a flat row-major buffer
+    /// `[x0,y0,z0,x1,y1,z1,...]` of length `3 * atom_count()`.
+    ConFrameBuilder &set_positions_from_flat(const std::vector<double> &positions);
+    /// Bulk-update forces from a flat row-major buffer of length `3 * atom_count()`.
+    ConFrameBuilder &set_forces_from_flat(const std::vector<double> &forces);
+    /// Bulk-update per-atom energies from a buffer of length `atom_count()`.
+    ConFrameBuilder &set_atom_energies_from_flat(const std::vector<double> &energies);
+
+    /// Read-only accessor: position of atom `i` as `(x, y, z)`.
+    [[nodiscard]] std::array<double, 3> get_atom_position(size_t i) const;
+    /// Read-only accessor: velocity of atom `i`, if any.
+    [[nodiscard]] std::optional<std::array<double, 3>>
+    get_atom_velocity(size_t i) const;
+    /// Read-only accessor: force on atom `i`, if any.
+    [[nodiscard]] std::optional<std::array<double, 3>>
+    get_atom_force(size_t i) const;
+    /// Read-only accessor: per-atom energy of atom `i`, if any.
+    [[nodiscard]] std::optional<double> get_atom_energy(size_t i) const;
+    /// Read-only accessor: mass of atom `i`.
+    [[nodiscard]] double get_atom_mass(size_t i) const;
+
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
      *
@@ -883,6 +935,157 @@ inline ConFrameBuilder &ConFrameBuilder::with_energy(double energy) {
         rkr_frame_builder_set_last_energy(builder_handle_, energy),
         "Failed to attach per-atom energy to last atom");
     return *this;
+}
+
+// --- v0.11.0 in-place mutation API impls ------------------------------------
+
+inline size_t ConFrameBuilder::atom_count() const {
+    return rkr_frame_builder_atom_count(builder_handle_);
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_position(size_t i, double x, double y, double z) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_position(builder_handle_, i, x, y, z),
+        "Failed to set atom position");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_velocity(size_t i, const std::array<double, 3> &v) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_velocity(builder_handle_, i, v.data()),
+        "Failed to set atom velocity");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_force(size_t i, const std::array<double, 3> &f) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_force(builder_handle_, i, f.data()),
+        "Failed to set atom force");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_atom_energy(size_t i,
+                                                         double energy) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_energy(builder_handle_, i, energy),
+        "Failed to set atom energy");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_fixed(size_t i, const std::array<bool, 3> &fixed) {
+    throw_on_error(rkr_frame_builder_set_atom_fixed(
+                       builder_handle_, i, fixed[0], fixed[1], fixed[2]),
+                   "Failed to set atom fixed flags");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_atom_mass(size_t i, double mass) {
+    throw_on_error(rkr_frame_builder_set_atom_mass(builder_handle_, i, mass),
+                   "Failed to set atom mass");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::clear_atom_velocity(size_t i) {
+    throw_on_error(
+        rkr_frame_builder_clear_atom_velocity(builder_handle_, i),
+        "Failed to clear atom velocity");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::clear_atom_force(size_t i) {
+    throw_on_error(rkr_frame_builder_clear_atom_force(builder_handle_, i),
+                   "Failed to clear atom force");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::clear_atom_energy(size_t i) {
+    throw_on_error(rkr_frame_builder_clear_atom_energy(builder_handle_, i),
+                   "Failed to clear atom energy");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_positions_from_flat(const std::vector<double> &positions) {
+    throw_on_error(rkr_frame_builder_set_positions_from_flat(
+                       builder_handle_, positions.data(), positions.size()),
+                   "Failed to bulk-set positions");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_forces_from_flat(const std::vector<double> &forces) {
+    throw_on_error(rkr_frame_builder_set_forces_from_flat(
+                       builder_handle_, forces.data(), forces.size()),
+                   "Failed to bulk-set forces");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_energies_from_flat(const std::vector<double> &energies) {
+    throw_on_error(rkr_frame_builder_set_atom_energies_from_flat(
+                       builder_handle_, energies.data(), energies.size()),
+                   "Failed to bulk-set per-atom energies");
+    return *this;
+}
+
+inline std::array<double, 3>
+ConFrameBuilder::get_atom_position(size_t i) const {
+    std::array<double, 3> xyz{0.0, 0.0, 0.0};
+    throw_on_error(rkr_frame_builder_get_atom_position(builder_handle_, i,
+                                                       xyz.data()),
+                   "Failed to read atom position");
+    return xyz;
+}
+
+inline std::optional<std::array<double, 3>>
+ConFrameBuilder::get_atom_velocity(size_t i) const {
+    std::array<double, 3> xyz{0.0, 0.0, 0.0};
+    bool has_value = false;
+    throw_on_error(rkr_frame_builder_get_atom_velocity(builder_handle_, i,
+                                                       xyz.data(), &has_value),
+                   "Failed to read atom velocity");
+    if (has_value) {
+        return xyz;
+    }
+    return std::nullopt;
+}
+
+inline std::optional<std::array<double, 3>>
+ConFrameBuilder::get_atom_force(size_t i) const {
+    std::array<double, 3> xyz{0.0, 0.0, 0.0};
+    bool has_value = false;
+    throw_on_error(
+        rkr_frame_builder_get_atom_force(builder_handle_, i, xyz.data(),
+                                         &has_value),
+        "Failed to read atom force");
+    if (has_value) {
+        return xyz;
+    }
+    return std::nullopt;
+}
+
+inline std::optional<double>
+ConFrameBuilder::get_atom_energy(size_t i) const {
+    double value = 0.0;
+    bool has_value = false;
+    throw_on_error(
+        rkr_frame_builder_get_atom_energy(builder_handle_, i, &value, &has_value),
+        "Failed to read atom energy");
+    if (has_value) {
+        return value;
+    }
+    return std::nullopt;
+}
+
+inline double ConFrameBuilder::get_atom_mass(size_t i) const {
+    double m = 0.0;
+    throw_on_error(rkr_frame_builder_get_atom_mass(builder_handle_, i, &m),
+                   "Failed to read atom mass");
+    return m;
 }
 
 inline ConFrameBuilder &
