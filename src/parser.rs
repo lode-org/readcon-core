@@ -456,7 +456,7 @@ pub fn parse_single_frame<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             let (fixed, atom_id) = if validate {
-                decode_identity_from_floats(&vals, 3, 4, "coordinate")?
+                parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
             } else {
                 (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
             };
@@ -533,32 +533,45 @@ fn validate_coordinate_component(
     Ok(())
 }
 
-/// Decode the per-row identity columns (fixed bitmask + atom_id) from
-/// the already-parsed f64 vector returned by `parse_line_of_range_f64`.
+/// Strict-validation parser for the per-row identity columns
+/// (fixed bitmask + atom_id) used by every section type.
 ///
-/// This avoids re-tokenizing the line and re-parsing the integers when
-/// `validate=true` (the previous code did one f64 pass plus a second
-/// u8/u64 pass on the same row). Works for sections of any column count
-/// since the indices into `vals` are explicit.
-fn decode_identity_from_floats(
-    vals: &[f64],
+/// `n_cols` is the total whitespace-separated column count expected on
+/// the row in strict mode, and `(fixed_idx, atom_id_idx)` are the
+/// 0-based positions of the fixed bitmask and atom_id columns inside
+/// that layout. Each section calls in with its own values:
+///
+/// - coordinates / velocities / forces: 5 cols, fixed=3, atom_id=4
+/// - energies: 3 cols, fixed=1, atom_id=2
+///
+/// String-based parsing on purpose: strict v2 mode rejects values that
+/// are not in the canonical integer form (e.g. `5.0` for a bitmask),
+/// which an f64 round-trip would silently accept.
+fn parse_identity_columns(
+    line: &str,
+    row_kind: &str,
     fixed_idx: usize,
     atom_id_idx: usize,
-    row_kind: &str,
+    n_cols: usize,
 ) -> Result<([bool; 3], u64), ParseError> {
-    let fixed_raw = vals[fixed_idx];
-    if !(0.0..=7.0).contains(&fixed_raw) || fixed_raw.fract() != 0.0 {
+    let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
+    if columns.len() != n_cols {
         return Err(ParseError::ValidationError(format!(
-            "{row_kind} fixed_flag must be an integer bitmask in 0..=7, got {fixed_raw}"
+            "{row_kind} rows require {n_cols} columns including fixed_flag and atom_id in validate mode"
         )));
     }
-    let id_raw = vals[atom_id_idx];
-    if id_raw < 0.0 || id_raw.fract() != 0.0 {
+    let fixed_flag = columns[fixed_idx].parse::<u8>().map_err(|_| {
+        ParseError::ValidationError(format!("{row_kind} fixed_flag must be an integer bitmask"))
+    })?;
+    if fixed_flag > 7 {
         return Err(ParseError::ValidationError(format!(
-            "{row_kind} atom_id must be a non-negative integer, got {id_raw}"
+            "{row_kind} fixed_flag must be between 0 and 7"
         )));
     }
-    Ok((decode_fixed_bitmask(fixed_raw as u8), id_raw as u64))
+    let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
+        ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
+    })?;
+    Ok((decode_fixed_bitmask(fixed_flag), atom_id))
 }
 
 
@@ -692,7 +705,8 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = decode_identity_from_floats(&vals, 3, 4, "velocities")?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(vel_line, "velocities", 3, 4, 5)?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -751,7 +765,8 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = decode_identity_from_floats(&vals, 3, 4, "forces")?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(force_line, "forces", 3, 4, 5)?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -816,7 +831,8 @@ where
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) = decode_identity_from_floats(&vals, 1, 2, "energies")?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(energy_line, "energies", 1, 2, 3)?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
