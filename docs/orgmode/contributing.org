@@ -104,6 +104,38 @@ cargo bench
 Test data lives in =resources/test/=. Use the =test_case!= macro in
 integration tests to locate test files.
 
+** Profile-guided optimisation (PGO)
+
+The =release= and =dist= profiles in =Cargo.toml= already enable
+=lto = "thin"= / =lto = "fat"= and =codegen-units = 1=. PGO can give
+another 5--15% on parser hot paths by feeding the optimiser a real
+profile from the Criterion benchmarks. It is opt-in because the build
+takes 2--3x longer.
+
+Three-step workflow (Linux, =rustc= 1.88+):
+
+#+begin_src shell
+# 1. Build instrumented binary; pass --features for everything you
+#    want profile data on.
+mkdir -p /tmp/readcon-pgo
+RUSTFLAGS="-Cprofile-generate=/tmp/readcon-pgo" \
+  cargo bench --features parallel,zstd,rpc --no-run
+
+# 2. Run the benches to collect .profraw files.
+RUSTFLAGS="-Cprofile-generate=/tmp/readcon-pgo" \
+  cargo bench --features parallel,zstd,rpc
+
+# 3. Merge profraws then build with --use to consume the merged profile.
+$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata \
+  merge -o /tmp/readcon-pgo/merged.profdata /tmp/readcon-pgo
+RUSTFLAGS="-Cprofile-use=/tmp/readcon-pgo/merged.profdata" \
+  cargo build --release --features parallel,zstd,rpc
+#+end_src
+
+The same flow works for =cargo cinstall= when you want PGO-optimised
+=libreadcon_core.so= for distribution; substitute =cargo cinstall=
+for =cargo build --release= in step 3.
+
 * Continuous integration
 
 ** Workflows
