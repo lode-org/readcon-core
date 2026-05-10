@@ -19,6 +19,15 @@ use std::path::Path;
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
     lines: Peekable<std::str::Lines<'a>>,
+    /// Raw bytes of the source string, alongside a cursor. Used by
+    /// [`Self::forward_fast`] to skip frames via direct memchr-bulk
+    /// `\n` lookup instead of advancing the line iterator one call at
+    /// a time. The cursor is only nudged forward from `forward_fast`;
+    /// callers that mix `next()` / `forward()` with `forward_fast`
+    /// will see the cursor reset to whatever the line iterator's
+    /// current view of the slice is.
+    bytes: &'a [u8],
+    cursor: usize,
 }
 
 impl<'a> ConFrameIterator<'a> {
@@ -30,7 +39,125 @@ impl<'a> ConFrameIterator<'a> {
     pub fn new(file_contents: &'a str) -> Self {
         ConFrameIterator {
             lines: file_contents.lines().peekable(),
+            bytes: file_contents.as_bytes(),
+            cursor: 0,
         }
+    }
+
+    /// Bulk-skips `n` lines starting at `self.cursor` using memchr to
+    /// find each `\n`. Returns `Ok(())` when `n` lines were consumed,
+    /// `Err(IncompleteFrame)` when the byte slice ran out first.
+    ///
+    /// Used by [`Self::forward_fast`] to avoid the per-line iterator
+    /// overhead of `Peekable<Lines>::next()` on workloads that only
+    /// want to skip past the current frame.
+    fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
+        for _ in 0..n {
+            let rest = &self.bytes[self.cursor..];
+            match memchr::memchr(b'\n', rest) {
+                Some(pos) => self.cursor += pos + 1,
+                None => {
+                    if rest.is_empty() {
+                        return Err(error::ParseError::IncompleteFrame);
+                    }
+                    self.cursor = self.bytes.len();
+                    return Err(error::ParseError::IncompleteFrame);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the bytes of the current line at `self.cursor` (without
+    /// the trailing `\n`) as a `&str`, advancing the cursor past the
+    /// newline.
+    fn read_line_str(&mut self) -> Option<&'a str> {
+        let rest = &self.bytes[self.cursor..];
+        if rest.is_empty() {
+            return None;
+        }
+        let (line_bytes, advance) = match memchr::memchr(b'\n', rest) {
+            Some(pos) => (&rest[..pos], pos + 1),
+            None => (rest, rest.len()),
+        };
+        // Strip optional trailing \r for Windows line endings.
+        let trimmed = if line_bytes.last() == Some(&b'\r') {
+            &line_bytes[..line_bytes.len() - 1]
+        } else {
+            line_bytes
+        };
+        // SAFETY: source was a `&str` so any UTF-8 prefix terminated by
+        // an ASCII byte (`\n`, `\r`) remains valid UTF-8.
+        let line = unsafe { std::str::from_utf8_unchecked(trimmed) };
+        self.cursor += advance;
+        Some(line)
+    }
+
+    /// memchr-backed equivalent of [`Self::forward`]. Skips the next
+    /// frame without fully parsing its atom data, walking the
+    /// underlying byte slice with `memchr` directly instead of the
+    /// peekable line iterator. The two methods are not interleavable:
+    /// once the caller starts using `forward_fast`, switching to
+    /// `next()` or `forward()` resets to the line iterator's view and
+    /// loses any progress the cursor made.
+    pub fn forward_fast(&mut self) -> Option<Result<(), error::ParseError>> {
+        if self.cursor >= self.bytes.len() {
+            return None;
+        }
+        // Lines 1..=6 of the header are skipped wholesale.
+        if let Err(e) = self.advance_lines(6) {
+            return Some(Err(e));
+        }
+        // Line 7: natm_types.
+        let natm_types: usize = match self.read_line_str() {
+            Some(line) => match crate::parser::parse_line_of_n::<usize>(line, 1) {
+                Ok(v) => v[0],
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
+        // Line 8: natms_per_type.
+        let natms_per_type: Vec<usize> = match self.read_line_str() {
+            Some(line) => match crate::parser::parse_line_of_n(line, natm_types) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
+        // Line 9: masses_per_type, consumed.
+        if let Err(e) = self.advance_lines(1) {
+            return Some(Err(e));
+        }
+        let total_atoms: usize = natms_per_type.iter().sum();
+        let coord_block_lines = total_atoms + natm_types * 2;
+        if let Err(e) = self.advance_lines(coord_block_lines) {
+            return Some(Err(e));
+        }
+        // Optional sections: blank line + same-shape block, repeated.
+        loop {
+            let rest = &self.bytes[self.cursor..];
+            // Peek the next line without advancing the cursor.
+            let next_eol = memchr::memchr(b'\n', rest);
+            let line = match next_eol {
+                Some(pos) => &rest[..pos],
+                None => rest,
+            };
+            let is_blank = line
+                .iter()
+                .all(|b| matches!(b, b' ' | b'\t' | b'\r'));
+            if !is_blank || line.is_empty() && self.cursor >= self.bytes.len() {
+                break;
+            }
+            if !is_blank {
+                break;
+            }
+            // Consume the blank separator and the section block.
+            self.cursor += next_eol.map(|p| p + 1).unwrap_or(rest.len());
+            if let Err(e) = self.advance_lines(coord_block_lines) {
+                return Some(Err(e));
+            }
+        }
+        Some(Ok(()))
     }
 
     /// Skips the next frame without fully parsing its atomic data.

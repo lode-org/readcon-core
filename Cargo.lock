@@ -956,6 +956,7 @@ dependencies = [
  "fast-float2",
  "flate2",
  "futures",
+ "memchr",
  "memmap2",
  "metatensor",
  "ndarray",

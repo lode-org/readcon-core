@@ -102,6 +102,15 @@ fn large_file_bench(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("100_frames_forward_fast_skip", |b| {
+        b.iter(|| {
+            let mut iter = ConFrameIterator::new(&large);
+            while let Some(result) = iter.forward_fast() {
+                let _ = black_box(result);
+            }
+        })
+    });
+
     group.finish();
 }
 
