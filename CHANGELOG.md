@@ -1,15 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## Unreleased (0381f18..48134ee)
+## Unreleased (0381f18..ba74d8e)
+#### Maintenance
+- bump to v0.10.0 - (35ee566) - *HaoZeke*
+#### Benchmarks
+- add trajectory-style write fixture with heavy shared metadata - (71cbbb5) - *HaoZeke*
+- write 100-frame trajectory through ConFrameWriter - (4b960b9) - *HaoZeke*
 #### Documentation
 - (**architecture**) document cargo-c install contract - (9a64ac4) - *HaoZeke*
 - (**contributing**) document profile-guided optimisation workflow - (9822fda) - *HaoZeke*
 - (**export**) publish docs/orgmode/img/ assets to docs/source/img/ - (0381f18) - *HaoZeke*
 - (**spec**) document the energies section format - (effb179) - *HaoZeke*
-#### Benchmarks
-- add trajectory-style write fixture with heavy shared metadata - (71cbbb5) - *HaoZeke*
-- write 100-frame trajectory through ConFrameWriter - (4b960b9) - *HaoZeke*
 #### Features
 - (**bindings**) plumb per-atom energies through every binding - (596862c) - *HaoZeke*
 - (**cpp**) morton_sort + atom_index_by_id mirroring the FFI - (a198e57) - *HaoZeke*
@@ -30,10 +32,12 @@ All notable changes to this project will be documented in this file. See [conven
 #### Performance Improvements
 - (**iterators**) add memchr-backed forward_fast skip path - (c41abf5) - *HaoZeke*
 - (**parallel**) boundary scan via forward_fast (O(N), not O(N^2)) - (48134ee) - *HaoZeke*
+- (**parser**) arena-back per-atom parse buffers via bumpalo - (a94aa9b) - *HaoZeke*
 - (**parser**) lift identity columns from already-parsed floats; fix energies validate - (dfb5bcf) - *HaoZeke*
 - (**profile**) tighten release and dist build profiles - (9538ea1) - *HaoZeke*
 - (**writer**) cache the serialised JSON metadata line across frames - (5663a6c) - *HaoZeke*
 #### Revert
+- (**parser**) drop bumpalo arena experiment - (ba74d8e) - *HaoZeke*
 - (**perf**) drop Morton spatial sort from v0.10.0 surface - (2ee6daa) - *HaoZeke*
 #### Tests
 - (**julia**) update CAtom/CFrame field order tests for energy fields - (6bdab08) - *HaoZeke*
@@ -47,11 +51,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.9.0 - 2026-05-10
+#### Maintenance
+- bump to v0.9.0 - (b1cc006) - *HaoZeke*
 #### Buildsystem
 - (**capi**) trim cargo-c metadata to defaults, fold drift check into script - (71c1380) - *HaoZeke*
 - (**capi**) ship pre-generated header, drop cbindgen build dep - (c4379bd) - *HaoZeke*
-#### Maintenance
-- bump to v0.9.0 - (b1cc006) - *HaoZeke*
 #### Features
 - (**builder**) validate metadata schema in set_metadata_json - (ed1b470) - *HaoZeke*
 - (**cpp**) mark legacy fields deprecated, document standard, polish iterator - (df5f6b4) - *HaoZeke*
@@ -114,10 +118,10 @@ All notable changes to this project will be documented in this file. See [conven
 ## v0.8.0 - 2026-05-10
 #### Maintenance
 - bump to v0.8.0 - (f5b14a8) - *HaoZeke*
-#### Generated
-- regenerate CHANGELOG.md from cog - (4520b3e) - *HaoZeke*
 #### Buildsystem
 - (**capi**) add cargo-c metadata and compatibility feature - (f776281) - *HaoZeke*
+#### Generated
+- regenerate CHANGELOG.md from cog - (4520b3e) - *HaoZeke*
 #### Features
 - (**ffi**) add builder metadata setters and JSON escape hatch - (75a756e) - *HaoZeke*
 - (**python**) add metadata helper parity across bindings - (3d6ca04) - *HaoZeke*
@@ -150,13 +154,13 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.7.0 - 2026-05-10
-#### Maintenance
-- rebuild .gitignore with gibo (Rust, C++, C, Python, CMake, macOS, Linux) - (e4458cb) - *HaoZeke*
 #### Documentation
 - rewrite spec.org as implementation-neutral format standard - (75f55b6) - *HaoZeke*
 - evolution rationale, reference impls, benchmark script, spec bitmask table - (06c26d2) - *HaoZeke*
 - spec update for forces/sections/compression, FAQ, benchmarks - (73e4edd) - *HaoZeke*
 - add recommended metadata keys to CON spec - (389d16f) - *HaoZeke*
+#### Maintenance
+- rebuild .gitignore with gibo (Rust, C++, C, Python, CMake, macOS, Linux) - (e4458cb) - *HaoZeke*
 #### Benchmarks
 - publication-quality plots, feature matrix, Pareto front - (a44e269) - *HaoZeke*
 - scaling benchmarks with memory usage across file sizes - (851076a) - *HaoZeke*
@@ -301,6 +305,9 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.3.0 - 2026-05-10
+#### Enhancements
+- update C/C++ examples with velocity field access - (d37ac52) - *HaoZeke*
+- integrate fast-float2, memmap2 reader, and parallel parsing - (13dc682) - *HaoZeke*
 #### Buildsystem
 - add CMakeLists.txt and update meson.build for subproject use - (01738af) - *HaoZeke*
 #### Documentation
@@ -308,9 +315,6 @@ All notable changes to this project will be documented in this file. See [conven
 - update README source with convel, bindings, and performance features - (eda3109) - *HaoZeke*
 - add tutorials page with examples for all languages - (931823a) - *HaoZeke*
 - add Sphinx docs site with org-mode source and con/convel spec - (e6c8c23) - *HaoZeke*
-#### Enhancements
-- update C/C++ examples with velocity field access - (d37ac52) - *HaoZeke*
-- integrate fast-float2, memmap2 reader, and parallel parsing - (13dc682) - *HaoZeke*
 #### Features
 - add Rust standalone usage example - (f4d2838) - *HaoZeke*
 - add Julia ccall bindings package - (07e0288) - *HaoZeke*
@@ -328,28 +332,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.2.0 - 2026-05-10
-#### Tests
-- Add some for writers - (0a59fcd) - *HaoZeke*
 #### Generated
 - Update generated readme - (0277e8b) - *HaoZeke*
 - Update with a void pointer - (f415740) - *HaoZeke*
-#### Documentation
-- Discuss the design.. - (9229f0d) - *HaoZeke*
-#### Buildsystem
-- Bump for doctests - (bfe85e1) - *HaoZeke*
-- Enable doctests - (1d79f3a) - *HaoZeke*
-#### Enhancements
-- Single pass for the writer - (ae39401) - *HaoZeke*
-- More ergonomic without constants for C++ - (7d78227) - *HaoZeke*
-- Add a cache for better performance - (ec8244d) - *HaoZeke*
-- Rework to use a writer object - (7029562) - *HaoZeke*
-- Update to do better on benchmarks - (063a89c) - *HaoZeke*
-- Setup the C++ API - (c54daf7) - *HaoZeke*
-- Rework to use opaque pointers - (736bb71) - *HaoZeke*
-- Rework the FFI for writes - (baae1c8) - *HaoZeke*
-- Update the C API sample - (5854ccc) - *HaoZeke*
-- Rework CLI to test things a bit - (a1177b6) - *HaoZeke*
-- Add a basic writer - (9b825f8) - *HaoZeke*
+#### Tests
+- Add some for writers - (0a59fcd) - *HaoZeke*
 #### Maintenance
 - Bump versions - (3619311) - *HaoZeke*
 - Even faster fails - (f729de5) - *HaoZeke*
@@ -366,6 +353,23 @@ All notable changes to this project will be documented in this file. See [conven
 - Update gitig - (64e9a79) - *HaoZeke*
 - Add an inverse helper for writes - (6170681) - *HaoZeke*
 - Minor documentation update - (b89931a) - *HaoZeke*
+#### Documentation
+- Discuss the design.. - (9229f0d) - *HaoZeke*
+#### Enhancements
+- Single pass for the writer - (ae39401) - *HaoZeke*
+- More ergonomic without constants for C++ - (7d78227) - *HaoZeke*
+- Add a cache for better performance - (ec8244d) - *HaoZeke*
+- Rework to use a writer object - (7029562) - *HaoZeke*
+- Update to do better on benchmarks - (063a89c) - *HaoZeke*
+- Setup the C++ API - (c54daf7) - *HaoZeke*
+- Rework to use opaque pointers - (736bb71) - *HaoZeke*
+- Rework the FFI for writes - (baae1c8) - *HaoZeke*
+- Update the C API sample - (5854ccc) - *HaoZeke*
+- Rework CLI to test things a bit - (a1177b6) - *HaoZeke*
+- Add a basic writer - (9b825f8) - *HaoZeke*
+#### Buildsystem
+- Bump for doctests - (bfe85e1) - *HaoZeke*
+- Enable doctests - (1d79f3a) - *HaoZeke*
 #### Continuous Integration
 - Try to run benchmarks more - (049c077) - *HaoZeke*
 #### Miscellaneous Chores
@@ -374,14 +378,12 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.1.1 - 2026-05-10
-#### Enhancements
-- Demonstrate more of the C++ usage - (f9f838c) - *HaoZeke*
-- Setup the iterator usage in the C example - (596f65a) - *HaoZeke*
-- Add a more elegant iterator interface to C++ - (706f14b) - *HaoZeke*
-- Expose iterators through C interface - (aad794a) - *HaoZeke*
-- Implement a basic forward skipper - (6e2c8a4) - *HaoZeke*
-#### Bugfixes
-- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
+#### Tests
+- Add a test for the forward iterator - (0917875) - *HaoZeke*
+#### Benchmarks
+- Add iterator validation - (9c49c86) - *HaoZeke*
+#### Buildsystem
+- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
 #### Maintenance
 - Fix category tags - (19b7499) - *HaoZeke*
 - Bump version - (09ae400) - *HaoZeke*
@@ -391,12 +393,14 @@ All notable changes to this project will be documented in this file. See [conven
 - Rework to better explain behavior - (d65634a) - *HaoZeke*
 - Try to use cargo-dist for generating things - (2ff5ce6) - *HaoZeke*
 - Fix license and keywords - (aa016b2) - *HaoZeke*
-#### Buildsystem
-- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
-#### Benchmarks
-- Add iterator validation - (9c49c86) - *HaoZeke*
-#### Tests
-- Add a test for the forward iterator - (0917875) - *HaoZeke*
+#### Enhancements
+- Demonstrate more of the C++ usage - (f9f838c) - *HaoZeke*
+- Setup the iterator usage in the C example - (596f65a) - *HaoZeke*
+- Add a more elegant iterator interface to C++ - (706f14b) - *HaoZeke*
+- Expose iterators through C interface - (aad794a) - *HaoZeke*
+- Implement a basic forward skipper - (6e2c8a4) - *HaoZeke*
+#### Bugfixes
+- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
 #### Generated
 - Update for criterion - (f1fcfa2) - *HaoZeke*
 #### Continuous Integration
@@ -410,8 +414,37 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.1.0 - 2026-05-10
+#### Generated
+- Update readme - (6524e55) - *HaoZeke*
+- Vendor a copy of the generated header - (127dd98) - *HaoZeke*
+#### Documentation
+- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
+- Minor updates - (f46b178) - *HaoZeke*
+- Minor updates - (bcd4df7) - *HaoZeke*
+- Add some more - (6529b22) - *HaoZeke*
+- Add a bunch - (0ba1212) - *HaoZeke*
+- Minor note - (1ecc856) - *HaoZeke*
+- Minor update - (489e9df) - *HaoZeke*
+- Update readme from readCon - (7751124) - *HaoZeke*
+#### Tests
+- Update for multi con reads - (6590e83) - *HaoZeke*
+- Add more unit tests - (7cd595d) - *HaoZeke*
+- Add a more interesting test - (b4c0049) - *HaoZeke*
+- Start with a simple test - (fbd71c7) - *HaoZeke*
 #### Data
 - Import test data from readCon - (c5cf85e) - *HaoZeke*
+#### Enhancements
+- Add and check a C++ interface - (b713997) - *HaoZeke*
+- Add an example for the C API usage - (94cd71d) - *HaoZeke*
+- First pass at a baseline C FFI - (577d185) - *HaoZeke*
+- Start wiring up C connections for readcon - (5f35e54) - *HaoZeke*
+- Add in first working CLI - (74c25fb) - *HaoZeke*
+- Add in an iterator - (f7a618d) - *HaoZeke*
+- Parse a single frame - (d79938a) - *HaoZeke*
+- Setup the parse header function - (4491175) - *HaoZeke*
+- Start with error types and a parser - (817e8a8) - *HaoZeke*
+- Setup some nicer error handling - (f054edd) - *HaoZeke*
+- Use cog - (7d09a68) - *HaoZeke*
 #### Maintenance
 - Use a tag prefix - (f1f68af) - *HaoZeke*
 - Minor renaming - (a871512) - *HaoZeke*
@@ -438,39 +471,10 @@ All notable changes to this project will be documented in this file. See [conven
 - Add a test helper - (c896963) - *HaoZeke*
 - Start with a project configuration - (5730540) - *HaoZeke*
 - Initialize with cargo new - (059e4eb) - *HaoZeke*
-#### Generated
-- Update readme - (6524e55) - *HaoZeke*
-- Vendor a copy of the generated header - (127dd98) - *HaoZeke*
-#### Documentation
-- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
-- Minor updates - (f46b178) - *HaoZeke*
-- Minor updates - (bcd4df7) - *HaoZeke*
-- Add some more - (6529b22) - *HaoZeke*
-- Add a bunch - (0ba1212) - *HaoZeke*
-- Minor note - (1ecc856) - *HaoZeke*
-- Minor update - (489e9df) - *HaoZeke*
-- Update readme from readCon - (7751124) - *HaoZeke*
 #### Buildsystem
 - Remove unstable rust module for stable - (bb7a200) - *HaoZeke*
 - Let meson run cargo tests too - (99d4362) - *HaoZeke*
 - Finalize first pass for readcon core - (ddff2bc) - *HaoZeke*
-#### Enhancements
-- Add and check a C++ interface - (b713997) - *HaoZeke*
-- Add an example for the C API usage - (94cd71d) - *HaoZeke*
-- First pass at a baseline C FFI - (577d185) - *HaoZeke*
-- Start wiring up C connections for readcon - (5f35e54) - *HaoZeke*
-- Add in first working CLI - (74c25fb) - *HaoZeke*
-- Add in an iterator - (f7a618d) - *HaoZeke*
-- Parse a single frame - (d79938a) - *HaoZeke*
-- Setup the parse header function - (4491175) - *HaoZeke*
-- Start with error types and a parser - (817e8a8) - *HaoZeke*
-- Setup some nicer error handling - (f054edd) - *HaoZeke*
-- Use cog - (7d09a68) - *HaoZeke*
-#### Tests
-- Update for multi con reads - (6590e83) - *HaoZeke*
-- Add more unit tests - (7cd595d) - *HaoZeke*
-- Add a more interesting test - (b4c0049) - *HaoZeke*
-- Start with a simple test - (fbd71c7) - *HaoZeke*
 #### Continuous Integration
 - Check commits too - (0f636f1) - *HaoZeke*
 - Setup a basic build and run workflow - (ff9be41) - *HaoZeke*
