@@ -515,6 +515,7 @@ impl ConFrame {
 /// assert_eq!(frame.header.natm_types, 2);
 /// assert_eq!(frame.atom_data.len(), 2);
 /// ```
+#[derive(Debug, Clone)]
 pub struct ConFrameBuilder {
     prebox_user: String,
     cell: [f64; 3],
@@ -524,6 +525,7 @@ pub struct ConFrameBuilder {
     metadata: BTreeMap<String, serde_json::Value>,
 }
 
+#[derive(Debug, Clone)]
 struct BuilderAtom {
     symbol: String,
     x: f64,
@@ -708,6 +710,297 @@ impl ConFrameBuilder {
         self
     }
 
+    // ----- In-place mutation API (added in v0.11.0) -------------------------
+    //
+    // Hot-loop consumers (eOn's Matter, dynamics integrators in GROMACS-style
+    // engines) update positions / forces / energies many thousands of times
+    // per simulation step. The append-only `add_atom` + `with_*` API forces a
+    // full rebuild each step, which is O(n*types) on `build()` and a pile of
+    // allocations besides. The methods below let callers treat the builder as
+    // a mutable in-memory frame: bulk-load once via `add_atom`, then update
+    // positions / velocities / forces / energies in place across many steps,
+    // and call `build()` only when serialising to disk.
+    //
+    // Index validation is fail-loud: every method returns
+    // `Result<&mut Self, ParseError>` and surfaces an
+    // `IndexOutOfBounds { index, len }` ParseError when `i >= atom_count()`.
+    // The C ABI maps that to RKR_STATUS_INDEX_OUT_OF_BOUNDS.
+
+    /// Number of atoms currently held in the builder.
+    pub fn atom_count(&self) -> usize {
+        self.atoms.len()
+    }
+
+    /// Updates the Cartesian position of an existing atom (zero-based index).
+    pub fn set_atom_position(
+        &mut self,
+        i: usize,
+        x: f64,
+        y: f64,
+        z: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.x = x;
+        atom.y = y;
+        atom.z = z;
+        Ok(self)
+    }
+
+    /// Sets the velocity vector of an existing atom. The frame auto-declares
+    /// a `"velocities"` section on `build()` if any atom carries velocity.
+    pub fn set_atom_velocity(
+        &mut self,
+        i: usize,
+        velocity: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.velocity = Some(velocity);
+        Ok(self)
+    }
+
+    /// Sets the force vector of an existing atom. The frame auto-declares a
+    /// `"forces"` section on `build()` if any atom carries force.
+    pub fn set_atom_force(
+        &mut self,
+        i: usize,
+        force: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.force = Some(force);
+        Ok(self)
+    }
+
+    /// Sets the per-atom energy contribution of an existing atom. The frame
+    /// auto-declares an `"energies"` section on `build()` if any atom carries
+    /// per-atom energy.
+    pub fn set_atom_energy(
+        &mut self,
+        i: usize,
+        energy: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.energy = Some(energy);
+        Ok(self)
+    }
+
+    /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
+    pub fn set_atom_fixed(
+        &mut self,
+        i: usize,
+        fixed: [bool; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.fixed = fixed;
+        Ok(self)
+    }
+
+    /// Updates the mass of an existing atom. Note: changing the mass of the
+    /// only atom of a given type recomputes that type's `masses_per_type`
+    /// entry on `build()`; mixing different masses for the same symbol is
+    /// not supported by the .con format and the last value wins.
+    pub fn set_atom_mass(
+        &mut self,
+        i: usize,
+        mass: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.mass = mass;
+        Ok(self)
+    }
+
+    /// Removes velocity data from an existing atom. After clearing every
+    /// atom, the resulting frame on `build()` does not declare a
+    /// `"velocities"` section.
+    pub fn clear_atom_velocity(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.velocity = None;
+        Ok(self)
+    }
+
+    /// Removes force data from an existing atom.
+    pub fn clear_atom_force(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.force = None;
+        Ok(self)
+    }
+
+    /// Removes per-atom energy data from an existing atom.
+    pub fn clear_atom_energy(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.atoms.len();
+        let atom = self
+            .atoms
+            .get_mut(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        atom.energy = None;
+        Ok(self)
+    }
+
+    /// Bulk-update positions for every atom from a flat buffer of length
+    /// `3 * atom_count()`. Layout is row-major `[x0, y0, z0, x1, y1, z1, ...]`
+    /// matching what NumPy / Eigen / Fortran-on-rows callers already use.
+    /// Returns `InvalidVectorLength` if the buffer length disagrees.
+    pub fn set_positions_from_flat(
+        &mut self,
+        positions: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.atoms.len();
+        if positions.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: positions.len(),
+            });
+        }
+        for (atom, chunk) in self.atoms.iter_mut().zip(positions.chunks_exact(3)) {
+            atom.x = chunk[0];
+            atom.y = chunk[1];
+            atom.z = chunk[2];
+        }
+        Ok(self)
+    }
+
+    /// Bulk-update forces for every atom from a flat buffer of length
+    /// `3 * atom_count()`. Auto-declares a `"forces"` section on `build()`.
+    pub fn set_forces_from_flat(
+        &mut self,
+        forces: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.atoms.len();
+        if forces.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: forces.len(),
+            });
+        }
+        for (atom, chunk) in self.atoms.iter_mut().zip(forces.chunks_exact(3)) {
+            atom.force = Some([chunk[0], chunk[1], chunk[2]]);
+        }
+        Ok(self)
+    }
+
+    /// Bulk-update per-atom energies for every atom from a buffer of length
+    /// `atom_count()`. Auto-declares an `"energies"` section on `build()`.
+    pub fn set_atom_energies_from_flat(
+        &mut self,
+        energies: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.atoms.len();
+        if energies.len() != n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: n,
+                found: energies.len(),
+            });
+        }
+        for (atom, &e) in self.atoms.iter_mut().zip(energies.iter()) {
+            atom.energy = Some(e);
+        }
+        Ok(self)
+    }
+
+    /// Read-only accessor: position of atom `i` as `(x, y, z)`.
+    pub fn get_atom_position(
+        &self,
+        i: usize,
+    ) -> Result<(f64, f64, f64), crate::error::ParseError> {
+        let len = self.atoms.len();
+        let a = self
+            .atoms
+            .get(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?;
+        Ok((a.x, a.y, a.z))
+    }
+
+    /// Read-only accessor: velocity of atom `i`, if any.
+    pub fn get_atom_velocity(
+        &self,
+        i: usize,
+    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.atoms.len();
+        Ok(self
+            .atoms
+            .get(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?
+            .velocity)
+    }
+
+    /// Read-only accessor: force on atom `i`, if any.
+    pub fn get_atom_force(
+        &self,
+        i: usize,
+    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.atoms.len();
+        Ok(self
+            .atoms
+            .get(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?
+            .force)
+    }
+
+    /// Read-only accessor: per-atom energy of atom `i`, if any.
+    pub fn get_atom_energy(
+        &self,
+        i: usize,
+    ) -> Result<Option<f64>, crate::error::ParseError> {
+        let len = self.atoms.len();
+        Ok(self
+            .atoms
+            .get(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?
+            .energy)
+    }
+
+    /// Read-only accessor: mass of atom `i`.
+    pub fn get_atom_mass(&self, i: usize) -> Result<f64, crate::error::ParseError> {
+        let len = self.atoms.len();
+        Ok(self
+            .atoms
+            .get(i)
+            .ok_or(crate::error::ParseError::IndexOutOfBounds { index: i, len })?
+            .mass)
+    }
+
+    // ----- end in-place mutation API ----------------------------------------
+
     /// Consumes the builder and produces a `ConFrame`.
     ///
     /// Atoms are grouped by symbol (in encounter order) to compute
@@ -761,10 +1054,15 @@ impl ConFrameBuilder {
             }
         }
 
-        // Auto-populate sections based on what data is present.
-        let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
-        let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
-        let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
+        // Auto-populate sections based on what data is present. Pre-v0.11
+        // the builder only checked atom 0 because `with_*` only ever
+        // attached to the most recently added atom; the in-place mutation
+        // API (set_atom_velocity / set_atom_force / set_atom_energy) lets
+        // callers populate any atom independently, so the section flag
+        // must check across the whole frame.
+        let has_vel = atom_data.iter().any(|a| a.has_velocity());
+        let has_frc = atom_data.iter().any(|a| a.has_forces());
+        let has_eng = atom_data.iter().any(|a| a.has_energy());
         let mut sections = Vec::new();
         if has_vel {
             sections.push(SECTION_VELOCITIES.into());
@@ -1092,5 +1390,144 @@ mod tests {
             frame.header.metadata.get("generator"),
             Some(&serde_json::Value::from("eon"))
         );
+    }
+
+    // ----- in-place mutation API tests (v0.11.0) --------------------------
+
+    fn three_atom_builder() -> ConFrameBuilder {
+        let mut b = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+        b.add_atom("Cu", 1.0, 1.0, 1.0, [false; 3], 1, 63.546);
+        b.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 2, 1.008);
+        b
+    }
+
+    #[test]
+    fn builder_atom_count_tracks_pushes() {
+        let mut b = ConFrameBuilder::new([1.0; 3], [90.0; 3]);
+        assert_eq!(b.atom_count(), 0);
+        b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        assert_eq!(b.atom_count(), 1);
+        b.add_atom("H", 1.0, 1.0, 1.0, [false; 3], 1, 1.0);
+        assert_eq!(b.atom_count(), 2);
+    }
+
+    #[test]
+    fn builder_set_atom_position_in_place() {
+        let mut b = three_atom_builder();
+        b.set_atom_position(1, 5.0, 6.0, 7.0).unwrap();
+        let (x, y, z) = b.get_atom_position(1).unwrap();
+        assert_eq!((x, y, z), (5.0, 6.0, 7.0));
+        // unaffected siblings
+        let (x0, y0, z0) = b.get_atom_position(0).unwrap();
+        assert_eq!((x0, y0, z0), (0.0, 0.0, 0.0));
+        let (x2, y2, z2) = b.get_atom_position(2).unwrap();
+        assert_eq!((x2, y2, z2), (2.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn builder_set_atom_velocity_force_energy() {
+        let mut b = three_atom_builder();
+        b.set_atom_velocity(0, [0.1, 0.2, 0.3]).unwrap();
+        b.set_atom_force(1, [10.0, 0.0, 0.0]).unwrap();
+        b.set_atom_energy(2, -1.5).unwrap();
+        assert_eq!(b.get_atom_velocity(0).unwrap(), Some([0.1, 0.2, 0.3]));
+        assert_eq!(b.get_atom_force(1).unwrap(), Some([10.0, 0.0, 0.0]));
+        assert_eq!(b.get_atom_energy(2).unwrap(), Some(-1.5));
+        // Frame should auto-declare all three sections on build.
+        let frame = b.build();
+        let names: Vec<&str> = frame.header.sections.iter().map(|s| s.as_str()).collect();
+        assert!(names.contains(&"velocities"));
+        assert!(names.contains(&"forces"));
+        assert!(names.contains(&"energies"));
+    }
+
+    #[test]
+    fn builder_clear_atom_velocity_force_energy() {
+        let mut b = three_atom_builder();
+        b.with_velocity([1.0, 2.0, 3.0]);
+        // Currently last-added atom (index 2) carries velocity; clear it.
+        b.clear_atom_velocity(2).unwrap();
+        assert_eq!(b.get_atom_velocity(2).unwrap(), None);
+    }
+
+    #[test]
+    fn builder_set_atom_fixed_and_mass() {
+        let mut b = three_atom_builder();
+        b.set_atom_fixed(0, [true, false, true]).unwrap();
+        b.set_atom_mass(0, 100.0).unwrap();
+        let frame = b.build();
+        assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
+        // type-grouped: index 0 in atom_data is the first "Cu" entry which
+        // started life at builder index 0; mass survives via masses_per_type.
+        assert_eq!(frame.header.masses_per_type[0], 100.0);
+    }
+
+    #[test]
+    fn builder_index_out_of_bounds_is_loud() {
+        let mut b = three_atom_builder();
+        let err = b.set_atom_position(99, 0.0, 0.0, 0.0).unwrap_err();
+        match err {
+            crate::error::ParseError::IndexOutOfBounds { index, len } => {
+                assert_eq!(index, 99);
+                assert_eq!(len, 3);
+            }
+            other => panic!("expected IndexOutOfBounds, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builder_bulk_set_positions_from_flat() {
+        let mut b = three_atom_builder();
+        let new_pos = [
+            10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0,
+        ];
+        b.set_positions_from_flat(&new_pos).unwrap();
+        assert_eq!(b.get_atom_position(0).unwrap(), (10.0, 20.0, 30.0));
+        assert_eq!(b.get_atom_position(1).unwrap(), (40.0, 50.0, 60.0));
+        assert_eq!(b.get_atom_position(2).unwrap(), (70.0, 80.0, 90.0));
+    }
+
+    #[test]
+    fn builder_bulk_set_positions_wrong_length_errors() {
+        let mut b = three_atom_builder();
+        let bad = [1.0, 2.0, 3.0, 4.0]; // 4 != 3*3
+        let err = b.set_positions_from_flat(&bad).unwrap_err();
+        match err {
+            crate::error::ParseError::InvalidVectorLength { expected, found } => {
+                assert_eq!(expected, 9);
+                assert_eq!(found, 4);
+            }
+            other => panic!("expected InvalidVectorLength, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builder_bulk_set_forces_and_energies_from_flat() {
+        let mut b = three_atom_builder();
+        let f = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        let e = [-0.1, -0.2, -0.3];
+        b.set_forces_from_flat(&f).unwrap();
+        b.set_atom_energies_from_flat(&e).unwrap();
+        assert_eq!(b.get_atom_force(0).unwrap(), Some([1.0, 0.0, 0.0]));
+        assert_eq!(b.get_atom_force(2).unwrap(), Some([0.0, 0.0, 1.0]));
+        assert_eq!(b.get_atom_energy(0).unwrap(), Some(-0.1));
+        assert_eq!(b.get_atom_energy(2).unwrap(), Some(-0.3));
+    }
+
+    #[test]
+    fn builder_round_trip_after_bulk_mutation() {
+        let mut b = three_atom_builder();
+        b.set_positions_from_flat(&[5.0; 9]).unwrap();
+        b.set_forces_from_flat(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+            .unwrap();
+        b.set_atom_energies_from_flat(&[-1.0, -2.0, -3.0]).unwrap();
+        let frame = b.build();
+        assert_eq!(frame.atom_data.len(), 3);
+        assert!(frame.has_forces());
+        assert!(frame.has_energies());
+        // group order: Cu, Cu, H
+        assert_eq!(frame.atom_data[0].force, Some([1.0, 0.0, 0.0]));
+        assert_eq!(frame.atom_data[2].force, Some([0.0, 0.0, 1.0]));
     }
 }
