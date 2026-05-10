@@ -14,12 +14,18 @@ name = "readcon_core"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
+# `metatensor` is a Rust crate but its `metatensor-core` dependency pulls
+# in a CMake-built C library, so we keep it default-off to keep
+# `cargo build` lean for users who only want CON I/O. Enable with
+# `--features metatensor` (or pin via the Python wheel build) when you
+# need TensorBlock / TensorMap export.
 default = []
 capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
-python = ["dep:pyo3"]
+python = ["dep:pyo3", "dep:numpy", "dep:ndarray"]
 zstd = ["dep:zstd"]
+metatensor = ["dep:metatensor", "dep:ndarray"]
 
 [dependencies]
 fast-float2 = "0.2"
@@ -34,6 +40,9 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros"], 
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+numpy = { version = "0.28", optional = true }
+ndarray = { version = "0.16", optional = true }
+metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]

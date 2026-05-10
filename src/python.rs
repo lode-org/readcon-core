@@ -1,3 +1,5 @@
+use ndarray::Array2;
+use numpy::{IntoPyArray, PyArray1, PyArray2};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
@@ -361,6 +363,104 @@ impl PyConFrame {
 
     fn __len__(&self, py: Python<'_>) -> usize {
         self.atoms.bind(py).len()
+    }
+
+    // --- NumPy array views ---
+    //
+    // Each method materialises a fresh contiguous f64 ndarray sized
+    // [N, 3] (coords / velocities / forces) or [N] (energies). NumPy
+    // arrays since 1.22 implement `__dlpack__`, so the returned
+    // arrays are zero-copy interoperable with torch / jax / cupy via
+    // `torch.from_dlpack(frame.coords_array())` etc.
+
+    /// Returns the per-atom xyz positions as a contiguous numpy
+    /// `[N, 3] float64` array, in the type-grouped order used by the
+    /// underlying frame.
+    fn coords_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let atoms = self.py_atoms(py)?;
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.extend_from_slice(&[atom.x, atom.y, atom.z]);
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
+        Ok(array.into_pyarray(py))
+    }
+
+    /// Returns the per-atom velocity vectors as a contiguous numpy
+    /// `[N, 3] float64` array. Returns `None` if the frame has no
+    /// velocity data.
+    fn velocities_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_velocity) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.vx.unwrap_or(0.0));
+            data.push(atom.vy.unwrap_or(0.0));
+            data.push(atom.vz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("velocities_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom force vectors as a contiguous numpy
+    /// `[N, 3] float64` array. Returns `None` if the frame has no
+    /// force data.
+    fn forces_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_forces) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.fx.unwrap_or(0.0));
+            data.push(atom.fy.unwrap_or(0.0));
+            data.push(atom.fz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("forces_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom energy contributions as a contiguous
+    /// numpy `[N] float64` array. Returns `None` if the frame has no
+    /// per-atom energies (only a frame-total energy in metadata).
+    fn energies_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_energy) {
+            return Ok(None);
+        }
+        let data: Vec<f64> = atoms
+            .iter()
+            .map(|atom| atom.energy.unwrap_or(0.0))
+            .collect();
+        Ok(Some(data.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
+    /// array, useful for filtering / one-hot encoding workflows.
+    fn atom_ids_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyArray1<u64>>> {
+        let atoms = self.py_atoms(py)?;
+        let data: Vec<u64> = atoms.iter().map(|a| a.atom_id).collect();
+        Ok(data.into_pyarray(py))
     }
 
     // --- atom_id index ---
