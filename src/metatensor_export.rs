@@ -28,7 +28,8 @@ pub fn frame_positions_block(frame: &ConFrame) -> Result<TensorBlock, metatensor
         data.extend_from_slice(&[atom.x, atom.y, atom.z]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
-        .expect("array shape mismatch when building positions block");
+        .expect("array shape mismatch when building positions block")
+        .into_dyn();
 
     let samples = build_atom_id_samples(frame)?;
     let properties = build_xyz_properties()?;
@@ -51,7 +52,8 @@ pub fn frame_velocities_block(
         data.extend_from_slice(&[vx, vy, vz]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
-        .expect("array shape mismatch when building velocities block");
+        .expect("array shape mismatch when building velocities block")
+        .into_dyn();
 
     let samples = build_atom_id_samples(frame)?;
     let properties = build_xyz_properties()?;
@@ -79,7 +81,8 @@ pub fn frame_forces_block(
         data.extend_from_slice(&[fx, fy, fz]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
-        .expect("array shape mismatch when building forces block");
+        .expect("array shape mismatch when building forces block")
+        .into_dyn();
 
     let samples = build_atom_id_samples(frame)?;
     let properties = build_xyz_properties()?;
@@ -107,7 +110,8 @@ pub fn frame_energies_block(
         .map(|a| a.energy.unwrap_or(0.0))
         .collect();
     let values = Array2::from_shape_vec((n, 1), data)
-        .expect("array shape mismatch when building energies block");
+        .expect("array shape mismatch when building energies block")
+        .into_dyn();
 
     let samples = build_atom_id_samples(frame)?;
     let mut props = LabelsBuilder::new(vec!["energy"]);
