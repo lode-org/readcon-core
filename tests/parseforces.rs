@@ -139,6 +139,28 @@ fn test_gzip_roundtrip() {
     assert_eq!(frames_original, frames_rt);
 }
 
+#[cfg(feature = "zstd")]
+#[test]
+fn test_zstd_roundtrip() {
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2_forces.con")).expect("Can't find test file.");
+    let parser = ConFrameIterator::new(&fdat);
+    let frames_original: Vec<_> = parser.map(|r| r.unwrap()).collect();
+
+    let tmp = tempfile::NamedTempFile::with_suffix(".con.zst").unwrap();
+    let path = tmp.path().to_owned();
+    {
+        let mut writer = ConFrameWriter::from_path_zstd_with_precision(&path, 17).unwrap();
+        writer
+            .extend(frames_original.iter())
+            .expect("Failed to write zstd.");
+    }
+
+    let frames_rt = readcon_core::iterators::read_all_frames(&path).expect("Failed to read zstd.");
+    assert_eq!(frames_original.len(), frames_rt.len());
+    assert_eq!(frames_original, frames_rt);
+}
+
 #[test]
 fn test_builder_with_forces() {
     use readcon_core::types::ConFrameBuilder;
