@@ -456,7 +456,7 @@ pub fn parse_single_frame<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             let (fixed, atom_id) = if validate {
-                parse_identity_columns(coord_line, "coordinate")?
+                decode_identity_from_floats(&vals, 3, 4, "coordinate")?
             } else {
                 (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
             };
@@ -533,26 +533,34 @@ fn validate_coordinate_component(
     Ok(())
 }
 
-fn parse_identity_columns(line: &str, row_kind: &str) -> Result<([bool; 3], u64), ParseError> {
-    let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
-    if columns.len() != 5 {
+/// Decode the per-row identity columns (fixed bitmask + atom_id) from
+/// the already-parsed f64 vector returned by `parse_line_of_range_f64`.
+///
+/// This avoids re-tokenizing the line and re-parsing the integers when
+/// `validate=true` (the previous code did one f64 pass plus a second
+/// u8/u64 pass on the same row). Works for sections of any column count
+/// since the indices into `vals` are explicit.
+fn decode_identity_from_floats(
+    vals: &[f64],
+    fixed_idx: usize,
+    atom_id_idx: usize,
+    row_kind: &str,
+) -> Result<([bool; 3], u64), ParseError> {
+    let fixed_raw = vals[fixed_idx];
+    if !(0.0..=7.0).contains(&fixed_raw) || fixed_raw.fract() != 0.0 {
         return Err(ParseError::ValidationError(format!(
-            "{row_kind} rows require fixed_flag and atom_id columns in validate mode"
+            "{row_kind} fixed_flag must be an integer bitmask in 0..=7, got {fixed_raw}"
         )));
     }
-    let fixed_flag = columns[3].parse::<u8>().map_err(|_| {
-        ParseError::ValidationError(format!("{row_kind} fixed_flag must be an integer bitmask"))
-    })?;
-    if fixed_flag > 7 {
+    let id_raw = vals[atom_id_idx];
+    if id_raw < 0.0 || id_raw.fract() != 0.0 {
         return Err(ParseError::ValidationError(format!(
-            "{row_kind} fixed_flag must be between 0 and 7"
+            "{row_kind} atom_id must be a non-negative integer, got {id_raw}"
         )));
     }
-    let atom_id = columns[4].parse::<u64>().map_err(|_| {
-        ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
-    })?;
-    Ok((decode_fixed_bitmask(fixed_flag), atom_id))
+    Ok((decode_fixed_bitmask(fixed_raw as u8), id_raw as u64))
 }
+
 
 fn validate_section_component(
     section: &str,
@@ -684,7 +692,7 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(vel_line, "velocities")?;
+                let (fixed, atom_id) = decode_identity_from_floats(&vals, 3, 4, "velocities")?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -743,7 +751,7 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(force_line, "forces")?;
+                let (fixed, atom_id) = decode_identity_from_floats(&vals, 3, 4, "forces")?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -808,7 +816,7 @@ where
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(energy_line, "energies")?;
+                let (fixed, atom_id) = decode_identity_from_floats(&vals, 1, 2, "energies")?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
