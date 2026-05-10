@@ -64,6 +64,10 @@ struct Atom {
     double fz;
     [[deprecated("Use force() (returns std::optional) instead")]]
     bool has_forces;
+    /// Per-atom energy contribution; meaningful only when `has_energy`
+    /// is true. Mirrors `Rust AtomDatum::energy`.
+    double energy;
+    bool has_energy;
 
     std::array<bool, 3> fixed_mask() const {
         return {fixed_x, fixed_y, fixed_z};
@@ -97,6 +101,14 @@ struct Atom {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
+        return std::nullopt;
+    }
+
+    /// Per-atom energy contribution if the file declared an
+    /// `"energies"` section, else std::nullopt.
+    std::optional<double> energy_value() const {
+        if (has_energy)
+            return energy;
         return std::nullopt;
     }
 };
@@ -208,6 +220,14 @@ class ConFrame {
     const std::array<std::string, 2> &postbox_header() const;
     bool has_velocities() const;
     bool has_forces() const;
+    /// True when at least one atom carries a per-atom energy
+    /// contribution (file declared an `"energies"` section).
+    bool has_energies() const;
+
+    /// Returns the position of an atom in the frame whose `atom_id`
+    /// equals the given id, or `std::nullopt` if no such atom exists.
+    /// O(N) per call.
+    std::optional<size_t> atom_index_by_id(uint64_t atom_id) const;
 
     uint32_t spec_version() const;
     std::string metadata_json() const;
@@ -268,6 +288,7 @@ class ConFrame {
     mutable std::array<std::string, 2> postbox_header_cache_;
     mutable bool has_velocities_cache_ = false;
     mutable bool has_forces_cache_ = false;
+    mutable bool has_energies_cache_ = false;
 };
 
 /**
@@ -392,6 +413,10 @@ class ConFrameBuilder {
     ConFrameBuilder &with_velocity(const std::array<double, 3> &v);
     /// Attaches force to the most recently added atom (chainable).
     ConFrameBuilder &with_force(const std::array<double, 3> &f);
+    /// Attaches a per-atom energy contribution to the most recently
+    /// added atom (chainable). The frame auto-declares an `"energies"`
+    /// section on `build()` if any atom carries an energy.
+    ConFrameBuilder &with_energy(double energy);
 
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
@@ -415,6 +440,25 @@ class ConFrameBuilder {
 inline std::string status_message(RKRStatus status) {
     const char *message = rkr_status_message(status);
     return message ? std::string(message) : std::string("unknown status");
+}
+
+/**
+ * @brief Returns the atomic number for a chemical symbol, or 0 if the
+ *        symbol is unknown. Coverage is H..U (Z = 1..=92);
+ *        case-sensitive.
+ */
+inline uint64_t symbol_to_z(const std::string &symbol) {
+    return rkr_symbol_to_z(symbol.c_str());
+}
+
+/**
+ * @brief Returns the chemical symbol for an atomic number, or "X" for
+ *        unknown values. The returned string is process-static; copying
+ *        into a std::string is safe.
+ */
+inline std::string z_to_symbol(uint64_t z) {
+    const char *symbol = rkr_z_to_symbol(z);
+    return symbol ? std::string(symbol) : std::string("X");
 }
 
 inline void throw_on_error(RKRStatus status, const std::string &operation) {
@@ -535,6 +579,7 @@ inline void ConFrame::cache_data() const {
 
     has_velocities_cache_ = c_frame->has_velocities;
     has_forces_cache_ = c_frame->has_forces;
+    has_energies_cache_ = c_frame->has_energies;
 
     atoms_cache_.reserve(c_frame->num_atoms);
     // The legacy Atom fields (vx/vy/vz, fx/fy/fz, has_velocity,
@@ -554,7 +599,8 @@ inline void ConFrame::cache_data() const {
                  c_atom.atom_id, c_atom.mass, c_atom.is_fixed,
                  c_atom.fixed_x, c_atom.fixed_y, c_atom.fixed_z,
                  c_atom.vx, c_atom.vy, c_atom.vz, c_atom.has_velocity,
-                 c_atom.fx, c_atom.fy, c_atom.fz, c_atom.has_forces});
+                 c_atom.fx, c_atom.fy, c_atom.fz, c_atom.has_forces,
+                 c_atom.energy, c_atom.has_energy});
     }
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
@@ -618,6 +664,20 @@ inline bool ConFrame::has_velocities() const {
 inline bool ConFrame::has_forces() const {
     cache_data();
     return has_forces_cache_;
+}
+
+inline bool ConFrame::has_energies() const {
+    cache_data();
+    return has_energies_cache_;
+}
+
+inline std::optional<size_t>
+ConFrame::atom_index_by_id(uint64_t atom_id) const {
+    uint64_t idx = rkr_frame_atom_index_by_id(frame_handle_.get(), atom_id);
+    if (idx == UINT64_MAX) {
+        return std::nullopt;
+    }
+    return static_cast<size_t>(idx);
 }
 
 inline uint32_t ConFrame::spec_version() const {
@@ -815,6 +875,13 @@ ConFrameBuilder::with_force(const std::array<double, 3> &f) {
     throw_on_error(
         rkr_frame_builder_set_last_force(builder_handle_, f.data()),
         "Failed to attach force to last atom");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::with_energy(double energy) {
+    throw_on_error(
+        rkr_frame_builder_set_last_energy(builder_handle_, energy),
+        "Failed to attach per-atom energy to last atom");
     return *this;
 }
 

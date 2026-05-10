@@ -1,7 +1,8 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
-    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_FORCES, SECTION_VELOCITIES,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_ENERGIES, SECTION_FORCES,
+    SECTION_VELOCITIES,
     decode_fixed_bitmask, meta,
 };
 use serde_json::Value;
@@ -455,7 +456,7 @@ pub fn parse_single_frame<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             let (fixed, atom_id) = if validate {
-                parse_identity_columns(coord_line, "coordinate")?
+                parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
             } else {
                 (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
             };
@@ -469,6 +470,7 @@ pub fn parse_single_frame<'a>(
                 atom_id,
                 velocity: None,
                 force: None,
+                energy: None,
             });
             global_atom_idx += 1;
         }
@@ -531,14 +533,34 @@ fn validate_coordinate_component(
     Ok(())
 }
 
-fn parse_identity_columns(line: &str, row_kind: &str) -> Result<([bool; 3], u64), ParseError> {
+/// Strict-validation parser for the per-row identity columns
+/// (fixed bitmask + atom_id) used by every section type.
+///
+/// `n_cols` is the total whitespace-separated column count expected on
+/// the row in strict mode, and `(fixed_idx, atom_id_idx)` are the
+/// 0-based positions of the fixed bitmask and atom_id columns inside
+/// that layout. Each section calls in with its own values:
+///
+/// - coordinates / velocities / forces: 5 cols, fixed=3, atom_id=4
+/// - energies: 3 cols, fixed=1, atom_id=2
+///
+/// String-based parsing on purpose: strict v2 mode rejects values that
+/// are not in the canonical integer form (e.g. `5.0` for a bitmask),
+/// which an f64 round-trip would silently accept.
+fn parse_identity_columns(
+    line: &str,
+    row_kind: &str,
+    fixed_idx: usize,
+    atom_id_idx: usize,
+    n_cols: usize,
+) -> Result<([bool; 3], u64), ParseError> {
     let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
-    if columns.len() != 5 {
+    if columns.len() != n_cols {
         return Err(ParseError::ValidationError(format!(
-            "{row_kind} rows require fixed_flag and atom_id columns in validate mode"
+            "{row_kind} rows require {n_cols} columns including fixed_flag and atom_id in validate mode"
         )));
     }
-    let fixed_flag = columns[3].parse::<u8>().map_err(|_| {
+    let fixed_flag = columns[fixed_idx].parse::<u8>().map_err(|_| {
         ParseError::ValidationError(format!("{row_kind} fixed_flag must be an integer bitmask"))
     })?;
     if fixed_flag > 7 {
@@ -546,11 +568,12 @@ fn parse_identity_columns(line: &str, row_kind: &str) -> Result<([bool; 3], u64)
             "{row_kind} fixed_flag must be between 0 and 7"
         )));
     }
-    let atom_id = columns[4].parse::<u64>().map_err(|_| {
+    let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
         ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
     })?;
     Ok((decode_fixed_bitmask(fixed_flag), atom_id))
 }
+
 
 fn validate_section_component(
     section: &str,
@@ -682,7 +705,8 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(vel_line, "velocities")?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(vel_line, "velocities", 3, 4, 5)?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -741,11 +765,78 @@ where
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(force_line, "forces")?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(force_line, "forces", 3, 4, 5)?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].force = Some([vals[0], vals[1], vals[2]]);
+            }
+            atom_idx += 1;
+        }
+    }
+
+    Ok(true)
+}
+
+/// Attempts to parse an energies section following coordinate (and optional
+/// velocity / force) blocks.
+///
+/// Energy sections mirror force sections but with one scalar per atom:
+/// blank separator, then per-component blocks of (symbol, "Energies of
+/// Component N", and atom lines `e fixed_flag atom_id`). The two
+/// trailing identity columns are optional and used only for strict
+/// validation; in non-strict mode any whitespace after the energy is
+/// ignored.
+///
+/// Returns `Ok(true)` if energies were found and parsed, `Ok(false)`
+/// otherwise.
+pub fn parse_energy_section<'a, I>(
+    lines: &mut Peekable<I>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    let validate = header.strict_validation;
+    match lines.peek() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next()
+            .ok_or(ParseError::IncompleteEnergySection)?
+            .trim();
+
+        let comp_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+        if !comp_line.contains("Energies of Component") {
+            return Err(ParseError::IncompleteEnergySection);
+        }
+        if validate {
+            validate_section_component(
+                "Energies", type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let energy_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+            // Single energy column, plus optional fixed flag and atom_id
+            // for round-trip identity checks.
+            let defaults = [0.0, 0.0, atom_idx as f64];
+            let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
+            if validate {
+                let (fixed, atom_id) =
+                    parse_identity_columns(energy_line, "energies", 1, 2, 3)?;
+                validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
+            }
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].energy = Some(vals[0]);
             }
             atom_idx += 1;
         }
@@ -787,6 +878,12 @@ where
                     let found = parse_force_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteForceSection);
+                    }
+                }
+                SECTION_ENERGIES => {
+                    let found = parse_energy_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteEnergySection);
                     }
                 }
                 other => return Err(ParseError::UnknownSection(other.to_string())),

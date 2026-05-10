@@ -19,6 +19,15 @@ use std::path::Path;
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
     lines: Peekable<std::str::Lines<'a>>,
+    /// Raw bytes of the source string, alongside a cursor. Used by
+    /// [`Self::forward_fast`] to skip frames via direct memchr-bulk
+    /// `\n` lookup instead of advancing the line iterator one call at
+    /// a time. The cursor is only nudged forward from `forward_fast`;
+    /// callers that mix `next()` / `forward()` with `forward_fast`
+    /// will see the cursor reset to whatever the line iterator's
+    /// current view of the slice is.
+    bytes: &'a [u8],
+    cursor: usize,
 }
 
 impl<'a> ConFrameIterator<'a> {
@@ -30,7 +39,125 @@ impl<'a> ConFrameIterator<'a> {
     pub fn new(file_contents: &'a str) -> Self {
         ConFrameIterator {
             lines: file_contents.lines().peekable(),
+            bytes: file_contents.as_bytes(),
+            cursor: 0,
         }
+    }
+
+    /// Bulk-skips `n` lines starting at `self.cursor` using memchr to
+    /// find each `\n`. Returns `Ok(())` when `n` lines were consumed,
+    /// `Err(IncompleteFrame)` when the byte slice ran out first.
+    ///
+    /// Used by [`Self::forward_fast`] to avoid the per-line iterator
+    /// overhead of `Peekable<Lines>::next()` on workloads that only
+    /// want to skip past the current frame.
+    fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
+        for _ in 0..n {
+            let rest = &self.bytes[self.cursor..];
+            match memchr::memchr(b'\n', rest) {
+                Some(pos) => self.cursor += pos + 1,
+                None => {
+                    if rest.is_empty() {
+                        return Err(error::ParseError::IncompleteFrame);
+                    }
+                    self.cursor = self.bytes.len();
+                    return Err(error::ParseError::IncompleteFrame);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the bytes of the current line at `self.cursor` (without
+    /// the trailing `\n`) as a `&str`, advancing the cursor past the
+    /// newline.
+    fn read_line_str(&mut self) -> Option<&'a str> {
+        let rest = &self.bytes[self.cursor..];
+        if rest.is_empty() {
+            return None;
+        }
+        let (line_bytes, advance) = match memchr::memchr(b'\n', rest) {
+            Some(pos) => (&rest[..pos], pos + 1),
+            None => (rest, rest.len()),
+        };
+        // Strip optional trailing \r for Windows line endings.
+        let trimmed = if line_bytes.last() == Some(&b'\r') {
+            &line_bytes[..line_bytes.len() - 1]
+        } else {
+            line_bytes
+        };
+        // SAFETY: source was a `&str` so any UTF-8 prefix terminated by
+        // an ASCII byte (`\n`, `\r`) remains valid UTF-8.
+        let line = unsafe { std::str::from_utf8_unchecked(trimmed) };
+        self.cursor += advance;
+        Some(line)
+    }
+
+    /// memchr-backed equivalent of [`Self::forward`]. Skips the next
+    /// frame without fully parsing its atom data, walking the
+    /// underlying byte slice with `memchr` directly instead of the
+    /// peekable line iterator. The two methods are not interleavable:
+    /// once the caller starts using `forward_fast`, switching to
+    /// `next()` or `forward()` resets to the line iterator's view and
+    /// loses any progress the cursor made.
+    pub fn forward_fast(&mut self) -> Option<Result<(), error::ParseError>> {
+        if self.cursor >= self.bytes.len() {
+            return None;
+        }
+        // Lines 1..=6 of the header are skipped wholesale.
+        if let Err(e) = self.advance_lines(6) {
+            return Some(Err(e));
+        }
+        // Line 7: natm_types.
+        let natm_types: usize = match self.read_line_str() {
+            Some(line) => match crate::parser::parse_line_of_n::<usize>(line, 1) {
+                Ok(v) => v[0],
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
+        // Line 8: natms_per_type.
+        let natms_per_type: Vec<usize> = match self.read_line_str() {
+            Some(line) => match crate::parser::parse_line_of_n(line, natm_types) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            },
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
+        // Line 9: masses_per_type, consumed.
+        if let Err(e) = self.advance_lines(1) {
+            return Some(Err(e));
+        }
+        let total_atoms: usize = natms_per_type.iter().sum();
+        let coord_block_lines = total_atoms + natm_types * 2;
+        if let Err(e) = self.advance_lines(coord_block_lines) {
+            return Some(Err(e));
+        }
+        // Optional sections: blank line + same-shape block, repeated.
+        loop {
+            let rest = &self.bytes[self.cursor..];
+            // Peek the next line without advancing the cursor.
+            let next_eol = memchr::memchr(b'\n', rest);
+            let line = match next_eol {
+                Some(pos) => &rest[..pos],
+                None => rest,
+            };
+            let is_blank = line
+                .iter()
+                .all(|b| matches!(b, b' ' | b'\t' | b'\r'));
+            if !is_blank || line.is_empty() && self.cursor >= self.bytes.len() {
+                break;
+            }
+            if !is_blank {
+                break;
+            }
+            // Consume the blank separator and the section block.
+            self.cursor += next_eol.map(|p| p + 1).unwrap_or(rest.len());
+            if let Err(e) = self.advance_lines(coord_block_lines) {
+                return Some(Err(e));
+            }
+        }
+        Some(Ok(()))
     }
 
     /// Skips the next frame without fully parsing its atomic data.
@@ -175,7 +302,13 @@ pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::err
 
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
 ///
-/// Phase 1: sequential scan to find byte offsets of each frame's start.
+/// Phase 1: sequential O(N) scan via memchr-backed
+/// [`ConFrameIterator::forward_fast`] to find byte offsets of every
+/// frame's start. The previous implementation built a `Vec<&str>` of
+/// every line and called `lines[..i].iter().map(|l| l.len() +
+/// 1).sum()` on every frame, which is O(N^2) in line count and
+/// dominated runtime on multi-frame trajectories.
+///
 /// Phase 2: parallel parse of each frame slice using rayon.
 ///
 /// Requires the `parallel` feature.
@@ -185,85 +318,19 @@ pub fn parse_frames_parallel(
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
     use rayon::prelude::*;
 
-    // Phase 1: find frame byte boundaries by scanning for header patterns.
-    // Each frame starts with a header: 2 comment lines, then a line with 3 floats (box).
-    // We identify boundaries by walking through the file with a ConFrameIterator
-    // and recording byte positions.
+    // Phase 1: walk the file once with forward_fast and snapshot the
+    // cursor before each frame.
     let mut boundaries: Vec<usize> = Vec::new();
-    boundaries.push(0);
-
-    // Walk through the file using the forward() method to find frame boundaries
     let mut scanner = ConFrameIterator::new(file_contents);
-    while scanner.forward().is_some() {
-        // After forward(), the internal iterator is positioned right after the frame.
-        // We need to figure out the byte offset of the next frame start.
-        // Since Peekable<Lines> doesn't expose byte offsets, we use a different approach:
-        // count lines consumed per frame and convert to byte offsets.
-    }
-
-    // Simpler approach: split into frame text chunks by parsing sequentially,
-    // recording where each frame starts and ends in the string.
-    boundaries.clear();
-    let lines: Vec<&str> = file_contents.lines().collect();
-    let mut line_idx = 0;
-    let total_lines = lines.len();
-
-    while line_idx < total_lines {
-        // Record the byte offset of this frame's start
-        let byte_offset: usize = lines[..line_idx]
-            .iter()
-            .map(|l| l.len() + 1) // +1 for newline
-            .sum();
-        boundaries.push(byte_offset);
-
-        // Skip 6 header lines (prebox1, prebox2, boxl, angles, postbox1, postbox2)
-        if line_idx + 6 >= total_lines {
+    loop {
+        let start = scanner.cursor;
+        if start >= scanner.bytes.len() {
             break;
         }
-        line_idx += 6;
-
-        // Line 7: natm_types
-        let natm_types: usize = match lines.get(line_idx) {
-            Some(l) => match crate::parser::parse_line_of_n::<usize>(l, 1) {
-                Ok(v) => v[0],
-                Err(_) => break,
-            },
-            None => break,
-        };
-        line_idx += 1;
-
-        // Line 8: natms_per_type
-        let natms_per_type: Vec<usize> = match lines.get(line_idx) {
-            Some(l) => match crate::parser::parse_line_of_n(l, natm_types) {
-                Ok(v) => v,
-                Err(_) => break,
-            },
-            None => break,
-        };
-        line_idx += 1;
-
-        // Line 9: masses (just skip)
-        line_idx += 1;
-
-        // Skip coordinate blocks
-        let total_atoms: usize = natms_per_type.iter().sum();
-        let coord_lines = total_atoms + natm_types * 2;
-        line_idx += coord_lines;
-
-        // Skip any additional sections (velocities, forces, etc.)
-        // Each section starts with a blank separator followed by the same
-        // number of lines as coordinate blocks.
-        while line_idx < total_lines {
-            if let Some(l) = lines.get(line_idx) {
-                if l.trim().is_empty() {
-                    line_idx += 1; // blank separator
-                    line_idx += coord_lines; // section blocks same size
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
+        boundaries.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            Some(Err(_)) | None => break,
         }
     }
 

@@ -1,6 +1,6 @@
 [workspace]
 name = "readcon-core"
-version = "0.9.0"
+version = "0.10.0"
 description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64"]
@@ -19,7 +19,7 @@ rust = ">=1.88"
 capnproto = "*"
 
 [feature.python]
-dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*", pip = "*" }
+dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*", pip = "*", numpy = ">=1.22" }
 tasks = { python-build = "maturin develop --features python", python-test = { cmd = "pytest tests/python/", depends-on = ["python-build"] } }
 
 [feature.julia]

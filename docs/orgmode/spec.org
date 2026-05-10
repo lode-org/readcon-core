@@ -218,16 +218,36 @@ unknown section names with an error. Every declared section MUST be
 present, complete, and parseable at its declared position. An empty
 =sections= array declares that no additional per-atom sections follow.
 
-| Section name | Label pattern                   | Columns | Data                        |
-|--------------+---------------------------------+---------+-----------------------------|
-| =velocities= | =Velocities of Component /i/=  |       5 | vx vy vz fixed_flag atom_id |
-| =forces=     | =Forces of Component /i/=      |       5 | fx fy fz fixed_flag atom_id |
+| Section name | Label pattern                    | Columns | Data                        |
+|--------------+----------------------------------+---------+-----------------------------|
+| =velocities= | =Velocities of Component /i/=    |       5 | vx vy vz fixed_flag atom_id |
+| =forces=     | =Forces of Component /i/=        |       5 | fx fy fz fixed_flag atom_id |
+| =energies=   | =Energies of Component /i/=      |       3 | energy fixed_flag atom_id   |
 
-The =fixed_flag= and =atom_id= columns in additional sections repeat
-the coordinate block identity data for the same atom ordering. Writers
-SHOULD emit the same values as the coordinate block. Readers associate
-section rows by component order and MAY ignore these duplicate identity
-columns after parsing the row shape.
+The =energies= section carries one scalar per atom, useful for ML
+potentials that decompose total energy into local contributions.
+Writers MAY emit it alongside =forces=, alone, or omit it entirely.
+
+When the =energies= section is present:
+
+- The per-frame total =energy= metadata key SHOULD equal the sum of
+  the per-atom contributions. Implementations MAY warn on a mismatch
+  but MUST NOT reject the frame on that ground (a reader cannot tell
+  apart a numerical-noise mismatch from a deliberate definition where
+  the per-atom decomposition does not sum to the total).
+- The total =energy= metadata key MAY still be absent, in which case
+  the per-atom contributions are the only energy data on the frame.
+- The =fixed_flag= and =atom_id= columns SHOULD match the coordinate
+  block, exactly as for =velocities= and =forces=. In =validate=true=
+  mode they MUST match.
+
+The =fixed_flag= and =atom_id= columns in every additional section
+repeat the coordinate-block identity data for the same atom ordering.
+Writers SHOULD emit the same values as the coordinate block. Readers
+associate section rows by component order and MAY ignore the duplicate
+identity columns after parsing the row shape; in =validate=true= mode
+readers MUST verify that the =fixed_flag= and =atom_id= columns match
+the coordinate block.
 
 ** Validation mode
 :PROPERTIES:

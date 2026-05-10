@@ -12,6 +12,7 @@ pub enum ParseError {
     UnsupportedSpecVersion(u32),
     InvalidMetadataJson(String),
     IncompleteForceSection,
+    IncompleteEnergySection,
     UnknownSection(String),
     ValidationError(String),
 }
@@ -48,6 +49,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::IncompleteForceSection => {
                 write!(f, "file ended unexpectedly while reading force section")
+            }
+            ParseError::IncompleteEnergySection => {
+                write!(f, "file ended unexpectedly while reading energy section")
             }
             ParseError::UnknownSection(name) => {
                 write!(f, "unknown section type in metadata: {name}")

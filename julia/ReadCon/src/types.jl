@@ -20,6 +20,8 @@ struct CAtom
     fy::Float64
     fz::Float64
     has_forces::Bool
+    energy::Float64
+    has_energy::Bool
 end
 
 """
@@ -32,6 +34,7 @@ struct CFrame
     angles::NTuple{3, Float64}
     has_velocities::Bool
     has_forces::Bool
+    has_energies::Bool
 end
 
 """
@@ -54,6 +57,8 @@ struct Atom
     fy::Float64
     fz::Float64
     has_forces::Bool
+    energy::Float64
+    has_energy::Bool
 
     function Atom(
         atomic_number::UInt64,
@@ -75,6 +80,7 @@ struct Atom
             is_fixed, (is_fixed, is_fixed, is_fixed),
             vx, vy, vz, has_velocity,
             0.0, 0.0, 0.0, false,
+            0.0, false,
         )
     end
 
@@ -103,6 +109,38 @@ struct Atom
             is_fixed, fixed,
             vx, vy, vz, has_velocity,
             fx, fy, fz, has_forces,
+            0.0, false,
+        )
+    end
+
+    function Atom(
+        atomic_number::UInt64,
+        x::Float64,
+        y::Float64,
+        z::Float64,
+        atom_id::UInt64,
+        mass::Float64,
+        is_fixed::Bool,
+        fixed::NTuple{3, Bool},
+        vx::Float64,
+        vy::Float64,
+        vz::Float64,
+        has_velocity::Bool,
+        fx::Float64,
+        fy::Float64,
+        fz::Float64,
+        has_forces::Bool,
+        energy::Float64,
+        has_energy::Bool,
+    )
+        new(
+            atomic_number,
+            x, y, z,
+            atom_id, mass,
+            is_fixed, fixed,
+            vx, vy, vz, has_velocity,
+            fx, fy, fz, has_forces,
+            energy, has_energy,
         )
     end
 end
@@ -118,6 +156,7 @@ struct ConFrame
     prebox_header::NTuple{2, String}
     postbox_header::NTuple{2, String}
     has_forces::Bool
+    has_energies::Bool
     spec_version::UInt32
     metadata_json::String
     energy::Union{Nothing, Float64}
@@ -137,7 +176,7 @@ struct ConFrame
     )
         new(
             cell, angles, atoms, has_velocities,
-            prebox_header, postbox_header, false,
+            prebox_header, postbox_header, false, false,
             UInt32(2), "", nothing, nothing, nothing, nothing, nothing, nothing,
         )
     end
@@ -153,7 +192,7 @@ struct ConFrame
     )
         new(
             cell, angles, atoms, has_velocities,
-            prebox_header, postbox_header, has_forces,
+            prebox_header, postbox_header, has_forces, false,
             UInt32(2), "", nothing, nothing, nothing, nothing, nothing, nothing,
         )
     end
@@ -166,6 +205,7 @@ struct ConFrame
         prebox_header::NTuple{2, String},
         postbox_header::NTuple{2, String},
         has_forces::Bool,
+        has_energies::Bool,
         spec_version::UInt32,
         metadata_json::String,
         energy::Union{Nothing, Float64},
@@ -177,7 +217,7 @@ struct ConFrame
     )
         new(
             cell, angles, atoms, has_velocities,
-            prebox_header, postbox_header, has_forces,
+            prebox_header, postbox_header, has_forces, has_energies,
             spec_version, metadata_json, energy, frame_index,
             time, timestep, neb_bead, neb_band,
         )

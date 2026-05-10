@@ -155,9 +155,9 @@ typedef struct CConFrameIterator {
  * for source compatibility with pre-spec-v2 callers that did not have
  * per-axis flags. New code should use the per-axis fields.
  *
- * `vx`/`vy`/`vz` and `fx`/`fy`/`fz` carry meaningful values only when
- * `has_velocity` or `has_forces` is true respectively; the values are
- * zeroed otherwise.
+ * `vx`/`vy`/`vz`, `fx`/`fy`/`fz`, and `energy` carry meaningful values
+ * only when `has_velocity`, `has_forces`, or `has_energy` is true
+ * respectively; the values are zeroed otherwise.
  */
 typedef struct CAtom {
     uint64_t atomic_number;
@@ -182,6 +182,12 @@ typedef struct CAtom {
     double fy;
     double fz;
     bool has_forces;
+    /**
+     * Per-atom energy contribution; meaningful only when
+     * `has_energy` is true. See [`crate::types::SECTION_ENERGIES`].
+     */
+    double energy;
+    bool has_energy;
 } CAtom;
 
 /**
@@ -196,6 +202,7 @@ typedef struct CFrame {
     double angles[3];
     bool has_velocities;
     bool has_forces;
+    bool has_energies;
 } CFrame;
 
 /**
@@ -227,6 +234,42 @@ uint32_t rkr_con_spec_version(void);
  * The returned pointer is valid for the lifetime of the process. Do NOT free it.
  */
 const char *rkr_library_version(void);
+
+/**
+ * Returns the position of an atom inside the frame's `atom_data` array
+ * matching the given `atom_id`. Returns `UINT64_MAX` if no atom with
+ * that id exists or `frame_handle` is NULL.
+ *
+ * O(N) per call. C/C++ consumers performing many lookups should cache
+ * a `std::unordered_map<uint64_t, size_t>` from a single sweep over
+ * the frame.
+ *
+ * # Safety
+ *
+ * `frame_handle` must point to a valid `RKRConFrame` allocation.
+ */
+uint64_t rkr_frame_atom_index_by_id(const struct RKRConFrame *frame_handle,
+                                    uint64_t atom_id);
+
+/**
+ * Returns the atomic number for a chemical symbol, or 0 if the symbol
+ * is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
+ * is case-sensitive: "Fe" works, "fe" does not.
+ *
+ * # Safety
+ *
+ * `symbol` must be either NULL or a pointer to a NUL-terminated UTF-8
+ * C string valid for reads up to the terminating NUL byte.
+ */
+uint64_t rkr_symbol_to_z(const char *symbol);
+
+/**
+ * Returns a pointer to a static, NUL-terminated chemical symbol for an
+ * atomic number, or "X" for unknown values. Coverage is H..U
+ * (Z = 1..=92). The returned pointer is valid for the lifetime of the
+ * process; do NOT free it.
+ */
+const char *rkr_z_to_symbol(uint64_t z);
 
 /**
  * Returns the spec version stored in a parsed frame's header.
@@ -459,6 +502,20 @@ enum RKRStatus rkr_frame_builder_set_last_velocity(struct RKRConFrameBuilder *bu
  */
 enum RKRStatus rkr_frame_builder_set_last_force(struct RKRConFrameBuilder *builder_handle,
                                                 const double *force);
+
+/**
+ * Attaches a per-atom energy to the most recently added atom on a
+ * builder. No-op if no atom has been added yet.
+ *
+ * Use this together with the per-frame `energy` metadata key when a
+ * caller wants to round-trip an "Energies of Component" decomposition
+ * alongside the total.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_last_energy(struct RKRConFrameBuilder *builder_handle,
+                                                 double energy);
 
 /**
  * Adds an atom with optional per-axis fixed mask, velocity, and force vectors.

@@ -102,6 +102,23 @@ fn large_file_bench(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("100_frames_forward_fast_skip", |b| {
+        b.iter(|| {
+            let mut iter = ConFrameIterator::new(&large);
+            while let Some(result) = iter.forward_fast() {
+                let _ = black_box(result);
+            }
+        })
+    });
+
+    #[cfg(feature = "parallel")]
+    group.bench_function("100_frames_parallel_parse", |b| {
+        b.iter(|| {
+            let frames = readcon_core::iterators::parse_frames_parallel(&large);
+            let _ = black_box(frames);
+        })
+    });
+
     group.finish();
 }
 
@@ -149,6 +166,65 @@ fn fast_float_microbench(c: &mut Criterion) {
     group.finish();
 }
 
+fn writer_bench(c: &mut Criterion) {
+    use readcon_core::writer::ConFrameWriter;
+    let large = generate_large_file(100);
+    let frames: Vec<_> = ConFrameIterator::new(&large).map(|r| r.unwrap()).collect();
+
+    // Trajectory-style fixture: 100 frames sharing a heavy
+    // FrameHeader.metadata payload (potential, units, frame_index).
+    // This is the workload the writer's metadata cache targets:
+    // every frame's JSON metadata line is identical, but the writer
+    // still has to (re)serialise it without the cache.
+    let cuh2 = std::fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find test.");
+    let single_frame = ConFrameIterator::new(&cuh2)
+        .next()
+        .unwrap()
+        .unwrap();
+    let mut heavy_meta_frames = Vec::with_capacity(100);
+    for i in 0..100u64 {
+        let mut frame = single_frame.clone();
+        frame.header.metadata.insert(
+            "potential".into(),
+            serde_json::json!({"type": "EMT", "params": {"cutoff": 6.0}}),
+        );
+        frame.header.metadata.insert(
+            "units".into(),
+            serde_json::json!({"length": "Angstrom", "energy": "eV", "time": "fs"}),
+        );
+        frame.header.metadata.insert("validate".into(), serde_json::json!(false));
+        // Per-frame keys do NOT change — match the cache's hot path.
+        let _ = i;
+        heavy_meta_frames.push(frame);
+    }
+
+    let mut group = c.benchmark_group("Writer");
+
+    group.bench_function("write_100_frames_buffer", |b| {
+        b.iter(|| {
+            let mut buffer: Vec<u8> = Vec::with_capacity(large.len());
+            {
+                let mut writer = ConFrameWriter::new(&mut buffer);
+                writer.extend(frames.iter()).unwrap();
+            }
+            let _ = black_box(buffer);
+        })
+    });
+
+    group.bench_function("write_100_frames_heavy_metadata", |b| {
+        b.iter(|| {
+            let mut buffer: Vec<u8> = Vec::with_capacity(large.len() * 2);
+            {
+                let mut writer = ConFrameWriter::new(&mut buffer);
+                writer.extend(heavy_meta_frames.iter()).unwrap();
+            }
+            let _ = black_box(buffer);
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     iterator_bench,
@@ -157,5 +233,6 @@ criterion_group!(
     large_file_bench,
     mmap_vs_read_bench,
     fast_float_microbench,
+    writer_bench,
 );
 criterion_main!(benches);
