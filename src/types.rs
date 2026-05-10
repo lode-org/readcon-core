@@ -1336,6 +1336,38 @@ impl ConFrameBuilder {
             .expect("atom_ids standard layout invariant violated")
     }
 
+    // ----- Crate-internal ndarray refs --------------------------------------
+    //
+    // FFI / cross-crate consumers (src/ffi.rs) need `&Array<T, D>` to
+    // construct DLPack tensors via dlpk's `TryFrom<&'a Array<T, D>>`.
+    // These accessors are pub-but-deliberately-low-level: callers should
+    // prefer `positions_dlpack()` / `positions_view()` for typed access.
+    /// Crate-internal `&Array2<f64>` for the FFI DLPack exporter.
+    pub fn positions_2d_ref(&self) -> &ndarray::Array2<f64> {
+        &self.positions
+    }
+    /// Crate-internal `&Array2<f64>` velocities ref (caller checks the
+    /// section flag first).
+    pub fn velocities_2d_ref(&self) -> &ndarray::Array2<f64> {
+        &self.velocities
+    }
+    /// Crate-internal `&Array2<f64>` forces ref.
+    pub fn forces_2d_ref(&self) -> &ndarray::Array2<f64> {
+        &self.forces
+    }
+    /// Crate-internal `&Array1<f64>` atom_energies ref.
+    pub fn atom_energies_1d_ref(&self) -> &ndarray::Array1<f64> {
+        &self.atom_energies
+    }
+    /// Crate-internal `&Array1<f64>` masses ref.
+    pub fn masses_1d_ref(&self) -> &ndarray::Array1<f64> {
+        &self.masses
+    }
+    /// Crate-internal `&Array1<u64>` atom_ids ref.
+    pub fn atom_ids_1d_ref(&self) -> &ndarray::Array1<u64> {
+        &self.atom_ids
+    }
+
     // ----- DLPack zero-copy export (v0.11.0) --------------------------------
     //
     // Cross-language consumers (C++ Eigen, Python numpy / PyTorch / JAX,
