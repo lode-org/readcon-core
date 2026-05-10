@@ -41,7 +41,7 @@ tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 numpy = { version = "0.28", optional = true }
-ndarray = { version = "0.16", optional = true }
+ndarray = { version = "0.17", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 
