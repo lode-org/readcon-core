@@ -23,11 +23,26 @@ default = []
 capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
-python = ["dep:pyo3", "dep:numpy", "dep:ndarray"]
+# NB: dlpk/pyo3 is intentionally NOT activated -- dlpk v0.1.5 pins
+# pyo3 = "0.26" but readcon-core's python.rs is on pyo3 0.28, and
+# pyo3-ffi is `links = "python"` so the two cannot coexist in the
+# graph. v0.11 builds its own __dlpack__ PyCapsule wrapper using
+# dlpk's sys::DLManagedTensorVersioned types directly. Once dlpk
+# bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
+python = ["dep:pyo3", "dep:numpy"]
 zstd = ["dep:zstd"]
-metatensor = ["dep:metatensor", "dep:ndarray"]
+metatensor = ["dep:metatensor"]
 
 [dependencies]
+# v0.11 storage abstraction. The `Array` trait + DLPack export pattern
+# mirrors metatensor v2's `Box<dyn Array>` storage hook so that
+# downstream consumers (eOn, GROMACS, ML potentials in PyTorch/JAX/TF)
+# get zero-copy interop without each language reimplementing a
+# bespoke pointer surface. dlpk is hard-deppy because the C-ABI
+# DLPack export is the v0.11 surface; the `ndarray` and `pyo3`
+# features are turned on conditionally below.
+dlpk = "0.1.5"
+ndarray = "0.17"
 fast-float2 = "0.2"
 flate2 = "1"
 serde_json = "1"
@@ -42,7 +57,6 @@ tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 numpy = { version = "0.28", optional = true }
-ndarray = { version = "0.17", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 
