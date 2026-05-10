@@ -35,6 +35,53 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     VERSION_NUL.as_ptr() as *const c_char
 }
 
+/// Returns the atomic number for a chemical symbol, or 0 if the symbol
+/// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
+/// is case-sensitive: "Fe" works, "fe" does not.
+///
+/// # Safety
+///
+/// `symbol` must be either NULL or a pointer to a NUL-terminated UTF-8
+/// C string valid for reads up to the terminating NUL byte.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_symbol_to_z(symbol: *const c_char) -> u64 {
+    if symbol.is_null() {
+        return 0;
+    }
+    match unsafe { CStr::from_ptr(symbol) }.to_str() {
+        Ok(s) => symbol_to_atomic_number(s),
+        Err(_) => 0,
+    }
+}
+
+/// Returns a pointer to a static, NUL-terminated chemical symbol for an
+/// atomic number, or "X" for unknown values. Coverage is H..U
+/// (Z = 1..=92). The returned pointer is valid for the lifetime of the
+/// process; do NOT free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_z_to_symbol(z: u64) -> *const c_char {
+    // The static &str returned by helpers::atomic_number_to_symbol is
+    // not NUL-terminated, so the FFI mirrors the table with literals
+    // that have a trailing NUL. Index 0 holds "X" for unknown Z; indices
+    // 1..=92 hold H..U in order.
+    macro_rules! cstrs {
+        ($($lit:literal),* $(,)?) => {
+            [$(concat!($lit, "\0").as_bytes()),*]
+        };
+    }
+    const TABLE: [&[u8]; 93] = cstrs![
+        "X", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P",
+        "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+        "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh",
+        "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
+        "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re",
+        "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+        "Pa", "U",
+    ];
+    let idx = if (1..=92).contains(&z) { z as usize } else { 0 };
+    TABLE[idx].as_ptr() as *const c_char
+}
+
 /// Returns the spec version stored in a parsed frame's header.
 /// Returns 0 on error (null handle).
 #[unsafe(no_mangle)]

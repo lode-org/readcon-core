@@ -417,6 +417,25 @@ inline std::string status_message(RKRStatus status) {
     return message ? std::string(message) : std::string("unknown status");
 }
 
+/**
+ * @brief Returns the atomic number for a chemical symbol, or 0 if the
+ *        symbol is unknown. Coverage is H..U (Z = 1..=92);
+ *        case-sensitive.
+ */
+inline uint64_t symbol_to_z(const std::string &symbol) {
+    return rkr_symbol_to_z(symbol.c_str());
+}
+
+/**
+ * @brief Returns the chemical symbol for an atomic number, or "X" for
+ *        unknown values. The returned string is process-static; copying
+ *        into a std::string is safe.
+ */
+inline std::string z_to_symbol(uint64_t z) {
+    const char *symbol = rkr_z_to_symbol(z);
+    return symbol ? std::string(symbol) : std::string("X");
+}
+
 inline void throw_on_error(RKRStatus status, const std::string &operation) {
     if (status != RKRStatus::RKR_STATUS_SUCCESS) {
         throw std::runtime_error(operation + ": " + status_message(status));
