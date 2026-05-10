@@ -141,8 +141,13 @@ bytes (=0x1f 0x8b=) are universally recognized. For the ~con~ format's
 typical file sizes (KiB to low MiB), gzip's compression ratio is
 adequate (60-80% reduction).
 
-zstd support may be added behind an optional feature flag in the
-future, using the same magic-byte detection pattern.
+zstd support is available behind the optional =zstd= Cargo feature
+since v0.10.0, using the same magic-byte detection pattern (=28 b5 2f
+fd= for zstd frames; =1f 8b= for gzip). =.con.zst= files are read and
+written through =ConFrameWriter::from_path_zstd= and the same
+=read_all_frames= entry point. Builds without the feature still detect
+zstd magic bytes and return a clear error pointing at the feature flag,
+so consumers never see a corrupt parse on a zstd file.
 
 * Migration guide for existing tools
 

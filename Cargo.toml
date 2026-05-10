@@ -19,6 +19,7 @@ capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
 python = ["dep:pyo3"]
+zstd = ["dep:zstd"]
 
 [dependencies]
 fast-float2 = "0.2"
@@ -32,6 +33,7 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros"], 
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 cog = "0.1.0"

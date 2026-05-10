@@ -244,3 +244,23 @@ impl ConFrameWriter<flate2::write::GzEncoder<File>> {
         Ok(Self::with_precision(encoder, precision))
     }
 }
+
+// Zstd-compressed writer constructors. Available only with the `zstd`
+// Cargo feature.
+#[cfg(feature = "zstd")]
+impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
+    /// Creates a zstd-compressed writer for the given path.
+    pub fn from_path_zstd<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let encoder = crate::compression::zstd_writer(path.as_ref())?;
+        Ok(Self::new(encoder))
+    }
+
+    /// Creates a zstd-compressed writer with custom precision.
+    pub fn from_path_zstd_with_precision<P: AsRef<Path>>(
+        path: P,
+        precision: usize,
+    ) -> io::Result<Self> {
+        let encoder = crate::compression::zstd_writer(path.as_ref())?;
+        Ok(Self::with_precision(encoder, precision))
+    }
+}
