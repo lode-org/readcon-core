@@ -379,67 +379,6 @@ function _add_atom(builder::Ptr{Cvoid}, atom::Atom)
 end
 
 """
-    _morton_encode(x, y, z, cell) -> UInt64
-
-3D Morton (Z-order) encoder mirroring `readcon_core::types::morton_encode`.
-Each axis is quantised to 10 bits over the simulation cell, then the
-bits are interleaved so adjacent codes correspond to spatially-close
-points.
-"""
-function _morton_encode(x::Float64, y::Float64, z::Float64,
-                        cell::NTuple{3, Float64})::UInt64
-    qx = UInt32(floor(clamp(x / cell[1], 0.0, 1.0) * 1023.0))
-    qy = UInt32(floor(clamp(y / cell[2], 0.0, 1.0) * 1023.0))
-    qz = UInt32(floor(clamp(z / cell[3], 0.0, 1.0) * 1023.0))
-    res = UInt64(0)
-    for i in 0:9
-        res |= (UInt64(qx) & (UInt64(1) << i)) << (2 * i)
-        res |= (UInt64(qy) & (UInt64(1) << i)) << (2 * i + 1)
-        res |= (UInt64(qz) & (UInt64(1) << i)) << (2 * i + 2)
-    end
-    return res
-end
-
-"""
-    morton_sort(frame::ConFrame) -> ConFrame
-
-Returns a new `ConFrame` whose atoms have been sorted within each type
-group by 3D Morton (Z-order) curve position. Type grouping is preserved;
-only the order within each species changes.
-"""
-function morton_sort(frame::ConFrame)::ConFrame
-    cell = frame.cell
-    new_atoms = copy(frame.atoms)
-    # The atom buffer is type-grouped; sort each group in place.
-    offset = 1
-    species_seen = String[]
-    counts = Int[]
-    for atom in new_atoms
-        sym = String(_atomic_symbol(atom.atomic_number))
-        idx = findfirst(==(sym), species_seen)
-        if idx === nothing
-            push!(species_seen, sym)
-            push!(counts, 1)
-        else
-            counts[idx] += 1
-        end
-    end
-    for count in counts
-        view = @view new_atoms[offset:offset + count - 1]
-        sort!(view, by = a -> _morton_encode(a.x, a.y, a.z, cell))
-        offset += count
-    end
-    return ConFrame(
-        frame.cell, frame.angles, new_atoms, frame.has_velocities,
-        frame.prebox_header, frame.postbox_header,
-        frame.has_forces, frame.has_energies,
-        frame.spec_version, frame.metadata_json, frame.energy,
-        frame.frame_index, frame.time, frame.timestep,
-        frame.neb_bead, frame.neb_band,
-    )
-end
-
-"""
     atom_index_by_id(frame::ConFrame, atom_id::Integer) -> Union{Int, Nothing}
 
 Returns the 1-based position of the atom in `frame.atoms` whose
