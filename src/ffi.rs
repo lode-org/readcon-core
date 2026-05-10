@@ -245,6 +245,11 @@ pub enum RKRStatus {
     RKR_STATUS_BUFFER_TOO_SMALL = -6,
     /// An internal logic error or unhandled state.
     RKR_STATUS_INTERNAL_ERROR = -7,
+    /// An optional section (velocities, forces, atom_energies) was
+    /// requested but is not declared on the builder.
+    RKR_STATUS_SECTION_ABSENT = -8,
+    /// DLPack export or another validation step failed.
+    RKR_STATUS_VALIDATION_ERROR = -9,
 }
 
 /// Returns a stable, static message for a status code.
@@ -260,6 +265,8 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS => c"index out of bounds".as_ptr(),
         RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL => c"buffer too small".as_ptr(),
         RKRStatus::RKR_STATUS_INTERNAL_ERROR => c"internal error".as_ptr(),
+        RKRStatus::RKR_STATUS_SECTION_ABSENT => c"section absent".as_ptr(),
+        RKRStatus::RKR_STATUS_VALIDATION_ERROR => c"validation error".as_ptr(),
     }
 }
 
@@ -1247,6 +1254,223 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
         },
         Err(e) => map_builder_err(e),
     }
+}
+
+// ----- v0.11.0 DLPack tier-3 export FFI -------------------------------------
+//
+// Cross-language zero-copy via the DLPack 1.0 ABI. Each per-atom field of
+// the builder is exported as an owning `DLManagedTensorVersioned*`. The
+// caller is responsible for invoking the tensor's deleter callback to
+// release the backing storage when finished. v0.11 ships the OWNING /
+// CLONED variant: the tensor carries its own copy of the field data so it
+// remains valid past the builder's lifetime. This is the conservative
+// choice for cross-process / language-runtime consumers (Python GC,
+// Julia GC, ...) where the consumer may outlive the Rust-side
+// ConFrameBuilder. A future v0.12 will add a `*_dlpack_borrowed` variant
+// that hands out a non-owning view backed by `Arc<ndarray::Array<...>>`
+// storage (matches metatensor v2's `Arc<RwLock<ArrayD<T>>>` pattern) for
+// in-process zero-copy.
+//
+// Optional sections (velocities, forces, atom_energies) return
+// RKR_STATUS_SECTION_ABSENT when the section is not declared on the
+// builder; the out parameter is left untouched. Always-present fields
+// (positions, masses, atom_ids) always return a tensor on success.
+
+/// Re-export of dlpk's `DLManagedTensorVersioned` for the C ABI surface.
+/// Defined here so cbindgen emits a forward declaration without pulling
+/// in the full dlpk header; consumers include `<dlpack/dlpack.h>` (or
+/// equivalent) and cast through the standard DLPack ABI.
+pub use dlpk::sys::DLManagedTensorVersioned as RKRDLManagedTensorVersioned;
+
+fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
+    use crate::error::ParseError;
+    match e {
+        ParseError::ValidationError(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
+fn export_owned_array2_dlpack(
+    arr: &ndarray::Array2<f64>,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let owned = arr.clone();
+    match dlpk::DLPackTensor::try_from(owned) {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
+            "DLPack export failed: {e}"
+        ))),
+    }
+}
+
+fn export_owned_array1_f64_dlpack(
+    arr: &ndarray::Array1<f64>,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let owned = arr.clone();
+    match dlpk::DLPackTensor::try_from(owned) {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
+            "DLPack export failed: {e}"
+        ))),
+    }
+}
+
+fn export_owned_array1_u64_dlpack(
+    arr: &ndarray::Array1<u64>,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let owned = arr.clone();
+    match dlpk::DLPackTensor::try_from(owned) {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
+            "DLPack export failed: {e}"
+        ))),
+    }
+}
+
+/// Export builder positions as a DLPack-managed tensor.
+///
+/// On success the caller-supplied `*out_tensor` is set to a newly-
+/// allocated `DLManagedTensorVersioned*` that owns a clone of the
+/// builder's `(N, 3) f64` row-major positions buffer. The caller MUST
+/// invoke `(*out_tensor)->deleter(*out_tensor)` to release it.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    export_owned_array2_dlpack(builder.positions_2d_ref(), out_tensor)
+}
+
+/// Export builder velocities as a DLPack-managed tensor.
+///
+/// Returns `RKR_STATUS_SECTION_ABSENT` if the velocities section is not
+/// declared; otherwise `(N, 3) f64`. See positions_dlpack for ownership
+/// semantics.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    if !builder.has_velocities_section() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    export_owned_array2_dlpack(builder.velocities_2d_ref(), out_tensor)
+}
+
+/// Export builder forces as a DLPack-managed tensor.
+///
+/// Returns `RKR_STATUS_SECTION_ABSENT` if the forces section is not
+/// declared.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    if !builder.has_forces_section() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    export_owned_array2_dlpack(builder.forces_2d_ref(), out_tensor)
+}
+
+/// Export builder per-atom energies as a DLPack-managed tensor.
+///
+/// Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
+/// declared; otherwise `(N,) f64`.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    if !builder.has_energies_section() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    export_owned_array1_f64_dlpack(builder.atom_energies_1d_ref(), out_tensor)
+}
+
+/// Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    export_owned_array1_f64_dlpack(builder.masses_1d_ref(), out_tensor)
+}
+
+/// Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    export_owned_array1_u64_dlpack(builder.atom_ids_1d_ref(), out_tensor)
 }
 
 // ----- end v0.11.0 in-place mutation FFI ------------------------------------
