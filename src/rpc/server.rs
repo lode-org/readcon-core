@@ -165,6 +165,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                         None
                     },
                     force: None,
+                    energy: None,
                 });
             }
             if current_count > 0 {
