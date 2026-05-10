@@ -10,7 +10,13 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinxcontrib_rust",
     "sphinx_rustdoc_postprocess",
+    "sphinxcontrib.bibtex",
 ]
+
+# -- sphinxcontrib-bibtex configuration --------------------------------------
+bibtex_bibfiles = ["references.bib"]
+bibtex_default_style = "alpha"
+bibtex_reference_style = "author_year"
 
 templates_path = ["_templates"]
 exclude_patterns = [
