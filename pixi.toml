@@ -12,7 +12,7 @@ bench = "cargo bench"
 build = "cargo build --release"
 build-rpc = "cargo build --release --features rpc"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen" }
-check-capi-headers = { cmd = "tmp=$(mktemp) && cbindgen --config cbindgen.toml --crate readcon-core --output \"$tmp\" && diff -u include/readcon-core.h \"$tmp\"", description = "Verify shipped C header matches what cbindgen would produce" }
+check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Verify shipped C header matches what cbindgen would produce" }
 
 [dependencies]
 rust = ">=1.88"
