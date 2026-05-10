@@ -35,6 +35,53 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     VERSION_NUL.as_ptr() as *const c_char
 }
 
+/// Sorts atoms within each type group by 3D Morton (Z-order) curve
+/// position. Atom-type grouping is preserved; only the order within
+/// each type changes.
+///
+/// Returns `RKR_STATUS_NULL_POINTER` if `frame_handle` is NULL,
+/// `RKR_STATUS_SUCCESS` otherwise. The frame is mutated in place; no
+/// new handle is allocated.
+///
+/// # Safety
+///
+/// `frame_handle` must point to a valid `RKRConFrame` allocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_morton_sort(frame_handle: *mut RKRConFrame) -> RKRStatus {
+    let frame = match unsafe { (frame_handle as *mut ConFrame).as_mut() } {
+        Some(f) => f,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    frame.morton_sort_in_place();
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Returns the position of an atom inside the frame's `atom_data` array
+/// matching the given `atom_id`. Returns `UINT64_MAX` if no atom with
+/// that id exists or `frame_handle` is NULL.
+///
+/// O(N) per call. C/C++ consumers performing many lookups should cache
+/// a `std::unordered_map<uint64_t, size_t>` from a single sweep over
+/// the frame.
+///
+/// # Safety
+///
+/// `frame_handle` must point to a valid `RKRConFrame` allocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
+    frame_handle: *const RKRConFrame,
+    atom_id: u64,
+) -> u64 {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return u64::MAX,
+    };
+    match frame.atom_index_by_id(atom_id) {
+        Some(idx) => idx as u64,
+        None => u64::MAX,
+    }
+}
+
 /// Returns the atomic number for a chemical symbol, or 0 if the symbol
 /// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
 /// is case-sensitive: "Fe" works, "fe" does not.

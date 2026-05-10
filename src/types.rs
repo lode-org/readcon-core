@@ -2,6 +2,7 @@
 // Data Structures - The shape of our parsed data
 //=============================================================================
 
+pub use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -468,6 +469,75 @@ impl ConFrame {
     pub fn has_energies(&self) -> bool {
         self.atom_data.first().is_some_and(|a| a.has_energy())
     }
+
+    /// Builds an O(1) reverse index from `atom_id` to the position of
+    /// the atom inside `atom_data`.
+    ///
+    /// Returns an [`FxHashMap`] (`rustc-hash`) so the small-integer
+    /// hash workload stays fast. The index is built fresh on each
+    /// call; callers that perform many lookups should cache the
+    /// returned map.
+    pub fn build_atom_id_index(&self) -> FxHashMap<u64, usize> {
+        let mut idx = FxHashMap::with_capacity_and_hasher(
+            self.atom_data.len(),
+            Default::default(),
+        );
+        for (i, atom) in self.atom_data.iter().enumerate() {
+            idx.insert(atom.atom_id, i);
+        }
+        idx
+    }
+
+    /// Linear-scan lookup of an atom by its `atom_id` column.
+    ///
+    /// O(N) per call. For repeated lookups on a stable frame, build a
+    /// reverse index once with [`Self::build_atom_id_index`] and look
+    /// up in the returned [`AtomIdIndex`] directly.
+    pub fn atom_index_by_id(&self, atom_id: u64) -> Option<usize> {
+        self.atom_data.iter().position(|a| a.atom_id == atom_id)
+    }
+
+    /// Sorts atoms within each type group by 3D Morton (Z-order) curve
+    /// position so spatially-close atoms land adjacent in the buffer.
+    ///
+    /// The atom-type grouping (and therefore `natms_per_type` /
+    /// `masses_per_type`) is preserved; only the *order within each
+    /// type* changes. The `atom_id` column is preserved per atom, so a
+    /// post-sort [`Self::build_atom_id_index`] still resolves to the
+    /// correct atom.
+    ///
+    /// 3D quantisation is 10 bits per dimension (1024 cells), giving a
+    /// 30-bit Morton code that fits in `u64`. Coordinates outside
+    /// `[0, boxl[d])` are clamped before quantisation.
+    pub fn morton_sort_in_place(&mut self) {
+        let cell = self.header.boxl;
+        let mut offset = 0;
+        for &count in &self.header.natms_per_type {
+            self.atom_data[offset..offset + count]
+                .sort_by_key(|a| morton_encode(a.x, a.y, a.z, cell));
+            offset += count;
+        }
+    }
+}
+
+/// Encode a 3D position to a 30-bit Morton (Z-order) curve key.
+///
+/// Each axis is quantised to 10 bits (1024 cells) over the simulation
+/// cell, then the bits are interleaved so adjacent codes correspond to
+/// spatially-close points. Used by [`ConFrame::morton_sort_in_place`]
+/// and the builder's `spatially_sort` flag.
+pub fn morton_encode(x: f64, y: f64, z: f64, boxl: [f64; 3]) -> u64 {
+    let qx = ((x / boxl[0]).clamp(0.0, 1.0) * 1023.0) as u32;
+    let qy = ((y / boxl[1]).clamp(0.0, 1.0) * 1023.0) as u32;
+    let qz = ((z / boxl[2]).clamp(0.0, 1.0) * 1023.0) as u32;
+
+    let mut res = 0u64;
+    for i in 0..10 {
+        res |= ((qx as u64) & (1 << i)) << (2 * i);
+        res |= ((qy as u64) & (1 << i)) << (2 * i + 1);
+        res |= ((qz as u64) & (1 << i)) << (2 * i + 2);
+    }
+    res
 }
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
