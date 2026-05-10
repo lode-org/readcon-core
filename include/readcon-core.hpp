@@ -471,6 +471,32 @@ class ConFrameBuilder {
     [[nodiscard]] double get_atom_mass(size_t i) const;
 
     /**
+     * @name In-process zero-copy data accessors (v0.11.1)
+     *
+     * Raw pointer borrow into the builder's ndarray storage. The
+     * intended use is `Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic,
+     * 3, Eigen::RowMajor>>(builder.positions_data(), N, 3)` and
+     * equivalents in C, Fortran, and other in-process consumers. The
+     * returned pointer is non-owning; the builder MUST outlive any
+     * use, and the pointer becomes invalid if `add_atom` reallocates
+     * the underlying buffer. Cross-language tensor consumers (NumPy,
+     * PyTorch, Julia) should use the DLPack tier-3 accessors below
+     * which carry shape / dtype / device metadata and respect the
+     * DLPack ABI's deleter contract.
+     *
+     * @return raw pointer to the field's first element; nullptr if
+     *         the section is absent or the builder is invalid.
+     * @{
+     */
+    [[nodiscard]] double *positions_data() noexcept;
+    [[nodiscard]] double *velocities_data() noexcept;
+    [[nodiscard]] double *forces_data() noexcept;
+    [[nodiscard]] double *atom_energies_data() noexcept;
+    [[nodiscard]] double *masses_data() noexcept;
+    [[nodiscard]] const uint64_t *atom_ids_data() const noexcept;
+    /// @}
+
+    /**
      * @brief Consumes the builder and returns a finalized ConFrame.
      *
      * The builder is invalidated after this call: every subsequent
@@ -1086,6 +1112,25 @@ inline double ConFrameBuilder::get_atom_mass(size_t i) const {
     throw_on_error(rkr_frame_builder_get_atom_mass(builder_handle_, i, &m),
                    "Failed to read atom mass");
     return m;
+}
+
+inline double *ConFrameBuilder::positions_data() noexcept {
+    return rkr_frame_builder_positions_data(builder_handle_);
+}
+inline double *ConFrameBuilder::velocities_data() noexcept {
+    return rkr_frame_builder_velocities_data(builder_handle_);
+}
+inline double *ConFrameBuilder::forces_data() noexcept {
+    return rkr_frame_builder_forces_data(builder_handle_);
+}
+inline double *ConFrameBuilder::atom_energies_data() noexcept {
+    return rkr_frame_builder_atom_energies_data(builder_handle_);
+}
+inline double *ConFrameBuilder::masses_data() noexcept {
+    return rkr_frame_builder_masses_data(builder_handle_);
+}
+inline const uint64_t *ConFrameBuilder::atom_ids_data() const noexcept {
+    return rkr_frame_builder_atom_ids_data(builder_handle_);
 }
 
 inline ConFrameBuilder &
