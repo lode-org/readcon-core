@@ -7,6 +7,9 @@ pub mod parser;
 pub mod types;
 pub mod writer;
 
+#[cfg(feature = "metatensor")]
+pub mod metatensor_export;
+
 #[cfg(feature = "rpc")]
 pub mod rpc;
 
