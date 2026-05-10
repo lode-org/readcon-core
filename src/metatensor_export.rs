@@ -175,8 +175,9 @@ mod tests {
         let frame = small_frame();
         let block = frame.to_metatensor_positions_block().unwrap();
         let values = block.values();
-        let shape = values.as_array().shape().to_vec();
-        assert_eq!(shape, vec![2, 3]);
+        let array_lock = values.as_ndarray_lock::<f64>();
+        let array = array_lock.read().expect("positions array lock");
+        assert_eq!(array.shape(), &[2, 3]);
         let samples = block.samples();
         assert_eq!(samples.size(), 2);
         let properties = block.properties();
