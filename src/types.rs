@@ -492,52 +492,10 @@ impl ConFrame {
     ///
     /// O(N) per call. For repeated lookups on a stable frame, build a
     /// reverse index once with [`Self::build_atom_id_index`] and look
-    /// up in the returned [`AtomIdIndex`] directly.
+    /// up in the returned hash map directly.
     pub fn atom_index_by_id(&self, atom_id: u64) -> Option<usize> {
         self.atom_data.iter().position(|a| a.atom_id == atom_id)
     }
-
-    /// Sorts atoms within each type group by 3D Morton (Z-order) curve
-    /// position so spatially-close atoms land adjacent in the buffer.
-    ///
-    /// The atom-type grouping (and therefore `natms_per_type` /
-    /// `masses_per_type`) is preserved; only the *order within each
-    /// type* changes. The `atom_id` column is preserved per atom, so a
-    /// post-sort [`Self::build_atom_id_index`] still resolves to the
-    /// correct atom.
-    ///
-    /// 3D quantisation is 10 bits per dimension (1024 cells), giving a
-    /// 30-bit Morton code that fits in `u64`. Coordinates outside
-    /// `[0, boxl[d])` are clamped before quantisation.
-    pub fn morton_sort_in_place(&mut self) {
-        let cell = self.header.boxl;
-        let mut offset = 0;
-        for &count in &self.header.natms_per_type {
-            self.atom_data[offset..offset + count]
-                .sort_by_key(|a| morton_encode(a.x, a.y, a.z, cell));
-            offset += count;
-        }
-    }
-}
-
-/// Encode a 3D position to a 30-bit Morton (Z-order) curve key.
-///
-/// Each axis is quantised to 10 bits (1024 cells) over the simulation
-/// cell, then the bits are interleaved so adjacent codes correspond to
-/// spatially-close points. Used by [`ConFrame::morton_sort_in_place`]
-/// and the builder's `spatially_sort` flag.
-pub fn morton_encode(x: f64, y: f64, z: f64, boxl: [f64; 3]) -> u64 {
-    let qx = ((x / boxl[0]).clamp(0.0, 1.0) * 1023.0) as u32;
-    let qy = ((y / boxl[1]).clamp(0.0, 1.0) * 1023.0) as u32;
-    let qz = ((z / boxl[2]).clamp(0.0, 1.0) * 1023.0) as u32;
-
-    let mut res = 0u64;
-    for i in 0..10 {
-        res |= ((qx as u64) & (1 << i)) << (2 * i);
-        res |= ((qy as u64) & (1 << i)) << (2 * i + 1);
-        res |= ((qz as u64) & (1 << i)) << (2 * i + 2);
-    }
-    res
 }
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
@@ -852,45 +810,6 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_morton_encode_locality() {
-        let cell = [10.0, 10.0, 10.0];
-        // Two points in the same cell-octant share leading Morton bits.
-        let near_a = morton_encode(0.5, 0.5, 0.5, cell);
-        let near_b = morton_encode(0.6, 0.6, 0.6, cell);
-        let far = morton_encode(9.0, 9.0, 9.0, cell);
-        // Nearby points should produce closer codes than distant ones.
-        let d_near = (near_a as i128 - near_b as i128).abs();
-        let d_far = (near_a as i128 - far as i128).abs();
-        assert!(d_near < d_far);
-    }
-
-    #[test]
-    fn test_morton_sort_groups_by_type_first() {
-        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        builder
-            .add_atom("Cu", 9.0, 9.0, 9.0, [false, false, false], 0, 63.546);
-        builder
-            .add_atom("Cu", 0.1, 0.1, 0.1, [false, false, false], 1, 63.546);
-        builder
-            .add_atom("H", 9.0, 9.0, 9.0, [false, false, false], 2, 1.008);
-        builder
-            .add_atom("H", 0.1, 0.1, 0.1, [false, false, false], 3, 1.008);
-        let mut frame = builder.build();
-        frame.morton_sort_in_place();
-        // Type grouping preserved.
-        assert_eq!(&*frame.atom_data[0].symbol, "Cu");
-        assert_eq!(&*frame.atom_data[1].symbol, "Cu");
-        assert_eq!(&*frame.atom_data[2].symbol, "H");
-        assert_eq!(&*frame.atom_data[3].symbol, "H");
-        // Within each type group, the spatially-near atom (small coords)
-        // sorts before the far one.
-        assert_eq!(frame.atom_data[0].atom_id, 1);
-        assert_eq!(frame.atom_data[1].atom_id, 0);
-        assert_eq!(frame.atom_data[2].atom_id, 3);
-        assert_eq!(frame.atom_data[3].atom_id, 2);
-    }
 
     #[test]
     fn test_atom_id_index_handles_non_sequential_ids() {
