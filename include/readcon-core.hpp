@@ -224,6 +224,20 @@ class ConFrame {
     /// contribution (file declared an `"energies"` section).
     bool has_energies() const;
 
+    /// Sorts atoms within each type group by 3D Morton (Z-order)
+    /// curve position so spatially-close atoms land adjacent in the
+    /// underlying buffer. Atom-type grouping is preserved; only the
+    /// order within each species changes.
+    ///
+    /// Mutates the underlying frame and invalidates any previously
+    /// returned `atoms()` reference.
+    void morton_sort();
+
+    /// Returns the position of an atom in the frame whose `atom_id`
+    /// equals the given id, or `std::nullopt` if no such atom exists.
+    /// O(N) per call.
+    std::optional<size_t> atom_index_by_id(uint64_t atom_id) const;
+
     uint32_t spec_version() const;
     std::string metadata_json() const;
 
@@ -664,6 +678,27 @@ inline bool ConFrame::has_forces() const {
 inline bool ConFrame::has_energies() const {
     cache_data();
     return has_energies_cache_;
+}
+
+inline void ConFrame::morton_sort() {
+    throw_on_error(
+        rkr_frame_morton_sort(frame_handle_.get()),
+        "Failed to Morton-sort frame");
+    // The atom buffer has been permuted; the cached AoS view, the
+    // has_*_cache_ flags, and the headers are still valid (they did
+    // not depend on atom order), but `atoms_cache_` no longer matches
+    // the underlying frame, so drop it.
+    is_cached_ = false;
+    atoms_cache_.clear();
+}
+
+inline std::optional<size_t>
+ConFrame::atom_index_by_id(uint64_t atom_id) const {
+    uint64_t idx = rkr_frame_atom_index_by_id(frame_handle_.get(), atom_id);
+    if (idx == UINT64_MAX) {
+        return std::nullopt;
+    }
+    return static_cast<size_t>(idx);
 }
 
 inline uint32_t ConFrame::spec_version() const {
