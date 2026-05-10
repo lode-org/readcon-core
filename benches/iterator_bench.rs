@@ -149,6 +149,26 @@ fn fast_float_microbench(c: &mut Criterion) {
     group.finish();
 }
 
+fn writer_bench(c: &mut Criterion) {
+    use readcon_core::writer::ConFrameWriter;
+    let large = generate_large_file(100);
+    let frames: Vec<_> = ConFrameIterator::new(&large).map(|r| r.unwrap()).collect();
+    let mut group = c.benchmark_group("Writer");
+
+    group.bench_function("write_100_frames_buffer", |b| {
+        b.iter(|| {
+            let mut buffer: Vec<u8> = Vec::with_capacity(large.len());
+            {
+                let mut writer = ConFrameWriter::new(&mut buffer);
+                writer.extend(frames.iter()).unwrap();
+            }
+            let _ = black_box(buffer);
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     iterator_bench,
@@ -157,5 +177,6 @@ criterion_group!(
     large_file_bench,
     mmap_vs_read_bench,
     fast_float_microbench,
+    writer_bench,
 );
 criterion_main!(benches);
