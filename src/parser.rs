@@ -1,7 +1,8 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
-    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_FORCES, SECTION_VELOCITIES,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_ENERGIES, SECTION_FORCES,
+    SECTION_VELOCITIES,
     decode_fixed_bitmask, meta,
 };
 use serde_json::Value;
@@ -469,6 +470,7 @@ pub fn parse_single_frame<'a>(
                 atom_id,
                 velocity: None,
                 force: None,
+                energy: None,
             });
             global_atom_idx += 1;
         }
@@ -754,6 +756,71 @@ where
     Ok(true)
 }
 
+/// Attempts to parse an energies section following coordinate (and optional
+/// velocity / force) blocks.
+///
+/// Energy sections mirror force sections but with one scalar per atom:
+/// blank separator, then per-component blocks of (symbol, "Energies of
+/// Component N", and atom lines `e fixed_flag atom_id`). The two
+/// trailing identity columns are optional and used only for strict
+/// validation; in non-strict mode any whitespace after the energy is
+/// ignored.
+///
+/// Returns `Ok(true)` if energies were found and parsed, `Ok(false)`
+/// otherwise.
+pub fn parse_energy_section<'a, I>(
+    lines: &mut Peekable<I>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError>
+where
+    I: Iterator<Item = &'a str>,
+{
+    let validate = header.strict_validation;
+    match lines.peek() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next()
+            .ok_or(ParseError::IncompleteEnergySection)?
+            .trim();
+
+        let comp_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+        if !comp_line.contains("Energies of Component") {
+            return Err(ParseError::IncompleteEnergySection);
+        }
+        if validate {
+            validate_section_component(
+                "Energies", type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let energy_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+            // Single energy column, plus optional fixed flag and atom_id
+            // for round-trip identity checks.
+            let defaults = [0.0, 0.0, atom_idx as f64];
+            let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
+            if validate {
+                let (fixed, atom_id) = parse_identity_columns(energy_line, "energies")?;
+                validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
+            }
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].energy = Some(vals[0]);
+            }
+            atom_idx += 1;
+        }
+    }
+
+    Ok(true)
+}
+
 /// Parses declared sections from a frame's header metadata.
 ///
 /// If `header.sections` is non-empty (v2 file with `"sections"` key in JSON),
@@ -787,6 +854,12 @@ where
                     let found = parse_force_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteForceSection);
+                    }
+                }
+                SECTION_ENERGIES => {
+                    let found = parse_energy_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteEnergySection);
                     }
                 }
                 other => return Err(ParseError::UnknownSection(other.to_string())),

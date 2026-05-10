@@ -87,6 +87,7 @@ pub mod meta {
 /// Canonical section names used in the JSON `sections` array and label lines.
 pub const SECTION_VELOCITIES: &str = "velocities";
 pub const SECTION_FORCES: &str = "forces";
+pub const SECTION_ENERGIES: &str = "energies";
 
 /// The two-line block preceding the box dimensions.
 ///
@@ -378,6 +379,12 @@ pub struct AtomDatum {
     pub velocity: Option<[f64; 3]>,
     /// Force vector `[fx, fy, fz]` (present when `"forces"` section declared).
     pub force: Option<[f64; 3]>,
+    /// Per-atom energy contribution (present when `"energies"` section declared).
+    ///
+    /// Useful for ML potentials that decompose total energy into per-atom
+    /// contributions; the per-frame total still lives in
+    /// `FrameHeader.metadata` under the `energy` key.
+    pub energy: Option<f64>,
 }
 
 impl AtomDatum {
@@ -399,6 +406,11 @@ impl AtomDatum {
     /// Returns `true` if this atom has force data.
     pub fn has_forces(&self) -> bool {
         self.force.is_some()
+    }
+
+    /// Returns `true` if this atom carries a per-atom energy contribution.
+    pub fn has_energy(&self) -> bool {
+        self.energy.is_some()
     }
 }
 
@@ -451,6 +463,11 @@ impl ConFrame {
     pub fn has_forces(&self) -> bool {
         self.atom_data.first().is_some_and(|a| a.has_forces())
     }
+
+    /// Returns `true` if any atom in this frame carries a per-atom energy.
+    pub fn has_energies(&self) -> bool {
+        self.atom_data.first().is_some_and(|a| a.has_energy())
+    }
 }
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
@@ -489,6 +506,7 @@ struct BuilderAtom {
     mass: f64,
     velocity: Option<[f64; 3]>,
     force: Option<[f64; 3]>,
+    energy: Option<f64>,
 }
 
 impl ConFrameBuilder {
@@ -630,6 +648,7 @@ impl ConFrameBuilder {
             mass,
             velocity: None,
             force: None,
+            energy: None,
         });
         self
     }
@@ -648,6 +667,15 @@ impl ConFrameBuilder {
     pub fn with_force(&mut self, force: [f64; 3]) -> &mut Self {
         if let Some(atom) = self.atoms.last_mut() {
             atom.force = Some(force);
+        }
+        self
+    }
+
+    /// Attaches a per-atom energy contribution to the most recently added
+    /// atom. No-op (silently) if no atom has been added yet.
+    pub fn with_energy(&mut self, energy: f64) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.energy = Some(energy);
         }
         self
     }
@@ -700,6 +728,7 @@ impl ConFrameBuilder {
                     atom_id: a.atom_id,
                     velocity: a.velocity,
                     force: a.force,
+                    energy: a.energy,
                 });
             }
         }
@@ -707,12 +736,16 @@ impl ConFrameBuilder {
         // Auto-populate sections based on what data is present.
         let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
         let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
+        let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
         let mut sections = Vec::new();
         if has_vel {
             sections.push(SECTION_VELOCITIES.into());
         }
         if has_frc {
             sections.push(SECTION_FORCES.into());
+        }
+        if has_eng {
+            sections.push(SECTION_ENERGIES.into());
         }
 
         let strict_validation = matches!(

@@ -1,4 +1,6 @@
-use crate::types::{ConFrame, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta};
+use crate::types::{
+    ConFrame, SECTION_ENERGIES, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta,
+};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -74,6 +76,9 @@ impl<W: Write> ConFrameWriter<W> {
         }
         if frame.has_forces() {
             sections.push(json!(SECTION_FORCES));
+        }
+        if frame.has_energies() {
+            sections.push(json!(SECTION_ENERGIES));
         }
         let validate = frame
             .header
@@ -193,6 +198,31 @@ impl<W: Write> ConFrameWriter<W> {
                     )?;
                 }
                 force_idx_offset += num_atoms_in_type;
+            }
+        }
+
+        // --- Write optional energies section ---
+        if frame.has_energies() {
+            writeln!(self.writer)?;
+
+            let mut energy_idx_offset = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[energy_idx_offset].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Energies of Component {}", type_idx + 1)?;
+
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[energy_idx_offset + i];
+                    let e = atom.energy.unwrap_or(0.0);
+                    writeln!(
+                        self.writer,
+                        "{e:.prec$} {fixed_flag} {atom_id}",
+                        prec = prec,
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                energy_idx_offset += num_atoms_in_type;
             }
         }
 
