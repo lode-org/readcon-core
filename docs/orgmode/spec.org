@@ -626,11 +626,33 @@ only at I/O boundaries:
   last value wins. Bindings SHOULD document this; future spec
   versions MAY tighten it.
 
-The reference implementation surface (Rust + C ABI + C++ + Python +
-Julia) is enumerated in =CHANGELOG.md= under v0.11.0. Bindings
-for other languages SHOULD follow the same naming pattern
-(=set_atom_position= / =set_atom_velocity= / ...) for
-discoverability.
+The reference implementation surface lands in v0.11.0:
+
+- Rust core (=ConFrameBuilder::set_atom_position=,
+  =set_atom_velocity=, =set_atom_force=, =set_atom_energy=,
+  =set_atom_fixed=, =set_atom_mass=, =clear_atom_*=,
+  =set_positions_from_flat=, =set_forces_from_flat=,
+  =set_atom_energies_from_flat=, =get_atom_*=, =atom_count=).
+- C ABI (=rkr_frame_builder_atom_count= and the matching
+  =rkr_frame_builder_set_atom_*= / =get_atom_*= / =clear_atom_*=
+  family in =readcon-core.h=).
+- C++ wrapper (the same surface as instance methods on
+  =readcon::ConFrameBuilder=, with =std::optional= return for
+  optional-vector getters).
+- Python: =readcon.Atom= already exposes per-atom fields with
+  =#[pyo3(get, set)]= so Python users have always been able to do
+  =frame.atoms[i].x = ...= /  =.fx = ...= /  =.energy = ...= for
+  in-place mutation. This is the recommended Python pattern; no
+  separate =readcon.ConFrameBuilder= class is exposed because the
+  Python module is value-based rather than handle-based.
+- Julia: equivalently, =ReadCon.Atom= fields are mutable Julia
+  struct fields; mutate directly and call =write_con(path, frame)=.
+  No public Julia builder class.
+
+Bindings for other languages SHOULD pick the idiom that matches
+their existing surface: handle-based (Rust / C / C++) gets the
+typed mutation API, value-based (Python / Julia / Ruby / ...) gets
+direct field assignment on the per-atom struct.
 
 Rationale (non-normative): the append-only authoring path forced
 every step of a long simulation to allocate a fresh builder, push
