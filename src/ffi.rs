@@ -837,6 +837,420 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
     RKRStatus::RKR_STATUS_SUCCESS
 }
 
+// ----- v0.11.0 in-place mutation FFI ---------------------------------------
+//
+// Mirrors `ConFrameBuilder::set_atom_* / clear_atom_* / *_from_flat /
+// get_atom_* / atom_count` for C / C++ / Python / Julia consumers. All
+// mutators return RKRStatus; getters return raw values via out-parameters
+// (so a caller can distinguish "atom has no force" from "successful read of
+// f={0,0,0}" via the `has_*` boolean out-parameter).
+//
+// IndexOutOfBounds errors from the Rust side surface as
+// RKR_STATUS_INDEX_OUT_OF_BOUNDS; all NULL-handle / NULL-out-pointer paths
+// return RKR_STATUS_NULL_POINTER. Bulk setters with the wrong length return
+// RKR_STATUS_INDEX_OUT_OF_BOUNDS as well (the caller sized the buffer
+// wrong).
+
+fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
+    use crate::error::ParseError;
+    match e {
+        ParseError::IndexOutOfBounds { .. } | ParseError::InvalidVectorLength { .. } => {
+            RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS
+        }
+        _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
+/// Returns the number of atoms currently held in the builder.
+///
+/// # Safety
+/// builder_handle must be a valid pointer returned by rkr_frame_new and
+/// not yet consumed by rkr_frame_builder_build / freed.
+/// Returns 0 on NULL handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_count(
+    builder_handle: *const RKRConFrameBuilder,
+) -> usize {
+    if builder_handle.is_null() {
+        return 0;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    builder.atom_count()
+}
+
+/// Updates the Cartesian position of an existing atom.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_position(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    x: f64,
+    y: f64,
+    z: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.set_atom_position(index, x, y, z) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Sets the velocity vector of an existing atom from 3 contiguous f64 values.
+/// # Safety
+/// builder_handle must be valid; velocity must point to 3 contiguous f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_velocity(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    velocity: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || velocity.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let v = unsafe { [*velocity, *velocity.add(1), *velocity.add(2)] };
+    match builder.set_atom_velocity(index, v) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Sets the force vector of an existing atom from 3 contiguous f64 values.
+/// # Safety
+/// builder_handle must be valid; force must point to 3 contiguous f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_force(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    force: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || force.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let f = unsafe { [*force, *force.add(1), *force.add(2)] };
+    match builder.set_atom_force(index, f) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Sets the per-atom energy contribution of an existing atom.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_energy(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    energy: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.set_atom_energy(index, energy) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_fixed(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    fixed_x: bool,
+    fixed_y: bool,
+    fixed_z: bool,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.set_atom_fixed(index, [fixed_x, fixed_y, fixed_z]) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Updates the mass of an existing atom.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_mass(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    mass: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.set_atom_mass(index, mass) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Removes velocity / force / energy data from an existing atom.
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_clear_atom_velocity(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.clear_atom_velocity(index) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_clear_atom_force(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.clear_atom_force(index) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_clear_atom_energy(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.clear_atom_energy(index) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Bulk-update positions for every atom from a flat row-major
+/// `[x0,y0,z0,x1,y1,z1,...]` buffer of length `3 * atom_count()`.
+/// # Safety
+/// builder_handle must be valid; positions must point to `3 * len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_positions_from_flat(
+    builder_handle: *mut RKRConFrameBuilder,
+    positions: *const f64,
+    len: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() || positions.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let slice = unsafe { std::slice::from_raw_parts(positions, len) };
+    match builder.set_positions_from_flat(slice) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Bulk-update forces for every atom.
+/// # Safety
+/// builder_handle must be valid; forces must point to `3 * len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_forces_from_flat(
+    builder_handle: *mut RKRConFrameBuilder,
+    forces: *const f64,
+    len: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() || forces.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let slice = unsafe { std::slice::from_raw_parts(forces, len) };
+    match builder.set_forces_from_flat(slice) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Bulk-update per-atom energies (one f64 per atom).
+/// # Safety
+/// builder_handle must be valid; energies must point to `len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_energies_from_flat(
+    builder_handle: *mut RKRConFrameBuilder,
+    energies: *const f64,
+    len: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() || energies.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let slice = unsafe { std::slice::from_raw_parts(energies, len) };
+    match builder.set_atom_energies_from_flat(slice) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Reads the position of an existing atom into 3 contiguous f64 out values.
+/// # Safety
+/// builder_handle must be valid; out_xyz must point to 3 writable f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_position(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_xyz: *mut f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_xyz.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_position(index) {
+        Ok((x, y, z)) => unsafe {
+            *out_xyz = x;
+            *out_xyz.add(1) = y;
+            *out_xyz.add(2) = z;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Reads the velocity / force vector of an atom (if any) into 3 contiguous
+/// f64. `*has_value` is set to `true` if the atom carries that vector,
+/// `false` if it does not (in which case `out_xyz` is left untouched).
+///
+/// # Safety
+/// builder_handle, out_xyz, has_value must all be valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_velocity(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_xyz: *mut f64,
+    has_value: *mut bool,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_velocity(index) {
+        Ok(Some(v)) => unsafe {
+            *out_xyz = v[0];
+            *out_xyz.add(1) = v[1];
+            *out_xyz.add(2) = v[2];
+            *has_value = true;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Ok(None) => unsafe {
+            *has_value = false;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// # Safety
+/// builder_handle, out_xyz, has_value must all be valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_xyz: *mut f64,
+    has_value: *mut bool,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_force(index) {
+        Ok(Some(f)) => unsafe {
+            *out_xyz = f[0];
+            *out_xyz.add(1) = f[1];
+            *out_xyz.add(2) = f[2];
+            *has_value = true;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Ok(None) => unsafe {
+            *has_value = false;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Reads the per-atom energy of an atom (if any). `*has_value` is set to
+/// `true` if the atom carries an energy contribution, else `false` and
+/// `*out_value` is left untouched.
+/// # Safety
+/// builder_handle, out_value, has_value must all be valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_energy(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_value: *mut f64,
+    has_value: *mut bool,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_value.is_null() || has_value.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_energy(index) {
+        Ok(Some(e)) => unsafe {
+            *out_value = e;
+            *has_value = true;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Ok(None) => unsafe {
+            *has_value = false;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+
+/// Reads the mass of an existing atom.
+/// # Safety
+/// builder_handle and out_mass must be valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_mass: *mut f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_mass.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_mass(index) {
+        Ok(m) => unsafe {
+            *out_mass = m;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+
+// ----- end v0.11.0 in-place mutation FFI ------------------------------------
+
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
 ///
 /// `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
