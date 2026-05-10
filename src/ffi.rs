@@ -1473,6 +1473,158 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
     export_owned_array1_u64_dlpack(builder.atom_ids_1d_ref(), out_tensor)
 }
 
+// ----- v0.11.1 in-process zero-copy raw-pointer FFI -------------------------
+//
+// The DLPack tier-3 export above clones field data into an owning tensor so
+// the consumer can outlive the builder; this is the right contract for
+// language-runtime / cross-process consumers (Python GC, Julia GC,
+// inter-process exchange). For *in-process* zero-copy on the hot path
+// (LAMMPS-style `lmp->atom->x` direct pointer access used by integrators,
+// dynamics drivers, eOn's Matter Eigen::Map<RowMajor> views), we expose
+// raw pointers into the builder's storage. The lifetime contract is
+// purely caller-managed: the pointer is valid while the builder is alive
+// and no add_atom call has grown the underlying ndarray. This mirrors
+// the LAMMPS / OpenMM / GROMACS C-side hot path and is what makes a
+// thin Matter wrapper over ConFrameBuilder fast.
+//
+// Cross-language ML consumers should use the DLPack tier above; raw
+// pointer access is for in-process hot paths only.
+
+/// Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
+/// Returns NULL on invalid handle. Pointer is valid until the builder
+/// is dropped or `add_atom` reallocates.
+///
+/// # Safety
+/// builder_handle must be valid; the returned pointer must not be
+/// dereferenced after a call to add_atom on the same builder.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_positions_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder
+        .positions_view_mut()
+        .as_slice_memory_order_mut()
+        .map(|s| s.as_mut_ptr())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Borrow the velocities buffer as a raw `(N, 3) f64` row-major pointer.
+/// Returns NULL if the velocities section is absent or the handle is
+/// invalid.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_velocities_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    if !builder.has_velocities_section() {
+        return std::ptr::null_mut();
+    }
+    let slice = builder.velocities_mut();
+    if slice.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        slice.as_mut_ptr()
+    }
+}
+
+/// Borrow the forces buffer as a raw `(N, 3) f64` row-major pointer.
+/// Returns NULL if the forces section is absent.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_forces_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    if !builder.has_forces_section() {
+        return std::ptr::null_mut();
+    }
+    let slice = builder.forces_mut();
+    if slice.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        slice.as_mut_ptr()
+    }
+}
+
+/// Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
+/// Returns NULL if the energies section is absent.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_energies_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    if !builder.has_energies_section() {
+        return std::ptr::null_mut();
+    }
+    let slice = builder.atom_energies_mut();
+    if slice.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        slice.as_mut_ptr()
+    }
+}
+
+/// Borrow the per-atom masses buffer as a raw `(N,) f64` pointer.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_masses_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let slice = builder.masses_mut();
+    if slice.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        slice.as_mut_ptr()
+    }
+}
+
+/// Borrow the per-atom atom_ids buffer as a raw `(N,) u64` pointer.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_ids_data(
+    builder_handle: *const RKRConFrameBuilder,
+) -> *const u64 {
+    if builder_handle.is_null() {
+        return std::ptr::null();
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    let slice = builder.atom_ids();
+    if slice.is_empty() {
+        std::ptr::null()
+    } else {
+        slice.as_ptr()
+    }
+}
+
 // ----- end v0.11.0 in-place mutation FFI ------------------------------------
 
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
