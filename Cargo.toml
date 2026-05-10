@@ -52,23 +52,18 @@ capnpc = { version = "0.20", optional = true }
 min_version = "0.10.17"
 
 [package.metadata.capi.header]
-name = "readcon-core.h"
+name = "readcon-core"
 subdirectory = ""
 generation = false
-enabled = true
 
 [package.metadata.capi.pkg_config]
 name = "readcon-core"
-filename = "readcon-core"
 description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
-
-[package.metadata.capi.library]
-name = "readcon_core"
 
 [package.metadata.capi.install.include]
 asset = [
-    { from = "include/readcon-core.h", to = "." },
-    { from = "include/readcon-core.hpp", to = "." },
+    { from = "include/readcon-core.h" },
+    { from = "include/readcon-core.hpp" },
 ]
 
 # The profile that 'dist' will build with
