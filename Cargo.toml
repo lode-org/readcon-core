@@ -41,7 +41,7 @@ metatensor = ["dep:metatensor"]
 # bespoke pointer surface. dlpk is hard-deppy because the C-ABI
 # DLPack export is the v0.11 surface; the `ndarray` and `pyo3`
 # features are turned on conditionally below.
-dlpk = "0.1.5"
+dlpk = { version = "0.1.5", features = ["ndarray"] }
 ndarray = "0.17"
 fast-float2 = "0.2"
 flate2 = "1"
