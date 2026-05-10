@@ -662,3 +662,126 @@ allocation pressure to the /output/ cadence rather than the
 /integration/ cadence. The mutation API is purely additive; the
 existing =add_atom= + =with_*= flow continues to work and remains
 the recommended path for one-shot frame authoring.
+
+** Storage layout (informative)
+:PROPERTIES:
+:CUSTOM_ID: builder-storage-layout
+:END:
+
+The v0.11.0 reference implementation holds per-atom fields as
+structure-of-arrays (SoA) buffers, each owned by an
+=ndarray::Array2<f64>= or =ndarray::Array1<T>= in row-major
+("C") layout:
+
+| Field           | Type                              | Shape    |
+|-----------------+-----------------------------------+----------|
+| =positions=     | =ndarray::Array2<f64>=            | =(N, 3)= |
+| =velocities=    | =ndarray::Array2<f64>= (optional) | =(N, 3)= |
+| =forces=        | =ndarray::Array2<f64>= (optional) | =(N, 3)= |
+| =atom_energies= | =ndarray::Array1<f64>= (optional) | =(N,)=   |
+| =masses=        | =ndarray::Array1<f64>=            | =(N,)=   |
+| =atom_ids=      | =ndarray::Array1<u64>=            | =(N,)=   |
+| =symbols=       | =Vec<String>=                     | =(N,)=   |
+| =fixed=         | =Vec<[bool; 3]>=                  | =(N, 3)= |
+
+Bindings MUST surface these fields as contiguous row-major buffers
+or as a DLPack-managed tensor (preferred for cross-language zero-
+copy); see [[#builder-dlpack-export]] for the cross-language
+contract.
+
+The SoA-per-field choice (rather than AoS, NumPy-structured-array
+style, or per-atom =Option<[f64; 3]>=) matches the layout used by
+LAMMPS, GROMACS, ASE, MDAnalysis, OpenMM, chemfiles, i-PI, h5md
+(the canonical MD libraries) /and/ Apache Arrow, DuckDB, Polars,
+Pandas v2, Parquet, PyTorch, JAX, DGL (the canonical columnar /
+ML stacks). It is the layout NumPy /recommends against/ structured
+arrays for, on the same SIMD-throughput grounds.
+
+** Section presence semantics (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-section-presence
+:END:
+
+The optional sections (="velocities"=, ="forces"=,
+="atom_energies"=) are *column-level*, not per-atom: when declared,
+the section applies to every atom in the frame. Per-atom NULL does
+not round-trip to disk because the .con on-disk format has no NULL
+encoding.
+
+Implementations MUST follow:
+
+- =add_atom= MUST pad newly added rows with zero in every already-
+  declared optional section so the per-field buffer length stays
+  coherent with =atom_count()=.
+- =with_velocity= / =_force= / =_energy=, =set_atom_velocity= /
+  =_force= / =_energy=, =set_velocities_from_flat= /
+  =set_forces_from_flat= / =set_atom_energies_from_flat= MUST
+  declare the corresponding section on first call.
+- =clear_atom_velocity= / =_force= / =_energy= MUST zero the slot
+  but MUST NOT change section presence; the field stays declared
+  and a subsequent =build()= emits the section block. This matches
+  Apache Arrow's column-level validity (a column either exists or
+  does not) and h5md's "dataset present or absent" rule.
+- =clear_velocities_section= / =_forces_section= /
+  =_energies_section= MUST drop the entire section: free the
+  storage, set the presence flag to false, and ensure the next
+  =build()= does not emit the section block.
+
+** DLPack export contract (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-dlpack-export
+:END:
+
+The reference implementation exposes every per-atom field with a
+contiguous backing as a DLPack-managed tensor for cross-language
+zero-copy interop. DLPack 1.0 is the universal exchange ABI
+supported by PyTorch, TensorFlow, JAX, NumPy, CuPy, MXNet, TVM,
+OneFlow, MNN, OneAPI, and mlx, plus a stable C ABI
+(=DLManagedTensorVersioned=) for non-Python consumers.
+
+The DLPack tier exposes:
+
+- =positions_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N, 3)=, dtype f64.
+- =positions_dlpack_mut(&mut self) -> DLPackTensorRefMut<'_>=,
+  same shape/dtype, write-through to the builder's storage.
+- =velocities_dlpack(&self) -> Option<DLPackTensorRef<'_>>= (=None= when
+  the section is absent), shape =(N, 3)=, dtype f64.
+- =forces_dlpack=, same contract as =velocities_dlpack=.
+- =atom_energies_dlpack(&self) -> Option<DLPackTensorRef<'_>>=,
+  shape =(N,)=, dtype f64.
+- =masses_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N,)=, dtype f64.
+- =atom_ids_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N,)=, dtype u64.
+
+The returned tensor MUST report:
+
+- shape: the field's natural shape (=(N, 3)= or =(N,)=).
+- strides: row-major standard layout for the dtype.
+- dtype: =kDLFloat / 64= for vector and scalar f64 fields,
+  =kDLUInt / 64= for atom_ids.
+- device: =kDLCPU= (device id 0) for the default backing. GPU /
+  device-resident backings (future versions) MAY surface a
+  non-CPU device tag.
+- data pointer: the backing array's first element.
+
+Lifetime: =DLPackTensorRef<'a>= borrows from =&'a self= and MUST
+NOT outlive the builder. C / FFI consumers that need an owning
+tensor go through the C-ABI export
+(=rkr_frame_builder_*_dlpack=) which fills a
+=DLManagedTensorVersioned*= with a clone of the field's storage
+plus a deleter callback owned by the consumer; the original
+builder is then free to drop.
+
+** Pointer stability (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-pointer-stability
+:END:
+
+The data pointer returned by any DLPack export is stable as long
+as no =add_atom= call grows the underlying ndarray buffer. Callers
+that hold raw pointers across =add_atom= MUST refresh after the
+push (the ndarray reallocates when capacity is exceeded; the
+DLPack view becomes invalid).
+
+Bulk and per-element mutation (=set_atom_*=, =set_*_from_flat=,
+=clear_atom_*=) MUST NOT reallocate the underlying buffer and the
+data pointer MUST stay stable across these operations.
