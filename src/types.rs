@@ -854,6 +854,61 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_morton_encode_locality() {
+        let cell = [10.0, 10.0, 10.0];
+        // Two points in the same cell-octant share leading Morton bits.
+        let near_a = morton_encode(0.5, 0.5, 0.5, cell);
+        let near_b = morton_encode(0.6, 0.6, 0.6, cell);
+        let far = morton_encode(9.0, 9.0, 9.0, cell);
+        // Nearby points should produce closer codes than distant ones.
+        let d_near = (near_a as i128 - near_b as i128).abs();
+        let d_far = (near_a as i128 - far as i128).abs();
+        assert!(d_near < d_far);
+    }
+
+    #[test]
+    fn test_morton_sort_groups_by_type_first() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .add_atom("Cu", 9.0, 9.0, 9.0, [false, false, false], 0, 63.546);
+        builder
+            .add_atom("Cu", 0.1, 0.1, 0.1, [false, false, false], 1, 63.546);
+        builder
+            .add_atom("H", 9.0, 9.0, 9.0, [false, false, false], 2, 1.008);
+        builder
+            .add_atom("H", 0.1, 0.1, 0.1, [false, false, false], 3, 1.008);
+        let mut frame = builder.build();
+        frame.morton_sort_in_place();
+        // Type grouping preserved.
+        assert_eq!(&*frame.atom_data[0].symbol, "Cu");
+        assert_eq!(&*frame.atom_data[1].symbol, "Cu");
+        assert_eq!(&*frame.atom_data[2].symbol, "H");
+        assert_eq!(&*frame.atom_data[3].symbol, "H");
+        // Within each type group, the spatially-near atom (small coords)
+        // sorts before the far one.
+        assert_eq!(frame.atom_data[0].atom_id, 1);
+        assert_eq!(frame.atom_data[1].atom_id, 0);
+        assert_eq!(frame.atom_data[2].atom_id, 3);
+        assert_eq!(frame.atom_data[3].atom_id, 2);
+    }
+
+    #[test]
+    fn test_atom_id_index_handles_non_sequential_ids() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 100, 63.546);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 42, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 7, 1.008);
+        let frame = builder.build();
+        let idx = frame.build_atom_id_index();
+        assert_eq!(idx.get(&100).copied(), Some(0));
+        assert_eq!(idx.get(&42).copied(), Some(1));
+        assert_eq!(idx.get(&7).copied(), Some(2));
+        assert_eq!(idx.get(&999), None);
+        assert_eq!(frame.atom_index_by_id(42), Some(1));
+        assert_eq!(frame.atom_index_by_id(999), None);
+    }
+
+    #[test]
     fn test_builder_basic() {
         let mut builder = ConFrameBuilder::new([10.0, 20.0, 30.0], [90.0, 90.0, 90.0]);
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
