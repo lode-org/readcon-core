@@ -142,25 +142,63 @@ counts and masses, and the JSON types of reserved metadata keys.
 
 * Can I store forces and energies?
 
-Yes. Forces are a per-atom section (declared via =sections=). Energy
-is per-frame, stored in the JSON metadata:
+Yes, in two complementary places:
+
+- *Per-frame total energy* lives in the JSON metadata under the
+  =energy= key.
+- *Forces* are a per-atom vector section, declared via =sections=:
 
 #+begin_example
 {"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
 #+end_example
 
-Forces require potential identification (the =potential= key) so
-downstream tools know how to interpret the values.
+For ML potentials that decompose total energy into per-atom
+contributions, declare the =energies= section alongside =forces= and
+emit one scalar per atom in an =Energies of Component i= block:
+
+#+begin_example
+{"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
+#+end_example
+
+The per-frame =energy= metadata key SHOULD equal the sum of the
+per-atom =energies= section when both are present. Forces require
+potential identification (the =potential= key) so downstream tools
+know how to interpret the values.
 
 * Does readcon-core support compression?
 
-Yes. Files with a =.con.gz= extension (or gzip magic bytes =0x1f
-0x8b=) are transparently decompressed during reading. Writing supports
-gzip compression via dedicated constructors.
+Yes. Two formats are detected automatically by magic bytes:
+
+- *gzip*: =.con.gz= extension or =0x1f 0x8b= magic; always available.
+- *zstd*: =.con.zst= extension or =0x28 0xb5 0x2f 0xfd= magic; opt-in
+  behind the =zstd= Cargo feature. Builds without the feature still
+  detect zstd input and return a clear error pointing at the feature
+  flag rather than producing a corrupt parse.
+
+Writing through =ConFrameWriter::from_path_gzip= /
+=from_path_gzip_with_precision= or (with the =zstd= feature) the
+matching =from_path_zstd= constructors compresses output transparently.
 
 Force data roughly triples per-atom file size. Gzip compression
-typically recovers 60-80% of that overhead, making it practical to
-store coordinates + velocities + forces in a single compressed file.
+typically recovers 60-80% of that overhead; zstd usually trims an
+additional 5-15% over gzip for the same content.
+
+* How do I look up an atom by its =atom_id=?
+
+readcon-core preserves =atom_id= (column 5) through every read-write
+cycle, but the in-memory atom order follows the file's type-grouped
+layout, not the =atom_id= ordering. Two convenience APIs lift the
+gap:
+
+- One-shot: =frame.atom_index_by_id(id)= scans the atom list and
+  returns =Option<usize>=. O(N) per call.
+- Repeated: =frame.build_atom_id_index()= returns an =FxHashMap<u64,
+  usize>= (Rust) / dict (Python) / Dict{UInt64, Int} (Julia) for O(1)
+  reverse lookup. Build once and reuse for every lookup against the
+  same frame.
+
+Both APIs mirror across every supported binding (Rust, C ABI, C++,
+Python, Julia).
 
 * What languages are supported?
 
