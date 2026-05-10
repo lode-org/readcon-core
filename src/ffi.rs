@@ -35,6 +35,79 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     VERSION_NUL.as_ptr() as *const c_char
 }
 
+/// Returns the position of an atom inside the frame's `atom_data` array
+/// matching the given `atom_id`. Returns `UINT64_MAX` if no atom with
+/// that id exists or `frame_handle` is NULL.
+///
+/// O(N) per call. C/C++ consumers performing many lookups should cache
+/// a `std::unordered_map<uint64_t, size_t>` from a single sweep over
+/// the frame.
+///
+/// # Safety
+///
+/// `frame_handle` must point to a valid `RKRConFrame` allocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
+    frame_handle: *const RKRConFrame,
+    atom_id: u64,
+) -> u64 {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return u64::MAX,
+    };
+    match frame.atom_index_by_id(atom_id) {
+        Some(idx) => idx as u64,
+        None => u64::MAX,
+    }
+}
+
+/// Returns the atomic number for a chemical symbol, or 0 if the symbol
+/// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
+/// is case-sensitive: "Fe" works, "fe" does not.
+///
+/// # Safety
+///
+/// `symbol` must be either NULL or a pointer to a NUL-terminated UTF-8
+/// C string valid for reads up to the terminating NUL byte.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_symbol_to_z(symbol: *const c_char) -> u64 {
+    if symbol.is_null() {
+        return 0;
+    }
+    match unsafe { CStr::from_ptr(symbol) }.to_str() {
+        Ok(s) => symbol_to_atomic_number(s),
+        Err(_) => 0,
+    }
+}
+
+/// Returns a pointer to a static, NUL-terminated chemical symbol for an
+/// atomic number, or "X" for unknown values. Coverage is H..U
+/// (Z = 1..=92). The returned pointer is valid for the lifetime of the
+/// process; do NOT free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_z_to_symbol(z: u64) -> *const c_char {
+    // The static &str returned by helpers::atomic_number_to_symbol is
+    // not NUL-terminated, so the FFI mirrors the table with literals
+    // that have a trailing NUL. Index 0 holds "X" for unknown Z; indices
+    // 1..=92 hold H..U in order.
+    macro_rules! cstrs {
+        ($($lit:literal),* $(,)?) => {
+            [$(concat!($lit, "\0").as_bytes()),*]
+        };
+    }
+    const TABLE: [&[u8]; 93] = cstrs![
+        "X", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P",
+        "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+        "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh",
+        "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
+        "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re",
+        "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+        "Pa", "U",
+    ];
+    let idx = if (1..=92).contains(&z) { z as usize } else { 0 };
+    TABLE[idx].as_ptr() as *const c_char
+}
+
 /// Returns the spec version stored in a parsed frame's header.
 /// Returns 0 on error (null handle).
 #[unsafe(no_mangle)]
@@ -215,6 +288,7 @@ pub struct CFrame {
     pub angles: [f64; 3],
     pub has_velocities: bool,
     pub has_forces: bool,
+    pub has_energies: bool,
 }
 
 /// Transparent atom record extracted via [`rkr_frame_to_c_frame`].
@@ -223,9 +297,9 @@ pub struct CFrame {
 /// for source compatibility with pre-spec-v2 callers that did not have
 /// per-axis flags. New code should use the per-axis fields.
 ///
-/// `vx`/`vy`/`vz` and `fx`/`fy`/`fz` carry meaningful values only when
-/// `has_velocity` or `has_forces` is true respectively; the values are
-/// zeroed otherwise.
+/// `vx`/`vy`/`vz`, `fx`/`fy`/`fz`, and `energy` carry meaningful values
+/// only when `has_velocity`, `has_forces`, or `has_energy` is true
+/// respectively; the values are zeroed otherwise.
 #[repr(C)]
 pub struct CAtom {
     pub atomic_number: u64,
@@ -248,6 +322,10 @@ pub struct CAtom {
     pub fy: f64,
     pub fz: f64,
     pub has_forces: bool,
+    /// Per-atom energy contribution; meaningful only when
+    /// `has_energy` is true. See [`crate::types::SECTION_ENERGIES`].
+    pub energy: f64,
+    pub has_energy: bool,
 }
 
 #[repr(C)]
@@ -393,6 +471,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
                 fy,
                 fz,
                 has_forces: atom_datum.has_forces(),
+                energy: atom_datum.energy.unwrap_or(0.0),
+                has_energy: atom_datum.has_energy(),
             }
         })
         .collect();
@@ -402,6 +482,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
     std::mem::forget(c_atoms);
 
     let has_forces = frame.has_forces();
+    let has_energies = frame.has_energies();
 
     let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
@@ -410,6 +491,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         angles: frame.header.angles,
         has_velocities,
         has_forces,
+        has_energies,
     });
 
     Box::into_raw(c_frame)
@@ -730,6 +812,28 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let f = unsafe { [*force, *force.add(1), *force.add(2)] };
     builder.with_force(f);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Attaches a per-atom energy to the most recently added atom on a
+/// builder. No-op if no atom has been added yet.
+///
+/// Use this together with the per-frame `energy` metadata key when a
+/// caller wants to round-trip an "Energies of Component" decomposition
+/// alongside the total.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
+    builder_handle: *mut RKRConFrameBuilder,
+    energy: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.with_energy(energy);
     RKRStatus::RKR_STATUS_SUCCESS
 }
 

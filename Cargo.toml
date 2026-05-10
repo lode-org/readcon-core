@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
@@ -14,17 +14,26 @@ name = "readcon_core"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
+# `metatensor` is a Rust crate but its `metatensor-core` dependency pulls
+# in a CMake-built C library, so we keep it default-off to keep
+# `cargo build` lean for users who only want CON I/O. Enable with
+# `--features metatensor` (or pin via the Python wheel build) when you
+# need TensorBlock / TensorMap export.
 default = []
 capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
-python = ["dep:pyo3"]
+python = ["dep:pyo3", "dep:numpy", "dep:ndarray"]
+zstd = ["dep:zstd"]
+metatensor = ["dep:metatensor", "dep:ndarray"]
 
 [dependencies]
 fast-float2 = "0.2"
 flate2 = "1"
 serde_json = "1"
+memchr = "2"
 memmap2 = "0.9"
+rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
@@ -32,6 +41,10 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros"], 
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+numpy = { version = "0.28", optional = true }
+ndarray = { version = "0.17", optional = true }
+metatensor = { version = "0.3.0-rc2", optional = true }
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 cog = "0.1.0"
@@ -67,7 +80,12 @@ asset = [
     { from = "include/readcon-core.hpp" },
 ]
 
-# The profile that 'dist' will build with
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# The profile that 'dist' / cargo-c builds use for shipping binaries.
 [profile.dist]
 inherits = "release"
-lto = "thin"
+lto = "fat"
+strip = "symbols"

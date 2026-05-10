@@ -173,6 +173,7 @@ function read_con(path::String)
                             c_atom.has_velocity,
                             c_atom.fx, c_atom.fy, c_atom.fz,
                             c_atom.has_forces,
+                            c_atom.energy, c_atom.has_energy,
                         ))
                     end
 
@@ -184,6 +185,7 @@ function read_con(path::String)
                         c_frame.cell, c_frame.angles,
                         atoms, c_frame.has_velocities,
                         prebox, postbox, c_frame.has_forces,
+                        c_frame.has_energies,
                         metadata...,
                     ))
                 finally
@@ -364,4 +366,42 @@ function _add_atom(builder::Ptr{Cvoid}, atom::Atom)
     end
 
     _check_status(status, "failed to add atom")
+
+    if atom.has_energy
+        e_status = ccall(
+            _lib_symbol(:rkr_frame_builder_set_last_energy),
+            Cint,
+            (Ptr{Cvoid}, Float64),
+            builder, atom.energy,
+        )
+        _check_status(e_status, "failed to attach per-atom energy")
+    end
+end
+
+"""
+    atom_index_by_id(frame::ConFrame, atom_id::Integer) -> Union{Int, Nothing}
+
+Returns the 1-based position of the atom in `frame.atoms` whose
+`atom_id` equals the given id, or `nothing` if no such atom exists.
+O(N) per call. For repeated lookups, build a dictionary once with
+`build_atom_id_index`.
+"""
+function atom_index_by_id(frame::ConFrame, atom_id::Integer)::Union{Int, Nothing}
+    target = UInt64(atom_id)
+    for (i, atom) in enumerate(frame.atoms)
+        if atom.atom_id == target
+            return i
+        end
+    end
+    return nothing
+end
+
+"""
+    build_atom_id_index(frame::ConFrame) -> Dict{UInt64, Int}
+
+Builds a fresh dictionary mapping `atom_id` to the 1-based position of
+the atom inside `frame.atoms`.
+"""
+function build_atom_id_index(frame::ConFrame)::Dict{UInt64, Int}
+    Dict{UInt64, Int}(atom.atom_id => i for (i, atom) in enumerate(frame.atoms))
 end

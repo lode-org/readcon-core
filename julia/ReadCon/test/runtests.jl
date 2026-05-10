@@ -22,9 +22,11 @@ end
             :is_fixed, :fixed_x, :fixed_y, :fixed_z,
             :vx, :vy, :vz, :has_velocity,
             :fx, :fy, :fz, :has_forces,
+            :energy, :has_energy,
         )
         @test fieldnames(ReadCon.CFrame) == (
-            :atoms, :num_atoms, :cell, :angles, :has_velocities, :has_forces,
+            :atoms, :num_atoms, :cell, :angles,
+            :has_velocities, :has_forces, :has_energies,
         )
     end
 

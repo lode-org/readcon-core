@@ -1,4 +1,6 @@
-use crate::types::{ConFrame, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta};
+use crate::types::{
+    ConFrame, SECTION_ENERGIES, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta,
+};
 use serde_json::json;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -24,6 +26,44 @@ const DEFAULT_FLOAT_PRECISION: usize = 6;
 pub struct ConFrameWriter<W: Write> {
     writer: BufWriter<W>,
     precision: usize,
+    /// Cache for the JSON metadata line: when consecutive frames share
+    /// the same (spec_version, sections-set, metadata) triple the
+    /// serialized JSON object is identical, so reusing the cached
+    /// string skips the per-frame `serde_json::Map::insert` rebuild
+    /// and re-serialisation. Hot for trajectory writes where every
+    /// frame has the same `units` / `potential` / `validate` keys.
+    metadata_cache: Option<MetadataCacheEntry>,
+}
+
+#[derive(Debug)]
+struct MetadataCacheEntry {
+    /// Snapshot of the inputs that fully determine the serialized JSON
+    /// metadata line. Cheap to clone; cheaper than re-serialising the
+    /// whole map on every frame.
+    spec_version: u32,
+    has_velocities: bool,
+    has_forces: bool,
+    has_energies: bool,
+    metadata: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Cached serialised metadata line (without trailing newline).
+    serialized: String,
+}
+
+impl MetadataCacheEntry {
+    fn matches(
+        &self,
+        spec_version: u32,
+        has_velocities: bool,
+        has_forces: bool,
+        has_energies: bool,
+        metadata: &std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> bool {
+        self.spec_version == spec_version
+            && self.has_velocities == has_velocities
+            && self.has_forces == has_forces
+            && self.has_energies == has_energies
+            && &self.metadata == metadata
+    }
 }
 
 // General implementation for any type that implements `Write`.
@@ -37,6 +77,7 @@ impl<W: Write> ConFrameWriter<W> {
         Self {
             writer: BufWriter::new(writer),
             precision: DEFAULT_FLOAT_PRECISION,
+            metadata_cache: None,
         }
     }
 
@@ -50,6 +91,7 @@ impl<W: Write> ConFrameWriter<W> {
         Self {
             writer: BufWriter::new(writer),
             precision,
+            metadata_cache: None,
         }
     }
 
@@ -60,37 +102,70 @@ impl<W: Write> ConFrameWriter<W> {
         // --- Write the 9-line Header ---
         writeln!(self.writer, "{}", frame.header.prebox_header.user)?;
 
-        // Line 2: always serialize JSON metadata with con_spec_version.
-        // Auto-populate sections based on frame data.
-        let mut meta_obj = serde_json::Map::new();
-        meta_obj.insert(
-            meta::CON_SPEC_VERSION.into(),
-            json!(frame.header.spec_version),
-        );
-        // Build sections array from actual data presence
-        let mut sections = Vec::new();
-        if frame.has_velocities() {
-            sections.push(json!(SECTION_VELOCITIES));
-        }
-        if frame.has_forces() {
-            sections.push(json!(SECTION_FORCES));
-        }
-        let validate = frame
-            .header
-            .metadata
-            .get(meta::VALIDATE)
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if !sections.is_empty() || validate {
-            meta_obj.insert(meta::SECTIONS.into(), json!(sections));
-        }
-        for (k, v) in &frame.header.metadata {
-            if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
-                continue;
+        // Line 2: serialised JSON metadata. The serialisation is
+        // deterministic in (spec_version, has_*, metadata), so we
+        // cache the previous frame's result and reuse it when the
+        // inputs are unchanged. For trajectory writes where every
+        // frame shares the same `units` / `potential` / `validate`
+        // keys this avoids rebuilding and re-serialising the JSON
+        // object on every frame.
+        let spec_version = frame.header.spec_version;
+        let has_vel = frame.has_velocities();
+        let has_frc = frame.has_forces();
+        let has_eng = frame.has_energies();
+
+        let cache_hit = self
+            .metadata_cache
+            .as_ref()
+            .is_some_and(|c| c.matches(spec_version, has_vel, has_frc, has_eng, &frame.header.metadata));
+
+        if !cache_hit {
+            let mut meta_obj = serde_json::Map::new();
+            meta_obj.insert(
+                meta::CON_SPEC_VERSION.into(),
+                json!(spec_version),
+            );
+            let mut sections = Vec::new();
+            if has_vel {
+                sections.push(json!(SECTION_VELOCITIES));
             }
-            meta_obj.insert(k.clone(), v.clone());
+            if has_frc {
+                sections.push(json!(SECTION_FORCES));
+            }
+            if has_eng {
+                sections.push(json!(SECTION_ENERGIES));
+            }
+            let validate = frame
+                .header
+                .metadata
+                .get(meta::VALIDATE)
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
+            if !sections.is_empty() || validate {
+                meta_obj.insert(meta::SECTIONS.into(), json!(sections));
+            }
+            for (k, v) in &frame.header.metadata {
+                if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
+                    continue;
+                }
+                meta_obj.insert(k.clone(), v.clone());
+            }
+            let serialized = serde_json::Value::Object(meta_obj).to_string();
+            self.metadata_cache = Some(MetadataCacheEntry {
+                spec_version,
+                has_velocities: has_vel,
+                has_forces: has_frc,
+                has_energies: has_eng,
+                metadata: frame.header.metadata.clone(),
+                serialized,
+            });
         }
-        writeln!(self.writer, "{}", serde_json::Value::Object(meta_obj))?;
+
+        let cached = self
+            .metadata_cache
+            .as_ref()
+            .expect("metadata_cache populated above");
+        writeln!(self.writer, "{}", cached.serialized)?;
         writeln!(
             self.writer,
             "{1:.0$} {2:.0$} {3:.0$}",
@@ -196,6 +271,31 @@ impl<W: Write> ConFrameWriter<W> {
             }
         }
 
+        // --- Write optional energies section ---
+        if frame.has_energies() {
+            writeln!(self.writer)?;
+
+            let mut energy_idx_offset = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[energy_idx_offset].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Energies of Component {}", type_idx + 1)?;
+
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[energy_idx_offset + i];
+                    let e = atom.energy.unwrap_or(0.0);
+                    writeln!(
+                        self.writer,
+                        "{e:.prec$} {fixed_flag} {atom_id}",
+                        prec = prec,
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                energy_idx_offset += num_atoms_in_type;
+            }
+        }
+
         Ok(())
     }
 
@@ -241,6 +341,26 @@ impl ConFrameWriter<flate2::write::GzEncoder<File>> {
         precision: usize,
     ) -> io::Result<Self> {
         let encoder = crate::compression::gzip_writer(path.as_ref())?;
+        Ok(Self::with_precision(encoder, precision))
+    }
+}
+
+// Zstd-compressed writer constructors. Available only with the `zstd`
+// Cargo feature.
+#[cfg(feature = "zstd")]
+impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
+    /// Creates a zstd-compressed writer for the given path.
+    pub fn from_path_zstd<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let encoder = crate::compression::zstd_writer(path.as_ref())?;
+        Ok(Self::new(encoder))
+    }
+
+    /// Creates a zstd-compressed writer with custom precision.
+    pub fn from_path_zstd_with_precision<P: AsRef<Path>>(
+        path: P,
+        precision: usize,
+    ) -> io::Result<Self> {
+        let encoder = crate::compression::zstd_writer(path.as_ref())?;
         Ok(Self::with_precision(encoder, precision))
     }
 }

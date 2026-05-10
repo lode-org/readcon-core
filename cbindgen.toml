@@ -59,3 +59,11 @@ documentation = true
 documentation_style = "Doxy"
 documentation_length = "full"
 line_endings = "LF"
+
+[export]
+# `FxHashMap` (rustc-hash) is re-exported by the Rust API for
+# `ConFrame::build_atom_id_index`. C/C++ consumers reach the index
+# through `rkr_frame_atom_index_by_id` instead; the hash map type
+# never crosses the FFI boundary, so cbindgen does not need to
+# generate a mangling for it.
+exclude = ["FxHashMap"]

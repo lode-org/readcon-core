@@ -2,6 +2,7 @@
 // Data Structures - The shape of our parsed data
 //=============================================================================
 
+pub use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -87,6 +88,7 @@ pub mod meta {
 /// Canonical section names used in the JSON `sections` array and label lines.
 pub const SECTION_VELOCITIES: &str = "velocities";
 pub const SECTION_FORCES: &str = "forces";
+pub const SECTION_ENERGIES: &str = "energies";
 
 /// The two-line block preceding the box dimensions.
 ///
@@ -378,6 +380,12 @@ pub struct AtomDatum {
     pub velocity: Option<[f64; 3]>,
     /// Force vector `[fx, fy, fz]` (present when `"forces"` section declared).
     pub force: Option<[f64; 3]>,
+    /// Per-atom energy contribution (present when `"energies"` section declared).
+    ///
+    /// Useful for ML potentials that decompose total energy into per-atom
+    /// contributions; the per-frame total still lives in
+    /// `FrameHeader.metadata` under the `energy` key.
+    pub energy: Option<f64>,
 }
 
 impl AtomDatum {
@@ -399,6 +407,11 @@ impl AtomDatum {
     /// Returns `true` if this atom has force data.
     pub fn has_forces(&self) -> bool {
         self.force.is_some()
+    }
+
+    /// Returns `true` if this atom carries a per-atom energy contribution.
+    pub fn has_energy(&self) -> bool {
+        self.energy.is_some()
     }
 }
 
@@ -451,6 +464,38 @@ impl ConFrame {
     pub fn has_forces(&self) -> bool {
         self.atom_data.first().is_some_and(|a| a.has_forces())
     }
+
+    /// Returns `true` if any atom in this frame carries a per-atom energy.
+    pub fn has_energies(&self) -> bool {
+        self.atom_data.first().is_some_and(|a| a.has_energy())
+    }
+
+    /// Builds an O(1) reverse index from `atom_id` to the position of
+    /// the atom inside `atom_data`.
+    ///
+    /// Returns an [`FxHashMap`] (`rustc-hash`) so the small-integer
+    /// hash workload stays fast. The index is built fresh on each
+    /// call; callers that perform many lookups should cache the
+    /// returned map.
+    pub fn build_atom_id_index(&self) -> FxHashMap<u64, usize> {
+        let mut idx = FxHashMap::with_capacity_and_hasher(
+            self.atom_data.len(),
+            Default::default(),
+        );
+        for (i, atom) in self.atom_data.iter().enumerate() {
+            idx.insert(atom.atom_id, i);
+        }
+        idx
+    }
+
+    /// Linear-scan lookup of an atom by its `atom_id` column.
+    ///
+    /// O(N) per call. For repeated lookups on a stable frame, build a
+    /// reverse index once with [`Self::build_atom_id_index`] and look
+    /// up in the returned hash map directly.
+    pub fn atom_index_by_id(&self, atom_id: u64) -> Option<usize> {
+        self.atom_data.iter().position(|a| a.atom_id == atom_id)
+    }
 }
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
@@ -489,6 +534,7 @@ struct BuilderAtom {
     mass: f64,
     velocity: Option<[f64; 3]>,
     force: Option<[f64; 3]>,
+    energy: Option<f64>,
 }
 
 impl ConFrameBuilder {
@@ -630,6 +676,7 @@ impl ConFrameBuilder {
             mass,
             velocity: None,
             force: None,
+            energy: None,
         });
         self
     }
@@ -648,6 +695,15 @@ impl ConFrameBuilder {
     pub fn with_force(&mut self, force: [f64; 3]) -> &mut Self {
         if let Some(atom) = self.atoms.last_mut() {
             atom.force = Some(force);
+        }
+        self
+    }
+
+    /// Attaches a per-atom energy contribution to the most recently added
+    /// atom. No-op (silently) if no atom has been added yet.
+    pub fn with_energy(&mut self, energy: f64) -> &mut Self {
+        if let Some(atom) = self.atoms.last_mut() {
+            atom.energy = Some(energy);
         }
         self
     }
@@ -700,6 +756,7 @@ impl ConFrameBuilder {
                     atom_id: a.atom_id,
                     velocity: a.velocity,
                     force: a.force,
+                    energy: a.energy,
                 });
             }
         }
@@ -707,12 +764,16 @@ impl ConFrameBuilder {
         // Auto-populate sections based on what data is present.
         let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
         let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
+        let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
         let mut sections = Vec::new();
         if has_vel {
             sections.push(SECTION_VELOCITIES.into());
         }
         if has_frc {
             sections.push(SECTION_FORCES.into());
+        }
+        if has_eng {
+            sections.push(SECTION_ENERGIES.into());
         }
 
         let strict_validation = matches!(
@@ -749,6 +810,22 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_atom_id_index_handles_non_sequential_ids() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 100, 63.546);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 42, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 7, 1.008);
+        let frame = builder.build();
+        let idx = frame.build_atom_id_index();
+        assert_eq!(idx.get(&100).copied(), Some(0));
+        assert_eq!(idx.get(&42).copied(), Some(1));
+        assert_eq!(idx.get(&7).copied(), Some(2));
+        assert_eq!(idx.get(&999), None);
+        assert_eq!(frame.atom_index_by_id(42), Some(1));
+        assert_eq!(frame.atom_index_by_id(999), None);
+    }
 
     #[test]
     fn test_builder_basic() {

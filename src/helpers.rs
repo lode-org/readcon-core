@@ -1,4 +1,13 @@
-// TODO(rg): Drop the comparisons in matter, integrate with readcon
+//! Element symbol and atomic number lookup.
+//!
+//! Both lookups cover hydrogen through uranium (Z = 1..=92). Unknown
+//! inputs return a stable sentinel: [`symbol_to_atomic_number`] returns
+//! 0 for unknown symbols and [`atomic_number_to_symbol`] returns "X"
+//! for unknown atomic numbers. The same lookup is exposed to C/C++ via
+//! [`crate::ffi::rkr_symbol_to_z`] and [`crate::ffi::rkr_z_to_symbol`]
+//! so downstream tools can drop their own copies of the periodic table.
+
+/// Returns the atomic number for a chemical symbol, or 0 if unknown.
 pub fn symbol_to_atomic_number(symbol: &str) -> u64 {
     match symbol {
         "H" => 1,
@@ -97,7 +106,7 @@ pub fn symbol_to_atomic_number(symbol: &str) -> u64 {
     }
 }
 
-/// Converts an atomic number to its corresponding chemical symbol.
+/// Returns the chemical symbol for an atomic number, or "X" if unknown.
 pub fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
     match atomic_number {
         1 => "H",
@@ -193,5 +202,36 @@ pub fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
         91 => "Pa",
         92 => "U",
         _ => "X", // Represents an unknown element
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_round_trip() {
+        for z in 1u64..=92 {
+            let symbol = atomic_number_to_symbol(z);
+            assert_eq!(
+                symbol_to_atomic_number(symbol),
+                z,
+                "round-trip failed for Z={z} (symbol={symbol})"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_symbol_returns_zero() {
+        assert_eq!(symbol_to_atomic_number(""), 0);
+        assert_eq!(symbol_to_atomic_number("Xx"), 0);
+        assert_eq!(symbol_to_atomic_number("h"), 0); // case-sensitive
+    }
+
+    #[test]
+    fn unknown_z_returns_x() {
+        assert_eq!(atomic_number_to_symbol(0), "X");
+        assert_eq!(atomic_number_to_symbol(93), "X");
+        assert_eq!(atomic_number_to_symbol(u64::MAX), "X");
     }
 }

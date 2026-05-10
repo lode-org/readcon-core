@@ -1,3 +1,5 @@
+use ndarray::Array2;
+use numpy::{IntoPyArray, PyArray1, PyArray2};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
@@ -42,12 +44,17 @@ pub struct PyAtomDatum {
     pub fy: Option<f64>,
     #[pyo3(get, set)]
     pub fz: Option<f64>,
+    /// Per-atom energy contribution; populated when the file declares an
+    /// `"energies"` section. None for ordinary frames where only the
+    /// per-frame total energy (`metadata['energy']`) is meaningful.
+    #[pyo3(get, set)]
+    pub energy: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
@@ -63,6 +70,7 @@ impl PyAtomDatum {
         fx: Option<f64>,
         fy: Option<f64>,
         fz: Option<f64>,
+        energy: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -78,6 +86,7 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
+            energy,
         }
     }
 
@@ -95,6 +104,11 @@ impl PyAtomDatum {
     #[getter]
     fn has_forces(&self) -> bool {
         self.fx.is_some() && self.fy.is_some() && self.fz.is_some()
+    }
+
+    #[getter]
+    fn has_energy(&self) -> bool {
+        self.energy.is_some()
     }
 
     fn __repr__(&self) -> String {
@@ -129,6 +143,7 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
+            energy: atom.energy,
         }
     }
 }
@@ -348,6 +363,128 @@ impl PyConFrame {
 
     fn __len__(&self, py: Python<'_>) -> usize {
         self.atoms.bind(py).len()
+    }
+
+    // --- NumPy array views ---
+    //
+    // Each method materialises a fresh contiguous f64 ndarray sized
+    // [N, 3] (coords / velocities / forces) or [N] (energies). NumPy
+    // arrays since 1.22 implement `__dlpack__`, so the returned
+    // arrays are zero-copy interoperable with torch / jax / cupy via
+    // `torch.from_dlpack(frame.coords_array())` etc.
+
+    /// Returns the per-atom xyz positions as a contiguous numpy
+    /// `[N, 3] float64` array, in the type-grouped order used by the
+    /// underlying frame.
+    fn coords_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let atoms = self.py_atoms(py)?;
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.extend_from_slice(&[atom.x, atom.y, atom.z]);
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
+        Ok(array.into_pyarray(py))
+    }
+
+    /// Returns the per-atom velocity vectors as a contiguous numpy
+    /// `[N, 3] float64` array. Returns `None` if the frame has no
+    /// velocity data.
+    fn velocities_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_velocity) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.vx.unwrap_or(0.0));
+            data.push(atom.vy.unwrap_or(0.0));
+            data.push(atom.vz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("velocities_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom force vectors as a contiguous numpy
+    /// `[N, 3] float64` array. Returns `None` if the frame has no
+    /// force data.
+    fn forces_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_forces) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.fx.unwrap_or(0.0));
+            data.push(atom.fy.unwrap_or(0.0));
+            data.push(atom.fz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("forces_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom energy contributions as a contiguous
+    /// numpy `[N] float64` array. Returns `None` if the frame has no
+    /// per-atom energies (only a frame-total energy in metadata).
+    fn energies_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_energy) {
+            return Ok(None);
+        }
+        let data: Vec<f64> = atoms
+            .iter()
+            .map(|atom| atom.energy.unwrap_or(0.0))
+            .collect();
+        Ok(Some(data.into_pyarray(py)))
+    }
+
+    /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
+    /// array, useful for filtering / one-hot encoding workflows.
+    fn atom_ids_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyArray1<u64>>> {
+        let atoms = self.py_atoms(py)?;
+        let data: Vec<u64> = atoms.iter().map(|a| a.atom_id).collect();
+        Ok(data.into_pyarray(py))
+    }
+
+    // --- atom_id index ---
+
+    /// Returns the position of an atom in the frame's atom list whose
+    /// `atom_id` equals the given id, or None if no such atom exists.
+    ///
+    /// O(N) per call. For repeated lookups, build a dict once with
+    /// `build_atom_id_index()` and look up there.
+    fn atom_index_by_id(&self, py: Python<'_>, atom_id: u64) -> PyResult<Option<usize>> {
+        Ok(self
+            .py_atoms(py)?
+            .iter()
+            .position(|a| a.atom_id == atom_id))
+    }
+
+    /// Builds a fresh `dict[int, int]` mapping `atom_id -> position`
+    /// for every atom in the frame.
+    fn build_atom_id_index<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (i, atom) in self.py_atoms(py)?.iter().enumerate() {
+            dict.set_item(atom.atom_id, i)?;
+        }
+        Ok(dict)
     }
 
     // --- Typed metadata accessors ---
@@ -601,6 +738,9 @@ impl PyConFrame {
                     py_atom.fy.unwrap_or(0.0),
                     py_atom.fz.unwrap_or(0.0),
                 ]);
+            }
+            if let Some(energy) = py_atom.energy {
+                builder.with_energy(energy);
             }
         }
 
@@ -1058,6 +1198,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 fx,
                 fy,
                 fz,
+                energy: None,
             }
         })
         .collect();

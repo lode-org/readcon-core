@@ -10,6 +10,7 @@ docs/doctrees/
 docs/source/*.rst
 docs/source/crates/
 docs/source/api/
+docs/source/img/
 
 # Julia package test resolution
 julia/ReadCon/Manifest.toml
