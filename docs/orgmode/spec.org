@@ -90,7 +90,10 @@ with an integer value:
 #+end_example
 
 Additional keys MAY appear. Parsers MUST preserve unrecognized keys
-through round-trips.
+through round-trips. Reserved metadata keys listed in [[#metadata-keys]]
+MUST use the declared JSON type. The =sections= key, when present,
+MUST be an array of strings. The =validate= key, when present, MUST
+be a boolean.
 
 *** Legacy (pre-v2) files
 
@@ -118,6 +121,10 @@ SHOULD include the exact 3x3 lattice vector matrix in the JSON
 metadata via the =lattice_vectors= key (see [[#lattice-vectors][Lattice vectors]]).
 When =lattice_vectors= is present, readers SHOULD prefer it over the
 length/angle values on lines 3-4.
+
+When =validate= is =true=, readers MUST reject zero or negative cell
+lengths and MUST reject angles outside the open interval =(0, 180)=
+degrees.
 
 ** Lines 5-6: Reserved
 
@@ -207,19 +214,94 @@ Version 2 files declare sections in the JSON metadata using the
 #+end_example
 
 The parser reads sections in the declared order. Parsers MUST reject
-unknown section names with an error.
+unknown section names with an error. Every declared section MUST be
+present, complete, and parseable at its declared position. An empty
+=sections= array declares that no additional per-atom sections follow.
 
 | Section name | Label pattern                   | Columns | Data                        |
 |--------------+---------------------------------+---------+-----------------------------|
 | =velocities= | =Velocities of Component /i/=  |       5 | vx vy vz fixed_flag atom_id |
 | =forces=     | =Forces of Component /i/=      |       5 | fx fy fz fixed_flag atom_id |
 
+The =fixed_flag= and =atom_id= columns in additional sections repeat
+the coordinate block identity data for the same atom ordering. Writers
+SHOULD emit the same values as the coordinate block. Readers associate
+section rows by component order and MAY ignore these duplicate identity
+columns after parsing the row shape.
+
+** Validation mode
+:PROPERTIES:
+:CUSTOM_ID: validation-mode
+:END:
+
+Version 2 files MAY set =validate= to =true= in the JSON metadata:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities","forces"],"validate":true}
+#+end_example
+
+When =validate= is =true=, the =sections= key MUST be present, even
+when the value is an empty array. Conforming readers MUST verify that
+the frame satisfies strict v2 invariants before accepting it. At
+minimum, this validation MUST check:
+
+- Reserved metadata keys use the declared JSON types.
+- Numeric tokens are finite.
+- Cell lengths are positive, cell angles are in =(0, 180)= degrees,
+  atom counts are positive, and masses are positive.
+- Coordinate component labels exactly match =Coordinates of Component
+  /i/=.
+- Component symbols are recognized element symbols, or =X= for an
+  explicitly unknown element.
+- Coordinate and additional-section =fixed_flag= and =atom_id= fields
+  are exact integer tokens.
+- The section component symbol matches the coordinate component
+  symbol.
+- The section label exactly matches the declared section and component
+  number (for example, =Velocities of Component 1=).
+- Each section row's =fixed_flag= decodes to the same per-axis fixed
+  mask as the corresponding coordinate row.
+- Each section row's =atom_id= equals the corresponding coordinate
+  row's =atom_id=.
+
+If any check fails, the reader MUST reject the frame. When =validate=
+is absent or false, readers MAY parse files by associating section
+rows by component order and ignoring duplicate identity column
+mismatches after parsing the row shape.
+
+*** Error paths and ParseError variants
+
+The reference reader (~readcon-core~) surfaces validation failures as
+typed ~ParseError~ variants. Other implementations are expected to
+return analogous structured errors, but the variant names below are
+specific to ~readcon-core~ and are listed here so that the spec and
+the reference implementation stay in sync.
+
+| ParseError variant | Fires when |
+|--------------------+-----------|
+| ~MissingSpecVersion~ | Line 2 starts with ={= but no ~con_spec_version~ key. |
+| ~UnsupportedSpecVersion(v)~ | ~con_spec_version~ exceeds ~CON_SPEC_VERSION~. |
+| ~InvalidMetadataJson(msg)~ | JSON is malformed, ~validate~ is not a boolean, ~sections~ is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ~validate=true~ omits the ~sections~ key. |
+| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, ~fixed_flag~ / ~atom_id~ integer tokens, section component symbol, section label, or per-row identity columns mismatch the rules above. Numeric tokens that are not finite are rejected here as well, after parse-time tokenization. |
+| ~UnknownSection(name)~ | A name in the ~sections~ array does not match a known section. |
+| ~IncompleteHeader~ | Fewer than 9 header lines remain. |
+| ~IncompleteFrame~ | Coordinate block ends short. |
+| ~IncompleteVelocitySection~ | Declared velocity section ends short or is absent. |
+| ~IncompleteForceSection~ | Declared force section ends short or is absent. |
+
+A minimal example of each path: the file
+=resources/test/tiny_cuh2_strict_invalid.con= (if present) and the
+test cases under =src/parser.rs::tests= and =tests/parseforces.rs=
+exercise these branches and serve as executable references.
+
 ** Legacy section detection
 
 Files without a =sections= key use blank-separator detection: if a
 blank line follows coordinate blocks, the parser attempts to parse a
-velocity section. This preserves backward compatibility with existing
-=.convel= files.
+velocity section. A present =sections= key disables this fallback,
+including when the value is =[]=. This preserves backward
+compatibility with existing =.convel= files while giving v2 writers a
+precise declaration mechanism.
 
 Writers SHOULD always emit the =sections= key when writing additional
 sections.
@@ -257,7 +339,8 @@ Writers MUST NOT insert extra blank lines between frames.
 
 - *Floats*: any valid decimal representation. Writers SHOULD emit at
   least 6 significant digits. For lossless f64 round-tripping, 17
-  digits suffice.
+  digits suffice. Readers MUST reject non-finite values (=NaN=,
+  =Infinity=, =-Infinity=).
 - *Integers*: constraint bitmask (0-7), atom_id, natm_types, and
   natms_per_type are non-negative integers.
 
@@ -280,27 +363,31 @@ content MUST be a valid CON file.
 - No upper limit on atom types or atom count is imposed.
 
 * Recommended metadata keys
+:PROPERTIES:
+:CUSTOM_ID: metadata-keys
+:END:
 
 All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 
-| Key                  | Type    | Description                                              |
-|----------------------+---------+----------------------------------------------------------|
-| =sections=           | array   | Declared per-atom sections (see [[#sections]])               |
-| =generator=          | string  | Tool name and version                                    |
-| =units=              | object  | Unit system (see [[#units]])                                 |
-| =pbc=                | array   | Periodic boundary conditions (see [[#pbc]])                  |
-| =lattice_vectors=    | array   | Exact 3x3 cell matrix (see [[#lattice-vectors]])             |
-| =energy=             | float   | Per-frame total energy                                   |
-| =potential=          | object  | ={"type":"EMT","params":{...}}=                          |
-| =frame_index=        | int     | Zero-based frame number in trajectory                    |
-| =time=               | float   | Simulation time                                          |
-| =timestep=           | float   | Integration timestep                                     |
-| =neb_bead=           | int     | NEB bead (image) index                                   |
-| =neb_band=           | int     | NEB band index                                           |
-| =convergence_fmax=   | float   | Convergence criterion: max force component               |
-| =convergence_energy= | float   | Convergence criterion: energy change threshold           |
-| =converged=          | bool   | Whether convergence criteria are met                     |
-| =fmax=               | float  | Current maximum force component across free atoms        |
+| Key                  | Type            | Description                                              |
+|----------------------+-----------------+----------------------------------------------------------|
+| =sections=           | array of string | Declared per-atom sections (see [[#sections]])               |
+| =validate=           | bool            | Enable strict v2 validation (see [[#validation-mode]])       |
+| =generator=          | string          | Tool name and version                                    |
+| =units=              | object          | Unit system (see [[#units]])                                 |
+| =pbc=                | 3 bool array    | Periodic boundary conditions (see [[#pbc]])                  |
+| =lattice_vectors=    | 3x3 float array | Exact 3x3 cell matrix (see [[#lattice-vectors]])             |
+| =energy=             | float           | Per-frame total energy                                   |
+| =potential=          | object          | ={"type":"EMT","params":{...}}=                          |
+| =frame_index=        | int             | Zero-based frame number in trajectory                    |
+| =time=               | float           | Simulation time                                          |
+| =timestep=           | float           | Integration timestep                                     |
+| =neb_bead=           | int             | NEB bead (image) index                                   |
+| =neb_band=           | int             | NEB band index                                           |
+| =convergence_fmax=   | float           | Convergence criterion: max force component               |
+| =convergence_energy= | float           | Convergence criterion: energy change threshold           |
+| =converged=          | bool            | Whether convergence criteria are met                     |
+| =fmax=               | float           | Current maximum force component across free atoms        |
 
 ** Units
 :PROPERTIES:

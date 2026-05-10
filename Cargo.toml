@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.7.3"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
@@ -15,6 +15,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
+capi = []
 parallel = ["rayon"]
 rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
 python = ["dep:pyo3"]
@@ -45,8 +46,26 @@ name = "iterator_bench"
 harness = false
 
 [build-dependencies]
-cbindgen = "0.29.0"
 capnpc = { version = "0.20", optional = true }
+
+[package.metadata.capi]
+min_version = "0.10.17"
+
+[package.metadata.capi.header]
+name = "readcon-core"
+subdirectory = ""
+generation = false
+
+[package.metadata.capi.pkg_config]
+name = "readcon-core"
+filename = "readcon-core"
+description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
+
+[package.metadata.capi.install.include]
+asset = [
+    { from = "include/readcon-core.h" },
+    { from = "include/readcon-core.hpp" },
+]
 
 # The profile that 'dist' will build with
 [profile.dist]

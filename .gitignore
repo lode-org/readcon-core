@@ -11,6 +11,9 @@ docs/source/*.rst
 docs/source/crates/
 docs/source/api/
 
+# Julia package test resolution
+julia/ReadCon/Manifest.toml
+
 # pixi
 .pixi/
 

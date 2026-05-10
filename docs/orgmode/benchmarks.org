@@ -160,7 +160,7 @@ core count for the parsing phase.
 * Memory profile
 
 readcon-core allocates:
-- One =Rc<String>= per atom type (not per atom) for symbol storage
+- One =Arc<str>= per atom type (not per atom) for symbol storage
 - One =Vec<AtomDatum>= per frame (pre-allocated from header counts)
 - No intermediate string allocations for atom line parsing (fast-float2
   parses directly from the borrowed =&str= slice)

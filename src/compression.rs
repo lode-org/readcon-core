@@ -98,9 +98,7 @@ impl FileContents {
 }
 
 /// Creates a gzip-compressed writer wrapping a file at the given path.
-pub fn gzip_writer(
-    path: &Path,
-) -> io::Result<flate2::write::GzEncoder<std::fs::File>> {
+pub fn gzip_writer(path: &Path) -> io::Result<flate2::write::GzEncoder<std::fs::File>> {
     let file = std::fs::File::create(path)?;
     Ok(flate2::write::GzEncoder::new(
         file,

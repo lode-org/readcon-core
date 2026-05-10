@@ -1,7 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.8.0 - 2026-04-20
+#### Buildsystem
+- (**capi**) add cargo-c metadata and compatibility feature - (f776281) - *HaoZeke*
+#### Features
+- (**ffi**) add builder metadata setters and JSON escape hatch - (75a756e) - *HaoZeke*
+- (**python**) add metadata helper parity across bindings - (3d6ca04) - *HaoZeke*
+#### Bug Fixes
+- (**parallel**) use Arc for shared atom symbols - (5224b02) - *HaoZeke*
+#### Documentation
+- (**readme**) regenerate from readme_src.org - (ec03eb9) - *HaoZeke*
+
+
+
 - - -
+
 ## v0.7.2 - 2026-03-27
 #### Features
 - pbc + lattice_vectors metadata, changelog catch-up, v0.7.2 - (e2df964) - *HaoZeke*

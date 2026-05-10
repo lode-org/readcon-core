@@ -1,9 +1,9 @@
-use capnp_rpc::{RpcSystem, twoparty, rpc_twoparty_capnp};
+use capnp_rpc::{RpcSystem, rpc_twoparty_capnp, twoparty};
 use futures::AsyncReadExt;
 
+use super::read_con_capnp::read_con_service;
 use crate::iterators::ConFrameIterator;
 use crate::types::ConFrame;
-use super::read_con_capnp::read_con_service;
 
 /// A synchronous RPC client that wraps the Cap'n Proto async transport.
 pub struct RpcClient {
@@ -33,10 +33,7 @@ impl RpcClient {
     }
 
     /// Parses raw file bytes via the RPC server.
-    pub fn parse_bytes(
-        &self,
-        data: &[u8],
-    ) -> Result<Vec<ConFrame>, Box<dyn std::error::Error>> {
+    pub fn parse_bytes(&self, data: &[u8]) -> Result<Vec<ConFrame>, Box<dyn std::error::Error>> {
         self.runtime.block_on(async {
             let stream = tokio::net::TcpStream::connect(&self.addr).await?;
             stream.set_nodelay(true)?;
@@ -70,10 +67,7 @@ impl RpcClient {
     }
 
     /// Writes frames by sending them to the RPC server, receiving serialized output.
-    pub fn write_frames(
-        &self,
-        frames: &[ConFrame],
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn write_frames(&self, frames: &[ConFrame]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         use crate::writer::ConFrameWriter;
         let mut buffer: Vec<u8> = Vec::new();
         {

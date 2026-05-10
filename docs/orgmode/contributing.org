@@ -137,13 +137,14 @@ Regressions above 10x trigger automatic conversion to draft PR.
 
 ** Version files
 
-Versions are tracked in five places that must stay synchronized:
+Versions are tracked in six source files that must stay synchronized:
 
 1. =Cargo.toml= (=version = "X.Y.Z"=)
 2. =meson.build= (=version: 'X.Y.Z'=)
 3. =pyproject.toml= (=version = "X.Y.Z"=)
 4. =pixi.toml= (=version = "X.Y.Z"=)
 5. =docs/source/conf.py= (=release = "X.Y.Z"=)
+6. =src/lib.rs= (=assert_eq!(VERSION, "X.Y.Z")= in the version test)
 
 ** Complete release checklist
 
@@ -152,56 +153,70 @@ Versions are tracked in five places that must stay synchronized:
    #+begin_src shell
    cargo test
    cargo test --all-features
+   pixi r -e python python-test
    #+end_src
 
-2. Bump the version in all five files listed above.
+2. Bump the version in all six files listed above.
 
-3. Generate the changelog:
+3. Regenerate =Cargo.lock= after the version bump:
 
    #+begin_src shell
-   cog changelog --at vX.Y.Z > /tmp/cl.md
-   # Review, then prepend to CHANGELOG.md
+   cargo test
    #+end_src
 
 4. Regenerate the README from =readme_src.org=:
 
    #+begin_src shell
-   # Export org to markdown (emacs batch or manual)
-   # Verify README.md reflects current features
+   emacs --batch \
+     --eval "(progn (require 'package) (package-initialize) (require 'ox-md) \
+                     (find-file \"readme_src.org\") \
+                     (org-export-to-file 'md \"README.md\"))"
    #+end_src
 
-5. Commit the version bump:
+5. Regenerate =CHANGELOG.md= with =cog=.
+   Do not hand-edit the generated release section.
+
+   #+begin_src shell
+   {
+     sed -n '1,3p' CHANGELOG.md
+     cog changelog
+   } > /tmp/CHANGELOG.md
+   mv /tmp/CHANGELOG.md CHANGELOG.md
+   #+end_src
+
+6. Commit the release preparation:
 
    #+begin_src shell
    git add Cargo.toml Cargo.lock meson.build pyproject.toml \
-           pixi.toml docs/source/conf.py CHANGELOG.md README.md
-   git commit -m "chore(version): vX.Y.Z"
+           pixi.toml docs/source/conf.py src/lib.rs \
+           CHANGELOG.md README.md docs/orgmode/contributing.org
+   git commit -m "maint: bump to vX.Y.Z"
    #+end_src
 
-6. Tag the release (annotated, signed if GPG is configured):
+7. Tag the release with a signed tag:
 
    #+begin_src shell
-   git tag -a vX.Y.Z -m "vX.Y.Z"
+   git tag -s vX.Y.Z -m "vX.Y.Z"
    #+end_src
 
-7. Push to both remotes:
+8. Push to both remotes:
 
    #+begin_src shell
    git push origin main --tags
    git push upstream main --tags
    #+end_src
 
-8. Publish to crates.io:
+9. Publish to crates.io:
 
    #+begin_src shell
    cargo publish
    #+end_src
 
-9. The =v*= tag push triggers the =python_wheels.yml= workflow which
+10. The =v*= tag push triggers the =python_wheels.yml= workflow which
    builds wheels for Linux (x86_64, aarch64), macOS (Intel, ARM), and
    Windows (x86_64), then publishes to PyPI via OIDC trusted publisher.
 
-10. Create the GitHub release with artifacts:
+11. Create the GitHub release with artifacts:
 
     #+begin_src shell
     cargo build --release
@@ -224,10 +239,10 @@ Versions are tracked in five places that must stay synchronized:
       schema/ReadCon.capnp \
       --repo lode-org/readcon-core \
       --title "vX.Y.Z" \
-      --notes-file /tmp/cl.md
+      --notes-file <(cog changelog --at vX.Y.Z)
     #+end_src
 
-11. Verify all distribution channels:
+12. Verify all distribution channels:
     - [[https://crates.io/crates/readcon-core][crates.io]] shows the new version
     - [[https://pypi.org/project/readcon/][PyPI]] shows the new version (wait for CI)
     - [[https://github.com/lode-org/readcon-core/releases][GitHub Releases]] has the tarball, Julia package, and capnp schema

@@ -88,7 +88,7 @@ readers (e.g., eOn's =fileio.py=) by using:
 
 - *fast-float2*: SIMD-accelerated float parsing (2-3x over =str::parse=)
 - *Memory-mapped I/O*: large files are mmap'd, avoiding heap copies
-- *Rc<String> symbols*: one allocation per atom type, not per atom
+- *Arc<str> symbols*: one allocation per atom type, not per atom
 - *Zero-copy iteration*: the =ConFrameIterator= borrows from the
   input string without allocating per-line
 - *Forward skip*: =forward()= skips frames by line counting without
@@ -116,8 +116,29 @@ peeking for a blank separator) because:
 - New section types can be added without ambiguity
 - Section order is explicit
 
+Declared sections must be present at the declared position. Use an
+empty =sections= array (=[]=) to state that no additional per-atom
+sections follow.
+When the key is absent, the reader keeps the blank-separator fallback
+for existing =.convel= files.
+
 Legacy =.convel= files without a =sections= key still work: the
 parser falls back to blank-separator velocity detection.
+
+* What does validate=true do?
+
+The =validate= metadata key asks v2 readers to reject frames that do
+not satisfy strict ordering and schema invariants:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities"],"validate":true}
+#+end_example
+
+In this mode, =sections= must be present. Readers verify the
+declared section order, exact component labels, component symbols,
+integer identity columns, matching fixed masks and atom ids across
+sections, finite numeric values, physical cell geometry, positive
+counts and masses, and the JSON types of reserved metadata keys.
 
 * Can I store forces and energies?
 

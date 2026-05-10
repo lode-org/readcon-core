@@ -94,6 +94,13 @@ and their order. The parser reads exactly those sections. Benefits:
 - The writer auto-populates =sections= from the frame data, so users
   never need to set it manually.
 
+The optional =validate=true= metadata flag lets producers ask readers
+to verify that declared sections match coordinate blocks exactly:
+component symbols, labels, fixed masks, atom ids, numeric finiteness,
+metadata schema, and physical header invariants must all agree. This
+keeps the default reader permissive for existing files while giving
+v2 producers a strict interoperability contract.
+
 * Why per-frame energy in metadata (not per-atom section)
 
 ** Alternatives considered
