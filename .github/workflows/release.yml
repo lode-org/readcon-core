@@ -44,19 +44,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cbindgen
-        run: cargo install cbindgen
-
       - name: Build static library
         run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Generate C header
-        run: cbindgen --config cbindgen.toml --crate readcon-core --output readcon-core.h
 
       - name: Package artifacts
         run: |
           mkdir -p staging/include staging/lib
-          cp readcon-core.h staging/include/
+          cp include/readcon-core.h staging/include/
           cp include/readcon-core.hpp staging/include/
           cp target/${{ matrix.target }}/release/${{ matrix.static_lib }} staging/lib/
           cp target/${{ matrix.target }}/release/${{ matrix.shared_lib }} staging/lib/ || true
