@@ -2193,6 +2193,47 @@ mod tests {
     }
 
     #[test]
+    fn clone_shares_storage_until_cow() {
+        // ArcArray's clone is a shallow Arc bump, so two builders born
+        // from a single template point to the same per-atom buffers
+        // until one of them mutates. This is the v0.12.0 NEB-image
+        // sharing primitive: build the template once, clone N+2 times,
+        // and only pay the (N, 3) f64 copy when an image is actually
+        // perturbed.
+        let template = three_atom_builder();
+        let cloned = template.clone();
+        // Same backing pointer for positions / masses / atom_ids
+        // through the crate-internal _ref helpers.
+        assert_eq!(
+            template.positions_2d_ref().as_ptr(),
+            cloned.positions_2d_ref().as_ptr()
+        );
+        assert_eq!(
+            template.masses_1d_ref().as_ptr(),
+            cloned.masses_1d_ref().as_ptr()
+        );
+        assert_eq!(
+            template.atom_ids_1d_ref().as_ptr(),
+            cloned.atom_ids_1d_ref().as_ptr()
+        );
+
+        // Mutate the clone; the template's pointer must stay put,
+        // the clone's pointer must diverge.
+        let template_ptr = template.positions_2d_ref().as_ptr();
+        let mut cloned_mut = cloned;
+        cloned_mut.set_atom_position(0, 9.0, 9.0, 9.0).unwrap();
+        assert_eq!(template.positions_2d_ref().as_ptr(), template_ptr);
+        assert_ne!(
+            cloned_mut.positions_2d_ref().as_ptr(),
+            template.positions_2d_ref().as_ptr()
+        );
+        // Template's atom 0 stays at its original value.
+        assert_eq!(template.get_atom_position(0).unwrap(), (0.0, 0.0, 0.0));
+        // Clone reflects the new write.
+        assert_eq!(cloned_mut.get_atom_position(0).unwrap(), (9.0, 9.0, 9.0));
+    }
+
+    #[test]
     fn positions_view_mut_writes_back_with_arc_cow() {
         // Mutating through the typed view triggers ArcArray copy-on-write
         // when storage is shared, and writes through to the builder's
