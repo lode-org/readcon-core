@@ -1313,11 +1313,13 @@ fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
 }
 
 fn export_owned_array2_dlpack(
-    arr: &ndarray::Array2<f64>,
+    arr: &ndarray::ArcArray2<f64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let owned = arr.clone();
-    match dlpk::DLPackTensor::try_from(owned) {
+    // ArcArray clone is a cheap Arc bump; the resulting tensor stays
+    // safely owned even if the source builder later CoW-mutates.
+    let shared = arr.clone();
+    match dlpk::DLPackTensor::try_from(shared) {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -1332,11 +1334,11 @@ fn export_owned_array2_dlpack(
 }
 
 fn export_owned_array1_f64_dlpack(
-    arr: &ndarray::Array1<f64>,
+    arr: &ndarray::ArcArray1<f64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let owned = arr.clone();
-    match dlpk::DLPackTensor::try_from(owned) {
+    let shared = arr.clone();
+    match dlpk::DLPackTensor::try_from(shared) {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -1351,11 +1353,11 @@ fn export_owned_array1_f64_dlpack(
 }
 
 fn export_owned_array1_u64_dlpack(
-    arr: &ndarray::Array1<u64>,
+    arr: &ndarray::ArcArray1<u64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let owned = arr.clone();
-    match dlpk::DLPackTensor::try_from(owned) {
+    let shared = arr.clone();
+    match dlpk::DLPackTensor::try_from(shared) {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {

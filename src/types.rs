@@ -524,7 +524,7 @@ impl ConFrame {
 /// Storage contract:
 ///
 /// Per-atom vector fields (`positions`, `velocities`, `forces`) are
-/// stored as `ndarray::Array2<f64>` with shape `(N, 3)`, row-major
+/// stored as `ndarray::ArcArray2<f64>` with shape `(N, 3)`, row-major
 /// (the default for newly-created `Array2` in standard layout). This
 /// is the SOTA frame-builder layout adopted by metatensor v2 (which
 /// uses `Arc<RwLock<ArrayD<T>>>` for the same reasons), and matches
@@ -572,19 +572,19 @@ pub struct ConFrameBuilder {
 
     // Per-atom DLPack-exportable fields, owned ndarrays.
     /// Row-major `(N, 3) f64`, always populated.
-    positions: ndarray::Array2<f64>,
+    positions: ndarray::ArcArray2<f64>,
     /// Row-major `(N,) u64`, always populated.
-    atom_ids: ndarray::Array1<u64>,
+    atom_ids: ndarray::ArcArray1<u64>,
     /// Row-major `(N,) f64`, always populated.
-    masses: ndarray::Array1<f64>,
+    masses: ndarray::ArcArray1<f64>,
     /// Row-major `(N, 3) f64` when has_velocities, else `(0, 3)`.
-    velocities: ndarray::Array2<f64>,
+    velocities: ndarray::ArcArray2<f64>,
     has_velocities: bool,
     /// Row-major `(N, 3) f64` when has_forces, else `(0, 3)`.
-    forces: ndarray::Array2<f64>,
+    forces: ndarray::ArcArray2<f64>,
     has_forces: bool,
     /// `(N,) f64` when has_energies, else `(0,)`.
-    atom_energies: ndarray::Array1<f64>,
+    atom_energies: ndarray::ArcArray1<f64>,
     has_energies: bool,
 
     metadata: BTreeMap<String, serde_json::Value>,
@@ -599,14 +599,14 @@ impl Default for ConFrameBuilder {
             postbox_header: [String::new(), String::new()],
             symbols: Vec::new(),
             fixed: Vec::new(),
-            positions: ndarray::Array2::<f64>::zeros((0, 3)),
-            atom_ids: ndarray::Array1::<u64>::zeros(0),
-            masses: ndarray::Array1::<f64>::zeros(0),
-            velocities: ndarray::Array2::<f64>::zeros((0, 3)),
+            positions: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            atom_ids: ndarray::ArcArray1::<u64>::zeros(0),
+            masses: ndarray::ArcArray1::<f64>::zeros(0),
+            velocities: ndarray::ArcArray2::<f64>::zeros((0, 3)),
             has_velocities: false,
-            forces: ndarray::Array2::<f64>::zeros((0, 3)),
+            forces: ndarray::ArcArray2::<f64>::zeros((0, 3)),
             has_forces: false,
-            atom_energies: ndarray::Array1::<f64>::zeros(0),
+            atom_energies: ndarray::ArcArray1::<f64>::zeros(0),
             has_energies: false,
             metadata: BTreeMap::new(),
         }
@@ -784,7 +784,7 @@ impl ConFrameBuilder {
         if !self.has_velocities {
             // First velocity declaration: backfill all earlier atoms with
             // zero so the section is length-coherent when declared on build().
-            self.velocities = ndarray::Array2::<f64>::zeros((n, 3));
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((n, 3));
             self.has_velocities = true;
         }
         let mut row = self.velocities.row_mut(n - 1);
@@ -802,7 +802,7 @@ impl ConFrameBuilder {
             return self;
         }
         if !self.has_forces {
-            self.forces = ndarray::Array2::<f64>::zeros((n, 3));
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
             self.has_forces = true;
         }
         let mut row = self.forces.row_mut(n - 1);
@@ -820,7 +820,7 @@ impl ConFrameBuilder {
             return self;
         }
         if !self.has_energies {
-            self.atom_energies = ndarray::Array1::<f64>::zeros(n);
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
             self.has_energies = true;
         }
         self.atom_energies[n - 1] = energy;
@@ -879,7 +879,7 @@ impl ConFrameBuilder {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
         }
         if !self.has_velocities {
-            self.velocities = ndarray::Array2::<f64>::zeros((len, 3));
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((len, 3));
             self.has_velocities = true;
         }
         let mut row = self.velocities.row_mut(i);
@@ -901,7 +901,7 @@ impl ConFrameBuilder {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
         }
         if !self.has_forces {
-            self.forces = ndarray::Array2::<f64>::zeros((len, 3));
+            self.forces = ndarray::ArcArray2::<f64>::zeros((len, 3));
             self.has_forces = true;
         }
         let mut row = self.forces.row_mut(i);
@@ -924,7 +924,7 @@ impl ConFrameBuilder {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
         }
         if !self.has_energies {
-            self.atom_energies = ndarray::Array1::<f64>::zeros(len);
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(len);
             self.has_energies = true;
         }
         self.atom_energies[i] = energy;
@@ -1039,21 +1039,21 @@ impl ConFrameBuilder {
     /// Drops the velocities section entirely. The next `build()` will not
     /// declare `"velocities"`. Storage is reclaimed.
     pub fn clear_velocities_section(&mut self) -> &mut Self {
-        self.velocities = ndarray::Array2::<f64>::zeros((0, 3));
+        self.velocities = ndarray::ArcArray2::<f64>::zeros((0, 3));
         self.has_velocities = false;
         self
     }
 
     /// Drops the forces section entirely.
     pub fn clear_forces_section(&mut self) -> &mut Self {
-        self.forces = ndarray::Array2::<f64>::zeros((0, 3));
+        self.forces = ndarray::ArcArray2::<f64>::zeros((0, 3));
         self.has_forces = false;
         self
     }
 
     /// Drops the per-atom energies section entirely.
     pub fn clear_energies_section(&mut self) -> &mut Self {
-        self.atom_energies = ndarray::Array1::<f64>::zeros(0);
+        self.atom_energies = ndarray::ArcArray1::<f64>::zeros(0);
         self.has_energies = false;
         self
     }
@@ -1097,7 +1097,7 @@ impl ConFrameBuilder {
             });
         }
         if !self.has_forces {
-            self.forces = ndarray::Array2::<f64>::zeros((n, 3));
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
             self.has_forces = true;
         }
         let dst = self
@@ -1122,7 +1122,7 @@ impl ConFrameBuilder {
             });
         }
         if !self.has_energies {
-            self.atom_energies = ndarray::Array1::<f64>::zeros(n);
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
             self.has_energies = true;
         }
         let dst = self
@@ -1269,7 +1269,7 @@ impl ConFrameBuilder {
     pub fn velocities_mut(&mut self) -> &mut [f64] {
         if !self.has_velocities {
             let n = self.symbols.len();
-            self.velocities = ndarray::Array2::<f64>::zeros((n, 3));
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((n, 3));
             self.has_velocities = true;
         }
         self.velocities
@@ -1299,7 +1299,7 @@ impl ConFrameBuilder {
     pub fn forces_mut(&mut self) -> &mut [f64] {
         if !self.has_forces {
             let n = self.symbols.len();
-            self.forces = ndarray::Array2::<f64>::zeros((n, 3));
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
             self.has_forces = true;
         }
         self.forces
@@ -1327,7 +1327,7 @@ impl ConFrameBuilder {
     pub fn atom_energies_mut(&mut self) -> &mut [f64] {
         if !self.has_energies {
             let n = self.symbols.len();
-            self.atom_energies = ndarray::Array1::<f64>::zeros(n);
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
             self.has_energies = true;
         }
         self.atom_energies
@@ -1363,28 +1363,28 @@ impl ConFrameBuilder {
     // These accessors are pub-but-deliberately-low-level: callers should
     // prefer `positions_dlpack()` / `positions_view()` for typed access.
     /// Crate-internal `&Array2<f64>` for the FFI DLPack exporter.
-    pub fn positions_2d_ref(&self) -> &ndarray::Array2<f64> {
+    pub fn positions_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
         &self.positions
     }
     /// Crate-internal `&Array2<f64>` velocities ref (caller checks the
     /// section flag first).
-    pub fn velocities_2d_ref(&self) -> &ndarray::Array2<f64> {
+    pub fn velocities_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
         &self.velocities
     }
     /// Crate-internal `&Array2<f64>` forces ref.
-    pub fn forces_2d_ref(&self) -> &ndarray::Array2<f64> {
+    pub fn forces_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
         &self.forces
     }
     /// Crate-internal `&Array1<f64>` atom_energies ref.
-    pub fn atom_energies_1d_ref(&self) -> &ndarray::Array1<f64> {
+    pub fn atom_energies_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
         &self.atom_energies
     }
     /// Crate-internal `&Array1<f64>` masses ref.
-    pub fn masses_1d_ref(&self) -> &ndarray::Array1<f64> {
+    pub fn masses_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
         &self.masses
     }
     /// Crate-internal `&Array1<u64>` atom_ids ref.
-    pub fn atom_ids_1d_ref(&self) -> &ndarray::Array1<u64> {
+    pub fn atom_ids_1d_ref(&self) -> &ndarray::ArcArray1<u64> {
         &self.atom_ids
     }
 
