@@ -559,6 +559,43 @@ impl ConFrame {
 /// from a DLPack export across `add_atom` invocations MUST refresh
 /// after the push (ndarray's `push` may reallocate the backing
 /// buffer when capacity is exceeded).
+/// Helper: `push_row` on a 2D ArcArray. ArcArray (OwnedArcRepr) does not
+/// implement DataOwned (push_row requires DataOwned + DataMut), so the
+/// implementation detours through the owned Array variant. When the
+/// Arc is uniquely owned the detour is O(1) (just unwraps + rewraps the
+/// Arc); when shared the detour is the copy-on-write the design wants.
+fn arc_push_row(arr: &mut ndarray::ArcArray2<f64>, row: ndarray::ArrayView1<f64>) {
+    let placeholder = ndarray::ArcArray2::<f64>::zeros((0, 3));
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push_row(row)
+        .expect("push_row failed (standard layout invariant)");
+    *arr = owned.into_shared();
+}
+
+/// Helper: push a single u64 onto a 1D ArcArray.
+fn arc_push_u64(arr: &mut ndarray::ArcArray1<u64>, value: u64) {
+    let placeholder = ndarray::ArcArray1::<u64>::zeros(0);
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push(ndarray::Axis(0), ndarray::aview0(&value))
+        .expect("atom_ids push failed");
+    *arr = owned.into_shared();
+}
+
+/// Helper: push a single f64 onto a 1D ArcArray.
+fn arc_push_f64_1d(arr: &mut ndarray::ArcArray1<f64>, value: f64) {
+    let placeholder = ndarray::ArcArray1::<f64>::zeros(0);
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push(ndarray::Axis(0), ndarray::aview0(&value))
+        .expect("push failed");
+    *arr = owned.into_shared();
+}
+
 #[derive(Debug, Clone)]
 pub struct ConFrameBuilder {
     prebox_user: String,
@@ -739,37 +776,27 @@ impl ConFrameBuilder {
         atom_id: u64,
         mass: f64,
     ) -> &mut Self {
-        use ndarray::{array, Axis};
+        use ndarray::array;
         self.symbols.push(symbol.to_string());
         self.fixed.push(fixed);
-        // Push a row to each owned ndarray. push_row keeps the
-        // standard-layout invariant which lets `as_slice_memory_order`
-        // and the DLPack export return contiguous data.
-        self.positions
-            .push_row(array![x, y, z].view())
-            .expect("positions push_row failed (standard layout invariant)");
-        self.atom_ids
-            .push(Axis(0), ndarray::aview0(&atom_id))
-            .expect("atom_ids push failed");
-        self.masses
-            .push(Axis(0), ndarray::aview0(&mass))
-            .expect("masses push failed");
-        // Optional sections: pad with zero so the array stays
-        // length-coherent if the section is already declared.
+        // Push a row to each owned ndarray. push_row is defined on
+        // owned Array (OwnedRepr) but not on ArcArray (OwnedArcRepr),
+        // so route the ArcArray storage through into_owned() then
+        // back through into_shared(). When the Arc is uniquely owned
+        // (the building phase before any clone) both calls are O(1)
+        // atomic ops; once shared the into_owned() copy is the
+        // copy-on-write the design wants.
+        arc_push_row(&mut self.positions, array![x, y, z].view());
+        arc_push_u64(&mut self.atom_ids, atom_id);
+        arc_push_f64_1d(&mut self.masses, mass);
         if self.has_velocities {
-            self.velocities
-                .push_row(array![0.0, 0.0, 0.0].view())
-                .expect("velocities push_row failed");
+            arc_push_row(&mut self.velocities, array![0.0, 0.0, 0.0].view());
         }
         if self.has_forces {
-            self.forces
-                .push_row(array![0.0, 0.0, 0.0].view())
-                .expect("forces push_row failed");
+            arc_push_row(&mut self.forces, array![0.0, 0.0, 0.0].view());
         }
         if self.has_energies {
-            self.atom_energies
-                .push(Axis(0), ndarray::aview0(&0.0))
-                .expect("atom_energies push failed");
+            arc_push_f64_1d(&mut self.atom_energies, 0.0);
         }
         self
     }
@@ -1411,18 +1438,6 @@ impl ConFrameBuilder {
         dlpk::DLPackTensorRef::try_from(&self.positions).map_err(|e| {
             crate::error::ParseError::ValidationError(format!(
                 "DLPack export for positions failed: {e}"
-            ))
-        })
-    }
-
-    /// DLPack mutable view onto positions, shape `(N, 3) f64`. Writes
-    /// through to the builder's storage.
-    pub fn positions_dlpack_mut(
-        &mut self,
-    ) -> Result<dlpk::DLPackTensorRefMut<'_>, crate::error::ParseError> {
-        dlpk::DLPackTensorRefMut::try_from(&mut self.positions).map_err(|e| {
-            crate::error::ParseError::ValidationError(format!(
-                "DLPack mut export for positions failed: {e}"
             ))
         })
     }
@@ -2178,25 +2193,24 @@ mod tests {
     }
 
     #[test]
-    fn dlpack_positions_mut_writes_back() {
-        // Mutating through the DLPack view must show up in the builder's
-        // ndarray storage. This is the property eOn's Matter, MD
-        // integrators, and ML potentials rely on.
+    fn positions_view_mut_writes_back_with_arc_cow() {
+        // Mutating through the typed view triggers ArcArray copy-on-write
+        // when storage is shared, and writes through to the builder's
+        // (now-unique) buffer. This is the property eOn's Matter, MD
+        // integrators, and ML potentials rely on. The DLPack mutable
+        // borrow path was retired in v0.12.0 because dlpk's
+        // `TryFrom<&'a mut ArcArray<T, D>> for DLPackTensorRefMut<'a>`
+        // is not yet implemented upstream; cross-language consumers go
+        // through the C ABI's raw pointer path (also CoW-aware) or
+        // through the owned DLPack export.
         let mut b = three_atom_builder();
         {
-            let mut t = b.positions_dlpack_mut().expect("positions_dlpack_mut");
-            // For row-major (N, 3) f64 the (i, j) element is at index
-            // `3 * i + j` in the contiguous block.
-            let ptr = t.data_ptr_mut::<f64>().expect("data_ptr_mut f64");
-            unsafe {
-                *ptr.add(3 * 1) = 42.0;
-                *ptr.add(3 * 1 + 1) = 43.0;
-                *ptr.add(3 * 1 + 2) = 44.0;
-            }
+            let mut view = b.positions_view_mut();
+            view[[1, 0]] = 42.0;
+            view[[1, 1]] = 43.0;
+            view[[1, 2]] = 44.0;
         }
-        // Read back through the builder's typed accessor.
         assert_eq!(b.get_atom_position(1).unwrap(), (42.0, 43.0, 44.0));
-        // And through the typed 2D view, confirming the same memory.
         let v = b.positions_view();
         assert_eq!(v[[1, 0]], 42.0);
         assert_eq!(v[[1, 1]], 43.0);
