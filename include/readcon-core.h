@@ -1176,6 +1176,26 @@ struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder *builder_h
 void free_rkr_frame_builder(struct RKRConFrameBuilder *builder_handle);
 
 /**
+ * Cheap, copy-on-write clone of a frame builder. Returned handle owns
+ * a new `ConFrameBuilder` whose per-atom buffers share storage with
+ * the source via ArcArray; any subsequent mutation triggers a
+ * per-buffer copy-on-write so writes do not leak across clones.
+ *
+ * Intended for downstream consumers (NEB image bulk allocation,
+ * trajectory snapshots) that need many builders carrying the same
+ * per-atom data without paying N copies up-front. Returns NULL on
+ * NULL input.
+ *
+ * The caller OWNS the returned handle and MUST call
+ * `free_rkr_frame_builder` (or consume via `rkr_frame_builder_build`).
+ *
+ * # Safety
+ * `builder_handle` must be a valid pointer returned by `rkr_frame_new`
+ * (or by an earlier `rkr_frame_builder_clone`) and not yet freed.
+ */
+struct RKRConFrameBuilder *rkr_frame_builder_clone(const struct RKRConFrameBuilder *builder_handle);
+
+/**
  * Creates a new gzip-compressed frame writer for the specified file.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
  *
