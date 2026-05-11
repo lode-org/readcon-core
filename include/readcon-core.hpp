@@ -355,6 +355,20 @@ class ConFrameBuilder {
     ConFrameBuilder &operator=(ConFrameBuilder &&other) noexcept;
 
     /**
+     * @brief Cheap copy-on-write clone of this builder.
+     *
+     * Per-atom buffers (positions, velocities, forces, masses, atom_ids,
+     * energies) share storage with the source via ArcArray; the resulting
+     * builder is a distinct mutable handle but pays only an Arc bump
+     * up-front. Subsequent mutations on either builder trigger a
+     * per-buffer copy-on-write so writes do not leak across clones.
+     *
+     * Intended for NEB-style consumers that need N+2 builders carrying
+     * the same template data without paying N (N, 3) f64 copies.
+     */
+    [[nodiscard]] ConFrameBuilder clone() const;
+
+    /**
      * @brief Parses and sets JSON metadata for the generated header line 2.
      *
      * The JSON must be an object. `con_spec_version` and `sections` are
@@ -916,6 +930,20 @@ ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
         other.builder_handle_ = nullptr;
     }
     return *this;
+}
+
+inline ConFrameBuilder ConFrameBuilder::clone() const {
+    RKRConFrameBuilder *cloned_handle = rkr_frame_builder_clone(builder_handle_);
+    if (!cloned_handle) {
+        throw std::runtime_error("Failed to clone frame builder.");
+    }
+    // Construct a placeholder builder (with throwaway cell metadata; the
+    // shared ArcArray storage from the source overrides anything the
+    // placeholder ctor would have set up) and swap in the cloned handle.
+    ConFrameBuilder result({0.0, 0.0, 0.0}, {90.0, 90.0, 90.0});
+    free_rkr_frame_builder(result.builder_handle_);
+    result.builder_handle_ = cloned_handle;
+    return result;
 }
 
 inline ConFrameBuilder &
