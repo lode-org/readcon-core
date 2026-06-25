@@ -38,10 +38,18 @@ order). It enables tools such as chemfiles selection (=bonds:= / =angles:= /
 
 Chemfiles is an optional Cargo/build feature (default off for lean C-only
 builds). When enabled, readcon-core can import chemfiles trajectories into
-=ConFrame= (topology becomes =metadata["bonds"]= when present) and evaluate
-chemfiles selection strings on frames via C/C++/Python/Rust APIs. Selection
-works for name/type filters without bonds; bond/angle contexts need =bonds=
-or an import path that carried topology.
+=ConFrame= (topology becomes =metadata["bonds"]= when present, with bond
+indices remapped into type-grouped =atom_data= order via =atom_id=) and
+evaluate chemfiles selection strings on frames via Rust, C/C++, Python, and
+Julia (=select_on_frame= / =rkr_frame_select=).
+
+Supported topology selectors (=bonds:=, =angles:=, =dihedrals:=, =is_bonded=,
+=is_angle=, =is_dihedral=) need =bonds= or an import that carried topology;
+name/type/=all= work without it. Surfaces share one evaluator; multiset
+parity with chemfiles is tested against =tests/selection.cpp= topology cases
+(see =chemfiles_selection_cpp_regression=). Gaps: single CON symbol label
+(not separate chemfiles name/type), residues/properties/numeric geometry
+blocks from full chemfiles =selection.cpp= unless trivially projected.
 
 * What problems does atom_id solve?
 

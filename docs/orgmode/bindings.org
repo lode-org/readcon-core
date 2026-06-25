@@ -29,15 +29,32 @@ to bindings; each binding's section below has runnable examples.
 | ~atom_id~ reverse index | ~build_atom_id_index~ | ~build_atom_id_index~ | ~build_atom_id_index~ | ~rkr_frame_atom_index_by_id~ | ~ConFrame::atom_index_by_id~ |
 | Coords / forces / velocities / energies as NumPy ndarray | n/a (use AoS) | yes (~numpy~ ndarray + DLPack via NumPy 1.22+) | n/a | n/a | n/a |
 | metatensor ~TensorBlock~ export | yes (~metatensor~ feature) | n/a | n/a | n/a | n/a |
-| Optional frame ~bonds~ topology | yes | ~PyConFrame.bonds~ / ~has_bonds~ | via metadata | ~rkr_frame_bond_*~ | ~ConFrame::bonds()~ |
-| Chemfiles import / selection | yes (~chemfiles~ feature) | ~select_on_frame~ / ~select_atom_indices~ | no | ~rkr_frame_select~ | ~ConFrame::select~ |
+| Optional frame ~bonds~ topology | yes | ~PyConFrame.bonds~ / ~has_bonds~ | ~metadata_json~ + ~frame_bond_count~ | ~rkr_frame_bond_*~ | ~ConFrame::bonds()~ |
+| Chemfiles import / selection | yes (~chemfiles~ feature) | ~select_on_frame~ / ~select_atom_indices~ | ~select_on_frame~ / ~select_atom_indices~ (FFI; chemfiles lib) | ~rkr_frame_select~ | ~ConFrame::select~ |
 
-Optional chemfiles support (~--features chemfiles~): multi-format trajectory
-import into ~ConFrame~, and chemfiles selection grammar evaluation. When
-~metadata["bonds"]~ is present, projection sets chemfiles topology so
-~bonds:~ / ~angles:~ / ~is_bonded~ selectors work; pair/name selections work
-without bonds. Probe support with ~rkr_has_chemfiles_support()~ (C/C++) or
-feature flags at build time (Rust/Python).
+**Chemfiles selection parity (supported subset).** One evaluator core; every
+surface is a pass-through (~evaluate_selection_on_con_frame~ → chemfiles
+~Selection~ after projecting the frame). Build with ~--features chemfiles~;
+probe with ~rkr_has_chemfiles_support()~ / ~has_chemfiles_support()~ (Julia) /
+feature at build time (Rust/Python).
+
+Supported contexts when topology is present (~metadata["bonds"]~, 0-based
+~atom_data~ pairs): ~bonds:~ / ~angles:~ / ~dihedrals:~ / ~pairs:~ / ~two:~ /
+~three:~ / ~four:~, and predicates ~is_bonded~ / ~is_angle~ / ~is_dihedral~ on
+the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
+
+**Index space / multiset contract.** CON type-groups atoms on write/import;
+bond endpoints are stored in ~atom_data~ order (chemfiles import remaps via
+~atom_id~). Surfaces return matches in that CON order. Parity with chemfiles
+direct evaluation is an *undirected multiset* after remapping chemfiles
+indices through ~atom_id~—not byte-identical index lists.
+
+**Documented gaps (not claimed parity).** Separate chemfiles display ~name~
+vs atomic ~type~ when CON carries one symbol string (~name H1~ may miss after
+import; ~type H~ works). Residue/~resname~, extra atom/residue properties,
+improper cases needing extra topology CON does not store, and numeric
+geometry assertion blocks from chemfiles ~tests/selection.cpp~ are out of
+scope unless they pass via projection without CON model changes.
 
 * Python (PyO3)
 

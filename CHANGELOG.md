@@ -4,12 +4,16 @@ All notable changes to this project will be documented in this file. See [conven
 ## v0.13.0 - 2026-06-24
 #### Features
 - (**topology**) optional frame `metadata["bonds"]` (0-based `atom_data` pairs; not a `sections` block; CON spec stays v2)
-- (**chemfiles**) import chemfiles topology into `bonds`; project `bonds` for selection (`bonds:` / `angles:` / `is_bonded`)
-- (**chemfiles**) selection grammar via C/C++/Python (`rkr_frame_select`, `ConFrame::select`, `select_on_frame`)
+- (**chemfiles**) import chemfiles topology into `bonds` with `atom_id` remap after type-grouped build; project for selection
+- (**chemfiles**) selection grammar via Rust/C/C++/Python/Julia (`rkr_frame_select`, `ConFrame::select`, `select_on_frame`)
 - (**chemfiles**) optional multi-format trajectory import into `ConFrame` (`--features chemfiles`)
 - (**ffi**) `rkr_frame_bond_count` / `rkr_frame_bond_at`; C++ `Bond` + Python `bonds` / `has_bonds`
+- (**julia**) `has_chemfiles_support`, `select_on_frame`, `select_atom_indices`, `frame_bond_count` (FFI pass-through)
+#### Tests
+- (**chemfiles**) `chemfiles_selection_cpp_regression` ported from chemfiles `tests/selection.cpp` topology sections
+- (**surfaces**) C `rkr_frame_select` topology smoke; Python/Julia selection tests (skip without chemfiles build)
 #### Documentation
-- (**spec**) document optional `bonds` key and chemfiles projection notes (no CON spec v3)
+- (**spec/bindings/faq**) optional `bonds`, supported selector subset, multiset/remap contract, documented gaps (no CON spec v3)
 
 - - -
 
