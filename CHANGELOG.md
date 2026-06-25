@@ -11,9 +11,10 @@ All notable changes to this project will be documented in this file. See [conven
 - (**julia**) `has_chemfiles_support`, `select_on_frame`, `select_atom_indices`, `frame_bond_count` (FFI pass-through)
 #### Tests
 - (**chemfiles**) `chemfiles_selection_cpp_regression` ported from chemfiles `tests/selection.cpp` topology sections
+- (**chemfiles**) `name H1` / display-name sidecars after import (no longer a documented gap)
 - (**surfaces**) C `rkr_frame_select` topology smoke; Python/Julia selection tests (skip without chemfiles build)
 #### Documentation
-- (**spec/bindings/faq**) optional `bonds`, supported selector subset, multiset/remap contract, documented gaps (no CON spec v3)
+- (**spec/bindings/faq**) optional `bonds`, `chemfiles_atom_names`/`types` sidecars, multiset/remap contract, remaining gaps (no CON spec v3)
 
 - - -
 

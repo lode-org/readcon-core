@@ -47,9 +47,16 @@ Supported topology selectors (=bonds:=, =angles:=, =dihedrals:=, =is_bonded=,
 =is_angle=, =is_dihedral=) need =bonds= or an import that carried topology;
 name/type/=all= work without it. Surfaces share one evaluator; multiset
 parity with chemfiles is tested against =tests/selection.cpp= topology cases
-(see =chemfiles_selection_cpp_regression=). Gaps: single CON symbol label
-(not separate chemfiles name/type), residues/properties/numeric geometry
-blocks from full chemfiles =selection.cpp= unless trivially projected.
+(see =chemfiles_selection_cpp_regression=).
+
+Chemfiles display =name= vs atomic =type= (e.g. =H1= / =H=) is preserved on
+**import** via metadata =chemfiles_atom_names= / =chemfiles_atom_types= (not a
+second CON column); projection restores both for selection. Hand-built frames
+without those keys use =symbol= for both.
+
+Remaining gaps: residue/=resname=, extra props not copied on import, improper
+extras beyond =bonds=, numeric geometry blocks from full =selection.cpp= unless
+trivially projected; multiset-after-remap not byte-identical chemfiles indices.
 
 * What problems does atom_id solve?
 

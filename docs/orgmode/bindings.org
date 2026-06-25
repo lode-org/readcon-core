@@ -49,12 +49,20 @@ bond endpoints are stored in ~atom_data~ order (chemfiles import remaps via
 direct evaluation is an *undirected multiset* after remapping chemfiles
 indices through ~atom_id~—not byte-identical index lists.
 
-**Documented gaps (not claimed parity).** Separate chemfiles display ~name~
-vs atomic ~type~ when CON carries one symbol string (~name H1~ may miss after
-import; ~type H~ works). Residue/~resname~, extra atom/residue properties,
-improper cases needing extra topology CON does not store, and numeric
-geometry assertion blocks from chemfiles ~tests/selection.cpp~ are out of
-scope unless they pass via projection without CON model changes.
+**Chemfiles name vs type (fixed for import path).** On-disk CON still has one
+~symbol~ column (element/type for layout). Chemfiles import additionally stores
+optional metadata sidecars ~chemfiles_atom_names~ / ~chemfiles_atom_types~
+(indexed by chemfiles / ~atom_id~ order). Selection projection restores display
+~name~ and atomic ~type~ so ~name H1~ and ~type H~ both work after import.
+Hand-built frames without sidecars use ~symbol~ for both (same as before).
+
+**Remaining documented gaps (not claimed parity).** Residue/~resname~ and extra
+atom/residue properties (beyond what import already copies into
+~chemfiles_atom_properties~ / frame extras). Improper topology extras not
+stored in CON ~bonds~. Numeric geometry assertion blocks from chemfiles
+~tests/selection.cpp~ (~distance~ / ~angle~ / ~dihedral~ / ~out_of_plane~
+thresholds with extra atoms) unless trivially projected. Multiset-after-remap
+parity, not byte-identical chemfiles index lists.
 
 * Python (PyO3)
 

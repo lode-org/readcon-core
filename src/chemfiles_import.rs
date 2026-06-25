@@ -56,6 +56,18 @@ pub const CHEMFILES_EXTRA_PREFIX: &str = "chemfiles::";
 /// Prefix for per-atom property bags stored in frame metadata.
 pub const CHEMFILES_ATOM_PROPS_KEY: &str = "chemfiles_atom_properties";
 
+/// Chemfiles display names in **chemfiles / `atom_id` order** (not `atom_data` order).
+///
+/// CON only stores one symbol string per atom (element/type for the `.con` layout).
+/// When chemfiles has a distinct display `name` (e.g. `H1`) vs atomic `type` (`H`),
+/// the display name is preserved here so selection projection can restore
+/// `name H1` without changing on-disk CON columns. Optional; absent for non-import frames.
+pub const CHEMFILES_ATOM_NAMES_KEY: &str = "chemfiles_atom_names";
+
+/// Chemfiles atomic types in **chemfiles / `atom_id` order** (parallel to names).
+/// Used with [`CHEMFILES_ATOM_NAMES_KEY`] when projecting to chemfiles for selection.
+pub const CHEMFILES_ATOM_TYPES_KEY: &str = "chemfiles_atom_types";
+
 /// Errors from chemfiles I/O or conversion.
 #[derive(Debug)]
 pub enum ChemfilesImportError {
@@ -242,22 +254,40 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     };
 
     let mut atom_props_all: Vec<BTreeMap<String, Value>> = Vec::with_capacity(n);
+    // Parallel arrays in chemfiles index order (= atom_id); survive type-grouped build.
+    let mut chfl_names: Vec<String> = Vec::with_capacity(n);
+    let mut chfl_types: Vec<String> = Vec::with_capacity(n);
+    let mut any_name_type_extra = false;
 
     for i in 0..n {
         let atom = frame.atom(i);
+        let chfl_name = atom.name();
+        let chfl_type = atom.atomic_type();
         let symbol = {
-            let t = atom.atomic_type();
-            if !t.is_empty() {
-                t
+            if !chfl_type.is_empty() {
+                chfl_type.clone()
+            } else if !chfl_name.is_empty() {
+                chfl_name.clone()
             } else {
-                let name = atom.name();
-                if name.is_empty() {
-                    "X".to_string()
-                } else {
-                    name
-                }
+                "X".to_string()
             }
         };
+        let display_name = if !chfl_name.is_empty() {
+            chfl_name.clone()
+        } else {
+            symbol.clone()
+        };
+        let atomic_type_str = if !chfl_type.is_empty() {
+            chfl_type.clone()
+        } else {
+            symbol.clone()
+        };
+        if display_name != symbol || atomic_type_str != symbol {
+            any_name_type_extra = true;
+        }
+        chfl_names.push(display_name);
+        chfl_types.push(atomic_type_str);
+
         let mass = atom.mass();
         let mass = if mass > 0.0 { mass } else { 1.0 };
         let pos = positions[i];
@@ -319,6 +349,15 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
             .map(|m| Value::Object(m.into_iter().collect()))
             .collect();
         metadata.insert(CHEMFILES_ATOM_PROPS_KEY.into(), Value::Array(arr));
+    }
+
+    // Always store name/type sidecars on chemfiles import so selection can restore
+    // display names (H1) distinct from CON symbol/type (H) without CON v3.
+    if any_name_type_extra || n > 0 {
+        let names_json: Vec<Value> = chfl_names.into_iter().map(Value::String).collect();
+        let types_json: Vec<Value> = chfl_types.into_iter().map(Value::String).collect();
+        metadata.insert(CHEMFILES_ATOM_NAMES_KEY.into(), Value::Array(names_json));
+        metadata.insert(CHEMFILES_ATOM_TYPES_KEY.into(), Value::Array(types_json));
     }
 
     // Record chemfiles library version as an extra for provenance.
