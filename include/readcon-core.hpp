@@ -123,6 +123,18 @@ class ConFrameBuilder;
 class SelectionResult;
 
 /**
+ * @brief Optional frame topology bond (`metadata["bonds"]` entry).
+ *
+ * Indices are 0-based into `atom_data` order (not `atom_id`). Optional `order`
+ * mirrors chemfiles bond orders when known (1=single, 2=double, ...).
+ */
+struct Bond {
+    uint32_t i = 0;
+    uint32_t j = 0;
+    std::optional<int32_t> order;
+};
+
+/**
  * @brief An iterator for lazily reading frames from a .con file.
  *
  * This class provides a C++-idiomatic way to iterate over frames in a file.
@@ -269,6 +281,16 @@ class ConFrame {
     std::optional<uint64_t> neb_band_opt() const;
     /// Potential type string (e.g. "EMT") if present, else nullopt.
     std::optional<std::string> potential_type() const;
+
+    /**
+     * Optional frame topology from `metadata["bonds"]` (0-based atom_data indices).
+     * Empty when absent. Enables chemfiles `bonds:` / `angles:` / `is_bonded`
+     * selection when the library is built with chemfiles.
+     */
+    std::vector<Bond> bonds() const;
+
+    /// True when `metadata["bonds"]` is present and non-empty.
+    bool has_bonds() const;
 
     /**
      * Evaluate a chemfiles selection-language string on this frame.
@@ -993,6 +1015,31 @@ inline std::optional<std::string> ConFrame::potential_type() const {
     std::string s(p);
     rkr_free_string(p);
     return s;
+}
+
+inline std::vector<Bond> ConFrame::bonds() const {
+    uint64_t n = rkr_frame_bond_count(frame_handle_.get());
+    std::vector<Bond> out;
+    out.reserve(static_cast<size_t>(n));
+    for (uint64_t idx = 0; idx < n; ++idx) {
+        uint32_t i = 0, j = 0;
+        uint8_t has_order = 0;
+        int32_t order = 0;
+        RKRStatus st = rkr_frame_bond_at(frame_handle_.get(), idx, &i, &j, &has_order, &order);
+        if (st != RKR_STATUS_OK)
+            throw std::runtime_error(std::string("rkr_frame_bond_at: ") + rkr_status_message(st));
+        Bond b;
+        b.i = i;
+        b.j = j;
+        if (has_order)
+            b.order = order;
+        out.push_back(b);
+    }
+    return out;
+}
+
+inline bool ConFrame::has_bonds() const {
+    return rkr_frame_bond_count(frame_handle_.get()) > 0;
 }
 
 // --- Implementation of ConFrameWriter methods ---

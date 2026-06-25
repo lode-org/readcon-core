@@ -349,6 +349,26 @@ uint64_t rkr_frame_neb_bead(const struct RKRConFrame *frame_handle);
 uint64_t rkr_frame_neb_band(const struct RKRConFrame *frame_handle);
 
 /**
+ * Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
+ * Bonds are 0-based `atom_data` index pairs; optional for chemfiles selection.
+ */
+uint64_t rkr_frame_bond_count(const struct RKRConFrame *frame_handle);
+
+/**
+ * Read one bond at `index` (0-based into the `bonds` array).
+ * Writes atom indices into `out_i` / `out_j`. When the bond has an explicit
+ * order, sets `*out_has_order` to 1 and `*out_order` to that integer; otherwise
+ * `*out_has_order` is 0. Returns `RKR_STATUS_NULL_POINTER` or
+ * `RKR_STATUS_INDEX_OUT_OF_BOUNDS` on failure.
+ */
+enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
+                                 uint64_t index,
+                                 uint32_t *out_i,
+                                 uint32_t *out_j,
+                                 uint8_t *out_has_order,
+                                 int32_t *out_order);
+
+/**
  * Returns a stable, static message for a status code.
  * The returned pointer is valid for the lifetime of the process. Do NOT free it.
  */

@@ -254,6 +254,64 @@ pub enum RKRStatus {
     RKR_STATUS_SELECTION_ERROR = -10,
 }
 
+/// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
+///
+/// # Safety
+/// `frame_handle` must be a valid handle or NULL.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_bond_count(frame_handle: *const RKRConFrame) -> u64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.bonds().len() as u64,
+        None => 0,
+    }
+}
+
+/// Read one bond at `index` (0-based into the `bonds` metadata array).
+///
+/// Writes 0-based `atom_data` indices into `out_i` / `out_j`. When the bond
+/// has an explicit order, sets `out_has_order` to 1 and `out_order` to that
+/// integer; otherwise `out_has_order` is 0.
+///
+/// # Safety
+/// `frame_handle` must be valid. Output pointers must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_bond_at(
+    frame_handle: *const RKRConFrame,
+    index: u64,
+    out_i: *mut u32,
+    out_j: *mut u32,
+    out_has_order: *mut u8,
+    out_order: *mut i32,
+) -> RKRStatus {
+    if frame_handle.is_null()
+        || out_i.is_null()
+        || out_j.is_null()
+        || out_has_order.is_null()
+        || out_order.is_null()
+    {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let bonds = frame.bonds();
+    let Some(bond) = bonds.get(index as usize) else {
+        return RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS;
+    };
+    unsafe {
+        *out_i = bond.i;
+        *out_j = bond.j;
+        if let Some(order) = bond.order {
+            *out_has_order = 1;
+            *out_order = order;
+        } else {
+            *out_has_order = 0;
+            *out_order = 0;
+        }
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
 /// Returns a stable, static message for a status code.
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
 #[unsafe(no_mangle)]

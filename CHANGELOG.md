@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.13.0 - 2026-06-24
+#### Features
+- (**topology**) optional frame `metadata["bonds"]` (0-based `atom_data` pairs; not a `sections` block; CON spec stays v2)
+- (**chemfiles**) import chemfiles topology into `bonds`; project `bonds` for selection (`bonds:` / `angles:` / `is_bonded`)
+- (**chemfiles**) selection grammar via C/C++/Python (`rkr_frame_select`, `ConFrame::select`, `select_on_frame`)
+- (**chemfiles**) optional multi-format trajectory import into `ConFrame` (`--features chemfiles`)
+- (**ffi**) `rkr_frame_bond_count` / `rkr_frame_bond_at`; C++ `Bond` + Python `bonds` / `has_bonds`
+#### Documentation
+- (**spec**) document optional `bonds` key and chemfiles projection notes (no CON spec v3)
+
+- - -
+
 ## v0.11.0 - 2026-05-10
 #### Features
 - (**array**) introduce src/array.rs with Array trait + ndarray backing - (23a02bd) - *HaoZeke*

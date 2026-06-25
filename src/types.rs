@@ -35,6 +35,7 @@ use std::sync::Arc;
 /// | [`PBC`] | length-3 array of booleans | optional | Periodic-boundary flags per cell axis. |
 /// | [`LATTICE_VECTORS`] | 3x3 numeric array | optional | Full lattice basis when `boxl`/`angles` is insufficient. |
 /// | [`CONVERGED`] | boolean | optional | Whether the producing tool considers this frame converged. |
+/// | [`BONDS`] | array of pairs/objects | optional | Frame topology: 0-based `atom_data` index pairs (see spec). Enables chemfiles `bonds:` / `angles:` / `is_bonded` when projected. Not a per-atom `sections` block. |
 ///
 /// Keys not listed above are accepted on read and round-tripped on
 /// write but receive no schema check, even under `validate=true`.
@@ -83,6 +84,37 @@ pub mod meta {
     pub const LATTICE_VECTORS: &str = "lattice_vectors";
     /// Convergence flag (boolean).
     pub const CONVERGED: &str = "converged";
+    /// Optional frame-level bond list (JSON array). Each element is either
+    /// `[i, j]` or `{"i": i, "j": j, "order"?: ...}` with 0-based indices into
+    /// `atom_data` order (not `atom_id`). Absent means no topology (legacy).
+    pub const BONDS: &str = "bonds";
+}
+
+/// One optional bond endpoint pair on a frame (indices into `atom_data`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bond {
+    /// First atom index (0-based into `ConFrame::atom_data`).
+    pub i: u32,
+    /// Second atom index (0-based into `ConFrame::atom_data`).
+    pub j: u32,
+    /// Optional chemfiles-style bond order (stored as integer when known).
+    pub order: Option<i32>,
+}
+
+impl Bond {
+    /// Creates an unordered pair with `i <= j` for stable storage (optional).
+    pub fn new(i: u32, j: u32) -> Self {
+        Self {
+            i,
+            j,
+            order: None,
+        }
+    }
+
+    pub fn with_order(mut self, order: i32) -> Self {
+        self.order = Some(order);
+        self
+    }
 }
 
 /// Canonical section names used in the JSON `sections` array and label lines.
@@ -344,6 +376,92 @@ impl FrameHeader {
         self.metadata
             .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
     }
+
+    /// Optional frame-level bonds from the `bonds` metadata key (0-based
+    /// `atom_data` indices). Returns an empty vec when the key is absent.
+    pub fn bonds(&self) -> Vec<Bond> {
+        parse_bonds_from_metadata(&self.metadata)
+    }
+
+    /// True when the `bonds` key is present and non-empty.
+    pub fn has_bonds(&self) -> bool {
+        !self.bonds().is_empty()
+    }
+
+    /// Replace frame topology in metadata. Pass an empty slice to remove the key.
+    pub fn set_bonds(&mut self, bonds: &[Bond]) {
+        if bonds.is_empty() {
+            self.metadata.remove(meta::BONDS);
+            return;
+        }
+        self.metadata
+            .insert(meta::BONDS.into(), bonds_to_json_value(bonds));
+    }
+
+    /// Append one bond (does not de-duplicate).
+    pub fn add_bond(&mut self, bond: Bond) {
+        let mut bonds = self.bonds();
+        bonds.push(bond);
+        self.set_bonds(&bonds);
+    }
+
+    /// Clear topology (remove `bonds` key).
+    pub fn clear_bonds(&mut self) {
+        self.metadata.remove(meta::BONDS);
+    }
+}
+
+/// Parse `bonds` from a metadata map. Invalid/missing entries yield empty
+/// (parser validates shape at read time when the key is present).
+pub fn parse_bonds_from_metadata(metadata: &BTreeMap<String, serde_json::Value>) -> Vec<Bond> {
+    let Some(val) = metadata.get(meta::BONDS) else {
+        return Vec::new();
+    };
+    let Some(arr) = val.as_array() else {
+        return Vec::new();
+    };
+    let mut out = Vec::with_capacity(arr.len());
+    for item in arr {
+        if let Some(b) = bond_from_json_value(item) {
+            out.push(b);
+        }
+    }
+    out
+}
+
+/// Serialize bonds for the `bonds` metadata key.
+pub fn bonds_to_json_value(bonds: &[Bond]) -> serde_json::Value {
+    let items: Vec<serde_json::Value> = bonds
+        .iter()
+        .map(|b| {
+            if let Some(order) = b.order {
+                serde_json::json!({ "i": b.i, "j": b.j, "order": order })
+            } else {
+                serde_json::json!([b.i, b.j])
+            }
+        })
+        .collect();
+    serde_json::Value::Array(items)
+}
+
+fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
+    if let Some(arr) = item.as_array() {
+        if arr.len() != 2 {
+            return None;
+        }
+        let i = arr[0].as_u64()? as u32;
+        let j = arr[1].as_u64()? as u32;
+        return Some(Bond::new(i, j));
+    }
+    if let Some(obj) = item.as_object() {
+        let i = obj.get("i")?.as_u64()? as u32;
+        let j = obj.get("j")?.as_u64()? as u32;
+        let order = obj.get("order").and_then(|v| v.as_i64()).map(|v| v as i32);
+        let mut b = Bond::new(i, j);
+        b.order = order;
+        return Some(b);
+    }
+    None
 }
 
 /// Represents the data for a single atom in a frame.
@@ -495,6 +613,16 @@ impl ConFrame {
     /// up in the returned hash map directly.
     pub fn atom_index_by_id(&self, atom_id: u64) -> Option<usize> {
         self.atom_data.iter().position(|a| a.atom_id == atom_id)
+    }
+
+    /// Optional frame bonds (`metadata["bonds"]`, 0-based `atom_data` indices).
+    pub fn bonds(&self) -> Vec<Bond> {
+        self.header.bonds()
+    }
+
+    /// True when non-empty topology is present.
+    pub fn has_bonds(&self) -> bool {
+        self.header.has_bonds()
     }
 }
 
@@ -752,6 +880,24 @@ impl ConFrameBuilder {
         self.metadata
             .insert(meta::NEB_BAND.into(), serde_json::Value::from(band));
         self
+    }
+
+    /// Replace optional frame topology (synced to `metadata["bonds"]`).
+    pub fn set_bonds(&mut self, bonds: &[Bond]) -> &mut Self {
+        if bonds.is_empty() {
+            self.metadata.remove(meta::BONDS);
+        } else {
+            self.metadata
+                .insert(meta::BONDS.into(), bonds_to_json_value(bonds));
+        }
+        self
+    }
+
+    /// Append one bond.
+    pub fn add_bond(&mut self, bond: Bond) -> &mut Self {
+        let mut bonds = parse_bonds_from_metadata(&self.metadata);
+        bonds.push(bond);
+        self.set_bonds(&bonds)
     }
 
     /// Adds an atom with no velocity or force data and returns `&mut self`

@@ -29,6 +29,15 @@ to bindings; each binding's section below has runnable examples.
 | ~atom_id~ reverse index | ~build_atom_id_index~ | ~build_atom_id_index~ | ~build_atom_id_index~ | ~rkr_frame_atom_index_by_id~ | ~ConFrame::atom_index_by_id~ |
 | Coords / forces / velocities / energies as NumPy ndarray | n/a (use AoS) | yes (~numpy~ ndarray + DLPack via NumPy 1.22+) | n/a | n/a | n/a |
 | metatensor ~TensorBlock~ export | yes (~metatensor~ feature) | n/a | n/a | n/a | n/a |
+| Optional frame ~bonds~ topology | yes | ~PyConFrame.bonds~ / ~has_bonds~ | via metadata | ~rkr_frame_bond_*~ | ~ConFrame::bonds()~ |
+| Chemfiles import / selection | yes (~chemfiles~ feature) | ~select_on_frame~ / ~select_atom_indices~ | no | ~rkr_frame_select~ | ~ConFrame::select~ |
+
+Optional chemfiles support (~--features chemfiles~): multi-format trajectory
+import into ~ConFrame~, and chemfiles selection grammar evaluation. When
+~metadata["bonds"]~ is present, projection sets chemfiles topology so
+~bonds:~ / ~angles:~ / ~is_bonded~ selectors work; pair/name selections work
+without bonds. Probe support with ~rkr_has_chemfiles_support()~ (C/C++) or
+feature flags at build time (Rust/Python).
 
 * Python (PyO3)
 

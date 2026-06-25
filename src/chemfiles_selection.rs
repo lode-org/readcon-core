@@ -5,11 +5,47 @@
 //! a [`ConFrame`](crate::types::ConFrame) by projecting it into a temporary
 //! chemfiles [`Frame`](chemfiles::Frame).
 
-use chemfiles::{Atom, Frame, Selection, UnitCell};
+use chemfiles::{Atom, BondOrder, Frame, Selection, UnitCell};
 use serde_json::Value;
 
 use crate::chemfiles_import::ChemfilesImportError;
 use crate::types::ConFrame;
+
+/// Map optional integer bond order from CON metadata to chemfiles [`BondOrder`].
+fn bond_order_from_i32(order: Option<i32>) -> Option<BondOrder> {
+    match order {
+        None => None,
+        Some(0) => Some(BondOrder::Unknown),
+        Some(1) => Some(BondOrder::Single),
+        Some(2) => Some(BondOrder::Double),
+        Some(3) => Some(BondOrder::Triple),
+        Some(4) => Some(BondOrder::Quadruple),
+        Some(5) => Some(BondOrder::Quintuplet),
+        Some(6) => Some(BondOrder::Amide),
+        Some(7) => Some(BondOrder::Aromatic),
+        Some(_) => Some(BondOrder::Unknown),
+    }
+}
+
+/// Apply readcon frame topology (`metadata["bonds"]`) onto a chemfiles frame.
+///
+/// Indices are 0-based into `atom_data` / chemfiles atom order. Out-of-range
+/// indices or self-bonds are skipped (does not fail selection projection).
+pub fn apply_con_bonds_to_chemfiles_frame(frame: &ConFrame, chfl: &mut Frame) {
+    let n = chfl.size();
+    for bond in frame.bonds() {
+        let i = bond.i as usize;
+        let j = bond.j as usize;
+        if i >= n || j >= n || i == j {
+            continue;
+        }
+        if let Some(order) = bond_order_from_i32(bond.order) {
+            chfl.add_bond_with_order(i, j, order);
+        } else {
+            chfl.add_bond(i, j);
+        }
+    }
+}
 
 /// One selection match: up to four atom indices (chemfiles contexts: atom=1,
 /// pair/bond=2, angle/three=3, dihedral/four=4).
@@ -62,9 +98,9 @@ impl SelectionResult {
 /// Build a chemfiles [`Frame`] from a readcon [`ConFrame`] for selection.
 ///
 /// Populates atom names/types from symbols, positions, optional velocities,
-/// and orthorhombic/triclinic cell from `boxl`/`angles`. Bond topology is
-/// not reconstructed; bond/angle selection contexts only work if the
-/// chemfiles frame already has bonds (not set here).
+/// orthorhombic/triclinic cell from `boxl`/`angles`, and optional frame
+/// topology from `metadata["bonds"]` (enables chemfiles `bonds:` / `angles:` /
+/// `is_bonded` selection when present).
 pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, ChemfilesImportError> {
     let mut chfl = Frame::new();
     let cell = frame.header.boxl;
@@ -133,6 +169,9 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
     if let Some(t) = frame.header.time() {
         chfl.set("time", t);
     }
+
+    // Optional topology: enables bonds:/angles:/is_bonded selections.
+    apply_con_bonds_to_chemfiles_frame(frame, &mut chfl);
 
     Ok(chfl)
 }
@@ -298,5 +337,36 @@ mod tests {
         let chfl = chemfiles_frame_from_con_frame(&frame).expect("project");
         assert_eq!(chfl.size(), 3);
         assert_eq!(chfl.atom(0).name(), "O");
+    }
+
+    #[test]
+    fn con_frame_bonds_projected_for_bonds_selection() {
+        use crate::types::Bond;
+        let mut frame = water_con_frame();
+        // Water: O(0)-H(1), O(0)-H(2)
+        frame.header.set_bonds(&[Bond::new(0, 1), Bond::new(0, 2)]);
+        let result = evaluate_selection_on_con_frame("bonds: all", &frame).expect("bonds: all");
+        assert_eq!(result.context_size, 2);
+        assert_eq!(result.matches.len(), 2);
+        // Projection must have applied topology (without bonds, bonds: all is empty).
+        let frame_no_topo = water_con_frame();
+        let empty = evaluate_selection_on_con_frame("bonds: all", &frame_no_topo).expect("no topo");
+        assert!(empty.matches.is_empty());
+    }
+
+    #[test]
+    fn import_preserves_chemfiles_bonds_in_metadata() {
+        use crate::chemfiles_import::con_frame_from_chemfiles;
+        let mut chfl = Frame::new();
+        chfl.add_atom(&Atom::new("C"), [0.0, 0.0, 0.0], None);
+        chfl.add_atom(&Atom::new("O"), [1.2, 0.0, 0.0], None);
+        chfl.add_bond(0, 1);
+        chfl.set_cell(&UnitCell::new([5.0, 5.0, 5.0]));
+        let con = con_frame_from_chemfiles(&chfl).expect("import");
+        assert!(con.has_bonds());
+        let bonds = con.bonds();
+        assert_eq!(bonds.len(), 1);
+        assert_eq!(bonds[0].i.min(bonds[0].j), 0);
+        assert_eq!(bonds[0].i.max(bonds[0].j), 1);
     }
 }

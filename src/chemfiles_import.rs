@@ -12,10 +12,42 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
-use chemfiles::{CellShape, Frame, Property, Trajectory, UnitCell};
+use chemfiles::{BondOrder, CellShape, Frame, Property, Trajectory, UnitCell};
 use serde_json::{json, Value};
 
-use crate::types::{meta, ConFrame, ConFrameBuilder};
+use crate::types::{meta, Bond, ConFrame, ConFrameBuilder};
+
+/// Map chemfiles bond order to optional integer stored in CON `bonds` metadata.
+fn bond_order_to_i32(order: BondOrder) -> Option<i32> {
+    match order {
+        BondOrder::Unknown => Some(0),
+        BondOrder::Single => Some(1),
+        BondOrder::Double => Some(2),
+        BondOrder::Triple => Some(3),
+        BondOrder::Quadruple => Some(4),
+        BondOrder::Quintuplet => Some(5),
+        BondOrder::Amide => Some(6),
+        BondOrder::Aromatic => Some(7),
+        _ => Some(0),
+    }
+}
+
+/// Convert chemfiles topology bonds into readcon [`Bond`]s for `metadata["bonds"]`.
+pub fn bonds_from_chemfiles_frame(frame: &Frame) -> Vec<Bond> {
+    let topo = frame.topology();
+    let pairs = topo.bonds();
+    let orders = topo.bond_orders();
+    let mut out = Vec::with_capacity(pairs.len());
+    for (idx, pair) in pairs.iter().enumerate() {
+        let i = pair[0] as u32;
+        let j = pair[1] as u32;
+        let order = orders.get(idx).and_then(|o| bond_order_to_i32(*o));
+        let mut b = Bond::new(i, j);
+        b.order = order;
+        out.push(b);
+    }
+    out
+}
 
 /// Prefix for chemfiles frame properties that do not map to a reserved
 /// `meta::*` key. Preserved under `chemfiles::<name>` so nothing is dropped.
@@ -181,6 +213,8 @@ fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
 /// - Frame properties map into reserved `meta::*` keys when names align;
 ///   otherwise they are stored under `chemfiles::<name>`.
 /// - Per-atom properties are collected under `chemfiles_atom_properties`.
+/// - Chemfiles topology bonds are stored under reserved `metadata["bonds"]`
+///   (optional; absent when the chemfiles frame has no bonds).
 /// - `generator` defaults to `readcon-core chemfiles import` when unset.
 /// - `frame_index` defaults to chemfiles `step` when unset.
 pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImportError> {
@@ -294,7 +328,15 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     );
 
     builder.metadata(metadata);
-    Ok(builder.build())
+    let mut con = builder.build();
+
+    // Optional topology: chemfiles bonds -> CON metadata["bonds"].
+    let bonds = bonds_from_chemfiles_frame(frame);
+    if !bonds.is_empty() {
+        con.header.set_bonds(&bonds);
+    }
+
+    Ok(con)
 }
 
 /// Open a trajectory with chemfiles and convert every step to [`ConFrame`].

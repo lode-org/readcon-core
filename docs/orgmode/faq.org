@@ -26,6 +26,23 @@ The ~con~ format is deliberately minimal: a fixed 9-line header, typed
 atom blocks, and optional velocity/force sections. The v2 JSON
 metadata line adds extensibility without breaking the core simplicity.
 
+* Is frame topology (=bonds=) required?
+
+No. =bonds= is an optional v2 metadata key (not a =sections= block and
+not a CON spec v3 change). Legacy files omit it. When present, each
+entry is a 0-based =atom_data= index pair (optionally with chemfiles-style
+order). It enables tools such as chemfiles selection (=bonds:= / =angles:= /
+=is_bonded=) when the library is built with =--features chemfiles=.
+
+* How does chemfiles fit in?
+
+Chemfiles is an optional Cargo/build feature (default off for lean C-only
+builds). When enabled, readcon-core can import chemfiles trajectories into
+=ConFrame= (topology becomes =metadata["bonds"]= when present) and evaluate
+chemfiles selection strings on frames via C/C++/Python/Rust APIs. Selection
+works for name/type filters without bonds; bond/angle contexts need =bonds=
+or an import path that carried topology.
+
 * What problems does atom_id solve?
 
 The ~con~ format groups atoms by element type. A structure with atoms

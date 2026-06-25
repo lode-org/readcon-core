@@ -151,6 +151,7 @@ pub fn validate_metadata_schema(
             }
             meta::UNITS => {}
             meta::PBC => validate_pbc_metadata(value)?,
+            meta::BONDS => validate_bonds_metadata(value)?,
             meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
             meta::CONVERGED if !value.is_boolean() => {
                 return Err(metadata_json_error("converged must be a boolean"));
@@ -169,6 +170,71 @@ fn validate_pbc_metadata(value: &Value) -> Result<(), ParseError> {
     };
     if values.len() != 3 || values.iter().any(|entry| !entry.is_boolean()) {
         return Err(metadata_json_error("pbc must be a length-3 boolean array"));
+    }
+    Ok(())
+}
+
+/// Validate optional `bonds` frame topology metadata.
+///
+/// Each element is either a length-2 non-negative integer pair `[i, j]` or an
+/// object `{"i": i, "j": j, "order"?: integer}`. Indices are 0-based into
+/// `atom_data` order (parser does not yet know atom count at metadata time;
+/// bounds are enforced when projecting to chemfiles / selection).
+fn validate_bonds_metadata(value: &Value) -> Result<(), ParseError> {
+    let Some(items) = value.as_array() else {
+        return Err(metadata_json_error("bonds must be an array"));
+    };
+    for (idx, item) in items.iter().enumerate() {
+        if let Some(pair) = item.as_array() {
+            if pair.len() != 2 {
+                return Err(metadata_json_error(format!(
+                    "bonds[{idx}] pair must have exactly two indices"
+                )));
+            }
+            for (k, entry) in pair.iter().enumerate() {
+                let Some(n) = entry.as_u64() else {
+                    return Err(metadata_json_error(format!(
+                        "bonds[{idx}][{k}] must be a non-negative integer"
+                    )));
+                };
+                if n > u32::MAX as u64 {
+                    return Err(metadata_json_error(format!(
+                        "bonds[{idx}][{k}] index exceeds u32"
+                    )));
+                }
+            }
+            continue;
+        }
+        if let Some(obj) = item.as_object() {
+            for key in ["i", "j"] {
+                let Some(entry) = obj.get(key) else {
+                    return Err(metadata_json_error(format!(
+                        "bonds[{idx}] object must include \"{key}\""
+                    )));
+                };
+                let Some(n) = entry.as_u64() else {
+                    return Err(metadata_json_error(format!(
+                        "bonds[{idx}].{key} must be a non-negative integer"
+                    )));
+                };
+                if n > u32::MAX as u64 {
+                    return Err(metadata_json_error(format!(
+                        "bonds[{idx}].{key} index exceeds u32"
+                    )));
+                }
+            }
+            if let Some(order) = obj.get("order")
+                && order.as_i64().is_none()
+            {
+                return Err(metadata_json_error(format!(
+                    "bonds[{idx}].order must be an integer when present"
+                )));
+            }
+            continue;
+        }
+        return Err(metadata_json_error(format!(
+            "bonds[{idx}] must be [i, j] or {{\"i\": i, \"j\": j, \"order\"?: ...}}"
+        )));
     }
     Ok(())
 }
@@ -1631,6 +1697,50 @@ Coordinates of Component 1
 
         assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
         assert!(err.to_string().contains("energy"));
+    }
+
+    #[test]
+    fn test_validate_true_rejects_malformed_bonds() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"sections\":[],\"validate\":true,\"bonds\":[[0]]}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+        assert!(matches!(err, ParseError::InvalidMetadataJson(_)));
+        assert!(err.to_string().contains("bonds"));
+    }
+
+    #[test]
+    fn test_bonds_metadata_round_trip_in_header() {
+        use crate::types::{meta, Bond};
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":2,\"bonds\":[[0,1],{\"i\":0,\"j\":2,\"order\":1}]}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "12.011",
+        ];
+        let mut line_it = lines.iter().copied();
+        let header = parse_frame_header(&mut line_it).expect("header");
+        let bonds = header.bonds();
+        assert_eq!(bonds.len(), 2);
+        assert_eq!(bonds[0], Bond::new(0, 1));
+        assert_eq!(bonds[1].i, 0);
+        assert_eq!(bonds[1].j, 2);
+        assert_eq!(bonds[1].order, Some(1));
+        assert!(header.metadata.contains_key(meta::BONDS));
     }
 
     #[test]

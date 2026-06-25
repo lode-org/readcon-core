@@ -408,6 +408,39 @@ All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 | =convergence_energy= | float           | Convergence criterion: energy change threshold           |
 | =converged=          | bool            | Whether convergence criteria are met                     |
 | =fmax=               | float           | Current maximum force component across free atoms        |
+| =bonds=              | array           | Optional frame topology (see [[#bonds]]); NOT a =sections= block |
+
+** Frame topology (=bonds=)
+:PROPERTIES:
+:CUSTOM_ID: bonds
+:END:
+
+The =bonds= key is OPTIONAL frame-level topology for tools that need explicit
+connectivity (chemfiles selection grammar =bonds:= / =angles:= / =is_bonded=,
+molecular viewers, etc.). It is NOT a per-atom =sections= entry and MUST NOT
+appear in the =sections= array.
+
+Each element is either:
+
+- A length-2 pair =[i, j]= of non-negative integers, or
+- An object ={"i": i, "j": j, "order"?: integer}= where =order= is optional
+  chemfiles-style bond order (0=unknown, 1=single, 2=double, 3=triple, ...).
+
+Indices are 0-based into the frame =atom_data= order (coordinate block order),
+NOT =atom_id= column values. Absent or empty =bonds= means no topology is
+declared (legacy CON files). Implementations MUST preserve unknown shapes when
+=validate= is false; with =validate=true=, malformed entries MUST be rejected.
+
+Example:
+
+#+begin_src json
+{"con_spec_version":2,"bonds":[[0,1],[0,2],{"i":1,"j":2,"order":1}]}
+#+end_src
+
+When the optional chemfiles feature is enabled, readers/writers MAY project
+=bonds= onto chemfiles topology for selection and MAY import chemfiles topology
+back into =bonds= on chemfiles→CON conversion. The CON spec version remains 2;
+=bonds= is an additive optional metadata key (library semver may bump for API).
 
 ** Units
 :PROPERTIES:
