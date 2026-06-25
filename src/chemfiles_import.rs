@@ -331,9 +331,30 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     let mut con = builder.build();
 
     // Optional topology: chemfiles bonds -> CON metadata["bonds"].
-    let bonds = bonds_from_chemfiles_frame(frame);
-    if !bonds.is_empty() {
-        con.header.set_bonds(&bonds);
+    // Chemfiles indices are 0..n in trajectory order. `ConFrameBuilder::build`
+    // groups atoms by symbol for CON layout, so bond endpoints must be remapped
+    // via `atom_id` (set to the chemfiles index above) into `atom_data` order.
+    let chfl_bonds = bonds_from_chemfiles_frame(frame);
+    if !chfl_bonds.is_empty() {
+        let mut id_to_data_idx: BTreeMap<u64, u32> = BTreeMap::new();
+        for (data_idx, atom) in con.atom_data.iter().enumerate() {
+            id_to_data_idx.insert(atom.atom_id, data_idx as u32);
+        }
+        let mut remapped = Vec::with_capacity(chfl_bonds.len());
+        for b in chfl_bonds {
+            let Some(&i) = id_to_data_idx.get(&(b.i as u64)) else {
+                continue;
+            };
+            let Some(&j) = id_to_data_idx.get(&(b.j as u64)) else {
+                continue;
+            };
+            let mut bond = Bond::new(i, j);
+            bond.order = b.order;
+            remapped.push(bond);
+        }
+        if !remapped.is_empty() {
+            con.header.set_bonds(&remapped);
+        }
     }
 
     Ok(con)

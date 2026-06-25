@@ -29,10 +29,11 @@ fn bond_order_from_i32(order: Option<i32>) -> Option<BondOrder> {
 
 /// Apply readcon frame topology (`metadata["bonds"]`) onto a chemfiles frame.
 ///
-/// Indices are 0-based into `atom_data` / chemfiles atom order. Out-of-range
-/// indices or self-bonds are skipped (does not fail selection projection).
+/// Bond indices are 0-based into [`ConFrame::atom_data`] order (same order used
+/// when adding atoms to `chfl`). Out-of-range indices or self-bonds are skipped.
 pub fn apply_con_bonds_to_chemfiles_frame(frame: &ConFrame, chfl: &mut Frame) {
     let n = chfl.size();
+    debug_assert_eq!(n, frame.atom_data.len());
     for bond in frame.bonds() {
         let i = bond.i as usize;
         let j = bond.j as usize;
@@ -355,6 +356,26 @@ mod tests {
     }
 
     #[test]
+    fn angles_all_with_projected_bonds() {
+        use crate::types::Bond;
+        let mut frame = water_con_frame();
+        frame.header.set_bonds(&[Bond::new(0, 1), Bond::new(0, 2)]);
+        let result = evaluate_selection_on_con_frame("angles: all", &frame).expect("angles: all");
+        assert_eq!(result.context_size, 3);
+        // H-O-H angle: one triple (1,0,2) or (2,0,1)
+        assert_eq!(result.matches.len(), 1, "water with 2 bonds should yield 1 angle");
+        let m = &result.matches[0];
+        assert_eq!(m.size, 3);
+        assert_eq!(m.atoms[1], 0, "center should be O (index 0)");
+        let ends = [m.atoms[0], m.atoms[2]];
+        assert!(ends.contains(&1) && ends.contains(&2));
+
+        let no_topo = water_con_frame();
+        let empty = evaluate_selection_on_con_frame("angles: all", &no_topo).expect("empty");
+        assert!(empty.matches.is_empty());
+    }
+
+    #[test]
     fn import_preserves_chemfiles_bonds_in_metadata() {
         use crate::chemfiles_import::con_frame_from_chemfiles;
         let mut chfl = Frame::new();
@@ -368,5 +389,318 @@ mod tests {
         assert_eq!(bonds.len(), 1);
         assert_eq!(bonds[0].i.min(bonds[0].j), 0);
         assert_eq!(bonds[0].i.max(bonds[0].j), 1);
+    }
+}
+
+/// Regression cases ported from chemfiles `tests/selection.cpp` (master / v0.10.x).
+///
+/// Each case evaluates the same selection string on (1) a chemfiles [`Frame`]
+/// built like chemfiles' `testing_frame()` and (2) the same topology after
+/// import → CON `bonds` → re-projection. Topology-derived selectors must agree.
+#[cfg(test)]
+mod chemfiles_selection_cpp_regression {
+    use super::*;
+    use crate::chemfiles_import::con_frame_from_chemfiles;
+    use chemfiles::{Atom, Frame};
+
+    /// Mirror of chemfiles `tests/selection.cpp` `testing_frame()` (topology + names/types).
+    ///
+    /// Atoms: H1(H) @ (0,1,2), O @ (1,2,3), O @ (2,3,4), H @ (3,4,5).
+    /// Bonds: 0-1, 1-2, 2-3 (linear H–O–O–H chain → 2 angles, 1 dihedral).
+    fn chemfiles_cpp_testing_frame() -> Frame {
+        let mut frame = Frame::new();
+        // Atom(name, type) — matches C++ Atom("H1", "H") / Atom("O") / Atom("H")
+        let mut h1 = Atom::new("H1");
+        h1.set_atomic_type("H");
+        frame.add_atom(&h1, [0.0, 1.0, 2.0], None);
+        frame.add_atom(&Atom::new("O"), [1.0, 2.0, 3.0], None);
+        frame.add_atom(&Atom::new("O"), [2.0, 3.0, 4.0], None);
+        frame.add_atom(&Atom::new("H"), [3.0, 4.0, 5.0], None);
+        frame.add_bond(0, 1);
+        frame.add_bond(1, 2);
+        frame.add_bond(2, 3);
+        frame
+    }
+
+    /// CON path: chemfiles import (bonds in metadata) then selection via projection.
+    fn con_from_cpp_testing_frame() -> ConFrame {
+        let chfl = chemfiles_cpp_testing_frame();
+        con_frame_from_chemfiles(&chfl).expect("import chemfiles testing_frame")
+    }
+
+    fn match_key(m: &SelectionMatch) -> Vec<usize> {
+        m.indices().to_vec()
+    }
+
+    fn sort_match_keys(result: &SelectionResult) -> Vec<Vec<usize>> {
+        let mut keys: Vec<Vec<usize>> = result.matches.iter().map(match_key).collect();
+        keys.sort();
+        keys
+    }
+
+    /// Map chemfiles atom index → CON `atom_data` index via stored `atom_id`.
+    fn chemfiles_idx_to_con_data(con: &ConFrame, chfl_idx: usize) -> Option<usize> {
+        con.atom_data
+            .iter()
+            .position(|a| a.atom_id == chfl_idx as u64)
+    }
+
+    /// Remap a chemfiles match (indices in chemfiles order) into CON `atom_data` order.
+    fn remap_match_to_con_order(con: &ConFrame, m: &SelectionMatch) -> Option<Vec<usize>> {
+        let mut out = Vec::with_capacity(m.size);
+        for &idx in m.indices() {
+            out.push(chemfiles_idx_to_con_data(con, idx)?);
+        }
+        Some(out)
+    }
+
+    /// Canonical key for topology multiset compare (bond/angle/dihedral orientation).
+    ///
+    /// Chemfiles may emit either bond direction or reversed angle/dihedral walk;
+    /// CON projection must agree as an undirected multiset in `atom_data` order.
+    fn canonicalize_topology_match(indices: &[usize], context_size: usize) -> Vec<usize> {
+        match context_size {
+            2 => {
+                let mut p = [indices[0], indices[1]];
+                p.sort_unstable();
+                p.to_vec()
+            }
+            3 => {
+                // Angle i-j-k is same as k-j-i (same center j).
+                let (i, j, k) = (indices[0], indices[1], indices[2]);
+                if i <= k {
+                    vec![i, j, k]
+                } else {
+                    vec![k, j, i]
+                }
+            }
+            4 => {
+                let a = indices.to_vec();
+                let mut rev = a.clone();
+                rev.reverse();
+                if a <= rev { a } else { rev }
+            }
+            _ => indices.to_vec(),
+        }
+    }
+
+    fn multiset_topology_keys(result: &SelectionResult) -> Vec<Vec<usize>> {
+        let mut keys: Vec<Vec<usize>> = result
+            .matches
+            .iter()
+            .map(|m| canonicalize_topology_match(m.indices(), result.context_size))
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    /// Chemfiles-direct vs CON-projection agree after remapping chemfiles indices
+    /// into CON type-grouped `atom_data` order (builder reorders; bonds use data order).
+    fn assert_selection_parity_remapped(selection: &str, chfl: &Frame, con: &ConFrame) {
+        let direct = evaluate_selection_on_chemfiles_frame(selection, chfl)
+            .unwrap_or_else(|e| panic!("direct chemfiles '{selection}': {e}"));
+        let via_con = evaluate_selection_on_con_frame(selection, con)
+            .unwrap_or_else(|e| panic!("via CON projection '{selection}': {e}"));
+        assert_eq!(direct.context_size, via_con.context_size);
+
+        let mut remapped: Vec<Vec<usize>> = direct
+            .matches
+            .iter()
+            .map(|m| {
+                let r = remap_match_to_con_order(con, m)
+                    .unwrap_or_else(|| panic!("atom_id missing for match in '{selection}'"));
+                canonicalize_topology_match(&r, direct.context_size)
+            })
+            .collect();
+        remapped.sort();
+        let via_keys = multiset_topology_keys(&via_con);
+        assert_eq!(
+            remapped, via_keys,
+            "remapped multiset mismatch for '{selection}'\n  chemfiles→con: {remapped:?}\n  via con:       {via_keys:?}"
+        );
+    }
+
+    // --- TEST_CASE("Multiple selections") / SECTION("Bonds"|"Angles"|"Dihedrals") ---
+
+    #[test]
+    fn cpp_bonds_all_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        assert!(con.has_bonds());
+        assert_eq!(con.bonds().len(), 3);
+        assert_selection_parity_remapped("bonds: all", &chfl, &con);
+        let r = evaluate_selection_on_con_frame("bonds: all", &con).unwrap();
+        assert_eq!(r.context_size, 2);
+        assert_eq!(r.matches.len(), 3);
+    }
+
+    #[test]
+    fn cpp_bonds_name_o_type_h_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        // selection.cpp: bonds: name(#1) O and type(#2) H → chemfiles {1,0}, {2,3}
+        assert_selection_parity_remapped("bonds: name(#1) O and type(#2) H", &chfl, &con);
+    }
+
+    #[test]
+    fn cpp_angles_all_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        // selection.cpp: angles: all → {0,1,2}, {1,2,3} in chemfiles order
+        assert_selection_parity_remapped("angles: all", &chfl, &con);
+        let r = evaluate_selection_on_con_frame("angles: all", &con).unwrap();
+        assert_eq!(r.context_size, 3);
+        assert_eq!(r.matches.len(), 2);
+    }
+
+    #[test]
+    fn cpp_angles_filtered_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        // selection.cpp: angles: name(#1) O and name(#2) O and type(#3) H
+        assert_selection_parity_remapped(
+            "angles: name(#1) O and name(#2) O and type(#3) H",
+            &chfl,
+            &con,
+        );
+    }
+
+    #[test]
+    fn cpp_dihedrals_all_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        // selection.cpp: dihedrals: all → single {0,1,2,3}
+        assert_selection_parity_remapped("dihedrals: all", &chfl, &con);
+        let r = evaluate_selection_on_con_frame("dihedrals: all", &con).unwrap();
+        assert_eq!(r.context_size, 4);
+        assert_eq!(r.matches.len(), 1);
+    }
+
+    #[test]
+    fn cpp_is_bonded_equiv_bonds_context_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        let a = "two: type(#1) H and name(#2) O and is_bonded(#1, #2)";
+        let b = "bonds: type(#1) H and name(#2) O";
+        assert_selection_parity_remapped(a, &chfl, &con);
+        assert_selection_parity_remapped(b, &chfl, &con);
+        // On CON index space, is_bonded and bonds: filters must agree with each other.
+        let ra = evaluate_selection_on_con_frame(a, &con).unwrap();
+        let rb = evaluate_selection_on_con_frame(b, &con).unwrap();
+        assert_eq!(sort_match_keys(&ra), sort_match_keys(&rb));
+    }
+
+    #[test]
+    fn cpp_is_angle_equiv_angles_context_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        let a = "three: type(#1) H and name(#2) O and is_angle(#1, #2, #3)";
+        let b = "angles: type(#1) H and name(#2) O";
+        assert_selection_parity_remapped(a, &chfl, &con);
+        assert_selection_parity_remapped(b, &chfl, &con);
+        let ra = evaluate_selection_on_con_frame(a, &con).unwrap();
+        let rb = evaluate_selection_on_con_frame(b, &con).unwrap();
+        assert_eq!(sort_match_keys(&ra), sort_match_keys(&rb));
+    }
+
+    #[test]
+    fn cpp_is_dihedral_type_h_parity_remapped() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        // selection.cpp uses name H1; type H is the CON-stable equivalent for atom 0.
+        let sel = "four: type(#1) H and is_dihedral(#3, #4, #2, #1)";
+        assert_selection_parity_remapped(sel, &chfl, &con);
+    }
+
+    /// Hand-authored CON bonds in `atom_data` order (no import reorder): exact index parity.
+    #[test]
+    fn cpp_topology_on_ungrouped_con_frame_exact_indices() {
+        use crate::types::{Bond, ConFrameBuilder};
+        // Force same order as chemfiles by adding atoms H,O,O,H with distinct atom_ids.
+        // Builder still groups → H,H,O,O. Author bonds in that grouped order explicitly.
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 0.0, 1.0, 2.0, [false; 3], 0, 1.0);
+        b.add_atom("O", 1.0, 2.0, 3.0, [false; 3], 1, 16.0);
+        b.add_atom("O", 2.0, 3.0, 4.0, [false; 3], 2, 16.0);
+        b.add_atom("H", 3.0, 4.0, 5.0, [false; 3], 3, 1.0);
+        let mut frame = b.build();
+        // After group: data order H(id0), H(id3), O(id1), O(id2) — bonds must use data idx.
+        // chemfiles bonds 0-1,1-2,2-3 in id space → data pairs via atom_id lookup
+        let id_to = |id: u64| {
+            frame
+                .atom_data
+                .iter()
+                .position(|a| a.atom_id == id)
+                .unwrap() as u32
+        };
+        frame.header.set_bonds(&[
+            Bond::new(id_to(0), id_to(1)),
+            Bond::new(id_to(1), id_to(2)),
+            Bond::new(id_to(2), id_to(3)),
+        ]);
+        let angles = evaluate_selection_on_con_frame("angles: all", &frame).unwrap();
+        assert_eq!(angles.matches.len(), 2);
+        let dih = evaluate_selection_on_con_frame("dihedrals: all", &frame).unwrap();
+        assert_eq!(dih.matches.len(), 1);
+    }
+
+    #[test]
+    fn cpp_pairs_all_no_topology_needed() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let mut con = con_from_cpp_testing_frame();
+        con.header.clear_bonds();
+        let sel = "pairs: all";
+        let direct = evaluate_selection_on_chemfiles_frame(sel, &chfl).unwrap();
+        let via = evaluate_selection_on_con_frame(sel, &con).unwrap();
+        assert_eq!(direct.matches.len(), 12);
+        // pairs uses atom indices in projection order (type-grouped), not chemfiles order
+        assert_eq!(via.matches.len(), 12);
+    }
+
+    #[test]
+    fn cpp_without_bonds_topology_selectors_empty_on_con() {
+        let mut con = con_from_cpp_testing_frame();
+        con.header.clear_bonds();
+        for sel in ["bonds: all", "angles: all", "dihedrals: all"] {
+            let r = evaluate_selection_on_con_frame(sel, &con).unwrap();
+            assert!(r.matches.is_empty(), "{sel} must be empty without bonds");
+        }
+    }
+
+    #[test]
+    fn cpp_import_project_roundtrip_topology_parity() {
+        let chfl = chemfiles_cpp_testing_frame();
+        let con1 = con_frame_from_chemfiles(&chfl).unwrap();
+        let proj = chemfiles_frame_from_con_frame(&con1).unwrap();
+        assert_eq!(proj.topology().bonds_count(), 3);
+        let con2 = con_frame_from_chemfiles(&proj).unwrap();
+        assert_eq!(con2.bonds().len(), 3);
+        // First hop: chemfiles frame ↔ CON import/projection (atom_id preserves chemfiles index).
+        assert_selection_parity_remapped("bonds: all", &chfl, &con1);
+        assert_selection_parity_remapped("angles: all", &chfl, &con1);
+        assert_selection_parity_remapped("dihedrals: all", &chfl, &con1);
+        // Second hop: CON ↔ projected chemfiles ↔ CON (same atom_data order both times).
+        for sel in ["bonds: all", "angles: all", "dihedrals: all"] {
+            let a = multiset_topology_keys(&evaluate_selection_on_con_frame(sel, &con1).unwrap());
+            let b = multiset_topology_keys(&evaluate_selection_on_con_frame(sel, &con2).unwrap());
+            assert_eq!(a, b, "CON→project→import must preserve topology multiset for '{sel}'");
+        }
+    }
+
+    #[test]
+    fn cpp_h1_name_not_preserved_is_documented_gap() {
+        // selection.cpp filters on name H1; import stores atomic_type "H" only.
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        let direct = evaluate_selection_on_chemfiles_frame("name H1", &chfl).unwrap();
+        assert_eq!(direct.primary_indices(), vec![0]);
+        let via = evaluate_selection_on_con_frame("name H1", &con).unwrap();
+        assert!(
+            via.matches.is_empty(),
+            "CON/symbol path does not preserve chemfiles display name H1 separate from type H"
+        );
+        // type/name H still selects both hydrogens after import
+        let via_h = evaluate_selection_on_con_frame("type H", &con).unwrap();
+        assert_eq!(via_h.matches.len(), 2);
     }
 }
