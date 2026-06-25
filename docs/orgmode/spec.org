@@ -442,6 +442,21 @@ When the optional chemfiles feature is enabled, readers/writers MAY project
 back into =bonds= on chemfiles→CON conversion. The CON spec version remains 2;
 =bonds= is an additive optional metadata key (library semver may bump for API).
 
+**Chemfiles import sidecars (optional, not CON columns).** Implementations that
+import via chemfiles MAY store extra JSON keys such as
+=chemfiles_atom_names= and =chemfiles_atom_types= (string arrays in chemfiles /
+=atom_id= order) so selection can restore chemfiles display =name= distinct
+from atomic =type= while the coordinate blocks still use one =symbol= per atom.
+These keys are implementation extras: parsers MUST preserve unknown keys;
+writers MUST NOT require them for valid v2 files. Hand-authored frames without
+sidecars behave as symbol-only for selection.
+
+**Selection parity scope (library).** Multiset agreement with chemfiles after
+remapping chemfiles indices through =atom_id= into type-grouped =atom_data=
+order. Not in scope unless trivially projected: residue/=resname= filters,
+arbitrary extra properties, improper extras beyond =bonds=, full numeric
+geometry assertion suites from chemfiles =tests/selection.cpp=.
+
 ** Units
 :PROPERTIES:
 :CUSTOM_ID: units

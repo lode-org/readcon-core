@@ -8,8 +8,41 @@
 use chemfiles::{Atom, BondOrder, Frame, Selection, UnitCell};
 use serde_json::Value;
 
-use crate::chemfiles_import::ChemfilesImportError;
+use crate::chemfiles_import::{
+    ChemfilesImportError, CHEMFILES_ATOM_NAMES_KEY, CHEMFILES_ATOM_TYPES_KEY,
+};
 use crate::types::ConFrame;
+
+/// Chemfiles display name / atomic type for one CON atom, from optional import sidecars.
+///
+/// Sidecar arrays are indexed by chemfiles order (= [`AtomDatum::atom_id`](crate::types::AtomDatum::atom_id)
+/// on import). Falls back to CON `symbol` for both when sidecars are absent.
+fn chemfiles_name_and_type_for_atom(frame: &ConFrame, atom_data_idx: usize) -> (String, String) {
+    let atom = &frame.atom_data[atom_data_idx];
+    let symbol = atom.symbol.as_ref().to_string();
+    let chfl_idx = atom.atom_id as usize;
+    let name = frame
+        .header
+        .metadata
+        .get(CHEMFILES_ATOM_NAMES_KEY)
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.get(chfl_idx))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| symbol.clone());
+    let atomic_type = frame
+        .header
+        .metadata
+        .get(CHEMFILES_ATOM_TYPES_KEY)
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.get(chfl_idx))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| symbol.clone());
+    (name, atomic_type)
+}
 
 /// Map optional integer bond order from CON metadata to chemfiles [`BondOrder`].
 fn bond_order_from_i32(order: Option<i32>) -> Option<BondOrder> {
@@ -98,10 +131,11 @@ impl SelectionResult {
 
 /// Build a chemfiles [`Frame`] from a readcon [`ConFrame`] for selection.
 ///
-/// Populates atom names/types from symbols, positions, optional velocities,
-/// orthorhombic/triclinic cell from `boxl`/`angles`, and optional frame
-/// topology from `metadata["bonds"]` (enables chemfiles `bonds:` / `angles:` /
-/// `is_bonded` selection when present).
+/// Populates atom names/types (CON `symbol`, plus optional chemfiles import
+/// sidecars [`CHEMFILES_ATOM_NAMES_KEY`] / [`CHEMFILES_ATOM_TYPES_KEY`]), positions,
+/// optional velocities, orthorhombic/triclinic cell from `boxl`/`angles`, and
+/// optional frame topology from `metadata["bonds"]` (enables chemfiles `bonds:` /
+/// `angles:` / `is_bonded` selection when present).
 pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, ChemfilesImportError> {
     let mut chfl = Frame::new();
     let cell = frame.header.boxl;
@@ -130,9 +164,10 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
         chfl.add_velocities();
     }
 
-    for atom in &frame.atom_data {
-        let name = atom.symbol.as_ref();
-        let ch_atom = Atom::new(name);
+    for (data_idx, atom) in frame.atom_data.iter().enumerate() {
+        let (display_name, atomic_type) = chemfiles_name_and_type_for_atom(frame, data_idx);
+        let mut ch_atom = Atom::new(display_name.as_str());
+        ch_atom.set_atomic_type(atomic_type.as_str());
         let vel = atom.velocity;
         chfl.add_atom(&ch_atom, [atom.x, atom.y, atom.z], vel);
     }
@@ -688,19 +723,34 @@ mod chemfiles_selection_cpp_regression {
     }
 
     #[test]
-    fn cpp_h1_name_not_preserved_is_documented_gap() {
-        // selection.cpp filters on name H1; import stores atomic_type "H" only.
+    fn cpp_name_h1_preserved_after_import_project() {
+        // selection.cpp: name H1 vs type H on first atom; must work via import sidecars.
         let chfl = chemfiles_cpp_testing_frame();
         let con = con_from_cpp_testing_frame();
+        assert!(
+            con.header
+                .metadata
+                .contains_key(crate::chemfiles_import::CHEMFILES_ATOM_NAMES_KEY),
+            "import must store chemfiles_atom_names sidecar"
+        );
         let direct = evaluate_selection_on_chemfiles_frame("name H1", &chfl).unwrap();
         assert_eq!(direct.primary_indices(), vec![0]);
         let via = evaluate_selection_on_con_frame("name H1", &con).unwrap();
-        assert!(
-            via.matches.is_empty(),
-            "CON/symbol path does not preserve chemfiles display name H1 separate from type H"
-        );
-        // type/name H still selects both hydrogens after import
-        let via_h = evaluate_selection_on_con_frame("type H", &con).unwrap();
-        assert_eq!(via_h.matches.len(), 2);
+        assert_eq!(via.matches.len(), 1, "display name H1 must survive projection");
+        // CON atom_data order: H(id0) is first in type-group → data index 0
+        assert_eq!(via.primary_indices(), vec![0]);
+
+        let type_h = evaluate_selection_on_con_frame("type H", &con).unwrap();
+        assert_eq!(type_h.matches.len(), 2, "both hydrogens keep type H");
+        assert_selection_parity_remapped("name H1", &chfl, &con);
+    }
+
+    #[test]
+    fn cpp_dihedrals_name_h1_filter_parity_remapped() {
+        // selection.cpp SECTION Dihedrals: name(#3) O and name(#4) H1 → {3,2,1,0}
+        let chfl = chemfiles_cpp_testing_frame();
+        let con = con_from_cpp_testing_frame();
+        let sel = "dihedrals: name(#3) O and name(#4) H1";
+        assert_selection_parity_remapped(sel, &chfl, &con);
     }
 }
