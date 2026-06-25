@@ -14,6 +14,9 @@ pub mod metatensor_export;
 #[cfg(feature = "chemfiles")]
 pub mod chemfiles_import;
 
+#[cfg(feature = "chemfiles")]
+pub mod chemfiles_selection;
+
 #[cfg(feature = "rpc")]
 pub mod rpc;
 
