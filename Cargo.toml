@@ -32,6 +32,10 @@ rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util"
 python = ["dep:pyo3", "dep:numpy"]
 zstd = ["dep:zstd"]
 metatensor = ["dep:metatensor"]
+# Multi-format trajectory import via the chemfiles C++ library (Rust
+# bindings). Off by default so lean builds / conda C-only consumers do
+# not pull libchemfiles. Enable with `--features chemfiles`.
+chemfiles = ["dep:chemfiles"]
 
 [dependencies]
 # v0.11 storage abstraction. The `Array` trait + DLPack export pattern
@@ -59,6 +63,7 @@ pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 numpy = { version = "0.28", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
+chemfiles = { version = "0.10", optional = true }
 
 [dev-dependencies]
 cog = "0.1.0"
