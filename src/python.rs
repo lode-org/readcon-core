@@ -533,6 +533,62 @@ impl PyConFrame {
         self.metadata_get_f64(py, meta::TIMESTEP)
     }
 
+    /// Optional frame topology from ``metadata['bonds']`` as a list of
+    /// ``(i, j)`` or ``(i, j, order)`` tuples (0-based ``atom_data`` indices).
+    /// Empty list when absent. Enables chemfiles bond/angle selection when
+    /// the library is built with the ``chemfiles`` feature.
+    #[getter]
+    fn bonds(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let dict = self.metadata.bind(py);
+        let Some(raw) = dict.get_item(meta::BONDS)? else {
+            return Ok(Vec::new());
+        };
+        if raw.is_none() {
+            return Ok(Vec::new());
+        }
+        let arr = match raw.cast::<pyo3::types::PyList>() {
+            Ok(a) => a,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let mut out = Vec::with_capacity(arr.len());
+        for item in arr.iter() {
+            if let Ok(pair) = item.cast::<pyo3::types::PyList>() {
+                if pair.len() == 2 {
+                    let i: u32 = pair.get_item(0)?.extract()?;
+                    let j: u32 = pair.get_item(1)?.extract()?;
+                    out.push((i, j).into_pyobject(py)?.into_any().unbind());
+                    continue;
+                }
+            }
+            if let Ok(obj) = item.cast::<PyDict>() {
+                let i: u32 = obj
+                    .get_item("i")?
+                    .ok_or_else(|| PyValueError::new_err("bonds entry missing i"))?
+                    .extract()?;
+                let j: u32 = obj
+                    .get_item("j")?
+                    .ok_or_else(|| PyValueError::new_err("bonds entry missing j"))?
+                    .extract()?;
+                if let Some(order_v) = obj.get_item("order")? {
+                    if !order_v.is_none() {
+                        let order: i32 = order_v.extract()?;
+                        out.push((i, j, order).into_pyobject(py)?.into_any().unbind());
+                        continue;
+                    }
+                }
+                out.push((i, j).into_pyobject(py)?.into_any().unbind());
+                continue;
+            }
+        }
+        Ok(out)
+    }
+
+    /// True when ``metadata['bonds']`` is present and non-empty.
+    #[getter]
+    fn has_bonds(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(!self.bonds(py)?.is_empty())
+    }
+
     /// NEB bead index for this frame, or None.
     #[getter]
     fn neb_bead(&self, py: Python<'_>) -> PyResult<Option<u64>> {
