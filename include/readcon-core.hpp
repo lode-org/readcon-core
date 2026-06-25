@@ -10,14 +10,17 @@
 #error "readcon-core.hpp requires C++17 or later"
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "readcon-core.h"
@@ -117,6 +120,7 @@ struct Atom {
 class ConFrame;
 class ConFrameWriter;
 class ConFrameBuilder;
+class SelectionResult;
 
 /**
  * @brief An iterator for lazily reading frames from a .con file.
@@ -266,6 +270,22 @@ class ConFrame {
     /// Potential type string (e.g. "EMT") if present, else nullopt.
     std::optional<std::string> potential_type() const;
 
+    /**
+     * Evaluate a chemfiles selection-language string on this frame.
+     *
+     * Requires a library built with chemfiles (`rkr_has_chemfiles_support()`).
+     * Throws `std::runtime_error` on failure (invalid grammar, missing support).
+     *
+     * @param selection Chemfiles selection string, e.g. `"name O"` or `"all"`.
+     */
+    SelectionResult select(std::string_view selection) const;
+
+    /**
+     * Atom-context convenience: returns sorted unique primary indices for
+     * selections such as `"name H"`. Throws if the selection is not atom context.
+     */
+    std::vector<size_t> select_atom_indices(std::string_view selection) const;
+
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
   private:
@@ -290,6 +310,117 @@ class ConFrame {
     mutable bool has_forces_cache_ = false;
     mutable bool has_energies_cache_ = false;
 };
+
+/**
+ * @brief One chemfiles selection match (1-4 atom indices).
+ */
+struct SelectionMatch {
+    uint32_t size = 0;
+    std::array<uint64_t, 4> atoms{{UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX}};
+};
+
+/**
+ * @brief RAII result of `ConFrame::select` / `rkr_frame_select`.
+ *
+ * Only meaningful when the linked `readcon_core` was built with chemfiles.
+ */
+class SelectionResult {
+  public:
+    SelectionResult() = default;
+    SelectionResult(const SelectionResult &) = delete;
+    SelectionResult &operator=(const SelectionResult &) = delete;
+    SelectionResult(SelectionResult &&) = default;
+    SelectionResult &operator=(SelectionResult &&) = default;
+
+    explicit SelectionResult(RKRSelectionResult *handle) : handle_(handle) {}
+
+    uint64_t match_count() const {
+        return handle_ ? rkr_selection_result_match_count(handle_.get()) : 0;
+    }
+
+    uint32_t context_size() const {
+        return handle_ ? rkr_selection_result_context_size(handle_.get()) : 0;
+    }
+
+    SelectionMatch match_at(uint64_t index) const {
+        SelectionMatch m;
+        if (!handle_) {
+            throw std::runtime_error("SelectionResult: null handle");
+        }
+        uint32_t size = 0;
+        RKRStatus st = rkr_selection_result_match_at(handle_.get(), index, m.atoms.data(), &size);
+        if (st != RKR_STATUS_SUCCESS) {
+            throw std::runtime_error(std::string("rkr_selection_result_match_at: ") +
+                                     rkr_status_message(st));
+        }
+        m.size = size;
+        return m;
+    }
+
+    /// Primary atom index per match (length == match_count()).
+    std::vector<uint64_t> primary_indices() const {
+        if (!handle_) {
+            return {};
+        }
+        const uint64_t n = match_count();
+        std::vector<uint64_t> out(static_cast<size_t>(n));
+        if (n == 0) {
+            return out;
+        }
+        uint64_t written = 0;
+        RKRStatus st =
+            rkr_selection_result_primary_indices(handle_.get(), out.data(), n, &written);
+        if (st != RKR_STATUS_SUCCESS) {
+            throw std::runtime_error(std::string("rkr_selection_result_primary_indices: ") +
+                                     rkr_status_message(st));
+        }
+        out.resize(static_cast<size_t>(written));
+        return out;
+    }
+
+    const RKRSelectionResult *get_handle() const { return handle_.get(); }
+
+  private:
+    struct Deleter {
+        void operator()(RKRSelectionResult *p) const {
+            if (p)
+                rkr_selection_result_free(p);
+        }
+    };
+    std::unique_ptr<RKRSelectionResult, Deleter> handle_;
+};
+
+inline bool has_chemfiles_support() { return rkr_has_chemfiles_support() != 0; }
+
+inline SelectionResult ConFrame::select(std::string_view selection) const {
+    if (!has_chemfiles_support()) {
+        throw std::runtime_error(
+            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
+    }
+    std::string sel(selection);
+    RKRSelectionResult *raw = nullptr;
+    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
+    if (st != RKR_STATUS_SUCCESS) {
+        throw std::runtime_error(std::string("rkr_frame_select: ") + rkr_status_message(st));
+    }
+    return SelectionResult(raw);
+}
+
+inline std::vector<size_t> ConFrame::select_atom_indices(std::string_view selection) const {
+    SelectionResult res = select(selection);
+    if (res.context_size() != 1) {
+        throw std::runtime_error("select_atom_indices requires an atom-context selection");
+    }
+    auto prim = res.primary_indices();
+    std::vector<size_t> out;
+    out.reserve(prim.size());
+    for (auto i : prim) {
+        out.push_back(static_cast<size_t>(i));
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
 
 /**
  * @brief A C++ wrapper for writing frames to a .con file.

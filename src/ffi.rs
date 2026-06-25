@@ -250,6 +250,8 @@ pub enum RKRStatus {
     RKR_STATUS_SECTION_ABSENT = -8,
     /// DLPack export or another validation step failed.
     RKR_STATUS_VALIDATION_ERROR = -9,
+    /// Chemfiles selection parse/evaluate failed (requires chemfiles-enabled build).
+    RKR_STATUS_SELECTION_ERROR = -10,
 }
 
 /// Returns a stable, static message for a status code.
@@ -267,6 +269,7 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_INTERNAL_ERROR => c"internal error".as_ptr(),
         RKRStatus::RKR_STATUS_SECTION_ABSENT => c"section absent".as_ptr(),
         RKRStatus::RKR_STATUS_VALIDATION_ERROR => c"validation error".as_ptr(),
+        RKRStatus::RKR_STATUS_SELECTION_ERROR => c"selection error".as_ptr(),
     }
 }
 
@@ -2410,6 +2413,197 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
     }
 }
 
+//=============================================================================
+// Chemfiles selection (feature = "chemfiles")
+//=============================================================================
+
+/// Opaque handle for a cached selection evaluation result (chemfiles builds only).
+#[cfg(feature = "chemfiles")]
+pub struct RKRSelectionResult;
+
+/// Evaluate a chemfiles selection-language string on an `RKRConFrame`.
+///
+/// On success writes a heap-allocated result handle to `*out_result` (caller
+/// frees with [`rkr_selection_result_free`]). Returns
+/// `RKR_STATUS_SELECTION_ERROR` for invalid grammar or evaluation failure.
+///
+/// Only available when the library is built with the `chemfiles` feature.
+///
+/// # Safety
+/// `frame_handle`, `selection`, and `out_result` must be non-null; `selection`
+/// must point to a valid UTF-8 C string.
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_select(
+    frame_handle: *const RKRConFrame,
+    selection: *const c_char,
+    out_result: *mut *mut RKRSelectionResult,
+) -> RKRStatus {
+    use crate::chemfiles_selection::evaluate_selection_on_con_frame;
+
+    if frame_handle.is_null() || selection.is_null() || out_result.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let frame = unsafe { &*(frame_handle as *const ConFrame) };
+    let sel_str = match unsafe { CStr::from_ptr(selection) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+    };
+    match evaluate_selection_on_con_frame(sel_str, frame) {
+        Ok(result) => {
+            let boxed = Box::new(result);
+            unsafe {
+                *out_result = Box::into_raw(boxed) as *mut RKRSelectionResult;
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(_) => RKRStatus::RKR_STATUS_SELECTION_ERROR,
+    }
+}
+
+/// Number of matches in a selection result.
+///
+/// # Safety
+/// `result_handle` must be a valid handle from [`rkr_frame_select`] or NULL.
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_selection_result_match_count(
+    result_handle: *const RKRSelectionResult,
+) -> u64 {
+    if result_handle.is_null() {
+        return 0;
+    }
+    let result =
+        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    result.matches.len() as u64
+}
+
+/// Selection context size (1=atom, 2=pair, 3=angle, 4=dihedral).
+///
+/// # Safety
+/// `result_handle` must be valid or NULL (returns 0).
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_selection_result_context_size(
+    result_handle: *const RKRSelectionResult,
+) -> u32 {
+    if result_handle.is_null() {
+        return 0;
+    }
+    let result =
+        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    result.context_size as u32
+}
+
+/// Copy match `match_index` atom indices into `out_atoms` (up to 4 slots).
+/// Writes actual arity to `*out_size` when non-null.
+///
+/// # Safety
+/// Handles and `out_atoms` must be valid; `out_atoms` needs space for 4 `uint64_t`.
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_selection_result_match_at(
+    result_handle: *const RKRSelectionResult,
+    match_index: u64,
+    out_atoms: *mut u64,
+    out_size: *mut u32,
+) -> RKRStatus {
+    if result_handle.is_null() || out_atoms.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let result =
+        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let idx = match_index as usize;
+    if idx >= result.matches.len() {
+        return RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS;
+    }
+    let m = &result.matches[idx];
+    unsafe {
+        for i in 0..4 {
+            *out_atoms.add(i) = if i < m.size {
+                m.atoms[i] as u64
+            } else {
+                u64::MAX
+            };
+        }
+        if !out_size.is_null() {
+            *out_size = m.size as u32;
+        }
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Fill `out_indices` with primary atom indices for each match (length =
+/// match count). Returns `RKR_STATUS_BUFFER_TOO_SMALL` if `capacity` is too small.
+///
+/// # Safety
+/// `result_handle` and `out_indices` must be valid when capacity > 0.
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_selection_result_primary_indices(
+    result_handle: *const RKRSelectionResult,
+    out_indices: *mut u64,
+    capacity: u64,
+    out_written: *mut u64,
+) -> RKRStatus {
+    if result_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let result =
+        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let n = result.matches.len() as u64;
+    if !out_written.is_null() {
+        unsafe {
+            *out_written = n;
+        }
+    }
+    if n == 0 {
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
+    if out_indices.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    if capacity < n {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    unsafe {
+        for (i, m) in result.matches.iter().enumerate() {
+            *out_indices.add(i) = m.atoms[0] as u64;
+        }
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Free a selection result from [`rkr_frame_select`]. Safe with NULL.
+///
+/// # Safety
+/// `result_handle` must be from `rkr_frame_select` or NULL.
+#[cfg(feature = "chemfiles")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_selection_result_free(result_handle: *mut RKRSelectionResult) {
+    if result_handle.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(
+            result_handle as *mut crate::chemfiles_selection::SelectionResult,
+        ));
+    }
+}
+
+/// Returns 1 when this library build includes chemfiles selection support.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
+    #[cfg(feature = "chemfiles")]
+    {
+        1
+    }
+    #[cfg(not(feature = "chemfiles"))]
+    {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2688,6 +2882,7 @@ mod tests {
             (RKRStatus::RKR_STATUS_INTERNAL_ERROR, "internal error"),
             (RKRStatus::RKR_STATUS_SECTION_ABSENT, "section absent"),
             (RKRStatus::RKR_STATUS_VALIDATION_ERROR, "validation error"),
+            (RKRStatus::RKR_STATUS_SELECTION_ERROR, "selection error"),
         ];
 
         for (status, expected) in cases {
@@ -2777,5 +2972,34 @@ mod tests {
         let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
         let status = unsafe { rkr_frame_builder_positions_dlpack(ptr::null(), &mut t) };
         assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
+        assert!(t.is_null());
+    }
+
+    #[cfg(feature = "chemfiles")]
+    #[test]
+    fn rkr_frame_select_finds_oxygen() {
+        use crate::types::ConFrameBuilder;
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("O", 0.0, 0.0, 0.0, [false; 3], 0, 16.0);
+        b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let frame = b.build();
+        let frame_ptr = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
+        let sel = CString::new("name O").unwrap();
+        let mut out: *mut RKRSelectionResult = ptr::null_mut();
+        let st = unsafe { rkr_frame_select(frame_ptr, sel.as_ptr(), &mut out) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(!out.is_null());
+        let n = unsafe { rkr_selection_result_match_count(out) };
+        assert_eq!(n, 1);
+        let mut atoms = [u64::MAX; 4];
+        let mut size = 0u32;
+        let st2 = unsafe { rkr_selection_result_match_at(out, 0, atoms.as_mut_ptr(), &mut size) };
+        assert_eq!(st2, RKRStatus::RKR_STATUS_SUCCESS);
+        assert_eq!(size, 1);
+        assert_eq!(atoms[0], 0);
+        unsafe {
+            rkr_selection_result_free(out);
+            free_rkr_frame(frame_ptr);
+        }
     }
 }

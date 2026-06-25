@@ -1229,5 +1229,61 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
+    #[cfg(feature = "chemfiles")]
+    {
+        m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
+        m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
+        m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
+    }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Chemfiles selection (feature = "chemfiles" + "python")
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "chemfiles")]
+#[pyfunction]
+fn has_chemfiles_support() -> bool {
+    true
+}
+
+/// Evaluate a chemfiles selection string on a `ConFrame`.
+///
+/// Returns a dict with keys:
+/// - `selection`: str
+/// - `context_size`: int (1=atom, 2=pair, ...)
+/// - `matches`: list[list[int]] each inner list has 1-4 atom indices
+/// - `primary_indices`: list[int] first atom of each match
+#[cfg(feature = "chemfiles")]
+#[pyfunction]
+fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::evaluate_selection_on_con_frame;
+    let rust_frame = frame.to_con_frame(py)?;
+    let result = evaluate_selection_on_con_frame(selection, &rust_frame).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!("chemfiles selection failed: {e}"))
+    })?;
+    let matches: Vec<Vec<usize>> = result
+        .matches
+        .iter()
+        .map(|m| m.indices().to_vec())
+        .collect();
+    let primary: Vec<usize> = result.primary_indices();
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item("selection", result.selection)?;
+    dict.set_item("context_size", result.context_size)?;
+    dict.set_item("matches", matches)?;
+    dict.set_item("primary_indices", primary)?;
+    Ok(dict.into())
+}
+
+/// Atom-context selection: returns sorted unique atom indices (e.g. ``name O``).
+#[cfg(feature = "chemfiles")]
+#[pyfunction]
+fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Vec<usize>> {
+    use crate::chemfiles_selection::select_atom_indices as rust_select;
+    let rust_frame = frame.to_con_frame(py)?;
+    rust_select(selection, &rust_frame).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!("chemfiles selection failed: {e}"))
+    })
 }
