@@ -79,6 +79,120 @@ function _check_status(status::Cint, operation::String)
     error("$operation: $(_status_message(status))")
 end
 
+"""
+    has_chemfiles_support() -> Bool
+
+True when the linked `libreadcon_core` was built with the chemfiles feature
+(selection + optional multi-format import). Selection APIs require this.
+"""
+function has_chemfiles_support()
+    return ccall(_lib_symbol(:rkr_has_chemfiles_support), UInt8, ()) != 0
+end
+
+"""
+    select_on_frame(frame::ConFrame, selection::String) -> NamedTuple
+
+Evaluate a chemfiles selection-language string on `frame` via the C FFI
+(`rkr_frame_select`). Requires a chemfiles-enabled library build.
+
+Returns `(selection, context_size, matches)` where each match is a `Vector{UInt64}`
+of atom indices in CON `atom_data` order (1–4 indices depending on context).
+
+Topology contexts (`bonds:`, `angles:`, `dihedrals:`, `is_bonded`, …) need
+optional frame `metadata["bonds"]` (0-based `atom_data` pairs). Without bonds,
+those selectors return zero matches; name/type/`all` still work.
+"""
+function select_on_frame(frame::ConFrame, selection::String)
+    has_chemfiles_support() || error(
+        "select_on_frame requires libreadcon_core built with --features chemfiles"
+    )
+    handle = _build_frame_handle(frame)
+    try
+        out = Ref{Ptr{Cvoid}}(C_NULL)
+        status = ccall(
+            _lib_symbol(:rkr_frame_select),
+            Cint,
+            (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}),
+            handle,
+            selection,
+            out,
+        )
+        _check_status(status, "rkr_frame_select")
+        result_handle = out[]
+        result_handle == C_NULL && error("rkr_frame_select returned null result")
+        try
+            n = ccall(
+                _lib_symbol(:rkr_selection_result_match_count),
+                UInt64,
+                (Ptr{Cvoid},),
+                result_handle,
+            )
+            ctx = ccall(
+                _lib_symbol(:rkr_selection_result_context_size),
+                UInt32,
+                (Ptr{Cvoid},),
+                result_handle,
+            )
+            matches = Vector{Vector{UInt64}}()
+            for i in 0:(n - 1)
+                atoms = Vector{UInt64}(undef, 4)
+                fill!(atoms, typemax(UInt64))
+                size_ref = Ref{UInt32}(0)
+                st = ccall(
+                    _lib_symbol(:rkr_selection_result_match_at),
+                    Cint,
+                    (Ptr{Cvoid}, UInt64, Ptr{UInt64}, Ref{UInt32}),
+                    result_handle,
+                    i,
+                    atoms,
+                    size_ref,
+                )
+                _check_status(st, "rkr_selection_result_match_at")
+                sz = Int(size_ref[])
+                push!(matches, atoms[1:sz])
+            end
+            return (
+                selection = selection,
+                context_size = Int(ctx),
+                matches = matches,
+            )
+        finally
+            ccall(_lib_symbol(:rkr_selection_result_free), Cvoid, (Ptr{Cvoid},), result_handle)
+        end
+    finally
+        handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
+    end
+end
+
+"""
+    select_atom_indices(frame::ConFrame, selection::String) -> Vector{Int}
+
+Atom-context convenience: sorted unique primary indices (e.g. `"name O"`).
+Errors if the selection is not atom context (size 1).
+"""
+function select_atom_indices(frame::ConFrame, selection::String)
+    res = select_on_frame(frame, selection)
+    res.context_size == 1 || error(
+        "select_atom_indices requires atom-context selection, got context_size=$(res.context_size)"
+    )
+    idxs = sort(unique(Int(m[1]) for m in res.matches))
+    return idxs
+end
+
+"""
+    frame_bond_count(frame::ConFrame) -> Int
+
+Number of optional topology bonds in frame metadata (`rkr_frame_bond_count`).
+"""
+function frame_bond_count(frame::ConFrame)
+    handle = _build_frame_handle(frame)
+    try
+        return Int(ccall(_lib_symbol(:rkr_frame_bond_count), UInt64, (Ptr{Cvoid},), handle))
+    finally
+        handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
+    end
+end
+
 function _take_string(c_str::Ptr{UInt8})
     c_str == C_NULL && return ""
     value = unsafe_string(c_str)

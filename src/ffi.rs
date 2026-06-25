@@ -3060,4 +3060,53 @@ mod tests {
             free_rkr_frame(frame_ptr);
         }
     }
+
+    /// C surface: chemfiles selection.cpp chain topology via `rkr_frame_select`.
+    #[cfg(feature = "chemfiles")]
+    #[test]
+    fn rkr_frame_select_cpp_topology_bonds_angles_dihedrals() {
+        use crate::types::{Bond, ConFrameBuilder};
+        // H-O-O-H chain (chemfiles testing_frame topology), bonds in atom_data order.
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 0.0, 1.0, 2.0, [false; 3], 0, 1.0);
+        b.add_atom("O", 1.0, 2.0, 3.0, [false; 3], 1, 16.0);
+        b.add_atom("O", 2.0, 3.0, 4.0, [false; 3], 2, 16.0);
+        b.add_atom("H", 3.0, 4.0, 5.0, [false; 3], 3, 1.0);
+        let mut frame = b.build();
+        let id_to = |id: u64| {
+            frame
+                .atom_data
+                .iter()
+                .position(|a| a.atom_id == id)
+                .unwrap() as u32
+        };
+        frame.header.set_bonds(&[
+            Bond::new(id_to(0), id_to(1)),
+            Bond::new(id_to(1), id_to(2)),
+            Bond::new(id_to(2), id_to(3)),
+        ]);
+        let frame_ptr = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
+
+        let run = |sel: &str| -> (u64, u32) {
+            let csel = CString::new(sel).unwrap();
+            let mut out: *mut RKRSelectionResult = ptr::null_mut();
+            let st = unsafe { rkr_frame_select(frame_ptr, csel.as_ptr(), &mut out) };
+            assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS, "select failed: {sel}");
+            let n = unsafe { rkr_selection_result_match_count(out) };
+            let ctx = unsafe { rkr_selection_result_context_size(out) };
+            unsafe { rkr_selection_result_free(out) };
+            (n, ctx)
+        };
+
+        assert_eq!(run("bonds: all"), (3, 2));
+        assert_eq!(run("angles: all"), (2, 3));
+        assert_eq!(run("dihedrals: all"), (1, 4));
+        assert_eq!(run("bonds: name(#1) O and type(#2) H").0, 2);
+        assert_eq!(
+            run("two: type(#1) H and name(#2) O and is_bonded(#1, #2)").0,
+            run("bonds: type(#1) H and name(#2) O").0
+        );
+
+        unsafe { free_rkr_frame(frame_ptr) };
+    }
 }
