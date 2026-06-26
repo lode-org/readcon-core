@@ -866,13 +866,13 @@ metadata exposed by ``metadata_json``.
 *v0.13.0.* Documentation for chemfiles ingress is organized in the
 `Diátaxis <https://diataxis.fr/>`_ style (do not use this page as the primary guide):
 
-- **Tutorial** (learning, end-to-end XYZ→CON→selection): :doc:`chemfiles-tutorial`
+- **Tutorial** (learning, end-to-end XYZ→CON→selection): `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
 
-- **How-to** (task recipes, batch convert, C API): :doc:`chemfiles-howto`
+- **How-to** (task recipes, batch convert, C API): `chemfiles-howto.org <chemfiles-howto.rst>`_
 
-- **Explanation** (why optional chemfiles, bonds in JSON, index remap): :doc:`chemfiles-explain`
+- **Explanation** (why optional chemfiles, bonds in JSON, index remap): `chemfiles-explain.org <chemfiles-explain.rst>`_
 
-- **Reference** (API tables, grammar subset, install matrix): :doc:`chemfiles-reference`
+- **Reference** (API tables, grammar subset, install matrix): `chemfiles-reference.org <chemfiles-reference.rst>`_
 
 Start with the tutorial if you need to ****drive conversion from XYZ/PDB/GRO/…****
 into CON for LODE tools.
