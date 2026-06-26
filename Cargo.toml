@@ -111,3 +111,7 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 strip = "symbols"
+
+[[example]]
+name = "cachegrind_harness"
+path = "examples/cachegrind_harness.rs"
