@@ -62,6 +62,8 @@ html_theme_options = {
     "globaltoc_expand_depth": 1,
     "light_logo": "_static/logo-light.svg",
     "dark_logo": "_static/logo-dark.svg",
+    # Social / share card (Shibuya opengraph partial)
+    "og_image": "_static/figures/ecosystem-full.png",
     "nav_links": [
         {"title": "Start", "url": "getting-started"},
         {

@@ -74,7 +74,7 @@ into CON without inventing another reader for each format.
 #+begin_export rst
 .. toctree::
    :maxdepth: 1
-   :caption: Start
+   :caption: Tutorials & start
 
    getting-started
    tutorials
@@ -82,7 +82,7 @@ into CON without inventing another reader for each format.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Chemfiles ingress
+   :caption: How-to & tutorials (chemfiles)
 
    chemfiles-tutorial
    chemfiles-notebook
@@ -92,7 +92,7 @@ into CON without inventing another reader for each format.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Format & design
+   :caption: Explanation & design
 
    spec
    evolution
@@ -101,7 +101,7 @@ into CON without inventing another reader for each format.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Bindings & API
+   :caption: Reference (API)
 
    bindings
    rpc
@@ -109,7 +109,7 @@ into CON without inventing another reader for each format.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Project
+   :caption: Project meta
 
    contributing
    changelog

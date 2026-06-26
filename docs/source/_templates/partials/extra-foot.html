@@ -1,0 +1,21 @@
+<script>
+/* Skip link (WCAG 2.4.1 Bypass Blocks) — injected so we need not fork Shibuya layout */
+(function () {
+  if (document.getElementById("rc-skip-link")) return;
+  var a = document.createElement("a");
+  a.id = "rc-skip-link";
+  a.className = "rc-skip-link";
+  a.href = "#rc-main-content";
+  a.textContent = "Skip to main content";
+  document.body.insertBefore(a, document.body.firstChild);
+  var main =
+    document.querySelector("main") ||
+    document.querySelector("article") ||
+    document.querySelector(".sy-main") ||
+    document.querySelector(".yue");
+  if (main && !document.getElementById("rc-main-content")) {
+    main.id = "rc-main-content";
+    if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+  }
+})();
+</script>

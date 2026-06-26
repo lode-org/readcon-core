@@ -42,6 +42,7 @@ setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Ins
 docbld-full = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"], description = "Docs including fresh rustdocgen" }
 orgbld = "emacs --batch -l docs/export.el"
 docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] }
+linkcheck = { cmd = "lychee --config lychee.toml 'docs/build/**/*.html'", depends-on = ["docbld"], description = "Lychee link check on built HTML" }
 
 [environments]
 default = { solve-group = "default" }
