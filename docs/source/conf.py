@@ -28,10 +28,10 @@ rust_crates = {
 }
 rust_doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates")
 rust_rustdoc_fmt = "rst"
-# Prefer committed / previously generated crate RST so CI does not require
-# `cargo install sphinx-rustdocgen` on every docs job (rsx-rs still uses always
-# when the tool is installed; we fall back for reliability).
-rust_generate_mode = "always" if shutil.which("sphinx-rustdocgen") else "never"
+# Use committed crate RST under docs/source/crates/ (regenerate locally with
+# `pixi r -e docs docbld-full` when API docs change). Avoids `cargo install
+# sphinx-rustdocgen` / cargo-install-path failures in CI docs jobs.
+rust_generate_mode = "never"
 
 html_theme = "shibuya"
 html_static_path = ["_static"]
