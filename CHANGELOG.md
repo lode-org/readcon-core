@@ -1,20 +1,42 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## v0.13.0 - 2026-06-24
+## v0.13.0 - 2026-06-26
 #### Features
 - (**topology**) optional frame `metadata["bonds"]` (0-based `atom_data` pairs; not a `sections` block; CON spec stays v2)
 - (**chemfiles**) import chemfiles topology into `bonds` with `atom_id` remap after type-grouped build; project for selection
 - (**chemfiles**) selection grammar via Rust/C/C++/Python/Julia (`rkr_frame_select`, `ConFrame::select`, `select_on_frame`)
 - (**chemfiles**) optional multi-format trajectory import into `ConFrame` (`--features chemfiles`)
 - (**ffi**) `rkr_frame_bond_count` / `rkr_frame_bond_at`; C++ `Bond` + Python `bonds` / `has_bonds`
+- (**ffi**) C ABI for gzip/zstd compressed `ConFrameWriter` paths
+- (**cpp**) compressed `ConFrameWriter` wrappers
 - (**julia**) `has_chemfiles_support`, `select_on_frame`, `select_atom_indices`, `frame_bond_count` (FFI pass-through)
 #### Tests
 - (**chemfiles**) `chemfiles_selection_cpp_regression` ported from chemfiles `tests/selection.cpp` topology sections
 - (**chemfiles**) `name H1` / display-name sidecars after import (no longer a documented gap)
 - (**surfaces**) C `rkr_frame_select` topology smoke; Python/Julia selection tests (skip without chemfiles build)
+- (**ffi**) compressed writer round-trip through the C ABI
 #### Documentation
 - (**spec/bindings/faq**) optional `bonds`, `chemfiles_atom_names`/`types` sidecars, multiset/remap contract, remaining gaps (no CON spec v3)
+#### Build
+- (**chemfiles**) `CMAKE_POLICY_VERSION_MINIMUM=3.5` via `.cargo/config.toml` for modern CMake + chemfiles-sys
+#### Notes
+- First **main-line** release carrying the v0.11–v0.12 SoA/DLPack/ArcArray surface plus chemfiles topology/selection.
+- `chemfiles` remains an **optional** Cargo feature (not default); wheels and the crates.io package build without it unless enabled.
+
+- - -
+
+## v0.12.0 - 2026-05-10
+#### Features
+- (**builder**) per-atom buffers as `ArcArray2`/`ArcArray1` with copy-on-write sharing
+- (**ffi+cpp**) `rkr_frame_builder_clone` / `ConFrameBuilder::clone()` for cheap NEB-style template clones
+- (**builder**) `set_atom_id(i, atom_id)` post-add mutation
+- (**ffi+cpp**) raw-pointer data accessors for in-process hot paths
+#### Fixes
+- (**helpers**) map D and T to Z=1; clarify informational/non-binding symbol semantics
+- (**cbindgen**) forward-declare `RKRDLManagedTensorVersioned` in the C header
+#### Documentation
+- (**bib**) cite Bigi et al. (metatensor JCP 2026) via sphinxcontrib-bibtex
 
 - - -
 
