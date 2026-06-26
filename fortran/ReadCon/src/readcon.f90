@@ -1,139 +1,309 @@
-! ReadCon — first-class Fortran 2003/2008 bindings over include/readcon-core.h
-! Full ISO_C_BINDING types for CAtom/CFrame + ergonomic metadata helpers.
+! ReadCon — production Fortran bindings (ISO_C_BINDING) over include/readcon-core.h
+! fpm package: fortran/ReadCon  |  Tests: fpm test  |  Link libreadcon_core
 module readcon
   use, intrinsic :: iso_c_binding
-  use, intrinsic :: iso_fortran_env, only: real64, int64
+  use, intrinsic :: iso_fortran_env, only: real64, int64, int32
   implicit none
   private
 
-  public :: rkr_status_success, rkr_status_null_pointer, rkr_status_internal_error
+  public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
   public :: catom_t, cframe_t
-  public :: rkr_con_spec_version, rkr_library_version
-  public :: frame_t
-  public :: read_first_frame, read_all_frame_count
-  public :: c_string_to_f, f_to_c_string
+  public :: library_version, con_spec_version, has_chemfiles_support, status_message
+  public :: symbol_to_z, z_to_symbol
+  public :: frame_t, iterator_t, builder_t, writer_t
+  public :: read_first_frame, open_iterator
 
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
-  integer(c_int), parameter :: rkr_status_internal_error = -7
+  integer(c_int), parameter :: rkr_status_selection_error = -10
 
-  ! Transparent C layout (must match include/readcon-core.h CAtom / CFrame)
   type, bind(C), public :: catom_t
-    integer(c_int64_t) :: atomic_number = 0
-    real(c_double) :: x = 0, y = 0, z = 0
-    integer(c_int64_t) :: atom_id = 0
-    real(c_double) :: mass = 0
-    logical(c_bool) :: is_fixed = .false.
-    logical(c_bool) :: fixed_x = .false., fixed_y = .false., fixed_z = .false.
-    real(c_double) :: vx = 0, vy = 0, vz = 0
-    logical(c_bool) :: has_velocity = .false.
-    real(c_double) :: fx = 0, fy = 0, fz = 0
-    logical(c_bool) :: has_forces = .false.
-    real(c_double) :: energy = 0
-    logical(c_bool) :: has_energy = .false.
-  end type catom_t
+    integer(c_int64_t) :: atomic_number = 0_c_int64_t
+    real(c_double) :: x = 0.0_c_double, y = 0.0_c_double, z = 0.0_c_double
+    integer(c_int64_t) :: atom_id = 0_c_int64_t
+    real(c_double) :: mass = 0.0_c_double
+    logical(c_bool) :: is_fixed = .false._c_bool
+    logical(c_bool) :: fixed_x = .false._c_bool, fixed_y = .false._c_bool, fixed_z = .false._c_bool
+    real(c_double) :: vx = 0.0_c_double, vy = 0.0_c_double, vz = 0.0_c_double
+    logical(c_bool) :: has_velocity = .false._c_bool
+    real(c_double) :: fx = 0.0_c_double, fy = 0.0_c_double, fz = 0.0_c_double
+    logical(c_bool) :: has_forces = .false._c_bool
+    real(c_double) :: energy = 0.0_c_double
+    logical(c_bool) :: has_energy = .false._c_bool
+  end type
 
   type, bind(C), public :: cframe_t
     type(c_ptr) :: atoms = c_null_ptr
     integer(c_size_t) :: num_atoms = 0_c_size_t
-    real(c_double) :: cell(3) = 0
-    real(c_double) :: angles(3) = 0
-    logical(c_bool) :: has_velocities = .false.
-    logical(c_bool) :: has_forces = .false.
-    logical(c_bool) :: has_energies = .false.
-  end type cframe_t
+    real(c_double) :: cell(3) = 0.0_c_double
+    real(c_double) :: angles(3) = 0.0_c_double
+    logical(c_bool) :: has_velocities = .false._c_bool
+    logical(c_bool) :: has_forces = .false._c_bool
+    logical(c_bool) :: has_energies = .false._c_bool
+  end type
 
-  ! High-level Fortran frame: owns opaque RKRConFrame* + optional CFrame view
   type :: frame_t
     private
     type(c_ptr) :: handle = c_null_ptr
     type(c_ptr) :: cview = c_null_ptr
   contains
-    procedure :: valid => frame_valid
-    procedure :: free => frame_free
-    procedure :: natoms => frame_natoms
-    procedure :: ensure_cview => frame_ensure_cview
-    procedure :: atom => frame_atom
-    procedure :: cell_lengths => frame_cell
-    procedure :: cell_angles => frame_angles
-    procedure :: metadata_json => frame_metadata_json
-    procedure :: energy => frame_energy
-    procedure :: potential_type => frame_potential_type
-    procedure :: frame_index => frame_frame_index
-    procedure :: sim_time => frame_time
-    procedure :: timestep => frame_timestep
-    ! No FINAL: callers must call %free() (avoids double-free with explicit cleanup)
-  end type frame_t
+    procedure :: valid => fr_valid
+    procedure :: free => fr_free
+    procedure :: natoms => fr_natoms
+    procedure :: atom => fr_atom
+    procedure :: cell_lengths => fr_cell
+    procedure :: cell_angles => fr_angles
+    procedure :: has_velocities => fr_has_vel
+    procedure :: has_forces => fr_has_frc
+    procedure :: metadata_json => fr_meta
+    procedure :: energy => fr_energy
+    procedure :: potential_type => fr_pot
+    procedure :: frame_index => fr_fidx
+    procedure :: sim_time => fr_time
+    procedure :: timestep => fr_dt
+    procedure :: neb_bead => fr_neb_bead
+    procedure :: neb_band => fr_neb_band
+    procedure :: bond_count => fr_nbonds
+    procedure :: bond_at => fr_bond_at
+    procedure :: atom_index_by_id => fr_id_index
+    procedure :: spec_version => fr_spec
+    procedure :: select => fr_select
+    procedure :: write_path => fr_write_path
+    procedure :: handle_ptr => fr_handle
+  end type
+
+  type :: iterator_t
+    private
+    type(c_ptr) :: it = c_null_ptr
+  contains
+    procedure :: valid => it_valid
+    procedure :: next => it_next
+    procedure :: free => it_free
+  end type
+
+  type :: builder_t
+    private
+    type(c_ptr) :: b = c_null_ptr
+  contains
+    procedure :: valid => bd_valid
+    procedure :: free => bd_free
+    procedure :: add_atom => bd_add_atom
+    procedure :: set_energy => bd_set_energy
+    procedure :: set_metadata_json => bd_set_meta
+    procedure :: set_frame_index => bd_set_fidx
+    procedure :: build => bd_build
+  end type
+
+  type :: writer_t
+    private
+    type(c_ptr) :: w = c_null_ptr
+  contains
+    procedure :: valid => wr_valid
+    procedure :: free => wr_free
+    procedure :: extend_one => wr_extend_one
+  end type
 
   interface
-    function rkr_con_spec_version_c() bind(C, name="rkr_con_spec_version")
+    function c_rkr_con_spec_version() bind(C, name="rkr_con_spec_version")
       import :: c_int32_t
-      integer(c_int32_t) :: rkr_con_spec_version_c
+      integer(c_int32_t) :: c_rkr_con_spec_version
     end function
-    function rkr_library_version_c() bind(C, name="rkr_library_version")
+    function c_rkr_library_version() bind(C, name="rkr_library_version")
       import :: c_ptr
-      type(c_ptr) :: rkr_library_version_c
+      type(c_ptr) :: c_rkr_library_version
     end function
-    function rkr_read_first_frame_c(filename) bind(C, name="rkr_read_first_frame")
+    function c_rkr_has_chemfiles_support() bind(C, name="rkr_has_chemfiles_support")
+      import :: c_int8_t
+      integer(c_int8_t) :: c_rkr_has_chemfiles_support
+    end function
+    function c_rkr_status_message(st) bind(C, name="rkr_status_message")
+      import :: c_int, c_ptr
+      integer(c_int), value :: st
+      type(c_ptr) :: c_rkr_status_message
+    end function
+    function c_rkr_read_first_frame(fn) bind(C, name="rkr_read_first_frame")
       import :: c_char, c_ptr
-      character(kind=c_char), intent(in) :: filename(*)
-      type(c_ptr) :: rkr_read_first_frame_c
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_rkr_read_first_frame
     end function
-    function rkr_read_all_frames_c(filename, num_frames) bind(C, name="rkr_read_all_frames")
-      import :: c_char, c_ptr, c_size_t
-      character(kind=c_char), intent(in) :: filename(*)
-      integer(c_size_t), intent(out) :: num_frames
-      type(c_ptr) :: rkr_read_all_frames_c
-    end function
-    subroutine free_rkr_frame_c(frame) bind(C, name="free_rkr_frame")
+    subroutine c_free_rkr_frame(f) bind(C, name="free_rkr_frame")
       import :: c_ptr
-      type(c_ptr), value :: frame
+      type(c_ptr), value :: f
     end subroutine
-    subroutine free_rkr_frame_array_c(frames, n) bind(C, name="free_rkr_frame_array")
-      import :: c_ptr, c_size_t
-      type(c_ptr), value :: frames
-      integer(c_size_t), value :: n
-    end subroutine
-    function rkr_frame_to_c_frame_c(frame) bind(C, name="rkr_frame_to_c_frame")
+    function c_rkr_frame_to_c_frame(f) bind(C, name="rkr_frame_to_c_frame")
       import :: c_ptr
-      type(c_ptr), value :: frame
-      type(c_ptr) :: rkr_frame_to_c_frame_c
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_to_c_frame
     end function
-    subroutine free_c_frame_c(cframe) bind(C, name="free_c_frame")
+    subroutine c_free_c_frame(f) bind(C, name="free_c_frame")
       import :: c_ptr
-      type(c_ptr), value :: cframe
+      type(c_ptr), value :: f
     end subroutine
-    function rkr_frame_metadata_json_c(frame) bind(C, name="rkr_frame_metadata_json")
+    function c_rkr_frame_metadata_json(f) bind(C, name="rkr_frame_metadata_json")
       import :: c_ptr
-      type(c_ptr), value :: frame
-      type(c_ptr) :: rkr_frame_metadata_json_c
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_metadata_json
     end function
-    function rkr_frame_energy_c(frame) bind(C, name="rkr_frame_energy")
+    function c_rkr_frame_energy(f) bind(C, name="rkr_frame_energy")
       import :: c_ptr, c_double
-      type(c_ptr), value :: frame
-      real(c_double) :: rkr_frame_energy_c
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_energy
     end function
-    function rkr_frame_potential_type_c(frame) bind(C, name="rkr_frame_potential_type")
+    function c_rkr_frame_potential_type(f) bind(C, name="rkr_frame_potential_type")
       import :: c_ptr
-      type(c_ptr), value :: frame
-      type(c_ptr) :: rkr_frame_potential_type_c
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_potential_type
     end function
-    function rkr_frame_frame_index_c(frame) bind(C, name="rkr_frame_frame_index")
+    function c_rkr_frame_frame_index(f) bind(C, name="rkr_frame_frame_index")
       import :: c_ptr, c_int64_t
-      type(c_ptr), value :: frame
-      integer(c_int64_t) :: rkr_frame_frame_index_c
+      type(c_ptr), value :: f
+      integer(c_int64_t) :: c_rkr_frame_frame_index
     end function
-    function rkr_frame_time_c(frame) bind(C, name="rkr_frame_time")
+    function c_rkr_frame_time(f) bind(C, name="rkr_frame_time")
       import :: c_ptr, c_double
-      type(c_ptr), value :: frame
-      real(c_double) :: rkr_frame_time_c
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_time
     end function
-    function rkr_frame_timestep_c(frame) bind(C, name="rkr_frame_timestep")
+    function c_rkr_frame_timestep(f) bind(C, name="rkr_frame_timestep")
       import :: c_ptr, c_double
-      type(c_ptr), value :: frame
-      real(c_double) :: rkr_frame_timestep_c
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_timestep
     end function
-    subroutine rkr_free_string_c(s) bind(C, name="rkr_free_string")
+    function c_rkr_frame_neb_bead(f) bind(C, name="rkr_frame_neb_bead")
+      import :: c_ptr, c_int64_t
+      type(c_ptr), value :: f
+      integer(c_int64_t) :: c_rkr_frame_neb_bead
+    end function
+    function c_rkr_frame_neb_band(f) bind(C, name="rkr_frame_neb_band")
+      import :: c_ptr, c_int64_t
+      type(c_ptr), value :: f
+      integer(c_int64_t) :: c_rkr_frame_neb_band
+    end function
+    function c_rkr_frame_bond_count(f) bind(C, name="rkr_frame_bond_count")
+      import :: c_ptr, c_int64_t
+      type(c_ptr), value :: f
+      integer(c_int64_t) :: c_rkr_frame_bond_count
+    end function
+    function c_rkr_frame_bond_at(f, idx, i, j, has_o, ord) bind(C, name="rkr_frame_bond_at")
+      import :: c_ptr, c_int, c_int32_t, c_int64_t, c_int8_t
+      type(c_ptr), value :: f
+      integer(c_int64_t), value :: idx
+      integer(c_int32_t), intent(out) :: i, j, ord
+      integer(c_int8_t), intent(out) :: has_o
+      integer(c_int) :: c_rkr_frame_bond_at
+    end function
+    function c_rkr_frame_atom_index_by_id(f, aid) bind(C, name="rkr_frame_atom_index_by_id")
+      import :: c_ptr, c_int64_t
+      type(c_ptr), value :: f
+      integer(c_int64_t), value :: aid
+      integer(c_int64_t) :: c_rkr_frame_atom_index_by_id
+    end function
+    function c_rkr_frame_spec_version(f) bind(C, name="rkr_frame_spec_version")
+      import :: c_ptr, c_int32_t
+      type(c_ptr), value :: f
+      integer(c_int32_t) :: c_rkr_frame_spec_version
+    end function
+    function c_rkr_symbol_to_z(s) bind(C, name="rkr_symbol_to_z")
+      import :: c_char, c_int64_t
+      character(kind=c_char), intent(in) :: s(*)
+      integer(c_int64_t) :: c_rkr_symbol_to_z
+    end function
+    function c_rkr_z_to_symbol(z) bind(C, name="rkr_z_to_symbol")
+      import :: c_ptr, c_int64_t
+      integer(c_int64_t), value :: z
+      type(c_ptr) :: c_rkr_z_to_symbol
+    end function
+    function c_read_con_file_iterator(fn) bind(C, name="read_con_file_iterator")
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_read_con_file_iterator
+    end function
+    function c_con_frame_iterator_next(it) bind(C, name="con_frame_iterator_next")
+      import :: c_ptr
+      type(c_ptr), value :: it
+      type(c_ptr) :: c_con_frame_iterator_next
+    end function
+    subroutine c_free_con_frame_iterator(it) bind(C, name="free_con_frame_iterator")
+      import :: c_ptr
+      type(c_ptr), value :: it
+    end subroutine
+    function c_create_writer_from_path_c(fn) bind(C, name="create_writer_from_path_c")
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_create_writer_from_path_c
+    end function
+    subroutine c_free_rkr_writer(w) bind(C, name="free_rkr_writer")
+      import :: c_ptr
+      type(c_ptr), value :: w
+    end subroutine
+    function c_rkr_writer_extend(w, frames, n) bind(C, name="rkr_writer_extend")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: w
+      type(c_ptr), intent(in) :: frames(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_writer_extend
+    end function
+    function c_rkr_frame_new(cell, angles, pb0, pb1, pob0, pob1) bind(C, name="rkr_frame_new")
+      import :: c_ptr, c_double, c_char
+      real(c_double), intent(in) :: cell(*)
+      real(c_double), intent(in) :: angles(*)
+      type(c_ptr), value :: pb0, pb1, pob0, pob1
+      type(c_ptr) :: c_rkr_frame_new
+    end function
+    function c_rkr_frame_add_atom_with_fixed_mask(b, sym, x, y, z, aid, mass, fx, fy, fz) &
+         bind(C, name="rkr_frame_add_atom_with_fixed_mask")
+      import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
+      type(c_ptr), value :: b
+      character(kind=c_char), intent(in) :: sym(*)
+      real(c_double), value :: x, y, z, mass
+      integer(c_int64_t), value :: aid
+      logical(c_bool), value :: fx, fy, fz
+      integer(c_int) :: c_rkr_frame_add_atom_with_fixed_mask
+    end function
+    function c_rkr_frame_builder_set_energy(b, e) bind(C, name="rkr_frame_builder_set_energy")
+      import :: c_ptr, c_double, c_int
+      type(c_ptr), value :: b
+      real(c_double), value :: e
+      integer(c_int) :: c_rkr_frame_builder_set_energy
+    end function
+    function c_rkr_frame_builder_set_metadata_json(b, j) bind(C, name="rkr_frame_builder_set_metadata_json")
+      import :: c_ptr, c_char, c_int
+      type(c_ptr), value :: b
+      character(kind=c_char), intent(in) :: j(*)
+      integer(c_int) :: c_rkr_frame_builder_set_metadata_json
+    end function
+    function c_rkr_frame_builder_set_frame_index(b, i) bind(C, name="rkr_frame_builder_set_frame_index")
+      import :: c_ptr, c_int64_t, c_int
+      type(c_ptr), value :: b
+      integer(c_int64_t), value :: i
+      integer(c_int) :: c_rkr_frame_builder_set_frame_index
+    end function
+    function c_rkr_frame_builder_build(b) bind(C, name="rkr_frame_builder_build")
+      import :: c_ptr
+      type(c_ptr), value :: b
+      type(c_ptr) :: c_rkr_frame_builder_build
+    end function
+    subroutine c_free_rkr_frame_builder(b) bind(C, name="free_rkr_frame_builder")
+      import :: c_ptr
+      type(c_ptr), value :: b
+    end subroutine
+    function c_rkr_frame_select(f, sel, out) bind(C, name="rkr_frame_select")
+      import :: c_ptr, c_char, c_int
+      type(c_ptr), value :: f
+      character(kind=c_char), intent(in) :: sel(*)
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_select
+    end function
+    function c_rkr_selection_result_match_count(r) bind(C, name="rkr_selection_result_match_count")
+      import :: c_ptr, c_int64_t
+      type(c_ptr), value :: r
+      integer(c_int64_t) :: c_rkr_selection_result_match_count
+    end function
+    subroutine c_rkr_selection_result_free(r) bind(C, name="rkr_selection_result_free")
+      import :: c_ptr
+      type(c_ptr), value :: r
+    end subroutine
+    subroutine c_rkr_free_string(s) bind(C, name="rkr_free_string")
       import :: c_ptr
       type(c_ptr), value :: s
     end subroutine
@@ -141,24 +311,24 @@ module readcon
 
 contains
 
-  integer function rkr_con_spec_version()
-    rkr_con_spec_version = int(rkr_con_spec_version_c())
-  end function
+  subroutine to_c(f, c)
+    character(len=*), intent(in) :: f
+    character(kind=c_char), allocatable, intent(out) :: c(:)
+    integer :: n, i
+    n = len_trim(f)
+    allocate(c(n+1))
+    do i = 1, n
+      c(i) = f(i:i)
+    end do
+    c(n+1) = c_null_char
+  end subroutine
 
-  function rkr_library_version() result(ver)
-    character(len=:), allocatable :: ver
-    ver = c_string_to_f(rkr_library_version_c(), owned=.false.)
-  end function
-
-  function c_string_to_f(p, owned) result(s)
+  function from_c(p, owned) result(s)
     type(c_ptr), intent(in) :: p
-    logical, intent(in), optional :: owned
+    logical, intent(in) :: owned
     character(len=:), allocatable :: s
     character(kind=c_char), pointer :: fp(:)
     integer :: n, i
-    logical :: do_free
-    do_free = .false.
-    if (present(owned)) do_free = owned
     if (.not. c_associated(p)) then
       s = ""
       return
@@ -173,165 +343,411 @@ contains
     do i = 1, n
       s(i:i) = fp(i)
     end do
-    if (do_free) call rkr_free_string_c(p)
+    if (owned) call c_rkr_free_string(p)
   end function
 
-  subroutine f_to_c_string(f, cpath)
-    character(len=*), intent(in) :: f
-    character(kind=c_char), allocatable, intent(out) :: cpath(:)
-    integer :: n, i
-    n = len_trim(f)
-    allocate(cpath(n + 1))
-    do i = 1, n
-      cpath(i) = f(i:i)
-    end do
-    cpath(n + 1) = c_null_char
-  end subroutine
+  integer function con_spec_version()
+    con_spec_version = int(c_rkr_con_spec_version())
+  end function
+
+  function library_version() result(s)
+    character(len=:), allocatable :: s
+    s = from_c(c_rkr_library_version(), .false.)
+  end function
+
+  logical function has_chemfiles_support()
+    has_chemfiles_support = (c_rkr_has_chemfiles_support() /= 0_c_int8_t)
+  end function
+
+  function status_message(st) result(s)
+    integer, intent(in) :: st
+    character(len=:), allocatable :: s
+    s = from_c(c_rkr_status_message(int(st, c_int)), .false.)
+  end function
+
+  integer(int64) function symbol_to_z(sym)
+    character(len=*), intent(in) :: sym
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(sym, c)
+    symbol_to_z = c_rkr_symbol_to_z(c)
+  end function
+
+  function z_to_symbol(z) result(s)
+    integer(int64), intent(in) :: z
+    character(len=:), allocatable :: s
+    s = from_c(c_rkr_z_to_symbol(int(z, c_int64_t)), .false.)
+  end function
 
   function read_first_frame(path) result(fr)
     character(len=*), intent(in) :: path
     type(frame_t) :: fr
-    character(kind=c_char), allocatable :: cpath(:)
-    call f_to_c_string(path, cpath)
-    fr%handle = rkr_read_first_frame_c(cpath)
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    fr%handle = c_rkr_read_first_frame(c)
     fr%cview = c_null_ptr
   end function
 
-  !> Count frames via rkr_read_all_frames (allocates then frees).
-  integer function read_all_frame_count(path)
+  function open_iterator(path) result(it)
     character(len=*), intent(in) :: path
-    character(kind=c_char), allocatable :: cpath(:)
-    type(c_ptr) :: arr
-    integer(c_size_t) :: n
-    call f_to_c_string(path, cpath)
-    arr = rkr_read_all_frames_c(cpath, n)
-    if (c_associated(arr)) then
-      call free_rkr_frame_array_c(arr, n)
-      read_all_frame_count = int(n)
-    else
-      read_all_frame_count = -1
-    end if
+    type(iterator_t) :: it
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    it%it = c_read_con_file_iterator(c)
   end function
 
-  logical function frame_valid(self)
+  logical function fr_valid(self)
     class(frame_t), intent(in) :: self
-    frame_valid = c_associated(self%handle)
+    fr_valid = c_associated(self%handle)
   end function
 
-  subroutine frame_free(self)
+  subroutine fr_free(self)
     class(frame_t), intent(inout) :: self
     if (c_associated(self%cview)) then
-      call free_c_frame_c(self%cview)
+      call c_free_c_frame(self%cview)
       self%cview = c_null_ptr
     end if
     if (c_associated(self%handle)) then
-      call free_rkr_frame_c(self%handle)
+      call c_free_rkr_frame(self%handle)
       self%handle = c_null_ptr
     end if
   end subroutine
 
-  subroutine frame_ensure_cview(self)
+  type(c_ptr) function fr_handle(self)
+    class(frame_t), intent(in) :: self
+    fr_handle = self%handle
+  end function
+
+  subroutine ensure_view(self)
     class(frame_t), intent(inout) :: self
-    if (.not. c_associated(self%handle)) return
-    if (.not. c_associated(self%cview)) then
-      self%cview = rkr_frame_to_c_frame_c(self%handle)
+    if (c_associated(self%handle) .and. .not. c_associated(self%cview)) then
+      self%cview = c_rkr_frame_to_c_frame(self%handle)
     end if
   end subroutine
 
-  integer function frame_natoms(self)
+  integer function fr_natoms(self)
     class(frame_t), intent(inout) :: self
     type(cframe_t), pointer :: cf
-    call self%ensure_cview()
-    frame_natoms = 0
+    fr_natoms = 0
+    call ensure_view(self)
     if (.not. c_associated(self%cview)) return
     call c_f_pointer(self%cview, cf)
-    frame_natoms = int(cf%num_atoms)
+    fr_natoms = int(cf%num_atoms)
   end function
 
-  function frame_atom(self, i) result(a)
+  function fr_atom(self, i) result(a)
     class(frame_t), intent(inout) :: self
     integer, intent(in) :: i
     type(catom_t) :: a
     type(cframe_t), pointer :: cf
     type(catom_t), pointer :: atoms(:)
-    call self%ensure_cview()
     a = catom_t()
+    call ensure_view(self)
     if (.not. c_associated(self%cview)) return
     call c_f_pointer(self%cview, cf)
-    if (i < 1 .or. i > int(cf%num_atoms)) return
-    if (.not. c_associated(cf%atoms)) return
+    if (i < 1 .or. i > int(cf%num_atoms) .or. .not. c_associated(cf%atoms)) return
     call c_f_pointer(cf%atoms, atoms, [int(cf%num_atoms)])
     a = atoms(i)
   end function
 
-  subroutine frame_cell(self, lengths)
+  subroutine fr_cell(self, v)
     class(frame_t), intent(inout) :: self
-    real(real64), intent(out) :: lengths(3)
+    real(real64), intent(out) :: v(3)
     type(cframe_t), pointer :: cf
-    call self%ensure_cview()
-    lengths = 0
+    v = 0.0_real64
+    call ensure_view(self)
     if (.not. c_associated(self%cview)) return
     call c_f_pointer(self%cview, cf)
-    lengths = real(cf%cell, kind=real64)
+    v = real(cf%cell, real64)
   end subroutine
 
-  subroutine frame_angles(self, ang)
+  subroutine fr_angles(self, v)
     class(frame_t), intent(inout) :: self
-    real(real64), intent(out) :: ang(3)
+    real(real64), intent(out) :: v(3)
     type(cframe_t), pointer :: cf
-    call self%ensure_cview()
-    ang = 0
+    v = 0.0_real64
+    call ensure_view(self)
     if (.not. c_associated(self%cview)) return
     call c_f_pointer(self%cview, cf)
-    ang = real(cf%angles, kind=real64)
+    v = real(cf%angles, real64)
   end subroutine
 
-  function frame_metadata_json(self) result(s)
+  logical function fr_has_vel(self)
+    class(frame_t), intent(inout) :: self
+    type(cframe_t), pointer :: cf
+    fr_has_vel = .false.
+    call ensure_view(self)
+    if (.not. c_associated(self%cview)) return
+    call c_f_pointer(self%cview, cf)
+    fr_has_vel = logical(cf%has_velocities)
+  end function
+
+  logical function fr_has_frc(self)
+    class(frame_t), intent(inout) :: self
+    type(cframe_t), pointer :: cf
+    fr_has_frc = .false.
+    call ensure_view(self)
+    if (.not. c_associated(self%cview)) return
+    call c_f_pointer(self%cview, cf)
+    fr_has_frc = logical(cf%has_forces)
+  end function
+
+  function fr_meta(self) result(s)
     class(frame_t), intent(in) :: self
     character(len=:), allocatable :: s
-    type(c_ptr) :: p
     s = ""
     if (.not. c_associated(self%handle)) return
-    p = rkr_frame_metadata_json_c(self%handle)
-    s = c_string_to_f(p, owned=.true.)
+    s = from_c(c_rkr_frame_metadata_json(self%handle), .true.)
   end function
 
-  real(real64) function frame_energy(self)
+  real(real64) function fr_energy(self)
     class(frame_t), intent(in) :: self
-    frame_energy = 0
+    fr_energy = 0.0_real64
     if (.not. c_associated(self%handle)) return
-    frame_energy = real(rkr_frame_energy_c(self%handle), kind=real64)
+    fr_energy = real(c_rkr_frame_energy(self%handle), real64)
   end function
 
-  function frame_potential_type(self) result(s)
+  function fr_pot(self) result(s)
     class(frame_t), intent(in) :: self
     character(len=:), allocatable :: s
-    type(c_ptr) :: p
     s = ""
     if (.not. c_associated(self%handle)) return
-    p = rkr_frame_potential_type_c(self%handle)
-    s = c_string_to_f(p, owned=.true.)
+    s = from_c(c_rkr_frame_potential_type(self%handle), .true.)
   end function
 
-  integer(int64) function frame_frame_index(self)
+  integer(int64) function fr_fidx(self)
     class(frame_t), intent(in) :: self
-    frame_frame_index = -1_int64
+    fr_fidx = -1_int64
     if (.not. c_associated(self%handle)) return
-    frame_frame_index = rkr_frame_frame_index_c(self%handle)
+    fr_fidx = c_rkr_frame_frame_index(self%handle)
   end function
 
-  real(real64) function frame_time(self)
+  real(real64) function fr_time(self)
     class(frame_t), intent(in) :: self
-    frame_time = 0
+    fr_time = 0.0_real64
     if (.not. c_associated(self%handle)) return
-    frame_time = real(rkr_frame_time_c(self%handle), kind=real64)
+    fr_time = real(c_rkr_frame_time(self%handle), real64)
   end function
 
-  real(real64) function frame_timestep(self)
+  real(real64) function fr_dt(self)
     class(frame_t), intent(in) :: self
-    frame_timestep = 0
+    fr_dt = 0.0_real64
     if (.not. c_associated(self%handle)) return
-    frame_timestep = real(rkr_frame_timestep_c(self%handle), kind=real64)
+    fr_dt = real(c_rkr_frame_timestep(self%handle), real64)
+  end function
+
+  integer(int64) function fr_neb_bead(self)
+    class(frame_t), intent(in) :: self
+    fr_neb_bead = -1_int64
+    if (.not. c_associated(self%handle)) return
+    fr_neb_bead = c_rkr_frame_neb_bead(self%handle)
+  end function
+
+  integer(int64) function fr_neb_band(self)
+    class(frame_t), intent(in) :: self
+    fr_neb_band = -1_int64
+    if (.not. c_associated(self%handle)) return
+    fr_neb_band = c_rkr_frame_neb_band(self%handle)
+  end function
+
+  integer function fr_nbonds(self)
+    class(frame_t), intent(in) :: self
+    fr_nbonds = 0
+    if (.not. c_associated(self%handle)) return
+    fr_nbonds = int(c_rkr_frame_bond_count(self%handle))
+  end function
+
+  integer function fr_bond_at(self, idx0, i, j, order, has_order)
+    class(frame_t), intent(in) :: self
+    integer, intent(in) :: idx0
+    integer, intent(out) :: i, j, order
+    logical, intent(out) :: has_order
+    integer(c_int32_t) :: ci, cj, co
+    integer(c_int8_t) :: ho
+    integer(c_int) :: st
+    i = 0; j = 0; order = 0; has_order = .false.
+    fr_bond_at = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    st = c_rkr_frame_bond_at(self%handle, int(idx0, c_int64_t), ci, cj, ho, co)
+    fr_bond_at = int(st)
+    if (st == 0) then
+      i = int(ci); j = int(cj); order = int(co)
+      has_order = (ho /= 0_c_int8_t)
+    end if
+  end function
+
+  integer(int64) function fr_id_index(self, atom_id)
+    class(frame_t), intent(in) :: self
+    integer(int64), intent(in) :: atom_id
+    fr_id_index = -1_int64
+    if (.not. c_associated(self%handle)) return
+    fr_id_index = c_rkr_frame_atom_index_by_id(self%handle, int(atom_id, c_int64_t))
+    if (fr_id_index == huge(0_c_int64_t)) fr_id_index = -1_int64
+  end function
+
+  integer function fr_spec(self)
+    class(frame_t), intent(in) :: self
+    fr_spec = 0
+    if (.not. c_associated(self%handle)) return
+    fr_spec = int(c_rkr_frame_spec_version(self%handle))
+  end function
+
+  integer function fr_select(self, selection, nmatch)
+    class(frame_t), intent(in) :: self
+    character(len=*), intent(in) :: selection
+    integer, intent(out) :: nmatch
+    character(kind=c_char), allocatable :: csel(:)
+    type(c_ptr) :: res
+    integer(c_int) :: st
+    nmatch = 0
+    fr_select = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    call to_c(selection, csel)
+    st = c_rkr_frame_select(self%handle, csel, res)
+    fr_select = int(st)
+    if (st == 0 .and. c_associated(res)) then
+      nmatch = int(c_rkr_selection_result_match_count(res))
+      call c_rkr_selection_result_free(res)
+    end if
+  end function
+
+  integer function fr_write_path(self, path)
+    class(frame_t), intent(in) :: self
+    character(len=*), intent(in) :: path
+    type(writer_t) :: w
+    fr_write_path = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    w = open_writer(path)
+    if (.not. w%valid()) return
+    fr_write_path = w%extend_one(self)
+    call w%free()
+  end function
+
+  logical function it_valid(self)
+    class(iterator_t), intent(in) :: self
+    it_valid = c_associated(self%it)
+  end function
+
+  function it_next(self) result(fr)
+    class(iterator_t), intent(inout) :: self
+    type(frame_t) :: fr
+    fr%handle = c_null_ptr
+    fr%cview = c_null_ptr
+    if (.not. c_associated(self%it)) return
+    fr%handle = c_con_frame_iterator_next(self%it)
+  end function
+
+  subroutine it_free(self)
+    class(iterator_t), intent(inout) :: self
+    if (c_associated(self%it)) then
+      call c_free_con_frame_iterator(self%it)
+      self%it = c_null_ptr
+    end if
+  end subroutine
+
+  function new_builder(cell, angles) result(bd)
+    real(real64), intent(in) :: cell(3), angles(3)
+    type(builder_t) :: bd
+    real(c_double) :: cc(3), aa(3)
+    cc = real(cell, c_double)
+    aa = real(angles, c_double)
+    bd%b = c_rkr_frame_new(cc, aa, c_null_ptr, c_null_ptr, c_null_ptr, c_null_ptr)
+  end function
+  public :: new_builder
+
+  logical function bd_valid(self)
+    class(builder_t), intent(in) :: self
+    bd_valid = c_associated(self%b)
+  end function
+
+  subroutine bd_free(self)
+    class(builder_t), intent(inout) :: self
+    if (c_associated(self%b)) then
+      call c_free_rkr_frame_builder(self%b)
+      self%b = c_null_ptr
+    end if
+  end subroutine
+
+  integer function bd_add_atom(self, symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
+    class(builder_t), intent(inout) :: self
+    character(len=*), intent(in) :: symbol
+    real(real64), intent(in) :: x, y, z, mass
+    integer(int64), intent(in) :: atom_id
+    logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    character(kind=c_char), allocatable :: cs(:)
+    bd_add_atom = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    call to_c(symbol, cs)
+    bd_add_atom = int(c_rkr_frame_add_atom_with_fixed_mask(self%b, cs, &
+         real(x,c_double), real(y,c_double), real(z,c_double), int(atom_id,c_int64_t), &
+         real(mass,c_double), logical(fixed_x,c_bool), logical(fixed_y,c_bool), logical(fixed_z,c_bool)))
+  end function
+
+  integer function bd_set_energy(self, energy)
+    class(builder_t), intent(inout) :: self
+    real(real64), intent(in) :: energy
+    bd_set_energy = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_set_energy = int(c_rkr_frame_builder_set_energy(self%b, real(energy, c_double)))
+  end function
+
+  integer function bd_set_meta(self, json)
+    class(builder_t), intent(inout) :: self
+    character(len=*), intent(in) :: json
+    character(kind=c_char), allocatable :: cj(:)
+    bd_set_meta = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    call to_c(json, cj)
+    bd_set_meta = int(c_rkr_frame_builder_set_metadata_json(self%b, cj))
+  end function
+
+  integer function bd_set_fidx(self, idx)
+    class(builder_t), intent(inout) :: self
+    integer(int64), intent(in) :: idx
+    bd_set_fidx = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_set_fidx = int(c_rkr_frame_builder_set_frame_index(self%b, int(idx, c_int64_t)))
+  end function
+
+  function bd_build(self) result(fr)
+    class(builder_t), intent(inout) :: self
+    type(frame_t) :: fr
+    fr%handle = c_null_ptr
+    fr%cview = c_null_ptr
+    if (.not. c_associated(self%b)) return
+    fr%handle = c_rkr_frame_builder_build(self%b)
+    self%b = c_null_ptr  ! consumed
+  end function
+
+  function open_writer(path) result(w)
+    character(len=*), intent(in) :: path
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_from_path_c(c)
+  end function
+  public :: open_writer
+
+  logical function wr_valid(self)
+    class(writer_t), intent(in) :: self
+    wr_valid = c_associated(self%w)
+  end function
+
+  subroutine wr_free(self)
+    class(writer_t), intent(inout) :: self
+    if (c_associated(self%w)) then
+      call c_free_rkr_writer(self%w)
+      self%w = c_null_ptr
+    end if
+  end subroutine
+
+  integer function wr_extend_one(self, fr)
+    class(writer_t), intent(inout) :: self
+    class(frame_t), intent(in) :: fr
+    type(c_ptr) :: arr(1)
+    wr_extend_one = rkr_status_null_pointer
+    if (.not. c_associated(self%w) .or. .not. c_associated(fr%handle)) return
+    arr(1) = fr%handle
+    wr_extend_one = int(c_rkr_writer_extend(self%w, arr, 1_c_size_t))
   end function
 
 end module readcon
