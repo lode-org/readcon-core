@@ -112,12 +112,12 @@ html_theme_options = {
                 {
                     "title": "chemparseplot",
                     "url": "https://chemparseplot.rgoswami.me",
-                    "summary": "NEB / WBO / 2D FES publication plots",
+                    "summary": "Parsing and plotting for computational chemistry",
                 },
                 {
                     "title": "rgpycrumbs",
                     "url": "https://rgpycrumbs.rgoswami.me",
-                    "summary": "CLI crumbs, xyzrender structure strips",
+                    "summary": "CLI helpers for LODE / eOn workflows",
                 },
                 {
                     "title": "pychum",

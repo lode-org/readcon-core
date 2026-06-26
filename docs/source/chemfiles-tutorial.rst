@@ -60,7 +60,6 @@ You do **not** need a pre-existing ``.con`` file. The point is **ingress from th
    Foreign trajectory → chemfiles → ``ConFrame`` (optional bonds) → ``.con``.
 
    After ingress, geometries are first-class for chemparseplot / rgpycrumbs /
-   xyzrender visualization (examples use repo test ``.con`` files).
 
 Choose one install path
 -----------------------

@@ -58,7 +58,6 @@ wider ecosystem into CON*.
    Foreign trajectory → chemfiles → ``ConFrame`` (optional bonds) → ``.con``.
 
    After ingress, geometries are first-class for chemparseplot / rgpycrumbs /
-   xyzrender visualization (examples use repo test ``.con`` files).
 #+end_export
 
 

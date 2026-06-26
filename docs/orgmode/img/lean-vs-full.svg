@@ -1,26 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" width="680" height="200" role="img">
-<title>Lean vs chemfiles builds</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 188" width="680" height="188" role="img">
+<title>Default CON I/O build versus build with format conversion</title>
 <style>
-  .t { font-family: Atkinson Hyperlegible, system-ui, sans-serif; font-size: 12px; fill: #1E1B4B; }
+  .t { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #0F172A; }
   .h { font-weight: 700; font-size: 14px; }
   .s { font-size: 11px; fill: #64748B; }
 </style>
-<rect width="680" height="200" fill="#F8FAFC"/>
-<!-- lean -->
-<rect x="24" y="28" width="280" height="144" rx="12" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5"/>
-<text class="t h" x="164" y="52" text-anchor="middle">Lean (default)</text>
-<text class="t s" x="164" y="72" text-anchor="middle">crates.io · pip install readcon</text>
-<text class="t" x="44" y="100">• CON / convel I/O, FFI, metadata</text>
-<text class="t" x="44" y="120">• chemfiles APIs present as stubs</text>
-<text class="t" x="44" y="140">• has_chemfiles_support() → False</text>
-<text class="t" x="44" y="160">• no libchemfiles / CMake</text>
-<!-- full -->
-<rect x="376" y="28" width="280" height="144" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
-<text class="t h" x="516" y="52" text-anchor="middle">Full ingress</text>
-<text class="t s" x="516" y="72" text-anchor="middle">--features chemfiles · readcon-chemfiles</text>
-<text class="t" x="396" y="100">• same CON surface</text>
-<text class="t" x="396" y="120">• read_chemfiles* / selection real</text>
-<text class="t" x="396" y="140">• has_chemfiles_support() → True</text>
-<text class="t" x="396" y="160">• links libchemfiles</text>
-<text class="t s" x="340" y="108" text-anchor="middle">vs</text>
+<rect width="680" height="188" fill="#F8FAFC"/>
+<rect x="24" y="24" width="280" height="140" rx="12" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5"/>
+<text class="t h" x="164" y="48" text-anchor="middle">Default (CON only)</text>
+<text class="t s" x="164" y="68" text-anchor="middle">pip install readcon · cargo add readcon-core</text>
+<text class="t" x="44" y="96">• Read and write .con / .convel</text>
+<text class="t" x="44" y="116">• Metadata, FFI, multi-language</text>
+<text class="t" x="44" y="136">• No XYZ/PDB/GRO conversion</text>
+
+<text class="t s" x="340" y="100" text-anchor="middle">vs</text>
+
+<rect x="376" y="24" width="280" height="140" rx="12" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+<text class="t h" x="516" y="48" text-anchor="middle">With conversions</text>
+<text class="t s" x="516" y="68" text-anchor="middle">pip install readcon-chemfiles · --features chemfiles</text>
+<text class="t" x="396" y="96">• Same CON I/O as default</text>
+<text class="t" x="396" y="116">• Plus XYZ / PDB / GRO → CON</text>
+<text class="t" x="396" y="136">• Optional atom selection</text>
 </svg>
