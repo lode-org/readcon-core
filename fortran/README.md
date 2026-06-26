@@ -22,3 +22,26 @@ scripts/run_fortran_tests.sh
 ```
 
 CI: **Fortran (fpm)** workflow on PRs touching `fortran/` or the C ABI.
+
+## DLPack (builder)
+
+```fortran
+type(c_ptr) :: tensor
+st = bd%positions_dlpack(tensor)   ! owned DLManagedTensorVersioned*
+! ... pass tensor to a C/C++/Python consumer that speaks DLPack ...
+call bd%dlpack_delete(tensor)      ! rkr_dlpack_delete
+```
+
+Or copy into Fortran arrays without DLPack: `bd%copy_positions(pos)` / `bd%copy_masses(masses)` (row-major C buffers transposed into `pos(3,n)`).
+
+## Chemfiles (feature-enabled lib)
+
+Build with `cargo build --release --features chemfiles`, then:
+
+```fortran
+fr = read_chemfiles_first("water.xyz")
+st = fr%select("name O", nmatch)
+st = fr%select_primary("name H", indices, nwritten)
+```
+
+C API: `rkr_read_chemfiles_first`, `rkr_read_chemfiles_memory`, `rkr_has_chemfiles_support`.

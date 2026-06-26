@@ -12,10 +12,13 @@ module readcon
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, open_iterator, new_builder, open_writer
+  public :: read_chemfiles_first
+  public :: rkr_status_section_absent
 
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
   integer(c_int), parameter :: rkr_status_selection_error = -10
+  integer(c_int), parameter :: rkr_status_section_absent = -8
 
   type, bind(C), public :: catom_t
     integer(c_int64_t) :: atomic_number = 0_c_int64_t
@@ -68,6 +71,7 @@ module readcon
     procedure :: atom_index_by_id => fr_id_index
     procedure :: spec_version => fr_spec
     procedure :: select => fr_select
+    procedure :: select_primary => fr_select_primary
     procedure :: write_path => fr_write_path
     procedure :: handle_ptr => fr_handle
   end type
@@ -92,6 +96,11 @@ module readcon
     procedure :: set_metadata_json => bd_set_meta
     procedure :: set_frame_index => bd_set_fidx
     procedure :: build => bd_build
+    procedure :: copy_positions => bd_copy_positions
+    procedure :: copy_masses => bd_copy_masses
+    procedure :: positions_dlpack => bd_positions_dlpack
+    procedure :: masses_dlpack => bd_masses_dlpack
+    procedure :: dlpack_delete => bd_dlpack_delete
   end type
 
   type :: writer_t
@@ -303,6 +312,52 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: r
     end subroutine
+
+    function c_rkr_read_chemfiles_first(fn) bind(C, name="rkr_read_chemfiles_first")
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_rkr_read_chemfiles_first
+    end function
+    function c_rkr_frame_builder_positions_data(b) bind(C, name="rkr_frame_builder_positions_data")
+      import :: c_ptr
+      type(c_ptr), value :: b
+      type(c_ptr) :: c_rkr_frame_builder_positions_data
+    end function
+    function c_rkr_frame_builder_masses_data(b) bind(C, name="rkr_frame_builder_masses_data")
+      import :: c_ptr
+      type(c_ptr), value :: b
+      type(c_ptr) :: c_rkr_frame_builder_masses_data
+    end function
+    function c_rkr_frame_builder_atom_count(b) bind(C, name="rkr_frame_builder_atom_count")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: b
+      integer(c_size_t) :: c_rkr_frame_builder_atom_count
+    end function
+    function c_rkr_frame_builder_positions_dlpack(b, out) bind(C, name="rkr_frame_builder_positions_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_positions_dlpack
+    end function
+    function c_rkr_frame_builder_masses_dlpack(b, out) bind(C, name="rkr_frame_builder_masses_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_masses_dlpack
+    end function
+    subroutine c_rkr_dlpack_delete(tensor) bind(C, name="rkr_dlpack_delete")
+      import :: c_ptr
+      type(c_ptr), value :: tensor
+    end subroutine
+    function c_rkr_selection_result_primary_indices(r, out_idx, capacity, out_written) &
+         bind(C, name="rkr_selection_result_primary_indices")
+      import :: c_ptr, c_int, c_int64_t
+      type(c_ptr), value :: r
+      integer(c_int64_t), intent(out) :: out_idx(*)
+      integer(c_int64_t), value :: capacity
+      integer(c_int64_t), intent(out) :: out_written
+      integer(c_int) :: c_rkr_selection_result_primary_indices
+    end function
     subroutine c_rkr_free_string(s) bind(C, name="rkr_free_string")
       import :: c_ptr
       type(c_ptr), value :: s
@@ -747,5 +802,119 @@ contains
     arr(1) = fr%handle
     wr_extend_one = int(c_rkr_writer_extend(self%w, arr, 1_c_size_t))
   end function
+
+  function read_chemfiles_first(path) result(fr)
+    character(len=*), intent(in) :: path
+    type(frame_t) :: fr
+    character(kind=c_char), allocatable :: c(:)
+    fr%handle = c_null_ptr
+    fr%cview = c_null_ptr
+    call to_c(path, c)
+    fr%handle = c_rkr_read_chemfiles_first(c)
+  end function
+
+  integer function fr_select_primary(self, selection, indices, nwritten)
+    class(frame_t), intent(in) :: self
+    character(len=*), intent(in) :: selection
+    integer(int64), intent(out) :: indices(:)
+    integer, intent(out) :: nwritten
+    character(kind=c_char), allocatable :: csel(:)
+    type(c_ptr) :: res
+    integer(c_int) :: st
+    integer(c_int64_t) :: written, i
+    integer(c_int64_t), allocatable :: buf(:)
+    nwritten = 0
+    fr_select_primary = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    call to_c(selection, csel)
+    st = c_rkr_frame_select(self%handle, csel, res)
+    fr_select_primary = int(st)
+    if (st /= 0 .or. .not. c_associated(res)) return
+    allocate(buf(size(indices)))
+    st = c_rkr_selection_result_primary_indices(res, buf, int(size(indices), c_int64_t), written)
+    fr_select_primary = int(st)
+    if (st == 0) then
+      nwritten = int(written)
+      do i = 1_c_int64_t, written
+        indices(i) = buf(i)
+      end do
+    end if
+    call c_rkr_selection_result_free(res)
+  end function
+
+  integer function bd_copy_positions(self, pos)
+    class(builder_t), intent(inout) :: self
+    real(real64), intent(out) :: pos(:,:)
+    type(c_ptr) :: p
+    real(c_double), pointer :: flat(:)
+    integer :: n, i, j
+    bd_copy_positions = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    n = int(c_rkr_frame_builder_atom_count(self%b))
+    if (n <= 0) return
+    if (size(pos, 1) < 3 .or. size(pos, 2) < n) then
+      bd_copy_positions = -6
+      return
+    end if
+    p = c_rkr_frame_builder_positions_data(self%b)
+    if (.not. c_associated(p)) return
+    call c_f_pointer(p, flat, [3 * n])
+    do i = 1, n
+      do j = 1, 3
+        pos(j, i) = real(flat((i - 1) * 3 + j), real64)
+      end do
+    end do
+    bd_copy_positions = 0
+  end function
+
+  integer function bd_copy_masses(self, masses)
+    class(builder_t), intent(inout) :: self
+    real(real64), intent(out) :: masses(:)
+    type(c_ptr) :: p
+    real(c_double), pointer :: flat(:)
+    integer :: n, i
+    bd_copy_masses = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    n = int(c_rkr_frame_builder_atom_count(self%b))
+    if (n <= 0 .or. size(masses) < n) then
+      bd_copy_masses = -6
+      return
+    end if
+    p = c_rkr_frame_builder_masses_data(self%b)
+    if (.not. c_associated(p)) return
+    call c_f_pointer(p, flat, [n])
+    do i = 1, n
+      masses(i) = real(flat(i), real64)
+    end do
+    bd_copy_masses = 0
+  end function
+
+  integer function bd_positions_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    bd_positions_dlpack = rkr_status_null_pointer
+    tensor = c_null_ptr
+    if (.not. c_associated(self%b)) return
+    bd_positions_dlpack = int(c_rkr_frame_builder_positions_dlpack(self%b, tensor))
+  end function
+
+  integer function bd_masses_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    bd_masses_dlpack = rkr_status_null_pointer
+    tensor = c_null_ptr
+    if (.not. c_associated(self%b)) return
+    bd_masses_dlpack = int(c_rkr_frame_builder_masses_dlpack(self%b, tensor))
+  end function
+
+  subroutine bd_dlpack_delete(self, tensor)
+    class(builder_t), intent(in) :: self
+    type(c_ptr), intent(inout) :: tensor
+    if (c_associated(self%b)) continue
+    if (c_associated(tensor)) then
+      call c_rkr_dlpack_delete(tensor)
+      tensor = c_null_ptr
+    end if
+  end subroutine
 
 end module readcon
