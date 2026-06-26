@@ -454,6 +454,18 @@ inline std::vector<size_t> ConFrame::select_atom_indices(std::string_view select
 class ConFrameWriter {
   public:
     /**
+     * @brief Compression codec applied to the output stream.
+     *
+     * The Rust core transparently reads gzip and (with the `zstd` Cargo
+     * feature) zstd streams; these codecs expose the matching writers.
+     * `Zstd` requires readcon-core to have been built with the `zstd`
+     * feature: the backing C symbols are only declared when
+     * `READCON_CORE_HAS_ZSTD` is defined, and requesting `Zstd` without
+     * that support throws std::runtime_error.
+     */
+    enum class Compression { None, Gzip, Zstd };
+
+    /**
      * @brief Constructs a writer and opens the specified file for writing.
      * @param path The path to the output .con file.
      * @param precision Number of decimal places for floating-point output (default 6).
@@ -461,6 +473,31 @@ class ConFrameWriter {
      */
     explicit ConFrameWriter(const std::filesystem::path &path,
                             uint8_t precision = 6);
+
+    /**
+     * @brief Constructs a writer that compresses the output stream.
+     * @param path The path to the output .con file.
+     * @param compression Compression codec for the output stream.
+     * @param precision Number of decimal places for floating-point output (default 6).
+     * @throws std::runtime_error if the writer cannot be created, including
+     *         when `Compression::Zstd` is requested but the library was built
+     *         without the `zstd` feature (`READCON_CORE_HAS_ZSTD` undefined).
+     */
+    explicit ConFrameWriter(const std::filesystem::path &path,
+                            Compression compression, uint8_t precision = 6);
+
+    /**
+     * @brief Picks a compression codec from a path's file extension.
+     * @param path The output path to inspect.
+     * @return `Compression::Gzip` for `.gz`, `Compression::Zstd` for `.zst`,
+     *         `Compression::None` otherwise.
+     *
+     * Mirrors the Rust `detect_compression_from_extension` helper so a
+     * single call site can route `.con`, `.con.gz`, and `.con.zst` paths
+     * to the matching writer.
+     */
+    static Compression compression_from_extension(
+        const std::filesystem::path &path);
 
     /**
      * @brief Writes all frames from a vector to the file.
@@ -1056,6 +1093,55 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
         throw std::runtime_error("Failed to create writer for file: " +
                                  path.string());
     }
+}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      Compression compression,
+                                      uint8_t precision) {
+    const std::string p = path.string();
+    RKRConFrameWriter *raw = nullptr;
+    switch (compression) {
+    case Compression::None:
+        raw = (precision == 6)
+                  ? create_writer_from_path_c(p.c_str())
+                  : create_writer_from_path_with_precision_c(p.c_str(),
+                                                             precision);
+        break;
+    case Compression::Gzip:
+        raw = (precision == 6)
+                  ? create_writer_gzip_c(p.c_str())
+                  : create_writer_gzip_with_precision_c(p.c_str(), precision);
+        break;
+    case Compression::Zstd:
+#if defined(READCON_CORE_HAS_ZSTD)
+        raw = (precision == 6)
+                  ? create_writer_zstd_c(p.c_str())
+                  : create_writer_zstd_with_precision_c(p.c_str(), precision);
+        break;
+#else
+        throw std::runtime_error(
+            "Zstd compression requires readcon-core built with the zstd "
+            "feature (READCON_CORE_HAS_ZSTD undefined): " +
+            p);
+#endif
+    }
+    writer_handle_.reset(raw);
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " + p);
+    }
+}
+
+inline ConFrameWriter::Compression
+ConFrameWriter::compression_from_extension(
+    const std::filesystem::path &path) {
+    const std::filesystem::path ext = path.extension();
+    if (ext == ".gz") {
+        return Compression::Gzip;
+    }
+    if (ext == ".zst") {
+        return Compression::Zstd;
+    }
+    return Compression::None;
 }
 
 inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
