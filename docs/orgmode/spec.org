@@ -583,3 +583,222 @@ Coordinates of Component 1
 
 A conforming v2 reader processes this without error, assigning
 =spec_version = 1= because line 2 does not start with ={=.
+
+* Builder mutation surface (informative)
+:PROPERTIES:
+:CUSTOM_ID: builder-mutation
+:END:
+
+This section is informative; it describes the /reference
+implementation's/ in-memory authoring API rather than the on-disk
+format itself, but is recorded here so that conforming bindings can
+expose the same surface.
+
+The reference Rust =ConFrameBuilder= exposes per-atom and bulk
+in-place mutation in addition to the append-only =add_atom= /
+=with_*= flow. These are intended for hot-loop consumers (MD
+integrators, saddle-search drivers, NEB image updaters) that hold a
+single builder across many simulation steps and serialise to disk
+only at I/O boundaries:
+
+- Per-atom mutators MUST validate the index against the current atom
+  count and SHOULD return a typed /index out of bounds/ error
+  (=ParseError::IndexOutOfBounds= in the Rust core; mapped to
+  =RKR_STATUS_INDEX_OUT_OF_BOUNDS= in the C ABI; raised as
+  =IndexError= in PyO3 / equivalent in Julia).
+- Bulk mutators take a flat row-major buffer
+  (=[x0, y0, z0, x1, y1, z1, ...]= for positions / forces;
+  =[e0, e1, ..., e(N-1)]= for energies). They MUST validate the
+  buffer length against the expected size (3 N for vector buffers,
+  N for energies) and SHOULD reuse the existing length-mismatch
+  error path (=ParseError::InvalidVectorLength=).
+- Setting force / velocity / energy on any atom MUST cause the next
+  =build()= to declare the corresponding section
+  (="forces"= / ="velocities"= / ="energies"=). Implementations
+  MUST NOT short-circuit on inspecting only atom 0; the section flag
+  is set when /any/ atom carries the field.
+- =clear_atom_velocity= / =_force= / =_energy= MUST remove the
+  field from the named atom only. If every atom subsequently lacks
+  the field, the next =build()= MUST NOT declare the section.
+- =set_atom_mass= updates the per-type =masses_per_type= entry on
+  =build()=. The .con format binds one mass per element type, so
+  if multiple atoms of the same symbol carry different masses, the
+  last value wins. Bindings SHOULD document this; future spec
+  versions MAY tighten it.
+
+The reference implementation surface lands in v0.11.0:
+
+- Rust core (=ConFrameBuilder::set_atom_position=,
+  =set_atom_velocity=, =set_atom_force=, =set_atom_energy=,
+  =set_atom_fixed=, =set_atom_mass=, =clear_atom_*=,
+  =set_positions_from_flat=, =set_forces_from_flat=,
+  =set_atom_energies_from_flat=, =get_atom_*=, =atom_count=).
+- C ABI (=rkr_frame_builder_atom_count= and the matching
+  =rkr_frame_builder_set_atom_*= / =get_atom_*= / =clear_atom_*=
+  family in =readcon-core.h=).
+- C++ wrapper (the same surface as instance methods on
+  =readcon::ConFrameBuilder=, with =std::optional= return for
+  optional-vector getters).
+- Python: =readcon.Atom= already exposes per-atom fields with
+  =#[pyo3(get, set)]= so Python users have always been able to do
+  =frame.atoms[i].x = ...= /  =.fx = ...= /  =.energy = ...= for
+  in-place mutation. This is the recommended Python pattern; no
+  separate =readcon.ConFrameBuilder= class is exposed because the
+  Python module is value-based rather than handle-based.
+- Julia: equivalently, =ReadCon.Atom= fields are mutable Julia
+  struct fields; mutate directly and call =write_con(path, frame)=.
+  No public Julia builder class.
+
+Bindings for other languages SHOULD pick the idiom that matches
+their existing surface: handle-based (Rust / C / C++) gets the
+typed mutation API, value-based (Python / Julia / Ruby / ...) gets
+direct field assignment on the per-atom struct.
+
+Rationale (non-normative): the append-only authoring path forced
+every step of a long simulation to allocate a fresh builder, push
+N atoms, and discard. Reusing one builder across the simulation
+loop and serialising only at trajectory boundaries reduces
+allocation pressure to the /output/ cadence rather than the
+/integration/ cadence. The mutation API is purely additive; the
+existing =add_atom= + =with_*= flow continues to work and remains
+the recommended path for one-shot frame authoring.
+
+** Storage layout (informative)
+:PROPERTIES:
+:CUSTOM_ID: builder-storage-layout
+:END:
+
+The v0.11.0 reference implementation holds per-atom fields as
+structure-of-arrays (SoA) buffers, each owned by an
+=ndarray::Array2<f64>= or =ndarray::Array1<T>= in row-major
+("C") layout:
+
+| Field           | Type                              | Shape    |
+|-----------------+-----------------------------------+----------|
+| =positions=     | =ndarray::Array2<f64>=            | =(N, 3)= |
+| =velocities=    | =ndarray::Array2<f64>= (optional) | =(N, 3)= |
+| =forces=        | =ndarray::Array2<f64>= (optional) | =(N, 3)= |
+| =atom_energies= | =ndarray::Array1<f64>= (optional) | =(N,)=   |
+| =masses=        | =ndarray::Array1<f64>=            | =(N,)=   |
+| =atom_ids=      | =ndarray::Array1<u64>=            | =(N,)=   |
+| =symbols=       | =Vec<String>=                     | =(N,)=   |
+| =fixed=         | =Vec<[bool; 3]>=                  | =(N, 3)= |
+
+Bindings MUST surface these fields as contiguous row-major buffers
+or as a DLPack-managed tensor (preferred for cross-language zero-
+copy); see [[#builder-dlpack-export]] for the cross-language
+contract.
+
+The SoA-per-field choice (rather than AoS, NumPy-structured-array
+style, or per-atom =Option<[f64; 3]>=) matches the layout used by
+LAMMPS, GROMACS, ASE, MDAnalysis, OpenMM, chemfiles, i-PI, h5md
+(the canonical MD libraries) /and/ Apache Arrow, DuckDB, Polars,
+Pandas v2, Parquet, PyTorch, JAX, DGL (the canonical columnar /
+ML stacks). It is the layout NumPy /recommends against/ structured
+arrays for, on the same SIMD-throughput grounds.
+
+The =Arc<RwLock<ndarray::ArrayD<T>>>= storage hook + DLPack 1.0
+export pattern adopted here mirrors the design described in
+@@rst::cite:t:`bigiMetatensorMetatomicFoundational2026`@@, where
+the same layout serves as the foundational data exchange surface
+across the metatensor / metatomic atomistic machine-learning
+libraries.
+
+** Section presence semantics (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-section-presence
+:END:
+
+The optional sections (="velocities"=, ="forces"=,
+="atom_energies"=) are *column-level*, not per-atom: when declared,
+the section applies to every atom in the frame. Per-atom NULL does
+not round-trip to disk because the .con on-disk format has no NULL
+encoding.
+
+Implementations MUST follow:
+
+- =add_atom= MUST pad newly added rows with zero in every already-
+  declared optional section so the per-field buffer length stays
+  coherent with =atom_count()=.
+- =with_velocity= / =_force= / =_energy=, =set_atom_velocity= /
+  =_force= / =_energy=, =set_velocities_from_flat= /
+  =set_forces_from_flat= / =set_atom_energies_from_flat= MUST
+  declare the corresponding section on first call.
+- =clear_atom_velocity= / =_force= / =_energy= MUST zero the slot
+  but MUST NOT change section presence; the field stays declared
+  and a subsequent =build()= emits the section block. This matches
+  Apache Arrow's column-level validity (a column either exists or
+  does not) and h5md's "dataset present or absent" rule.
+- =clear_velocities_section= / =_forces_section= /
+  =_energies_section= MUST drop the entire section: free the
+  storage, set the presence flag to false, and ensure the next
+  =build()= does not emit the section block.
+
+** DLPack export contract (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-dlpack-export
+:END:
+
+The reference implementation exposes every per-atom field with a
+contiguous backing as a DLPack-managed tensor for cross-language
+zero-copy interop. DLPack 1.0 is the universal exchange ABI
+supported by PyTorch, TensorFlow, JAX, NumPy, CuPy, MXNet, TVM,
+OneFlow, MNN, OneAPI, and mlx, plus a stable C ABI
+(=DLManagedTensorVersioned=) for non-Python consumers.
+
+The DLPack tier exposes:
+
+- =positions_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N, 3)=, dtype f64.
+- =positions_dlpack_mut(&mut self) -> DLPackTensorRefMut<'_>=,
+  same shape/dtype, write-through to the builder's storage.
+- =velocities_dlpack(&self) -> Option<DLPackTensorRef<'_>>= (=None= when
+  the section is absent), shape =(N, 3)=, dtype f64.
+- =forces_dlpack=, same contract as =velocities_dlpack=.
+- =atom_energies_dlpack(&self) -> Option<DLPackTensorRef<'_>>=,
+  shape =(N,)=, dtype f64.
+- =masses_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N,)=, dtype f64.
+- =atom_ids_dlpack(&self) -> DLPackTensorRef<'_>=, shape =(N,)=, dtype u64.
+
+The returned tensor MUST report:
+
+- shape: the field's natural shape (=(N, 3)= or =(N,)=).
+- strides: row-major standard layout for the dtype.
+- dtype: =kDLFloat / 64= for vector and scalar f64 fields,
+  =kDLUInt / 64= for atom_ids.
+- device: =kDLCPU= (device id 0) for the default backing. GPU /
+  device-resident backings (future versions) MAY surface a
+  non-CPU device tag.
+- data pointer: the backing array's first element.
+
+Lifetime: =DLPackTensorRef<'a>= borrows from =&'a self= and MUST
+NOT outlive the builder. C / FFI consumers that need an owning
+tensor go through the C-ABI export
+(=rkr_frame_builder_*_dlpack=) which fills a
+=DLManagedTensorVersioned*= with a clone of the field's storage
+plus a deleter callback owned by the consumer; the original
+builder is then free to drop.
+
+** Pointer stability (normative)
+:PROPERTIES:
+:CUSTOM_ID: builder-pointer-stability
+:END:
+
+The data pointer returned by any DLPack export is stable as long
+as no =add_atom= call grows the underlying ndarray buffer. Callers
+that hold raw pointers across =add_atom= MUST refresh after the
+push (the ndarray reallocates when capacity is exceeded; the
+DLPack view becomes invalid).
+
+Bulk and per-element mutation (=set_atom_*=, =set_*_from_flat=,
+=clear_atom_*=) MUST NOT reallocate the underlying buffer and the
+data pointer MUST stay stable across these operations.
+
+* References
+:PROPERTIES:
+:CUSTOM_ID: references
+:END:
+
+#+begin_export rst
+.. bibliography::
+   :style: alpha
+#+end_export

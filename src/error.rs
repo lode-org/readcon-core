@@ -15,6 +15,13 @@ pub enum ParseError {
     IncompleteEnergySection,
     UnknownSection(String),
     ValidationError(String),
+    /// An in-place builder mutation
+    /// (`ConFrameBuilder::set_atom_position` / `set_atom_velocity` /
+    /// `set_atom_force` / `set_atom_energy` / `set_atom_fixed` /
+    /// `set_atom_mass` / clear_*) was called with an atom index past
+    /// the current length. Surfaces as `IndexError` in PyO3 and as
+    /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` over the C ABI.
+    IndexOutOfBounds { index: usize, len: usize },
 }
 
 impl fmt::Display for ParseError {
@@ -58,6 +65,12 @@ impl fmt::Display for ParseError {
             }
             ParseError::ValidationError(msg) => {
                 write!(f, "CON validation failed: {msg}")
+            }
+            ParseError::IndexOutOfBounds { index, len } => {
+                write!(
+                    f,
+                    "atom index {index} is out of bounds (builder holds {len} atoms)"
+                )
             }
         }
     }
