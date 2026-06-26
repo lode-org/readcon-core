@@ -12,6 +12,32 @@
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).
 #+end_export
 
+
+#+begin_export rst
+.. mermaid::
+
+   flowchart LR
+     subgraph Foreign["Foreign trajectories"]
+       XYZ[XYZ]
+       PDB[PDB]
+       GRO[GRO]
+       OTH[…]
+     end
+     CF[chemfiles reader]
+     RC[readcon ConFrame]
+     CON[".con / .convel"]
+     SEL[selection grammar]
+     XYZ --> CF
+     PDB --> CF
+     GRO --> CF
+     OTH --> CF
+     CF -->|read_chemfiles*| RC
+     RC --> CON
+     RC --> SEL
+     SEL -->|atom_data indices| RC
+#+end_export
+
+
 This tutorial is *learning-oriented*: one successful path from a *non-CON* file
 into CON for LODE tools. Prefer =pip install readcon-chemfiles= (or Rust
 =--features chemfiles=).
