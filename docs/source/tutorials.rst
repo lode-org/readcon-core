@@ -1,0 +1,878 @@
+=========
+Tutorials
+=========
+
+
+.. contents::
+
+
+1 Querying the spec version
+---------------------------
+
+*Added in v0.5.0. Per-frame spec\ :sub:`version`\ added in v0.6.0.*
+
+There are two distinct version queries:
+
+1. **Library spec version**: the highest spec version the library
+   implements (compile-time constant).
+
+2. **File spec version**: the version a particular file was written
+   with, parsed from the JSON metadata on line 2. Legacy files
+   without JSON metadata report version 1.
+
+1.1 Rust
+~~~~~~~~
+
+.. code:: rust
+
+    use readcon_core::{CON_SPEC_VERSION, VERSION};
+
+    // Library version
+    assert_eq!(CON_SPEC_VERSION, 2);
+    println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
+
+    // Per-frame version (from parsed file)
+    use readcon_core::iterators::read_first_frame;
+    let frame = read_first_frame(std::path::Path::new("input.con")).unwrap();
+    println!("File spec version: {}", frame.header.spec_version);
+    println!("Extra metadata: {:?}", frame.header.metadata);
+
+1.2 C/C++
+~~~~~~~~~
+
+.. code:: c
+
+    #include "readcon-core.h"
+
+    // Compile-time library version check
+    #if RKR_CON_SPEC_VERSION >= 2
+        // atom_id semantics available
+    #endif
+
+    // Runtime library version
+    printf("spec v%u, lib %s\n",
+           rkr_con_spec_version(), rkr_library_version());
+
+    // Per-frame version (from parsed file)
+    RKRConFrame *handle = rkr_read_first_frame("input.con");
+    printf("File spec version: %u\n", rkr_frame_spec_version(handle));
+
+    // Full JSON metadata
+    char *json = rkr_frame_metadata_json(handle);
+    printf("Metadata: %s\n", json);
+    rkr_free_string(json);
+    free_rkr_frame(handle);
+
+1.3 Python
+~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    # Library version
+    print(readcon.__version__)       # e.g. "0.6.0"
+    print(readcon.CON_SPEC_VERSION)  # 2
+
+    # Per-frame version (from parsed file)
+    frames = readcon.read_con("input.con")
+    print(frames[0].spec_version)   # 2 for v2 files, 1 for legacy
+    print(frames[0].metadata)       # dict of native JSON-compatible values
+    print(frames[0].energy)         # typed helper for common keys
+    print(frames[0].frame_index)
+    print(frames[0].timestep)
+
+2 Working with JSON metadata
+----------------------------
+
+*Added in v0.6.0.*
+
+Line 2 of every v2 CON file contains a JSON object. The writer always
+stamps ``con_spec_version``; additional keys survive round-trips.
+
+2.1 Rust: attaching custom metadata
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: rust
+
+    use readcon_core::types::ConFrameBuilder;
+    use std::collections::BTreeMap;
+
+    let mut meta = BTreeMap::new();
+    meta.insert("generator".to_string(),
+                serde_json::Value::String("my-tool 1.0".to_string()));
+    meta.insert("temperature_K".to_string(),
+                serde_json::json!(300.0));
+
+    let builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
+        .metadata(meta);
+    // ... add atoms, build, write ...
+    // Line 2 of the output:
+    // {"con_spec_version":2,"generator":"my-tool 1.0","temperature_K":300.0}
+
+2.2 Python: reading and attaching metadata
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    # Reading: metadata comes from the file's JSON line
+    frames = readcon.read_con("input.con")
+    print(frames[0].metadata)  # e.g. {"generator": "my-tool 1.0"}
+    print(frames[0].energy)    # typed accessors for common keys
+    print(frames[0].frame_index)
+
+    # Writing: metadata can be attached via typed setters
+    frame = readcon.ConFrame(
+        cell=[10.0, 10.0, 10.0],
+        angles=[90.0, 90.0, 90.0],
+        atoms=[...],
+    )
+    frame.set_energy(-42.5)
+    frame.set_frame_index(5)
+    frame.set_time(2.5)
+    frame.set_timestep(0.5)
+    frame.set_neb_bead(3)
+    frame.set_neb_band(1)
+    frame.set_scalar_metadata("temperature_K", 300.0)
+    frame.set_string_metadata("generator", "my-tool 1.0")
+
+    # Direct item assignment uses the live metadata dict and is validated
+    # when the frame is written.
+    frame.metadata["workflow"] = {"name": "neb", "bead": 3}
+
+    # Or replace metadata from a raw JSON object
+    frame.set_metadata_json(
+        '{"generator":"my-tool 1.0","temperature_K":300.0}'
+    )
+    readcon.write_con("output.con", [frame])
+
+2.3 Legacy file detection
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import warnings
+    import readcon
+
+    frames = readcon.read_con("old_eon_file.con")
+    if frames[0].spec_version < 2:
+        warnings.warn(
+            "Legacy CON file (spec v1): atom_id values may be sequential placeholders",
+            stacklevel=2,
+        )
+
+3 Rust
+------
+
+3.1 Reading a CON file
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: rust
+
+    use std::fs;
+    use readcon_core::iterators::ConFrameIterator;
+
+    let contents = fs::read_to_string("trajectory.con").unwrap();
+    let iter = ConFrameIterator::new(&contents);
+
+    for result in iter {
+        let frame = result.unwrap();
+        println!("Cell: {:?}", frame.header.boxl);
+        println!("Atoms: {}", frame.atom_data.len());
+    }
+
+3.2 Reading a convel file with velocities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same iterator handles both ``.con`` and ``.convel`` files.
+Velocity data is detected automatically by the parser.
+
+.. code:: rust
+
+    use std::fs;
+    use readcon_core::iterators::ConFrameIterator;
+
+    let contents = fs::read_to_string("trajectory.convel").unwrap();
+    let iter = ConFrameIterator::new(&contents);
+
+    for result in iter {
+        let frame = result.unwrap();
+        println!("Has velocities: {}", frame.has_velocities());
+
+        for atom in &frame.atom_data {
+            print!("{} ({:.4}, {:.4}, {:.4})", atom.symbol, atom.x, atom.y, atom.z);
+            if atom.has_velocity() {
+                print!(" vel=({:.6}, {:.6}, {:.6})",
+                       atom.vx.unwrap(), atom.vy.unwrap(), atom.vz.unwrap());
+            }
+            println!();
+        }
+    }
+
+3.3 Writing frames
+~~~~~~~~~~~~~~~~~~
+
+.. code:: rust
+
+    use std::fs::File;
+    use readcon_core::writer::ConFrameWriter;
+
+    let file = File::create("output.con").unwrap();
+    let mut writer = ConFrameWriter::new(file);
+
+    for frame in &frames {
+        writer.write_frame(frame).unwrap();
+    }
+
+Velocity data is written automatically when
+``frame.has_velocities()`` returns true.
+
+3.4 Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+Use ``ConFrameBuilder`` to construct frames programmatically. The
+``atom_id`` parameter (6th argument to ``add_atom``) is the original atom
+index -- the position of this atom in your input before type-based
+grouping. The builder groups atoms by symbol automatically, but
+preserves each atom's ``atom_id`` so the original ordering can be
+reconstructed.
+
+.. code:: rust
+
+    use readcon_core::types::ConFrameBuilder;
+
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    // atom_id 0 and 1 for Cu, 2 for H -- these survive type-based reordering
+    builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 0, 63.546);
+    builder.add_atom("H",  1.0, 2.0, 3.0, false, 2, 1.008);
+    builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 1, 63.546);
+    let frame = builder.build();
+    // Atoms are now grouped: Cu(id=0), Cu(id=1), H(id=2)
+
+3.5 Writing with custom precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+Control the number of decimal places in output coordinates:
+
+.. code:: rust
+
+    use std::fs::File;
+    use readcon_core::writer::ConFrameWriter;
+
+    // Default precision (6 decimal places)
+    let file = File::create("output.con").unwrap();
+    let mut writer = ConFrameWriter::new(file);
+
+    // High precision (17 decimal places for lossless roundtrip)
+    let file = File::create("precise.con").unwrap();
+    let mut writer = ConFrameWriter::with_precision(file, 17);
+
+3.6 Reading a single frame efficiently
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.3.*
+
+When only the first frame is needed, ``read_first_frame`` stops after
+parsing it.  Files under 64 KiB are read into memory directly; larger
+files use memory-mapped I/O.
+
+.. code:: rust
+
+    use readcon_core::iterators::read_first_frame;
+    use std::path::Path;
+
+    let frame = read_first_frame(Path::new("single.con")).unwrap();
+    println!("Atoms: {}", frame.atom_data.len());
+
+3.7 Reading all frames from a file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For trajectory files with many frames, ``read_all_frames`` applies
+the same small-file optimization and uses memory-mapped I/O for
+larger files.
+
+.. code:: rust
+
+    use readcon_core::iterators::read_all_frames;
+    use std::path::Path;
+
+    let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
+    println!("Loaded {} frames", frames.len());
+
+3.8 Parallel parsing
+~~~~~~~~~~~~~~~~~~~~
+
+Behind the ``parallel`` feature gate, multi-frame files can be parsed
+concurrently using rayon.
+
+.. code:: rust
+
+    #[cfg(feature = "parallel")]
+    use readcon_core::iterators::parse_frames_parallel;
+
+    let contents = std::fs::read_to_string("large_trajectory.con").unwrap();
+    let results = parse_frames_parallel(&contents);
+    let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
+
+4 Python
+--------
+
+4.1 Installation
+~~~~~~~~~~~~~~~~
+
+.. code:: shell
+
+    # From PyPI
+    pip install readcon
+
+    # From source
+    maturin develop --features python
+
+    # Via pixi
+    pixi r -e python python-build
+
+4.2 Reading and inspecting frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    # Read from file
+    frames = readcon.read_con("trajectory.con")
+    first = readcon.read_first_frame("trajectory.con")
+
+    # Iterate over frames
+    for frame in readcon.iter_con("trajectory.con"):
+        print(len(frame))
+
+    # Read from string
+    with open("trajectory.con") as f:
+        frames = readcon.read_con_string(f.read())
+
+    for frame in frames:
+        print(f"Cell: {frame.cell}")
+        print(f"Angles: {frame.angles}")
+        print(f"Atom count: {len(frame)}")
+        print(f"Has velocities: {frame.has_velocities}")
+        print(f"Pre-box header: {frame.prebox_header}")
+
+        for atom in frame.atoms:
+            print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
+            print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
+
+4.3 Working with convel velocity data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    frames = readcon.read_con("trajectory.convel")
+    frame = frames[0]
+
+    if frame.has_velocities:
+        for atom in frame.atoms:
+            if atom.has_velocity:
+                print(f"{atom.symbol}: vel=({atom.vx:.6f}, {atom.vy:.6f}, {atom.vz:.6f})")
+            else:
+                print(f"{atom.symbol}: no velocity")
+
+4.4 Constructing frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+Build frames programmatically using ``Atom`` and ``ConFrame`` constructors:
+
+.. code:: python
+
+    import readcon
+
+    atoms = [
+        readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
+                     fixed=[False, False, False], atom_id=1),
+        readcon.Atom(symbol="Cu", x=2.55, y=2.55, z=0.0,
+                     fixed=[False, False, False], atom_id=2),
+    ]
+    frame = readcon.ConFrame(
+        cell=[10.0, 10.0, 10.0],
+        angles=[90.0, 90.0, 90.0],
+        atoms=atoms,
+    )
+    frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0))
+    frame.atoms[0].fixed = [True, False, True]
+
+4.5 Writing frames
+~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    # Read, modify, and write back
+    frames = readcon.read_con("input.con")
+
+    # Write to file
+    readcon.write_con("output.con", frames)
+
+    # Write to string
+    output = readcon.write_con_string(frames)
+    print(output)
+
+4.6 Writing with custom precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+Pass the ``precision`` keyword to control decimal places:
+
+.. code:: python
+
+    import readcon
+
+    # Default (6 decimal places)
+    readcon.write_con("output.con", frames)
+
+    # Lossless roundtrip (17 decimal places)
+    readcon.write_con("precise.con", frames, precision=17)
+    output = readcon.write_con_string(frames, precision=17)
+
+4.7 ASE Atoms conversion
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0. atom\ :sub:`id`\, velocity, mass, forces, and per-axis fixed-mask transfer are preserved.*
+
+Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE must be
+installed (it is an optional dependency).  The conversion preserves
+atom\ :sub:`id`\ (via a custom per-atom array), velocities, forces, masses,
+and per-axis fixed masks.
+
+.. code:: python
+
+    import readcon
+
+    # ConFrame -> ase.Atoms
+    frames = readcon.read_con("input.con")
+    ase_atoms = frames[0].to_ase()
+
+    # ase.Atoms -> ConFrame
+    frame = readcon.ConFrame.from_ase(ase_atoms)
+
+    # Convenience: read a .con file directly as ase.Atoms list
+    ase_list = readcon.read_con_as_ase("trajectory.con")
+
+4.7.1 atom\ :sub:`id`\ in ASE roundtrips
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``to_ase()`` stores each atom's ``atom_id`` as a custom ``atom_id``
+per-atom array on the ASE ``Atoms`` object.  Tags are left untouched
+so they remain available for other uses (slab layers, etc.).
+
+.. code:: python
+
+    import readcon
+
+    frames = readcon.read_con("saddle.con")
+    ase_atoms = frames[0].to_ase()
+
+    # atom_id is stored as a named per-atom array
+    print(ase_atoms.get_array("atom_id"))  # e.g. [3, 0, 1, 4, 2]
+
+    # Roundtrip preserves atom_id
+    frame_back = readcon.ConFrame.from_ase(ase_atoms)
+    assert [a.atom_id for a in frame_back.atoms] == [3, 0, 1, 4, 2]
+
+When converting from an ASE ``Atoms`` object that was not created by
+readcon, ``from_ase()`` checks for the ``atom_id`` array first, then
+falls back to ``tags`` (if any are non-zero), and finally uses
+sequential indices.
+
+4.7.2 Velocities and masses in ASE roundtrips
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Velocities from ``.convel`` files are transferred via
+``set_velocities()`` / ``get_velocities()``.  Custom masses (when present
+on the ``ConFrame``) override ASE's atomic-number defaults via
+``set_masses()``.
+
+.. code:: python
+
+    import readcon
+
+    # convel -> ASE preserves velocities
+    frames = readcon.read_con("trajectory.convel")
+    ase_atoms = frames[0].to_ase()
+    print(ase_atoms.get_velocities())  # non-zero velocity array
+
+    # Roundtrip back to ConFrame
+    frame_back = readcon.ConFrame.from_ase(ase_atoms)
+    assert frame_back.has_velocities
+    assert frame_back.atoms[0].fixed == frames[0].atoms[0].fixed
+
+4.8 Roundtrip test pattern
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: python
+
+    import readcon
+
+    frames = readcon.read_con("input.convel")
+    output = readcon.write_con_string(frames)
+    frames2 = readcon.read_con_string(output)
+
+    assert len(frames) == len(frames2)
+    for orig, reread in zip(frames, frames2):
+        assert len(orig) == len(reread)
+        assert orig.has_velocities == reread.has_velocities
+
+5 C
+---
+
+5.1 Reading and printing frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: c
+
+    #include "readcon-core.h"
+    #include <stdio.h>
+
+    int main(int argc, char *argv[]) {
+        CConFrameIterator *iter = read_con_file_iterator(argv[1]);
+        if (!iter) return 1;
+
+        RKRConFrame *handle;
+        while ((handle = con_frame_iterator_next(iter)) != NULL) {
+            CFrame *frame = rkr_frame_to_c_frame(handle);
+
+            printf("Cell: [%.4f, %.4f, %.4f]\n",
+                   frame->cell[0], frame->cell[1], frame->cell[2]);
+            printf("Atoms: %zu, Has velocities: %s\n",
+                   frame->num_atoms, frame->has_velocities ? "yes" : "no");
+
+            for (size_t i = 0; i < frame->num_atoms; i++) {
+                CAtom *a = &frame->atoms[i];
+                printf("  Atom %zu: (%.4f, %.4f, %.4f) fixed=%d id=%llu\n",
+                       i, a->x, a->y, a->z, a->is_fixed,
+                       (unsigned long long)a->atom_id);
+                if (a->has_velocity) {
+                    printf("    vel=(%.6f, %.6f, %.6f)\n", a->vx, a->vy, a->vz);
+                }
+            }
+
+            free_c_frame(frame);
+            free_rkr_frame(handle);
+        }
+        free_con_frame_iterator(iter);
+        return 0;
+    }
+
+5.2 Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+.. code:: c
+
+    #include "readcon-core.h"
+
+    double cell[3] = {10.0, 10.0, 10.0};
+    double angles[3] = {90.0, 90.0, 90.0};
+    RKRConFrameBuilder *builder =
+        rkr_frame_new(cell, angles, "", "", "", "");
+    RKRStatus status = rkr_frame_add_atom(builder, "Cu", 0.0, 0.0, 0.0,
+                                          false, 1, 63.546);
+    if (status != RKR_STATUS_SUCCESS) {
+        fprintf(stderr, "%s\n", rkr_status_message(status));
+        free_rkr_frame_builder(builder);
+        return 1;
+    }
+    status = rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+            builder, "Cu", 2.55, 2.55, 0.0,
+            true, false, true,
+            2, 63.546,
+            0.1, 0.2, 0.3,
+            -0.1, -0.2, -0.3);
+    if (status != RKR_STATUS_SUCCESS) {
+        fprintf(stderr, "%s\n", rkr_status_message(status));
+        free_rkr_frame_builder(builder);
+        return 1;
+    }
+    RKRConFrame *frame = rkr_frame_builder_build(builder);
+    if (!frame) {
+        return 1;
+    }
+
+    // Write with custom precision
+    RKRConFrameWriter *writer =
+        create_writer_from_path_with_precision_c("output.con", 17);
+    if (writer) {
+        rkr_writer_extend(writer, (const RKRConFrame **)&frame, 1);
+    }
+    free_rkr_writer(writer);
+    free_rkr_frame(frame);
+
+5.3 Reading a single frame
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+.. code:: c
+
+    RKRConFrame *frame = rkr_read_first_frame("input.con");
+    if (frame) {
+        CFrame *cf = rkr_frame_to_c_frame(frame);
+        printf("Atoms: %zu\n", cf->num_atoms);
+        free_c_frame(cf);
+        free_rkr_frame(frame);
+    }
+
+5.4 Writing frames
+~~~~~~~~~~~~~~~~~~
+
+.. code:: c
+
+    #include "readcon-core.h"
+
+    // After collecting handles into an array:
+    RKRConFrameWriter *writer = create_writer_from_path_c("output.con");
+    RKRStatus result = rkr_writer_extend(writer,
+                                         (const RKRConFrame **)handles,
+                                         num_frames);
+    if (result != RKR_STATUS_SUCCESS) {
+        fprintf(stderr, "write failed: %s\n", rkr_status_message(result));
+    }
+    free_rkr_writer(writer);
+
+5.5 Memory management
+~~~~~~~~~~~~~~~~~~~~~
+
+The C API uses two ownership patterns:
+
+1. **Opaque handles** (``RKRConFrame``): allocated by Rust, freed with
+   ``free_rkr_frame()``. Used for lossless frame manipulation.
+
+2. **Transparent structs** (``CFrame``): extracted copies freed with
+   ``free_c_frame()``. Used for direct data access.
+
+Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
+
+6 C++
+-----
+
+6.1 RAII iteration with range-based for
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: cpp
+
+    #include "readcon-core.hpp"
+    #include <iostream>
+
+    int main(int argc, char *argv[]) {
+        readcon::ConFrameIterator frames(argv[1]);
+
+        for (auto&& frame : frames) {
+            auto cell = frame.cell();
+            auto angles = frame.angles();
+            std::cout << "Cell: " << cell[0] << ", " << cell[1] << ", "
+                      << cell[2] << "\n";
+            std::cout << "Has velocities: " << std::boolalpha
+                      << frame.has_velocities() << "\n";
+
+            for (const auto& atom : frame.atoms()) {
+                std::cout << "  (" << atom.x << ", " << atom.y << ", "
+                          << atom.z << ")";
+                if (atom.has_velocity) {
+                    std::cout << " vel=(" << atom.vx << ", " << atom.vy
+                              << ", " << atom.vz << ")";
+                }
+                std::cout << "\n";
+            }
+        }
+        return 0;
+    }
+
+6.2 Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+.. code:: cpp
+
+    #include "readcon-core.hpp"
+
+    readcon::ConFrameBuilder builder(
+        {10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
+    builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 1, 63.546);
+    builder.add_atom_with_velocity_and_forces(
+        "Cu", 2.55, 2.55, 0.0,
+        {true, false, true},
+        2, 63.546,
+        0.1, 0.2, 0.3,
+        -0.1, -0.2, -0.3);
+    auto frame = builder.build();
+
+6.3 Reading a single frame
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Added in v0.4.0.*
+
+.. code:: cpp
+
+    auto frame = readcon::read_first_frame("input.con");
+    std::cout << "Atoms: " << frame.atoms().size() << "\n";
+
+6.4 Collecting and writing frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: cpp
+
+    #include "readcon-core.hpp"
+    #include <vector>
+
+    readcon::ConFrameIterator input("input.con");
+    std::vector<readcon::ConFrame> all_frames;
+
+    for (auto&& frame : input) {
+        all_frames.push_back(std::move(frame));
+    }
+
+    // Default precision (6 decimal places)
+    readcon::ConFrameWriter writer("output.con");
+    writer.extend(all_frames);
+
+    // High precision (17 decimal places)
+    readcon::ConFrameWriter precise_writer("precise.con", 17);
+    precise_writer.extend(all_frames);
+
+6.5 Integration with eOn
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The C++ RAII API is used by eOn for all ``.con`` and ``.convel`` I/O:
+
+.. code:: cpp
+
+    // Reading: mmap-based single frame read
+    auto frame = readcon::read_first_frame(con_path);
+    // frame.cell(), frame.atoms(), frame.has_velocities(), frame.has_forces()
+
+    // Writing: builder with precision control
+    readcon::ConFrameBuilder builder(lengths, angles);
+    for (int i = 0; i < nAtoms; i++) {
+        builder.add_atom(symbol, x, y, z, fixed_mask, id, mass);
+    }
+    auto out_frame = builder.build();
+    readcon::ConFrameWriter writer(path, 17);  // 17 digits for lossless roundtrip
+    writer.extend({out_frame});
+
+7 Julia
+-------
+
+7.1 Installation and setup
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: julia
+
+    # Point to the shared library
+    ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
+
+    # Or build from source (library auto-discovered)
+    using Pkg
+    Pkg.develop(path="julia/ReadCon")
+
+7.2 Reading frames
+~~~~~~~~~~~~~~~~~~
+
+.. code:: julia
+
+    using ReadCon
+
+    frames = read_con("trajectory.con")
+
+    for frame in frames
+        println("Cell: ", frame.cell)
+        println("Angles: ", frame.angles)
+        println("Atoms: ", length(frame.atoms))
+        println("Has velocities: ", frame.has_velocities)
+        println("Has forces: ", frame.has_forces)
+        println("Spec version: ", frame.spec_version)
+        println("Energy: ", frame.energy)
+        println("Header: ", frame.prebox_header)
+
+        for atom in frame.atoms
+            @printf("  (%.4f, %.4f, %.4f) fixed=%s id=%d\n",
+                    atom.x, atom.y, atom.z, atom.is_fixed, atom.atom_id)
+        end
+    end
+
+7.3 Writing frames
+~~~~~~~~~~~~~~~~~~
+
+.. code:: julia
+
+    using ReadCon
+
+    frames = read_con("trajectory.con")
+    write_con("roundtrip.con", frames)
+    write_con("precise.con", frames; precision=17)
+
+Julia writes through the C FFI builder and writer. The path preserves
+velocities, forces, per-axis fixed masks, masses, atom ids, and JSON
+metadata exposed by ``metadata_json``.
+
+7.4 Working with convel velocity data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: julia
+
+    using ReadCon
+
+    frames = read_con("trajectory.convel")
+    frame = frames[1]
+
+    if frame.has_velocities
+        for atom in frame.atoms
+            if atom.has_velocity
+                @printf("vel=(%.6f, %.6f, %.6f)\n", atom.vx, atom.vy, atom.vz)
+            end
+        end
+    end
+
+7.5 Multi-frame trajectory processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: julia
+
+    using ReadCon
+
+    frames = read_con("neb_trajectory.con")
+    println("Loaded $(length(frames)) images")
+
+    # Process each NEB image
+    for (i, frame) in enumerate(frames)
+        n_free = count(a -> !a.is_fixed, frame.atoms)
+        println("Image $i: $n_free free atoms")
+    end
+
+8 Chemfiles — convert other formats into CON
+--------------------------------------------
+
+*v0.13.0.* Documentation for chemfiles ingress is organized in the
+`Diátaxis <https://diataxis.fr/>`_ style (do not use this page as the primary guide):
+
+- **Tutorial** (learning, end-to-end XYZ→CON→selection): `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
+
+- **How-to** (task recipes, batch convert, C API): `chemfiles-howto.org <chemfiles-howto.rst>`_
+
+- **Explanation** (why optional chemfiles, bonds in JSON, index remap): `chemfiles-explain.org <chemfiles-explain.rst>`_
+
+- **Reference** (API tables, grammar subset, install matrix): `chemfiles-reference.org <chemfiles-reference.rst>`_
+
+Start with the tutorial if you need to ****drive conversion from XYZ/PDB/GRO/…****
+into CON for LODE tools.

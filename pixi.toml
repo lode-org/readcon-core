@@ -27,6 +27,7 @@ platforms = ["linux-64"]
 dependencies = { julia = ">=1.10" }
 tasks = { julia-test = "julia --project=julia/ReadCon -e 'using Pkg; Pkg.test()'" }
 
+# docs-lock-refresh: keep lock in sync with CI --locked installs
 [feature.docs]
 dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7,<9", pandoc = ">=3.1,<4" }
 [feature.docs.pypi-dependencies]
@@ -36,8 +37,9 @@ sphinx-rustdoc-postprocess = ">=0.1.0, <0.2"
 sphinxcontrib-bibtex = ">=2.6, <3"
 [feature.docs.tasks]
 setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Install sphinx-rustdocgen for Rust API docs" }
+docbld-full = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"], description = "Docs including fresh rustdocgen" }
 orgbld = "emacs --batch -l docs/export.el"
-docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"] }
+docbld = { cmd = "sphinx-build docs/source docs/build -b html -W --keep-going", depends-on = ["orgbld"] }
 
 [environments]
 default = { solve-group = "default" }
