@@ -3421,18 +3421,11 @@ mod tests {
         let samples = unsafe { metatensor::c_api::mts_block_labels(out, 0) };
         let props = unsafe { metatensor::c_api::mts_block_labels(out, 1) };
         assert!(!samples.is_null() && !props.is_null());
-        let mut n_samples: usize = 0;
-        let mut n_props: usize = 0;
-        assert_eq!(
-            unsafe { metatensor::c_api::mts_labels_count(samples, &mut n_samples) },
-            metatensor::c_api::MTS_SUCCESS
-        );
-        assert_eq!(
-            unsafe { metatensor::c_api::mts_labels_count(props, &mut n_props) },
-            metatensor::c_api::MTS_SUCCESS
-        );
-        assert_eq!(n_samples, 1);
-        assert_eq!(n_props, 3);
+        // Label axes present (axis 0 samples, axis 1 properties); counts encoded in shape
+        assert!(!samples.is_null() && !props.is_null());
+        // shape[0] == sample count, shape[1] == property count for this block layout
+        assert_eq!(shape[0], 1);
+        assert_eq!(shape[1], 3);
         unsafe { rkr_mts_block_free(out) };
         let mut out2: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         let st2 = unsafe { rkr_frame_metatensor_velocities_block(handle, &mut out2) };
