@@ -292,6 +292,15 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "dlpk"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cebd0cf4daf054b82db0150be17f8147c5d35a772da82bab380b0dab7ca08d4"
+dependencies = [
+ "ndarray",
+]
+
+[[package]]
+name = "dlpk"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "386227244f7a28d62e9ba18049ce4721828dbe637c91d2b86dffd620e544df85"
@@ -637,7 +646,7 @@ version = "0.3.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0331823cbf103e1fded1ac2402d1e2c25cbdf44a13ac817d5dfeea451f2374e"
 dependencies = [
- "dlpk",
+ "dlpk 0.3.0",
  "half 1.8.3",
  "metatensor-sys",
  "ndarray",
@@ -651,7 +660,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbbeac932fcdc04c3f5e6f5382ce223a60f1afcfe1c8dec8456c99e1ceb29829"
 dependencies = [
  "cmake",
- "dlpk",
+ "dlpk 0.3.0",
  "which",
 ]
 
@@ -972,6 +981,7 @@ dependencies = [
  "chemfiles",
  "cog",
  "criterion",
+ "dlpk 0.1.5",
  "fast-float2",
  "flate2",
  "futures",
