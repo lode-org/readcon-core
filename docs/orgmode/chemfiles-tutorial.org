@@ -1,0 +1,290 @@
+#+title: Tutorial — Convert other formats into CON (chemfiles)
+#+options: toc:2 num:t
+#+description: Learning-oriented walkthrough: install full Python or Rust chemfiles support, convert XYZ (and friends) to CON, preserve bonds, run selection, write a trajectory.
+
+/Diátaxis: *tutorial* (learning). Goal: succeed once end-to-end. For goals like
+"only convert PDB" see [[file:chemfiles-howto.org][chemfiles how-to guides]]. For *why* lean vs full wheels and
+index remap, see [[file:chemfiles-explain.org][chemfiles explanation]]. For API tables see
+[[file:chemfiles-reference.org][chemfiles reference]] and [[file:bindings.org][bindings]]./
+
+* What you will build
+
+In this tutorial you:
+
+1. Install a **chemfiles-linked** build (Python =readcon-chemfiles= or Rust
+   =--features chemfiles=).
+2. **Drive conversion from another format** (we use XYZ; the same APIs accept
+   PDB, GRO, LAMMPS dump, etc. via chemfiles).
+3. Inspect geometry and optional **bonds** on the resulting CON frame.
+4. Run a **selection** (=name O=, =angles: all=) in CON atom order.
+5. **Write** a =.con= (and optionally multi-frame) file you can feed to eOn /
+   amsel / any CON consumer.
+
+You do *not* need a pre-existing =.con= file. The point of the chemfiles path
+is **ingress from the wider ecosystem into CON**.
+
+* Step 0 — Choose one install path
+
+Pick **one** environment. Do not install both =readcon= and =readcon-chemfiles=
+in the same venv (both provide =import readcon=).
+
+** Path A — Python full wheel (recommended for this tutorial)
+
+#+begin_src shell
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -U pip
+pip install 'readcon-chemfiles==0.13.0'
+python -c "import readcon; print(readcon.has_chemfiles_support())"   # must print True
+#+end_src
+
+If that prints =False=, you installed lean =readcon= by mistake. Uninstall and
+install =readcon-chemfiles= only.
+
+** Path B — Rust with chemfiles
+
+#+begin_src shell
+# From a clone of readcon-core
+cargo build --features chemfiles
+# Optional: run the suite that exercises import + selection
+cargo test --features chemfiles --lib chemfiles
+#+end_src
+
+Modern CMake may need =CMAKE_POLICY_VERSION_MINIMUM=3.5= while building
+=chemfiles-sys=; this repo sets it in =.cargo/config.toml=.
+
+** Path C — Editable Python from source
+
+#+begin_src shell
+# From the repo root
+cp pyproject.chemfiles.toml pyproject.toml   # or: maturin with explicit features
+maturin develop --features python,chemfiles
+python -c "import readcon; assert readcon.has_chemfiles_support()"
+#+end_src
+
+* Step 1 — A small XYZ to convert
+
+Create =water.xyz= (chemfiles XYZ; free-form cell omitted → non-PBC CON cell
+markers are fine for this demo):
+
+#+begin_src text
+3
+water demo for readcon-core chemfiles tutorial
+O  0.000  0.000  0.000
+H  0.957  0.000  0.000
+H -0.240  0.927  0.000
+#+end_src
+
+Any chemfiles-readable file works the same way later (=structure.pdb=,
+=conf.gro=, LAMMPS dump, …). Only the path (and for in-memory import, the
+format string) changes.
+
+* Step 2 — Convert XYZ → CON frame (Rust)
+
+#+begin_src rust
+use readcon_core::chemfiles_import::{
+    chemfiles_enabled, con_frame_from_trajectory_path, con_frames_from_trajectory_path,
+};
+use readcon_core::writer::ConFrameWriter;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    assert!(
+        chemfiles_enabled(),
+        "rebuild with --features chemfiles (stubs return FeatureDisabled otherwise)"
+    );
+
+    // First frame only — works for single-structure XYZ/PDB/GRO/...
+    let frame = con_frame_from_trajectory_path("water.xyz")?;
+    println!(
+        "atoms={} has_bonds={} bonds={}",
+        frame.atom_data.len(),
+        frame.has_bonds(),
+        frame.bonds().len()
+    );
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        println!(
+            "  [{i}] {} id={} ({:.3},{:.3},{:.3})",
+            a.symbol, a.atom_id, a.x, a.y, a.z
+        );
+    }
+
+    // Write a CON file consumers understand
+    let mut w = ConFrameWriter::from_path("water_from_xyz.con")?;
+    w.write_frame(&frame)?;
+    println!("wrote water_from_xyz.con");
+
+    // Multi-frame trajectories (e.g. multi-model PDB or multi-frame XYZ)
+    let all = con_frames_from_trajectory_path("water.xyz")?;
+    println!("trajectory frames: {}", all.len());
+    Ok(())
+}
+#+end_src
+
+Build and run with =--features chemfiles=. On success you have
+=water_from_xyz.con= with JSON metadata on line 2 (=con_spec_version= 2). If
+the source format carried topology, =metadata["bonds"]= is populated (indices
+in =atom_data= order after type-grouping; see explanation doc).
+
+* Step 3 — Same conversion mindset in Python
+
+The published =readcon-chemfiles= wheel links libchemfiles, but **path import
+helpers are exposed primarily on the Rust/C side today**. In Python for this
+tutorial we:
+
+1. Confirm chemfiles support.
+2. Prefer writing CON from Rust once, *or* build a frame with bonds and
+   demonstrate **selection** (the selection APIs are fully wired in Python).
+3. Show reading the CON you produced and selecting on it.
+
+#+begin_src python
+import readcon
+
+assert readcon.has_chemfiles_support(), "install readcon-chemfiles, not lean readcon"
+
+# Read the CON produced in Step 2 (or any CON with optional bonds)
+frame = readcon.read_first_frame("water_from_xyz.con")
+print("atoms", len(frame.atoms), "has_bonds", frame.has_bonds)
+if frame.has_bonds:
+    print("n_bonds", len(frame.bonds))
+
+# Selection uses chemfiles grammar on the projected frame (needs bonds for angles)
+oxy = readcon.select_atom_indices(frame, "name O")
+print("oxygen atom_data indices", oxy)
+
+# If bonds are present (from a format that carried topology, or hand-authored CON)
+try:
+    angles = readcon.select_on_frame(frame, "angles: all")
+    print("angles", len(angles["matches"]), "arity", angles["context_size"])
+    for m in angles["matches"][:3]:
+        print("  angle atoms", m)
+except RuntimeError as e:
+    print("angles selection:", e)
+    print("(XYZ often has no bonds — see Step 4 to add topology or use PDB)")
+#+end_src
+
+Plain XYZ usually has **no bonds**. That is normal: conversion still gives you
+CON geometry; topology-aware selectors need bonds (next step or a richer
+format).
+
+* Step 4 — Drive topology: prefer formats with bonds, or set bonds in CON
+
+**4a — Prefer a format chemfiles reads *with* topology (best for LODE pipelines)**
+
+#+begin_src rust
+// PDB / mol2 / some chemfiles formats populate topology → CON metadata bonds
+let frame = con_frame_from_trajectory_path("ligand.pdb")?;
+assert!(frame.has_bonds() || frame.bonds().is_empty());
+// If has_bonds(), angles: / is_bonded work after projection
+#+end_src
+
+**4b — Or attach bonds on a builder after ingress (indices = atom_data order)**
+
+#+begin_src rust
+use readcon_core::chemfiles_import::con_frame_from_trajectory_path;
+use readcon_core::chemfiles_selection::{evaluate_selection_on_con_frame, select_atom_indices};
+use readcon_core::types::{Bond, ConFrameBuilder};
+use readcon_core::writer::ConFrameWriter;
+
+// Start from converted geometry, then add connectivity in CON index space
+let imported = con_frame_from_trajectory_path("water.xyz")?;
+let mut b = ConFrameBuilder::new(imported.header.boxl, imported.header.angles);
+for a in &imported.atom_data {
+    b.add_atom(
+        a.symbol.as_ref(),
+        a.x,
+        a.y,
+        a.z,
+        [a.fixed_x, a.fixed_y, a.fixed_z],
+        a.atom_id,
+        a.mass,
+    );
+}
+// Water: O–H, O–H in atom_data order after type-group may differ — use atom_id
+// For this tiny demo atoms are O,H,H and often stay 0,1,2:
+b.set_bonds(&[Bond::new(0, 1), Bond::new(0, 2)]);
+let frame = b.build();
+
+let angles = evaluate_selection_on_con_frame("angles: all", &frame)?;
+assert_eq!(angles.context_size, 3);
+assert!(!angles.matches.is_empty());
+println!("H–O–H style matches: {}", angles.matches.len());
+
+let mut w = ConFrameWriter::from_path("water_with_bonds.con")?;
+w.write_frame(&frame)?;
+#+end_src
+
+**4c — Python selection on that CON**
+
+#+begin_src python
+import readcon
+
+frame = readcon.read_first_frame("water_with_bonds.con")
+assert frame.has_bonds
+print(readcon.select_atom_indices(frame, "type H"))
+r = readcon.select_on_frame(frame, "bonds: all")
+print("bonds matches", r["matches"])
+r = readcon.select_on_frame(frame, "angles: all")
+print("angles matches", r["matches"])
+#+end_src
+
+* Step 5 — Multi-format conversion habit (other ingress formats)
+
+Treat chemfiles as the **format router**; CON as the **canonical LODE store**.
+
+#+begin_src rust
+use readcon_core::chemfiles_import::con_frames_from_trajectory_path;
+use readcon_core::writer::ConFrameWriter;
+
+// Swap the path; chemfiles picks the reader from extension / format
+for path in ["conf.gro", "system.pdb", "dump.lammpstrj", "traj.xyz"] {
+    if !std::path::Path::new(path).exists() {
+        continue;
+    }
+    let frames = con_frames_from_trajectory_path(path)?;
+    let out = format!("{path}.converted.con");
+    let mut w = ConFrameWriter::from_path(&out)?;
+    for f in &frames {
+        w.write_frame(f)?;
+    }
+    println!("{path} -> {out} ({} frames)", frames.len());
+}
+#+end_src
+
+In-memory buffers (when you already have file bytes):
+
+#+begin_src rust
+use readcon_core::chemfiles_import::con_frames_from_memory;
+
+let xyz = std::fs::read_to_string("water.xyz")?;
+let frames = con_frames_from_memory(&xyz, "XYZ")?;
+assert!(!frames.is_empty());
+#+end_src
+
+* Step 6 — C probe (optional)
+
+Link a library built with =--features chemfiles= (or lean build where
+=rkr_has_chemfiles_support()= is 0 and selection returns an error status).
+
+#+begin_src c
+#include "readcon-core.h"
+#include <stdio.h>
+
+int main(void) {
+    printf("chemfiles support: %u\n", (unsigned)rkr_has_chemfiles_support());
+    /* Load a frame via your usual iterator, then: */
+    /* RKRSelectionResult *sel = NULL; */
+    /* rkr_frame_select(frame, "name O", &sel); */
+    return 0;
+}
+#+end_src
+
+* Checkpoint — you succeeded if
+
+- =has_chemfiles_support()= / =chemfiles_enabled()= is true for the build you used.
+- You produced at least one =.con= **from a non-CON file** (=water_from_xyz.con=).
+- You understand XYZ may lack bonds; PDB (or explicit =set_bonds=) enables
+  =angles:= / =bonds:=.
+- You ran at least one selection (=name O= or =angles: all=) and saw CON
+  =atom_data= indices.
+
+Next: [[file:chemfiles-howto.org][how-to guides]] (specific formats, C-only, lean wheel limits) and
+[[file:chemfiles-explain.org][explanation]] (why two PyPI names, index remap, metadata bonds).

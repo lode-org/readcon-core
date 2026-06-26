@@ -38,10 +38,9 @@ surface is a pass-through (~evaluate_selection_on_con_frame~ → chemfiles
 probe with ~rkr_has_chemfiles_support()~ / ~has_chemfiles_support()~ (Julia) /
 feature at build time (Rust/Python).
 
-*New contributor walk-throughs* (converter XYZ→CON, bond/angle selection
-examples in Rust/Python/C, enable flags): see ~docs/orgmode/tutorials.org~
-sections *Chemfiles multi-format converter* and *Bond and angle selection*.
-Release cutting (cargo-dist PR + crates.io secret): ~docs/orgmode/contributing.org~
+*Chemfiles documentation (Diátaxis):* ~chemfiles-tutorial.org~ (learn conversion),
+~chemfiles-howto.org~, ~chemfiles-explain.org~, ~chemfiles-reference.org~ (this
+matrix is the bindings slice of reference). Release cutting: ~contributing.org~
 *Release process*.
 
 Supported contexts when topology is present (~metadata["bonds"]~, 0-based

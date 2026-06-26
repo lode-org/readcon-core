@@ -47,10 +47,14 @@ builds and for the default PyPI wheel). When enabled, readcon-core provides:
    geometry and topology into a temporary chemfiles frame
    (=select_on_frame= / =rkr_frame_select= / Rust =select_atom_indices=).
 
-Runnable walk-throughs (enable feature, XYZ→CON, =angles: all=, C probe) live
-in =docs/orgmode/tutorials.org= under *Chemfiles multi-format converter* and
-*Bond and angle selection*. Binding matrix and documented gaps are in
-=docs/orgmode/bindings.org=.
+Documentation is Diátaxis-shaped under =docs/orgmode/chemfiles-*.org=:
+
+- Tutorial (conversion-first): =chemfiles-tutorial.org=
+- How-to recipes: =chemfiles-howto.org=
+- Explanation (optional feature, bonds, indices): =chemfiles-explain.org=
+- Reference (APIs, grammar, install matrix): =chemfiles-reference.org=
+
+Binding matrix and gaps: =bindings.org=. On-disk =bonds=: =spec.org=.
 
 Supported topology selectors (=bonds:=, =angles:=, =dihedrals:=, =is_bonded=,
 =is_angle=, =is_dihedral=) need =bonds= or an import that carried topology;
