@@ -8,7 +8,12 @@ release = "0.13.1"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.graphviz",
     "sphinxcontrib.bibtex",
+    "sphinx_copybutton",
+    "sphinx_design",
+    "myst_parser",
+    "sphinxcontrib.mermaid",
 ]
 
 bibtex_bibfiles = ["references.bib"]
@@ -20,23 +25,92 @@ exclude_patterns = [
     "crates/readcon_core/main.rst",
 ]
 
+# Myst: allow mermaid fences in any .md we add later
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+]
+myst_fence_as_directive = ["mermaid"]
+
+# Pre-generated crate RST under docs/source/crates/ (no sphinxcontrib-rust in CI)
 html_theme = "shibuya"
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.svg"
 html_title = "readcon-core documentation"
+html_baseurl = "https://lode-org.github.io/readcon-core/"
 
 html_theme_options = {
     "github_url": "https://github.com/lode-org/readcon-core",
+    "accent_color": "indigo",
+    "dark_code": True,
+    "globaltoc_expand_depth": 1,
     "light_logo": "_static/logo-light.svg",
     "dark_logo": "_static/logo-dark.svg",
-    "accent_color": "indigo",
+    "nav_links": [
+        {"title": "Start", "url": "getting-started"},
+        {
+            "title": "Chemfiles",
+            "children": [
+                {
+                    "title": "Tutorial — convert formats",
+                    "url": "chemfiles-tutorial",
+                    "summary": "XYZ/PDB/GRO → CON end-to-end",
+                },
+                {
+                    "title": "Executable Org notebook",
+                    "url": "chemfiles-notebook",
+                    "summary": "Babel: scripts/run-chemfiles-notebook.sh",
+                },
+                {
+                    "title": "How-to recipes",
+                    "url": "chemfiles-howto",
+                    "summary": "Batch convert, C API, lean vs full",
+                },
+                {
+                    "title": "Reference",
+                    "url": "chemfiles-reference",
+                    "summary": "APIs, grammar, install matrix",
+                },
+            ],
+        },
+        {
+            "title": "Ecosystem",
+            "children": [
+                {
+                    "title": "eOn",
+                    "url": "https://eondocs.org",
+                    "summary": "Saddle-point search on PESs",
+                },
+                {
+                    "title": "rgpot",
+                    "url": "https://omnipotentrpc.github.io/rgpot/",
+                    "summary": "Potential evaluation toolkit",
+                },
+                {
+                    "title": "rgpycrumbs",
+                    "url": "https://rgpycrumbs.rgoswami.me",
+                    "summary": "Analysis crumbs / helpers",
+                },
+                {
+                    "title": "LODE org",
+                    "url": "https://github.com/lode-org",
+                    "summary": "Long-timescale dynamics ecosystem",
+                },
+            ],
+        },
+        {"title": "Spec", "url": "spec"},
+        {"title": "GitHub", "url": "https://github.com/lode-org/readcon-core"},
+    ],
+}
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
 }
 
 
 def setup(app):
     app.add_css_file("custom.css")
-
-
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-}

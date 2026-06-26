@@ -33,6 +33,10 @@ dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7,<9", pandoc = ">=
 [feature.docs.pypi-dependencies]
 shibuya = ">=2026.1.9, <2027"
 sphinxcontrib-bibtex = ">=2.6, <3"
+sphinx-copybutton = ">=0.5.2, <1"
+sphinx-design = ">=0.6, <1"
+myst-parser = ">=4.0, <5"
+sphinxcontrib-mermaid = ">=1.0, <2"
 [feature.docs.tasks]
 setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Install sphinx-rustdocgen for Rust API docs" }
 docbld-full = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"], description = "Docs including fresh rustdocgen" }

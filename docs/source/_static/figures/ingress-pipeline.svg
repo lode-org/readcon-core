@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" width="720" height="200" role="img" aria-labelledby="t1">
+<title id="t1">Foreign formats ingress into CON</title>
+<defs>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L6,3 L0,6 Z" fill="#4F46E5"/>
+  </marker>
+  <filter id="s" x="-5%" y="-5%" width="110%" height="110%">
+    <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.12"/>
+  </filter>
+  <style>
+    .box { font-family: Atkinson Hyperlegible, system-ui, sans-serif; }
+    .lbl { font-size: 13px; fill: #1E1B4B; font-weight: 700; }
+    .sub { font-size: 11px; fill: #64748B; }
+    .boxr { rx: 10; stroke-width: 1.5; filter: url(#s); }
+  </style>
+</defs>
+<rect width="720" height="200" fill="#F8FAFC"/>
+<!-- sources -->
+<g class="box">
+  <rect class="boxr" x="24" y="36" width="100" height="44" fill="#EEF2FF" stroke="#6366F1"/>
+  <text class="lbl" x="74" y="54" text-anchor="middle">XYZ / PDB</text>
+  <text class="sub" x="74" y="70" text-anchor="middle">GRO / LAMMPS…</text>
+  <rect class="boxr" x="24" y="100" width="100" height="44" fill="#EEF2FF" stroke="#6366F1"/>
+  <text class="lbl" x="74" y="118" text-anchor="middle">memory buffer</text>
+  <text class="sub" x="74" y="134" text-anchor="middle">format string</text>
+</g>
+<!-- chemfiles -->
+<rect class="boxr" x="180" y="62" width="120" height="56" fill="#312E81" stroke="#312E81"/>
+<text class="lbl" x="240" y="88" text-anchor="middle" fill="#F8FAFC">chemfiles</text>
+<text class="sub" x="240" y="106" text-anchor="middle" fill="#C7D2FE">format router</text>
+<!-- arrow -->
+<line x1="128" y1="70" x2="172" y2="82" stroke="#4F46E5" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="128" y1="118" x2="172" y2="100" stroke="#4F46E5" stroke-width="2" marker-end="url(#arrow)"/>
+<line x1="304" y1="90" x2="348" y2="90" stroke="#4F46E5" stroke-width="2.5" marker-end="url(#arrow)"/>
+<!-- readcon -->
+<rect class="boxr" x="356" y="54" width="140" height="72" fill="#EEF2FF" stroke="#4F46E5"/>
+<text class="lbl" x="426" y="82" text-anchor="middle">readcon-core</text>
+<text class="sub" x="426" y="100" text-anchor="middle">ConFrame + bonds?</text>
+<text class="sub" x="426" y="116" text-anchor="middle">atom_id · metadata</text>
+<line x1="500" y1="90" x2="544" y2="90" stroke="#4F46E5" stroke-width="2.5" marker-end="url(#arrow)"/>
+<!-- outputs -->
+<g>
+  <rect class="boxr" x="552" y="28" width="140" height="40" fill="#FEF3C7" stroke="#D97706"/>
+  <text class="lbl" x="622" y="52" text-anchor="middle">.con / .convel</text>
+  <rect class="boxr" x="552" y="80" width="140" height="40" fill="#ECFDF5" stroke="#059669"/>
+  <text class="lbl" x="622" y="104" text-anchor="middle">eOn · amsel</text>
+  <rect class="boxr" x="552" y="132" width="140" height="40" fill="#F1F5F9" stroke="#475569"/>
+  <text class="lbl" x="622" y="156" text-anchor="middle">C / C++ / Py / Jl</text>
+</g>
+</svg>

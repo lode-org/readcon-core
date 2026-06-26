@@ -15,6 +15,14 @@ Explanation — Chemfiles ingress and CON topology
 Why drive conversion from other formats at all?
 -----------------------------------------------
 
+.. figure:: /_static/figures/ingress-pipeline.svg
+   :alt: Ingress pipeline diagram
+   :align: center
+   :width: 100%
+
+   Chemfiles owns format diversity; readcon-core owns CON fidelity.
+
+
 CON is a **deliberately small** LODE-centric format (typed blocks, fixed flags,
 optional velocities/forces/energies, JSON line-2 metadata). Most of the
 ecosystem does not speak CON: structures arrive as XYZ, PDB, GRO, LAMMPS
@@ -26,6 +34,12 @@ product story is not "replace chemfiles" but **land foreign trajectories in CON*
 
 Why is chemfiles optional (Cargo feature + two PyPI names)?
 -----------------------------------------------------------
+
+.. figure:: /_static/figures/lean-vs-full.svg
+   :alt: Lean versus full builds
+   :align: center
+   :width: 100%
+
 
 Linking libchemfiles pulls CMake, a C++ library, slower builds, and weaker
 cross targets. Many consumers only need CON read/write.
@@ -55,6 +69,14 @@ platform tag cannot carry two different binaries). Install **one** of
 
 Why bonds live in frame JSON, not ``sections``
 ----------------------------------------------
+
+.. figure:: /_static/figures/con-frame-layout.svg
+   :alt: CON frame layout
+   :align: center
+   :width: 100%
+
+   Header + JSON line-2 + type-group blocks + optional per-atom sections.
+
 
 ``sections`` is the channel for **per-atom** optional blocks (velocities,
 forces, energies) with fixed column layouts and one row per atom. Bonds are
@@ -115,3 +137,14 @@ Residue/=resname= filters, full chemfiles property surface, improper
 topology extras, and numeric geometry assertion blocks from chemfiles
 ``tests/selection.cpp`` are not fully mirrored. See `bindings <bindings.rst>`_ and
 `reference <chemfiles-reference.rst>`_ for the supported subset.
+
+Place in the LODE / eOn ecosystem
+---------------------------------
+
+.. figure:: /_static/figures/ecosystem.svg
+   :alt: readcon-core among eOn, rgpot, rgpycrumbs, chemfiles, bindings
+   :align: center
+   :width: 100%
+
+   Interchange hub: potentials (rgpot), saddles (eOn), analysis (rgpycrumbs),
+   multi-format ingress (chemfiles), multi-language consumers.

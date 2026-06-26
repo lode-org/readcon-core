@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" width="640" height="220" role="img">
+<title>CON frame layout</title>
+<style>
+  .t { font-family: Atkinson Hyperlegible, system-ui, sans-serif; font-size: 12px; fill: #1E1B4B; }
+  .h { font-weight: 700; font-size: 13px; }
+  .s { font-size: 11px; fill: #64748B; }
+</style>
+<rect width="640" height="220" fill="#F8FAFC"/>
+<!-- stacked lines -->
+<rect x="40" y="24" width="560" height="22" rx="4" fill="#312E81"/>
+<text class="t" x="52" y="39" fill="#E0E7FF">Lines 1–9 header (cell, angles, types, masses, constraints…)</text>
+<rect x="40" y="52" width="560" height="22" rx="4" fill="#4338CA"/>
+<text class="t" x="52" y="67" fill="#E0E7FF">Line 2 JSON metadata — energy, pbc, optional bonds[], chemfiles sidecars</text>
+<rect x="40" y="84" width="560" height="28" rx="4" fill="#EEF2FF" stroke="#6366F1"/>
+<text class="t h" x="52" y="102">Type-group block: symbol · N atoms · mass — repeated per species</text>
+<rect x="40" y="120" width="560" height="48" rx="4" fill="#FFFBEB" stroke="#D97706"/>
+<text class="t h" x="52" y="140">Coordinate rows (x y z fixed_x fixed_y fixed_z atom_id)</text>
+<text class="t s" x="52" y="158">Grouped by species; atom_id preserves pre-group identity for NEB / comparisons</text>
+<rect x="40" y="176" width="560" height="28" rx="4" fill="#ECFDF5" stroke="#059669"/>
+<text class="t h" x="52" y="194">Optional sections: velocities · forces · energies (per-atom blocks)</text>
+</svg>

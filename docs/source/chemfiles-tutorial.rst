@@ -13,6 +13,30 @@ Convert other formats into CON
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).
 
+
+.. mermaid::
+
+   flowchart LR
+     subgraph Foreign["Foreign trajectories"]
+       XYZ[XYZ]
+       PDB[PDB]
+       GRO[GRO]
+       OTH[…]
+     end
+     CF[chemfiles reader]
+     RC[readcon ConFrame]
+     CON[".con / .convel"]
+     SEL[selection grammar]
+     XYZ --> CF
+     PDB --> CF
+     GRO --> CF
+     OTH --> CF
+     CF -->|read_chemfiles*| RC
+     RC --> CON
+     RC --> SEL
+     SEL -->|atom_data indices| RC
+
+
 This tutorial is **learning-oriented**: one successful path from a **non-CON** file
 into CON for LODE tools. Prefer ``pip install readcon-chemfiles`` (or Rust
 ``--features chemfiles``).

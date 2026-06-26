@@ -5,10 +5,29 @@ Getting started
 
 .. contents::
 
-.. tip::
 
-   This is the **front door**. Use the sidebar for the full map; the links
-   below are proper Sphinx references (not raw ``:doc:`` text).
+#+begin_export rst
+.. figure:: /_static/figures/ingress-pipeline.svg
+   :alt: Foreign formats flow through chemfiles into readcon-core CON frames
+   :align: center
+   :width: 100%
+
+   **Ingress pipeline** — chemfiles routes XYZ/PDB/GRO (and more) into
+   ``ConFrame``; write ``.con`` for eOn, amsel, and language bindings.
+
+.. figure:: /_static/figures/lean-vs-full.svg
+   :alt: Lean default build versus chemfiles-linked full ingress build
+   :align: center
+   :width: 100%
+
+   **Lean vs full** — same Python/Rust API surface; only full builds link
+   libchemfiles (``readcon-chemfiles`` / ``--features chemfiles``).
+
+\.. tip\:\:
+
+   This is the ****front door****. Use the sidebar for the full map; the links
+   below are proper Sphinx references (not raw \`\`:doc:\`\` text).
+#+end\ :sub:`export`\
 
 Install
 -------
