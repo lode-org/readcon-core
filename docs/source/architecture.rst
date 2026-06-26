@@ -251,9 +251,13 @@ produces:
 The header is shipped pre-generated at ``include/readcon-core.h`` and the
 ``generation = false`` flag in ``[package.metadata.capi.header]`` tells
 cargo-c to copy it from the install assets list rather than running
-cbindgen at install time. Run ``scripts/regen-capi-headers.sh`` when the
-FFI surface in ``src/ffi.rs`` changes; CI verifies drift via
-``scripts/regen-capi-headers.sh --check``.
+cbindgen at install time. Optional metatensor C exports are gated
+(``READCON_CORE_HAS_METATENSOR``); prefer ``include/readcon-metatensor.h``
+(``metatensor.h`` first). Fat builds write
+``target/<profile>/readcon-metatensor.env`` for include/lib. Ownership:
+``tensor_block_into_raw_mts`` then ``mts_block_free`` only (bindings page).
+Run ``scripts/regen-capi-headers.sh`` when the FFI surface in ``src/ffi.rs``
+changes; CI verifies drift via ``scripts/regen-capi-headers.sh --check``.
 
 The ``[package.metadata.capi.pkg_config] filename = "readcon-core"``
 override is load-bearing: without it cargo-c defaults the .pc filename
