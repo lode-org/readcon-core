@@ -2567,33 +2567,28 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 }
 
 //=============================================================================
-// Chemfiles selection (feature = "chemfiles")
+// Chemfiles selection (always linked; real impl needs --features chemfiles)
 //=============================================================================
 
-/// Opaque handle for a cached selection evaluation result (chemfiles builds only).
-#[cfg(feature = "chemfiles")]
+/// Opaque handle for a cached selection evaluation result.
 pub struct RKRSelectionResult;
 
 /// Evaluate a chemfiles selection-language string on an `RKRConFrame`.
 ///
 /// On success writes a heap-allocated result handle to `*out_result` (caller
 /// frees with [`rkr_selection_result_free`]). Returns
-/// `RKR_STATUS_SELECTION_ERROR` for invalid grammar or evaluation failure.
-///
-/// Only available when the library is built with the `chemfiles` feature.
+/// `RKR_STATUS_SELECTION_ERROR` for invalid grammar, evaluation failure, or
+/// when this build was compiled without the `chemfiles` feature.
 ///
 /// # Safety
 /// `frame_handle`, `selection`, and `out_result` must be non-null; `selection`
 /// must point to a valid UTF-8 C string.
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_select(
     frame_handle: *const RKRConFrame,
     selection: *const c_char,
     out_result: *mut *mut RKRSelectionResult,
 ) -> RKRStatus {
-    use crate::chemfiles_selection::evaluate_selection_on_con_frame;
-
     if frame_handle.is_null() || selection.is_null() || out_result.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
@@ -2602,7 +2597,7 @@ pub unsafe extern "C" fn rkr_frame_select(
         Ok(s) => s,
         Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
     };
-    match evaluate_selection_on_con_frame(sel_str, frame) {
+    match crate::chemfiles_selection::evaluate_selection_on_con_frame(sel_str, frame) {
         Ok(result) => {
             let boxed = Box::new(result);
             unsafe {
@@ -2618,7 +2613,6 @@ pub unsafe extern "C" fn rkr_frame_select(
 ///
 /// # Safety
 /// `result_handle` must be a valid handle from [`rkr_frame_select`] or NULL.
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_selection_result_match_count(
     result_handle: *const RKRSelectionResult,
@@ -2635,7 +2629,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_count(
 ///
 /// # Safety
 /// `result_handle` must be valid or NULL (returns 0).
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_selection_result_context_size(
     result_handle: *const RKRSelectionResult,
@@ -2653,7 +2646,6 @@ pub unsafe extern "C" fn rkr_selection_result_context_size(
 ///
 /// # Safety
 /// Handles and `out_atoms` must be valid; `out_atoms` needs space for 4 `uint64_t`.
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_selection_result_match_at(
     result_handle: *const RKRSelectionResult,
@@ -2691,7 +2683,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
 ///
 /// # Safety
 /// `result_handle` and `out_indices` must be valid when capacity > 0.
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_selection_result_primary_indices(
     result_handle: *const RKRSelectionResult,
@@ -2731,7 +2722,6 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
 ///
 /// # Safety
 /// `result_handle` must be from `rkr_frame_select` or NULL.
-#[cfg(feature = "chemfiles")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_selection_result_free(result_handle: *mut RKRSelectionResult) {
     if result_handle.is_null() {

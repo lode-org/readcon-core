@@ -121,11 +121,9 @@ jobs:
             target: aarch64
             pyproject: pyproject.chemfiles.toml
             features: python,chemfiles
-          - variant: chemfiles
-            os: windows-latest
-            target: x86_64
-            pyproject: pyproject.chemfiles.toml
-            features: python,chemfiles
+          # Windows + chemfiles-sys/CMake is unreliable on GHA; ship lean
+          # Windows wheels only. Linux/macOS cover full chemfiles matrices.
+          # - variant: chemfiles / windows-latest — omitted on purpose
     steps:
       - uses: actions/checkout@v6
 
