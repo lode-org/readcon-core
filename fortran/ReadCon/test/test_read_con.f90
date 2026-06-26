@@ -3,20 +3,6 @@ program test_read_con
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: real64, int64
   implicit none
-#ifdef READCON_HAS_METATENSOR
-  interface
-    function c_mts_pos(f, out) bind(C, name="rkr_frame_metatensor_positions_block")
-      import :: c_ptr, c_int
-      type(c_ptr), value :: f
-      type(c_ptr), intent(out) :: out
-      integer(c_int) :: c_mts_pos
-    end function
-    subroutine c_mts_free(b) bind(C, name="rkr_mts_block_free")
-      import :: c_ptr
-      type(c_ptr), value :: b
-    end subroutine
-  end interface
-#endif
   character(len=*), parameter :: tiny = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_cuh2.con"
   character(len=*), parameter :: water = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/water_min.xyz"
   type(frame_t) :: fr, fr2, frx
@@ -24,7 +10,7 @@ program test_read_con
   real(real64) :: cell(3), ang(3), pos(3, 8)
   integer(int64) :: prim(32), shape0, shape1
   integer :: nfail, st, nmatch, nw, ndim, bits
-  type(c_ptr) :: dlt, mts
+  type(c_ptr) :: dlt, mts, data_p
   logical :: ok
 
   nfail = 0
@@ -43,18 +29,22 @@ program test_read_con
 
   st = bd%positions_dlpack(dlt)
   call dlpack_inspect(dlt, ndim, shape0, shape1, bits, ok)
-  print *, "positions_dlpack st=", st, " ok=", ok, " ndim=", ndim, " shape=", shape0, shape1, " bits=", bits
+  data_p = dlpack_data_ptr(dlt)
+  print *, "positions_dlpack st=", st, " ok=", ok, " ndim=", ndim, " shape=", shape0, shape1, &
+       " bits=", bits, " data=", c_associated(data_p)
   if (st /= 0 .or. .not. ok .or. ndim /= 2 .or. shape0 /= 2_int64 .or. shape1 /= 3_int64) nfail = nfail + 1
+  if (.not. c_associated(data_p)) nfail = nfail + 1
   if (c_associated(dlt)) call bd%dlpack_delete(dlt)
 
   st = bd%masses_dlpack(dlt)
   call dlpack_inspect(dlt, ndim, shape0, shape1, bits, ok)
   print *, "masses_dlpack st=", st, " ndim=", ndim, " shape0=", shape0
-  if (st /= 0) nfail = nfail + 1
+  if (st /= 0 .or. .not. ok) nfail = nfail + 1
   if (c_associated(dlt)) call bd%dlpack_delete(dlt)
 
   st = bd%atom_ids_dlpack(dlt)
-  if (st /= 0) nfail = nfail + 1
+  call dlpack_inspect(dlt, ndim, shape0, shape1, bits, ok)
+  if (st /= 0 .or. .not. ok) nfail = nfail + 1
   if (c_associated(dlt)) call bd%dlpack_delete(dlt)
 
   st = bd%velocities_dlpack(dlt)
@@ -70,15 +60,24 @@ program test_read_con
     nfail = nfail + 1
   else
     if (abs(fr2%energy() + 42.5_real64) > 1.0e-6_real64) nfail = nfail + 1
-#ifdef READCON_HAS_METATENSOR
-    mts = c_null_ptr
-    st = int(c_mts_pos(fr2%handle_ptr(), mts))
-    print *, "metatensor_positions st=", st, " block=", c_associated(mts)
-    if (st /= 0 .or. .not. c_associated(mts)) nfail = nfail + 1
-    if (c_associated(mts)) call c_mts_free(mts)
-#else
+    ! All four metatensor C ABI exports (mts_block_t* via metatensor cbindgen path)
     st = frame_metatensor_positions_block(fr2, mts)
-    print *, "metatensor_positions (stub) st=", st, " block=", c_associated(mts)
+    print *, "metatensor_positions st=", st, " block=", c_associated(mts)
+#ifdef READCON_HAS_METATENSOR
+    if (st /= 0 .or. .not. c_associated(mts)) nfail = nfail + 1
+    call mts_block_free_rkr(mts)
+    st = frame_metatensor_velocities_block(fr2, mts)
+    print *, "metatensor_velocities (absent) st=", st
+    if (st /= rkr_status_section_absent) nfail = nfail + 1
+    call mts_block_free_rkr(mts)
+    st = frame_metatensor_forces_block(fr2, mts)
+    if (st /= rkr_status_section_absent) nfail = nfail + 1
+    call mts_block_free_rkr(mts)
+    st = frame_metatensor_atom_energies_block(fr2, mts)
+    if (st /= rkr_status_section_absent) nfail = nfail + 1
+    call mts_block_free_rkr(mts)
+#else
+    if (st /= -7) nfail = nfail + 1
 #endif
     call fr2%free()
   end if

@@ -8,9 +8,11 @@ module readcon
 
   public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
   public :: catom_t, cframe_t
-  public :: dl_tensor_t, dl_managed_tensor_versioned_t
-  public :: dlpack_inspect
-  public :: frame_metatensor_positions_block, mts_block_free_rkr
+  public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
+  public :: dlpack_inspect, dlpack_data_ptr
+  public :: frame_metatensor_positions_block, frame_metatensor_velocities_block
+  public :: frame_metatensor_forces_block, frame_metatensor_atom_energies_block
+  public :: mts_block_free_rkr
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
@@ -417,6 +419,41 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: tensor
     end subroutine
+#ifdef READCON_HAS_METATENSOR
+    ! Metatensor cbindgen C API handles (mts_block_t*) — ownership via rkr_mts_block_free
+    function c_rkr_frame_metatensor_positions_block(f, out) &
+         bind(C, name="rkr_frame_metatensor_positions_block")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: f
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_metatensor_positions_block
+    end function
+    function c_rkr_frame_metatensor_velocities_block(f, out) &
+         bind(C, name="rkr_frame_metatensor_velocities_block")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: f
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_metatensor_velocities_block
+    end function
+    function c_rkr_frame_metatensor_forces_block(f, out) &
+         bind(C, name="rkr_frame_metatensor_forces_block")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: f
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_metatensor_forces_block
+    end function
+    function c_rkr_frame_metatensor_atom_energies_block(f, out) &
+         bind(C, name="rkr_frame_metatensor_atom_energies_block")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: f
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_metatensor_atom_energies_block
+    end function
+    subroutine c_rkr_mts_block_free(block) bind(C, name="rkr_mts_block_free")
+      import :: c_ptr
+      type(c_ptr), value :: block
+    end subroutine
+#endif
     function c_rkr_selection_result_primary_indices(r, out_idx, capacity, out_written) &
          bind(C, name="rkr_selection_result_primary_indices")
       import :: c_ptr, c_int, c_int64_t
@@ -986,6 +1023,7 @@ contains
   end subroutine
 
   subroutine dlpack_inspect(tensor, ndim, shape0, shape1, dtype_bits, ok)
+    ! Mirror DLPack C header fields: DLManagedTensorVersioned.dl_tensor.{ndim,shape,dtype.bits}
     type(c_ptr), intent(in) :: tensor
     integer, intent(out) :: ndim, dtype_bits
     integer(int64), intent(out) :: shape0, shape1
@@ -1006,8 +1044,19 @@ contains
       shape0 = shp(1)
       if (ndim >= 2) shape1 = shp(2)
     end if
-    ok = .true.
+    ok = c_associated(mt%dl_tensor%data) .and. ndim > 0
   end subroutine
+
+  function dlpack_data_ptr(tensor) result(p)
+    ! DLTensor.data from dlpack.h layout
+    type(c_ptr), intent(in) :: tensor
+    type(c_ptr) :: p
+    type(dl_managed_tensor_versioned_t), pointer :: mt
+    p = c_null_ptr
+    if (.not. c_associated(tensor)) return
+    call c_f_pointer(tensor, mt)
+    p = mt%dl_tensor%data
+  end function
 
   integer function bd_velocities_dlpack(self, tensor)
     class(builder_t), intent(inout) :: self
@@ -1051,17 +1100,59 @@ contains
     block = c_null_ptr
     frame_metatensor_positions_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-    frame_metatensor_positions_block = -7
+#ifdef READCON_HAS_METATENSOR
+    frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
+#else
+    ! Lean lib omits metatensor C symbols (READCON_CORE_HAS_METATENSOR gate)
     frame_metatensor_positions_block = -7
     block = c_null_ptr
+#endif
+  end function
+
+  integer function frame_metatensor_velocities_block(fr, block)
+    type(frame_t), intent(in) :: fr
+    type(c_ptr), intent(out) :: block
+    block = c_null_ptr
+    frame_metatensor_velocities_block = rkr_status_null_pointer
+    if (.not. c_associated(fr%handle)) return
+#ifdef READCON_HAS_METATENSOR
+    frame_metatensor_velocities_block = int(c_rkr_frame_metatensor_velocities_block(fr%handle, block))
+#else
+    frame_metatensor_velocities_block = -7
+#endif
+  end function
+
+  integer function frame_metatensor_forces_block(fr, block)
+    type(frame_t), intent(in) :: fr
+    type(c_ptr), intent(out) :: block
+    block = c_null_ptr
+    frame_metatensor_forces_block = rkr_status_null_pointer
+    if (.not. c_associated(fr%handle)) return
+#ifdef READCON_HAS_METATENSOR
+    frame_metatensor_forces_block = int(c_rkr_frame_metatensor_forces_block(fr%handle, block))
+#else
+    frame_metatensor_forces_block = -7
+#endif
+  end function
+
+  integer function frame_metatensor_atom_energies_block(fr, block)
+    type(frame_t), intent(in) :: fr
+    type(c_ptr), intent(out) :: block
+    block = c_null_ptr
+    frame_metatensor_atom_energies_block = rkr_status_null_pointer
+    if (.not. c_associated(fr%handle)) return
+#ifdef READCON_HAS_METATENSOR
+    frame_metatensor_atom_energies_block = int(c_rkr_frame_metatensor_atom_energies_block(fr%handle, block))
+#else
+    frame_metatensor_atom_energies_block = -7
+#endif
   end function
 
   subroutine mts_block_free_rkr(block)
     type(c_ptr), intent(inout) :: block
-    if (c_associated(block)) then
-      continue
-      block = c_null_ptr
-    end if
+#ifdef READCON_HAS_METATENSOR
+    if (c_associated(block)) call c_rkr_mts_block_free(block)
+#endif
     block = c_null_ptr
   end subroutine
 

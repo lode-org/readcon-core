@@ -5,7 +5,8 @@ FEATURES="${READCON_FORTRAN_FEATURES:-chemfiles}"
 # shellcheck disable=SC2086
 cargo build --release --features ${FEATURES}
 export LD_LIBRARY_PATH="$ROOT/target/release:${LD_LIBRARY_PATH:-}"
-FFLAGS=""
+# Always -cpp so READCON_HAS_METATENSOR gates in the module are honored
+FFLAGS="-cpp"
 EXTRA="-lstdc++"
 if [[ "$FEATURES" == *metatensor* ]]; then
   FFLAGS="-cpp -DREADCON_HAS_METATENSOR"

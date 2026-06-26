@@ -3397,40 +3397,120 @@ mod tests {
     }
 
     #[cfg(feature = "metatensor")]
+    fn assert_mts_block_shape(block: *mut metatensor::c_api::mts_block_t, n: usize, props: usize) {
+        assert!(!block.is_null());
+        let mut array = unsafe { std::mem::zeroed::<metatensor::c_api::mts_array_t>() };
+        let status = unsafe { metatensor::c_api::mts_block_data(block, &mut array) };
+        assert_eq!(status, metatensor::c_api::MTS_SUCCESS);
+        let shape_fn = array.shape.expect("mts_array_t.shape from metatensor C API");
+        let mut shape_ptr: *const usize = std::ptr::null();
+        let mut shape_count: usize = 0;
+        let st_shape = unsafe { shape_fn(array.ptr, &mut shape_ptr, &mut shape_count) };
+        assert_eq!(st_shape, metatensor::c_api::MTS_SUCCESS);
+        assert_eq!(shape_count, 2);
+        let shape = unsafe { std::slice::from_raw_parts(shape_ptr, shape_count) };
+        assert_eq!(shape[0], n);
+        assert_eq!(shape[1], props);
+        let samples = unsafe { metatensor::c_api::mts_block_labels(block, 0) };
+        let prop_lab = unsafe { metatensor::c_api::mts_block_labels(block, 1) };
+        assert!(!samples.is_null() && !prop_lab.is_null());
+    }
+
+    #[cfg(feature = "metatensor")]
     #[test]
     fn metatensor_positions_via_c_abi() {
         let handle = test_frame_handle();
         let mut out: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         let st = unsafe { rkr_frame_metatensor_positions_block(handle, &mut out) };
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
-        assert!(!out.is_null());
-        let mut array = unsafe { std::mem::zeroed::<metatensor::c_api::mts_array_t>() };
-        let status = unsafe { metatensor::c_api::mts_block_data(out, &mut array) };
-        assert_eq!(status, metatensor::c_api::MTS_SUCCESS);
-        // Shape [N, 3] via mts_array_t::shape (metatensor C API / shipped path)
-        let shape_fn = array.shape.expect("mts_array_t.shape");
-        let mut shape_ptr: *const usize = std::ptr::null();
-        let mut shape_count: usize = 0;
-        let st_shape = unsafe { shape_fn(array.ptr, &mut shape_ptr, &mut shape_count) };
-        assert_eq!(st_shape, metatensor::c_api::MTS_SUCCESS);
-        assert_eq!(shape_count, 2, "positions block must be 2-D [N,3]");
-        let shape = unsafe { std::slice::from_raw_parts(shape_ptr, shape_count) };
-        assert_eq!(shape[0], 1, "one atom in test_frame_handle (N samples)");
-        assert_eq!(shape[1], 3, "xyz property axis");
-        // Axis 0 = samples, axis 1 = properties (metatensor C: mts_block_labels(block, axis))
-        let samples = unsafe { metatensor::c_api::mts_block_labels(out, 0) };
-        let props = unsafe { metatensor::c_api::mts_block_labels(out, 1) };
-        assert!(!samples.is_null() && !props.is_null());
-        // Label axes present (axis 0 samples, axis 1 properties); counts encoded in shape
-        assert!(!samples.is_null() && !props.is_null());
-        // shape[0] == sample count, shape[1] == property count for this block layout
-        assert_eq!(shape[0], 1);
-        assert_eq!(shape[1], 3);
+        assert_mts_block_shape(out, 1, 3);
         unsafe { rkr_mts_block_free(out) };
-        let mut out2: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
-        let st2 = unsafe { rkr_frame_metatensor_velocities_block(handle, &mut out2) };
-        assert_eq!(st2, RKRStatus::RKR_STATUS_SECTION_ABSENT);
-        assert!(out2.is_null());
+
+        for (name, export) in [
+            (
+                "velocities",
+                rkr_frame_metatensor_velocities_block
+                    as unsafe extern "C" fn(
+                        *const RKRConFrame,
+                        *mut *mut metatensor::c_api::mts_block_t,
+                    ) -> RKRStatus,
+            ),
+            (
+                "forces",
+                rkr_frame_metatensor_forces_block
+                    as unsafe extern "C" fn(
+                        *const RKRConFrame,
+                        *mut *mut metatensor::c_api::mts_block_t,
+                    ) -> RKRStatus,
+            ),
+            (
+                "atom_energies",
+                rkr_frame_metatensor_atom_energies_block
+                    as unsafe extern "C" fn(
+                        *const RKRConFrame,
+                        *mut *mut metatensor::c_api::mts_block_t,
+                    ) -> RKRStatus,
+            ),
+        ] {
+            let mut o: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+            let st_abs = unsafe { export(handle, &mut o) };
+            assert_eq!(
+                st_abs,
+                RKRStatus::RKR_STATUS_SECTION_ABSENT,
+                "{name} must be SECTION_ABSENT on minimal test frame"
+            );
+            assert!(o.is_null(), "{name} out block must be null when absent");
+        }
+        unsafe { free_rkr_frame(handle) };
+    }
+
+    #[cfg(feature = "metatensor")]
+    #[test]
+    fn metatensor_optional_sections_via_c_abi() {
+        // Frame with velocities, forces, and per-atom energies — all four block exports
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        builder.add_atom("O", 1.0, 0.0, 0.0, [false; 3], 2, 16.0);
+        builder.set_atom_velocity(0, [0.1, 0.2, 0.3]).unwrap();
+        builder.set_atom_velocity(1, [0.0, 0.1, 0.0]).unwrap();
+        builder.set_atom_force(0, [1.0, 0.0, 0.0]).unwrap();
+        builder.set_atom_force(1, [0.0, 1.0, 0.0]).unwrap();
+        builder.set_atom_energy(0, -0.5).unwrap();
+        builder.set_atom_energy(1, -1.0).unwrap();
+        let frame = builder.build();
+        let handle = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
+
+        let mut pos: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_metatensor_positions_block(handle, &mut pos) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_mts_block_shape(pos, 2, 3);
+        unsafe { rkr_mts_block_free(pos) };
+
+        let mut vel: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_metatensor_velocities_block(handle, &mut vel) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_mts_block_shape(vel, 2, 3);
+        unsafe { rkr_mts_block_free(vel) };
+
+        let mut frc: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_metatensor_forces_block(handle, &mut frc) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_mts_block_shape(frc, 2, 3);
+        unsafe { rkr_mts_block_free(frc) };
+
+        let mut eng: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_metatensor_atom_energies_block(handle, &mut eng) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_mts_block_shape(eng, 2, 1);
+        unsafe { rkr_mts_block_free(eng) };
         unsafe { free_rkr_frame(handle) };
     }
 
