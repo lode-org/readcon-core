@@ -154,12 +154,10 @@ typedef enum RKRStatus {
  */
 typedef struct ConFrameIterator ConFrameIterator;
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
- * Opaque handle for a cached selection evaluation result (chemfiles builds only).
+ * Opaque handle for a cached selection evaluation result.
  */
 typedef struct RKRSelectionResult RKRSelectionResult;
-#endif
 
 typedef struct String String;
 
@@ -1317,15 +1315,13 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.
  *
  * On success writes a heap-allocated result handle to `*out_result` (caller
  * frees with [`rkr_selection_result_free`]). Returns
- * `RKR_STATUS_SELECTION_ERROR` for invalid grammar or evaluation failure.
- *
- * Only available when the library is built with the `chemfiles` feature.
+ * `RKR_STATUS_SELECTION_ERROR` for invalid grammar, evaluation failure, or
+ * when this build was compiled without the `chemfiles` feature.
  *
  * # Safety
  * `frame_handle`, `selection`, and `out_result` must be non-null; `selection`
@@ -1334,9 +1330,7 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 enum RKRStatus rkr_frame_select(const struct RKRConFrame *frame_handle,
                                 const char *selection,
                                 struct RKRSelectionResult **out_result);
-#endif
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Number of matches in a selection result.
  *
@@ -1344,9 +1338,7 @@ enum RKRStatus rkr_frame_select(const struct RKRConFrame *frame_handle,
  * `result_handle` must be a valid handle from [`rkr_frame_select`] or NULL.
  */
 uint64_t rkr_selection_result_match_count(const struct RKRSelectionResult *result_handle);
-#endif
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Selection context size (1=atom, 2=pair, 3=angle, 4=dihedral).
  *
@@ -1354,9 +1346,7 @@ uint64_t rkr_selection_result_match_count(const struct RKRSelectionResult *resul
  * `result_handle` must be valid or NULL (returns 0).
  */
 uint32_t rkr_selection_result_context_size(const struct RKRSelectionResult *result_handle);
-#endif
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Copy match `match_index` atom indices into `out_atoms` (up to 4 slots).
  * Writes actual arity to `*out_size` when non-null.
@@ -1368,9 +1358,7 @@ enum RKRStatus rkr_selection_result_match_at(const struct RKRSelectionResult *re
                                              uint64_t match_index,
                                              uint64_t *out_atoms,
                                              uint32_t *out_size);
-#endif
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Fill `out_indices` with primary atom indices for each match (length =
  * match count). Returns `RKR_STATUS_BUFFER_TOO_SMALL` if `capacity` is too small.
@@ -1382,9 +1370,7 @@ enum RKRStatus rkr_selection_result_primary_indices(const struct RKRSelectionRes
                                                     uint64_t *out_indices,
                                                     uint64_t capacity,
                                                     uint64_t *out_written);
-#endif
 
-#if defined(READCON_CORE_HAS_CHEMFILES)
 /**
  * Free a selection result from [`rkr_frame_select`]. Safe with NULL.
  *
@@ -1392,7 +1378,6 @@ enum RKRStatus rkr_selection_result_primary_indices(const struct RKRSelectionRes
  * `result_handle` must be from `rkr_frame_select` or NULL.
  */
 void rkr_selection_result_free(struct RKRSelectionResult *result_handle);
-#endif
 
 /**
  * Returns 1 when this library build includes chemfiles selection support.
