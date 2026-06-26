@@ -10,7 +10,7 @@ authors:
 license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
-version: 0.13.0
+version: 0.13.1
 date-released: "2026-06-26"
 keywords:
   - parser

@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.13.1 - 2026-06-26
+#### Features
+- (**python**) `read_chemfiles` / `read_chemfiles_first` / `read_chemfiles_memory` ingress APIs
+- (**python**) `ConFrame.select` / `select_atoms` / `write_con` method style
+- (**docs**) Diátaxis chemfiles pages + papermill executable notebook
+#### Build
+- (**ci**) dual PyPI matrix `readcon` + `readcon-chemfiles` (no Windows chemfiles wheel)
+- (**capi**) selection FFI always exported (stubs without chemfiles feature)
+
+- - -
+
 ## v0.13.0 - 2026-06-26
 #### Maintenance
 - (**release**) sync meson and sphinx version to 0.13.0 - (da94d13) - *HaoZeke*
