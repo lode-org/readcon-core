@@ -1063,7 +1063,7 @@ inline std::vector<Bond> ConFrame::bonds() const {
         uint8_t has_order = 0;
         int32_t order = 0;
         RKRStatus st = rkr_frame_bond_at(frame_handle_.get(), idx, &i, &j, &has_order, &order);
-        if (st != RKR_STATUS_OK)
+        if (st != RKR_STATUS_SUCCESS)
             throw std::runtime_error(std::string("rkr_frame_bond_at: ") + rkr_status_message(st));
         Bond b;
         b.i = i;
