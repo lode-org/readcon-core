@@ -2609,12 +2609,14 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    match crate::metatensor_export::frame_positions_block(frame) {
-        Ok(b) => {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::metatensor_export::frame_positions_block(frame)
+    })) {
+        Ok(Ok(b)) => {
             unsafe { *out_block = transfer_mts_block(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
-        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
 
@@ -2631,13 +2633,15 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    match crate::metatensor_export::frame_velocities_block(frame) {
-        Ok(Some(b)) => {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::metatensor_export::frame_velocities_block(frame)
+    })) {
+        Ok(Ok(Some(b))) => {
             unsafe { *out_block = transfer_mts_block(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
-        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
 
@@ -2654,13 +2658,15 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    match crate::metatensor_export::frame_forces_block(frame) {
-        Ok(Some(b)) => {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::metatensor_export::frame_forces_block(frame)
+    })) {
+        Ok(Ok(Some(b))) => {
             unsafe { *out_block = transfer_mts_block(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
-        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
 
@@ -2677,13 +2683,15 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    match crate::metatensor_export::frame_energies_block(frame) {
-        Ok(Some(b)) => {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::metatensor_export::frame_energies_block(frame)
+    })) {
+        Ok(Ok(Some(b))) => {
             unsafe { *out_block = transfer_mts_block(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
-        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
 
