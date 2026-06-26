@@ -1,39 +1,81 @@
 #!/usr/bin/env bash
-# Execute docs/notebooks/chemfiles_ingress.py via papermill (rgoswami.me-style:
-# literate source in git; notebooks are *functions* parameterized on the fly).
+# Execute docs/orgmode/chemfiles-notebook.org via Org Babel (source of truth).
+# Optional: tangle Python and run papermill on the *generated* script only.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-SRC="${ROOT}/docs/notebooks/chemfiles_ingress.py"
+ORG="${ROOT}/docs/orgmode/chemfiles-notebook.org"
 OUT_DIR="${ROOT}/docs/notebooks/out"
-OUT_NB="${OUT_DIR}/chemfiles_ingress.ipynb"
 WORK="${OUT_DIR}/work"
+TANGLE_PY="${ROOT}/docs/notebooks/chemfiles_ingress.py"
 mkdir -p "$OUT_DIR" "$WORK"
+export READCON_NB_WORK="$WORK"
 
-if ! python3 -c "import readcon, readcon.has_chemfiles_support as h; import sys; sys.exit(0 if h() else 1)" 2>/dev/null; then
+ensure_chemfiles_python() {
+  if python3 -c "import readcon; import sys; sys.exit(0 if readcon.has_chemfiles_support() else 1)" 2>/dev/null; then
+    return 0
+  fi
   echo "Building chemfiles-linked extension (maturin develop --features python,chemfiles)..."
   if command -v maturin >/dev/null 2>&1; then
     maturin develop --features python,chemfiles
   else
-    echo "maturin not found; pip install maturin or use pixi -e python, then re-run." >&2
+    echo "maturin not on PATH; install maturin or: pixi run -e python python-build-chemfiles" >&2
     exit 1
   fi
+  python3 -c "import readcon; assert readcon.has_chemfiles_support(), 'chemfiles still missing'"
+}
+
+ensure_chemfiles_python
+
+if ! command -v emacs >/dev/null 2>&1; then
+  echo "emacs required to execute Org Babel (primary path)" >&2
+  exit 1
 fi
 
-if ! python3 -c "import papermill" 2>/dev/null; then
-  python3 -m pip install -q 'papermill>=2.4' jupytext ipykernel
+# 1) Tangle named blocks from Org → docs/notebooks/chemfiles_ingress.py (generated)
+emacs --batch \
+  --eval "(require 'org)" \
+  --eval "(setq org-confirm-babel-evaluate nil)" \
+  --visit "$ORG" \
+  --eval "(org-babel-tangle)" 
+
+# 2) Execute the Org buffer (Python session) — this is the authoritative run
+emacs --batch \
+  --eval "(require 'org)" \
+  --eval "(require 'ob-python)" \
+  --eval "(setq org-confirm-babel-evaluate nil)" \
+  --eval "(setq org-babel-python-command \"python3\")" \
+  --eval "(defun readcon/org-babel-execute-python-blocks ()
+            (org-babel-map-src-blocks nil
+              (when (org-babel-get-src-block-info)
+                (let ((lang (nth 0 (org-babel-get-src-block-info))))
+                  (when (string= lang \"python\")
+                    (org-babel-execute-src-block))))))" \
+  --visit "$ORG" \
+  --eval "(let ((default-directory \"$ROOT\"))
+            (setq default-directory \"$ROOT\")
+            (readcon/org-babel-execute-python-blocks))"
+
+if [[ ! -f "$WORK/summary.json" ]]; then
+  echo "warning: summary.json missing after babel; trying tangled script as fallback" >&2
+  READCON_NB_WORK="$WORK" python3 "$TANGLE_PY"
 fi
 
-# Ensure percent script is a valid notebook for papermill
-python3 -m jupytext --to ipynb -o "${OUT_DIR}/chemfiles_ingress.in.ipynb" "$SRC"
+python3 -c "from pathlib import Path; print(Path('$WORK/summary.json').read_text())"
+echo "OK — executed Org Babel notebook: $ORG"
 
-python3 -m papermill \
-  "${OUT_DIR}/chemfiles_ingress.in.ipynb" \
-  "$OUT_NB" \
-  -p work_dir "$WORK" \
-  -p require_chemfiles true \
-  --cwd "$ROOT"
-
-python3 -c "import json; from pathlib import Path; p=Path('$WORK')/'summary.json'; print(p.read_text())"
-echo "OK papermill -> $OUT_NB"
+# 3) Optional Papermill on *tangled* percent-less script (not a committed ipynb)
+if [[ "${READCON_NB_PAPERMILL:-0}" == "1" ]]; then
+  python3 -m pip install -q 'papermill>=2.4' jupytext ipykernel 2>/dev/null || true
+  if python3 -c "import papermill, jupytext" 2>/dev/null; then
+    # Wrap tangled py as a minimal notebook for papermill without maintaining ipynb in git
+    python3 -m jupytext --to ipynb -o "$OUT_DIR/chemfiles_ingress.tangled.ipynb" "$TANGLE_PY"
+    python3 -m papermill \
+      "$OUT_DIR/chemfiles_ingress.tangled.ipynb" \
+      "$OUT_DIR/chemfiles_ingress.papermill.ipynb" \
+      -p work_dir "$WORK" \
+      --cwd "$ROOT" || true
+    echo "OK — optional papermill on tangled output (READCON_NB_PAPERMILL=1)"
+  fi
+fi

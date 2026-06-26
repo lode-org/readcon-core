@@ -2,8 +2,10 @@
 #+options: toc:2 num:t
 #+description: Learning-oriented walkthrough: install full Python or Rust chemfiles support, convert XYZ (and friends) to CON, preserve bonds, run selection, write a trajectory.
 
-/Executable twin: =docs/notebooks/chemfiles_ingress.py= (Papermill) and
-=docs/orgmode/chemfiles-notebook.org= (Org Babel). Run =scripts/run-chemfiles-notebook.sh=.
+/Executable form is **Org-mode only**: =docs/orgmode/chemfiles-notebook.org=
+(Babel; run =scripts/run-chemfiles-notebook.sh=). The =.py= under =docs/notebooks/=
+is **tangled** from that Org file — do not hand-edit it. Optional Papermill is
+only on tangled output (=READCON_NB_PAPERMILL=1=).
 
 /Diátaxis: *tutorial* (learning). Goal: succeed once end-to-end. For goals like
 "only convert PDB" see [[file:chemfiles-howto.org][chemfiles how-to guides]]. For *why* lean vs full wheels and
