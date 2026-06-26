@@ -2567,6 +2567,122 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 }
 
 //=============================================================================
+
+// ---------------------------------------------------------------------------
+// Metatensor TensorBlock exports (`metatensor` Cargo feature)
+// ---------------------------------------------------------------------------
+
+/// Free a block from `rkr_frame_metatensor_*_block`. Safe with NULL.
+/// Equivalent to `mts_block_free` from metatensor.h — call exactly once.
+#[cfg(feature = "metatensor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_block_t) {
+    if !block.is_null() {
+        unsafe {
+            let _ = metatensor::c_api::mts_block_free(block);
+        }
+    }
+}
+
+#[cfg(feature = "metatensor")]
+fn transfer_mts_block(block: metatensor::TensorBlock) -> *mut metatensor::c_api::mts_block_t {
+    unsafe {
+        std::mem::transmute::<metatensor::TensorBlock, *mut metatensor::c_api::mts_block_t>(block)
+    }
+}
+
+/// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+#[cfg(feature = "metatensor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
+    frame_handle: *const RKRConFrame,
+    out_block: *mut *mut metatensor::c_api::mts_block_t,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_block.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_block = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    match crate::metatensor_export::frame_positions_block(frame) {
+        Ok(b) => {
+            unsafe { *out_block = transfer_mts_block(b) };
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
+#[cfg(feature = "metatensor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
+    frame_handle: *const RKRConFrame,
+    out_block: *mut *mut metatensor::c_api::mts_block_t,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_block.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_block = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    match crate::metatensor_export::frame_velocities_block(frame) {
+        Ok(Some(b)) => {
+            unsafe { *out_block = transfer_mts_block(b) };
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
+#[cfg(feature = "metatensor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
+    frame_handle: *const RKRConFrame,
+    out_block: *mut *mut metatensor::c_api::mts_block_t,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_block.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_block = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    match crate::metatensor_export::frame_forces_block(frame) {
+        Ok(Some(b)) => {
+            unsafe { *out_block = transfer_mts_block(b) };
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
+#[cfg(feature = "metatensor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
+    frame_handle: *const RKRConFrame,
+    out_block: *mut *mut metatensor::c_api::mts_block_t,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_block.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_block = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    match crate::metatensor_export::frame_energies_block(frame) {
+        Ok(Some(b)) => {
+            unsafe { *out_block = transfer_mts_block(b) };
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
+        Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+    }
+}
+
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
 //=============================================================================
 
@@ -3219,8 +3335,7 @@ mod tests {
             free_rkr_frame(frame_ptr);
         }
     }
-
-    /// C surface: chemfiles selection.cpp chain topology via `rkr_frame_select`.
+        /// C surface: chemfiles selection.cpp chain topology via `rkr_frame_select`.
     #[cfg(feature = "chemfiles")]
     #[test]
     fn rkr_frame_select_cpp_topology_bonds_angles_dihedrals() {
@@ -3268,4 +3383,24 @@ mod tests {
 
         unsafe { free_rkr_frame(frame_ptr) };
     }
+
+    #[cfg(feature = "metatensor")]
+    #[test]
+    fn metatensor_positions_via_c_abi() {
+        let handle = test_frame_handle();
+        let mut out: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        let st = unsafe { rkr_frame_metatensor_positions_block(handle, &mut out) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(!out.is_null());
+        let mut array = unsafe { std::mem::zeroed::<metatensor::c_api::mts_array_t>() };
+        let status = unsafe { metatensor::c_api::mts_block_data(out, &mut array) };
+        assert_eq!(status, metatensor::c_api::MTS_SUCCESS);
+        unsafe { rkr_mts_block_free(out) };
+        let mut out2: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
+        let st2 = unsafe { rkr_frame_metatensor_velocities_block(handle, &mut out2) };
+        assert_eq!(st2, RKRStatus::RKR_STATUS_SECTION_ABSENT);
+        assert!(out2.is_null());
+        unsafe { free_rkr_frame(handle) };
+    }
+
 }
