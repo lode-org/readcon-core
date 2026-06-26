@@ -5,9 +5,6 @@ copyright = "2025--present, LODE developers"
 author = "LODE developers"
 release = "0.13.1"
 
-# sphinxcontrib_rust / sphinx-rustdocgen invoke `cargo install --path .` and
-# fail in minimal CI; serve pre-generated RST under docs/source/crates/ instead
-# (regenerate locally with sphinx-rustdocgen when the public Rust API changes).
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
@@ -26,11 +23,13 @@ exclude_patterns = [
 html_theme = "shibuya"
 html_static_path = ["_static"]
 html_favicon = "_static/favicon.svg"
+html_title = "readcon-core documentation"
 
 html_theme_options = {
     "github_url": "https://github.com/lode-org/readcon-core",
     "light_logo": "_static/logo-light.svg",
     "dark_logo": "_static/logo-dark.svg",
+    "accent_color": "indigo",
 }
 
 
