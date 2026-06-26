@@ -1,0 +1,2 @@
+! Rename to .f90 and compile with -DREADCON_HAS_METATENSOR against metatensor-enabled lib
+! to replace stub frame_metatensor_positions_block — kept disabled by default.

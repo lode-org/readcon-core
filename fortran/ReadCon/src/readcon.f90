@@ -413,18 +413,6 @@ module readcon
       type(c_ptr), intent(out) :: out
       integer(c_int) :: c_rkr_frame_builder_atom_ids_dlpack
     end function
-#ifdef READCON_HAS_METATENSOR
-    function c_rkr_frame_metatensor_positions_block(f, out) bind(C, name="rkr_frame_metatensor_positions_block")
-      import :: c_ptr, c_int
-      type(c_ptr), value :: f
-      type(c_ptr), intent(out) :: out
-      integer(c_int) :: c_rkr_frame_metatensor_positions_block
-    end function
-    subroutine c_rkr_mts_block_free(b) bind(C, name="rkr_mts_block_free")
-      import :: c_ptr
-      type(c_ptr), value :: b
-    end subroutine
-#endif
     subroutine c_rkr_dlpack_delete(tensor) bind(C, name="rkr_dlpack_delete")
       import :: c_ptr
       type(c_ptr), value :: tensor
@@ -1063,24 +1051,18 @@ contains
     block = c_null_ptr
     frame_metatensor_positions_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
-    frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
-#else
-    frame_metatensor_positions_block = rkr_status_internal_error
+    frame_metatensor_positions_block = -7
+    frame_metatensor_positions_block = -7
     block = c_null_ptr
-#endif
   end function
 
   subroutine mts_block_free_rkr(block)
     type(c_ptr), intent(inout) :: block
-#ifdef READCON_HAS_METATENSOR
     if (c_associated(block)) then
-      call c_rkr_mts_block_free(block)
+      continue
       block = c_null_ptr
     end if
-#else
     block = c_null_ptr
-#endif
   end subroutine
 
 
