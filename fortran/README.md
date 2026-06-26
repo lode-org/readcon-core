@@ -53,9 +53,16 @@ call bd%dlpack_delete(tensor)
 
 Or copy into Fortran arrays without DLPack: `bd%copy_positions(pos)` / `bd%copy_masses(masses)` (row-major C buffers transposed into `pos(3,n)`).
 
-## Metatensor TensorBlocks (optional fat lib)
+## Metatensor TensorBlocks (optional fat lib — option A)
 
-Build `libreadcon_core` with `--features metatensor` (and usually `chemfiles`). Compile the module with **`-cpp -DREADCON_HAS_METATENSOR`** (the test script does this). Lean builds omit C symbols (`READCON_CORE_HAS_METATENSOR` in the header); Fortran helpers then return status **`-7`** without linking `libmetatensor`.
+**Boundary:** pointers are metatensor-sys `mts_block_t*` (same as `metatensor.h`). Rust builds `TensorBlock` in `metatensor_export`, transfers once (`tensor_block_into_raw_mts`), frees only via `rkr_mts_block_free` → `mts_block_free`.
+
+| Build | Cargo features | Fortran flags | Link | Helper behaviour |
+|-------|----------------|---------------|------|------------------|
+| **Lean** | `chemfiles` (no `metatensor`) | `-cpp` only | no `libmetatensor` | status **`-7`**, null block |
+| **Fat** | `chemfiles,metatensor` | `-cpp -DREADCON_HAS_METATENSOR` | `libmetatensor` + paths from env | real blocks / `SECTION_ABSENT` (-8) |
+
+After `cargo build --release --features metatensor`, source **`target/release/readcon-metatensor.env`** (`READCON_METATENSOR_INCLUDE`, `READCON_METATENSOR_LIB_DIR`). `scripts/run_fortran_tests.sh` does this automatically for fat runs.
 
 | Helper | C symbol | Shape / status |
 |--------|----------|----------------|
@@ -65,7 +72,7 @@ Build `libreadcon_core` with `--features metatensor` (and usually `chemfiles`). 
 | `frame_metatensor_atom_energies_block` | `…_atom_energies_block` | `[N,1]` or -8 |
 | `mts_block_free_rkr` | `rkr_mts_block_free` | calls `mts_block_free` once |
 
-Consumers that need values/labels include metatensor’s cbindgen header (`metatensor.h`) and use `mts_block_data` / `mts_block_labels` on the opaque pointer. C example: `examples/c_metatensor_sample.c`.
+C consumers: prefer `include/readcon-metatensor.h` (`metatensor.h` **first**). Inspect with `mts_block_data` / `mts_block_labels`. Example: `examples/c_metatensor_sample.c`. Full matrix and ownership rules: Sphinx **Language bindings** page.
 
 ## Chemfiles (feature-enabled lib)
 
