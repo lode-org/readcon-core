@@ -566,34 +566,86 @@ Builder metadata helpers:
 6 metatensor TensorBlock export (v0.10.0+; C/Fortran ABI v0.13.1+)
 ------------------------------------------------------------------
 
-The optional ``metatensor`` Cargo feature builds `metatensor <https://docs.metatensor.org/latest/index.html>`_
-``TensorBlock`` instances from a frame (Rust module ``metatensor_export``).
-With the same feature, the ****shipped C ABI**** transfers ownership as
-``mts_block_t *`` handles consumable via metatensor's ****cbindgen**** C API
-(``mts_block_data``, ``mts_block_labels``, ``mts_block_free``). Headers declare
-the exports only when ``READCON_CORE_HAS_METATENSOR`` is defined (cbindgen
-``defines``; same pattern as ``READCON_CORE_HAS_ZSTD``). Lean builds omit the
-symbols so non-metatensor C/Fortran consumers do not need ``libmetatensor``.
+****Design (option A):**** high-level construction in Rust
+(``metatensor_export`` / ``TensorBlock``); ****C boundary = metatensor-sys only****
+(``mts_block_t *``, ``mts_block_data`` / ``mts_block_labels`` / ``mts_block_free`` from
+``metatensor.h``). Single ownership transfer in Rust
+(``tensor_block_into_raw_mts`` → ``rkr_*`` out-param; free with ``rkr_mts_block_free``
+or ``mts_block_free``, not both). We do ****not**** merge metatensor's cbindgen
+header into ``readcon-core.h``; two headers, one pointer ABI.
+
+****Lean vs fat (honest gates)****
 
 .. table::
 
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
-    | Quantity      | Shape               | C ABI                                                    | Fortran (``READCON_HAS_METATENSOR`` / fat lib) |
-    +===============+=====================+==========================================================+================================================+
-    | positions     | ``[N,3]``           | ``rkr_frame_metatensor_positions_block``                 | ``frame_metatensor_positions_block``           |
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
-    | velocities    | ``[N,3]`` or absent | ``…_velocities_block``                                   | ``frame_metatensor_velocities_block``          |
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
-    | forces        | ``[N,3]`` or absent | ``…_forces_block``                                       | ``frame_metatensor_forces_block``              |
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
-    | atom energies | ``[N,1]`` or absent | ``…_atom_energies_block``                                | ``frame_metatensor_atom_energies_block``       |
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
-    | free          | —                   | ``rkr_mts_block_free`` (or ``mts_block_free``; not both) | ``mts_block_free_rkr``                         |
-    +---------------+---------------------+----------------------------------------------------------+------------------------------------------------+
+    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+----------------------------------------------------------------------------------------------------+------------------------+
+    | Variant | Cargo                                                      | ``libreadcon_core.so`` symbols                  | C header                                                      | Fortran module                                                                                     | Link ``libmetatensor`` |
+    +=========+============================================================+=================================================+===============================================================+====================================================================================================+========================+
+    | Lean    | default / ``chemfiles`` only                               | ****omit**** ``rkr_frame_metatensor_*``         | no ``READCON_CORE_HAS_METATENSOR`` (or undef)                 | compile with ``-cpp`` ****without**** ``-DREADCON_HAS_METATENSOR`` → helpers return ****``-7``**** | no                     |
+    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+----------------------------------------------------------------------------------------------------+------------------------+
+    | Fat     | ``--features metatensor`` (often ``chemfiles,metatensor``) | export all four blocks + ``rkr_mts_block_free`` | define ``READCON_CORE_HAS_METATENSOR`` (cbindgen ``defines``) | ``-cpp -DREADCON_HAS_METATENSOR`` (script does this)                                               | ****yes****            |
+    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+----------------------------------------------------------------------------------------------------+------------------------+
 
-Optional sections return ``RKR_STATUS_SECTION_ABSENT`` (``-8``) with a null
-out-pointer. Example C consumer: ``examples/c_metatensor_sample.c``
-(include ``metatensor.h`` for shape/label checks).
+After a fat ``cargo build --features metatensor``, ``build.rs`` writes
+``target/<profile>/readcon-metatensor.env`` (``READCON_METATENSOR_INCLUDE``,
+``READCON_METATENSOR_LIB_DIR``) and adds link-search / ``-lmetatensor`` / rpath.
+``scripts/run_fortran_tests.sh`` ****sources**** that file (with a glob fallback).
+
+****Headers****
+
+.. table::
+
+    +------------------------------------------------+------------------------------------------------------------------------------------------------------------------+
+    | File                                           | When                                                                                                             |
+    +================================================+==================================================================================================================+
+    | ``include/readcon-core.h``                     | Always; metatensor decls only under ``#if defined(READCON_CORE_HAS_METATENSOR)``; opaque ``mts_block_t`` typedef |
+    +------------------------------------------------+------------------------------------------------------------------------------------------------------------------+
+    | ``include/readcon-metatensor.h``               | Prefer for C consumers: includes ****``metatensor.h`` first****, then defines the gate and ``readcon-core.h``    |
+    +------------------------------------------------+------------------------------------------------------------------------------------------------------------------+
+    | ``metatensor.h`` (from env INCLUDE or install) | Values/labels/free via sys C API; ****required**** to interpret the pointer                                      |
+    +------------------------------------------------+------------------------------------------------------------------------------------------------------------------+
+
+Regenerate ``readcon-core.h`` with ``scripts/regen-capi-headers.sh`` (CI ``--check``).
+
+****Status codes (C/Fortran)****
+
+.. table::
+
+    +----------------------------------------+------------------------------------------------------------------------+
+    | Code                                   | Meaning                                                                |
+    +========================================+========================================================================+
+    | ``0`` (``RKR_STATUS_SUCCESS``)         | Owned non-null ``mts_block_t *``                                       |
+    +----------------------------------------+------------------------------------------------------------------------+
+    | ``-1``                                 | null pointer arg                                                       |
+    +----------------------------------------+------------------------------------------------------------------------+
+    | ``-7``                                 | Fortran lean: metatensor C symbols not linked (feature gate in module) |
+    +----------------------------------------+------------------------------------------------------------------------+
+    | ``-8`` (``RKR_STATUS_SECTION_ABSENT``) | Optional velocities/forces/energies missing on frame; out null         |
+    +----------------------------------------+------------------------------------------------------------------------+
+    | other non-zero                         | internal / metatensor error                                            |
+    +----------------------------------------+------------------------------------------------------------------------+
+
+****Exports****
+
+.. table::
+
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+    | Quantity      | Shape               | C ABI                                                           | Fortran (fat / ``-DREADCON_HAS_METATENSOR``) |
+    +===============+=====================+=================================================================+==============================================+
+    | positions     | ``[N,3]``           | ``rkr_frame_metatensor_positions_block``                        | ``frame_metatensor_positions_block``         |
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+    | velocities    | ``[N,3]`` or absent | ``…_velocities_block``                                          | ``frame_metatensor_velocities_block``        |
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+    | forces        | ``[N,3]`` or absent | ``…_forces_block``                                              | ``frame_metatensor_forces_block``            |
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+    | atom energies | ``[N,1]`` or absent | ``…_atom_energies_block``                                       | ``frame_metatensor_atom_energies_block``     |
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+    | free          | —                   | ``rkr_mts_block_free`` ****or**** ``mts_block_free`` (not both) | ``mts_block_free_rkr``                       |
+    +---------------+---------------------+-----------------------------------------------------------------+----------------------------------------------+
+
+Sample labels ``atom_id``; properties ``xyz`` (0/1/2) or single ``energy``. No full
+``TensorMap`` keyed by species (callers build that). Example C consumer:
+``examples/c_metatensor_sample.c``.
 
 .. code:: toml
 
@@ -605,22 +657,22 @@ out-pointer. Example C consumer: ``examples/c_metatensor_sample.c``
     use readcon_core::metatensor_export::{
         frame_positions_block, frame_velocities_block,
         frame_forces_block, frame_energies_block,
+        tensor_block_into_raw_mts, // FFI transfer; prefer rkr_* from C
     };
 
     let frame = /* ... */;
     let positions = frame_positions_block(&frame)?;       // [N, 3] f64
     let velocities = frame_velocities_block(&frame)?;     // Option<TensorBlock>
-    let forces = frame_forces_block(&frame)?;             // Option<TensorBlock>
-    let energies = frame_energies_block(&frame)?;         // Option<TensorBlock>, [N, 1]
+    // C path: tensor_block_into_raw_mts(block) then mts_block_free only
 
-    // Convenience entry point for the most common case:
-    let positions = frame.to_metatensor_positions_block()?;
+.. code:: bash
 
-Prefer ``include/readcon-metatensor.h`` (includes ``metatensor.h`` ****first****, then
-``readcon-core.h`` with ``READCON_CORE_HAS_METATENSOR``). Ownership transfer is
-centralized in Rust (``tensor_block_into_raw_mts`` / ``mts_block_free_sys`` via
-metatensor-sys). After ``cargo build --features metatensor``, scripts source
-``target/<profile>/readcon-metatensor.env`` for include/lib paths.
+    cargo build --release --features chemfiles,metatensor
+    set -a && source target/release/readcon-metatensor.env && set +a
+    gcc -I include -I "$READCON_METATENSOR_INCLUDE" examples/c_metatensor_sample.c \
+      -L target/release -L "$READCON_METATENSOR_LIB_DIR" \
+      -Wl,-rpath,"$READCON_METATENSOR_LIB_DIR" -Wl,-rpath,$PWD/target/release \
+      -lreadcon_core -lmetatensor -o /tmp/c_mts
 
 .. code:: c
 
@@ -629,12 +681,11 @@ metatensor-sys). After ``cargo build --features metatensor``, scripts source
        mts_block_data(block, &array);  mts_block_labels(block, 0);
        rkr_mts_block_free(block); */
 
-Sample labels are ``atom_id`` (the post-grouping column-5 index from the
-file); property labels are ``xyz`` (0/1/2) for vector quantities and a
-single ``energy`` column for the scalar block. Users wanting a
-``TensorMap`` keyed by species can build one on top of these blocks; the
-species-vs-atom-list partition is downstream-specific so the helpers
-expose the building blocks rather than baking in one convention.
+****CI / tests:**** Rust ``metatensor_`` lib tests (C ABI + transfer). Fortran workflow
+runs lean (``chemfiles``) and fat (``chemfiles,metatensor``) via
+``scripts/run_fortran_tests.sh``. Fortran suite does ****not**** call chemfiles C++
+on CI (SIGFPE under gfortran traps); chemfiles stays on Rust CI. Python/Julia:
+no first-class TensorBlock helpers (matrix ``n/a``); use C or Rust.
 
 7 Builder DLPack export (C / Fortran)
 -------------------------------------
