@@ -25,7 +25,6 @@ exclude_patterns = [
     "crates/readcon_core/main.rst",
 ]
 
-# Myst: allow mermaid fences in any .md we add later
 myst_enable_extensions = [
     "colon_fence",
     "deflist",
@@ -38,6 +37,23 @@ html_static_path = ["_static"]
 html_favicon = "_static/favicon.svg"
 html_title = "readcon-core documentation"
 html_baseurl = "https://lode-org.github.io/readcon-core/"
+
+# Edit-this-page + repo-stats sidebars (Shibuya / rgpot / rgpycrumbs parity)
+html_context = {
+    "source_type": "github",
+    "source_user": "lode-org",
+    "source_repo": "readcon-core",
+    "source_version": "main",
+    "source_docs_path": "/docs/source/",
+}
+
+html_sidebars = {
+    "**": [
+        "sidebars/localtoc.html",
+        "sidebars/repo-stats.html",
+        "sidebars/edit-this-page.html",
+    ],
+}
 
 html_theme_options = {
     "github_url": "https://github.com/lode-org/readcon-core",
@@ -67,6 +83,11 @@ html_theme_options = {
                     "summary": "Batch convert, C API, lean vs full",
                 },
                 {
+                    "title": "Explain — why chemfiles",
+                    "url": "chemfiles-explain",
+                    "summary": "Bonds, indices, lean vs full",
+                },
+                {
                     "title": "Reference",
                     "url": "chemfiles-reference",
                     "summary": "APIs, grammar, install matrix",
@@ -87,9 +108,19 @@ html_theme_options = {
                     "summary": "Potential evaluation toolkit",
                 },
                 {
+                    "title": "chemparseplot",
+                    "url": "https://chemparseplot.rgoswami.me",
+                    "summary": "NEB / WBO / 2D FES publication plots",
+                },
+                {
                     "title": "rgpycrumbs",
                     "url": "https://rgpycrumbs.rgoswami.me",
-                    "summary": "Analysis crumbs / helpers",
+                    "summary": "CLI crumbs, xyzrender structure strips",
+                },
+                {
+                    "title": "pychum",
+                    "url": "https://github.com/HaoZeke/pychum",
+                    "summary": "ORCA / NWChem input generation",
                 },
                 {
                     "title": "LODE org",
@@ -99,6 +130,7 @@ html_theme_options = {
             ],
         },
         {"title": "Spec", "url": "spec"},
+        {"title": "Benchmarks", "url": "benchmarks"},
         {"title": "GitHub", "url": "https://github.com/lode-org/readcon-core"},
     ],
 }

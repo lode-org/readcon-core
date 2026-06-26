@@ -135,3 +135,63 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
 .sy-page a.reference {
   text-underline-offset: 0.15em;
 }
+
+/* === Figures: WBO / publication style ===================================== */
+.sy-page img,
+.sy-page .figure img,
+.sy-page figure img {
+  border-radius: 0.45rem;
+  max-width: 100%;
+  height: auto;
+}
+
+.sy-page .figure,
+.sy-page figure {
+  margin: 1.5rem auto 1.75rem;
+  text-align: center;
+}
+
+.sy-page .figure .caption,
+.sy-page figcaption,
+.sy-page p.caption {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--sy-f-text-mute, #475569);
+  margin-top: 0.55rem;
+  text-align: left;
+  max-width: 46rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Right sidebar (localtoc / repo-stats / edit-this-page) */
+.sy-rside,
+aside.sy-rside {
+  font-family: var(--rc-font-sans) !important;
+  font-size: 0.92rem;
+}
+
+.sy-rside .sidebar-tree,
+.sy-rside .localtoc,
+.sy-rside nav {
+  line-height: 1.45;
+}
+
+.sy-rside a {
+  text-underline-offset: 0.12em;
+}
+
+/* Cards on index */
+.sy-page .sd-card {
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--rc-indigo) 18%, transparent);
+}
+.sy-page .sd-card-title {
+  font-weight: 700;
+  font-family: var(--rc-font-sans) !important;
+}
+
+/* Mermaid diagrams breathe */
+.sy-page .mermaid {
+  margin: 1.25rem 0 1.5rem;
+}
