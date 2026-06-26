@@ -1411,9 +1411,11 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
 #endif  // __cplusplus
 
 
-#if defined(READCON_CORE_HAS_METATENSOR)
 /**
- * Free block from rkr_frame_metatensor_*_block (or call mts_block_free).
+ * Metatensor TensorBlock exports. Real data requires linking a build with the
+ * `metatensor` Cargo feature (`-DREADCON_CORE_HAS_METATENSOR` for docs only).
+ * Without the feature, exports return RKR_STATUS_INTERNAL_ERROR and null blocks.
+ * Free successful blocks with `rkr_mts_block_free` or `mts_block_free` (not both).
  */
 void rkr_mts_block_free(struct mts_block_t *block);
 
@@ -1425,6 +1427,5 @@ enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame
                                                  struct mts_block_t **out_block);
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
                                                         struct mts_block_t **out_block);
-#endif /* READCON_CORE_HAS_METATENSOR */
 
 #endif  /* READCON_H */

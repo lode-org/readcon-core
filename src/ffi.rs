@@ -2574,14 +2574,18 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 
 /// Free a block from `rkr_frame_metatensor_*_block`. Safe with NULL.
 /// Equivalent to `mts_block_free` from metatensor.h — call exactly once.
-#[cfg(feature = "metatensor")]
+/// Always exported so Fortran can link; no-op without the `metatensor` feature.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_block_t) {
-    if !block.is_null() {
-        unsafe {
-            let _ = metatensor::c_api::mts_block_free(block);
-        }
+pub unsafe extern "C" fn rkr_mts_block_free(block: *mut std::ffi::c_void) {
+    if block.is_null() {
+        return;
     }
+    #[cfg(feature = "metatensor")]
+    unsafe {
+        let _ = metatensor::c_api::mts_block_free(block as *mut metatensor::c_api::mts_block_t);
+    }
+    #[cfg(not(feature = "metatensor"))]
+    let _ = block;
 }
 
 #[cfg(feature = "metatensor")]
@@ -2681,6 +2685,56 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
         Ok(None) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
         Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
+}
+
+
+/// Always linked; returns INTERNAL_ERROR and null out without `metatensor` feature.
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut std::ffi::c_void,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_INTERNAL_ERROR
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut std::ffi::c_void,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_INTERNAL_ERROR
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut std::ffi::c_void,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_INTERNAL_ERROR
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut std::ffi::c_void,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_INTERNAL_ERROR
 }
 
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
@@ -3395,7 +3449,7 @@ mod tests {
         let mut array = unsafe { std::mem::zeroed::<metatensor::c_api::mts_array_t>() };
         let status = unsafe { metatensor::c_api::mts_block_data(out, &mut array) };
         assert_eq!(status, metatensor::c_api::MTS_SUCCESS);
-        unsafe { rkr_mts_block_free(out) };
+        unsafe { rkr_mts_block_free(out as *mut std::ffi::c_void) };
         let mut out2: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         let st2 = unsafe { rkr_frame_metatensor_velocities_block(handle, &mut out2) };
         assert_eq!(st2, RKRStatus::RKR_STATUS_SECTION_ABSENT);
