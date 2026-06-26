@@ -67,27 +67,27 @@ html_theme_options = {
     "nav_links": [
         {"title": "Start", "url": "getting-started"},
         {
-            "title": "Chemfiles",
+            "title": "Convert",
             "children": [
                 {
-                    "title": "Tutorial — convert formats",
+                    "title": "Tutorial — XYZ/PDB/GRO → CON",
                     "url": "chemfiles-tutorial",
-                    "summary": "XYZ/PDB/GRO → CON end-to-end",
+                    "summary": "End-to-end format conversion",
                 },
                 {
-                    "title": "Executable Org notebook",
+                    "title": "Executable conversion notebook",
                     "url": "chemfiles-notebook",
-                    "summary": "Babel: scripts/run-chemfiles-notebook.sh",
+                    "summary": "Org Babel: scripts/run-chemfiles-notebook.sh",
                 },
                 {
                     "title": "How-to recipes",
                     "url": "chemfiles-howto",
-                    "summary": "Batch convert, C API, lean vs full",
+                    "summary": "Batch convert, C API, install choices",
                 },
                 {
-                    "title": "Explain — why chemfiles",
+                    "title": "Explain — why conversion is optional",
                     "url": "chemfiles-explain",
-                    "summary": "Bonds, indices, lean vs full",
+                    "summary": "Bonds, indices, two install flavours",
                 },
                 {
                     "title": "Reference",

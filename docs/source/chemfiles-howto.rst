@@ -10,7 +10,7 @@ How-to — Chemfiles conversion and selection
    Diátaxis *how-to guides*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-(:doc:`tutorials`) or finish :doc:`chemfiles-tutorial` once./
+(`tutorials <tutorials.rst>`_) or finish `the chemfiles tutorial <chemfiles-tutorial.rst>`_ once./
 
 How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 ----------------------------------------------------------------

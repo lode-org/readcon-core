@@ -57,17 +57,7 @@ What you will build
 
 You do **not** need a pre-existing ``.con`` file. The point is **ingress from the wider ecosystem into CON**.
 
-.. figure:: /_static/figures/ingress-with-structure.png
-   :alt: Ingress pipeline with embedded WBO-style structure
-   :align: center
-   :width: 100%
-
    Foreign trajectory → chemfiles → ``ConFrame`` (optional bonds) → ``.con``.
-
-.. figure:: /_static/figures/structures-wbo-style.png
-   :alt: Example CON geometries as ball-stick
-   :align: center
-   :width: 100%
 
    After ingress, geometries are first-class for chemparseplot / rgpycrumbs /
    xyzrender visualization (examples use repo test ``.con`` files).

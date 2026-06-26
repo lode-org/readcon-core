@@ -33,34 +33,33 @@ into CON without inventing another reader for each format.
 
 
 #+begin_export rst
-.. figure:: /_static/figures/ecosystem-full.png
-   :alt: readcon-core linked to eOn, rgpot, LODE, chemparseplot, rgpycrumbs, pychum
+.. figure:: /_static/figures/conversion-pipeline.svg
+   :alt: Convert XYZ PDB or GRO into CON for eOn and LODE
    :align: center
    :width: 92%
 
-   **Ecosystem** — CON I/O at the center; consumers (eOn, rgpot, LODE) and the
-   viz/input layer (chemparseplot, rgpycrumbs, pychum).
+   **Conversion path** — common structure formats into CON for eOn / LODE.
 
 .. grid:: 1 1 2 2
    :gutter: 2
 
-   .. grid-item-card:: WBO-style structures
+   .. grid-item-card:: Get started
       :link: getting-started
       :link-type: doc
 
-      Ball–stick CON frames with bond scalars (chemparseplot / rgpycrumbs look).
+      Install, read a CON file, convert XYZ/PDB/GRO when you need it.
 
-   .. grid-item-card:: Chemfiles ingress
+   .. grid-item-card:: Convert formats
       :link: chemfiles-tutorial
       :link-type: doc
 
-      XYZ, PDB, GRO → ``ConFrame`` → ``.con`` without a bespoke reader per format.
+      XYZ, PDB, GRO → CON without writing a reader per format.
 
-   .. grid-item-card:: 2D landscapes
+   .. grid-item-card:: Why conversion is optional
       :link: chemfiles-explain
       :link-type: doc
 
-      Reaction-valley figures are the viz layer — link out to chemparseplot.
+      Background on optional conversion, bonds, and atom indices.
 
    .. grid-item-card:: Spec & bindings
       :link: spec
@@ -82,7 +81,7 @@ into CON without inventing another reader for each format.
 
 .. toctree::
    :maxdepth: 1
-   :caption: How-to & tutorials (chemfiles)
+   :caption: Convert other formats
 
    chemfiles-tutorial
    chemfiles-notebook

@@ -177,7 +177,7 @@ readers (e.g., eOn's ``fileio.py``) by using:
 - **Forward skip**: ``forward()`` skips frames by line counting without
   parsing atom data
 
-See :doc:`benchmarks` for measured numbers on real datasets.
+See `benchmarks <benchmarks.rst>`_ for measured numbers on real datasets.
 
 8 What is the sections mechanism?
 ---------------------------------

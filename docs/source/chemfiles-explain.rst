@@ -5,26 +5,11 @@ Explanation — Chemfiles ingress and CON topology
 
 .. contents::
 
-.. figure:: /_static/figures/con-anatomy-structure.png
-   :alt: CON on-disk layers beside live geometry
-   :align: center
-   :width: 100%
-
    **Anatomy + geometry** — layered CON layout next to an in-memory structure
    (``tiny_cuh2.con``). Selection indices follow ``atom_data`` order.
 
-.. figure:: /_static/figures/landscape-2d-valley.png
-   :alt: 2D reaction valley landscape with path overlay
-   :align: center
-   :width: 88%
-
    **Why CON matters for viz** — chemparseplot / rgpycrumbs 2D reaction-valley
    landscapes consume CON NEB paths; readcon-core is the reliable I/O layer.
-
-.. figure:: /_static/figures/ecosystem-full.png
-   :alt: Full ecosystem map
-   :align: center
-   :width: 92%
 
    **Full ecosystem** — eOn, rgpot, LODE consumers; chemparseplot, rgpycrumbs,
    pychum for viz and inputs.
@@ -36,15 +21,10 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-:doc:`chemfiles-tutorial` and :doc:`chemfiles-howto`./
+`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_./
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
-
-.. figure:: /_static/figures/ingress-with-structure.png
-   :alt: Ingress pipeline diagram
-   :align: center
-   :width: 100%
 
    Chemfiles owns format diversity; readcon-core owns CON fidelity.
 
@@ -61,7 +41,7 @@ product story is not "replace chemfiles" but **land foreign trajectories in CON*
 Why is chemfiles optional (Cargo feature + two PyPI names)?
 -----------------------------------------------------------
 
-.. figure:: /_static/figures/lean-vs-full.svg
+.. figure:: /_static/figures/lean-vs-conversion.svg
    :alt: Lean versus full builds
    :align: center
    :width: 100%
@@ -161,16 +141,11 @@ Gaps (honest limits)
 
 Residue/=resname= filters, full chemfiles property surface, improper
 topology extras, and numeric geometry assertion blocks from chemfiles
-``tests/selection.cpp`` are not fully mirrored. See :doc:`bindings` and
-:doc:`chemfiles-reference` for the supported subset.
+``tests/selection.cpp`` are not fully mirrored. See `bindings <bindings.rst>`_ and
+`reference <chemfiles-reference.rst>`_ for the supported subset.
 
 Place in the LODE / eOn ecosystem
 ---------------------------------
-
-.. figure:: /_static/figures/ecosystem-full.png
-   :alt: readcon-core among eOn, rgpot, rgpycrumbs, chemfiles, bindings
-   :align: center
-   :width: 100%
 
    Interchange hub: potentials (rgpot), saddles (eOn), analysis (rgpycrumbs),
    multi-format ingress (chemfiles), multi-language consumers.
