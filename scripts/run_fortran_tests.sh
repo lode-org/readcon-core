@@ -21,14 +21,29 @@ FFLAGS="-cpp -ffpe-summary=none"
 EXTRA="-lstdc++"
 if [[ "$FEATURES" == *metatensor* ]]; then
   FFLAGS="-cpp -DREADCON_HAS_METATENSOR -ffpe-summary=none"
-  for d in "$ROOT"/target/release/build/metatensor-sys-*/out/lib \
-           "$ROOT"/target/release/build/metatensor-sys-*/out/build/target/*/release/deps \
-           "$ROOT"/target/release/build/metatensor-sys-*/out; do
-    if [[ -d "$d" ]] && ls "$d"/libmetatensor.so >/dev/null 2>&1; then
-      EXTRA="-L$d -lmetatensor $EXTRA"
-      export LD_LIBRARY_PATH="$d:$LD_LIBRARY_PATH"
-    fi
-  done
+  ENV_FILE="$ROOT/target/release/readcon-metatensor.env"
+  if [[ -f "$ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    # shellcheck source=/dev/null
+    source "$ENV_FILE"
+    set +a
+  fi
+  if [[ -n "${READCON_METATENSOR_LIB_DIR:-}" && -d "${READCON_METATENSOR_LIB_DIR}" ]]; then
+    EXTRA="-L${READCON_METATENSOR_LIB_DIR} -lmetatensor $EXTRA"
+    export LD_LIBRARY_PATH="${READCON_METATENSOR_LIB_DIR}:$LD_LIBRARY_PATH"
+  else
+    # Fallback: scan metatensor-sys out (first build may race env file)
+    for d in "$ROOT"/target/release/build/metatensor-sys-*/out/lib \
+             "$ROOT"/target/release/build/metatensor-sys-*/out/build/target/*/release/deps \
+             "$ROOT"/target/release/build/metatensor-sys-*/out; do
+      if [[ -d "$d" ]] && ls "$d"/libmetatensor.so >/dev/null 2>&1; then
+        EXTRA="-L$d -lmetatensor $EXTRA"
+        export LD_LIBRARY_PATH="$d:$LD_LIBRARY_PATH"
+        break
+      fi
+    done
+  fi
 fi
 cd "$ROOT/fortran/ReadCon"
 # shellcheck disable=SC2086

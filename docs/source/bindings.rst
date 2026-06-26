@@ -616,11 +616,15 @@ out-pointer. Example C consumer: ``examples/c_metatensor_sample.c``
     // Convenience entry point for the most common case:
     let positions = frame.to_metatensor_positions_block()?;
 
+Prefer ``include/readcon-metatensor.h`` (includes ``metatensor.h`` ****first****, then
+``readcon-core.h`` with ``READCON_CORE_HAS_METATENSOR``). Ownership transfer is
+centralized in Rust (``tensor_block_into_raw_mts`` / ``mts_block_free_sys`` via
+metatensor-sys). After ``cargo build --features metatensor``, scripts source
+``target/<profile>/readcon-metatensor.env`` for include/lib paths.
+
 .. code:: c
 
-    #define READCON_CORE_HAS_METATENSOR 1
-    #include "readcon-core.h"
-    #include <metatensor.h>
+    #include "readcon-metatensor.h"
     /* rkr_frame_metatensor_positions_block(frame, &block);
        mts_block_data(block, &array);  mts_block_labels(block, 0);
        rkr_mts_block_free(block); */

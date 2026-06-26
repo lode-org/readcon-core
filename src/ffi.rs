@@ -2570,27 +2570,26 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 
 // ---------------------------------------------------------------------------
 // Metatensor TensorBlock exports (`metatensor` Cargo feature)
+//
+// Boundary types are metatensor-sys only (`metatensor::c_api::mts_block_t`).
+// Construction: `metatensor_export` (high-level). Transfer/free: single helpers
+// in that module (`tensor_block_into_raw_mts` / `mts_block_free_sys`).
+// Lean builds omit these symbols (`READCON_CORE_HAS_METATENSOR` in the header).
 // ---------------------------------------------------------------------------
 
-
-#[cfg(feature = "metatensor")]
-fn transfer_mts_block(block: metatensor::TensorBlock) -> *mut metatensor::c_api::mts_block_t {
-    unsafe {
-        std::mem::transmute::<metatensor::TensorBlock, *mut metatensor::c_api::mts_block_t>(block)
-    }
-}
-
-/// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+/// Free an owned block from `rkr_frame_metatensor_*_block`.
+/// Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
+///
+/// # Safety
+/// `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
 
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_block_t) {
-    if !block.is_null() {
-        unsafe {
-            let _ = metatensor::c_api::mts_block_free(block);
-        }
-    }
+    unsafe { crate::metatensor_export::mts_block_free_sys(block) };
 }
+
+/// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
 
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
@@ -2609,7 +2608,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
         crate::metatensor_export::frame_positions_block(frame)
     })) {
         Ok(Ok(b)) => {
-            unsafe { *out_block = transfer_mts_block(b) };
+            unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
@@ -2633,7 +2632,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
         crate::metatensor_export::frame_velocities_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
-            unsafe { *out_block = transfer_mts_block(b) };
+            unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
@@ -2658,7 +2657,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
         crate::metatensor_export::frame_forces_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
-            unsafe { *out_block = transfer_mts_block(b) };
+            unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
@@ -2683,7 +2682,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
         crate::metatensor_export::frame_energies_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
-            unsafe { *out_block = transfer_mts_block(b) };
+            unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
