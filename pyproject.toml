@@ -26,6 +26,16 @@ Repository = "https://github.com/lode-org/readcon-core"
 Issues = "https://github.com/lode-org/readcon-core/issues"
 Changelog = "https://github.com/lode-org/readcon-core/blob/main/CHANGELOG.md"
 
+[project.optional-dependencies]
+# Declares the chemfiles-capable install path. Pre-built wheels on PyPI are
+# built *without* linking libchemfiles (`has_chemfiles_support()` is False).
+# To enable import/selection, install from this source tree (or sdist) with
+# the Rust feature turned on, e.g.:
+#   MATURIN_PEP517_ARGS="--features python,chemfiles" pip install ".[chemfiles]"
+#   maturin develop --features python,chemfiles
+# The extra itself is empty (no PyPI deps); it documents intent for full builds.
+chemfiles = []
+
 [tool.maturin]
 features = ["python"]
 module-name = "readcon"

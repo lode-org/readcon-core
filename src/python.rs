@@ -1285,23 +1285,22 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
-    #[cfg(feature = "chemfiles")]
-    {
-        m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
-        m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
-        m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
-    }
+    m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
+    m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
+    m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Chemfiles selection (feature = "chemfiles" + "python")
+// Chemfiles selection (always registered; stubs if built without `chemfiles`)
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "chemfiles")]
+/// True when this extension was built with the Rust ``chemfiles`` feature
+/// (links libchemfiles). Default PyPI wheels return False; install the
+/// ``chemfiles`` extra from source to enable (see project docs).
 #[pyfunction]
 fn has_chemfiles_support() -> bool {
-    true
+    crate::chemfiles_import::chemfiles_enabled()
 }
 
 /// Evaluate a chemfiles selection string on a `ConFrame`.
@@ -1311,13 +1310,15 @@ fn has_chemfiles_support() -> bool {
 /// - `context_size`: int (1=atom, 2=pair, ...)
 /// - `matches`: list[list[int]] each inner list has 1-4 atom indices
 /// - `primary_indices`: list[int] first atom of each match
-#[cfg(feature = "chemfiles")]
+///
+/// Raises ``RuntimeError`` if the extension was built without the ``chemfiles``
+/// feature (see ``has_chemfiles_support()`` and the ``chemfiles`` install extra).
 #[pyfunction]
 fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
     use crate::chemfiles_selection::evaluate_selection_on_con_frame;
     let rust_frame = frame.to_con_frame(py)?;
     let result = evaluate_selection_on_con_frame(selection, &rust_frame).map_err(|e| {
-        pyo3::exceptions::PyValueError::new_err(format!("chemfiles selection failed: {e}"))
+        pyo3::exceptions::PyRuntimeError::new_err(format!("{e}"))
     })?;
     let matches: Vec<Vec<usize>> = result
         .matches
@@ -1334,12 +1335,13 @@ fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyRes
 }
 
 /// Atom-context selection: returns sorted unique atom indices (e.g. ``name O``).
-#[cfg(feature = "chemfiles")]
+///
+/// Raises ``RuntimeError`` if built without the ``chemfiles`` feature.
 #[pyfunction]
 fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Vec<usize>> {
     use crate::chemfiles_selection::select_atom_indices as rust_select;
     let rust_frame = frame.to_con_frame(py)?;
     rust_select(selection, &rust_frame).map_err(|e| {
-        pyo3::exceptions::PyValueError::new_err(format!("chemfiles selection failed: {e}"))
+        pyo3::exceptions::PyRuntimeError::new_err(format!("{e}"))
     })
 }

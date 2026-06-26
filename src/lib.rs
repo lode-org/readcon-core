@@ -11,10 +11,10 @@ pub mod writer;
 #[cfg(feature = "metatensor")]
 pub mod metatensor_export;
 
-#[cfg(feature = "chemfiles")]
+/// Chemfiles multi-format import (real impl behind `chemfiles` feature; stubs otherwise).
 pub mod chemfiles_import;
 
-#[cfg(feature = "chemfiles")]
+/// Chemfiles selection grammar on CON frames (real impl behind `chemfiles` feature; stubs otherwise).
 pub mod chemfiles_selection;
 
 #[cfg(feature = "rpc")]
