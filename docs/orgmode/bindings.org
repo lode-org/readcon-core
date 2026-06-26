@@ -472,3 +472,24 @@ Builds without the =zstd= feature still detect zstd magic bytes on
 read and return =io::ErrorKind::Unsupported= pointing at the feature
 flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
+
+
+** Fortran (ISO_C_BINDING)
+
+Thin wrappers in =fortran/ReadCon/src/readcon.f90= over the C ABI (issue #6).
+Link the =readcon_core= library produced by Meson, CMake+Corrosion, or =cargo-c=.
+
+#+begin_src fortran
+use readcon
+use, intrinsic :: iso_c_binding
+type(c_ptr) :: frame, cframe
+frame = rkr_read_first_frame("structure.con")
+if (c_associated(frame)) then
+  cframe = rkr_frame_to_c_frame(frame)
+  ! inspect via c_f_pointer on cframe_t / catom_t
+  call free_c_frame(cframe)
+  call free_rkr_frame(frame)
+end if
+#+end_src
+
+Per-axis =fixed_x= / =fixed_y= / =fixed_z= are on =catom_t= (issue #19, mirrored from C =CAtom=).
