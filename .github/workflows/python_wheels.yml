@@ -10,29 +10,45 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'pyproject.toml'
+      - 'pyproject.chemfiles.toml'
       - '.github/workflows/python_wheels.yml'
   workflow_dispatch:
 
 concurrency:
   group: python-wheels-${{ github.ref }}
-  # Never cancel a tag build mid-flight (PyPI needs the full matrix).
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
 
 env:
-  # Prefer fewer HTTP/2 multiplexing failures against crates.io on GHA runners.
   CARGO_HTTP_MULTIPLEXING: "false"
   CARGO_NET_RETRY: "10"
   CARGO_HTTP_TIMEOUT: "120"
 
 jobs:
+  # Lean `readcon` + chemfiles-linked `readcon-chemfiles` (separate PyPI names,
+  # same extension module `readcon`). Matrix is the usual dual-distribution pattern.
   sdist:
-    name: Build sdist
+    name: Build sdist (${{ matrix.variant }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            pyproject: pyproject.toml
+          - variant: chemfiles
+            pyproject: pyproject.chemfiles.toml
     steps:
       - uses: actions/checkout@v6
+
+      - name: Select pyproject for variant
+        run: |
+          if [ "${{ matrix.pyproject }}" != "pyproject.toml" ]; then
+            cp "${{ matrix.pyproject }}" pyproject.toml
+          fi
+          head -15 pyproject.toml
 
       - name: Build sdist
         uses: PyO3/maturin-action@v1
@@ -45,26 +61,70 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sdist
+          name: sdist-${{ matrix.variant }}
           path: dist/*.tar.gz
+          if-no-files-found: error
 
   wheels:
-    name: Build wheels (${{ matrix.os }}, ${{ matrix.target }})
+    name: Wheel ${{ matrix.variant }} (${{ matrix.os }}, ${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        variant: [default, chemfiles]
         include:
-          - os: ubuntu-latest
+          # --- default (lean): features from pyproject.toml [tool.maturin]
+          - variant: default
+            os: ubuntu-latest
             target: x86_64
-          - os: ubuntu-22.04
+            pyproject: pyproject.toml
+            features: python
+          - variant: default
+            os: ubuntu-22.04
             target: aarch64
-          - os: macos-15
+            pyproject: pyproject.toml
+            features: python
+          - variant: default
+            os: macos-15
             target: x86_64
-          - os: macos-14
+            pyproject: pyproject.toml
+            features: python
+          - variant: default
+            os: macos-14
             target: aarch64
-          - os: windows-latest
+            pyproject: pyproject.toml
+            features: python
+          - variant: default
+            os: windows-latest
             target: x86_64
+            pyproject: pyproject.toml
+            features: python
+          # --- chemfiles-linked distribution
+          - variant: chemfiles
+            os: ubuntu-latest
+            target: x86_64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
+          - variant: chemfiles
+            os: ubuntu-22.04
+            target: aarch64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
+          - variant: chemfiles
+            os: macos-15
+            target: x86_64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
+          - variant: chemfiles
+            os: macos-14
+            target: aarch64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
+          - variant: chemfiles
+            os: windows-latest
+            target: x86_64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
     steps:
       - uses: actions/checkout@v6
 
@@ -72,31 +132,40 @@ jobs:
         with:
           python-version: '3.12'
 
-      # First attempt. Transient crates.io / docker blips are common on GHA.
+      - name: Select pyproject for variant
+        run: |
+          if [ "${{ matrix.pyproject }}" != "pyproject.toml" ]; then
+            cp "${{ matrix.pyproject }}" pyproject.toml
+          fi
+          echo "Building features=${{ matrix.features }} from:"
+          head -20 pyproject.toml
+
       - name: Build wheels
         id: build1
         continue-on-error: true
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features python --find-interpreter
+          args: --release --out dist --features ${{ matrix.features }} --find-interpreter
           manylinux: auto
           docker-options: >-
             -e CARGO_HTTP_MULTIPLEXING=false
             -e CARGO_NET_RETRY=10
             -e CARGO_HTTP_TIMEOUT=120
+            -e CMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Build wheels (retry)
         if: steps.build1.outcome == 'failure'
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features python --find-interpreter
+          args: --release --out dist --features ${{ matrix.features }} --find-interpreter
           manylinux: auto
           docker-options: >-
             -e CARGO_HTTP_MULTIPLEXING=false
             -e CARGO_NET_RETRY=10
             -e CARGO_HTTP_TIMEOUT=120
+            -e CMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Validate wheels
         if: matrix.target != 'aarch64' || runner.os != 'Linux'
@@ -104,7 +173,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          name: wheels-${{ matrix.variant }}-${{ matrix.os }}-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error
 
@@ -121,13 +190,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: '{sdist,wheels-*}'
+          pattern: '{sdist-*,wheels-*}'
           merge-multiple: true
           path: dist/
 
       - name: List artifacts
-        run: ls -la dist/
+        run: |
+          ls -la dist/
+          echo "--- expected packages: readcon (lean) and readcon-chemfiles (full) ---"
+          ls dist/*.whl dist/*.tar.gz | sed 's|.*/||' | sort -u
 
+      # Trusted publishers must be configured on PyPI for *both* project names
+      # `readcon` and `readcon-chemfiles` (same workflow + environment `pypi`).
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

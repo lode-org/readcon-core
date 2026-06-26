@@ -852,11 +852,13 @@ cargo test --lib stub_tests
 cargo build --features chemfiles
 cargo test --features chemfiles
 
-# Python: default PyPI wheel has stubs (has_chemfiles_support() is False).
-# Optional extra documents the full source install (empty deps; enables intent):
-MATURIN_PEP517_ARGS="--features python,chemfiles" pip install ".[chemfiles]"
-# or editable:
+# Python — two PyPI distributions (CI builds both matrices on each tag):
+#   pip install readcon              # lean; has_chemfiles_support() is False (stubs)
+#   pip install readcon-chemfiles    # full; libchemfiles linked (preferred for selection)
+#   pip install 'readcon[chemfiles]' # pulls readcon-chemfiles==same version (avoid installing both)
+# Editable full build from this repo:
 maturin develop --features python,chemfiles
+# or: cp pyproject.chemfiles.toml pyproject.toml && maturin develop
 
 # C ABI: build the shared library with the feature, then link as usual
 cargo build --release --features chemfiles

@@ -21,6 +21,9 @@ echo "==> version bump -> $VER"
 sed -i "0,/^version = /{s/^version = \".*\"/version = \"${VER}\"/}" Cargo.toml
 sed -i "s/^    version: '.*'/    version: '${VER}'/" meson.build
 sed -i "0,/^version = /{s/^version = \".*\"/version = \"${VER}\"/}" pyproject.toml
+sed -i "0,/^version = /{s/^version = \".*\"/version = \"${VER}\"/}" pyproject.chemfiles.toml
+# Keep optional extra pin in lockstep with the chemfiles distribution.
+sed -i "s/readcon-chemfiles==[0-9.][0-9.]*/readcon-chemfiles==${VER}/" pyproject.toml
 sed -i "0,/^version = /{s/^version = \".*\"/version = \"${VER}\"/}" pixi.toml
 sed -i "s/^release = \".*\"/release = \"${VER}\"/" docs/source/conf.py
 # lib.rs version assertion
@@ -46,7 +49,7 @@ if command -v cbindgen >/dev/null 2>&1; then
 fi
 
 echo "==> stage release files"
-git add Cargo.toml Cargo.lock meson.build pyproject.toml \
+git add Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemfiles.toml \
   pixi.toml docs/source/conf.py src/lib.rs CHANGELOG.md \
   include/readcon-core.h 2>/dev/null || true
 
