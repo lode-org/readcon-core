@@ -5,6 +5,32 @@ Explanation — Chemfiles ingress and CON topology
 
 .. contents::
 
+.. figure:: /_static/figures/con-anatomy-structure.png
+   :alt: CON on-disk layers beside live geometry
+   :align: center
+   :width: 100%
+
+   **Anatomy + geometry** — layered CON layout next to an in-memory structure
+   (``tiny_cuh2.con``). Selection indices follow ``atom_data`` order.
+
+.. figure:: /_static/figures/landscape-2d-valley.png
+   :alt: 2D reaction valley landscape with path overlay
+   :align: center
+   :width: 88%
+
+   **Why CON matters for viz** — chemparseplot / rgpycrumbs 2D reaction-valley
+   landscapes consume CON NEB paths; readcon-core is the reliable I/O layer.
+
+.. figure:: /_static/figures/ecosystem-full.png
+   :alt: Full ecosystem map
+   :align: center
+   :width: 92%
+
+   **Full ecosystem** — eOn, rgpot, LODE consumers; chemparseplot, rgpycrumbs,
+   pychum for viz and inputs.
+
+
+
 .. note::
 
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
@@ -15,7 +41,7 @@ Explanation — Chemfiles ingress and CON topology
 Why drive conversion from other formats at all?
 -----------------------------------------------
 
-.. figure:: /_static/figures/ingress-pipeline.svg
+.. figure:: /_static/figures/ingress-with-structure.png
    :alt: Ingress pipeline diagram
    :align: center
    :width: 100%
@@ -141,7 +167,7 @@ topology extras, and numeric geometry assertion blocks from chemfiles
 Place in the LODE / eOn ecosystem
 ---------------------------------
 
-.. figure:: /_static/figures/ecosystem.svg
+.. figure:: /_static/figures/ecosystem-full.png
    :alt: readcon-core among eOn, rgpot, rgpycrumbs, chemfiles, bindings
    :align: center
    :width: 100%

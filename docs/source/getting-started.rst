@@ -5,15 +5,14 @@ Getting started
 
 .. contents::
 
-
-#+begin_export rst
-.. figure:: /_static/figures/ingress-pipeline.svg
-   :alt: Foreign formats flow through chemfiles into readcon-core CON frames
+.. figure:: /_static/figures/ingress-with-structure.png
+   :alt: XYZ/PDB/GRO through chemfiles into ConFrame and .con for eOn/LODE
    :align: center
    :width: 100%
 
-   **Ingress pipeline** — chemfiles routes XYZ/PDB/GRO (and more) into
-   ``ConFrame``; write ``.con`` for eOn, amsel, and language bindings.
+   **Ingress with structure** — foreign formats → chemfiles → ``ConFrame``
+   (bonds optional) → ``.con`` for eOn / LODE. Same geometry chemparseplot and
+   rgpycrumbs render with WBO-style bonds and xyzrender strips.
 
 .. figure:: /_static/figures/lean-vs-full.svg
    :alt: Lean default build versus chemfiles-linked full ingress build
@@ -23,11 +22,11 @@ Getting started
    **Lean vs full** — same Python/Rust API surface; only full builds link
    libchemfiles (``readcon-chemfiles`` / ``--features chemfiles``).
 
-\.. tip\:\:
+.. tip::
 
-   This is the ****front door****. Use the sidebar for the full map; the links
-   below are proper Sphinx references (not raw \`\`:doc:\`\` text).
-#+end\ :sub:`export`\
+   This is the **front door**. Use the **right sidebar** for the on-page TOC,
+   repo stats, and **Edit this page**. Top nav has Chemfiles + Ecosystem
+   (eOn, rgpot, chemparseplot, rgpycrumbs, pychum).
 
 Install
 -------
@@ -76,6 +75,15 @@ Read a CON file
     use readcon_core::iterators::read_first_frame;
     let frame = read_first_frame(std::path::Path::new("structure.con"))?;
 
+.. figure:: /_static/figures/structures-wbo-style.png
+   :alt: sulfolene and CuH2 CON frames as ball-stick with WBO-colored bonds
+   :align: center
+   :width: 100%
+
+   **Sample frames** from ``resources/test/`` — ball–stick with pseudo-WBO bond
+   coloring (chemparseplot / rgpycrumbs aesthetic). Real WBO from QM goes through
+   those tools; here geometry alone drives the scalar for docs.
+
 Convert a foreign format into CON
 ---------------------------------
 
@@ -86,10 +94,32 @@ Convert a foreign format into CON
     frame = readcon.read_chemfiles_first("water.xyz")
     frame.write_con("water.con")
 
-See the full walkthrough in :doc:`chemfiles-tutorial`. Run the literate Org
-notebook (:doc:`chemfiles-notebook`) with::
+See the full walkthrough in `chemfiles-tutorial <chemfiles-tutorial.rst>`_. Run the literate Org
+notebook (`chemfiles-notebook <chemfiles-notebook.rst>`_) with:
 
-   scripts/run-chemfiles-notebook.sh
+.. code:: shell
+
+    scripts/run-chemfiles-notebook.sh
+
+Downstream visualization
+------------------------
+
+CON is the **exchange format**. Publication figures (NEB profiles, structure
+strips, Wiberg bond-order views, 2D reaction valleys) live in the sibling tools:
+
+- `chemparseplot <https://chemparseplot.rgoswami.me>`_ — NEB / optimization landscapes, structure strips (\`\`xyzrender\`\` / ASE / solvis backends)
+
+- `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ — CLI wrappers (\`\`plt\ :sub:`neb`\\`\`, \`\`plt\ :sub:`min`\\`\`, \`\`plt\ :sub:`saddle`\\`\`), fragment WBO viz
+
+- `pychum <https://github.com/HaoZeke/pychum>`_ — ORCA / NWChem inputs when you need fresh energies on a CON geometry
+
+.. figure:: /_static/figures/profile-structure-strip.png
+   :alt: Energy profile with structure strip thumbnails
+   :align: center
+   :width: 100%
+
+   **Profile + structure strip** layout used by chemparseplot NEB plots and
+   rgpycrumbs ``plt_neb`` (docs figure uses test ``sulfolene.con`` as a stand-in).
 
 Where to go next
 ----------------

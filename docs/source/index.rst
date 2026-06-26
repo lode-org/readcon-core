@@ -27,6 +27,42 @@ into CON without inventing another reader for each format.
    **Format rules?** → :doc:`spec` · **APIs?** → :doc:`bindings` ·
    :doc:`chemfiles-reference`
 
+
+.. figure:: /_static/figures/ecosystem-full.png
+   :alt: readcon-core linked to eOn, rgpot, LODE, chemparseplot, rgpycrumbs, pychum
+   :align: center
+   :width: 92%
+
+   **Ecosystem** — CON I/O at the center; consumers (eOn, rgpot, LODE) and the
+   viz/input layer (chemparseplot, rgpycrumbs, pychum).
+
+.. grid:: 1 1 2 2
+   :gutter: 2
+
+   .. grid-item-card:: WBO-style structures
+      :link: getting-started
+      :link-type: doc
+
+      Ball–stick CON frames with bond scalars (chemparseplot / rgpycrumbs look).
+
+   .. grid-item-card:: Chemfiles ingress
+      :link: chemfiles-tutorial
+      :link-type: doc
+
+      XYZ, PDB, GRO → ``ConFrame`` → ``.con`` without a bespoke reader per format.
+
+   .. grid-item-card:: 2D landscapes
+      :link: chemfiles-explain
+      :link-type: doc
+
+      Reaction-valley figures are the viz layer — link out to chemparseplot.
+
+   .. grid-item-card:: Spec & bindings
+      :link: spec
+      :link-type: doc
+
+      On-disk CON/convel rules, C/Python/Julia/Rust APIs.
+
 Site map
 --------
 
