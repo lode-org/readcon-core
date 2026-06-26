@@ -44,6 +44,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Select pyproject for variant
+        shell: bash
         run: |
           if [ "${{ matrix.pyproject }}" != "pyproject.toml" ]; then
             cp "${{ matrix.pyproject }}" pyproject.toml
@@ -133,6 +134,7 @@ jobs:
           python-version: '3.12'
 
       - name: Select pyproject for variant
+        shell: bash
         run: |
           if [ "${{ matrix.pyproject }}" != "pyproject.toml" ]; then
             cp "${{ matrix.pyproject }}" pyproject.toml
