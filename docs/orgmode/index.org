@@ -2,37 +2,33 @@
 #+options: toc:nil num:nil title:nil
 
 #+begin_export rst
-.. image:: /_static/logo-light.svg
-   :class: light-only
-   :width: 400
-   :align: center
-   :alt: readcon-core — CON configuration I/O
+.. raw:: html
 
-.. image:: /_static/logo-dark.svg
-   :class: dark-only
-   :width: 400
-   :align: center
-   :alt: readcon-core — CON configuration I/O
+   <div class="rc-hero">
+     <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
+     <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
+     <p class="rc-hero-tagline">CON and convel I/O for LODE and eOn — fast, typed metadata, multi-language bindings, optional chemfiles ingress.</p>
+   </div>
 
 ================
 ``readcon-core``
 ================
-#+end_export
 
-Rust CON / convel reader–writer for LODE and eOn, with C, C++, Python, and Julia
-bindings. Fast lazy iteration, spec-v2 JSON metadata, and optional chemfiles
-*ingress* so XYZ, PDB, GRO, and other trajectories become CON.
+Rust library for **reading and writing** ``.con`` / ``.convel`` simulation
+frames (eOn, LODE). Lazy iterators, spec-v2 JSON metadata, C/C++/Python/Julia
+bindings. From v0.13, convert **XYZ, PDB, GRO,** and other chemfiles formats
+into CON without inventing another reader for each format.
 
-#+begin_export rst
 .. important::
 
-   **Start here** → :doc:`getting-started` (install + first read/convert).
+   **New here?** → :doc:`getting-started`
 
-   **Foreign formats → CON** → :doc:`chemfiles-tutorial` · executable Org
-   :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
+   **Bring XYZ/PDB/GRO into CON?** → :doc:`chemfiles-tutorial`
+   · run the Org notebook :doc:`chemfiles-notebook`
+   (``scripts/run-chemfiles-notebook.sh``)
 
-   **On-disk format** → :doc:`spec`. **APIs** → :doc:`bindings` ·
-   :doc:`chemfiles-reference`.
+   **Format rules?** → :doc:`spec` · **APIs?** → :doc:`bindings` ·
+   :doc:`chemfiles-reference`
 #+end_export
 
 * Site map

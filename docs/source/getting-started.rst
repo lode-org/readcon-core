@@ -7,8 +7,8 @@ Getting started
 
 .. tip::
 
-   Prefer the hosted docs theme (shibuya). This page is the **front door**;
-   deep topics live in the toctree sections below.
+   This is the **front door**. Use the sidebar for the full map; the links
+   below are proper Sphinx references (not raw ``:doc:`` text).
 
 Install
 -------
@@ -20,20 +20,20 @@ Rust (CON I/O only)
 
     cargo add readcon-core
 
-Python lean (stubs for chemfiles APIs)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Python lean (chemfiles APIs present but disabled)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
     pip install 'readcon==0.13.1'
 
-Python full (convert XYZ/PDB/… → CON + selection)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Python full (XYZ/PDB/… → CON + selection)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
     pip install 'readcon-chemfiles==0.13.1'
-    # do not also install lean `readcon` in the same venv
+    # do not also install lean readcon in the same venv
 
 Rust with chemfiles
 ~~~~~~~~~~~~~~~~~~~
@@ -67,30 +67,34 @@ Convert a foreign format into CON
     frame = readcon.read_chemfiles_first("water.xyz")
     frame.write_con("water.con")
 
-Full walkthrough: :doc:\`chemfiles-tutorial\`. Executable Org notebook:
-:doc:\`chemfiles-notebook\` (``scripts/run-chemfiles-notebook.sh``).
+See the full walkthrough in :doc:`chemfiles-tutorial`. Run the literate Org
+notebook (:doc:`chemfiles-notebook`) with::
+
+   scripts/run-chemfiles-notebook.sh
 
 Where to go next
 ----------------
 
-.. table::
+.. list-table::
+   :header-rows: 1
+   :widths: 45 55
+   :class: next-steps
 
-    +---------------------------------+-------------------------------------------------+
-    | Goal                            | Page                                            |
-    +=================================+=================================================+
-    | Learn CON I/O patterns          | :doc:\`tutorials\`                              |
-    +---------------------------------+-------------------------------------------------+
-    | Convert XYZ/PDB/GRO → CON       | :doc:\`chemfiles-tutorial\`                     |
-    +---------------------------------+-------------------------------------------------+
-    | Run the literate notebook       | :doc:\`chemfiles-notebook\`                     |
-    +---------------------------------+-------------------------------------------------+
-    | Task recipes                    | :doc:\`chemfiles-howto\`                        |
-    +---------------------------------+-------------------------------------------------+
-    | Why chemfiles / bonds / indices | :doc:\`chemfiles-explain\`                      |
-    +---------------------------------+-------------------------------------------------+
-    | API tables                      | :doc:\`chemfiles-reference\`, :doc:\`bindings\` |
-    +---------------------------------+-------------------------------------------------+
-    | On-disk format                  | :doc:\`spec\`                                   |
-    +---------------------------------+-------------------------------------------------+
-    | Release / contribute            | :doc:\`contributing\`                           |
-    +---------------------------------+-------------------------------------------------+
+   * - Goal
+     - Page
+   * - Learn CON I/O patterns
+     - :doc:`tutorials`
+   * - Convert XYZ / PDB / GRO → CON
+     - :doc:`chemfiles-tutorial`
+   * - Run the literate Org notebook
+     - :doc:`chemfiles-notebook`
+   * - Task recipes (how-to)
+     - :doc:`chemfiles-howto`
+   * - Why chemfiles, bonds, indices
+     - :doc:`chemfiles-explain`
+   * - API tables
+     - :doc:`chemfiles-reference`, :doc:`bindings`
+   * - On-disk format
+     - :doc:`spec`
+   * - Release / contribute
+     - :doc:`contributing`
