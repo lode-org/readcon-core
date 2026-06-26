@@ -3,13 +3,14 @@
 
 * Feature parity matrix
 
-The five surfaces (Rust, Python, Julia, C, C++) cover the same core
+The surfaces (Rust, Python, Julia, Fortran, C, C++) share the same core
 read/write/build functionality. The table below maps coarse features
-to bindings; each binding's section below has runnable examples.
+to bindings; multi-language panels follow for the common “read first frame”
+task.
 
-| Feature | Rust | Python | Julia | C | C++ |
-|---------+------+--------+-------+---+-----|
-| Lazy frame iterator | yes | yes | yes | yes | yes |
+| Feature | Rust | Python | Julia | Fortran | C | C++ |
+|---------+------+--------+-------+---------+---+-----|
+| Lazy frame iterator | yes | yes | yes | via C iter (planned) | yes | yes |
 | Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~ConFrameIterator::read_all_frames~ (planned) |
 | Parallel iterator | yes (~parallel~ feature) | no | no | no | no |
 | Builder API | ~ConFrameBuilder~ | ~PyConFrameBuilder~ | ~ConFrameBuilder~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~readcon::ConFrameBuilder~ |
@@ -42,6 +43,79 @@ feature at build time (Rust/Python).
 ~chemfiles-howto.org~, ~chemfiles-explain.org~, ~chemfiles-reference.org~ (this
 matrix is the bindings slice of reference). Release cutting: ~contributing.org~
 *Release process*.
+
+
+
+* Multi-language: read first frame + metadata
+
+Same task in each user-facing language (paths are examples).
+
+#+begin_export rst
+.. tab-set::
+
+   .. tab-item:: Rust
+
+      .. code-block:: rust
+
+         use readcon_core::iterators::read_first_frame;
+         let frame = read_first_frame(std::path::Path::new("structure.con"))?;
+         println!("{} atoms, meta={:?}", frame.atom_data.len(), frame.header.metadata);
+         println!("energy={:?}", frame.header.energy());
+
+   .. tab-item:: Python
+
+      .. code-block:: python
+
+         import readcon
+         frame = readcon.read_first_frame("structure.con")
+         print(len(frame.atoms), frame.metadata)
+         print("energy", frame.energy)  # typed accessor when present
+
+   .. tab-item:: Fortran (fpm ReadCon)
+
+      .. code-block:: fortran
+
+         use readcon
+         type(frame_t) :: fr
+         type(catom_t) :: a
+         fr = read_first_frame("structure.con")
+         if (fr%valid()) then
+           print *, "natoms", fr%natoms()
+           print *, "metadata_json", fr%metadata_json()
+           print *, "energy", fr%energy()
+           a = fr%atom(1)
+           print *, "atom1 fixed_x/y/z", a%fixed_x, a%fixed_y, a%fixed_z
+           call fr%free()
+         end if
+
+   .. tab-item:: C
+
+      .. code-block:: c
+
+         #include "readcon-core.h"
+         RKRConFrame *f = rkr_read_first_frame("structure.con");
+         CFrame *cf = rkr_frame_to_c_frame(f);
+         char *meta = rkr_frame_metadata_json(f);
+         printf("natoms=%zu meta=%s\n", (size_t)cf->num_atoms, meta ? meta : "");
+         printf("fixed_x=%d\n", cf->atoms[0].fixed_x);
+         rkr_free_string(meta);
+         free_c_frame(cf);
+         free_rkr_frame(f);
+
+   .. tab-item:: C++
+
+      .. code-block:: cpp
+
+         #include "readcon-core.hpp"
+         // Prefer C API or C++ wrappers in include/readcon-core.hpp
+         auto *f = rkr_read_first_frame("structure.con");
+         auto *cf = rkr_frame_to_c_frame(f);
+         char *meta = rkr_frame_metadata_json(f);
+         // ... use cf->atoms[i].fixed_x/y/z ...
+         rkr_free_string(meta);
+         free_c_frame(cf);
+         free_rkr_frame(f);
+#+end_export
 
 Supported contexts when topology is present (~metadata["bonds"]~, 0-based
 ~atom_data~ pairs): ~bonds:~ / ~angles:~ / ~dihedrals:~ / ~pairs:~ / ~two:~ /
@@ -472,3 +546,28 @@ Builds without the =zstd= feature still detect zstd magic bytes on
 read and return =io::ErrorKind::Unsupported= pointing at the feature
 flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
+
+
+** Fortran (fpm ``ReadCon``, ISO_C_BINDING)
+
+Thin wrappers in =fortran/ReadCon/src/readcon.f90= over the C ABI (issue #6).
+Link the =readcon_core= library produced by Meson, CMake+Corrosion, or =cargo-c=.
+
+#+begin_src fortran
+use readcon
+use, intrinsic :: iso_c_binding
+type(c_ptr) :: frame, cframe
+frame = rkr_read_first_frame("structure.con")
+if (c_associated(frame)) then
+  cframe = rkr_frame_to_c_frame(frame)
+  ! inspect via c_f_pointer on cframe_t / catom_t
+  call free_c_frame(cframe)
+  call free_rkr_frame(frame)
+end if
+#+end_src
+
+Per-axis =fixed_x= / =fixed_y= / =fixed_z= are on =catom_t= (issue #19, mirrored from C =CAtom=).
+
+
+Full API: =frame_t= (read, metadata, bonds, select), =iterator_t=, =builder_t=, =writer_t=,
+=symbol_to_z= / =z_to_symbol=, =has_chemfiles_support=. CI: =.github/workflows/ci_fortran.yml=.

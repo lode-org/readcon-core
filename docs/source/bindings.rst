@@ -9,17 +9,18 @@ Language bindings
 1 Feature parity matrix
 -----------------------
 
-The five surfaces (Rust, Python, Julia, C, C++) cover the same core
+The surfaces (Rust, Python, Julia, Fortran, C, C++) share the same core
 read/write/build functionality. The table below maps coarse features
-to bindings; each binding's section below has runnable examples.
+to bindings; multi-language panels follow for the common “read first frame”
+task.
 
 .. table::
 
-    +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+-------------------------------------------------+
-    | Feature                                                                               | Rust                           | Python                                           | Julia                                                              | C                                                     | C++                                             |
-    +=======================================================================================+================================+==================================================+====================================================================+=======================================================+=================================================+
-    | Lazy frame iterator                                                                   | yes                            | yes                                              | yes                                                                | yes                                                   | yes                                             |
-    +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+-------------------------------------------------+
+    +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+-------------------------------------------------+-----+
+    | Feature                                                                               | Rust                           | Python                                           | Julia                                                              | Fortran                                               | C                                               | C++ |
+    +=======================================================================================+================================+==================================================+====================================================================+=======================================================+=================================================+=====+
+    | Lazy frame iterator                                                                   | yes                            | yes                                              | yes                                                                | via C iter (planned)                                  | yes                                             | yes |
+    +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+-------------------------------------------------+-----+
     | Read-all-frames helper                                                                | ``iterators::read_all_frames`` | ``readcon.read_all_frames``                      | ``read_all_frames``                                                | ``rkr_read_all_frames``                               | ``ConFrameIterator::read_all_frames`` (planned) |
     +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+-------------------------------------------------+
     | Parallel iterator                                                                     | yes (``parallel`` feature)     | no                                               | no                                                                 | no                                                    | no                                              |
@@ -74,6 +75,76 @@ feature at build time (Rust/Python).
 matrix is the bindings slice of reference). Release cutting: ``contributing.org``
 **Release process**.
 
+2 Multi-language: read first frame + metadata
+---------------------------------------------
+
+Same task in each user-facing language (paths are examples).
+
+.. tab-set::
+
+   .. tab-item:: Rust
+
+      .. code-block:: rust
+
+         use readcon_core::iterators::read_first_frame;
+         let frame = read_first_frame(std::path::Path::new("structure.con"))?;
+         println!("{} atoms, meta={:?}", frame.atom_data.len(), frame.header.metadata);
+         println!("energy={:?}", frame.header.energy());
+
+   .. tab-item:: Python
+
+      .. code-block:: python
+
+         import readcon
+         frame = readcon.read_first_frame("structure.con")
+         print(len(frame.atoms), frame.metadata)
+         print("energy", frame.energy)  # typed accessor when present
+
+   .. tab-item:: Fortran (fpm ReadCon)
+
+      .. code-block:: fortran
+
+         use readcon
+         type(frame_t) :: fr
+         type(catom_t) :: a
+         fr = read_first_frame("structure.con")
+         if (fr%valid()) then
+           print *, "natoms", fr%natoms()
+           print *, "metadata_json", fr%metadata_json()
+           print *, "energy", fr%energy()
+           a = fr%atom(1)
+           print *, "atom1 fixed_x/y/z", a%fixed_x, a%fixed_y, a%fixed_z
+           call fr%free()
+         end if
+
+   .. tab-item:: C
+
+      .. code-block:: c
+
+         #include "readcon-core.h"
+         RKRConFrame *f = rkr_read_first_frame("structure.con");
+         CFrame *cf = rkr_frame_to_c_frame(f);
+         char *meta = rkr_frame_metadata_json(f);
+         printf("natoms=%zu meta=%s\n", (size_t)cf->num_atoms, meta ? meta : "");
+         printf("fixed_x=%d\n", cf->atoms[0].fixed_x);
+         rkr_free_string(meta);
+         free_c_frame(cf);
+         free_rkr_frame(f);
+
+   .. tab-item:: C++
+
+      .. code-block:: cpp
+
+         #include "readcon-core.hpp"
+         // Prefer C API or C++ wrappers in include/readcon-core.hpp
+         auto *f = rkr_read_first_frame("structure.con");
+         auto *cf = rkr_frame_to_c_frame(f);
+         char *meta = rkr_frame_metadata_json(f);
+         // ... use cf->atoms[i].fixed_x/y/z ...
+         rkr_free_string(meta);
+         free_c_frame(cf);
+         free_rkr_frame(f);
+
 Supported contexts when topology is present (``metadata["bonds"]``, 0-based
 ``atom_data`` pairs): ``bonds:`` / ``angles:`` / ``dihedrals:`` / ``pairs:`` / ``two:`` /
 ``three:`` / ``four:``, and predicates ``is_bonded`` / ``is_angle`` / ``is_dihedral`` on
@@ -100,10 +171,10 @@ stored in CON ``bonds``. Numeric geometry assertion blocks from chemfiles
 thresholds with extra atoms) unless trivially projected. Multiset-after-remap
 parity, not byte-identical chemfiles index lists.
 
-2 Python (PyO3)
+3 Python (PyO3)
 ---------------
 
-2.1 Installation
+3.1 Installation
 ~~~~~~~~~~~~~~~~
 
 .. code:: shell
@@ -117,7 +188,7 @@ parity, not byte-identical chemfiles index lists.
     # Or via pixi
     pixi r -e python python-build
 
-2.2 Version and spec queries
+3.2 Version and spec queries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
@@ -127,7 +198,7 @@ parity, not byte-identical chemfiles index lists.
     print(readcon.__version__)       # e.g. "0.5.0"
     print(readcon.CON_SPEC_VERSION)  # 2
 
-2.3 Usage
+3.3 Usage
 ~~~~~~~~~
 
 .. code:: python
@@ -169,7 +240,7 @@ parity, not byte-identical chemfiles index lists.
     ase_atoms = frame.to_ase()
     frame2 = readcon.ConFrame.from_ase(ase_atoms)
 
-2.4 Types
+3.4 Types
 ~~~~~~~~~
 
 ``readcon.Atom``
@@ -203,7 +274,7 @@ parity, not byte-identical chemfiles index lists.
     The iterator API avoids indexing into ``read_con(path)`` for
     first-frame and loop-based workflows.
 
-2.5 NumPy array views and DLPack interop (v0.10.0+)
+3.5 NumPy array views and DLPack interop (v0.10.0+)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Every per-atom quantity has a contiguous NumPy ndarray accessor.
@@ -240,7 +311,7 @@ wiring DLPack itself.
   ``SinglePointCalculator``, and per-axis fixed masks through
   ``FixCartesian`` / ``FixAtoms`` constraints.
 
-2.6 Typed metadata accessors
+3.6 Typed metadata accessors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Every reserved JSON key has a typed setter in addition to the live
@@ -271,10 +342,10 @@ remains available for raw escape-hatch use.
     # Bulk-replace metadata from a JSON string (validated against the schema)
     frame.set_metadata_json('{"con_spec_version": 2, "energy": -1.0}')
 
-3 Julia (ccall)
+4 Julia (ccall)
 ---------------
 
-3.1 Installation
+4.1 Installation
 ~~~~~~~~~~~~~~~~
 
 Set ``READCON_LIB_PATH`` to the shared library path, or build with
@@ -285,7 +356,7 @@ automatically.
 
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
 
-3.2 Usage
+4.2 Usage
 ~~~~~~~~~
 
 .. code:: julia
@@ -307,7 +378,7 @@ automatically.
 
     write_con("roundtrip.con", frames)
 
-3.3 Types
+4.3 Types
 ~~~~~~~~~
 
 ``ReadCon.Atom``
@@ -325,7 +396,7 @@ automatically.
     frames through the C FFI builder/writer path, preserving velocities,
     forces, per-axis fixed masks, atom ids, masses, and JSON metadata.
 
-3.4 Typed metadata accessors
+4.4 Typed metadata accessors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Mirrors the Rust and Python typed-setter helpers. Reserved keys are
@@ -355,10 +426,10 @@ addressable by named getters and setters; arbitrary keys go through
         "{\"con_spec_version\": 2, \"sections\": [\"velocities\"], \"energy\": -1.0}",
     )
 
-4 C/C++ (FFI)
+5 C/C++ (FFI)
 -------------
 
-4.1 Version and spec queries
+5.1 Version and spec queries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: c
@@ -374,7 +445,7 @@ addressable by named getters and setters; arbitrary keys go through
     printf("Spec version: %u\n", rkr_con_spec_version());
     printf("Library version: %s\n", rkr_library_version());
 
-4.2 C API
+5.2 C API
 ~~~~~~~~~
 
 Include ``readcon-core.h`` and link against ``libreadcon_core``.
@@ -427,7 +498,7 @@ Metadata builder helpers:
         -0.1, -0.2, -0.3);
     printf("status: %s\n", rkr_status_message(RKR_STATUS_SUCCESS));
 
-4.3 C++ API
+5.3 C++ API
 ~~~~~~~~~~~
 
 Include ``readcon-core.hpp`` for RAII wrappers.
@@ -469,10 +540,10 @@ Builder metadata helpers:
         0.1, 0.2, 0.3,
         -0.1, -0.2, -0.3);
 
-4.4 Build system integration
+5.4 Build system integration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-4.4.1 Meson subproject
+5.4.1 Meson subproject
 ^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: meson
@@ -482,7 +553,7 @@ Builder metadata helpers:
 
     executable('my_app', 'main.cpp', dependencies: readcon_dep)
 
-4.4.2 CMake subproject
+5.4.2 CMake subproject
 ^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: cmake
@@ -490,7 +561,7 @@ Builder metadata helpers:
     add_subdirectory(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::readcon-core)
 
-5 metatensor TensorBlock export (v0.10.0+)
+6 metatensor TensorBlock export (v0.10.0+)
 ------------------------------------------
 
 The optional ``metatensor`` Cargo feature exposes a Rust module that
@@ -525,7 +596,7 @@ single ``energy`` column for the scalar block. Users wanting a
 species-vs-atom-list partition is downstream-specific so the helpers
 expose the building blocks rather than baking in one convention.
 
-6 Compression formats
+7 Compression formats
 ---------------------
 
 .. table::
@@ -542,3 +613,28 @@ Builds without the ``zstd`` feature still detect zstd magic bytes on
 read and return ``io::ErrorKind::Unsupported`` pointing at the feature
 flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
+
+7.1 Fortran (fpm \`\`ReadCon\`\`, ISO\ :sub:`C`\ \ :sub:`BINDING`\)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Thin wrappers in ``fortran/ReadCon/src/readcon.f90`` over the C ABI (issue #6).
+Link the ``readcon_core`` library produced by Meson, CMake+Corrosion, or ``cargo-c``.
+
+.. code:: fortran
+
+    use readcon
+    use, intrinsic :: iso_c_binding
+    type(c_ptr) :: frame, cframe
+    frame = rkr_read_first_frame("structure.con")
+    if (c_associated(frame)) then
+      cframe = rkr_frame_to_c_frame(frame)
+      ! inspect via c_f_pointer on cframe_t / catom_t
+      call free_c_frame(cframe)
+      call free_rkr_frame(frame)
+    end if
+
+Per-axis ``fixed_x`` / ``fixed_y`` / ``fixed_z`` are on ``catom_t`` (issue #19, mirrored from C ``CAtom``).
+
+
+Full API: ``frame_t`` (read, metadata, bonds, select), ``iterator_t``, ``builder_t``, ``writer_t``,
+``symbol_to_z`` / ``z_to_symbol``, ``has_chemfiles_support``. CI: ``.github/workflows/ci_fortran.yml``.
