@@ -838,17 +838,29 @@ or run selection (next section) on the in-memory =ConFrame=.
 
 ** Build / enable
 
+The Rust modules =chemfiles_import= and =chemfiles_selection= are *always*
+present. Without =--features chemfiles= they return
+=ChemfilesImportError::FeatureDisabled= (clear rebuild message). With the
+feature they link libchemfiles and implement import/selection for real.
+
 #+begin_src shell
-# Rust crate / tests
+# Rust crate / tests (stubs compile without the feature)
+cargo build
+cargo test --lib stub_tests
+
+# Real chemfiles
 cargo build --features chemfiles
 cargo test --features chemfiles
 
-# Python from source (PyPI wheels are usually *without* chemfiles)
+# Python: default PyPI wheel has stubs (has_chemfiles_support() is False).
+# Optional extra documents the full source install (empty deps; enables intent):
+MATURIN_PEP517_ARGS="--features python,chemfiles" pip install ".[chemfiles]"
+# or editable:
 maturin develop --features python,chemfiles
 
 # C ABI: build the shared library with the feature, then link as usual
 cargo build --release --features chemfiles
-# Probe at runtime: rkr_has_chemfiles_support() returns 1 only if linked with chemfiles
+# Probe: rkr_has_chemfiles_support() / chemfiles_import::chemfiles_enabled()
 #+end_src
 
 Modern CMake may need =CMAKE_POLICY_VERSION_MINIMUM=3.5= while building

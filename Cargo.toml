@@ -32,9 +32,12 @@ rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util"
 python = ["dep:pyo3", "dep:numpy"]
 zstd = ["dep:zstd"]
 metatensor = ["dep:metatensor"]
-# Multi-format trajectory import via the chemfiles C++ library (Rust
-# bindings). Off by default so lean builds / conda C-only consumers do
-# not pull libchemfiles. Enable with `--features chemfiles`.
+# Multi-format trajectory import + selection via chemfiles (C++ library).
+# Off by default so lean builds / conda C-only consumers do not pull
+# libchemfiles. Public Rust modules `chemfiles_import` / `chemfiles_selection`
+# always exist; without this feature they return FeatureDisabled stubs.
+# Enable with `--features chemfiles`. Python: optional extra `chemfiles`
+# documents source installs with MATURIN_PEP517_ARGS=--features python,chemfiles.
 chemfiles = ["dep:chemfiles"]
 
 [dependencies]
