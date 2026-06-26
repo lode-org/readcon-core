@@ -23,6 +23,10 @@ exclude = [
   # for internal links via file:// resolution. Still exclude stale remote Pages
   # when checking mixed inputs.
   '^https://lode-org\.github\.io/readcon-core/crates/',
+  # Live Pages lag behind main until the docs deploy workflow finishes; CI builds
+  # HTML locally and checks file:// links. Remote Pages may 404 for new pages
+  # (issue-status, generated Cachegrind) until the next publish.
+  '^https://lode-org\.github\.io/readcon-core/',
   # Edit-this-page targets main; CI/PR runs before merge so blobs 404. We track
   # RST in-repo; existence is guaranteed by git, not HTTP.
   '^https://github\.com/lode-org/readcon-core/blob/',
