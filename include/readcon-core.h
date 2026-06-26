@@ -45,6 +45,7 @@
 struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
+/* Metatensor block (include metatensor.h to use mts_block_*). */
 struct mts_block_t;
 
 
@@ -1317,6 +1318,33 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 
+#if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+ */
+void rkr_mts_block_free(mts_block_t *block);
+#endif
+
+#if defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
+                                                    mts_block_t **out_block);
+#endif
+
+#if defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
+                                                     mts_block_t **out_block);
+#endif
+
+#if defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
+                                                 mts_block_t **out_block);
+#endif
+
+#if defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
+                                                        mts_block_t **out_block);
+#endif
+
 /**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.
  *
@@ -1387,20 +1415,33 @@ void rkr_selection_result_free(struct RKRSelectionResult *result_handle);
 uint8_t rkr_has_chemfiles_support(void);
 
 /**
- * Read the first frame via chemfiles (XYZ/PDB/GRO/…). NULL without chemfiles feature.
- * Caller must `free_rkr_frame`.
+ * Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
+ * Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
+ *
+ * # Safety
+ * `path_c` must be a valid NUL-terminated UTF-8 path.
  */
 struct RKRConFrame *rkr_read_chemfiles_first(const char *path_c);
 
 /**
- * Read all frames from a memory buffer with chemfiles format string (e.g. "XYZ").
- * Sets *num_frames. Free frames with free_rkr_frame and array with free_rkr_frame_array.
+ * Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
+ * Sets `*num_frames`. Free frames with `free_rkr_frame` and the array with
+ * `free_rkr_frame_array`. NULL on error / without chemfiles.
+ *
+ * # Safety
+ * `data_c`, `format_c` valid UTF-8 C strings; `num_frames` non-null.
  */
 struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
                                                const char *format_c,
                                                uintptr_t *num_frames);
 
-
+/**
+ * Free a DLPack tensor from `rkr_frame_builder_*_dlpack` (calls deleter). Safe with NULL.
+ *
+ * # Safety
+ * `tensor` must be NULL or a pointer from a dlpack export of this library.
+ */
+void rkr_dlpack_delete(RKRDLManagedTensorVersioned *tensor);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -1409,25 +1450,5 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
 #ifdef __cplusplus
 }  // namespace readcon
 #endif  // __cplusplus
-
-
-#if defined(READCON_CORE_HAS_METATENSOR)
-/**
- * Metatensor TensorBlock exports (link a build with Cargo feature `metatensor`).
- * Free successful blocks with `rkr_mts_block_free` or `mts_block_free` (not both).
- * Include <metatensor.h> to use `mts_block_data` / `mts_block_labels` on the handle.
- */
-void rkr_mts_block_free(struct mts_block_t *block);
-
-enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
-                                                    struct mts_block_t **out_block);
-enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
-                                                     struct mts_block_t **out_block);
-enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
-                                                 struct mts_block_t **out_block);
-enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
-                                                        struct mts_block_t **out_block);
-#endif /* READCON_CORE_HAS_METATENSOR */
-
 
 #endif  /* READCON_H */

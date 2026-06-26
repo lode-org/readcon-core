@@ -3,8 +3,8 @@ program test_read_con
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: real64, int64
   implicit none
-  character(len=*), parameter :: tiny = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_cuh2.con"
-  character(len=*), parameter :: water = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/water_min.xyz"
+  character(len=1024) :: root, tiny, water
+  integer :: nlen, ierr
   type(frame_t) :: fr, fr2, frx
   type(builder_t) :: bd
   real(real64) :: cell(3), ang(3), pos(3, 8)
@@ -14,9 +14,23 @@ program test_read_con
   logical :: ok
 
   nfail = 0
-  print *, "lib=", library_version(), " chemfiles=", has_chemfiles_support()
+  call get_environment_variable("READCON_CORE_ROOT", root, length=nlen, status=ierr)
+  if (ierr /= 0 .or. nlen == 0) then
+    ! Fallback when script did not set ROOT (fpm cwd is package dir)
+    root = "../.."
+  end if
+  tiny = trim(root) // "/resources/test/tiny_cuh2.con"
+  water = trim(root) // "/resources/test/water_min.xyz"
+  inquire(file=trim(tiny), exist=ok)
+  if (.not. ok) then
+    print *, "missing ", trim(tiny)
+    error stop "tiny_cuh2.con not found; set READCON_CORE_ROOT to repo root"
+  end if
 
-  fr = read_first_frame(tiny)
+  print *, "lib=", library_version(), " chemfiles=", has_chemfiles_support()
+  print *, "tiny=", trim(tiny)
+
+  fr = read_first_frame(trim(tiny))
   if (.not. fr%valid()) error stop "read tiny"
 
   cell = 10.0_real64; ang = 90.0_real64
@@ -60,7 +74,6 @@ program test_read_con
     nfail = nfail + 1
   else
     if (abs(fr2%energy() + 42.5_real64) > 1.0e-6_real64) nfail = nfail + 1
-    ! All four metatensor C ABI exports (mts_block_t* via metatensor cbindgen path)
     st = frame_metatensor_positions_block(fr2, mts)
     print *, "metatensor_positions st=", st, " block=", c_associated(mts)
 #ifdef READCON_HAS_METATENSOR
@@ -83,7 +96,7 @@ program test_read_con
   end if
 
   if (has_chemfiles_support()) then
-    frx = read_chemfiles_first(water)
+    frx = read_chemfiles_first(trim(water))
     if (.not. frx%valid()) then
       nfail = nfail + 1
     else
