@@ -32,8 +32,6 @@ tasks = { julia-test = "julia --project=julia/ReadCon -e 'using Pkg; Pkg.test()'
 dependencies = { python = ">=3.10", emacs = "*", sphinx = ">=7,<9", pandoc = ">=3.1,<4" }
 [feature.docs.pypi-dependencies]
 shibuya = ">=2026.1.9, <2027"
-sphinxcontrib-rust = ">=1.0.0, <2"
-sphinx-rustdoc-postprocess = ">=0.1.0, <0.2"
 sphinxcontrib-bibtex = ">=2.6, <3"
 [feature.docs.tasks]
 setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Install sphinx-rustdocgen for Rust API docs" }
