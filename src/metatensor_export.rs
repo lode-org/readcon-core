@@ -127,8 +127,18 @@ pub fn frame_energies_block(
 
 fn build_atom_id_samples(frame: &ConFrame) -> Result<Labels, metatensor::Error> {
     let mut builder = LabelsBuilder::new(vec!["atom_id"]);
-    for atom in &frame.atom_data {
-        builder.add(&[atom.atom_id as i32]);
+    // Prefer atom_id; fall back to row index if ids are non-unique (metatensor
+    // rejects duplicate sample rows).
+    let mut seen = std::collections::HashSet::new();
+    for (i, atom) in frame.atom_data.iter().enumerate() {
+        let mut key = atom.atom_id as i32;
+        if !seen.insert(key) {
+            key = i as i32;
+            while !seen.insert(key) {
+                key = key.wrapping_add(1);
+            }
+        }
+        builder.add(&[key]);
     }
     Ok(builder.finish())
 }
