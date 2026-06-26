@@ -1,46 +1,75 @@
 /* =============================================================================
-   readcon-core docs — design system
-   Aligns with Diátaxis IA + WCAG-oriented tech-docs practice (measure, focus,
-   landmarks, contrast, sticky nav) as used on rgpot / rgpycrumbs Shibuya sites.
+   readcon-core docs — readability + accessibility
+   Patterns from MDN / Google developer style / WCAG 2.2 AA, Shibuya peers
+   (rgpot, rgpycrumbs): measure, focus, landmarks, large code, contrast.
    ============================================================================= */
 
 :root {
   --rc-font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
   --rc-font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono",
-    Menlo, Consolas, monospace;
+    "Segoe UI Mono", Menlo, Consolas, monospace;
   --rc-indigo: #4f46e5;
   --rc-indigo-deep: #312e81;
-  --rc-amber: #d97706;
-  --rc-measure: 68ch; /* ~65–75 character line length for prose */
-  --rc-focus: #2563eb;
+  --rc-amber: #b45309; /* darker for AA on light bg */
+  --rc-measure: 68ch;
+  --rc-focus: #1d4ed8;
+  --rc-focus-ring: 0 0 0 3px #fff, 0 0 0 6px var(--rc-focus);
   --rc-radius: 0.5rem;
+  /* Code: absolute sizes so it does not shrink with nested em */
+  --rc-code-size: 0.9375rem; /* 15px — MDN-ish floor */
+  --rc-code-size-block: 0.96875rem; /* 15.5px blocks */
+  --rc-code-lh: 1.65;
+  --rc-inline-code-bg: color-mix(in srgb, var(--rc-indigo) 9%, #f1f5f9);
+  --rc-inline-code-fg: #1e1b4b;
+  --rc-pre-bg: #0f172a;
+  --rc-pre-fg: #e2e8f0;
+  --rc-link: #3730a3;
+  --rc-link-visited: #5b21b6;
 }
 
-/* ---- Skip link (keyboard / screen reader) -------------------------------- */
+html.dark,
+html[data-theme="dark"] {
+  --rc-inline-code-bg: color-mix(in srgb, #a5b4fc 16%, #1e293b);
+  --rc-inline-code-fg: #e0e7ff;
+  --rc-link: #a5b4fc;
+  --rc-link-visited: #c4b5fd;
+  --rc-focus: #93c5fd;
+  --rc-pre-bg: #020617;
+  --rc-pre-fg: #e2e8f0;
+}
+
+/* ---- Skip link ----------------------------------------------------------- */
 .rc-skip-link {
   position: absolute;
   left: 0.75rem;
-  top: -3.5rem;
+  top: -4rem;
   z-index: 10000;
-  padding: 0.5rem 0.9rem;
+  padding: 0.6rem 1rem;
   background: var(--rc-indigo-deep);
   color: #fff !important;
   font-family: var(--rc-font-sans);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1rem;
   border-radius: var(--rc-radius);
   text-decoration: none;
   transition: top 0.15s ease;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
 }
 .rc-skip-link:focus,
 .rc-skip-link:focus-visible {
   top: 0.75rem;
-  outline: 3px solid var(--rc-focus);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--rc-focus-ring);
 }
 
 /* ---- Global type --------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
 html,
 body,
 .sy-page,
@@ -54,16 +83,17 @@ body,
 
 body,
 .sy-page {
-  font-size: 1.0625rem; /* ≥17px — easier for long guides */
-  line-height: 1.65;
+  font-size: 1.125rem; /* 18px body — closer to MDN / modern docs */
+  line-height: 1.7;
   letter-spacing: 0.01em;
+  font-weight: 400;
 }
 
-/* Prose measure: avoid ultra-wide walls of text on large monitors */
+/* Prose measure */
 .sy-page article.yue,
 .sy-page .yue,
 article.yue {
-  max-width: min(100%, calc(var(--rc-measure) + 12rem)); /* room for figures */
+  max-width: min(100%, calc(var(--rc-measure) + 14rem));
 }
 
 .sy-page p,
@@ -81,56 +111,194 @@ article.yue {
 .sy-head-brand strong {
   font-family: var(--rc-font-sans) !important;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
-  scroll-margin-top: 5rem; /* in-page TOC / skip targets */
+  scroll-margin-top: 5.5rem;
+  text-wrap: balance;
 }
 
-.sy-page h1 { font-size: clamp(1.75rem, 2.5vw, 2.15rem); }
-.sy-page h2 { font-size: clamp(1.35rem, 2vw, 1.55rem); margin-top: 2rem; }
-.sy-page h3 { font-size: 1.15rem; margin-top: 1.5rem; }
+.sy-page h1 { font-size: clamp(1.85rem, 2.6vw, 2.25rem); }
+.sy-page h2 { font-size: clamp(1.4rem, 2vw, 1.6rem); margin-top: 2.15rem; }
+.sy-page h3 { font-size: 1.2rem; margin-top: 1.6rem; }
 
-/* Code: distinct mono, readable */
-.sy-page code,
-.sy-page pre,
-.sy-page tt,
-.sy-page .highlight,
-.sy-page div[class*="highlight"] pre,
-.sy-page kbd {
-  font-family: var(--rc-font-mono) !important;
-  font-size: 0.9em;
-  line-height: 1.5;
+/* ---- Links: never rely on color alone ------------------------------------ */
+.sy-page a.reference {
+  color: var(--rc-link);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 0.08em;
+  text-decoration-skip-ink: auto;
+}
+.sy-page a.reference:visited {
+  color: var(--rc-link-visited);
+}
+.sy-page a.reference:hover {
+  text-decoration-thickness: 0.12em;
+}
+.globaltoc a,
+.sy-rside a {
+  text-underline-offset: 0.12em;
 }
 
-.sy-page pre {
-  border-radius: var(--rc-radius);
-  padding: 1rem 1.1rem !important;
-  max-width: 100%;
-  overflow-x: auto;
+/* ---- Focus (WCAG 2.4.7 / 2.4.11 / 2.4.13) --------------------------------- */
+:focus {
+  outline: none;
 }
-
-/* Visible focus — WCAG 2.4.7 / 2.4.11 (not color alone) */
 :focus-visible {
   outline: 3px solid var(--rc-focus);
-  outline-offset: 2px;
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 .sy-page a:focus-visible,
 .globaltoc a:focus-visible,
 .sy-rside a:focus-visible,
-.sy-head a:focus-visible {
+.sy-head a:focus-visible,
+.sy-page button:focus-visible,
+.sy-page .copybtn:focus-visible,
+.sy-page summary:focus-visible {
   outline: 3px solid var(--rc-focus);
-  outline-offset: 2px;
-  border-radius: 2px;
+  outline-offset: 3px;
 }
 
-/* Links */
-.sy-page a.reference {
-  text-underline-offset: 0.15em;
-  text-decoration-thickness: 0.08em;
+/* ---- CODE: larger, clearer, high contrast -------------------------------- */
+/* Inline code */
+.sy-page :not(pre) > code,
+.sy-page :not(pre) > tt,
+.sy-page p code,
+.sy-page li code,
+.sy-page td code,
+.sy-page th code,
+.sy-page dd code,
+.sy-page .docutils.literal,
+.sy-page kbd,
+.sy-page samp {
+  font-family: var(--rc-font-mono) !important;
+  font-size: var(--rc-code-size) !important;
+  font-weight: 500;
+  line-height: 1.45;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  background: var(--rc-inline-code-bg);
+  color: var(--rc-inline-code-fg);
+  padding: 0.12em 0.38em;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--rc-indigo) 14%, transparent);
+  word-break: break-word;
 }
-.sy-page a.reference.external::after {
-  content: "";
-  /* keep external marker subtle; Shibuya may already add icon */
+
+/* Fenced / highlighted blocks — dominate over theme em-sizing */
+.sy-page div.highlight,
+.sy-page div[class*="highlight-"],
+.sy-page .highlight,
+.sy-page pre,
+.sy-page pre.literal-block,
+.sy-page .literal-block,
+.sy-page div[class*="highlight"] pre,
+.sy-page .highlight pre,
+.sy-page .copybutton-wrapper,
+.sy-page .code-block-caption + div {
+  font-family: var(--rc-font-mono) !important;
+}
+
+.sy-page div.highlight,
+.sy-page div[class*="highlight-"],
+.sy-page pre.literal-block {
+  border-radius: 0.55rem;
+  margin: 1.15rem 0 1.35rem;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, #64748b 35%, transparent);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+.sy-page pre,
+.sy-page .highlight pre,
+.sy-page div[class*="highlight"] pre,
+.sy-page pre.literal-block {
+  font-family: var(--rc-font-mono) !important;
+  font-size: var(--rc-code-size-block) !important;
+  line-height: var(--rc-code-lh) !important;
+  font-weight: 400;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  padding: 1.05rem 1.2rem !important;
+  margin: 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Prefer dark code surface always for contrast (Shibuya dark_code + extra) */
+  background: var(--rc-pre-bg) !important;
+  color: var(--rc-pre-fg) !important;
+  border-radius: 0.55rem;
+}
+
+/* Tokens inside blocks must inherit readable size */
+.sy-page .highlight pre span,
+.sy-page .highlight pre code,
+.sy-page pre code,
+.sy-page pre span {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+/* Keyboard focus on scrollable pre (extra-foot sets tabindex=0) */
+.sy-page pre:focus-visible,
+.sy-page .highlight pre:focus-visible {
+  outline: 3px solid var(--rc-focus);
+  outline-offset: 2px;
+}
+
+/* Copy button: larger hit target */
+.sy-page button.copybtn,
+.sy-page .copybtn {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  opacity: 0.85;
+}
+.sy-page button.copybtn:hover,
+.sy-page .copybtn:hover,
+.sy-page button.copybtn:focus-visible {
+  opacity: 1;
+}
+
+/* Code caption / prompt lines */
+.sy-page .code-block-caption,
+.sy-page .caption-code {
+  font-family: var(--rc-font-sans) !important;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+/* Selection in code: high visibility */
+.sy-page pre::selection,
+.sy-page .highlight ::selection,
+.sy-page code::selection {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+/* Syntax tokens: ensure not too dim on dark pre (light mode dark_code) */
+.sy-page .highlight .c,
+.sy-page .highlight .c1,
+.sy-page .highlight .cm,
+.sy-page .highlight .cs {
+  opacity: 0.92;
+}
+
+html.dark .highlight,
+html.dark .highlight pre,
+html.dark pre.literal-block,
+html[data-theme="dark"] .highlight,
+html[data-theme="dark"] .highlight pre,
+.yue.dark-code .highlight,
+.yue.dark-code .highlight pre,
+.yue.dark-code pre.literal-block {
+  --syntax-text: #e6edf3;
+  background: var(--rc-pre-bg) !important;
+  color: var(--rc-pre-fg) !important;
 }
 
 /* ---- Hero ---------------------------------------------------------------- */
@@ -146,7 +314,7 @@ article.yue {
   height: auto;
 }
 .rc-hero-tagline {
-  font-size: 1.125rem;
+  font-size: 1.2rem;
   line-height: 1.55;
   color: var(--sy-f-text-mute, #475569);
   margin: 0 auto;
@@ -171,15 +339,17 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
 .sy-page div.note,
 .sy-page div.tip,
 .sy-page div.warning,
-.sy-page div.caution {
+.sy-page div.caution,
+.sy-page div.attention {
   border-radius: var(--rc-radius);
   margin: 1.35rem 0;
-  padding: 0.85rem 1.1rem;
+  padding: 0.95rem 1.15rem;
   border-left: 4px solid var(--rc-indigo);
   max-width: calc(var(--rc-measure) + 2rem);
 }
 .sy-page div.important,
-.sy-page div.warning {
+.sy-page div.warning,
+.sy-page div.caution {
   border-left-color: var(--rc-amber);
 }
 
@@ -189,48 +359,50 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   width: 100%;
   max-width: 48rem;
   border-collapse: collapse;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 .sy-page table.docutils th,
 .sy-page table.docutils td {
-  padding: 0.65rem 0.85rem;
+  padding: 0.7rem 0.9rem;
   vertical-align: top;
 }
 .sy-page table.docutils th {
   font-weight: 700;
   text-align: left;
 }
+.sy-page table.docutils caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
 
-/* ---- Sidebars (sticky primary nav + page TOC) ---------------------------- */
+/* ---- Sidebars ------------------------------------------------------------ */
 .globaltoc p.caption {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
-  opacity: 0.75;
+  opacity: 0.8;
   margin-top: 1.1rem;
 }
 
-/* Current page affordance */
 .globaltoc a.current,
 .globaltoc li.current > a {
   font-weight: 700;
   border-left: 3px solid var(--rc-indigo);
-  padding-left: 0.45rem;
-  margin-left: -0.45rem;
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
 }
 
 .sy-rside,
 aside.sy-rside {
   font-family: var(--rc-font-sans) !important;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
 }
 .sy-rside .localtoc,
 .sy-rside nav {
-  line-height: 1.45;
-}
-.sy-rside a {
-  text-underline-offset: 0.12em;
+  line-height: 1.5;
 }
 .sy-rside .localtoc h3,
 .sy-rside .localtoc .caption {
@@ -238,20 +410,37 @@ aside.sy-rside {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 700;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
-/* Touch targets ≥44px on mobile for primary nav links */
+/* Touch targets */
 @media (max-width: 768px) {
   .globaltoc a,
-  .sy-head a {
+  .sy-head a,
+  .sy-rside a {
     min-height: 2.75rem;
     display: inline-flex;
     align-items: center;
   }
+  :root {
+    --rc-code-size: 0.9rem;
+    --rc-code-size-block: 0.9rem;
+  }
+  body,
+  .sy-page {
+    font-size: 1.0625rem;
+  }
 }
 
-/* ---- Figures (publication / WBO assets) ---------------------------------- */
+/* Prefer larger type on wide screens with room */
+@media (min-width: 1200px) {
+  :root {
+    --rc-code-size: 1rem; /* 16px inline */
+    --rc-code-size-block: 1rem; /* 16px blocks */
+  }
+}
+
+/* ---- Figures ------------------------------------------------------------- */
 .sy-page img,
 .sy-page .figure img,
 .sy-page figure img {
@@ -268,8 +457,8 @@ aside.sy-rside {
 .sy-page .figure .caption,
 .sy-page figcaption,
 .sy-page p.caption {
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 0.98rem;
+  line-height: 1.55;
   color: var(--sy-f-text-mute, #475569);
   margin-top: 0.55rem;
   text-align: left;
@@ -278,13 +467,53 @@ aside.sy-rside {
   margin-right: auto;
 }
 
-/* Prefer reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .rc-skip-link { transition: none; }
-  * { scroll-behavior: auto !important; }
+/* Images that are diagrams: keep alt as accessible name via img */
+.sy-page img[alt=""] {
+  /* decorative only — discourage empty alt on content figs */
 }
 
-/* Cards (sphinx-design) */
+/* ---- Motion / contrast preferences --------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rc-skip-link { transition: none; }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .sy-page a.reference {
+    text-decoration-thickness: 0.12em;
+  }
+  .sy-page :not(pre) > code,
+  .sy-page p code {
+    border-width: 2px;
+  }
+  .sy-page pre,
+  .sy-page .highlight pre {
+    border: 2px solid #94a3b8;
+  }
+  :focus-visible {
+    outline-width: 4px;
+  }
+}
+
+/* Forced colors (Windows high contrast) */
+@media (forced-colors: active) {
+  .sy-page pre,
+  .sy-page .highlight pre,
+  .sy-page :not(pre) > code {
+    border: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+  .rc-skip-link {
+    border: 2px solid CanvasText;
+  }
+}
+
+/* ---- Cards --------------------------------------------------------------- */
 .sy-page .sd-card {
   border-radius: 0.55rem;
   border: 1px solid color-mix(in srgb, var(--rc-indigo) 18%, transparent);
@@ -293,6 +522,7 @@ aside.sy-rside {
 .sy-page .sd-card-title {
   font-weight: 700;
   font-family: var(--rc-font-sans) !important;
+  font-size: 1.05rem;
 }
 .sy-page .sd-card:focus-within {
   outline: 3px solid var(--rc-focus);
@@ -303,21 +533,41 @@ aside.sy-rside {
   margin: 1.25rem 0 1.5rem;
 }
 
-/* Dark-mode code blocks: only containers, not prose (rgpot lesson) */
-html.dark .highlight,
-html.dark .highlight pre,
-html.dark pre.literal-block {
-  --syntax-text: #e6edf3;
-  color: #e6edf3;
-}
-
-/* Avoid double H1 noise */
 .sy-page .section > h1:first-child {
   margin-top: 0.25rem;
 }
 
-/* Footer readability */
 .sy-foot {
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+/* Print: readable code, no chrome noise */
+@media print {
+  .rc-skip-link,
+  .sy-head,
+  .sy-lside,
+  .sy-rside,
+  .copybtn {
+    display: none !important;
+  }
+  body,
+  .sy-page {
+    font-size: 11pt;
+    line-height: 1.45;
+    color: #000;
+  }
+  .sy-page pre,
+  .sy-page .highlight pre {
+    background: #f8fafc !important;
+    color: #000 !important;
+    border: 1px solid #333;
+    font-size: 9.5pt !important;
+    white-space: pre-wrap;
+    overflow: visible;
+  }
+  .sy-page a.reference {
+    color: #000;
+    text-decoration: underline;
+  }
 }

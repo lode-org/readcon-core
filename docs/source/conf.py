@@ -137,6 +137,10 @@ html_theme_options = {
 
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
+# Do not copy line numbers / prompts; keep blocks paste-friendly
+copybutton_exclude = ".linenos, .gp, .go"
+copybutton_line_continuation_character = "\\"
+copybutton_here_doc_delimiter = "EOF"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
