@@ -11,7 +11,7 @@
      - 4,386,987
      - 2-frame multi CON (50×)
    * - ``forward_multi_2x4``
-     - 3,127,247
+     - 3,127,232
      - forward() skip (50×)
    * - ``convel_multi``
      - 5,252,607
@@ -26,7 +26,7 @@
      - 13,305,051
      - 218-atom frame (20×)
    * - ``float_fast_float2``
-     - 19,860,833
+     - 19,860,818
      - 5-col fast-float2 (10k)
    * - ``float_std_parse``
      - 30,901,344
@@ -44,7 +44,7 @@
      - 2,881,848
      - selection ``name O`` (50×)
 
-Generated **2026-06-26T19:06:59Z** from commit ``e340f0e``
+Generated **2026-06-26T19:19:59Z** from commit ``4c4dbe7``
 (Cargo features: ``chemfiles``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
