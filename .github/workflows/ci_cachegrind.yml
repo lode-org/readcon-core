@@ -1,0 +1,70 @@
+name: Cachegrind benchmarks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "benches/**"
+      - "examples/cachegrind_harness.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "scripts/run_cachegrind_bench.sh"
+      - "resources/test/**"
+      - ".github/workflows/ci_cachegrind.yml"
+  schedule:
+    # Weekly refresh even if no code paths matched (tooling drift)
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cachegrind-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cachegrind:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need write token for committing generated RST on main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Run Cachegrind harness
+        run: scripts/run_cachegrind_bench.sh
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cachegrind-results
+          path: |
+            docs/source/_generated/cachegrind_results.json
+            docs/source/_generated/cachegrind_results.rst
+            target/cachegrind/
+          retention-days: 30
+
+      - name: Commit updated docs include (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/source/_generated/cachegrind_results.json \
+                  docs/source/_generated/cachegrind_results.rst
+          if git diff --staged --quiet; then
+            echo "No cachegrind result changes"
+            exit 0
+          fi
+          git commit -m "chore(bench): refresh Cachegrind I-refs for docs"
+          git push

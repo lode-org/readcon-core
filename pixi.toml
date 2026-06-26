@@ -9,6 +9,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64"]
 test = "cargo test"
 test-all = "cargo test --all-features"
 bench = "cargo bench"
+cachegrind-bench = { cmd = "scripts/run_cachegrind_bench.sh", description = "Valgrind Cachegrind I-refs for docs (slow)" }
 build = "cargo build --release"
 build-rpc = "cargo build --release --features rpc"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen" }

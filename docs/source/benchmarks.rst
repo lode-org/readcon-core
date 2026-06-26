@@ -20,6 +20,25 @@ Run benchmarks locally:
     cargo bench
     # or: pixi r bench
 
+
+CI Cachegrind (always-on numbers)
+---------------------------------
+
+Hand-written Criterion tables below can lag releases. CI runs Valgrind
+**Cachegrind** on ``examples/cachegrind_harness.rs`` and refreshes instruction
+counts into the include below (workflow **Cachegrind benchmarks** on ``main``).
+
+.. include:: _generated/cachegrind_results.rst
+
+Reproduce locally (Valgrind required; several minutes)::
+
+    scripts/run_cachegrind_bench.sh
+
+**Why Cachegrind on CI?** Shared runners make Criterion wall-clock noisy.
+Cachegrind **I refs** are stable for a given binary and Valgrind version.
+PR **Benchmark PR** workflow still runs Criterion + ``critcmp`` for latency
+deltas. Chemfiles conversion is not in the harness yet (optional feature).
+
 2 Frame parsing throughput
 --------------------------
 
