@@ -1,18 +1,18 @@
 #+title: Tracker issue status (lode-org/readcon-core)
 #+options: toc:nil num:nil
 
-Maps historical GitHub issues to current tree. Prefer closing via PR =Closes #N=.
+Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge PRs.
 
-| Issue | Title | Status | Evidence |
-|-------+-------+--------+----------|
-| #4 | DOC: User facing details | Done | Sphinx + Shibuya site, Org→RST Diátaxis |
-| #5 | ENH: Python bindings | Done | =python= feature, maturin wheels, =readcon= / =readcon-chemfiles= |
-| #6 | ENH: Fortran bindings | Done | =fortran/ReadCon/src/readcon.f90= ISO_C_BINDING |
-| #7 | DOC: cmake integration | Done | Root =CMakeLists.txt= (Corrosion) + bindings CMake subsection |
-| #8 | REL: Explain release process | Done | =docs/orgmode/contributing.org= release + cog/cargo-dist/PyPI |
-| #10 | ENH: Support convel | Done | =.convel= iterators/writers, tests, docs |
+| Issue | Title | Status | Representative commits / evidence |
+|-------+-------+--------+-------------------------------------|
+| #4 | DOC: User facing details | Done | Sphinx site; =401fbbe= a11y; =ad70e47= benches; branch =issues/close-open-trackers= |
+| #5 | ENH: Python bindings | Done | =python= feature / maturin; releases 0.13.x wheels |
+| #6 | ENH: Fortran bindings | Done | =fortran/ReadCon= fpm package, =frame_t=, tests (=fpm test=) |
+| #7 | DOC: cmake integration | Done | Root =CMakeLists.txt= Corrosion; bindings CMake subsection |
+| #8 | REL: Explain release process | Done | =docs/orgmode/contributing.org= cog / cargo-dist / PyPI OIDC |
+| #10 | ENH: Support convel | Done | iterators/writers + =resources/test/*.convel= |
 | #11 | TST: Coverage and metrics | Done | =.github/workflows/coverage.yml= |
-| #12 | EXT: Integrate with chemfiles | Done | =--features chemfiles=, ingress APIs, Cachegrind scenarios |
-| #19 | ENH: 3-component fixed_flag | Done | =AtomData.fixed: [bool; 3]=, C =fixed_x/y/z=, bitmask 0–7 |
+| #12 | EXT: chemfiles | Done | =--features chemfiles=; =ad70e47= Cachegrind conversion scenarios |
+| #19 | 3-component =fixed_flag= | Done | Rust =[bool;3]=; C =fixed_x/y/z=; Fortran =catom_t= |
 
-Chemfiles conversion and Cachegrind I-refs are on the benchmarks page include.
+Fortran details: =fortran/README.md=. Multi-language panels: bindings page.
