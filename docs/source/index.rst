@@ -1,55 +1,75 @@
 
 .. image:: /_static/logo-light.svg
    :class: light-only
-   :width: 420
+   :width: 400
    :align: center
-   :alt: readcon-core
+   :alt: readcon-core — CON configuration I/O
 
 .. image:: /_static/logo-dark.svg
    :class: dark-only
-   :width: 420
+   :width: 400
    :align: center
-   :alt: readcon-core
+   :alt: readcon-core — CON configuration I/O
 
 ================
 ``readcon-core``
 ================
 
-readcon-core is a Rust library for reading and writing CON and convel
-simulation configuration files, with FFI bindings for C/C++, Python, and Julia.
-From v0.13 you can convert foreign trajectories (XYZ, PDB, GRO, … via chemfiles)
-into CON.
+Rust CON / convel reader–writer for LODE and eOn, with C, C++, Python, and Julia
+bindings. Fast lazy iteration, spec-v2 JSON metadata, and optional chemfiles
+**ingress** so XYZ, PDB, GRO, and other trajectories become CON.
 
-Contents
+.. important::
+
+   **Start here** → :doc:`getting-started` (install + first read/convert).
+
+   **Foreign formats → CON** → :doc:`chemfiles-tutorial` · executable Org
+   :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
+
+   **On-disk format** → :doc:`spec`. **APIs** → :doc:`bindings` ·
+   :doc:`chemfiles-reference`.
+
+Site map
 --------
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Guide
+   :maxdepth: 1
+   :caption: Start
 
+   getting-started
    tutorials
+   faq
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Chemfiles ingress
+
    chemfiles-tutorial
    chemfiles-notebook
    chemfiles-howto
    chemfiles-explain
    chemfiles-reference
-   faq
-   contributing
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Specification
+   :maxdepth: 1
+   :caption: Format & design
 
    spec
    evolution
    architecture
-   bindings
-   rpc
    benchmarks
 
 .. toctree::
-   :maxdepth: 2
-   :caption: API & project
+   :maxdepth: 1
+   :caption: Bindings & API
 
+   bindings
+   rpc
    crates/readcon_core/lib
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Project
+
+   contributing
    changelog
