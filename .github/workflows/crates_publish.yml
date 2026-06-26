@@ -29,13 +29,22 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Skip if version already on crates.io
+      - name: Resolve crate version
         id: check
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          # Prefer Cargo.toml so workflow_dispatch on `main` still targets the
+          # package version. On a v* tag, ref name must match Cargo.toml.
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          ref_name="${GITHUB_REF_NAME:-}"
           if [ -n "${{ inputs.tag }}" ]; then
-            version="${{ inputs.tag }}"
-            version="${version#v}"
+            ref_name="${{ inputs.tag }}"
+          fi
+          if [[ "$ref_name" == v* ]]; then
+            tag_ver="${ref_name#v}"
+            if [ "$tag_ver" != "$version" ]; then
+              echo "tag ${ref_name} does not match Cargo.toml version ${version}" >&2
+              exit 1
+            fi
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           if curl -sfL \
