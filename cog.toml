@@ -25,6 +25,20 @@ bld = { changelog_title = "Buildsystem" }
 gen = { changelog_title = "Generated" }
 dat = { changelog_title = "Data" }
 bench = { changelog_title = "Benchmarks" }
+# Allow types used on the v0.11–v0.13 merge line so `cog changelog` runs clean.
+deps = { changelog_title = "Dependencies" }
+wip = { changelog_title = "Work in progress" }
+merge = { changelog_title = "Merges" }
+chore = { changelog_title = "Chores" }
+build = { changelog_title = "Build system" }
+ci = { changelog_title = "CI" }
+perf = { changelog_title = "Performance" }
+refactor = { changelog_title = "Refactoring" }
+style = { changelog_title = "Style" }
+test = { changelog_title = "Tests" }
+docs = { changelog_title = "Documentation" }
+fix = { changelog_title = "Bug Fixes" }
+feat = { changelog_title = "Features" }
 
 [changelog]
 path = "CHANGELOG.md"
@@ -33,5 +47,3 @@ authors = [
 ]
 
 [bump_profiles]
-
-[packages]
