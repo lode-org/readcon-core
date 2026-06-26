@@ -252,6 +252,9 @@ pub enum RKRStatus {
     RKR_STATUS_VALIDATION_ERROR = -9,
     /// Chemfiles selection parse/evaluate failed (requires chemfiles-enabled build).
     RKR_STATUS_SELECTION_ERROR = -10,
+    /// Requested API is not in this build (Cargo feature off / symbols omitted).
+    /// Never use `-7` for this — that is [`RKR_STATUS_INTERNAL_ERROR`].
+    RKR_STATUS_FEATURE_DISABLED = -11,
 }
 
 /// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
@@ -328,6 +331,7 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_SECTION_ABSENT => c"section absent".as_ptr(),
         RKRStatus::RKR_STATUS_VALIDATION_ERROR => c"validation error".as_ptr(),
         RKRStatus::RKR_STATUS_SELECTION_ERROR => c"selection error".as_ptr(),
+        RKRStatus::RKR_STATUS_FEATURE_DISABLED => c"feature disabled in this build".as_ptr(),
     }
 }
 
@@ -3227,6 +3231,10 @@ mod tests {
             (RKRStatus::RKR_STATUS_SECTION_ABSENT, "section absent"),
             (RKRStatus::RKR_STATUS_VALIDATION_ERROR, "validation error"),
             (RKRStatus::RKR_STATUS_SELECTION_ERROR, "selection error"),
+            (
+                RKRStatus::RKR_STATUS_FEATURE_DISABLED,
+                "feature disabled in this build",
+            ),
         ];
 
         for (status, expected) in cases {

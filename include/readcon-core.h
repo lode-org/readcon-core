@@ -144,6 +144,11 @@ typedef enum RKRStatus {
      * Chemfiles selection parse/evaluate failed (requires chemfiles-enabled build).
      */
     RKR_STATUS_SELECTION_ERROR = -10,
+    /**
+     * Requested API is not in this build (Cargo feature off / symbols omitted).
+     * Never use `-7` for this — that is [`RKR_STATUS_INTERNAL_ERROR`].
+     */
+    RKR_STATUS_FEATURE_DISABLED = -11,
 } RKRStatus;
 
 /**
