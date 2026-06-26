@@ -1,14 +1,21 @@
 #+title: How-to — Chemfiles conversion and selection
-#+options: toc:2 num:t
+#+options: toc:2 num:nil
 
-/Diátaxis: *how-to guides* (goal-oriented). Prerequisites: know CON basics
+
+#+begin_export rst
+.. note::
+
+   Diátaxis *how-to guides*. Learning path: :doc:`chemfiles-tutorial`.
+   Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
+#+end_export
+
 ([[file:tutorials.org][tutorials]]) or finish [[file:chemfiles-tutorial.org][the chemfiles tutorial]] once./
 
 * How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 
-**Goal:** one file on disk → one =.con=.
+*Goal:* one file on disk → one =.con=.
 
-**Rust** (requires =--features chemfiles=):
+*Rust* (requires =--features chemfiles=):
 
 #+begin_src rust
 use readcon_core::chemfiles_import::con_frame_from_trajectory_path;
@@ -23,7 +30,7 @@ Chemfiles selects the reader from the path. If the format has topology, CON
 line-2 JSON may include =bonds= (0-based =atom_data= indices after import
 remap).
 
-**Python** (=readcon-chemfiles=):
+*Python* (=readcon-chemfiles=):
 
 #+begin_src python
 import readcon
@@ -39,7 +46,7 @@ readcon.write_con("traj.con", frames)
 
 * How to convert a multi-frame trajectory into multi-frame CON
 
-**Goal:** every chemfiles step becomes a CON frame in one file.
+*Goal:* every chemfiles step becomes a CON frame in one file.
 
 #+begin_src rust
 use readcon_core::chemfiles_import::con_frames_from_trajectory_path;
@@ -54,7 +61,7 @@ for f in &frames {
 
 * How to convert from an in-memory buffer
 
-**Goal:** bytes already in memory (HTTP download, archive member).
+*Goal:* bytes already in memory (HTTP download, archive member).
 
 #+begin_src rust
 use readcon_core::chemfiles_import::con_frames_from_memory;
@@ -66,10 +73,10 @@ let frames = con_frames_from_memory(&data, "XYZ")?;
 
 * How to select atoms by name or type on a CON frame
 
-**Goal:** indices in CON =atom_data= order (not =atom_id= column unless they
+*Goal:* indices in CON =atom_data= order (not =atom_id= column unless they
 coincide).
 
-**Python** (=readcon-chemfiles=):
+*Python* (=readcon-chemfiles=):
 
 #+begin_src python
 import readcon
@@ -79,7 +86,7 @@ print(readcon.select_atom_indices(frame, "type H"))
 print(readcon.select_atom_indices(frame, "all"))
 #+end_src
 
-**Rust:**
+*Rust:*
 
 #+begin_src rust
 use readcon_core::chemfiles_selection::select_atom_indices;
@@ -87,13 +94,13 @@ use readcon_core::chemfiles_selection::select_atom_indices;
 let oxygens = select_atom_indices("name O", frame)?;
 #+end_src
 
-Works **without** =bonds= for atom selectors. On lean builds / lean wheels,
+Works *without* =bonds= for atom selectors. On lean builds / lean wheels,
 APIs exist but return =FeatureDisabled= / =RuntimeError= — install full
 chemfiles support.
 
 * How to select bonds and angles
 
-**Goal:** topology-aware matches.
+*Goal:* topology-aware matches.
 
 Requires =metadata["bonds"]= on the frame (from chemfiles import of a bonded
 format, or =ConFrameBuilder::set_bonds= / =header.set_bonds=).
@@ -113,7 +120,7 @@ let r = evaluate_selection_on_con_frame("angles: all", frame)?;
 assert_eq!(r.context_size, 3);
 #+end_src
 
-Angles/dihedrals are **derived by chemfiles from bonds** at projection time;
+Angles/dihedrals are *derived by chemfiles from bonds* at projection time;
 you do not store angle arrays on disk in v0.13.
 
 * How to use the C API for selection

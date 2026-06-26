@@ -1,7 +1,14 @@
 #+title: Reference — Chemfiles conversion and selection
-#+options: toc:2 num:t
+#+options: toc:2 num:nil
 
-/Diátaxis: *reference* (information-oriented). For learning see
+
+#+begin_export rst
+.. note::
+
+   Diátaxis *reference*. Learning path: :doc:`chemfiles-tutorial`.
+   Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
+#+end_export
+
 [[file:chemfiles-tutorial.org][tutorial]]; for tasks see [[file:chemfiles-howto.org][how-to]]; for rationale see
 [[file:chemfiles-explain.org][explanation]]. Binding-wide matrices live in [[file:bindings.org][bindings]]; on-disk =bonds=
 key in [[file:spec.org][spec]]./
@@ -24,7 +31,7 @@ Optional extra on lean package: =readcon[chemfiles]= → depends on
 | =readcon_core::chemfiles_import= | Foreign format → =ConFrame= |
 | =readcon_core::chemfiles_selection= | Selection grammar on =ConFrame= |
 
-**Import (full feature)**
+*Import (full feature)*
 
 | Function | Purpose |
 |---|---|
@@ -35,11 +42,11 @@ Optional extra on lean package: =readcon[chemfiles]= → depends on
 | =bonds_from_chemfiles_frame= | Topology → =Vec<Bond>= |
 | =chemfiles_enabled()= | =const fn= probe |
 
-**Import (stubs without feature):** path/memory helpers return
+*Import (stubs without feature):* path/memory helpers return
 =ChemfilesImportError::FeatureDisabled=. =con_frame_from_chemfiles= is only
 available with the feature (needs =chemfiles::Frame= in the signature).
 
-**Selection (always available; stubs error without feature)**
+*Selection (always available; stubs error without feature)*
 
 | Item | Purpose |
 |---|---|
@@ -76,7 +83,7 @@ chemfiles name (="XYZ"=, ="PDB"=, ="GRO"=, …).
 | Symbol | Notes |
 |---|---|
 | =rkr_has_chemfiles_support= | 0 or 1 |
-| =rkr_frame_select= | Fills =RKRSelectionResult**=; stubs → =RKR_STATUS_SELECTION_ERROR= |
+| =rkr_frame_select= | Fills =RKRSelectionResult*=; stubs → =RKR_STATUS_SELECTION_ERROR= |
 | =rkr_selection_result_match_count= / =_context_size= / =_match_at= / =_primary_indices= / =_free= | Always declared |
 | =readcon::ConFrame::select= | C++ RAII; throws if support is 0 |
 | =readcon::has_chemfiles_support= | C++ |
@@ -114,5 +121,5 @@ exercised in =chemfiles_selection_cpp_regression= (see bindings gaps).
 | =python_wheels.yml= matrix =chemfiles= | PyPI =readcon-chemfiles= (no Windows chemfiles row) |
 | =crates_publish.yml= | crates.io =readcon-core= (chemfiles still optional feature) |
 
-Pending/active trusted publishers must use **exact** PyPI names =readcon= and
+Pending/active trusted publishers must use *exact* PyPI names =readcon= and
 =readcon-chemfiles=.

@@ -16,35 +16,40 @@
 ================
 
 readcon-core is a Rust library for reading and writing CON and convel
-simulation configuration files, with FFI bindings for C/C++, Python,
-and Julia. From v0.13 you can ****convert foreign trajectories**** (XYZ, PDB,
-GRO, … via chemfiles) into CON.
-
-****Chemfiles (Diátaxis + executable Org):**** start at
-`chemfiles-tutorial <chemfiles-tutorial.rst>`_, run
-`chemfiles-notebook <chemfiles-notebook.rst>`_ with
-``scripts/run-chemfiles-notebook.sh`` (Org Babel — not a committed ``.ipynb``).
+simulation configuration files, with FFI bindings for C/C++, Python, and Julia.
+From v0.13 you can convert foreign trajectories (XYZ, PDB, GRO, … via chemfiles)
+into CON.
 
 Contents
 --------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents
+   :caption: Guide
 
-   spec
-   evolution
-   faq
-   benchmarks
    tutorials
    chemfiles-tutorial
    chemfiles-notebook
    chemfiles-howto
    chemfiles-explain
    chemfiles-reference
+   faq
+   contributing
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Specification
+
+   spec
+   evolution
    architecture
    bindings
-   crates/readcon_core/lib
    rpc
-   contributing
+   benchmarks
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API & project
+
+   crates/readcon_core/lib
    changelog

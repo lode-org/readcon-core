@@ -1,12 +1,10 @@
 ;; Batch export org-mode files to RST for Sphinx
 ;; Usage: emacs --batch -l docs/export.el
 
-;; Setup Package Manager (to fetch ox-rst automatically)
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
 
-;; Ensure ox-rst is present
 (unless (package-installed-p 'ox-rst)
   (package-refresh-contents)
   (package-install 'ox-rst))
@@ -14,7 +12,13 @@
 (require 'ox-rst)
 (require 'ox-publish)
 
-;; Define the Publishing Project
+;; Prefer Sphinx-friendly RST (no auto section numbers; titles from #+title)
+(setq org-export-with-section-numbers nil)
+(setq org-export-with-toc nil)
+(setq org-export-with-author nil)
+(setq org-export-with-timestamps nil)
+(setq org-rst-headline-underline ?-)
+
 (setq org-publish-project-alist
       '(("sphinx-rst"
          :base-directory "./docs/orgmode/"
@@ -24,7 +28,8 @@
          :recursive t
          :headline-levels 4
          :with-toc nil
-         :section-numbers nil)
+         :section-numbers nil
+         :with-author nil)
         ("sphinx-static"
          :base-directory "./docs/orgmode/img/"
          :base-extension "svg\\|png\\|jpg\\|jpeg\\|gif"
@@ -33,5 +38,4 @@
          :recursive t)
         ("sphinx-all" :components ("sphinx-rst" "sphinx-static"))))
 
-;; Run the publish
 (org-publish "sphinx-all" t)

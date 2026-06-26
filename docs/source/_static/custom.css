@@ -6,3 +6,13 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   html:not([data-theme="light"]) .light-only { display: none !important; }
   html:not([data-theme="light"]) .dark-only { display: block !important; }
 }
+
+/* Org-exported pages: match guide typography */
+.sy-page .section h1 { font-weight: 700; letter-spacing: -0.02em; }
+.sy-page div.note,
+.sy-page div.tip,
+.sy-page div.important {
+  border-radius: 0.5rem;
+}
+/* Prefer theme code blocks; avoid double-emphasis artifacts if any remain */
+.sy-page strong strong { font-weight: 700; }
