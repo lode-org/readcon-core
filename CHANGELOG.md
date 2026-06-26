@@ -6,9 +6,16 @@ All notable changes to this project will be documented in this file. See [conven
 - (**python**) `read_chemfiles` / `read_chemfiles_first` / `read_chemfiles_memory` ingress APIs
 - (**python**) `ConFrame.select` / `select_atoms` / `write_con` method style
 - (**docs**) Diátaxis chemfiles pages + papermill executable notebook
+- (**ffi**) metatensor `mts_block_t*` C ABI (`rkr_frame_metatensor_*_block`, `rkr_mts_block_free`) gated by `READCON_CORE_HAS_METATENSOR`
+- (**ffi**) full builder DLPack set + `rkr_dlpack_delete`; Fortran binds `dlpack.h` layout (`dlpack_inspect`)
+- (**fortran**) all six DLPack exports + four metatensor block helpers (fat lib / `-DREADCON_HAS_METATENSOR`)
 #### Build
 - (**ci**) dual PyPI matrix `readcon` + `readcon-chemfiles` (no Windows chemfiles wheel)
 - (**capi**) selection FFI always exported (stubs without chemfiles feature)
+- (**ci**) Fortran lean + metatensor jobs via `scripts/run_fortran_tests.sh`; cbindgen header check
+- (**docs**) bindings matrix + Fortran README for DLPack/metatensor C API parity
+#### Examples
+- `examples/c_metatensor_sample.c` — consume blocks with `metatensor.h` (`mts_block_data` / `mts_block_labels`)
 
 - - -
 
