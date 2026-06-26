@@ -70,8 +70,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Explicit rows only (no axis × include cartesian product).
       matrix:
-        variant: [default, chemfiles]
         include:
           # --- default (lean): features from pyproject.toml [tool.maturin]
           - variant: default
@@ -99,7 +99,7 @@ jobs:
             target: x86_64
             pyproject: pyproject.toml
             features: python
-          # --- chemfiles-linked distribution
+          # --- chemfiles-linked distribution (readcon-chemfiles on PyPI)
           - variant: chemfiles
             os: ubuntu-latest
             target: x86_64
