@@ -214,17 +214,12 @@ def plot_feature_matrix():
 # ---------------------------------------------------------------------------
 
 def plot_pareto():
+    # Only points with timings from compare_readers / Criterion-style runs — no invented chemfiles bars.
     # (name, feature_count, parse_time_ms_per_100frames_218atoms, color)
     points = [
         ("CON v2\n(readcon-core)", 10, 4.4, TEAL),
         ("CON v2\n(C sscanf)", 10, 10.6, LIGHT_TEAL),
-        ("extxyz\n(ASE)", 6, 36.1, CORAL),   # ASE timing proxy
-        ("XYZ\n(chemfiles)", 3, 8.0, YELLOW),  # estimate: simple format, C++ parser
-        ("POSCAR\n(ASE)", 3, 15.0, CORAL),     # estimate
-        ("GRO\n(chemfiles)", 5, 10.0, YELLOW), # estimate
-        ("LAMMPS\n(chemfiles)", 7, 12.0, YELLOW), # estimate
-        ("DCD\n(MDAnalysis)", 4, 3.0, GRAY),   # binary, very fast
-        ("TRR\n(chemfiles)", 5, 5.0, YELLOW),  # binary
+        ("extxyz\n(ASE)", 6, 36.1, CORAL),  # ASE timing proxy from compare_readers.py
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -241,7 +236,7 @@ def plot_pareto():
 
     ax.set_xlabel("Features supported (out of 10)")
     ax.set_ylabel("Parse time for 100 frames x 218 atoms (ms, lower is better)")
-    ax.set_title("Feature coverage vs parsing performance")
+    ax.set_title("Feature coverage vs parse speed (measured points only)")
     ax.set_xlim(1, 11.5)
     ax.set_ylim(0, 42)
     ax.invert_yaxis()  # Lower (faster) is better, so flip

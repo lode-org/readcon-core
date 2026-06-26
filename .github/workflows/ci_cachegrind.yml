@@ -11,6 +11,8 @@ on:
       - "Cargo.lock"
       - "scripts/run_cachegrind_bench.sh"
       - "resources/test/**"
+      - "docs/orgmode/benchmarks.org"
+      - "docs/source/benchmarks.rst"
       - ".github/workflows/ci_cachegrind.yml"
   schedule:
     # Weekly refresh even if no code paths matched (tooling drift)
@@ -35,15 +37,16 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Valgrind
+      - name: Install Valgrind + chemfiles build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y valgrind
+          sudo apt-get install -y valgrind build-essential cmake
 
-      - name: Run Cachegrind harness
+      - name: Run Cachegrind harness (CON + chemfiles conversion)
         run: scripts/run_cachegrind_bench.sh
         env:
           CARGO_TERM_COLOR: always
+          CACHEGRIND_FEATURES: chemfiles
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

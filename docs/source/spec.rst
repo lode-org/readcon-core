@@ -34,7 +34,7 @@ MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ se
 
 The CON format stores atomic configurations for molecular dynamics
 and transition-state search simulations. It originated in the
-`eOn code <https://eondocs.org>`_ and has since been adopted by multiple tools including
+:doc:`eondocs` and has since been adopted by multiple tools including
 `ASE <https://wiki.fysik.dtu.dk/ase/>`_.
 
 A CON file contains one or more *frames*. Each frame encodes a
@@ -115,7 +115,7 @@ NOT assign it semantic meaning.
 6.2 Line 2: Metadata
 ~~~~~~~~~~~~~~~~~~~~
 
-Line 2 carries machine-readable metadata as a single-line `JSON <https://www.json.org>`_
+Line 2 carries machine-readable metadata as a single-line :doc:`www.json`
 object.
 
 6.2.1 Version 2+ files
@@ -481,7 +481,7 @@ content MUST be a valid CON file.
 
 - Total atom count equals the sum of line 8 values.
 
-- Symbol strings SHOULD match `IUPAC <https://iupac.org>`_ element symbols.
+- Symbol strings SHOULD match :doc:`iupac` element symbols.
 
 - No upper limit on atom types or atom count is imposed.
 
