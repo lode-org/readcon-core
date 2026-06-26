@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(readcon-core VERSION 0.13.0 LANGUAGES C CXX)
+project(readcon-core VERSION 0.13.1 LANGUAGES C CXX)
 
 # Corrosion builds the Rust crate from Cargo.toml
 include(FetchContent)
