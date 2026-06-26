@@ -5,14 +5,19 @@ How-to — Chemfiles conversion and selection
 
 .. contents::
 
-*Diátaxis: **how-to guides** (goal-oriented). Prerequisites: know CON basics (`tutorials <tutorials.rst>`_) or finish `the chemfiles tutorial <chemfiles-tutorial.rst>`_ once.*
+.. note::
 
-1 How to convert a single structure file (XYZ, PDB, GRO, …) to CON
-------------------------------------------------------------------
+   Diátaxis *how-to guides*. Learning path: :doc:`chemfiles-tutorial`.
+   Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-****Goal:**** one file on disk → one ``.con``.
+(`tutorials <tutorials.rst>`_) or finish `the chemfiles tutorial <chemfiles-tutorial.rst>`_ once./
 
-****Rust**** (requires ``--features chemfiles``):
+How to convert a single structure file (XYZ, PDB, GRO, …) to CON
+----------------------------------------------------------------
+
+**Goal:** one file on disk → one ``.con``.
+
+**Rust** (requires ``--features chemfiles``):
 
 .. code:: rust
 
@@ -27,7 +32,7 @@ Chemfiles selects the reader from the path. If the format has topology, CON
 line-2 JSON may include ``bonds`` (0-based ``atom_data`` indices after import
 remap).
 
-****Python**** (``readcon-chemfiles``):
+**Python** (``readcon-chemfiles``):
 
 .. code:: python
 
@@ -41,10 +46,10 @@ remap).
     frames = readcon.read_chemfiles("traj.xyz")
     readcon.write_con("traj.con", frames)
 
-2 How to convert a multi-frame trajectory into multi-frame CON
---------------------------------------------------------------
+How to convert a multi-frame trajectory into multi-frame CON
+------------------------------------------------------------
 
-****Goal:**** every chemfiles step becomes a CON frame in one file.
+**Goal:** every chemfiles step becomes a CON frame in one file.
 
 .. code:: rust
 
@@ -57,10 +62,10 @@ remap).
         w.write_frame(f)?;
     }
 
-3 How to convert from an in-memory buffer
------------------------------------------
+How to convert from an in-memory buffer
+---------------------------------------
 
-****Goal:**** bytes already in memory (HTTP download, archive member).
+**Goal:** bytes already in memory (HTTP download, archive member).
 
 .. code:: rust
 
@@ -70,13 +75,13 @@ remap).
     // Second argument is a chemfiles format name, e.g. "XYZ", "PDB", "GRO"
     let frames = con_frames_from_memory(&data, "XYZ")?;
 
-4 How to select atoms by name or type on a CON frame
-----------------------------------------------------
+How to select atoms by name or type on a CON frame
+--------------------------------------------------
 
-****Goal:**** indices in CON ``atom_data`` order (not ``atom_id`` column unless they
+**Goal:** indices in CON ``atom_data`` order (not ``atom_id`` column unless they
 coincide).
 
-****Python**** (``readcon-chemfiles``):
+**Python** (``readcon-chemfiles``):
 
 .. code:: python
 
@@ -86,7 +91,7 @@ coincide).
     print(readcon.select_atom_indices(frame, "type H"))
     print(readcon.select_atom_indices(frame, "all"))
 
-****Rust:****
+**Rust:**
 
 .. code:: rust
 
@@ -94,14 +99,14 @@ coincide).
     // frame: &ConFrame
     let oxygens = select_atom_indices("name O", frame)?;
 
-Works ****without**** ``bonds`` for atom selectors. On lean builds / lean wheels,
+Works **without** ``bonds`` for atom selectors. On lean builds / lean wheels,
 APIs exist but return ``FeatureDisabled`` / ``RuntimeError`` — install full
 chemfiles support.
 
-5 How to select bonds and angles
---------------------------------
+How to select bonds and angles
+------------------------------
 
-****Goal:**** topology-aware matches.
+**Goal:** topology-aware matches.
 
 Requires ``metadata["bonds"]`` on the frame (from chemfiles import of a bonded
 format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
@@ -121,11 +126,11 @@ format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
     let r = evaluate_selection_on_con_frame("angles: all", frame)?;
     assert_eq!(r.context_size, 3);
 
-Angles/dihedrals are ****derived by chemfiles from bonds**** at projection time;
+Angles/dihedrals are **derived by chemfiles from bonds** at projection time;
 you do not store angle arrays on disk in v0.13.
 
-6 How to use the C API for selection
-------------------------------------
+How to use the C API for selection
+----------------------------------
 
 Build ``libreadcon_core`` with ``--features chemfiles`` for real evaluation;
 without it, ``rkr_has_chemfiles_support()`` is 0 and ``rkr_frame_select`` returns
@@ -148,8 +153,8 @@ without it, ``rkr_has_chemfiles_support()`` is 0 and ``rkr_frame_select`` return
 C++: ``readcon::ConFrame::select`` / ``readcon::has_chemfiles_support()`` in
 ``readcon-core.hpp``.
 
-7 How to install lean CON I/O only (no libchemfiles)
-----------------------------------------------------
+How to install lean CON I/O only (no libchemfiles)
+--------------------------------------------------
 
 .. code:: shell
 
@@ -159,8 +164,8 @@ C++: ``readcon::ConFrame::select`` / ``readcon::has_chemfiles_support()`` in
 Selection symbols still import in Python/Rust; they error clearly. Use this
 for CI that must not compile CMake/chemfiles.
 
-8 How to install full chemfiles support
----------------------------------------
+How to install full chemfiles support
+-------------------------------------
 
 .. code:: shell
 
@@ -171,8 +176,8 @@ for CI that must not compile CMake/chemfiles.
 
 Do not install ``readcon`` and ``readcon-chemfiles`` together (module clash).
 
-9 How to batch-convert a directory of foreign trajectories
-----------------------------------------------------------
+How to batch-convert a directory of foreign trajectories
+--------------------------------------------------------
 
 .. code:: rust
 
@@ -205,8 +210,8 @@ Do not install ``readcon`` and ``readcon-chemfiles`` together (module clash).
 Run under a chemfiles-enabled build. Extend the extension list for formats
 your chemfiles build supports.
 
-10 How to batch-convert in Python
----------------------------------
+How to batch-convert in Python
+------------------------------
 
 .. code:: python
 

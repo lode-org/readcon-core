@@ -5,10 +5,17 @@ Reference — Chemfiles conversion and selection
 
 .. contents::
 
-*Diátaxis: **reference** (information-oriented). For learning see `tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see `explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds`` key in `spec <spec.rst>`_.*
+.. note::
 
-1 Feature and install matrix
-----------------------------
+   Diátaxis *reference*. Learning path: :doc:`chemfiles-tutorial`.
+   Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
+
+`tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see
+`explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds``
+key in `spec <spec.rst>`_./
+
+Feature and install matrix
+--------------------------
 
 .. table::
 
@@ -25,8 +32,8 @@ Reference — Chemfiles conversion and selection
 Optional extra on lean package: ``readcon[chemfiles]`` → depends on
 ``readcon-chemfiles==X.Y.Z`` (same version; avoid installing both modules).
 
-2 Rust modules
---------------
+Rust modules
+------------
 
 .. table::
 
@@ -38,7 +45,7 @@ Optional extra on lean package: ``readcon[chemfiles]`` → depends on
     | ``readcon_core::chemfiles_selection`` | Selection grammar on ``ConFrame`` |
     +---------------------------------------+-----------------------------------+
 
-****Import (full feature)****
+**Import (full feature)**
 
 .. table::
 
@@ -58,11 +65,11 @@ Optional extra on lean package: ``readcon[chemfiles]`` → depends on
     | ``chemfiles_enabled()``                   | ``const fn`` probe                  |
     +-------------------------------------------+-------------------------------------+
 
-****Import (stubs without feature):**** path/memory helpers return
+**Import (stubs without feature):** path/memory helpers return
 ``ChemfilesImportError::FeatureDisabled``. ``con_frame_from_chemfiles`` is only
 available with the feature (needs ``chemfiles::Frame`` in the signature).
 
-****Selection (always available; stubs error without feature)****
+**Selection (always available; stubs error without feature)**
 
 .. table::
 
@@ -84,8 +91,8 @@ Constants: ``CHEMFILES_EXTRA_PREFIX``, ``CHEMFILES_ATOM_PROPS_KEY``,
 Error: ``ChemfilesImportError`` (``Chemfiles`` / ``InvalidFrame`` / ``Io`` /
 ``FeatureDisabled``; ``Chemfiles`` variant only in full builds).
 
-3 Python (``import readcon``)
------------------------------
+Python (``import readcon``)
+---------------------------
 
 .. table::
 
@@ -113,27 +120,27 @@ Error: ``ChemfilesImportError`` (``Chemfiles`` / ``InvalidFrame`` / ``Io`` /
 (``list[list[int]]``), ``primary_indices``. ``format`` for memory import is a
 chemfiles name (``"XYZ"``, ``"PDB"``, ``"GRO"``, …).
 
-4 C / C++
----------
+C / C++
+-------
 
 .. table::
 
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-    | Symbol                                                                                                      | Notes                                                                  |
-    +=============================================================================================================+========================================================================+
-    | ``rkr_has_chemfiles_support``                                                                               | 0 or 1                                                                 |
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-    | ``rkr_frame_select``                                                                                        | Fills ``RKRSelectionResult**``; stubs → ``RKR_STATUS_SELECTION_ERROR`` |
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-    | ``rkr_selection_result_match_count`` / ``_context_size`` / ``_match_at`` / ``_primary_indices`` / ``_free`` | Always declared                                                        |
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-    | ``readcon::ConFrame::select``                                                                               | C++ RAII; throws if support is 0                                       |
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-    | ``readcon::has_chemfiles_support``                                                                          | C++                                                                    |
-    +-------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
+    | Symbol                                                                                                      | Notes                                                                 |
+    +=============================================================================================================+=======================================================================+
+    | ``rkr_has_chemfiles_support``                                                                               | 0 or 1                                                                |
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
+    | ``rkr_frame_select``                                                                                        | Fills ``RKRSelectionResult*``; stubs → ``RKR_STATUS_SELECTION_ERROR`` |
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
+    | ``rkr_selection_result_match_count`` / ``_context_size`` / ``_match_at`` / ``_primary_indices`` / ``_free`` | Always declared                                                       |
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
+    | ``readcon::ConFrame::select``                                                                               | C++ RAII; throws if support is 0                                      |
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
+    | ``readcon::has_chemfiles_support``                                                                          | C++                                                                   |
+    +-------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------+
 
-5 CON metadata keys (topology / sidecars)
------------------------------------------
+CON metadata keys (topology / sidecars)
+---------------------------------------
 
 .. table::
 
@@ -153,8 +160,8 @@ chemfiles name (``"XYZ"``, ``"PDB"``, ``"GRO"``, …).
 
 See `spec <spec.rst>`_ § frame topology for normative wording.
 
-6 Selection grammar (supported subset)
---------------------------------------
+Selection grammar (supported subset)
+------------------------------------
 
 .. table::
 
@@ -175,8 +182,8 @@ See `spec <spec.rst>`_ § frame topology for normative wording.
 Upstream chemfiles documents the full language; readcon guarantees the subset
 exercised in ``chemfiles_selection_cpp_regression`` (see bindings gaps).
 
-7 CI / release artifacts
-------------------------
+CI / release artifacts
+----------------------
 
 .. table::
 
@@ -190,5 +197,5 @@ exercised in ``chemfiles_selection_cpp_regression`` (see bindings gaps).
     | ``crates_publish.yml``                     | crates.io ``readcon-core`` (chemfiles still optional feature) |
     +--------------------------------------------+---------------------------------------------------------------+
 
-Pending/active trusted publishers must use ****exact**** PyPI names ``readcon`` and
+Pending/active trusted publishers must use **exact** PyPI names ``readcon`` and
 ``readcon-chemfiles``.

@@ -1,37 +1,28 @@
-# -*- org-src-preserve-indentation: t; org-edit-src-content-indentation: 0; -*-
-#+title: Executable notebook — Chemfiles → CON (Org-mode)
-#+author: readcon-core
-#+options: toc:2 num:t
-#+startup: showall
+#+title: Executable Chemfiles notebook
+#+options: toc:2 num:nil
+# -*- org-src-preserve-indentation: t; -*-
+#+PROPERTY: header-args:python :session readcon-cf :results output replace :exports code :mkdirp yes
 
-# Org is the *only* source of truth for this executable tutorial (rgoswami.me /
-# HaoZeke style: plain-text Babel, not committed .ipynb JSON). Run with:
-#   scripts/run-chemfiles-notebook.sh
-# which uses Emacs batch =org-babel-execute-buffer= on this file.
-# Optional: tangle the named Python blocks for Papermill (=C-c C-v t= or the script).
+#+begin_export rst
+.. note::
 
-#+PROPERTY: header-args:python :session readcon-cf :results output replace :exports both :mkdirp yes :noweb yes
+   This page is the **Org-mode source** executed by
+   ``scripts/run-chemfiles-notebook.sh`` (Emacs Babel). In the HTML site the
+   blocks are shown as documentation; run them locally with that script or
+   ``C-c C-c`` in Emacs. Same conversion-first story as :doc:`chemfiles-tutorial`.
+#+end_export
 
-* Overview
-
-/Diátaxis companion to [[file:chemfiles-tutorial.org][chemfiles-tutorial]] — same conversion-first story,
-**executed** via Org Babel. Requires a chemfiles-linked install
-(=readcon-chemfiles= on PyPI, or =maturin develop --features python,chemfiles=)./
+Literate, plain-text notebook (not a committed =.ipynb=). Requires
+=readcon-chemfiles= or =maturin develop --features python,chemfiles=.
 
 * Parameters
 
-Edit these bindings, then re-execute later sections (=C-c C-c= on each block,
-or re-run the whole buffer via =scripts/run-chemfiles-notebook.sh=).
-
 #+NAME: params
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 from __future__ import annotations
 
-from pathlib import Path
-
-# Papermill-style knobs (also overridden by scripts/run-chemfiles-notebook.sh
-# via env READCON_NB_WORK when executing through Emacs).
 import os
+from pathlib import Path
 
 work_dir = Path(os.environ.get("READCON_NB_WORK", "docs/notebooks/out/work"))
 work_dir.mkdir(parents=True, exist_ok=True)
@@ -42,10 +33,10 @@ require_chemfiles = True
 print("work_dir =", work_dir.resolve())
 #+end_src
 
-* Setup — prove chemfiles is linked
+* Setup
 
 #+NAME: setup
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 import json
 import sys
 
@@ -61,13 +52,10 @@ if require_chemfiles and not ok:
     )
 #+end_src
 
-* Ingress — write XYZ (foreign format) and convert to CON
-
-This is the product story: **drive conversion from other formats**, not start
-from an existing =.con=.
+* Convert XYZ to CON
 
 #+NAME: ingress
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 xyz_path.write_text(
     "3\n"
     "water demo — org-mode executable tutorial\n"
@@ -90,7 +78,6 @@ frame.write_con(str(con_path))
 assert con_path.is_file()
 print("wrote", con_path.resolve())
 
-# Same ingress from an in-memory buffer (chemfiles format name)
 mem = readcon.read_chemfiles_memory(xyz_path.read_text(encoding="utf-8"), "XYZ")
 assert len(mem) == 1 and len(mem[0].atoms) == 3
 
@@ -101,11 +88,8 @@ print("read_chemfiles frames =", len(all_frames))
 
 * Topology and selection
 
-Plain XYZ has no bonds. Attach CON =metadata['bonds']= in =atom_data= order
-(demo), then run chemfiles selection grammar via idiomatic methods.
-
 #+NAME: selection
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 bonded = readcon.ConFrame(
     cell=list(frame.cell),
     angles=list(frame.angles),
@@ -127,11 +111,8 @@ print("wrote", bonded_path.resolve())
 
 * Multi-format habit
 
-Same APIs for any chemfiles-readable path that exists (extend the list in
-=params= / env for CI sweeps).
-
 #+NAME: multifmt
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 candidates = [xyz_path]
 converted = []
 for path in candidates:
@@ -148,7 +129,7 @@ print(json.dumps({"converted": converted}, indent=2))
 * Checkpoint
 
 #+NAME: checkpoint
-#+begin_src python :results output :tangle ../notebooks/chemfiles_ingress.py
+#+begin_src python :tangle ../notebooks/chemfiles_ingress.py
 summary = {
     "has_chemfiles_support": ok,
     "xyz": str(xyz_path),
@@ -164,24 +145,14 @@ print(json.dumps(summary, indent=2))
 print("OK — org-mode chemfiles ingress finished", file=sys.stderr)
 #+end_src
 
-* How to run (shell)
+* Run from the shell
 
-Primary path — **Org is executed**, not a hand-maintained notebook:
+#+begin_export rst
+.. code-block:: shell
 
-#+begin_src shell :results output :exports both
-scripts/run-chemfiles-notebook.sh
-#+end_src
+   scripts/run-chemfiles-notebook.sh
+#+end_export
 
-Emacs interactively: open this file, =C-c C-c= on each =SRC python= block
-(session =readcon-cf= keeps state). To refresh the tangled helper script only:
-
-#+begin_src shell :results silent
-emacs --batch \
-  --eval "(require 'org)" \
-  --eval "(setq org-confirm-babel-evaluate nil)" \
-  --visit docs/orgmode/chemfiles-notebook.org \
-  --eval "(org-babel-tangle)"
-#+end_src
-
-Papermill is **optional** and only runs **tangled** output from this Org file
-(never a hand-edited =.ipynb= committed to git). Prefer the Emacs batch path.
+Emacs: open this file and use =C-c C-c= on each Python source block (session
+=readcon-cf=). The script tangles to =docs/notebooks/chemfiles_ingress.py=
+then executes this Org buffer via Babel — do not hand-edit the tangled =.py=.
