@@ -701,6 +701,41 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 // FFI Writer Functions (Writer Object Model)
 //=============================================================================
 
+/// Type-erased writer that backs every `RKRConFrameWriter` handle.
+///
+/// `ConFrameWriter<W>` is generic over its sink, so a plain `File`, a
+/// gzip `GzEncoder<File>`, and a zstd encoder all monomorphise to
+/// distinct, layout-incompatible types. Boxing the sink as
+/// `Box<dyn Write>` collapses them to a single concrete handle type, so
+/// `free_rkr_writer` and `rkr_writer_extend` can cast the opaque pointer
+/// to exactly one type regardless of the compression chosen at
+/// construction. Dropping the box flushes the `BufWriter` and then runs
+/// the sink's own `Drop` (gzip/zstd finalize their streams there).
+type RkrWriter = ConFrameWriter<Box<dyn std::io::Write>>;
+
+/// Boxes a sink into an `RKRConFrameWriter` handle at the requested
+/// precision. `precision == None` selects the writer's built-in default.
+#[inline]
+fn into_rkr_writer(
+    sink: Box<dyn std::io::Write>,
+    precision: Option<u8>,
+) -> *mut RKRConFrameWriter {
+    let writer: RkrWriter = match precision {
+        Some(p) => ConFrameWriter::with_precision(sink, p as usize),
+        None => ConFrameWriter::new(sink),
+    };
+    Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter
+}
+
+/// Parses a borrowed C string, returning `None` for null or non-UTF-8.
+#[inline]
+unsafe fn cstr_path<'a>(filename_c: *const c_char) -> Option<&'a str> {
+    if filename_c.is_null() {
+        return None;
+    }
+    unsafe { CStr::from_ptr(filename_c).to_str().ok() }
+}
+
 /// Creates a new frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 ///
@@ -710,15 +745,12 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 pub unsafe extern "C" fn create_writer_from_path_c(
     filename_c: *const c_char,
 ) -> *mut RKRConFrameWriter {
-    if filename_c.is_null() {
-        return ptr::null_mut();
-    }
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
     };
-    match crate::writer::ConFrameWriter::from_path(filename) {
-        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+    match File::create(filename) {
+        Ok(file) => into_rkr_writer(Box::new(file), None),
         Err(_) => ptr::null_mut(),
     }
 }
@@ -730,7 +762,7 @@ pub unsafe extern "C" fn create_writer_from_path_c(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) {
     if !writer_handle.is_null() {
-        let _ = unsafe { Box::from_raw(writer_handle as *mut ConFrameWriter<File>) };
+        let _ = unsafe { Box::from_raw(writer_handle as *mut RkrWriter) };
     }
 }
 
@@ -745,7 +777,7 @@ pub unsafe extern "C" fn rkr_writer_extend(
     frame_handles: *const *const RKRConFrame,
     num_frames: usize,
 ) -> RKRStatus {
-    let writer = match unsafe { (writer_handle as *mut ConFrameWriter<File>).as_mut() } {
+    let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
         Some(w) => w,
         None => return RKRStatus::RKR_STATUS_NULL_POINTER,
     };
@@ -789,15 +821,12 @@ pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
     filename_c: *const c_char,
     precision: u8,
 ) -> *mut RKRConFrameWriter {
-    if filename_c.is_null() {
-        return ptr::null_mut();
-    }
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
     };
-    match ConFrameWriter::from_path_with_precision(filename, precision as usize) {
-        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+    match File::create(filename) {
+        Ok(file) => into_rkr_writer(Box::new(file), Some(precision)),
         Err(_) => ptr::null_mut(),
     }
 }
@@ -2370,15 +2399,81 @@ pub unsafe extern "C" fn rkr_frame_builder_clone(
 /// filename_c must be valid. The caller takes ownership of the returned writer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_gzip_c(filename_c: *const c_char) -> *mut RKRConFrameWriter {
-    if filename_c.is_null() {
-        return ptr::null_mut();
-    }
-    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
-        Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
     };
-    match ConFrameWriter::from_path_gzip(filename) {
-        Ok(writer) => Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter,
+    match crate::compression::gzip_writer(Path::new(filename)) {
+        Ok(encoder) => into_rkr_writer(Box::new(encoder), None),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Creates a gzip-compressed frame writer with a custom floating-point
+/// precision. The caller OWNS the returned pointer and MUST call
+/// `free_rkr_writer`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_gzip_with_precision_c(
+    filename_c: *const c_char,
+    precision: u8,
+) -> *mut RKRConFrameWriter {
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
+    };
+    match crate::compression::gzip_writer(Path::new(filename)) {
+        Ok(encoder) => into_rkr_writer(Box::new(encoder), Some(precision)),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Creates a new zstd-compressed frame writer for the specified file.
+/// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+///
+/// Only present when readcon-core is built with the `zstd` Cargo
+/// feature; the C header guards the declaration with
+/// `READCON_CORE_HAS_ZSTD`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
+#[cfg(feature = "zstd")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_c(filename_c: *const c_char) -> *mut RKRConFrameWriter {
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
+    };
+    match crate::compression::zstd_writer(Path::new(filename)) {
+        Ok(encoder) => into_rkr_writer(Box::new(encoder), None),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Creates a zstd-compressed frame writer with a custom floating-point
+/// precision. The caller OWNS the returned pointer and MUST call
+/// `free_rkr_writer`.
+///
+/// Only present when readcon-core is built with the `zstd` Cargo
+/// feature; the C header guards the declaration with
+/// `READCON_CORE_HAS_ZSTD`.
+///
+/// # Safety
+/// filename_c must be valid. The caller takes ownership of the returned writer.
+#[cfg(feature = "zstd")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
+    filename_c: *const c_char,
+    precision: u8,
+) -> *mut RKRConFrameWriter {
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
+    };
+    match crate::compression::zstd_writer(Path::new(filename)) {
+        Ok(encoder) => into_rkr_writer(Box::new(encoder), Some(precision)),
         Err(_) => ptr::null_mut(),
     }
 }
