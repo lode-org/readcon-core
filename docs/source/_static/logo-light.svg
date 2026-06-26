@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="100" viewBox="0 0 420 100" fill="none" role="img" aria-labelledby="rc-title">
+  <title id="rc-title">readcon-core</title>
+  <desc>Logo for readcon-core: CON configuration file reader</desc>
+  <!-- Icon: stacked CON "lines" / atom rows -->
+  <g id="mark">
+    <rect x="12" y="22" width="56" height="8" rx="2" fill="#0F766E"/>
+    <rect x="12" y="36" width="40" height="8" rx="2" fill="#0F766E"/>
+    <rect x="12" y="50" width="48" height="8" rx="2" fill="#EA580C"/>
+    <rect x="12" y="64" width="36" height="8" rx="2" fill="#0F766E"/>
+    <!-- type-group bar -->
+    <rect x="72" y="22" width="10" height="50" rx="2" fill="#0F172A"/>
+    <circle cx="88" cy="32" r="5" fill="#0F766E"/>
+    <circle cx="88" cy="48" r="5" fill="#EA580C"/>
+    <circle cx="88" cy="64" r="5" fill="#0F766E"/>
+  </g>
+  <text x="110" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="800" letter-spacing="-1.5" fill="#0F172A">readcon</text>
+  <text x="310" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="600" fill="#64748B">-core</text>
+</svg>

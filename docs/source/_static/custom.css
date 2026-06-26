@@ -1,0 +1,8 @@
+/* Show logo variant matching color scheme (rsx-rs pattern) */
+html[data-theme="dark"] .light-only,
+html.dark .light-only { display: none !important; }
+html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .light-only { display: none !important; }
+  html:not([data-theme="light"]) .dark-only { display: block !important; }
+}
