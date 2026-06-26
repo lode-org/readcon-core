@@ -23,10 +23,19 @@ Chemfiles selects the reader from the path. If the format has topology, CON
 line-2 JSON may include =bonds= (0-based =atom_data= indices after import
 remap).
 
-**Python:** prefer producing CON via Rust/CLI once, or install
-=readcon-chemfiles= and use selection on an existing CON. Path import is not
-wrapped as a single Python function in 0.13; use the Rust API or a small
-binary for batch ingress.
+**Python** (=readcon-chemfiles=):
+
+#+begin_src python
+import readcon
+frame = readcon.read_chemfiles_first("input.pdb")  # or .xyz, .gro, …
+frame.write_con("output.con")
+# multi-frame:
+for i, f in enumerate(readcon.read_chemfiles("traj.xyz")):
+    f.write_con(f"frame_{i}.con")
+# or one multi-frame CON via write_con(list) — use readcon.write_con(path, frames)
+frames = readcon.read_chemfiles("traj.xyz")
+readcon.write_con("traj.con", frames)
+#+end_src
 
 * How to convert a multi-frame trajectory into multi-frame CON
 
@@ -183,3 +192,24 @@ fn convert_tree(dir: &Path) -> std::io::Result<()> {
 
 Run under a chemfiles-enabled build. Extend the extension list for formats
 your chemfiles build supports.
+
+* How to batch-convert in Python
+
+#+begin_src python
+from pathlib import Path
+import readcon
+
+assert readcon.has_chemfiles_support()
+exts = {".xyz", ".pdb", ".gro", ".lammpstrj", ".mol2"}
+for path in Path("incoming").iterdir():
+    if path.suffix.lower() not in exts:
+        continue
+    try:
+        frames = readcon.read_chemfiles(str(path))
+    except (OSError, ValueError, RuntimeError) as e:
+        print("skip", path, e)
+        continue
+    out = path.with_suffix(".con")
+    readcon.write_con(str(out), frames)
+    print(path, "->", out, len(frames), "frames")
+#+end_src

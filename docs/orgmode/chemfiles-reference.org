@@ -59,12 +59,17 @@ Error: =ChemfilesImportError= (=Chemfiles= / =InvalidFrame= / =Io= /
 | API | Lean wheel | =readcon-chemfiles= |
 |---|---|---|
 | =has_chemfiles_support()= | =False= | =True= |
-| =select_on_frame(frame, sel)= | =RuntimeError= | dict |
-| =select_atom_indices(frame, sel)= | =RuntimeError= | =list[int]= |
+| =read_chemfiles(path)= | =RuntimeError= | =list[ConFrame]= (all steps) |
+| =read_chemfiles_first(path)= | =RuntimeError= | =ConFrame= |
+| =read_chemfiles_memory(data, format)= | =RuntimeError= | =list[ConFrame]= |
+| =select_on_frame(frame, sel)= / =frame.select(sel)= | error | dict |
+| =select_atom_indices(frame, sel)= / =frame.select_atoms(sel)= | error | =list[int]= |
+| =frame.write_con(path)= | yes | yes |
 | =PyConFrame.bonds= / =has_bonds= | yes | yes |
 
-=select_on_frame= dict keys: =selection=, =context_size=, =matches=
-(=list[list[int]]=), =primary_indices=.
+=select= / =select_on_frame= dict keys: =selection=, =context_size=, =matches=
+(=list[list[int]]=), =primary_indices=. =format= for memory import is a
+chemfiles name (="XYZ"=, ="PDB"=, ="GRO"=, …).
 
 * C / C++
 
