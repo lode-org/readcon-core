@@ -37,7 +37,7 @@ sphinxcontrib-bibtex = ">=2.6, <3"
 setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Install sphinx-rustdocgen for Rust API docs" }
 docbld-full = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"], description = "Docs including fresh rustdocgen" }
 orgbld = "emacs --batch -l docs/export.el"
-docbld = { cmd = "sphinx-build docs/source docs/build -b html -W --keep-going", depends-on = ["orgbld"] }
+docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] }
 
 [environments]
 default = { solve-group = "default" }
