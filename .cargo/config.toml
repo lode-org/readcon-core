@@ -1,0 +1,6 @@
+# chemfiles-sys vendors an older CMakeLists that still declares
+# cmake_minimum_required(< 3.5). Modern CMake rejects that unless
+# CMAKE_POLICY_VERSION_MINIMUM is set; export it for all cargo builds
+# that pull the optional `chemfiles` feature.
+[env]
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
