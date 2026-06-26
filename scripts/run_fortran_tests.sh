@@ -4,15 +4,23 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export READCON_CORE_ROOT="$ROOT"
 FEATURES="${READCON_FORTRAN_FEATURES:-chemfiles}"
 # shellcheck disable=SC2086
-cargo build --release --features ${FEATURES}
+for attempt in 1 2 3; do
+  if cargo build --release --features ${FEATURES}; then
+    break
+  fi
+  if [[ "$attempt" -eq 3 ]]; then
+    exit 1
+  fi
+  echo "cargo build failed (attempt $attempt), retrying..." >&2
+  sleep 5
+done
 export LD_LIBRARY_PATH="$ROOT/target/release:${LD_LIBRARY_PATH:-}"
-# Chemfiles C++ can raise benign FPEs; do not let gfortran abort the suite on CI
 export GFORTRAN_ERROR_BACKTRACE=0
 # Always -cpp so READCON_HAS_METATENSOR gates in the module are honored
 FFLAGS="-cpp -ffpe-summary=none"
 EXTRA="-lstdc++"
 if [[ "$FEATURES" == *metatensor* ]]; then
-  FFLAGS="-cpp -DREADCON_HAS_METATENSOR"
+  FFLAGS="-cpp -DREADCON_HAS_METATENSOR -ffpe-summary=none"
   for d in "$ROOT"/target/release/build/metatensor-sys-*/out/lib \
            "$ROOT"/target/release/build/metatensor-sys-*/out/build/target/*/release/deps \
            "$ROOT"/target/release/build/metatensor-sys-*/out; do
