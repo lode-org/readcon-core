@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "readcon-chemfiles"
+version = "0.13.0"
+description = "Python bindings for readcon-core with chemfiles import/selection (libchemfiles linked)"
+requires-python = ">=3.10"
+license = "MIT"
+readme = "README.md"
+keywords = ["parser", "comp-chem", "file-format", "con", "eon", "chemfiles"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[project.urls]
+Homepage = "https://github.com/lode-org/readcon-core"
+Documentation = "https://lode-org.github.io/readcon-core/"
+Repository = "https://github.com/lode-org/readcon-core"
+Issues = "https://github.com/lode-org/readcon-core/issues"
+Changelog = "https://github.com/lode-org/readcon-core/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+features = ["python", "chemfiles"]
+module-name = "readcon"

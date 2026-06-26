@@ -392,6 +392,21 @@ maturin build --release --features python
 uvx twine upload target/wheels/*
 #+end_src
 
+
+Python ships **two** distributions from =python_wheels.yml=:
+
+| PyPI name | Features | Import |
+|-----------+----------+--------|
+| =readcon= | =python= only (stubs for chemfiles APIs) | =import readcon= |
+| =readcon-chemfiles= | =python,chemfiles= (libchemfiles linked) | =import readcon= (=has_chemfiles_support()= True) |
+
+Configure a trusted publisher on *each* PyPI project (same workflow
+=python_wheels.yml=, environment =pypi=). Do not install both wheels in one
+venv (both export the =readcon= module). Prefer =pip install readcon-chemfiles=
+when selection/import are required; lean =readcon= for CON I/O only.
+=pip install 'readcon[chemfiles]'= depends on =readcon-chemfiles==X.Y.Z= (pin
+updated by =scripts/release-prep.sh=).
+
 Then configure trusted publisher on PyPI:
 
 1. Go to https://pypi.org/manage/project/readcon/settings/publishing/
