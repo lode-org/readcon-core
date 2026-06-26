@@ -634,3 +634,7 @@ Link the ``readcon_core`` library produced by Meson, CMake+Corrosion, or ``cargo
     end if
 
 Per-axis ``fixed_x`` / ``fixed_y`` / ``fixed_z`` are on ``catom_t`` (issue #19, mirrored from C ``CAtom``).
+
+
+Full API: ``frame_t`` (read, metadata, bonds, select), ``iterator_t``, ``builder_t``, ``writer_t``,
+``symbol_to_z`` / ``z_to_symbol``, ``has_chemfiles_support``. CI: ``.github/workflows/ci_fortran.yml``.

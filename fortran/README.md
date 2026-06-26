@@ -1,38 +1,24 @@
-# Fortran bindings (`ReadCon` via fpm)
+# Fortran `ReadCon` (fpm)
 
-First-class **ISO_C_BINDING** module over `include/readcon-core.h`, managed with
-[fpm](https://fpm.fortran-lang.org/).
+Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed with [fpm](https://fpm.fortran-lang.org/).
 
-## Layout
+## Types
 
-```
-fortran/ReadCon/
-  fpm.toml
-  src/readcon.f90      # catom_t, cframe_t, frame_t + metadata helpers
-  test/test_read_con.f90
-  example/read_first.f90
-```
+| Type | Role |
+|------|------|
+| `catom_t` / `cframe_t` | `bind(C)` layouts (= `CAtom` / `CFrame`), incl. **fixed_x/y/z** |
+| `frame_t` | Owns `RKRConFrame*`; atoms, cell, **metadata_json**, energy, potential, time, NEB, bonds, **select** |
+| `iterator_t` | Lazy multi-frame via `read_con_file_iterator` |
+| `builder_t` | `rkr_frame_new` + add_atom (per-axis fixed) + set_energy / metadata_json / build |
+| `writer_t` | `create_writer_from_path_c` + extend |
 
-## Build & test
+Always `call obj%free()` when done (no FINAL — avoids double-free).
+
+## Test
 
 ```bash
-# 1) C ABI library
-cargo build --release
-
-# 2) fpm (link against target/release)
-cd fortran/ReadCon
-export LD_LIBRARY_PATH="$(pwd)/../../target/release:${LD_LIBRARY_PATH}"
-fpm test --flag "-L../../target/release" \
-  --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
-fpm run --example read_first --flag "-L../../target/release" \
-  --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+scripts/run_fortran_tests.sh
+# or: cargo build --release && cd fortran/ReadCon && fpm test ...
 ```
 
-## Ergonomics
-
-- `frame_t` — owns opaque `RKRConFrame*`, lazy `CFrame` view for atoms/cell
-- `catom_t` — bind(C) layout with **per-axis** `fixed_x/y/z` (spec bitmask)
-- `metadata_json()`, `energy()`, `potential_type()`, `frame_index()`, `sim_time()`, `timestep()`
-- Always call `call fr%free()` when done (no FINAL, avoids double-free)
-
-See docs **Language bindings** (Fortran + multi-language panels).
+CI: **Fortran (fpm)** workflow on PRs touching `fortran/` or the C ABI.
