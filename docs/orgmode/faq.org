@@ -37,11 +37,20 @@ order). It enables tools such as chemfiles selection (=bonds:= / =angles:= /
 * How does chemfiles fit in?
 
 Chemfiles is an optional Cargo/build feature (default off for lean C-only
-builds). When enabled, readcon-core can import chemfiles trajectories into
-=ConFrame= (topology becomes =metadata["bonds"]= when present, with bond
-indices remapped into type-grouped =atom_data= order via =atom_id=) and
-evaluate chemfiles selection strings on frames via Rust, C/C++, Python, and
-Julia (=select_on_frame= / =rkr_frame_select=).
+builds and for the default PyPI wheel). When enabled, readcon-core provides:
+
+1. A *multi-format converter* (=chemfiles_import=): chemfiles =Frame= /
+   trajectory path or memory → =ConFrame=, with optional =metadata["bonds"]=
+   and name/type sidecars.
+2. A *bond / angle / atom selector* (=chemfiles_selection=): chemfiles
+   selection-language strings evaluated on a =ConFrame= after projecting
+   geometry and topology into a temporary chemfiles frame
+   (=select_on_frame= / =rkr_frame_select= / Rust =select_atom_indices=).
+
+Runnable walk-throughs (enable feature, XYZ→CON, =angles: all=, C probe) live
+in =docs/orgmode/tutorials.org= under *Chemfiles multi-format converter* and
+*Bond and angle selection*. Binding matrix and documented gaps are in
+=docs/orgmode/bindings.org=.
 
 Supported topology selectors (=bonds:=, =angles:=, =dihedrals:=, =is_bonded=,
 =is_angle=, =is_dihedral=) need =bonds= or an import that carried topology;
