@@ -21,7 +21,7 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-:doc:`chemfiles-tutorial` and :doc:`chemfiles-howto`.
+`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_.
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
@@ -141,8 +141,8 @@ Gaps (honest limits)
 
 Residue/=resname= filters, full chemfiles property surface, improper
 topology extras, and numeric geometry assertion blocks from chemfiles
-``tests/selection.cpp`` are not fully mirrored. See :doc:`bindings` and
-:doc:`chemfiles-reference` for the supported subset.
+``tests/selection.cpp`` are not fully mirrored. See `bindings <bindings.rst>`_ and
+`reference <chemfiles-reference.rst>`_ for the supported subset.
 
 Place in the LODE / eOn ecosystem
 ---------------------------------

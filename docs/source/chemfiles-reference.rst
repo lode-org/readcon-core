@@ -10,9 +10,9 @@ Reference — Chemfiles conversion and selection
    Diátaxis *reference*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-:doc:`chemfiles-tutorial`; for tasks see :doc:`chemfiles-howto`; for rationale see
-:doc:`chemfiles-explain`. Binding-wide matrices live in :doc:`bindings`; on-disk ``bonds``
-key in :doc:`spec`.
+`tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see
+`explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds``
+key in `spec <spec.rst>`_.
 
 Feature and install matrix
 --------------------------
@@ -158,7 +158,7 @@ CON metadata keys (topology / sidecars)
     | ``chemfiles::…``              | Unmapped frame properties                                             |
     +-------------------------------+-----------------------------------------------------------------------+
 
-See :doc:`spec` § frame topology for normative wording.
+See `spec <spec.rst>`_ § frame topology for normative wording.
 
 Selection grammar (supported subset)
 ------------------------------------

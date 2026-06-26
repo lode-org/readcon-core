@@ -45,8 +45,11 @@
 struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
-/* Metatensor block (include metatensor.h to use mts_block_*). */
+/* Metatensor block: opaque. Prefer include/readcon-metatensor.h (pulls
+ * metatensor.h first). With only this header, define READCON_CORE_HAS_METATENSOR
+ * and include <metatensor.h>, or use the incomplete struct typedef below. */
 struct mts_block_t;
+typedef struct mts_block_t mts_block_t;
 
 
 #ifndef READCON_H
@@ -1320,12 +1323,19 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 /**
- * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+ * Free an owned block from `rkr_frame_metatensor_*_block`.
+ * Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
+ *
+ * # Safety
+ * `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
  */
 void rkr_mts_block_free(mts_block_t *block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+ */
 enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
                                                     mts_block_t **out_block);
 #endif

@@ -9,10 +9,48 @@
 //! of these blocks; the choice of "per-species block" vs "single block
 //! with `species` as a sample column" is user-specific, so we expose
 //! the building blocks rather than baking in one convention.
+//!
+//! ## C ABI ownership (option A)
+//!
+//! High-level construction stays here. The **FFI boundary** uses only
+//! metatensor-sys C types (`metatensor::c_api::mts_block_t`, i.e. the
+//! same ABI as `metatensor.h`). Transfer is centralized in
+//! [`tensor_block_into_raw_mts`] / [`mts_block_free_sys`] so callers never
+//! ad-hoc transmute and never double-free with Rust `Drop`.
 
 use crate::types::ConFrame;
+use metatensor::c_api::{self as mts_sys, mts_block_t};
 use metatensor::{Labels, LabelsBuilder, TensorBlock};
 use ndarray::Array2;
+use std::mem::ManuallyDrop;
+
+/// Pin: `metatensor` 0.3.0-rc2 `TensorBlock` is `#[repr(transparent)]` over
+/// `*mut mts_block_t` (see upstream `block/owned.rs`). No public `into_raw`
+/// exists; this is the single supported ownership transfer for our C ABI.
+///
+/// After this returns, the pointer must be freed **only** with
+/// [`mts_block_free_sys`] / `mts_block_free` (not by dropping a second
+/// `TensorBlock` on the same pointer).
+pub fn tensor_block_into_raw_mts(block: TensorBlock) -> *mut mts_block_t {
+    // Layout mirror of metatensor::TensorBlock { ptr: *mut mts_block_t }
+    #[repr(transparent)]
+    struct TensorBlockLayout {
+        ptr: *mut mts_block_t,
+    }
+    let block = ManuallyDrop::new(block);
+    let layout = unsafe { std::ptr::read(&*block as *const TensorBlock as *const TensorBlockLayout) };
+    debug_assert!(!layout.ptr.is_null());
+    layout.ptr
+}
+
+/// Free an owned `mts_block_t*` transferred via [`tensor_block_into_raw_mts`].
+/// Null-safe. Invokes metatensor-sys `mts_block_free` (C ABI destructor).
+pub unsafe fn mts_block_free_sys(block: *mut mts_block_t) {
+    if !block.is_null() {
+        // Ignore status: best-effort free on the C boundary.
+        let _ = unsafe { mts_sys::mts_block_free(block) };
+    }
+}
 
 /// Builds a `TensorBlock` with shape `[N, 3]` carrying the per-atom
 /// xyz coordinates from `frame`. Samples are labelled `atom_id` (the
@@ -210,5 +248,20 @@ mod tests {
         assert!(frame_velocities_block(&frame).unwrap().is_none());
         assert!(frame_forces_block(&frame).unwrap().is_none());
         assert!(frame_energies_block(&frame).unwrap().is_none());
+    }
+
+    #[test]
+    fn tensor_block_into_raw_mts_round_trip_free_via_sys() {
+        let frame = small_frame();
+        let block = frame_positions_block(&frame).unwrap();
+        let ptr = tensor_block_into_raw_mts(block);
+        assert!(!ptr.is_null());
+        // Inspect via sys C API (same as consumers of metatensor.h)
+        let mut array = unsafe { std::mem::zeroed::<mts_sys::mts_array_t>() };
+        assert_eq!(
+            unsafe { mts_sys::mts_block_data(ptr, &mut array) },
+            mts_sys::MTS_SUCCESS
+        );
+        unsafe { mts_block_free_sys(ptr) };
     }
 }

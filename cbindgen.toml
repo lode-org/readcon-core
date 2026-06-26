@@ -50,8 +50,11 @@ header = """
 struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
-/* Metatensor block (include metatensor.h to use mts_block_*). */
+/* Metatensor block: opaque. Prefer include/readcon-metatensor.h (pulls
+ * metatensor.h first). With only this header, define READCON_CORE_HAS_METATENSOR
+ * and include <metatensor.h>, or use the incomplete struct typedef below. */
 struct mts_block_t;
+typedef struct mts_block_t mts_block_t;
 """
 include_guard = "READCON_H"
 include_version = true

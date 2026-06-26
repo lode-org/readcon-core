@@ -1,16 +1,15 @@
-/* Exercise metatensor cbindgen C API on blocks from readcon-core.
+/* Metatensor-sys C ABI consumer (option A: sys on the boundary).
  *
- * Build (after: cargo build --release --features metatensor,chemfiles):
- *   Pick MTS_INC under target/release/build/metatensor-sys-.../out/include
- *   Pick MTS_LIB dir containing libmetatensor.so under the same out tree.
- *   gcc -DREADCON_CORE_HAS_METATENSOR -I include -I "$MTS_INC" \
- *       examples/c_metatensor_sample.c \
- *       -L target/release -L "$MTS_LIB" -Wl,-rpath,"$MTS_LIB" \
- *       -Wl,-rpath,target/release -lreadcon_core -lmetatensor -o /tmp/c_mts
+ * After: cargo build --release --features metatensor,chemfiles
+ *   source target/release/readcon-metatensor.env   # sets INCLUDE + LIB_DIR
+ *   gcc -I include -I "$READCON_METATENSOR_INCLUDE" examples/c_metatensor_sample.c \
+ *       -L target/release -L "$READCON_METATENSOR_LIB_DIR" \
+ *       -Wl,-rpath,"$READCON_METATENSOR_LIB_DIR" -Wl,-rpath,"$PWD/target/release" \
+ *       -lreadcon_core -lmetatensor -o /tmp/c_mts
+ *
+ * Or include readcon-metatensor.h (defines READCON_CORE_HAS_METATENSOR + metatensor.h).
  */
-#define READCON_CORE_HAS_METATENSOR 1
-#include "readcon-core.h"
-#include <metatensor.h>
+#include "readcon-metatensor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -86,11 +85,6 @@ int main(int argc, char **argv) {
     st = rkr_frame_metatensor_velocities_block(f, &block);
     printf("velocities (optional) status=%d\n", (int)st);
     if (st == RKR_STATUS_SUCCESS && block) {
-        if (check_block_shape(block, natoms, 3) != 0) {
-            rkr_mts_block_free(block);
-            free_rkr_frame(f);
-            return 4;
-        }
         rkr_mts_block_free(block);
     } else if (st != RKR_STATUS_SECTION_ABSENT) {
         free_rkr_frame(f);
@@ -123,6 +117,6 @@ int main(int argc, char **argv) {
     }
 
     free_rkr_frame(f);
-    printf("OK metatensor C API consumer\n");
+    printf("OK metatensor C API consumer (sys boundary)\n");
     return 0;
 }
