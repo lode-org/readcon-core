@@ -54,6 +54,6 @@ mod tests {
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.13.0");
+        assert_eq!(VERSION, "0.13.1");
     }
 }
