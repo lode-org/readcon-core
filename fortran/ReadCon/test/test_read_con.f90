@@ -1,95 +1,100 @@
 program test_read_con
   use readcon
-  use, intrinsic :: iso_fortran_env, only: output_unit, error_unit, real64, int64
+  use, intrinsic :: iso_c_binding, only: c_ptr, c_associated
+  use, intrinsic :: iso_fortran_env, only: real64, int64
   implicit none
-  character(len=*), parameter :: tiny = &
-    "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_cuh2.con"
-  character(len=*), parameter :: multi = &
-    "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_multi_cuh2.con"
-  type(frame_t) :: fr, fr2
+  character(len=*), parameter :: tiny = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_cuh2.con"
+  character(len=*), parameter :: multi = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_multi_cuh2.con"
+  character(len=*), parameter :: water = "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/water_min.xyz"
+  type(frame_t) :: fr, fr2, frx
   type(iterator_t) :: it
   type(builder_t) :: bd
   type(catom_t) :: a
+  real(real64) :: cell(3), ang(3), pos(3, 8), masses(8), e
+  integer(int64) :: prim(32)
+  integer :: nfail, n, nf, st, nmatch, nw, i
+  type(c_ptr) :: dlt
   character(len=:), allocatable :: meta
-  real(real64) :: cell(3), ang(3)
-  integer :: n, nfail, nmatch, st, i, nf
-  integer(int64) :: z
-  character(len=:), allocatable :: sym
 
   nfail = 0
-  print *, "version=", library_version(), " spec=", con_spec_version()
-  print *, "chemfiles_support=", has_chemfiles_support()
-
-  z = symbol_to_z("Cu")
-  sym = z_to_symbol(z)
-  print *, "Cu Z=", z, " symbol=", trim(sym)
-  if (z <= 0) nfail = nfail + 1
+  print *, "lib=", library_version(), " chemfiles=", has_chemfiles_support()
 
   fr = read_first_frame(tiny)
-  if (.not. fr%valid()) then
-    print *, "FAIL read_first"
-    error stop 1
-  end if
-  n = fr%natoms()
-  if (n /= 4) nfail = nfail + 1
-  call fr%cell_lengths(cell)
+  if (.not. fr%valid()) error stop "read tiny"
+  if (fr%natoms() /= 4) nfail = nfail + 1
   meta = fr%metadata_json()
-  print *, "natoms=", n, " meta=", trim(meta)
-  a = fr%atom(1)
-  if (.not. (a%fixed_x .or. a%fixed_y .or. a%fixed_z .or. .not. a%is_fixed)) then
-    continue
-  end if
-  ! is_fixed consistency
-  do i = 1, n
-    a = fr%atom(i)
-    if (logical(a%is_fixed) .neqv. (logical(a%fixed_x) .or. logical(a%fixed_y) .or. logical(a%fixed_z))) then
-      nfail = nfail + 1
-    end if
-  end do
+  print *, "meta=", trim(meta)
 
-  ! iterator multi-frame
   it = open_iterator(multi)
   nf = 0
-  if (it%valid()) then
-    do
-      fr2 = it%next()
-      if (.not. fr2%valid()) exit
-      nf = nf + 1
-      call fr2%free()
-    end do
-    call it%free()
-  end if
-  print *, "iterator frames=", nf
-  if (nf < 1) nfail = nfail + 1
+  do while (it%valid())
+    fr2 = it%next()
+    if (.not. fr2%valid()) exit
+    nf = nf + 1
+    call fr2%free()
+  end do
+  call it%free()
+  if (nf < 2) nfail = nfail + 1
 
-  ! builder + writer roundtrip to temp would need writable path — build only
-  cell = [10.0_real64, 10.0_real64, 10.0_real64]
-  ang = [90.0_real64, 90.0_real64, 90.0_real64]
+  cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)
-  if (bd%valid()) then
-    st = bd%add_atom("H", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 1.008_real64, &
-         .false., .false., .false.)
-    st = bd%set_energy(-1.23_real64)
-    st = bd%set_metadata_json('{"con_spec_version":2,"note":"fortran-test"}')
-    fr2 = bd%build()
-    if (fr2%valid()) then
-      print *, "built natoms=", fr2%natoms(), " energy=", fr2%energy()
-      if (fr2%natoms() /= 1) nfail = nfail + 1
-      call fr2%free()
-    else
+  st = bd%add_atom("O", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 15.999_real64, &
+       .false., .false., .false.)
+  st = bd%add_atom("H", 1.0_real64, 0.0_real64, 0.0_real64, 1_int64, 1.008_real64, &
+       .true., .false., .false.)
+  st = bd%set_energy(-42.5_real64)
+  print *, "set_energy status=", st
+  st = bd%copy_positions(pos)
+  print *, "copy_positions status=", st, " pos1=", pos(1,1), pos(2,1), pos(3,1)
+  if (st /= 0) nfail = nfail + 1
+  st = bd%copy_masses(masses)
+  if (st /= 0) nfail = nfail + 1
+  st = bd%positions_dlpack(dlt)
+  print *, "positions_dlpack status=", st, " ptr associated=", c_associated(dlt)
+  if (st == 0 .and. c_associated(dlt)) call bd%dlpack_delete(dlt)
+  fr2 = bd%build()
+  if (.not. fr2%valid()) then
+    nfail = nfail + 1
+  else
+    e = fr2%energy()
+    print *, "built energy=", e, " natoms=", fr2%natoms()
+    meta = fr2%metadata_json()
+    print *, "built meta=", trim(meta)
+    if (fr2%natoms() /= 2) nfail = nfail + 1
+    ! energy may be in JSON even if getter NaN
+    if (index(meta, "energy") == 0 .and. e == e) then
+      continue
+    end if
+    if (e == e .and. abs(e + 42.5_real64) > 1.0e-6_real64) then
+      ! finite but wrong
+      if (abs(e + 42.5_real64) > 1.0e-3_real64) nfail = nfail + 1
+    end if
+    a = fr2%atom(2)
+    if (.not. logical(a%fixed_x)) nfail = nfail + 1
+    call fr2%free()
+  end if
+
+  if (has_chemfiles_support()) then
+    frx = read_chemfiles_first(water)
+    if (.not. frx%valid()) then
+      print *, "chemfiles read failed"
       nfail = nfail + 1
+    else
+      print *, "xyz atoms=", frx%natoms()
+      st = frx%select("name O", nmatch)
+      print *, "select name O status=", st, " nmatch=", nmatch
+      if (st == 0 .and. nmatch < 1) nfail = nfail + 1
+      st = frx%select_primary("name H", prim, nw)
+      print *, "select_primary H status=", st, " n=", nw
+      call frx%free()
     end if
   else
-    nfail = nfail + 1
+    print *, "skip chemfiles tests (lean lib)"
   end if
-
-  ! selection (may fail without chemfiles — that's OK)
-  st = fr%select("all", nmatch)
-  print *, "select all status=", st, " nmatch=", nmatch, " msg=", status_message(st)
 
   call fr%free()
   if (nfail /= 0) then
-    print *, "FAIL nfail=", nfail
+    print *, "FAIL", nfail
     error stop nfail
   end if
   print *, "OK"

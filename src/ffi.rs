@@ -2747,6 +2747,80 @@ pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
     }
 }
 
+/// Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
+/// Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
+///
+/// # Safety
+/// `path_c` must be a valid NUL-terminated UTF-8 path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_chemfiles_first(path_c: *const c_char) -> *mut RKRConFrame {
+    if path_c.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    match crate::chemfiles_import::con_frame_from_trajectory_path(path_str) {
+        Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
+/// Sets `*num_frames`. Free frames with `free_rkr_frame` and the array with
+/// `free_rkr_frame_array`. NULL on error / without chemfiles.
+///
+/// # Safety
+/// `data_c`, `format_c` valid UTF-8 C strings; `num_frames` non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_chemfiles_memory(
+    data_c: *const c_char,
+    format_c: *const c_char,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
+    if data_c.is_null() || format_c.is_null() || num_frames.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(data) = unsafe { CStr::from_ptr(data_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    let Ok(format) = unsafe { CStr::from_ptr(format_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    match crate::chemfiles_import::con_frames_from_memory(data, format) {
+        Ok(frames) => {
+            let n = frames.len();
+            unsafe { *num_frames = n };
+            let mut ptrs: Vec<*mut RKRConFrame> = frames
+                .into_iter()
+                .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
+                .collect();
+            let p = ptrs.as_mut_ptr();
+            std::mem::forget(ptrs);
+            p
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Free a DLPack tensor from `rkr_frame_builder_*_dlpack` (calls deleter). Safe with NULL.
+///
+/// # Safety
+/// `tensor` must be NULL or a pointer from a dlpack export of this library.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersioned) {
+    if tensor.is_null() {
+        return;
+    }
+    unsafe {
+        let t = &mut *tensor;
+        if let Some(del) = t.deleter {
+            del(tensor);
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

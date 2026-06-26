@@ -1384,6 +1384,22 @@ void rkr_selection_result_free(struct RKRSelectionResult *result_handle);
  */
 uint8_t rkr_has_chemfiles_support(void);
 
+/**
+ * Read the first frame via chemfiles (XYZ/PDB/GRO/…). NULL without chemfiles feature.
+ * Caller must `free_rkr_frame`.
+ */
+struct RKRConFrame *rkr_read_chemfiles_first(const char *path_c);
+
+/**
+ * Read all frames from a memory buffer with chemfiles format string (e.g. "XYZ").
+ * Sets *num_frames. Free frames with free_rkr_frame and array with free_rkr_frame_array.
+ */
+struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
+                                               const char *format_c,
+                                               uintptr_t *num_frames);
+
+
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

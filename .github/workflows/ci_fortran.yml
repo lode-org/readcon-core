@@ -7,16 +7,14 @@ on:
       - "fortran/**"
       - "include/readcon-core.h"
       - "src/ffi.rs"
+      - "src/chemfiles_*.rs"
       - "src/types.rs"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "resources/test/**"
       - ".github/workflows/ci_fortran.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "fortran/**"
-      - "include/**"
-      - "src/ffi.rs"
   workflow_dispatch:
 
 jobs:
@@ -25,19 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install gfortran + fpm
+      - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gfortran
+          sudo apt-get install -y gfortran build-essential cmake
           curl -LO https://github.com/fortran-lang/fpm/releases/download/v0.10.1/fpm-0.10.1-linux-x86_64
           sudo install -m 755 fpm-0.10.1-linux-x86_64 /usr/local/bin/fpm
-          fpm --version
-      - name: Build readcon_core
-        run: cargo build --release
+      - name: Build readcon_core (chemfiles ON)
+        run: cargo build --release --features chemfiles
       - name: fpm test
         working-directory: fortran/ReadCon
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
         run: |
           fpm test --flag "-L${{ github.workspace }}/target/release" \
-            --link-flag "-L${{ github.workspace }}/target/release -lreadcon_core -ldl -lpthread -lm"
+            --link-flag "-L${{ github.workspace }}/target/release -lreadcon_core -ldl -lpthread -lm -lstdc++"
