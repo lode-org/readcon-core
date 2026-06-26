@@ -1,16 +1,16 @@
 import os
-import shutil
 
 project = "readcon-core"
 copyright = "2025--present, LODE developers"
 author = "LODE developers"
 release = "0.13.1"
 
+# sphinxcontrib_rust / sphinx-rustdocgen invoke `cargo install --path .` and
+# fail in minimal CI; serve pre-generated RST under docs/source/crates/ instead
+# (regenerate locally with sphinx-rustdocgen when the public Rust API changes).
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
-    "sphinxcontrib_rust",
-    "sphinx_rustdoc_postprocess",
     "sphinxcontrib.bibtex",
 ]
 
@@ -22,16 +22,6 @@ templates_path = ["_templates"]
 exclude_patterns = [
     "crates/readcon_core/main.rst",
 ]
-
-rust_crates = {
-    "readcon_core": os.path.abspath("../../"),
-}
-rust_doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates")
-rust_rustdoc_fmt = "rst"
-# Use committed crate RST under docs/source/crates/ (regenerate locally with
-# `pixi r -e docs docbld-full` when API docs change). Avoids `cargo install
-# sphinx-rustdocgen` / cargo-install-path failures in CI docs jobs.
-rust_generate_mode = "never"
 
 html_theme = "shibuya"
 html_static_path = ["_static"]
