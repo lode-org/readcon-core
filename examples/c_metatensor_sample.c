@@ -1,4 +1,5 @@
-/* Build with -DREADCON_CORE_HAS_METATENSOR and link readcon_core + metatensor */
+/* gcc -DREADCON_CORE_HAS_METATENSOR -I include ... -lreadcon_core -lmetatensor */
+#define READCON_CORE_HAS_METATENSOR 1
 #include "readcon-core.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,15 +11,14 @@ int main(int argc, char **argv) {
         fprintf(stderr, "read failed\n");
         return 1;
     }
-#if defined(READCON_CORE_HAS_METATENSOR)
     struct mts_block_t *block = NULL;
     enum RKRStatus st = rkr_frame_metatensor_positions_block(f, &block);
     printf("positions block status=%d block=%p\n", (int)st, (void *)block);
-    if (block)
-        rkr_mts_block_free(block);
-#else
-    printf("built without READCON_CORE_HAS_METATENSOR\n");
-#endif
+    if (st != RKR_STATUS_SUCCESS || block == NULL) {
+        free_rkr_frame(f);
+        return 2;
+    }
+    rkr_mts_block_free(block);
     free_rkr_frame(f);
     return 0;
 }
