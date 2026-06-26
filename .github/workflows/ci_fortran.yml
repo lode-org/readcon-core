@@ -17,17 +17,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y gfortran build-essential cmake
           curl -LO https://github.com/fortran-lang/fpm/releases/download/v0.10.1/fpm-0.10.1-linux-x86_64
           sudo install -m 755 fpm-0.10.1-linux-x86_64 /usr/local/bin/fpm
-      - run: cargo build --release --features chemfiles
-      - working-directory: fortran/ReadCon
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
-        run: |
-          fpm test --flag "-L${{ github.workspace }}/target/release" \
-            --link-flag "-L${{ github.workspace }}/target/release -lreadcon_core -ldl -lpthread -lm -lstdc++"
+      - name: Fortran tests (chemfiles, lean metatensor stubs)
+        run: READCON_FORTRAN_FEATURES=chemfiles bash scripts/run_fortran_tests.sh
 
   fpm-metatensor:
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -35,17 +29,5 @@ jobs:
           sudo apt-get update && sudo apt-get install -y gfortran build-essential cmake
           curl -LO https://github.com/fortran-lang/fpm/releases/download/v0.10.1/fpm-0.10.1-linux-x86_64
           sudo install -m 755 fpm-0.10.1-linux-x86_64 /usr/local/bin/fpm
-      - run: cargo build --release --features chemfiles,metatensor
-      - name: fpm with metatensor link
-        working-directory: fortran/ReadCon
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
-        run: |
-          EXTRA=""
-          for d in ${{ github.workspace }}/target/release/build/metatensor-sys-*/out/lib; do
-            [ -d "$d" ] && EXTRA="$EXTRA -L$d" && export LD_LIBRARY_PATH="$d:$LD_LIBRARY_PATH"
-          done
-          fpm test --flag "-L${{ github.workspace }}/target/release" \
-            --link-flag "-L${{ github.workspace }}/target/release -lreadcon_core -ldl -lpthread -lm -lstdc++ $EXTRA -lmetatensor" \
-            || fpm test --flag "-L${{ github.workspace }}/target/release" \
-            --link-flag "-L${{ github.workspace }}/target/release -lreadcon_core -ldl -lpthread -lm -lstdc++"
+      - name: Fortran tests (chemfiles + metatensor C ABI)
+        run: READCON_FORTRAN_FEATURES=chemfiles,metatensor bash scripts/run_fortran_tests.sh

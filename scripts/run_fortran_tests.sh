@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export READCON_CORE_ROOT="$ROOT"
 FEATURES="${READCON_FORTRAN_FEATURES:-chemfiles}"
 # shellcheck disable=SC2086
 cargo build --release --features ${FEATURES}
