@@ -12,7 +12,7 @@ Reference — Chemfiles conversion and selection
 
 `tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see
 `explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds``
-key in `spec <spec.rst>`_./
+key in `spec <spec.rst>`_.
 
 Feature and install matrix
 --------------------------

@@ -21,7 +21,7 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_./
+`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_.
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
