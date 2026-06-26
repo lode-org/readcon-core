@@ -68,7 +68,7 @@ Site map
 
 .. toctree::
    :maxdepth: 1
-   :caption: Start
+   :caption: Tutorials & start
 
    getting-started
    tutorials
@@ -76,7 +76,7 @@ Site map
 
 .. toctree::
    :maxdepth: 1
-   :caption: Chemfiles ingress
+   :caption: How-to & tutorials (chemfiles)
 
    chemfiles-tutorial
    chemfiles-notebook
@@ -86,7 +86,7 @@ Site map
 
 .. toctree::
    :maxdepth: 1
-   :caption: Format & design
+   :caption: Explanation & design
 
    spec
    evolution
@@ -95,7 +95,7 @@ Site map
 
 .. toctree::
    :maxdepth: 1
-   :caption: Bindings & API
+   :caption: Reference (API)
 
    bindings
    rpc
@@ -103,7 +103,7 @@ Site map
 
 .. toctree::
    :maxdepth: 1
-   :caption: Project
+   :caption: Project meta
 
    contributing
    changelog

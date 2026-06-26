@@ -37,6 +37,15 @@ jobs:
         env:
           CARGO_HOME: ${{ runner.temp }}/.cargo
 
+
+      - name: Install lychee
+        uses: taiki-e/install-action@v2
+        with:
+          tool: lychee@0.24.2
+
+      - name: Link check (lychee)
+        run: lychee --config lychee.toml 'docs/build/**/*.html'
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:

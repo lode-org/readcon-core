@@ -94,8 +94,8 @@ Convert a foreign format into CON
     frame = readcon.read_chemfiles_first("water.xyz")
     frame.write_con("water.con")
 
-See the full walkthrough in `chemfiles-tutorial <chemfiles-tutorial.rst>`_. Run the literate Org
-notebook (`chemfiles-notebook <chemfiles-notebook.rst>`_) with:
+See the full walkthrough in :doc:`chemfiles-tutorial`. Run the literate Org
+notebook (:doc:`chemfiles-notebook`) with:
 
 .. code:: shell
 

@@ -4,13 +4,13 @@ compile_commands.json
 addl/referenceImpls/eon_cpp/bench_con_reader
 uv.lock
 
-# Documentation build artifacts
+# Documentation build artifacts (keep source RST + figures tracked for
+# GitHub Pages reproducibility and Shibuya "Edit this page" links)
 docs/build/
 docs/doctrees/
-docs/source/*.rst
-docs/source/crates/
+# Transient rustdocgen-only trees if regenerated outside source/
 docs/source/api/
-docs/source/img/
+# Benchmark plot SVGs are tracked under docs/source/img/ when present
 
 # Julia package test resolution
 julia/ReadCon/Manifest.toml
@@ -426,7 +426,8 @@ CMakeUserPresets.json
 __MACOSX/
 .AppleDouble
 .LSOverride
-Icon[]
+Icon[
+]
 
 # Thumbnails
 ._*

@@ -1,0 +1,36 @@
+# Link checker for built Sphinx HTML (and optional source).
+# Run: lychee --config lychee.toml 'docs/build/**/*.html'
+# CI: after pixi run -e docs docbld
+
+verbose = "info"
+no_progress = true
+max_concurrency = 8
+# Relative links in HTML resolve against the file; also check against Pages base
+# after deploy. Local build uses paths under docs/build/.
+include_mail = false
+
+# Accept common "soft" failures that are not real doc bugs
+accept = ["100..=103", "200..=299", "403", "429"]
+
+# Theme / analytics / vendor noise (not our content links)
+exclude = [
+  '^https?://umami\.is/?$',
+  '^https?://analytics\.turtletech\.us/',
+  '^https?://antics-api\.turtletech\.us/',
+  '^https?://fonts\.gstatic\.com/',
+  '^https?://fonts\.googleapis\.com/',
+  # Live Pages lag behind main until deploy; lychee runs on the artifact itself
+  # for internal links via file:// resolution. Still exclude stale remote Pages
+  # when checking mixed inputs.
+  '^https://lode-org\.github\.io/readcon-core/crates/',
+  # Edit-this-page targets main; CI/PR runs before merge so blobs 404. We track
+  # RST in-repo; existence is guaranteed by git, not HTTP.
+  '^https://github\.com/lode-org/readcon-core/blob/',
+]
+
+
+# Do not require network for scheme-less / data
+exclude_path = [
+  "docs/build/_static/.*",
+  "docs/build/searchindex.js",
+]

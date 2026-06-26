@@ -1,4 +1,8 @@
-/* === readcon-core docs: Atkinson Hyperlegible + calmer layout ============== */
+/* =============================================================================
+   readcon-core docs — design system
+   Aligns with Diátaxis IA + WCAG-oriented tech-docs practice (measure, focus,
+   landmarks, contrast, sticky nav) as used on rgpot / rgpycrumbs Shibuya sites.
+   ============================================================================= */
 
 :root {
   --rc-font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI",
@@ -8,20 +12,66 @@
   --rc-indigo: #4f46e5;
   --rc-indigo-deep: #312e81;
   --rc-amber: #d97706;
+  --rc-measure: 68ch; /* ~65–75 character line length for prose */
+  --rc-focus: #2563eb;
+  --rc-radius: 0.5rem;
 }
 
-/* Body + UI chrome */
+/* ---- Skip link (keyboard / screen reader) -------------------------------- */
+.rc-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3.5rem;
+  z-index: 10000;
+  padding: 0.5rem 0.9rem;
+  background: var(--rc-indigo-deep);
+  color: #fff !important;
+  font-family: var(--rc-font-sans);
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: var(--rc-radius);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.rc-skip-link:focus,
+.rc-skip-link:focus-visible {
+  top: 0.75rem;
+  outline: 3px solid var(--rc-focus);
+  outline-offset: 2px;
+}
+
+/* ---- Global type --------------------------------------------------------- */
 html,
 body,
 .sy-page,
 .sy-head,
 .sy-lside,
 .globaltoc,
-.sy-foot {
+.sy-foot,
+.sy-rside {
   font-family: var(--rc-font-sans) !important;
-  font-size: 1.05rem;
+}
+
+body,
+.sy-page {
+  font-size: 1.0625rem; /* ≥17px — easier for long guides */
   line-height: 1.65;
   letter-spacing: 0.01em;
+}
+
+/* Prose measure: avoid ultra-wide walls of text on large monitors */
+.sy-page article.yue,
+.sy-page .yue,
+article.yue {
+  max-width: min(100%, calc(var(--rc-measure) + 12rem)); /* room for figures */
+}
+
+.sy-page p,
+.sy-page li,
+.sy-page dd,
+.sy-page .caption,
+.sy-page figcaption {
+  max-width: var(--rc-measure);
 }
 
 .sy-page h1,
@@ -33,29 +83,61 @@ body,
   font-weight: 700;
   letter-spacing: -0.015em;
   line-height: 1.25;
+  scroll-margin-top: 5rem; /* in-page TOC / skip targets */
 }
 
-/* Code: distinct mono, readable size */
+.sy-page h1 { font-size: clamp(1.75rem, 2.5vw, 2.15rem); }
+.sy-page h2 { font-size: clamp(1.35rem, 2vw, 1.55rem); margin-top: 2rem; }
+.sy-page h3 { font-size: 1.15rem; margin-top: 1.5rem; }
+
+/* Code: distinct mono, readable */
 .sy-page code,
 .sy-page pre,
 .sy-page tt,
 .sy-page .highlight,
-.sy-page div[class*="highlight"] pre {
+.sy-page div[class*="highlight"] pre,
+.sy-page kbd {
   font-family: var(--rc-font-mono) !important;
   font-size: 0.9em;
   line-height: 1.5;
 }
 
 .sy-page pre {
-  border-radius: 0.5rem;
+  border-radius: var(--rc-radius);
   padding: 1rem 1.1rem !important;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-/* Hero on home */
+/* Visible focus — WCAG 2.4.7 / 2.4.11 (not color alone) */
+:focus-visible {
+  outline: 3px solid var(--rc-focus);
+  outline-offset: 2px;
+}
+.sy-page a:focus-visible,
+.globaltoc a:focus-visible,
+.sy-rside a:focus-visible,
+.sy-head a:focus-visible {
+  outline: 3px solid var(--rc-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Links */
+.sy-page a.reference {
+  text-underline-offset: 0.15em;
+  text-decoration-thickness: 0.08em;
+}
+.sy-page a.reference.external::after {
+  content: "";
+  /* keep external marker subtle; Shibuya may already add icon */
+}
+
+/* ---- Hero ---------------------------------------------------------------- */
 .rc-hero {
   text-align: center;
   margin: 0.5rem auto 1.75rem;
-  max-width: 40rem;
+  max-width: 42rem;
 }
 .rc-hero-logo {
   display: block;
@@ -75,7 +157,6 @@ html.dark .rc-hero-tagline {
   color: #94a3b8;
 }
 
-/* Logo swap (landing images + any .light-only / .dark-only) */
 html[data-theme="dark"] .light-only,
 html.dark .light-only { display: none !important; }
 html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; }
@@ -85,24 +166,28 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   html:not([data-theme="light"]) .rc-hero .dark-only { display: block !important; }
 }
 
-/* Admonitions */
+/* ---- Admonitions --------------------------------------------------------- */
 .sy-page div.important,
 .sy-page div.note,
-.sy-page div.tip {
-  border-radius: 0.5rem;
+.sy-page div.tip,
+.sy-page div.warning,
+.sy-page div.caution {
+  border-radius: var(--rc-radius);
   margin: 1.35rem 0;
   padding: 0.85rem 1.1rem;
   border-left: 4px solid var(--rc-indigo);
+  max-width: calc(var(--rc-measure) + 2rem);
 }
-
-.sy-page div.important {
+.sy-page div.important,
+.sy-page div.warning {
   border-left-color: var(--rc-amber);
 }
 
-/* Next-steps table on getting-started */
+/* ---- Tables -------------------------------------------------------------- */
 .sy-page table.next-steps,
 .sy-page table.docutils {
   width: 100%;
+  max-width: 48rem;
   border-collapse: collapse;
   font-size: 1rem;
 }
@@ -116,7 +201,7 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   text-align: left;
 }
 
-/* Sidebar captions */
+/* ---- Sidebars (sticky primary nav + page TOC) ---------------------------- */
 .globaltoc p.caption {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -126,17 +211,47 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   margin-top: 1.1rem;
 }
 
-/* Avoid double H1 noise: hide redundant page title style issues */
-.sy-page .section > h1:first-child {
-  margin-top: 0.25rem;
+/* Current page affordance */
+.globaltoc a.current,
+.globaltoc li.current > a {
+  font-weight: 700;
+  border-left: 3px solid var(--rc-indigo);
+  padding-left: 0.45rem;
+  margin-left: -0.45rem;
 }
 
-/* Links in body — slightly stronger for Hyperlegible */
-.sy-page a.reference {
-  text-underline-offset: 0.15em;
+.sy-rside,
+aside.sy-rside {
+  font-family: var(--rc-font-sans) !important;
+  font-size: 0.92rem;
+}
+.sy-rside .localtoc,
+.sy-rside nav {
+  line-height: 1.45;
+}
+.sy-rside a {
+  text-underline-offset: 0.12em;
+}
+.sy-rside .localtoc h3,
+.sy-rside .localtoc .caption {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  opacity: 0.8;
 }
 
-/* === Figures: WBO / publication style ===================================== */
+/* Touch targets ≥44px on mobile for primary nav links */
+@media (max-width: 768px) {
+  .globaltoc a,
+  .sy-head a {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ---- Figures (publication / WBO assets) ---------------------------------- */
 .sy-page img,
 .sy-page .figure img,
 .sy-page figure img {
@@ -144,13 +259,12 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   max-width: 100%;
   height: auto;
 }
-
 .sy-page .figure,
 .sy-page figure {
   margin: 1.5rem auto 1.75rem;
   text-align: center;
+  max-width: 52rem;
 }
-
 .sy-page .figure .caption,
 .sy-page figcaption,
 .sy-page p.caption {
@@ -159,39 +273,51 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   color: var(--sy-f-text-mute, #475569);
   margin-top: 0.55rem;
   text-align: left;
-  max-width: 46rem;
+  max-width: var(--rc-measure);
   margin-left: auto;
   margin-right: auto;
 }
 
-/* Right sidebar (localtoc / repo-stats / edit-this-page) */
-.sy-rside,
-aside.sy-rside {
-  font-family: var(--rc-font-sans) !important;
-  font-size: 0.92rem;
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .rc-skip-link { transition: none; }
+  * { scroll-behavior: auto !important; }
 }
 
-.sy-rside .sidebar-tree,
-.sy-rside .localtoc,
-.sy-rside nav {
-  line-height: 1.45;
-}
-
-.sy-rside a {
-  text-underline-offset: 0.12em;
-}
-
-/* Cards on index */
+/* Cards (sphinx-design) */
 .sy-page .sd-card {
   border-radius: 0.55rem;
   border: 1px solid color-mix(in srgb, var(--rc-indigo) 18%, transparent);
+  height: 100%;
 }
 .sy-page .sd-card-title {
   font-weight: 700;
   font-family: var(--rc-font-sans) !important;
 }
+.sy-page .sd-card:focus-within {
+  outline: 3px solid var(--rc-focus);
+  outline-offset: 2px;
+}
 
-/* Mermaid diagrams breathe */
 .sy-page .mermaid {
   margin: 1.25rem 0 1.5rem;
+}
+
+/* Dark-mode code blocks: only containers, not prose (rgpot lesson) */
+html.dark .highlight,
+html.dark .highlight pre,
+html.dark pre.literal-block {
+  --syntax-text: #e6edf3;
+  color: #e6edf3;
+}
+
+/* Avoid double H1 noise */
+.sy-page .section > h1:first-child {
+  margin-top: 0.25rem;
+}
+
+/* Footer readability */
+.sy-foot {
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
