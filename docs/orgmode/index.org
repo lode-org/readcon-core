@@ -25,6 +25,7 @@ GRO, … via chemfiles) into CON — see the chemfiles tutorial in the toctree.
    benchmarks
    tutorials
    chemfiles-tutorial
+   chemfiles-notebook
    chemfiles-howto
    chemfiles-explain
    chemfiles-reference

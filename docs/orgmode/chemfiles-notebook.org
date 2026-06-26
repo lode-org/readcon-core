@@ -1,0 +1,75 @@
+#+title: Executable notebook — Chemfiles → CON (Org Babel + Papermill)
+#+author: readcon-core
+#+options: toc:2 num:t
+# -*- org-src-preserve-indentation: t; -*-
+#+PROPERTY: header-args:python :session readcon-chemfiles :results output :exports both :mkdirp yes
+
+/Diátaxis companion: literate *executable* form of [[file:chemfiles-tutorial.org][chemfiles-tutorial]].
+Author in Org (plain text); execute with Babel or tangle + Papermill.
+Canonical parameterized script: =docs/notebooks/chemfiles_ingress.py= (Jupytext percent)./
+
+* Setup
+
+#+begin_src python :results output
+import readcon
+print("version", getattr(readcon, "__version__", "?"))
+print("has_chemfiles_support", readcon.has_chemfiles_support())
+assert readcon.has_chemfiles_support(), "use readcon-chemfiles or maturin --features python,chemfiles"
+#+end_src
+
+* Parameters (mirror papermill tags=["parameters"] cell)
+
+Edit these, then re-run subsequent blocks (or pass =-p= to papermill on the .py).
+
+#+begin_src python :results output
+from pathlib import Path
+work_dir = Path("docs/notebooks/out/work")
+work_dir.mkdir(parents=True, exist_ok=True)
+xyz_path = work_dir / "water.xyz"
+con_path = work_dir / "water_from_xyz.con"
+bonded_path = work_dir / "water_with_bonds.con"
+print(work_dir.resolve())
+#+end_src
+
+* Ingress: write XYZ and convert
+
+#+begin_src python :results output
+xyz_path.write_text(
+    "3\nwater org babel demo\n"
+    "O  0.000  0.000  0.000\n"
+    "H  0.957  0.000  0.000\n"
+    "H -0.240  0.927  0.000\n"
+)
+frame = readcon.read_chemfiles_first(str(xyz_path))
+print("atoms", len(frame.atoms), "bonds?", frame.has_bonds)
+frame.write_con(str(con_path))
+print("wrote", con_path)
+mem = readcon.read_chemfiles_memory(xyz_path.read_text(), "XYZ")
+assert len(mem[0].atoms) == 3
+#+end_src
+
+* Selection with explicit bonds
+
+#+begin_src python :results output
+bonded = readcon.ConFrame(
+    cell=list(frame.cell),
+    angles=list(frame.angles),
+    atoms=list(frame.atoms),
+    metadata={"con_spec_version": 2, "bonds": [[0, 1], [0, 2]]},
+)
+print("select O", bonded.select_atoms("name O"))
+print("angles", bonded.select("angles: all")["matches"])
+bonded.write_con(str(bonded_path))
+#+end_src
+
+* Run via Papermill (shell)
+
+From the repo root (after a chemfiles-linked install):
+
+#+begin_src shell :results output :exports both
+scripts/run-chemfiles-notebook.sh
+#+end_src
+
+Tangle the percent script is already checked in; Org blocks above are the
+interactive twin for Emacs (=C-c C-c= on each =SRC=). Keep both in sync when
+changing the API demos.
