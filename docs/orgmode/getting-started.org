@@ -27,6 +27,39 @@
 
 * Install
 
+#+begin_export rst
+.. tab-set::
+
+   .. tab-item:: Rust
+
+      .. code-block:: shell
+
+         cargo add readcon-core
+
+   .. tab-item:: Python
+
+      .. code-block:: shell
+
+         pip install 'readcon==0.13.1'
+         # conversions: pip install 'readcon-chemfiles==0.13.1'
+
+   .. tab-item:: Fortran
+
+      .. code-block:: shell
+
+         cargo build --release
+         cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
+           --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+   .. tab-item:: C / C++
+
+      .. code-block:: shell
+
+         # Meson or CMake (Corrosion) — see bindings page
+         # Header: include/readcon-core.h
+#+end_export
+
+
 ** Rust — CON I/O only
 
 #+begin_src shell

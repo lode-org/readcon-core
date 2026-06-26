@@ -1,0 +1,28 @@
+name = "ReadCon"
+version = "0.13.1"
+license = "MIT"
+author = "LODE developers"
+maintainer = "LODE developers"
+copyright = "2025-present LODE developers"
+description = "Fortran ISO_C_BINDING bindings for readcon-core (CON/convel I/O)"
+
+[library]
+source-dir = "src"
+
+[build]
+auto-tests = true
+auto-examples = true
+link = ["readcon_core"]
+
+[install]
+library = true
+
+[[test]]
+name = "test_read_con"
+source-dir = "test"
+main = "test_read_con.f90"
+
+[[example]]
+name = "read_first"
+source-dir = "example"
+main = "read_first.f90"
