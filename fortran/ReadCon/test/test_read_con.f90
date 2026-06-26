@@ -7,6 +7,7 @@ program test_read_con
   character(len=1024) :: root, tiny
   integer :: nlen, ierr
   type(frame_t) :: fr, fr2
+  type(writer_t) :: wg
   type(builder_t) :: bd
   real(real64) :: cell(3), ang(3), pos(3, 8)
   integer(int64) :: shape0, shape1
@@ -93,7 +94,7 @@ program test_read_con
     if (st /= rkr_status_section_absent) nfail = nfail + 1
     call mts_block_free_rkr(mts)
 #else
-    if (st /= -7) nfail = nfail + 1
+    if (st /= rkr_status_feature_disabled) nfail = nfail + 1
 #endif
     call fr2%free()
   end if
@@ -101,6 +102,35 @@ program test_read_con
   ! Chemfiles exercised in Rust CI; avoid calling into chemfiles C++ from gfortran on runners
   ! (SIGFPE in chfl_trajectory_open under trapped FP on ubuntu-22.04 + gfortran).
   print *, "chemfiles_support=", has_chemfiles_support()
+
+  ! gzip compressed writer (always exported from C)
+  wg = open_writer_gzip(trim(root) // "/target/tmp_fortran_gzip_test.con.gz")
+  if (.not. wg%valid()) then
+    print *, "open_writer_gzip failed"
+    nfail = nfail + 1
+  else
+    print *, "open_writer_gzip ok"
+    call wg%free()
+  end if
+#ifdef READCON_HAS_ZSTD
+  wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_test.con.zst")
+  if (.not. wg%valid()) then
+    print *, "open_writer_zstd failed"
+    nfail = nfail + 1
+  else
+    print *, "open_writer_zstd ok"
+    call wg%free()
+  end if
+#else
+  wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_skip.con.zst")
+  if (wg%valid()) then
+    print *, "open_writer_zstd should be null without READCON_HAS_ZSTD"
+    nfail = nfail + 1
+    call wg%free()
+  else
+    print *, "open_writer_zstd lean null ok"
+  end if
+#endif
 
   call fr%free()
   if (nfail /= 0) then

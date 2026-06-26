@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file. See [conven
 - (**capi**) selection FFI always exported (stubs without chemfiles feature)
 - (**ci**) Fortran lean + metatensor jobs via `scripts/run_fortran_tests.sh`; cbindgen header check
 - (**docs**) bindings matrix + Fortran README for DLPack/metatensor C API parity
+- (**ffi**) `RKR_STATUS_FEATURE_DISABLED` (-11) for lean/missing optional APIs (not `-7`)
+- (**fortran**) `open_writer_gzip` / `open_writer_zstd` (zstd gated); metatensor lean uses -11
 - (**ffi**) option A: sys on C boundary (`tensor_block_into_raw_mts` / `mts_block_free_sys`); `build.rs` → `readcon-metatensor.env`; `include/readcon-metatensor.h`
 - (**docs**) lean/fat gates, status codes, header order, env paths on bindings + architecture + `fortran/README.md`
 #### Examples

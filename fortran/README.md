@@ -59,7 +59,7 @@ Or copy into Fortran arrays without DLPack: `bd%copy_positions(pos)` / `bd%copy_
 
 | Build | Cargo features | Fortran flags | Link | Helper behaviour |
 |-------|----------------|---------------|------|------------------|
-| **Lean** | `chemfiles` (no `metatensor`) | `-cpp` only | no `libmetatensor` | status **`-7`**, null block |
+| **Lean** | `chemfiles` (no `metatensor`) | `-cpp` only | no `libmetatensor` | status **`RKR_STATUS_FEATURE_DISABLED` (-11)**, null block |
 | **Fat** | `chemfiles,metatensor` | `-cpp -DREADCON_HAS_METATENSOR` | `libmetatensor` + paths from env | real blocks / `SECTION_ABSENT` (-8) |
 
 After `cargo build --release --features metatensor`, source **`target/release/readcon-metatensor.env`** (`READCON_METATENSOR_INCLUDE`, `READCON_METATENSOR_LIB_DIR`). `scripts/run_fortran_tests.sh` does this automatically for fat runs.

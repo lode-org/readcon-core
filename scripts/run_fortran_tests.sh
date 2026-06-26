@@ -19,8 +19,14 @@ export GFORTRAN_ERROR_BACKTRACE=0
 # Always -cpp so READCON_HAS_METATENSOR gates in the module are honored
 FFLAGS="-cpp -ffpe-summary=none"
 EXTRA="-lstdc++"
+if [[ "$FEATURES" == *zstd* ]]; then
+  FFLAGS="$FFLAGS -DREADCON_HAS_ZSTD"
+fi
 if [[ "$FEATURES" == *metatensor* ]]; then
   FFLAGS="-cpp -DREADCON_HAS_METATENSOR -ffpe-summary=none"
+  if [[ "$FEATURES" == *zstd* ]]; then
+    FFLAGS="$FFLAGS -DREADCON_HAS_ZSTD"
+  fi
   ENV_FILE="$ROOT/target/release/readcon-metatensor.env"
   if [[ -f "$ENV_FILE" ]]; then
     # shellcheck disable=SC1090

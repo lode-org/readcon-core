@@ -7,6 +7,7 @@ module readcon
   private
 
   public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
+  public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_feature_disabled
   public :: catom_t, cframe_t
   public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
   public :: dlpack_inspect, dlpack_data_ptr
@@ -17,13 +18,16 @@ module readcon
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, open_iterator, new_builder, open_writer
+  public :: open_writer_gzip, open_writer_zstd
   public :: read_chemfiles_first
-  public :: rkr_status_section_absent
 
+  ! Mirror include/readcon-core.h RKRStatus (keep in sync with src/ffi.rs)
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
-  integer(c_int), parameter :: rkr_status_selection_error = -10
+  integer(c_int), parameter :: rkr_status_internal_error = -7
   integer(c_int), parameter :: rkr_status_section_absent = -8
+  integer(c_int), parameter :: rkr_status_selection_error = -10
+  integer(c_int), parameter :: rkr_status_feature_disabled = -11
 
   type, bind(C), public :: catom_t
     integer(c_int64_t) :: atomic_number = 0_c_int64_t
@@ -286,6 +290,18 @@ module readcon
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_create_writer_from_path_c
     end function
+    function c_create_writer_gzip_c(fn) bind(C, name="create_writer_gzip_c")
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_create_writer_gzip_c
+    end function
+#ifdef READCON_HAS_ZSTD
+    function c_create_writer_zstd_c(fn) bind(C, name="create_writer_zstd_c")
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(in) :: fn(*)
+      type(c_ptr) :: c_create_writer_zstd_c
+    end function
+#endif
     subroutine c_free_rkr_writer(w) bind(C, name="free_rkr_writer")
       import :: c_ptr
       type(c_ptr), value :: w
@@ -885,6 +901,30 @@ contains
     w%w = c_create_writer_from_path_c(c)
   end function
 
+  function open_writer_gzip(path) result(w)
+    ! Always in C ABI (create_writer_gzip_c)
+    character(len=*), intent(in) :: path
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_gzip_c(c)
+  end function
+
+  function open_writer_zstd(path) result(w)
+    ! Requires lib built with --features zstd and -DREADCON_HAS_ZSTD when compiling this module
+    character(len=*), intent(in) :: path
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    w%w = c_null_ptr
+#ifdef READCON_HAS_ZSTD
+    call to_c(path, c)
+    w%w = c_create_writer_zstd_c(c)
+#else
+    ! Associate remains null — caller checks wr_valid; no false success
+    if (.false.) call to_c(path, c)
+#endif
+  end function
+
   logical function wr_valid(self)
     class(writer_t), intent(in) :: self
     wr_valid = c_associated(self%w)
@@ -1104,7 +1144,7 @@ contains
     frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
 #else
     ! Lean lib omits metatensor C symbols (READCON_CORE_HAS_METATENSOR gate)
-    frame_metatensor_positions_block = -7
+    frame_metatensor_positions_block = rkr_status_feature_disabled
     block = c_null_ptr
 #endif
   end function
@@ -1118,7 +1158,7 @@ contains
 #ifdef READCON_HAS_METATENSOR
     frame_metatensor_velocities_block = int(c_rkr_frame_metatensor_velocities_block(fr%handle, block))
 #else
-    frame_metatensor_velocities_block = -7
+    frame_metatensor_velocities_block = rkr_status_feature_disabled
 #endif
   end function
 
@@ -1131,7 +1171,7 @@ contains
 #ifdef READCON_HAS_METATENSOR
     frame_metatensor_forces_block = int(c_rkr_frame_metatensor_forces_block(fr%handle, block))
 #else
-    frame_metatensor_forces_block = -7
+    frame_metatensor_forces_block = rkr_status_feature_disabled
 #endif
   end function
 
@@ -1144,7 +1184,7 @@ contains
 #ifdef READCON_HAS_METATENSOR
     frame_metatensor_atom_energies_block = int(c_rkr_frame_metatensor_atom_energies_block(fr%handle, block))
 #else
-    frame_metatensor_atom_energies_block = -7
+    frame_metatensor_atom_energies_block = rkr_status_feature_disabled
 #endif
   end function
 

@@ -516,7 +516,7 @@ header into =readcon-core.h=; two headers, one pointer ABI.
 
 | Variant | Cargo | =libreadcon_core.so= symbols | C header | Fortran module | Link =libmetatensor= |
 |---------+-------+------------------------------+----------+----------------+----------------------|
-| Lean | default / =chemfiles= only | **omit** =rkr_frame_metatensor_*= | no =READCON_CORE_HAS_METATENSOR= (or undef) | compile with =-cpp= **without** =-DREADCON_HAS_METATENSOR= → helpers return **=-7=** | no |
+| Lean | default / =chemfiles= only | **omit** =rkr_frame_metatensor_*= | no =READCON_CORE_HAS_METATENSOR= (or undef) | compile with =-cpp= **without** =-DREADCON_HAS_METATENSOR= → helpers return **=RKR_STATUS_FEATURE_DISABLED= (=-11=)** | no |
 | Fat | =--features metatensor= (often =chemfiles,metatensor=) | export all four blocks + =rkr_mts_block_free= | define =READCON_CORE_HAS_METATENSOR= (cbindgen =defines=) | =-cpp -DREADCON_HAS_METATENSOR= (script does this) | **yes** |
 
 After a fat =cargo build --features metatensor=, =build.rs= writes
@@ -540,7 +540,7 @@ Regenerate =readcon-core.h= with =scripts/regen-capi-headers.sh= (CI =--check=).
 |------+---------|
 | =0= (=RKR_STATUS_SUCCESS=) | Owned non-null =mts_block_t *= |
 | =-1= | null pointer arg |
-| =-7= | Fortran lean: metatensor C symbols not linked (feature gate in module) |
+| =-11= (=RKR_STATUS_FEATURE_DISABLED=) | API not in this build (lean Fortran metatensor; never aliases internal error =-7=) |
 | =-8= (=RKR_STATUS_SECTION_ABSENT=) | Optional velocities/forces/energies missing on frame; out null |
 | other non-zero | internal / metatensor error |
 
@@ -637,7 +637,7 @@ Wrappers in =fortran/ReadCon/src/readcon.f90= over =include/readcon-core.h=
 (issue #6). Link =libreadcon_core= (Meson, CMake+Corrosion, or =cargo build --release=).
 
 #+begin_src bash
-# Lean (chemfiles only): metatensor Fortran helpers return status -7 (feature gate)
+# Lean (chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)
 READCON_FORTRAN_FEATURES=chemfiles scripts/run_fortran_tests.sh
 
 # Fat: real mts_block_t* path (-cpp -DREADCON_HAS_METATENSOR + libmetatensor)
