@@ -1,6 +1,5 @@
-//! Deterministic workload for Cachegrind / Callgrind CI.
-//! Runs each scenario a fixed number of times (no timing loops).
-//! Usage: cargo run --release --example cachegrind_harness -- [scenario|all]
+//! Deterministic workload for Cachegrind CI.
+//! Usage: cargo run --release --example cachegrind_harness [--features chemfiles] -- [scenario|all|list]
 
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::parser::{parse_line_of_n, parse_line_of_n_f64};
@@ -28,8 +27,7 @@ fn gen_frames(n: usize) -> String {
 fn scenario_parse_multi() {
     let fdat = fs::read_to_string(test_case("tiny_multi_cuh2.con")).unwrap();
     for _ in 0..50 {
-        let iter = ConFrameIterator::new(&fdat);
-        for frame in iter {
+        for frame in ConFrameIterator::new(&fdat) {
             let _ = black_box(frame);
         }
     }
@@ -111,26 +109,75 @@ fn scenario_write_100() {
     }
 }
 
+#[cfg(feature = "chemfiles")]
+fn scenario_xyz_to_con() {
+    use readcon_core::chemfiles_import::con_frame_from_trajectory_path;
+    let path = test_case("water_min.xyz");
+    for _ in 0..50 {
+        let frame = con_frame_from_trajectory_path(&path).expect("xyz→con");
+        let _ = black_box(frame);
+    }
+}
+
+#[cfg(feature = "chemfiles")]
+fn scenario_xyz_memory_to_con() {
+    use readcon_core::chemfiles_import::con_frames_from_memory;
+    let text = fs::read_to_string(test_case("water_min.xyz")).unwrap();
+    for _ in 0..50 {
+        let frames = con_frames_from_memory(&text, "XYZ").expect("xyz mem→con");
+        let _ = black_box(frames);
+    }
+}
+
+#[cfg(feature = "chemfiles")]
+fn scenario_select_name_o() {
+    use readcon_core::chemfiles_import::con_frame_from_trajectory_path;
+    use readcon_core::chemfiles_selection::evaluate_selection_on_con_frame;
+    let frame = con_frame_from_trajectory_path(test_case("water_min.xyz")).unwrap();
+    for _ in 0..50 {
+        let sel = evaluate_selection_on_con_frame("name O", &frame).expect("select");
+        let _ = black_box(sel);
+    }
+}
+
 type Scenario = (&'static str, fn());
 
-const SCENARIOS: &[Scenario] = &[
-    ("parse_multi_2x4", scenario_parse_multi),
-    ("forward_multi_2x4", scenario_forward_multi),
-    ("convel_multi", scenario_convel),
-    ("parse_100_frames", scenario_100_frames),
-    ("forward_100_frames", scenario_100_forward),
-    ("parse_cuh2_218", scenario_cuh2),
-    ("float_fast_float2", scenario_float_fast),
-    ("float_std_parse", scenario_float_std),
-    ("write_100_frames", scenario_write_100),
-];
+fn core_scenarios() -> Vec<Scenario> {
+    vec![
+        ("parse_multi_2x4", scenario_parse_multi),
+        ("forward_multi_2x4", scenario_forward_multi),
+        ("convel_multi", scenario_convel),
+        ("parse_100_frames", scenario_100_frames),
+        ("forward_100_frames", scenario_100_forward),
+        ("parse_cuh2_218", scenario_cuh2),
+        ("float_fast_float2", scenario_float_fast),
+        ("float_std_parse", scenario_float_std),
+        ("write_100_frames", scenario_write_100),
+    ]
+}
+
+fn all_scenarios() -> Vec<Scenario> {
+    let mut s = core_scenarios();
+    #[cfg(feature = "chemfiles")]
+    {
+        s.push(("chemfiles_xyz_path", scenario_xyz_to_con));
+        s.push(("chemfiles_xyz_memory", scenario_xyz_memory_to_con));
+        s.push(("chemfiles_select_name_O", scenario_select_name_o));
+    }
+    s
+}
 
 fn main() {
     let arg = env::args().nth(1).unwrap_or_else(|| "all".into());
+    let scenarios = all_scenarios();
     if arg == "list" {
-        for (name, _) in SCENARIOS {
+        for (name, _) in &scenarios {
             println!("{name}");
         }
+        #[cfg(not(feature = "chemfiles"))]
+        eprintln!("# note: built without chemfiles; conversion scenarios omitted");
+        #[cfg(feature = "chemfiles")]
+        eprintln!("# note: built WITH chemfiles; conversion scenarios included");
         return;
     }
     let run_one = |name: &str, f: fn()| {
@@ -139,12 +186,12 @@ fn main() {
         eprintln!("cachegrind_harness: done {name}");
     };
     if arg == "all" {
-        for (name, f) in SCENARIOS {
+        for (name, f) in &scenarios {
             run_one(name, *f);
         }
         return;
     }
-    for (name, f) in SCENARIOS {
+    for (name, f) in &scenarios {
         if *name == arg {
             run_one(name, *f);
             return;

@@ -47,9 +47,7 @@ path you care to regress; CON I/O is the core library cost.
 hot-path changes (0.13 chemfiles is orthogonal to CON parse unless you
 measure conversion). Prefer treating Criterion tables as **illustrative** and
 Cachegrind as **authoritative for CI**. Re-run =cargo bench= +
-=benches/make_plots.py= when preparing a paper or major release — plots still
-embed some format “estimates” for chemfiles XYZ/GRO that are not measured
-ingress through =readcon-chemfiles=.
+=benches/make_plots.py= when preparing a paper or major release — Pareto plot uses **measured** CON/ASE points only; conversion cost is in the Cachegrind table (``chemfiles_*`` scenarios).
 
 * Frame parsing throughput
 
