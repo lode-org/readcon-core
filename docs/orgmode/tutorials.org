@@ -807,3 +807,233 @@ for (i, frame) in enumerate(frames)
     println("Image $i: $n_free free atoms")
 end
 #+end_src
+
+* Chemfiles multi-format converter (optional feature)
+
+/Added in v0.13.0. Requires building with =--features chemfiles= (or a wheel /
+library built that way). Default crates.io and PyPI packages omit chemfiles so
+lean installs never pull libchemfiles./
+
+** What it does
+
+Chemfiles supports many trajectory formats (XYZ, PDB, GRO, LAMMPS dump, …).
+readcon-core’s *converter* turns a chemfiles =Frame= (or the first / all frames
+of a chemfiles =Trajectory=) into a CON-spec =ConFrame=:
+
+- Geometry: cell lengths/angles (or non-PBC marker), positions, optional velocities.
+- Atoms: element =symbol= from chemfiles atomic type; =atom_id= preserves chemfiles
+  atom index so type-grouped CON layout can be un-remapped later.
+- Topology: chemfiles bonds become optional frame JSON =metadata["bonds"]=
+  (0-based pairs in *chemfiles* order at import time, then remapped into
+  =atom_data= order via =atom_id= after the type-grouped build).
+- Extra properties: reserved CON keys (=energy=, =pbc=, …) are mapped when
+  recognized; everything else is kept under =chemfiles::…= or
+  =chemfiles_atom_properties= so nothing is dropped silently.
+- Display vs type: chemfiles display =name= (e.g. =H1=) vs atomic =type= (=H=)
+  are stored in =chemfiles_atom_names= / =chemfiles_atom_types= sidecars
+  (indexed by =atom_id= order) because on-disk CON has only one symbol column.
+
+After conversion you can write =.con= / =.convel= with the normal writer APIs,
+or run selection (next section) on the in-memory =ConFrame=.
+
+** Build / enable
+
+#+begin_src shell
+# Rust crate / tests
+cargo build --features chemfiles
+cargo test --features chemfiles
+
+# Python from source (PyPI wheels are usually *without* chemfiles)
+maturin develop --features python,chemfiles
+
+# C ABI: build the shared library with the feature, then link as usual
+cargo build --release --features chemfiles
+# Probe at runtime: rkr_has_chemfiles_support() returns 1 only if linked with chemfiles
+#+end_src
+
+Modern CMake may need =CMAKE_POLICY_VERSION_MINIMUM=3.5= while building
+=chemfiles-sys=; the repo ships that in =.cargo/config.toml=.
+
+** Short example (Rust): XYZ → CON
+
+#+begin_src rust
+// cargo run --features chemfiles --example …  (or any binary with the feature)
+use readcon_core::chemfiles_import::{
+    con_frame_from_chemfiles, con_frame_from_trajectory_path,
+};
+use readcon_core::writer::ConFrameWriter;
+use chemfiles::Trajectory;
+
+// Path-based: first frame of any chemfiles-readable file
+let frame = con_frame_from_trajectory_path("water.xyz")?;
+assert!(frame.has_bonds() || frame.bonds().is_empty()); // topology if present
+
+// Or convert an in-memory chemfiles Frame
+let mut traj = Trajectory::open("water.xyz", 'r')?;
+let mut chfl = chemfiles::Frame::new();
+traj.read(&mut chfl)?;
+let frame2 = con_frame_from_chemfiles(&chfl)?;
+
+// Write a CON file (bonds ride along in line-2 JSON when present)
+let mut w = ConFrameWriter::from_path("water.con")?;
+w.write_frame(&frame2)?;
+#+end_src
+
+** Short example (Python): only when the extension was built with chemfiles
+
+PyPI =readcon= wheels typically do *not* enable chemfiles. For conversion you
+need a from-source build with the feature, or call chemfiles in Python and pass
+data into =ConFrameBuilder= yourself. Selection helpers are registered only
+when the extension was compiled with =chemfiles=:
+
+#+begin_src python
+# Requires: maturin develop --features python,chemfiles
+import readcon
+
+# Prefer Rust-side import from a path via a small FFI helper if exposed in
+# your build; otherwise use chemfiles in Python and set bonds on the builder.
+# Minimal path when the crate exposes trajectory import only in Rust:
+# use a thin CLI or embed the Rust API.
+#
+# Once you have a ConFrame (e.g. read back a .con written after import):
+frames = readcon.read_all_frames("water.con")
+f = frames[0]
+print("has_bonds", f.has_bonds)
+print("n_bonds", len(f.bonds) if f.has_bonds else 0)
+#+end_src
+
+** Multi-frame trajectories
+
+#+begin_src rust
+use readcon_core::chemfiles_import::con_frames_from_trajectory_path;
+
+let frames = con_frames_from_trajectory_path("traj.xyz")?;
+// each ConFrame is independent; write with ConFrameWriter::extend / write_frames
+#+end_src
+
+See also =docs/orgmode/faq.org= (“How does chemfiles fit in?”) and the design
+note on optional =bonds= in =docs/orgmode/spec.org=.
+
+* Bond and angle selection (chemfiles selection grammar)
+
+/Added in v0.13.0. Same =chemfiles= Cargo feature as the converter./
+
+** What it does
+
+Chemfiles defines a *selection language* (atoms by =name= / =type= / =all=,
+pairs, bonds, angles, dihedrals, predicates such as =is_bonded=). readcon-core
+projects a =ConFrame= into a temporary chemfiles =Frame= (positions, cell,
+optional =bonds= topology, name/type sidecars) and runs chemfiles’
+=Selection= evaluator. Results are returned in *CON =atom_data= index space*
+(0-based into the frame’s atom list after type-grouping).
+
+- *Without* =metadata["bonds"]=: atom selectors (=name O=, =type H=, =all=)
+  and combinators that do not need topology still work; topology-only
+  selectors (=bonds:=, =angles:=, =is_bonded=, …) yield no matches.
+- *With* =bonds= (from chemfiles import or hand-authored JSON): chemfiles
+  derives angles/dihedrals from the bond graph, so =angles: all= and
+  =is_angle= work without storing angles on disk.
+- Surfaces: Rust =evaluate_selection_on_con_frame= / =select_atom_indices=,
+  Python =select_on_frame= / =select_atom_indices=, C =rkr_frame_select=,
+  C++ =ConFrame::select=, Julia =select_on_frame= / =select_atom_indices=
+  (FFI). Probe: =rkr_has_chemfiles_support()= / Julia =has_chemfiles_support()=.
+
+Index contract: bonds in metadata are 0-based into =atom_data= order (not the
+=atom_id= column). Chemfiles import remaps endpoints through =atom_id= after
+type-grouped build. Parity tests compare *undirected multisets* of matches to
+chemfiles C++ (=chemfiles_selection_cpp_regression=), not byte-identical lists.
+
+** Short example (Rust): bonds and angles
+
+#+begin_src rust
+use readcon_core::chemfiles_selection::{
+    evaluate_selection_on_con_frame, select_atom_indices,
+};
+use readcon_core::types::{Bond, ConFrameBuilder};
+
+let mut b = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+b.add_atom("O", 0.0, 0.0, 0.0, [false; 3], 0, 16.0);
+b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+b.add_atom("H", 0.0, 1.0, 0.0, [false; 3], 2, 1.0);
+// Topology: water-like bonds O–H1, O–H2 (atom_data indices 0,1,2)
+b.set_bonds(&[Bond::new(0, 1), Bond::new(0, 2)]);
+let frame = b.build();
+
+// Atoms named O (uses symbol / name sidecars)
+let oxygens = select_atom_indices("name O", &frame)?;
+assert_eq!(oxygens, vec![0]);
+
+// All angles implied by the bond graph (H–O–H)
+let angles = evaluate_selection_on_con_frame("angles: all", &frame)?;
+assert_eq!(angles.context_size, 3); // three atoms per match
+assert!(!angles.matches.is_empty());
+
+// Bond predicate on pairs
+let bonded = evaluate_selection_on_con_frame("is_bonded", &frame)?;
+// each match is a bonded pair in atom_data indices
+let _ = bonded;
+#+end_src
+
+** Short example (Python)
+
+#+begin_src python
+# Extension built with --features python,chemfiles
+import readcon
+
+frame = readcon.read_first_frame("water.con")  # or builder + bonds in metadata
+
+# Primary atom indices for an atom selection (argument order: frame, selection)
+idx = readcon.select_atom_indices(frame, "name O")
+print("oxygen indices", idx)
+
+# Full result dict: selection, context_size, matches, primary_indices
+# context_size: 1=atom, 2=pair/bond, 3=angle, 4=dihedral
+result = readcon.select_on_frame(frame, "angles: all")
+print("n_angles", len(result["matches"]), "arity", result["context_size"])
+for m in result["matches"]:
+    print("angle atoms", m)
+print("primary", result["primary_indices"])
+#+end_src
+
+** Short example (C)
+
+#+begin_src c
+#include "readcon-core.h"
+#include <stdio.h>
+
+/* Library must be built with --features chemfiles */
+if (!rkr_has_chemfiles_support()) {
+    fprintf(stderr, "rebuild with chemfiles\n");
+    return 1;
+}
+
+RKRConFrame *frame = /* ... from iterator or builder ... */;
+RKRSelectionResult *sel = NULL;
+if (rkr_frame_select(frame, "bonds: all", &sel) != RKR_STATUS_SUCCESS) {
+    fprintf(stderr, "selection failed\n");
+    return 1;
+}
+uint64_t n = rkr_selection_result_match_count(sel);
+uint32_t arity = rkr_selection_result_context_size(sel);
+printf("bonds: %llu matches, arity %u\n",
+       (unsigned long long)n, (unsigned)arity);
+rkr_selection_result_free(sel);
+#+end_src
+
+** Useful selection strings
+
+| Selection | Needs bonds? | Meaning |
+|------------+--------------+---------|
+| =name O= / =type H= | no | atoms by display name or atomic type |
+| =all= | no | every atom |
+| =bonds: all= | yes | all bonded pairs |
+| =angles: all= | yes (derived) | all angles from the bond graph |
+| =is_bonded= | yes | pair context; true when edge exists |
+| =is_angle= | yes | triple context; true for an angle |
+
+Invalid grammar returns an error (=RKR_STATUS_SELECTION_ERROR= on the C ABI).
+
+Full chemfiles grammar details live in the upstream chemfiles selection docs;
+readcon implements the subset exercised in =tests= /
+=chemfiles_selection_cpp_regression= (see =docs/orgmode/bindings.org= for
+documented gaps: residues, numeric geometry blocks, etc.).
