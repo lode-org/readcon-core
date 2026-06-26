@@ -682,6 +682,29 @@ impl PyConFrame {
     fn from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult<Self> {
         pyconframe_from_ase(py, ase_atoms)
     }
+
+    /// Chemfiles selection on this frame (see module :func:`select_on_frame`).
+    ///
+    /// Requires a chemfiles-linked build (``readcon-chemfiles`` / ``--features chemfiles``).
+    fn select(&self, py: Python<'_>, selection: &str) -> PyResult<Py<PyAny>> {
+        select_on_frame(py, self, selection)
+    }
+
+    /// Atom-context chemfiles selection → sorted unique ``atom_data`` indices.
+    fn select_atoms(&self, py: Python<'_>, selection: &str) -> PyResult<Vec<usize>> {
+        select_atom_indices(py, self, selection)
+    }
+
+    /// Write this frame to a CON path (single-frame convenience).
+    fn write_con(&self, py: Python<'_>, path: &str) -> PyResult<()> {
+        let frame = self.to_con_frame(py)?;
+        let mut writer = ConFrameWriter::from_path(Path::new(path))
+            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+        writer
+            .write_frame(&frame)
+            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+        Ok(())
+    }
 }
 
 impl PyConFrame {
@@ -1286,47 +1309,50 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
+    m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
+    m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
+    m.add_function(wrap_pyfunction!(read_chemfiles_memory, m)?)?;
     m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Chemfiles selection (always registered; stubs if built without `chemfiles`)
+// Chemfiles import + selection (always registered; stubs if built without feature)
 // ---------------------------------------------------------------------------
 
 /// True when this extension was built with the Rust ``chemfiles`` feature
-/// (links libchemfiles). Default PyPI wheels return False; install the
-/// ``chemfiles`` extra from source to enable (see project docs).
+/// (links libchemfiles). Lean ``readcon`` wheels return False; use
+/// ``readcon-chemfiles`` on PyPI (or a source build with the feature).
 #[pyfunction]
 fn has_chemfiles_support() -> bool {
     crate::chemfiles_import::chemfiles_enabled()
 }
 
-/// Evaluate a chemfiles selection string on a `ConFrame`.
-///
-/// Returns a dict with keys:
-/// - `selection`: str
-/// - `context_size`: int (1=atom, 2=pair, ...)
-/// - `matches`: list[list[int]] each inner list has 1-4 atom indices
-/// - `primary_indices`: list[int] first atom of each match
-///
-/// Raises ``RuntimeError`` if the extension was built without the ``chemfiles``
-/// feature (see ``has_chemfiles_support()`` and the ``chemfiles`` install extra).
-#[pyfunction]
-fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
-    use crate::chemfiles_selection::evaluate_selection_on_con_frame;
-    let rust_frame = frame.to_con_frame(py)?;
-    let result = evaluate_selection_on_con_frame(selection, &rust_frame).map_err(|e| {
-        pyo3::exceptions::PyRuntimeError::new_err(format!("{e}"))
-    })?;
+fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyErr {
+    use crate::chemfiles_import::ChemfilesImportError;
+    match e {
+        ChemfilesImportError::FeatureDisabled => {
+            pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
+        }
+        ChemfilesImportError::Io(io) => PyIOError::new_err(io.to_string()),
+        ChemfilesImportError::InvalidFrame(msg) => PyValueError::new_err(msg),
+        #[cfg(feature = "chemfiles")]
+        ChemfilesImportError::Chemfiles(ch) => PyValueError::new_err(format!("chemfiles: {ch}")),
+    }
+}
+
+fn selection_result_to_py(
+    py: Python<'_>,
+    result: crate::chemfiles_selection::SelectionResult,
+) -> PyResult<Py<PyAny>> {
     let matches: Vec<Vec<usize>> = result
         .matches
         .iter()
         .map(|m| m.indices().to_vec())
         .collect();
     let primary: Vec<usize> = result.primary_indices();
-    let dict = pyo3::types::PyDict::new(py);
+    let dict = PyDict::new(py);
     dict.set_item("selection", result.selection)?;
     dict.set_item("context_size", result.context_size)?;
     dict.set_item("matches", matches)?;
@@ -1334,14 +1360,72 @@ fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyRes
     Ok(dict.into())
 }
 
-/// Atom-context selection: returns sorted unique atom indices (e.g. ``name O``).
+/// Read **all** frames from a chemfiles-supported path (XYZ, PDB, GRO, …)
+/// into CON :class:`ConFrame` values.
 ///
-/// Raises ``RuntimeError`` if built without the ``chemfiles`` feature.
+/// This is the Python entry point for **format conversion into CON**: chemfiles
+/// chooses the reader from the path; topology becomes optional
+/// ``metadata['bonds']`` when present.
+///
+/// Raises ``RuntimeError`` if this wheel was built without chemfiles (install
+/// ``readcon-chemfiles``), ``OSError`` on I/O failure, ``ValueError`` on bad frames.
+#[pyfunction]
+fn read_chemfiles(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
+    use crate::chemfiles_import::con_frames_from_trajectory_path;
+    let frames = con_frames_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)?;
+    frames
+        .iter()
+        .map(|f| PyConFrame::from_con_frame(py, f))
+        .collect()
+}
+
+/// Read the **first** frame only from a chemfiles-supported path.
+///
+/// Prefer this for single-structure XYZ/PDB/GRO files.
+#[pyfunction]
+fn read_chemfiles_first(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
+    use crate::chemfiles_import::con_frame_from_trajectory_path;
+    let frame = con_frame_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)?;
+    PyConFrame::from_con_frame(py, &frame)
+}
+
+/// Read all frames from an in-memory trajectory buffer.
+///
+/// ``format`` is a chemfiles format name such as ``"XYZ"``, ``"PDB"``, or ``"GRO"``.
+#[pyfunction]
+fn read_chemfiles_memory(py: Python<'_>, data: &str, format: &str) -> PyResult<Vec<PyConFrame>> {
+    use crate::chemfiles_import::con_frames_from_memory;
+    let frames = con_frames_from_memory(data, format).map_err(chemfiles_err_to_py)?;
+    frames
+        .iter()
+        .map(|f| PyConFrame::from_con_frame(py, f))
+        .collect()
+}
+
+/// Evaluate a chemfiles selection string on a `ConFrame` (module-level).
+///
+/// Prefer :meth:`ConFrame.select` for idiomatic method-call style.
+///
+/// Returns a dict with keys:
+/// - `selection`: str
+/// - `context_size`: int (1=atom, 2=pair, ...)
+/// - `matches`: list[list[int]] each inner list has 1-4 atom indices
+/// - `primary_indices`: list[int] first atom of each match
+#[pyfunction]
+fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::evaluate_selection_on_con_frame;
+    let rust_frame = frame.to_con_frame(py)?;
+    let result =
+        evaluate_selection_on_con_frame(selection, &rust_frame).map_err(chemfiles_err_to_py)?;
+    selection_result_to_py(py, result)
+}
+
+/// Atom-context selection: sorted unique atom indices (e.g. ``name O``).
+///
+/// Prefer :meth:`ConFrame.select_atoms` for idiomatic method-call style.
 #[pyfunction]
 fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Vec<usize>> {
     use crate::chemfiles_selection::select_atom_indices as rust_select;
     let rust_frame = frame.to_con_frame(py)?;
-    rust_select(selection, &rust_frame).map_err(|e| {
-        pyo3::exceptions::PyRuntimeError::new_err(format!("{e}"))
-    })
+    rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
 }

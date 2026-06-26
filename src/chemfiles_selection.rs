@@ -3,8 +3,8 @@
 //! Real evaluation requires the `chemfiles` Cargo feature. Without it, APIs
 //! return [`ChemfilesImportError::FeatureDisabled`](crate::chemfiles_import::ChemfilesImportError::FeatureDisabled).
 
+#[cfg(not(feature = "chemfiles"))]
 use crate::chemfiles_import::ChemfilesImportError;
-
 #[cfg(not(feature = "chemfiles"))]
 use crate::types::ConFrame;
 
