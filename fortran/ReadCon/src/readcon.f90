@@ -11,7 +11,7 @@ module readcon
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
-  public :: read_first_frame, open_iterator
+  public :: read_first_frame, open_iterator, new_builder, open_writer
 
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
@@ -652,7 +652,6 @@ contains
     aa = real(angles, c_double)
     bd%b = c_rkr_frame_new(cc, aa, c_null_ptr, c_null_ptr, c_null_ptr, c_null_ptr)
   end function
-  public :: new_builder
 
   logical function bd_valid(self)
     class(builder_t), intent(in) :: self
@@ -725,7 +724,6 @@ contains
     call to_c(path, c)
     w%w = c_create_writer_from_path_c(c)
   end function
-  public :: open_writer
 
   logical function wr_valid(self)
     class(writer_t), intent(in) :: self
