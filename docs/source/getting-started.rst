@@ -24,9 +24,8 @@ Getting started
 
 .. tip::
 
-   Start here for install and the shortest paths. Use the right sidebar for
-   this page’s sections; top nav **Convert** is the conversion tutorial and
-   recipes.
+   Start here for install and the shortest paths. Top nav **Convert** is the
+   conversion tutorial and recipes.
 
 Install
 -------
@@ -53,9 +52,9 @@ Python — CON I/O plus format conversion
     pip install 'readcon-chemfiles==0.13.1'
     # do not also install lean readcon in the same venv
 
-The package name still contains ``chemfiles`` (the library used under the hood
-for multi-format read). You do not need to learn that library to convert
-files—use the ``read_chemfiles_*`` helpers on ``readcon`` as in the next section.
+The PyPI name ``readcon-chemfiles`` is historical (multi-format read is linked
+in that wheel). You do not need a separate chemfiles tutorial to convert a
+file—call the helpers on ``readcon`` as below.
 
 Rust — CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -91,12 +90,8 @@ Needs the ****with conversions**** install.
     frame = readcon.read_chemfiles_first("water.xyz")
     frame.write_con("water.con")
 
-Full walkthrough: `convert formats tutorial <chemfiles-tutorial.rst>`_. Runnable Org notebook:
-`executable notebook <chemfiles-notebook.rst>`_ via:
-
-.. code:: shell
-
-    scripts/run-chemfiles-notebook.sh
+Full walkthrough: :doc:`chemfiles-tutorial`. Executable notebook:
+:doc:`chemfiles-notebook` via ``scripts/run-chemfiles-notebook.sh``.
 
 Where to go next
 ----------------
