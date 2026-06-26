@@ -9,7 +9,7 @@ Performance Benchmarks
 1 Methodology
 -------------
 
-All benchmarks use `Criterion.rs <https://bheisler.github.io/criterion.rs/book/>`_ with default settings (100 iterations,
+Unless noted, historical tables below used `Criterion.rs <https://bheisler.github.io/criterion.rs/book/>`_ with default settings (100 iterations,
 5-second warm-up). Measurements taken on a single core. Times report
 the median of the sample distribution. Source: ``benches/iterator_bench.rs``.
 
@@ -20,26 +20,39 @@ Run benchmarks locally:
     cargo bench
     # or: pixi r bench
 
+2 CI Cachegrind (always-on numbers)
+-----------------------------------
 
-CI Cachegrind (always-on numbers)
----------------------------------
-
-Hand-written Criterion tables below can lag releases. CI runs Valgrind
-**Cachegrind** on ``examples/cachegrind_harness.rs`` and refreshes instruction
-counts into the include below (workflow **Cachegrind benchmarks** on ``main``).
+Hand-written Criterion tables below can lag releases. For ****regression tracking on every ``main`` push****, CI runs Valgrind ****Cachegrind**** on
+``examples/cachegrind_harness.rs`` and commits instruction counts into the docs.
 
 .. include:: _generated/cachegrind_results.rst
 
-Reproduce locally (Valgrind required; several minutes)::
+Reproduce locally (needs Valgrind; several minutes):
+
+.. code:: shell
 
     scripts/run_cachegrind_bench.sh
+    # outputs docs/source/_generated/cachegrind_results.{json,rst}
 
-**Why Cachegrind on CI?** Shared runners make Criterion wall-clock noisy.
-Cachegrind **I refs** are stable for a given binary and Valgrind version.
-PR **Benchmark PR** workflow still runs Criterion + ``critcmp`` for latency
-deltas. Chemfiles conversion is not in the harness yet (optional feature).
+****Why Cachegrind instead of Criterion on CI?**** Wall-clock medians on shared
+GitHub runners are noisy (noisy neighbours, CPU migration). Cachegrind counts
+****instruction references**** for a fixed binary — stable enough to diff commits
+and fail a PR workflow later if desired. Criterion remains best for local
+latency intuition; PR workflow ``Benchmark PR`` still compares Criterion
+baselines with ``critcmp``.
 
-2 Frame parsing throughput
+****Chemfiles / format conversion**** is not in this harness yet (optional feature,
+links ``libchemfiles``). Add scenarios only when conversion is on the critical
+path you care to regress; CON I/O is the core library cost.
+
+****Do the old tables need updating?**** Yes for marketing-style µs claims after
+hot-path changes (0.13 chemfiles is orthogonal to CON parse unless you
+measure conversion). Prefer treating Criterion tables as ****illustrative**** and
+Cachegrind as ****authoritative for CI****. Re-run ``cargo bench`` +
+``benches/make_plots.py`` when preparing a paper or major release — Pareto plot uses ****measured**** CON/ASE points only; conversion cost is in the Cachegrind table (\`\`chemfiles\ :sub:`\*`\\`\` scenarios).
+
+3 Frame parsing throughput
 --------------------------
 
 .. table::
@@ -64,7 +77,7 @@ deltas. Chemfiles conversion is not in the harness yet (optional feature).
 achieving 7x higher throughput than full parsing. This matters for
 trajectory analysis that only needs specific frames (e.g., every 10th).
 
-3 Velocity parsing overhead
+4 Velocity parsing overhead
 ---------------------------
 
 .. table::
@@ -83,7 +96,7 @@ Velocity sections add roughly 70% parsing time (same line count, same
 float parsing). The ``forward()`` skip mode handles velocity sections
 with minimal overhead.
 
-4 Float parsing: fast-float2 vs stdlib
+5 Float parsing: fast-float2 vs stdlib
 --------------------------------------
 
 .. table::
@@ -100,7 +113,7 @@ readcon-core uses `fast-float2 <https://github.com/aldanor/fast-float-rust>`_ fo
 line parsing. This provides a consistent 2x speedup over Rust's
 standard library float parser on the hot path.
 
-5 I/O strategy: mmap vs read\ :sub:`to`\ \ :sub:`string`\
+6 I/O strategy: mmap vs read\ :sub:`to`\ \ :sub:`string`\
 ---------------------------------------------------------
 
 .. table::
@@ -121,7 +134,7 @@ without a full heap copy. readcon-core switches automatically at the
 Compressed files (``.con.gz``) always decompress to an in-memory buffer
 regardless of size, since mmap cannot decompress on the fly.
 
-6 Cross-implementation comparison
+7 Cross-implementation comparison
 ---------------------------------
 
 Measured with ``benches/compare_readers.py`` on a 100-frame trajectory
@@ -160,7 +173,7 @@ compounds: readcon-core's ``forward()`` skip mode processes frames it
 does not need at 14M atoms/s, while Python readers must parse every
 line.
 
-7 Scaling with file size
+8 Scaling with file size
 ------------------------
 
 Measured across four trajectory sizes. readcon-core and C times are
@@ -186,7 +199,7 @@ advantage over C narrows on large files (I/O becomes a larger fraction
 of total time), but readcon-core remains consistently faster due to
 fast-float2 and zero-copy parsing.
 
-8 Memory usage
+9 Memory usage
 --------------
 
 Peak resident set size when loading all frames into memory:
@@ -225,8 +238,8 @@ achieve similar constant-memory usage via the iterator API:
         // process frame, then drop
     }
 
-9 Scaling considerations
-------------------------
+10 Scaling considerations
+-------------------------
 
 The per-atom parsing cost is dominated by float conversion (5 columns
 per atom line). With fast-float2, each atom line takes roughly 100 ns
@@ -244,7 +257,7 @@ For trajectory files with many frames, the ``parallel`` feature gate
 enables rayon-based frame-level parallelism, scaling linearly with
 core count for the parsing phase.
 
-10 Memory profile
+11 Memory profile
 -----------------
 
 readcon-core allocates:
@@ -268,7 +281,7 @@ footprint is approximately:
 The iterator API processes one frame at a time, so multi-frame files
 do not require loading the entire trajectory into memory.
 
-11 Feature coverage vs other formats
+12 Feature coverage vs other formats
 ------------------------------------
 
 The CON v2 format covers features that typically require multiple
@@ -299,7 +312,7 @@ coverage at the fastest parse speed among text-based formats. Binary
 formats (DCD, TRR) trade features for raw throughput -- they lack
 metadata, constraints, and human readability.
 
-12 Statistical analysis
+13 Statistical analysis
 -----------------------
 
 The point estimates above characterize typical performance. For
@@ -315,7 +328,7 @@ The bayescomp analysis pipeline reads Criterion JSON output and
 ``cmdstanr``, and produces posterior predictive checks and effect size
 summaries suitable for JOSS or SoftwareX publication.
 
-13 Reproducing these benchmarks
+14 Reproducing these benchmarks
 -------------------------------
 
 .. code:: shell
