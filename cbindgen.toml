@@ -68,6 +68,16 @@ documentation_style = "Doxy"
 documentation_length = "full"
 line_endings = "LF"
 
+[defines]
+# The zstd-compressed writer FFI (`create_writer_zstd_c`,
+# `create_writer_zstd_with_precision_c`) is gated behind the `zstd`
+# Cargo feature. cbindgen always emits the declarations but wraps them
+# in `#if defined(READCON_CORE_HAS_ZSTD)`, so consumers that link a
+# build with the feature enabled define that macro to reach the
+# symbols; builds without the feature omit the symbols and the guard
+# keeps the declarations out of reach.
+"feature = zstd" = "READCON_CORE_HAS_ZSTD"
+
 [export]
 # `FxHashMap` (rustc-hash) is re-exported by the Rust API for
 # `ConFrame::build_atom_id_index`. C/C++ consumers reach the index
