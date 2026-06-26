@@ -515,38 +515,148 @@ impl ConFrame {
 /// assert_eq!(frame.header.natm_types, 2);
 /// assert_eq!(frame.atom_data.len(), 2);
 /// ```
+/// In-memory frame builder backed by struct-of-arrays storage so
+/// downstream consumers (eOn's Matter, GROMACS-style integrators)
+/// can map a `[N, 3] f64` view directly onto Rust-owned memory and
+/// mutate positions / forces / energies via FFI raw pointer with no
+/// copy-through-API overhead.
+///
+/// Storage contract:
+///
+/// Per-atom vector fields (`positions`, `velocities`, `forces`) are
+/// stored as `ndarray::ArcArray2<f64>` with shape `(N, 3)`, row-major
+/// (the default for newly-created `Array2` in standard layout). This
+/// is the SOTA frame-builder layout adopted by metatensor v2 (which
+/// uses `Arc<RwLock<ArrayD<T>>>` for the same reasons), and matches
+/// what NumPy / Eigen RowMajor / PyTorch / JAX consumers expect via
+/// DLPack `(N, 3) f64` views. Owning the data as an `ndarray::Array`
+/// (rather than a `Vec<f64>` we'd have to re-wrap on every export)
+/// is what makes dlpk's `TryFrom<&'a Array<T, D>> for
+/// DLPackTensorRef<'a>` lifetime-clean: `&self.positions` carries
+/// `&self`'s lifetime through to the returned tensor view, no
+/// borrow-life-extension or unsafe-from-raw needed.
+///
+/// - `positions` shape `(N, 3) f64`, always populated, length-coherent
+///   with `atom_count()`.
+/// - `velocities`, `forces` shape `(N, 3) f64` when their respective
+///   sections are declared, else `(0, 3)`. The `has_*` flag tracks
+///   declaration so `build()` knows whether to emit the section block.
+/// - `atom_energies` shape `(N,) f64` when populated, else `(0,)`.
+/// - `masses` shape `(N,) f64`, always populated.
+/// - `atom_ids` shape `(N,) u64`, always populated.
+/// - `fixed` stays `Vec<[bool; 3]>` for now (DLPack `kDLBool` typing
+///   is rarely worth round-tripping, and bool-tensor consumers are
+///   uncommon); a future v0.12 may promote it to `Array2<bool>` once
+///   we have a use case.
+/// - `symbols` stays `Vec<String>` -- DLPack has no native variable-
+///   length string dtype, so symbols are surfaced via a separate
+///   `symbols()` getter (and emitted as Arrow string columns when the
+///   `arrow` feature flag arrives in v0.12).
+///
+/// Pointer stability: once `atom_count()` is fixed (i.e. no further
+/// `add_atom` calls), each ndarray's data pointer is stable until
+/// `build()` consumes the builder. Callers that hold raw pointers
+/// from a DLPack export across `add_atom` invocations MUST refresh
+/// after the push (ndarray's `push` may reallocate the backing
+/// buffer when capacity is exceeded).
+/// Helper: `push_row` on a 2D ArcArray. ArcArray (OwnedArcRepr) does not
+/// implement DataOwned (push_row requires DataOwned + DataMut), so the
+/// implementation detours through the owned Array variant. When the
+/// Arc is uniquely owned the detour is O(1) (just unwraps + rewraps the
+/// Arc); when shared the detour is the copy-on-write the design wants.
+fn arc_push_row(arr: &mut ndarray::ArcArray2<f64>, row: ndarray::ArrayView1<f64>) {
+    let placeholder = ndarray::ArcArray2::<f64>::zeros((0, 3));
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push_row(row)
+        .expect("push_row failed (standard layout invariant)");
+    *arr = owned.into_shared();
+}
+
+/// Helper: push a single u64 onto a 1D ArcArray.
+fn arc_push_u64(arr: &mut ndarray::ArcArray1<u64>, value: u64) {
+    let placeholder = ndarray::ArcArray1::<u64>::zeros(0);
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push(ndarray::Axis(0), ndarray::aview0(&value))
+        .expect("atom_ids push failed");
+    *arr = owned.into_shared();
+}
+
+/// Helper: push a single f64 onto a 1D ArcArray.
+fn arc_push_f64_1d(arr: &mut ndarray::ArcArray1<f64>, value: f64) {
+    let placeholder = ndarray::ArcArray1::<f64>::zeros(0);
+    let taken = std::mem::replace(arr, placeholder);
+    let mut owned = taken.into_owned();
+    owned
+        .push(ndarray::Axis(0), ndarray::aview0(&value))
+        .expect("push failed");
+    *arr = owned.into_shared();
+}
+
+#[derive(Debug, Clone)]
 pub struct ConFrameBuilder {
     prebox_user: String,
     cell: [f64; 3],
     angles: [f64; 3],
     postbox_header: [String; 2],
-    atoms: Vec<BuilderAtom>,
+
+    // Per-atom heterogeneous fields kept as Vecs (no DLPack export).
+    symbols: Vec<String>,
+    fixed: Vec<[bool; 3]>,
+
+    // Per-atom DLPack-exportable fields, owned ndarrays.
+    /// Row-major `(N, 3) f64`, always populated.
+    positions: ndarray::ArcArray2<f64>,
+    /// Row-major `(N,) u64`, always populated.
+    atom_ids: ndarray::ArcArray1<u64>,
+    /// Row-major `(N,) f64`, always populated.
+    masses: ndarray::ArcArray1<f64>,
+    /// Row-major `(N, 3) f64` when has_velocities, else `(0, 3)`.
+    velocities: ndarray::ArcArray2<f64>,
+    has_velocities: bool,
+    /// Row-major `(N, 3) f64` when has_forces, else `(0, 3)`.
+    forces: ndarray::ArcArray2<f64>,
+    has_forces: bool,
+    /// `(N,) f64` when has_energies, else `(0,)`.
+    atom_energies: ndarray::ArcArray1<f64>,
+    has_energies: bool,
+
     metadata: BTreeMap<String, serde_json::Value>,
 }
 
-struct BuilderAtom {
-    symbol: String,
-    x: f64,
-    y: f64,
-    z: f64,
-    fixed: [bool; 3],
-    atom_id: u64,
-    mass: f64,
-    velocity: Option<[f64; 3]>,
-    force: Option<[f64; 3]>,
-    energy: Option<f64>,
+impl Default for ConFrameBuilder {
+    fn default() -> Self {
+        Self {
+            prebox_user: String::new(),
+            cell: [0.0; 3],
+            angles: [0.0; 3],
+            postbox_header: [String::new(), String::new()],
+            symbols: Vec::new(),
+            fixed: Vec::new(),
+            positions: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            atom_ids: ndarray::ArcArray1::<u64>::zeros(0),
+            masses: ndarray::ArcArray1::<f64>::zeros(0),
+            velocities: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            has_velocities: false,
+            forces: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            has_forces: false,
+            atom_energies: ndarray::ArcArray1::<f64>::zeros(0),
+            has_energies: false,
+            metadata: BTreeMap::new(),
+        }
+    }
 }
 
 impl ConFrameBuilder {
     /// Creates a new builder with the given cell dimensions and angles.
     pub fn new(cell: [f64; 3], angles: [f64; 3]) -> Self {
         Self {
-            prebox_user: String::new(),
             cell,
             angles,
-            postbox_header: [String::new(), String::new()],
-            atoms: Vec::new(),
-            metadata: BTreeMap::new(),
+            ..Self::default()
         }
     }
 
@@ -666,47 +776,754 @@ impl ConFrameBuilder {
         atom_id: u64,
         mass: f64,
     ) -> &mut Self {
-        self.atoms.push(BuilderAtom {
-            symbol: symbol.to_string(),
-            x,
-            y,
-            z,
-            fixed,
-            atom_id,
-            mass,
-            velocity: None,
-            force: None,
-            energy: None,
-        });
+        use ndarray::array;
+        self.symbols.push(symbol.to_string());
+        self.fixed.push(fixed);
+        // Push a row to each owned ndarray. push_row is defined on
+        // owned Array (OwnedRepr) but not on ArcArray (OwnedArcRepr),
+        // so route the ArcArray storage through into_owned() then
+        // back through into_shared(). When the Arc is uniquely owned
+        // (the building phase before any clone) both calls are O(1)
+        // atomic ops; once shared the into_owned() copy is the
+        // copy-on-write the design wants.
+        arc_push_row(&mut self.positions, array![x, y, z].view());
+        arc_push_u64(&mut self.atom_ids, atom_id);
+        arc_push_f64_1d(&mut self.masses, mass);
+        if self.has_velocities {
+            arc_push_row(&mut self.velocities, array![0.0, 0.0, 0.0].view());
+        }
+        if self.has_forces {
+            arc_push_row(&mut self.forces, array![0.0, 0.0, 0.0].view());
+        }
+        if self.has_energies {
+            arc_push_f64_1d(&mut self.atom_energies, 0.0);
+        }
         self
     }
 
     /// Attaches velocity data to the most recently added atom.
     /// No-op (silently) if no atom has been added yet.
     pub fn with_velocity(&mut self, velocity: [f64; 3]) -> &mut Self {
-        if let Some(atom) = self.atoms.last_mut() {
-            atom.velocity = Some(velocity);
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
         }
+        if !self.has_velocities {
+            // First velocity declaration: backfill all earlier atoms with
+            // zero so the section is length-coherent when declared on build().
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_velocities = true;
+        }
+        let mut row = self.velocities.row_mut(n - 1);
+        row[0] = velocity[0];
+        row[1] = velocity[1];
+        row[2] = velocity[2];
         self
     }
 
     /// Attaches force data to the most recently added atom.
     /// No-op (silently) if no atom has been added yet.
     pub fn with_force(&mut self, force: [f64; 3]) -> &mut Self {
-        if let Some(atom) = self.atoms.last_mut() {
-            atom.force = Some(force);
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
         }
+        if !self.has_forces {
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_forces = true;
+        }
+        let mut row = self.forces.row_mut(n - 1);
+        row[0] = force[0];
+        row[1] = force[1];
+        row[2] = force[2];
         self
     }
 
     /// Attaches a per-atom energy contribution to the most recently added
     /// atom. No-op (silently) if no atom has been added yet.
     pub fn with_energy(&mut self, energy: f64) -> &mut Self {
-        if let Some(atom) = self.atoms.last_mut() {
-            atom.energy = Some(energy);
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
         }
+        if !self.has_energies {
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
+            self.has_energies = true;
+        }
+        self.atom_energies[n - 1] = energy;
         self
     }
+
+    // ----- In-place mutation API (added in v0.11.0) -------------------------
+    //
+    // Hot-loop consumers (eOn's Matter, dynamics integrators in GROMACS-style
+    // engines) update positions / forces / energies many thousands of times
+    // per simulation step. The append-only `add_atom` + `with_*` API forces a
+    // full rebuild each step, which is O(n*types) on `build()` and a pile of
+    // allocations besides. The methods below let callers treat the builder as
+    // a mutable in-memory frame: bulk-load once via `add_atom`, then update
+    // positions / velocities / forces / energies in place across many steps,
+    // and call `build()` only when serialising to disk.
+    //
+    // Index validation is fail-loud: every method returns
+    // `Result<&mut Self, ParseError>` and surfaces an
+    // `IndexOutOfBounds { index, len }` ParseError when `i >= atom_count()`.
+    // The C ABI maps that to RKR_STATUS_INDEX_OUT_OF_BOUNDS.
+
+    /// Number of atoms currently held in the builder.
+    pub fn atom_count(&self) -> usize {
+        self.symbols.len()
+    }
+
+    /// Updates the Cartesian position of an existing atom (zero-based index).
+    pub fn set_atom_position(
+        &mut self,
+        i: usize,
+        x: f64,
+        y: f64,
+        z: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        let mut row = self.positions.row_mut(i);
+        row[0] = x;
+        row[1] = y;
+        row[2] = z;
+        Ok(self)
+    }
+
+    /// Sets the velocity vector of an existing atom. The frame auto-declares
+    /// a `"velocities"` section on `build()` when any atom carries velocity.
+    pub fn set_atom_velocity(
+        &mut self,
+        i: usize,
+        velocity: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_velocities {
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((len, 3));
+            self.has_velocities = true;
+        }
+        let mut row = self.velocities.row_mut(i);
+        row[0] = velocity[0];
+        row[1] = velocity[1];
+        row[2] = velocity[2];
+        Ok(self)
+    }
+
+    /// Sets the force vector of an existing atom. The frame auto-declares a
+    /// `"forces"` section on `build()` if any atom carries force.
+    pub fn set_atom_force(
+        &mut self,
+        i: usize,
+        force: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_forces {
+            self.forces = ndarray::ArcArray2::<f64>::zeros((len, 3));
+            self.has_forces = true;
+        }
+        let mut row = self.forces.row_mut(i);
+        row[0] = force[0];
+        row[1] = force[1];
+        row[2] = force[2];
+        Ok(self)
+    }
+
+    /// Sets the per-atom energy contribution of an existing atom. The frame
+    /// auto-declares an `"energies"` section on `build()` when any atom
+    /// carries per-atom energy.
+    pub fn set_atom_energy(
+        &mut self,
+        i: usize,
+        energy: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_energies {
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(len);
+            self.has_energies = true;
+        }
+        self.atom_energies[i] = energy;
+        Ok(self)
+    }
+
+    /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
+    pub fn set_atom_fixed(
+        &mut self,
+        i: usize,
+        fixed: [bool; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        self.fixed[i] = fixed;
+        Ok(self)
+    }
+
+    /// Updates the mass of an existing atom. Note: changing the mass of the
+    /// only atom of a given type recomputes that type's `masses_per_type`
+    /// entry on `build()`; mixing different masses for the same symbol is
+    /// not supported by the .con format and the last value wins.
+    pub fn set_atom_mass(
+        &mut self,
+        i: usize,
+        mass: f64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        self.masses[i] = mass;
+        Ok(self)
+    }
+
+    /// Updates the atom_id (the pre-grouping index from .con column 5)
+    /// of an existing atom. The atom_id is the only per-atom field that
+    /// `add_atom` set once and offered no post-add mutator for, which
+    /// forced downstream consumers (eOn's `ConFileIO::con2matter`) to
+    /// rebuild the builder from scratch whenever they wanted to install
+    /// non-sequential ids. This setter lets callers mutate one slot in
+    /// place; the underlying `Array1<u64>` buffer pointer stays stable.
+    pub fn set_atom_id(
+        &mut self,
+        i: usize,
+        atom_id: u64,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        self.atom_ids[i] = atom_id;
+        Ok(self)
+    }
+
+    /// Removes velocity data from an existing atom by zeroing the slot.
+    /// If every atom subsequently lacks a meaningful velocity (the section
+    /// can be cleared via `clear_velocities_section`) the next `build()`
+    /// will not declare a `"velocities"` section.
+    pub fn clear_atom_velocity(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if self.has_velocities {
+            let mut row = self.velocities.row_mut(i);
+            row[0] = 0.0;
+            row[1] = 0.0;
+            row[2] = 0.0;
+        }
+        Ok(self)
+    }
+
+    /// Removes force data from an existing atom by zeroing the slot.
+    pub fn clear_atom_force(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if self.has_forces {
+            let mut row = self.forces.row_mut(i);
+            row[0] = 0.0;
+            row[1] = 0.0;
+            row[2] = 0.0;
+        }
+        Ok(self)
+    }
+
+    /// Removes per-atom energy data from an existing atom by zeroing the slot.
+    pub fn clear_atom_energy(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if self.has_energies {
+            self.atom_energies[i] = 0.0;
+        }
+        Ok(self)
+    }
+
+    /// Drops the velocities section entirely. The next `build()` will not
+    /// declare `"velocities"`. Storage is reclaimed.
+    pub fn clear_velocities_section(&mut self) -> &mut Self {
+        self.velocities = ndarray::ArcArray2::<f64>::zeros((0, 3));
+        self.has_velocities = false;
+        self
+    }
+
+    /// Drops the forces section entirely.
+    pub fn clear_forces_section(&mut self) -> &mut Self {
+        self.forces = ndarray::ArcArray2::<f64>::zeros((0, 3));
+        self.has_forces = false;
+        self
+    }
+
+    /// Drops the per-atom energies section entirely.
+    pub fn clear_energies_section(&mut self) -> &mut Self {
+        self.atom_energies = ndarray::ArcArray1::<f64>::zeros(0);
+        self.has_energies = false;
+        self
+    }
+
+    /// Bulk-update positions for every atom from a flat buffer of length
+    /// `3 * atom_count()`. Layout is row-major `[x0, y0, z0, x1, y1, z1, ...]`
+    /// matching what NumPy / Eigen / Fortran-on-rows callers already use.
+    /// Returns `InvalidVectorLength` if the buffer length disagrees.
+    pub fn set_positions_from_flat(
+        &mut self,
+        positions: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.symbols.len();
+        if positions.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: positions.len(),
+            });
+        }
+        // Standard-layout Array2 is row-major contiguous; safe to use
+        // as_slice_memory_order_mut for a one-shot bulk copy.
+        let dst = self
+            .positions
+            .as_slice_memory_order_mut()
+            .expect("positions standard layout invariant violated");
+        dst.copy_from_slice(positions);
+        Ok(self)
+    }
+
+    /// Bulk-update forces for every atom from a flat buffer of length
+    /// `3 * atom_count()`. Auto-declares a `"forces"` section on `build()`.
+    pub fn set_forces_from_flat(
+        &mut self,
+        forces: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.symbols.len();
+        if forces.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: forces.len(),
+            });
+        }
+        if !self.has_forces {
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_forces = true;
+        }
+        let dst = self
+            .forces
+            .as_slice_memory_order_mut()
+            .expect("forces standard layout invariant violated");
+        dst.copy_from_slice(forces);
+        Ok(self)
+    }
+
+    /// Bulk-update per-atom energies for every atom from a buffer of length
+    /// `atom_count()`. Auto-declares an `"energies"` section on `build()`.
+    pub fn set_atom_energies_from_flat(
+        &mut self,
+        energies: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.symbols.len();
+        if energies.len() != n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: n,
+                found: energies.len(),
+            });
+        }
+        if !self.has_energies {
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
+            self.has_energies = true;
+        }
+        let dst = self
+            .atom_energies
+            .as_slice_memory_order_mut()
+            .expect("atom_energies standard layout invariant violated");
+        dst.copy_from_slice(energies);
+        Ok(self)
+    }
+
+    /// Read-only accessor: position of atom `i` as `(x, y, z)`.
+    pub fn get_atom_position(
+        &self,
+        i: usize,
+    ) -> Result<(f64, f64, f64), crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        let row = self.positions.row(i);
+        Ok((row[0], row[1], row[2]))
+    }
+
+    /// Read-only accessor: velocity of atom `i`, if any.
+    pub fn get_atom_velocity(
+        &self,
+        i: usize,
+    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_velocities {
+            return Ok(None);
+        }
+        let row = self.velocities.row(i);
+        Ok(Some([row[0], row[1], row[2]]))
+    }
+
+    /// Read-only accessor: force on atom `i`, if any.
+    pub fn get_atom_force(
+        &self,
+        i: usize,
+    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_forces {
+            return Ok(None);
+        }
+        let row = self.forces.row(i);
+        Ok(Some([row[0], row[1], row[2]]))
+    }
+
+    /// Read-only accessor: per-atom energy of atom `i`, if any.
+    pub fn get_atom_energy(
+        &self,
+        i: usize,
+    ) -> Result<Option<f64>, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_energies {
+            return Ok(None);
+        }
+        Ok(Some(self.atom_energies[i]))
+    }
+
+    /// Read-only accessor: mass of atom `i`.
+    pub fn get_atom_mass(&self, i: usize) -> Result<f64, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        Ok(self.masses[i])
+    }
+
+    // ----- Zero-copy SoA slice access (v0.11.0) -----------------------------
+    //
+    // Hot-loop consumers (eOn's Matter, MD integrators, NEB image updaters)
+    // hold a `ConFrameBuilder` for the lifetime of a simulation and update
+    // positions / forces / energies thousands of times per second. The
+    // get/set wrappers above all charge a copy through Rust on every call,
+    // which dominates the integration cost. The accessors below expose the
+    // underlying SoA ndarray storage as `&[f64]` (row-major flat) /
+    // `ArrayView2<f64>` (typed 2D) so callers can map a contiguous view --
+    // `Eigen::Map<MatrixXd>(positions_data(), N, 3)` in C++,
+    // `numpy.from_dlpack(...)` in Python, `unsafe_wrap(Array, ptr, ...)`
+    // in Julia -- onto the builder's memory and write through it directly.
+    //
+    // The DLPack export tier (positions_dlpack(), etc.) is the cross-
+    // language zero-copy hot path; the &[f64] slice tier below is the
+    // pure-Rust shortcut.
+    //
+    // Pointer stability: the data pointer is stable as long as no
+    // `add_atom` call grows the ndarray. Callers that hold raw pointers
+    // across `add_atom` must refresh after the push.
+
+    /// Row-major flat positions slice `[x0,y0,z0, x1,y1,z1, ...]`,
+    /// length `3 * atom_count()`. Panics if the ndarray loses its
+    /// standard-layout invariant (which our internal API never does).
+    pub fn positions(&self) -> &[f64] {
+        self.positions
+            .as_slice_memory_order()
+            .expect("positions standard layout invariant violated")
+    }
+
+    /// Mutable row-major positions slice; FFI exposes the same pointer
+    /// for zero-copy in-place updates from C / C++ / Python / Julia.
+    pub fn positions_mut(&mut self) -> &mut [f64] {
+        self.positions
+            .as_slice_memory_order_mut()
+            .expect("positions standard layout invariant violated")
+    }
+
+    /// Typed 2D `(N, 3) f64` view onto positions. Preferred over the
+    /// flat slice when the caller already speaks ndarray.
+    pub fn positions_view(&self) -> ndarray::ArrayView2<'_, f64> {
+        self.positions.view()
+    }
+
+    /// Mutable typed 2D `(N, 3) f64` view onto positions.
+    pub fn positions_view_mut(&mut self) -> ndarray::ArrayViewMut2<'_, f64> {
+        self.positions.view_mut()
+    }
+
+    /// Row-major velocities slice if the velocities section is populated,
+    /// else an empty slice.
+    pub fn velocities(&self) -> &[f64] {
+        if self.has_velocities {
+            self.velocities
+                .as_slice_memory_order()
+                .expect("velocities standard layout invariant violated")
+        } else {
+            &[]
+        }
+    }
+
+    /// Mutable velocities slice. Auto-allocates the section if it was
+    /// not already populated; subsequent `build()` will declare
+    /// `"velocities"`.
+    pub fn velocities_mut(&mut self) -> &mut [f64] {
+        if !self.has_velocities {
+            let n = self.symbols.len();
+            self.velocities = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_velocities = true;
+        }
+        self.velocities
+            .as_slice_memory_order_mut()
+            .expect("velocities standard layout invariant violated")
+    }
+
+    /// Typed 2D `(N, 3) f64` view onto velocities (empty `(0, 3)` when
+    /// the section is absent).
+    pub fn velocities_view(&self) -> ndarray::ArrayView2<'_, f64> {
+        self.velocities.view()
+    }
+
+    /// Row-major forces slice if the forces section is populated, else
+    /// an empty slice.
+    pub fn forces(&self) -> &[f64] {
+        if self.has_forces {
+            self.forces
+                .as_slice_memory_order()
+                .expect("forces standard layout invariant violated")
+        } else {
+            &[]
+        }
+    }
+
+    /// Mutable forces slice. Auto-allocates the section if needed.
+    pub fn forces_mut(&mut self) -> &mut [f64] {
+        if !self.has_forces {
+            let n = self.symbols.len();
+            self.forces = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_forces = true;
+        }
+        self.forces
+            .as_slice_memory_order_mut()
+            .expect("forces standard layout invariant violated")
+    }
+
+    /// Typed 2D `(N, 3) f64` view onto forces.
+    pub fn forces_view(&self) -> ndarray::ArrayView2<'_, f64> {
+        self.forces.view()
+    }
+
+    /// Per-atom energies slice if the energies section is populated.
+    pub fn atom_energies(&self) -> &[f64] {
+        if self.has_energies {
+            self.atom_energies
+                .as_slice_memory_order()
+                .expect("atom_energies standard layout invariant violated")
+        } else {
+            &[]
+        }
+    }
+
+    /// Mutable per-atom energies slice. Auto-allocates the section if needed.
+    pub fn atom_energies_mut(&mut self) -> &mut [f64] {
+        if !self.has_energies {
+            let n = self.symbols.len();
+            self.atom_energies = ndarray::ArcArray1::<f64>::zeros(n);
+            self.has_energies = true;
+        }
+        self.atom_energies
+            .as_slice_memory_order_mut()
+            .expect("atom_energies standard layout invariant violated")
+    }
+
+    /// Per-atom masses slice (length `atom_count()`).
+    pub fn masses(&self) -> &[f64] {
+        self.masses
+            .as_slice_memory_order()
+            .expect("masses standard layout invariant violated")
+    }
+
+    /// Mutable per-atom masses slice.
+    pub fn masses_mut(&mut self) -> &mut [f64] {
+        self.masses
+            .as_slice_memory_order_mut()
+            .expect("masses standard layout invariant violated")
+    }
+
+    /// Per-atom atom_id slice (length `atom_count()`).
+    pub fn atom_ids(&self) -> &[u64] {
+        self.atom_ids
+            .as_slice_memory_order()
+            .expect("atom_ids standard layout invariant violated")
+    }
+
+    // ----- Crate-internal ndarray refs --------------------------------------
+    //
+    // FFI / cross-crate consumers (src/ffi.rs) need `&Array<T, D>` to
+    // construct DLPack tensors via dlpk's `TryFrom<&'a Array<T, D>>`.
+    // These accessors are pub-but-deliberately-low-level: callers should
+    // prefer `positions_dlpack()` / `positions_view()` for typed access.
+    /// Crate-internal `&Array2<f64>` for the FFI DLPack exporter.
+    pub fn positions_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
+        &self.positions
+    }
+    /// Crate-internal `&Array2<f64>` velocities ref (caller checks the
+    /// section flag first).
+    pub fn velocities_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
+        &self.velocities
+    }
+    /// Crate-internal `&Array2<f64>` forces ref.
+    pub fn forces_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
+        &self.forces
+    }
+    /// Crate-internal `&Array1<f64>` atom_energies ref.
+    pub fn atom_energies_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
+        &self.atom_energies
+    }
+    /// Crate-internal `&Array1<f64>` masses ref.
+    pub fn masses_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
+        &self.masses
+    }
+    /// Crate-internal `&Array1<u64>` atom_ids ref.
+    pub fn atom_ids_1d_ref(&self) -> &ndarray::ArcArray1<u64> {
+        &self.atom_ids
+    }
+
+    // ----- DLPack zero-copy export (v0.11.0) --------------------------------
+    //
+    // Cross-language consumers (C++ Eigen, Python numpy / PyTorch / JAX,
+    // Julia DLPack.jl, R reticulate, ...) speak DLPack as the canonical
+    // tensor-exchange ABI. The methods below return a
+    // `dlpk::DLPackTensorRef<'_>` (borrowed view, lifetime tied to
+    // `&self`) for each per-atom field. The view carries shape, strides,
+    // dtype, device, and data pointer; the consumer reinterprets it as
+    // their native tensor type with zero copies.
+    //
+    // The lifetime contract is enforced by Rust: a DLPackTensorRef borrowed
+    // from `&self.positions` cannot outlive the builder. C / FFI consumers
+    // that need an owning tensor (longer lifetime than the builder) go
+    // through the C ABI's `DLManagedTensorVersioned` export which clones the
+    // backing storage; see `src/ffi.rs`.
+
+    /// DLPack view onto positions, shape `(N, 3) f64`, lifetime tied to
+    /// `&self`. The returned `DLPackTensorRef` reads through to the
+    /// builder's `Array2<f64>` storage zero-copy.
+    pub fn positions_dlpack(&self) -> Result<dlpk::DLPackTensorRef<'_>, crate::error::ParseError> {
+        dlpk::DLPackTensorRef::try_from(&self.positions).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for positions failed: {e}"
+            ))
+        })
+    }
+
+    /// DLPack view onto velocities, shape `(N, 3) f64`. Returns `None`
+    /// if the velocities section is absent.
+    pub fn velocities_dlpack(
+        &self,
+    ) -> Result<Option<dlpk::DLPackTensorRef<'_>>, crate::error::ParseError> {
+        if !self.has_velocities {
+            return Ok(None);
+        }
+        let view = dlpk::DLPackTensorRef::try_from(&self.velocities).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for velocities failed: {e}"
+            ))
+        })?;
+        Ok(Some(view))
+    }
+
+    /// DLPack view onto forces, shape `(N, 3) f64`. Returns `None` if
+    /// the forces section is absent.
+    pub fn forces_dlpack(
+        &self,
+    ) -> Result<Option<dlpk::DLPackTensorRef<'_>>, crate::error::ParseError> {
+        if !self.has_forces {
+            return Ok(None);
+        }
+        let view = dlpk::DLPackTensorRef::try_from(&self.forces).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for forces failed: {e}"
+            ))
+        })?;
+        Ok(Some(view))
+    }
+
+    /// DLPack view onto per-atom energies, shape `(N,) f64`. Returns
+    /// `None` if the energies section is absent.
+    pub fn atom_energies_dlpack(
+        &self,
+    ) -> Result<Option<dlpk::DLPackTensorRef<'_>>, crate::error::ParseError> {
+        if !self.has_energies {
+            return Ok(None);
+        }
+        let view = dlpk::DLPackTensorRef::try_from(&self.atom_energies).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for atom_energies failed: {e}"
+            ))
+        })?;
+        Ok(Some(view))
+    }
+
+    /// DLPack view onto per-atom masses, shape `(N,) f64`.
+    pub fn masses_dlpack(&self) -> Result<dlpk::DLPackTensorRef<'_>, crate::error::ParseError> {
+        dlpk::DLPackTensorRef::try_from(&self.masses).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for masses failed: {e}"
+            ))
+        })
+    }
+
+    /// DLPack view onto per-atom atom_ids, shape `(N,) u64`.
+    pub fn atom_ids_dlpack(&self) -> Result<dlpk::DLPackTensorRef<'_>, crate::error::ParseError> {
+        dlpk::DLPackTensorRef::try_from(&self.atom_ids).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!(
+                "DLPack export for atom_ids failed: {e}"
+            ))
+        })
+    }
+
+    /// Whether the builder currently has a velocities section populated.
+    pub fn has_velocities_section(&self) -> bool {
+        self.has_velocities
+    }
+
+    /// Whether the builder currently has a forces section populated.
+    pub fn has_forces_section(&self) -> bool {
+        self.has_forces
+    }
+
+    /// Whether the builder currently has a per-atom energies section populated.
+    pub fn has_energies_section(&self) -> bool {
+        self.has_energies
+    }
+
+    // ----- end in-place mutation API ----------------------------------------
 
     /// Consumes the builder and produces a `ConFrame`.
     ///
@@ -716,21 +1533,24 @@ impl ConFrameBuilder {
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
+        let n = self.symbols.len();
         let mut type_order: Vec<String> = Vec::new();
         let mut type_counts: Vec<usize> = Vec::new();
         let mut type_masses: Vec<f64> = Vec::new();
         let mut buckets: Vec<Vec<usize>> = Vec::new();
 
-        for (i, atom) in self.atoms.iter().enumerate() {
-            let idx = match type_order.iter().position(|s| s == &atom.symbol) {
+        for i in 0..n {
+            let symbol = &self.symbols[i];
+            let mass = self.masses[i];
+            let idx = match type_order.iter().position(|s| s == symbol) {
                 Some(idx) => {
                     type_counts[idx] += 1;
                     idx
                 }
                 None => {
-                    type_order.push(atom.symbol.clone());
+                    type_order.push(symbol.clone());
                     type_counts.push(1);
-                    type_masses.push(atom.mass);
+                    type_masses.push(mass);
                     buckets.push(Vec::new());
                     type_order.len() - 1
                 }
@@ -742,29 +1562,46 @@ impl ConFrameBuilder {
         let type_symbols: Vec<Arc<str>> =
             type_order.iter().map(|s| Arc::from(s.as_str())).collect();
 
-        let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(self.atoms.len());
+        let has_vel = self.has_velocities;
+        let has_frc = self.has_forces;
+        let has_eng = self.has_energies;
+
+        let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(n);
         for (type_idx, indices) in buckets.iter().enumerate() {
             let symbol = &type_symbols[type_idx];
             for &i in indices {
-                let a = &self.atoms[i];
+                let pos = self.positions.row(i);
+                let velocity = if has_vel {
+                    let r = self.velocities.row(i);
+                    Some([r[0], r[1], r[2]])
+                } else {
+                    None
+                };
+                let force = if has_frc {
+                    let r = self.forces.row(i);
+                    Some([r[0], r[1], r[2]])
+                } else {
+                    None
+                };
+                let energy = if has_eng {
+                    Some(self.atom_energies[i])
+                } else {
+                    None
+                };
                 atom_data.push(AtomDatum {
                     symbol: Arc::clone(symbol),
-                    x: a.x,
-                    y: a.y,
-                    z: a.z,
-                    fixed: a.fixed,
-                    atom_id: a.atom_id,
-                    velocity: a.velocity,
-                    force: a.force,
-                    energy: a.energy,
+                    x: pos[0],
+                    y: pos[1],
+                    z: pos[2],
+                    fixed: self.fixed[i],
+                    atom_id: self.atom_ids[i],
+                    velocity,
+                    force,
+                    energy,
                 });
             }
         }
 
-        // Auto-populate sections based on what data is present.
-        let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
-        let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
-        let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
         let mut sections = Vec::new();
         if has_vel {
             sections.push(SECTION_VELOCITIES.into());
@@ -1092,5 +1929,332 @@ mod tests {
             frame.header.metadata.get("generator"),
             Some(&serde_json::Value::from("eon"))
         );
+    }
+
+    // ----- in-place mutation API tests (v0.11.0) --------------------------
+
+    fn three_atom_builder() -> ConFrameBuilder {
+        let mut b = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+        b.add_atom("Cu", 1.0, 1.0, 1.0, [false; 3], 1, 63.546);
+        b.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 2, 1.008);
+        b
+    }
+
+    #[test]
+    fn builder_atom_count_tracks_pushes() {
+        let mut b = ConFrameBuilder::new([1.0; 3], [90.0; 3]);
+        assert_eq!(b.atom_count(), 0);
+        b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        assert_eq!(b.atom_count(), 1);
+        b.add_atom("H", 1.0, 1.0, 1.0, [false; 3], 1, 1.0);
+        assert_eq!(b.atom_count(), 2);
+    }
+
+    #[test]
+    fn builder_set_atom_position_in_place() {
+        let mut b = three_atom_builder();
+        b.set_atom_position(1, 5.0, 6.0, 7.0).unwrap();
+        let (x, y, z) = b.get_atom_position(1).unwrap();
+        assert_eq!((x, y, z), (5.0, 6.0, 7.0));
+        // unaffected siblings
+        let (x0, y0, z0) = b.get_atom_position(0).unwrap();
+        assert_eq!((x0, y0, z0), (0.0, 0.0, 0.0));
+        let (x2, y2, z2) = b.get_atom_position(2).unwrap();
+        assert_eq!((x2, y2, z2), (2.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn builder_set_atom_velocity_force_energy() {
+        let mut b = three_atom_builder();
+        b.set_atom_velocity(0, [0.1, 0.2, 0.3]).unwrap();
+        b.set_atom_force(1, [10.0, 0.0, 0.0]).unwrap();
+        b.set_atom_energy(2, -1.5).unwrap();
+        assert_eq!(b.get_atom_velocity(0).unwrap(), Some([0.1, 0.2, 0.3]));
+        assert_eq!(b.get_atom_force(1).unwrap(), Some([10.0, 0.0, 0.0]));
+        assert_eq!(b.get_atom_energy(2).unwrap(), Some(-1.5));
+        // Frame should auto-declare all three sections on build.
+        let frame = b.build();
+        let names: Vec<&str> = frame.header.sections.iter().map(|s| s.as_str()).collect();
+        assert!(names.contains(&"velocities"));
+        assert!(names.contains(&"forces"));
+        assert!(names.contains(&"energies"));
+    }
+
+    #[test]
+    fn builder_clear_atom_velocity_zeros_slot_keeps_section() {
+        // v0.11 SoA contract: clearing one atom's velocity zeros the
+        // slot but keeps the velocities section declared so the
+        // contiguous Vec<f64> stays length-coherent (3*N). The slice
+        // / DLPack view contract requires the buffer to exist whenever
+        // the section flag is set. Use clear_velocities_section() to
+        // drop the section entirely.
+        let mut b = three_atom_builder();
+        b.with_velocity([1.0, 2.0, 3.0]);
+        b.clear_atom_velocity(2).unwrap();
+        // Section still declared; slot zeroed.
+        assert!(b.has_velocities_section());
+        assert_eq!(b.get_atom_velocity(2).unwrap(), Some([0.0, 0.0, 0.0]));
+        // Section-level drop returns to "no velocities at all".
+        b.clear_velocities_section();
+        assert!(!b.has_velocities_section());
+        assert_eq!(b.get_atom_velocity(2).unwrap(), None);
+    }
+
+    #[test]
+    fn builder_set_atom_fixed_and_mass() {
+        let mut b = three_atom_builder();
+        b.set_atom_fixed(0, [true, false, true]).unwrap();
+        b.set_atom_mass(0, 100.0).unwrap();
+        let frame = b.build();
+        assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
+        // type-grouped: index 0 in atom_data is the first "Cu" entry which
+        // started life at builder index 0; mass survives via masses_per_type.
+        assert_eq!(frame.header.masses_per_type[0], 100.0);
+    }
+
+    #[test]
+    fn builder_set_atom_id_overrides_sequential_default() {
+        let mut b = three_atom_builder();
+        // three_atom_builder seeds atom_ids 0..3 via add_atom; override
+        // them with non-sequential values (simulating .con column-5
+        // load) and verify the build round-trips them.
+        b.set_atom_id(0, 42).unwrap();
+        b.set_atom_id(1, 7).unwrap();
+        b.set_atom_id(2, 99).unwrap();
+        // Buffer pointer stability: mutation should not reallocate.
+        let ptr_before = b.atom_ids().as_ptr();
+        b.set_atom_id(0, 1234).unwrap();
+        let ptr_after = b.atom_ids().as_ptr();
+        assert_eq!(ptr_before, ptr_after);
+        // Restore the test fixture's id 42 so the build round-trip
+        // check below still asserts the documented value.
+        b.set_atom_id(0, 42).unwrap();
+        let frame = b.build();
+        // Type-grouping reorders atom_data; locate ids via the symbol.
+        let cu_ids: Vec<u64> = frame
+            .atom_data
+            .iter()
+            .filter(|a| a.symbol.as_ref() == "Cu")
+            .map(|a| a.atom_id)
+            .collect();
+        let h_ids: Vec<u64> = frame
+            .atom_data
+            .iter()
+            .filter(|a| a.symbol.as_ref() == "H")
+            .map(|a| a.atom_id)
+            .collect();
+        assert_eq!(cu_ids, vec![42, 7]);
+        assert_eq!(h_ids, vec![99]);
+    }
+
+    #[test]
+    fn builder_set_atom_id_out_of_bounds_is_loud() {
+        let mut b = three_atom_builder();
+        let err = b.set_atom_id(99, 0).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::ParseError::IndexOutOfBounds { index: 99, len: 3 }
+        ));
+    }
+
+    #[test]
+    fn builder_index_out_of_bounds_is_loud() {
+        let mut b = three_atom_builder();
+        let err = b.set_atom_position(99, 0.0, 0.0, 0.0).unwrap_err();
+        match err {
+            crate::error::ParseError::IndexOutOfBounds { index, len } => {
+                assert_eq!(index, 99);
+                assert_eq!(len, 3);
+            }
+            other => panic!("expected IndexOutOfBounds, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builder_bulk_set_positions_from_flat() {
+        let mut b = three_atom_builder();
+        let new_pos = [
+            10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0,
+        ];
+        b.set_positions_from_flat(&new_pos).unwrap();
+        assert_eq!(b.get_atom_position(0).unwrap(), (10.0, 20.0, 30.0));
+        assert_eq!(b.get_atom_position(1).unwrap(), (40.0, 50.0, 60.0));
+        assert_eq!(b.get_atom_position(2).unwrap(), (70.0, 80.0, 90.0));
+    }
+
+    #[test]
+    fn builder_bulk_set_positions_wrong_length_errors() {
+        let mut b = three_atom_builder();
+        let bad = [1.0, 2.0, 3.0, 4.0]; // 4 != 3*3
+        let err = b.set_positions_from_flat(&bad).unwrap_err();
+        match err {
+            crate::error::ParseError::InvalidVectorLength { expected, found } => {
+                assert_eq!(expected, 9);
+                assert_eq!(found, 4);
+            }
+            other => panic!("expected InvalidVectorLength, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builder_bulk_set_forces_and_energies_from_flat() {
+        let mut b = three_atom_builder();
+        let f = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        let e = [-0.1, -0.2, -0.3];
+        b.set_forces_from_flat(&f).unwrap();
+        b.set_atom_energies_from_flat(&e).unwrap();
+        assert_eq!(b.get_atom_force(0).unwrap(), Some([1.0, 0.0, 0.0]));
+        assert_eq!(b.get_atom_force(2).unwrap(), Some([0.0, 0.0, 1.0]));
+        assert_eq!(b.get_atom_energy(0).unwrap(), Some(-0.1));
+        assert_eq!(b.get_atom_energy(2).unwrap(), Some(-0.3));
+    }
+
+    #[test]
+    fn builder_round_trip_after_bulk_mutation() {
+        let mut b = three_atom_builder();
+        b.set_positions_from_flat(&[5.0; 9]).unwrap();
+        b.set_forces_from_flat(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+            .unwrap();
+        b.set_atom_energies_from_flat(&[-1.0, -2.0, -3.0]).unwrap();
+        let frame = b.build();
+        assert_eq!(frame.atom_data.len(), 3);
+        assert!(frame.has_forces());
+        assert!(frame.has_energies());
+        // group order: Cu, Cu, H
+        assert_eq!(frame.atom_data[0].force, Some([1.0, 0.0, 0.0]));
+        assert_eq!(frame.atom_data[2].force, Some([0.0, 0.0, 1.0]));
+    }
+
+    // ----- DLPack export tier tests -----------------------------------------
+    //
+    // These tests pin the cross-language zero-copy contract: every per-atom
+    // field surfaces as a DLPackTensorRef with the right shape, dtype, and
+    // device, and a mutable view writes back to the builder's storage with
+    // no intermediate copy.
+
+    #[test]
+    fn dlpack_positions_shape_dtype_device() {
+        let b = three_atom_builder();
+        let t = b.positions_dlpack().expect("positions_dlpack");
+        // (N, 3) f64 on CPU is the spec contract for v0.11.
+        assert_eq!(t.shape(), &[3, 3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+        assert_eq!(dt.lanes, 1);
+        assert_eq!(t.device(), dlpk::sys::DLDevice::cpu());
+    }
+
+    #[test]
+    fn dlpack_velocities_absent_returns_none() {
+        let b = three_atom_builder();
+        assert!(b.velocities_dlpack().expect("velocities_dlpack").is_none());
+        assert!(b.forces_dlpack().expect("forces_dlpack").is_none());
+        assert!(
+            b.atom_energies_dlpack()
+                .expect("atom_energies_dlpack")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn dlpack_velocities_present_after_declaration() {
+        let mut b = three_atom_builder();
+        b.set_atom_velocity(1, [1.5, 2.5, 3.5]).unwrap();
+        let t = b
+            .velocities_dlpack()
+            .expect("velocities_dlpack ok")
+            .expect("section present");
+        assert_eq!(t.shape(), &[3, 3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn dlpack_atom_ids_dtype_is_uint64() {
+        let b = three_atom_builder();
+        let t = b.atom_ids_dlpack().expect("atom_ids_dlpack");
+        assert_eq!(t.shape(), &[3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLUInt);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn dlpack_masses_shape_and_values() {
+        let b = three_atom_builder();
+        let t = b.masses_dlpack().expect("masses_dlpack");
+        assert_eq!(t.shape(), &[3]);
+        let dt = t.dtype();
+        assert_eq!(dt.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dt.bits, 64);
+    }
+
+    #[test]
+    fn clone_shares_storage_until_cow() {
+        // ArcArray's clone is a shallow Arc bump, so two builders born
+        // from a single template point to the same per-atom buffers
+        // until one of them mutates. This is the v0.12.0 NEB-image
+        // sharing primitive: build the template once, clone N+2 times,
+        // and only pay the (N, 3) f64 copy when an image is actually
+        // perturbed.
+        let template = three_atom_builder();
+        let cloned = template.clone();
+        // Same backing pointer for positions / masses / atom_ids
+        // through the crate-internal _ref helpers.
+        assert_eq!(
+            template.positions_2d_ref().as_ptr(),
+            cloned.positions_2d_ref().as_ptr()
+        );
+        assert_eq!(
+            template.masses_1d_ref().as_ptr(),
+            cloned.masses_1d_ref().as_ptr()
+        );
+        assert_eq!(
+            template.atom_ids_1d_ref().as_ptr(),
+            cloned.atom_ids_1d_ref().as_ptr()
+        );
+
+        // Mutate the clone; the template's pointer must stay put,
+        // the clone's pointer must diverge.
+        let template_ptr = template.positions_2d_ref().as_ptr();
+        let mut cloned_mut = cloned;
+        cloned_mut.set_atom_position(0, 9.0, 9.0, 9.0).unwrap();
+        assert_eq!(template.positions_2d_ref().as_ptr(), template_ptr);
+        assert_ne!(
+            cloned_mut.positions_2d_ref().as_ptr(),
+            template.positions_2d_ref().as_ptr()
+        );
+        // Template's atom 0 stays at its original value.
+        assert_eq!(template.get_atom_position(0).unwrap(), (0.0, 0.0, 0.0));
+        // Clone reflects the new write.
+        assert_eq!(cloned_mut.get_atom_position(0).unwrap(), (9.0, 9.0, 9.0));
+    }
+
+    #[test]
+    fn positions_view_mut_writes_back_with_arc_cow() {
+        // Mutating through the typed view triggers ArcArray copy-on-write
+        // when storage is shared, and writes through to the builder's
+        // (now-unique) buffer. This is the property eOn's Matter, MD
+        // integrators, and ML potentials rely on. The DLPack mutable
+        // borrow path was retired in v0.12.0 because dlpk's
+        // `TryFrom<&'a mut ArcArray<T, D>> for DLPackTensorRefMut<'a>`
+        // is not yet implemented upstream; cross-language consumers go
+        // through the C ABI's raw pointer path (also CoW-aware) or
+        // through the owned DLPack export.
+        let mut b = three_atom_builder();
+        {
+            let mut view = b.positions_view_mut();
+            view[[1, 0]] = 42.0;
+            view[[1, 1]] = 43.0;
+            view[[1, 2]] = 44.0;
+        }
+        assert_eq!(b.get_atom_position(1).unwrap(), (42.0, 43.0, 44.0));
+        let v = b.positions_view();
+        assert_eq!(v[[1, 0]], 42.0);
+        assert_eq!(v[[1, 1]], 43.0);
+        assert_eq!(v[[1, 2]], 44.0);
     }
 }

@@ -1,6 +1,27 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.11.0 - 2026-05-10
+#### Features
+- (**array**) introduce src/array.rs with Array trait + ndarray backing - (23a02bd) - *HaoZeke*
+- (**builder**) in-place mutation API for ConFrameBuilder - (4dcdd76) - *HaoZeke*
+- (**cpp**) C++ wrapper for v0.11.0 in-place builder mutation - (e093b7e) - *HaoZeke*
+- (**ffi**) tier-3 DLPack export functions for builder fields - (40a4de6) - *HaoZeke*
+- (**ffi**) C ABI for v0.11.0 in-place builder mutation - (82ce7a6) - *HaoZeke*
+#### Refactoring
+- (**builder**) SoA storage via ndarray::Array2/Array1 with DLPack - (1fe6dc6) - *HaoZeke*
+#### Documentation
+- (**spec**) codify v0.11 ndarray storage + DLPack contract in §17 - (58048e1) - *HaoZeke*
+- (**spec**) add builder mutation surface (informative) to spec.org - (b92b6a6) - *HaoZeke*
+#### Tests
+- (**dlpack**) pin cross-language export contract for builder fields - (64ac443) - *HaoZeke*
+- (**ffi**) smoke tests for DLPack tier-3 export - (f7c187f) - *HaoZeke*
+#### Miscellaneous Chores
+- (**deps**) hard-dep dlpk + ndarray for v0.11 SoA storage - (bb3e7bd) - *HaoZeke*
+- (**version**) bump readcon-core to 0.11.0 - (e2fb998) - *HaoZeke*
+
+- - -
+
 ## v0.10.0 - 2026-05-10
 #### Benchmarks
 - add trajectory-style write fixture with heavy shared metadata - (71cbbb5) - *HaoZeke*

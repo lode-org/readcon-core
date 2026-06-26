@@ -37,6 +37,14 @@
  *     is not surfaced via this C header.
  */
 
+/* Forward-declare the DLPack-managed tensor type for the tier-3
+ * builder export FFI. Consumers that want to dereference fields
+ * (data, shape, strides, dtype, deleter) must include
+ * <dlpack/dlpack.h> (or equivalent) themselves; the readcon-core C
+ * ABI only passes the pointer through. */
+struct DLManagedTensorVersioned;
+typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
+
 
 #ifndef READCON_H
 #define READCON_H
@@ -117,6 +125,15 @@ typedef enum RKRStatus {
      * An internal logic error or unhandled state.
      */
     RKR_STATUS_INTERNAL_ERROR = -7,
+    /**
+     * An optional section (velocities, forces, atom_energies) was
+     * requested but is not declared on the builder.
+     */
+    RKR_STATUS_SECTION_ABSENT = -8,
+    /**
+     * DLPack export or another validation step failed.
+     */
+    RKR_STATUS_VALIDATION_ERROR = -9,
 } RKRStatus;
 
 /**
@@ -518,6 +535,318 @@ enum RKRStatus rkr_frame_builder_set_last_energy(struct RKRConFrameBuilder *buil
                                                  double energy);
 
 /**
+ * Returns the number of atoms currently held in the builder.
+ *
+ * # Safety
+ * builder_handle must be a valid pointer returned by rkr_frame_new and
+ * not yet consumed by rkr_frame_builder_build / freed.
+ * Returns 0 on NULL handle.
+ */
+uintptr_t rkr_frame_builder_atom_count(const struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Updates the Cartesian position of an existing atom.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_position(struct RKRConFrameBuilder *builder_handle,
+                                                   uintptr_t index,
+                                                   double x,
+                                                   double y,
+                                                   double z);
+
+/**
+ * Sets the velocity vector of an existing atom from 3 contiguous f64 values.
+ * # Safety
+ * builder_handle must be valid; velocity must point to 3 contiguous f64.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_velocity(struct RKRConFrameBuilder *builder_handle,
+                                                   uintptr_t index,
+                                                   const double *velocity);
+
+/**
+ * Sets the force vector of an existing atom from 3 contiguous f64 values.
+ * # Safety
+ * builder_handle must be valid; force must point to 3 contiguous f64.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_force(struct RKRConFrameBuilder *builder_handle,
+                                                uintptr_t index,
+                                                const double *force);
+
+/**
+ * Sets the per-atom energy contribution of an existing atom.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_energy(struct RKRConFrameBuilder *builder_handle,
+                                                 uintptr_t index,
+                                                 double energy);
+
+/**
+ * Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_fixed(struct RKRConFrameBuilder *builder_handle,
+                                                uintptr_t index,
+                                                bool fixed_x,
+                                                bool fixed_y,
+                                                bool fixed_z);
+
+/**
+ * Updates the mass of an existing atom.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_mass(struct RKRConFrameBuilder *builder_handle,
+                                               uintptr_t index,
+                                               double mass);
+
+/**
+ * Updates the atom_id (pre-grouping index from .con column 5) of an
+ * existing atom. The underlying `Array1<u64>` buffer pointer stays
+ * stable; callers that hold a raw `*const u64` via
+ * `rkr_frame_builder_atom_ids_data` do not need to refresh after this.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_id(struct RKRConFrameBuilder *builder_handle,
+                                             uintptr_t index,
+                                             uint64_t atom_id);
+
+/**
+ * Removes velocity / force / energy data from an existing atom.
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_clear_atom_velocity(struct RKRConFrameBuilder *builder_handle,
+                                                     uintptr_t index);
+
+/**
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_clear_atom_force(struct RKRConFrameBuilder *builder_handle,
+                                                  uintptr_t index);
+
+/**
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_clear_atom_energy(struct RKRConFrameBuilder *builder_handle,
+                                                   uintptr_t index);
+
+/**
+ * Bulk-update positions for every atom from a flat row-major
+ * `[x0,y0,z0,x1,y1,z1,...]` buffer of length `3 * atom_count()`.
+ * # Safety
+ * builder_handle must be valid; positions must point to `3 * len` f64.
+ */
+enum RKRStatus rkr_frame_builder_set_positions_from_flat(struct RKRConFrameBuilder *builder_handle,
+                                                         const double *positions,
+                                                         uintptr_t len);
+
+/**
+ * Bulk-update forces for every atom.
+ * # Safety
+ * builder_handle must be valid; forces must point to `3 * len` f64.
+ */
+enum RKRStatus rkr_frame_builder_set_forces_from_flat(struct RKRConFrameBuilder *builder_handle,
+                                                      const double *forces,
+                                                      uintptr_t len);
+
+/**
+ * Bulk-update per-atom energies (one f64 per atom).
+ * # Safety
+ * builder_handle must be valid; energies must point to `len` f64.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_energies_from_flat(struct RKRConFrameBuilder *builder_handle,
+                                                             const double *energies,
+                                                             uintptr_t len);
+
+/**
+ * Reads the position of an existing atom into 3 contiguous f64 out values.
+ * # Safety
+ * builder_handle must be valid; out_xyz must point to 3 writable f64.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_position(const struct RKRConFrameBuilder *builder_handle,
+                                                   uintptr_t index,
+                                                   double *out_xyz);
+
+/**
+ * Reads the velocity / force vector of an atom (if any) into 3 contiguous
+ * f64. `*has_value` is set to `true` if the atom carries that vector,
+ * `false` if it does not (in which case `out_xyz` is left untouched).
+ *
+ * # Safety
+ * builder_handle, out_xyz, has_value must all be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_velocity(const struct RKRConFrameBuilder *builder_handle,
+                                                   uintptr_t index,
+                                                   double *out_xyz,
+                                                   bool *has_value);
+
+/**
+ * # Safety
+ * builder_handle, out_xyz, has_value must all be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_force(const struct RKRConFrameBuilder *builder_handle,
+                                                uintptr_t index,
+                                                double *out_xyz,
+                                                bool *has_value);
+
+/**
+ * Reads the per-atom energy of an atom (if any). `*has_value` is set to
+ * `true` if the atom carries an energy contribution, else `false` and
+ * `*out_value` is left untouched.
+ * # Safety
+ * builder_handle, out_value, has_value must all be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_energy(const struct RKRConFrameBuilder *builder_handle,
+                                                 uintptr_t index,
+                                                 double *out_value,
+                                                 bool *has_value);
+
+/**
+ * Reads the mass of an existing atom.
+ * # Safety
+ * builder_handle and out_mass must be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_mass(const struct RKRConFrameBuilder *builder_handle,
+                                               uintptr_t index,
+                                               double *out_mass);
+
+/**
+ * Export builder positions as a DLPack-managed tensor.
+ *
+ * On success the caller-supplied `*out_tensor` is set to a newly-
+ * allocated `DLManagedTensorVersioned*` that owns a clone of the
+ * builder's `(N, 3) f64` row-major positions buffer. The caller MUST
+ * invoke `(*out_tensor)->deleter(*out_tensor)` to release it.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_positions_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                  RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Export builder velocities as a DLPack-managed tensor.
+ *
+ * Returns `RKR_STATUS_SECTION_ABSENT` if the velocities section is not
+ * declared; otherwise `(N, 3) f64`. See positions_dlpack for ownership
+ * semantics.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_velocities_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                   RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Export builder forces as a DLPack-managed tensor.
+ *
+ * Returns `RKR_STATUS_SECTION_ABSENT` if the forces section is not
+ * declared.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_forces_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                               RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Export builder per-atom energies as a DLPack-managed tensor.
+ *
+ * Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
+ * declared; otherwise `(N,) f64`.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_atom_energies_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                      RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_masses_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                               RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_atom_ids_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                 RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
+ * Returns NULL on invalid handle. Pointer is valid until the builder
+ * is dropped or `add_atom` reallocates.
+ *
+ * # Safety
+ * builder_handle must be valid; the returned pointer must not be
+ * dereferenced after a call to add_atom on the same builder.
+ */
+double *rkr_frame_builder_positions_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the velocities buffer as a raw `(N, 3) f64` row-major pointer.
+ * Returns NULL if the velocities section is absent or the handle is
+ * invalid.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_velocities_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the forces buffer as a raw `(N, 3) f64` row-major pointer.
+ * Returns NULL if the forces section is absent.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_forces_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
+ * Returns NULL if the energies section is absent.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_atom_energies_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the per-atom masses buffer as a raw `(N,) f64` pointer.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_masses_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the per-atom atom_ids buffer as a raw `(N,) u64` pointer.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+const uint64_t *rkr_frame_builder_atom_ids_data(const struct RKRConFrameBuilder *builder_handle);
+
+/**
  * Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
  *
  * `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
@@ -845,6 +1174,26 @@ struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder *builder_h
  * builder_handle must be valid or null.
  */
 void free_rkr_frame_builder(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Cheap, copy-on-write clone of a frame builder. Returned handle owns
+ * a new `ConFrameBuilder` whose per-atom buffers share storage with
+ * the source via ArcArray; any subsequent mutation triggers a
+ * per-buffer copy-on-write so writes do not leak across clones.
+ *
+ * Intended for downstream consumers (NEB image bulk allocation,
+ * trajectory snapshots) that need many builders carrying the same
+ * per-atom data without paying N copies up-front. Returns NULL on
+ * NULL input.
+ *
+ * The caller OWNS the returned handle and MUST call
+ * `free_rkr_frame_builder` (or consume via `rkr_frame_builder_build`).
+ *
+ * # Safety
+ * `builder_handle` must be a valid pointer returned by `rkr_frame_new`
+ * (or by an earlier `rkr_frame_builder_clone`) and not yet freed.
+ */
+struct RKRConFrameBuilder *rkr_frame_builder_clone(const struct RKRConFrameBuilder *builder_handle);
 
 /**
  * Creates a new gzip-compressed frame writer for the specified file.
