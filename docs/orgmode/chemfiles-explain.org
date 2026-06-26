@@ -21,7 +21,7 @@
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 #+end_export
 
-[[file:chemfiles-tutorial.org][tutorial]] and [[file:chemfiles-howto.org][how-to]]./
+[[file:chemfiles-tutorial.org][tutorial]] and [[file:chemfiles-howto.org][how-to]].
 
 * Why drive conversion from other formats at all?
 

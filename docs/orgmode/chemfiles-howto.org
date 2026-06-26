@@ -9,7 +9,7 @@
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 #+end_export
 
-([[file:tutorials.org][tutorials]]) or finish [[file:chemfiles-tutorial.org][the chemfiles tutorial]] once./
+([[file:tutorials.org][tutorials]]) or finish [[file:chemfiles-tutorial.org][the chemfiles tutorial]] once.
 
 * How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 

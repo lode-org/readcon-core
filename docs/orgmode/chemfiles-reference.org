@@ -11,7 +11,7 @@
 
 [[file:chemfiles-tutorial.org][tutorial]]; for tasks see [[file:chemfiles-howto.org][how-to]]; for rationale see
 [[file:chemfiles-explain.org][explanation]]. Binding-wide matrices live in [[file:bindings.org][bindings]]; on-disk =bonds=
-key in [[file:spec.org][spec]]./
+key in [[file:spec.org][spec]].
 
 * Feature and install matrix
 

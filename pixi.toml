@@ -41,7 +41,8 @@ sphinxcontrib-mermaid = ">=1.0, <2"
 setup-rustdocgen = { cmd = "cargo install sphinx-rustdocgen", description = "Install sphinx-rustdocgen for Rust API docs" }
 docbld-full = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"], description = "Docs including fresh rustdocgen" }
 orgbld = "emacs --batch -l docs/export.el"
-docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld"] }
+fix-doc-links = { cmd = "python docs/scripts/fix_doc_links.py", depends-on = ["orgbld"], description = "Rewrite .rst hyperlinks to :doc: roles" }
+docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["fix-doc-links"] }
 linkcheck = { cmd = "lychee --config lychee.toml 'docs/build/**/*.html'", depends-on = ["docbld"], description = "Lychee link check on built HTML" }
 
 [environments]

@@ -9,7 +9,7 @@ Tutorials
 1 Querying the spec version
 ---------------------------
 
-*Added in v0.5.0. Per-frame spec\ :sub:`version`\ added in v0.6.0.*
+/Added in v0.5.0. Per-frame spec\ :sub:`version`\ added in v0.6.0.
 
 There are two distinct version queries:
 
@@ -85,7 +85,7 @@ There are two distinct version queries:
 2 Working with JSON metadata
 ----------------------------
 
-*Added in v0.6.0.*
+/Added in v0.6.0.
 
 Line 2 of every v2 CON file contains a JSON object. The writer always
 stamps ``con_spec_version``; additional keys survive round-trips.
@@ -232,7 +232,7 @@ Velocity data is written automatically when
 3.4 Building frames from data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 Use ``ConFrameBuilder`` to construct frames programmatically. The
 ``atom_id`` parameter (6th argument to ``add_atom``) is the original atom
@@ -256,7 +256,7 @@ reconstructed.
 3.5 Writing with custom precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 Control the number of decimal places in output coordinates:
 
@@ -276,7 +276,7 @@ Control the number of decimal places in output coordinates:
 3.6 Reading a single frame efficiently
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.3.*
+/Added in v0.4.3.
 
 When only the first frame is needed, ``read_first_frame`` stops after
 parsing it.  Files under 64 KiB are read into memory directly; larger
@@ -387,7 +387,7 @@ concurrently using rayon.
 4.4 Constructing frames from data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 Build frames programmatically using ``Atom`` and ``ConFrame`` constructors:
 
@@ -429,7 +429,7 @@ Build frames programmatically using ``Atom`` and ``ConFrame`` constructors:
 4.6 Writing with custom precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 Pass the ``precision`` keyword to control decimal places:
 
@@ -447,7 +447,8 @@ Pass the ``precision`` keyword to control decimal places:
 4.7 ASE Atoms conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0. atom\ :sub:`id`\, velocity, mass, forces, and per-axis fixed-mask transfer are preserved.*
+/Added in v0.4.0.  atom\ :sub:`id`\, velocity, mass, forces, and per-axis
+fixed-mask transfer are preserved.
 
 Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE must be
 installed (it is an optional dependency).  The conversion preserves
@@ -576,7 +577,7 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
 5.2 Building frames from data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 .. code:: c
 
@@ -621,7 +622,7 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
 5.3 Reading a single frame
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 .. code:: c
 
@@ -701,7 +702,7 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
 6.2 Building frames from data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 .. code:: cpp
 
@@ -721,7 +722,7 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
 6.3 Reading a single frame
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*Added in v0.4.0.*
+/Added in v0.4.0.
 
 .. code:: cpp
 
@@ -863,7 +864,7 @@ metadata exposed by ``metadata_json``.
 8 Chemfiles — convert other formats into CON
 --------------------------------------------
 
-*v0.13.0.* Documentation for chemfiles ingress is organized in the
+/v0.13.0. Documentation for chemfiles ingress is organized in the
 `Diátaxis <https://diataxis.fr/>`_ style (do not use this page as the primary guide):
 
 - **Tutorial** (learning, end-to-end XYZ→CON→selection): `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_

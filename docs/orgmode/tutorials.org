@@ -3,7 +3,7 @@
 
 * Querying the spec version
 
-/Added in v0.5.0. Per-frame spec_version added in v0.6.0./
+/Added in v0.5.0. Per-frame spec_version added in v0.6.0.
 
 There are two distinct version queries:
 
@@ -74,7 +74,7 @@ print(frames[0].timestep)
 
 * Working with JSON metadata
 
-/Added in v0.6.0./
+/Added in v0.6.0.
 
 Line 2 of every v2 CON file contains a JSON object. The writer always
 stamps =con_spec_version=; additional keys survive round-trips.
@@ -213,7 +213,7 @@ Velocity data is written automatically when
 
 ** Building frames from data
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 Use =ConFrameBuilder= to construct frames programmatically. The
 =atom_id= parameter (6th argument to =add_atom=) is the original atom
@@ -236,7 +236,7 @@ let frame = builder.build();
 
 ** Writing with custom precision
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 Control the number of decimal places in output coordinates:
 
@@ -255,7 +255,7 @@ let mut writer = ConFrameWriter::with_precision(file, 17);
 
 ** Reading a single frame efficiently
 
-/Added in v0.4.3./
+/Added in v0.4.3.
 
 When only the first frame is needed, =read_first_frame= stops after
 parsing it.  Files under 64 KiB are read into memory directly; larger
@@ -359,7 +359,7 @@ if frame.has_velocities:
 
 ** Constructing frames from data
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 Build frames programmatically using =Atom= and =ConFrame= constructors:
 
@@ -399,7 +399,7 @@ print(output)
 
 ** Writing with custom precision
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 Pass the =precision= keyword to control decimal places:
 
@@ -417,7 +417,7 @@ output = readcon.write_con_string(frames, precision=17)
 ** ASE Atoms conversion
 
 /Added in v0.4.0.  atom_id, velocity, mass, forces, and per-axis
-fixed-mask transfer are preserved./
+fixed-mask transfer are preserved.
 
 Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
 installed (it is an optional dependency).  The conversion preserves
@@ -540,7 +540,7 @@ int main(int argc, char *argv[]) {
 
 ** Building frames from data
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 #+begin_src c
 #include "readcon-core.h"
@@ -584,7 +584,7 @@ free_rkr_frame(frame);
 
 ** Reading a single frame
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 #+begin_src c
 RKRConFrame *frame = rkr_read_first_frame("input.con");
@@ -658,7 +658,7 @@ int main(int argc, char *argv[]) {
 
 ** Building frames from data
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 #+begin_src cpp
 #include "readcon-core.hpp"
@@ -677,7 +677,7 @@ auto frame = builder.build();
 
 ** Reading a single frame
 
-/Added in v0.4.0./
+/Added in v0.4.0.
 
 #+begin_src cpp
 auto frame = readcon::read_first_frame("input.con");
@@ -811,7 +811,7 @@ end
 
 * Chemfiles — convert other formats into CON
 
-/v0.13.0./ Documentation for chemfiles ingress is organized in the
+/v0.13.0. Documentation for chemfiles ingress is organized in the
 [[https://diataxis.fr/][Diátaxis]] style (do not use this page as the primary guide):
 
 - *Tutorial* (learning, end-to-end XYZ→CON→selection): [[file:chemfiles-tutorial.org][chemfiles-tutorial.org]]
