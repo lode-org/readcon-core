@@ -45,6 +45,8 @@
 struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
+struct mts_block_t;
+
 
 #ifndef READCON_H
 #define READCON_H
@@ -1407,5 +1409,22 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
 #ifdef __cplusplus
 }  // namespace readcon
 #endif  // __cplusplus
+
+
+#if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Free block from rkr_frame_metatensor_*_block (or call mts_block_free).
+ */
+void rkr_mts_block_free(struct mts_block_t *block);
+
+enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
+                                                    struct mts_block_t **out_block);
+enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
+                                                     struct mts_block_t **out_block);
+enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
+                                                 struct mts_block_t **out_block);
+enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
+                                                        struct mts_block_t **out_block);
+#endif /* READCON_CORE_HAS_METATENSOR */
 
 #endif  /* READCON_H */

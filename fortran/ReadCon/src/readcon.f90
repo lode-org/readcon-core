@@ -8,6 +8,9 @@ module readcon
 
   public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
   public :: catom_t, cframe_t
+  public :: dl_tensor_t, dl_managed_tensor_versioned_t
+  public :: dlpack_inspect
+  public :: frame_metatensor_positions_block, mts_block_free_rkr
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
@@ -33,6 +36,42 @@ module readcon
     logical(c_bool) :: has_forces = .false._c_bool
     real(c_double) :: energy = 0.0_c_double
     logical(c_bool) :: has_energy = .false._c_bool
+  end type
+
+
+  ! DLPack C layout (dlpack.h DLManagedTensorVersioned / DLTensor) — field access
+  type, bind(C), public :: dl_device_t
+    integer(c_int32_t) :: device_type = 1_c_int32_t  ! kDLCPU
+    integer(c_int32_t) :: device_id = 0_c_int32_t
+  end type
+
+  type, bind(C), public :: dl_data_type_t
+    integer(c_int8_t) :: code = 0_c_int8_t
+    integer(c_int8_t) :: bits = 0_c_int8_t
+    integer(c_int16_t) :: lanes = 0_c_int16_t
+  end type
+
+  type, bind(C), public :: dl_tensor_t
+    type(c_ptr) :: data = c_null_ptr
+    type(dl_device_t) :: device
+    integer(c_int32_t) :: ndim = 0_c_int32_t
+    type(dl_data_type_t) :: dtype
+    type(c_ptr) :: shape = c_null_ptr   ! int64_t*
+    type(c_ptr) :: strides = c_null_ptr
+    integer(c_int64_t) :: byte_offset = 0_c_int64_t
+  end type
+
+  type, bind(C), public :: dl_pack_version_t
+    integer(c_int32_t) :: major = 0_c_int32_t
+    integer(c_int32_t) :: minor = 0_c_int32_t
+  end type
+
+  type, bind(C), public :: dl_managed_tensor_versioned_t
+    type(dl_pack_version_t) :: version
+    type(c_ptr) :: manager_ctx = c_null_ptr
+    type(c_funptr) :: deleter = c_null_funptr
+    integer(c_int64_t) :: flags = 0_c_int64_t
+    type(dl_tensor_t) :: dl_tensor
   end type
 
   type, bind(C), public :: cframe_t
@@ -99,7 +138,11 @@ module readcon
     procedure :: copy_positions => bd_copy_positions
     procedure :: copy_masses => bd_copy_masses
     procedure :: positions_dlpack => bd_positions_dlpack
+    procedure :: velocities_dlpack => bd_velocities_dlpack
+    procedure :: forces_dlpack => bd_forces_dlpack
+    procedure :: atom_energies_dlpack => bd_atom_energies_dlpack
     procedure :: masses_dlpack => bd_masses_dlpack
+    procedure :: atom_ids_dlpack => bd_atom_ids_dlpack
     procedure :: dlpack_delete => bd_dlpack_delete
   end type
 
@@ -345,6 +388,41 @@ module readcon
       type(c_ptr), intent(out) :: out
       integer(c_int) :: c_rkr_frame_builder_masses_dlpack
     end function
+
+    function c_rkr_frame_builder_velocities_dlpack(b, out) bind(C, name="rkr_frame_builder_velocities_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_velocities_dlpack
+    end function
+    function c_rkr_frame_builder_forces_dlpack(b, out) bind(C, name="rkr_frame_builder_forces_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_forces_dlpack
+    end function
+    function c_rkr_frame_builder_atom_energies_dlpack(b, out) bind(C, name="rkr_frame_builder_atom_energies_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_atom_energies_dlpack
+    end function
+    function c_rkr_frame_builder_atom_ids_dlpack(b, out) bind(C, name="rkr_frame_builder_atom_ids_dlpack")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: b
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_builder_atom_ids_dlpack
+    end function
+    function c_rkr_frame_metatensor_positions_block(f, out) bind(C, name="rkr_frame_metatensor_positions_block")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: f
+      type(c_ptr), intent(out) :: out
+      integer(c_int) :: c_rkr_frame_metatensor_positions_block
+    end function
+    subroutine c_rkr_mts_block_free(b) bind(C, name="rkr_mts_block_free")
+      import :: c_ptr
+      type(c_ptr), value :: b
+    end subroutine
     subroutine c_rkr_dlpack_delete(tensor) bind(C, name="rkr_dlpack_delete")
       import :: c_ptr
       type(c_ptr), value :: tensor
@@ -916,5 +994,83 @@ contains
       tensor = c_null_ptr
     end if
   end subroutine
+
+  subroutine dlpack_inspect(tensor, ndim, shape0, shape1, dtype_bits, ok)
+    type(c_ptr), intent(in) :: tensor
+    integer, intent(out) :: ndim, dtype_bits
+    integer(int64), intent(out) :: shape0, shape1
+    logical, intent(out) :: ok
+    type(dl_managed_tensor_versioned_t), pointer :: mt
+    integer(c_int64_t), pointer :: shp(:)
+    ok = .false.
+    ndim = 0
+    shape0 = 0_int64
+    shape1 = 0_int64
+    dtype_bits = 0
+    if (.not. c_associated(tensor)) return
+    call c_f_pointer(tensor, mt)
+    ndim = int(mt%dl_tensor%ndim)
+    dtype_bits = int(mt%dl_tensor%dtype%bits)
+    if (ndim >= 1 .and. c_associated(mt%dl_tensor%shape)) then
+      call c_f_pointer(mt%dl_tensor%shape, shp, [ndim])
+      shape0 = shp(1)
+      if (ndim >= 2) shape1 = shp(2)
+    end if
+    ok = .true.
+  end subroutine
+
+  integer function bd_velocities_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    tensor = c_null_ptr
+    bd_velocities_dlpack = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_velocities_dlpack = int(c_rkr_frame_builder_velocities_dlpack(self%b, tensor))
+  end function
+
+  integer function bd_forces_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    tensor = c_null_ptr
+    bd_forces_dlpack = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_forces_dlpack = int(c_rkr_frame_builder_forces_dlpack(self%b, tensor))
+  end function
+
+  integer function bd_atom_energies_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    tensor = c_null_ptr
+    bd_atom_energies_dlpack = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_atom_energies_dlpack = int(c_rkr_frame_builder_atom_energies_dlpack(self%b, tensor))
+  end function
+
+  integer function bd_atom_ids_dlpack(self, tensor)
+    class(builder_t), intent(inout) :: self
+    type(c_ptr), intent(out) :: tensor
+    tensor = c_null_ptr
+    bd_atom_ids_dlpack = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    bd_atom_ids_dlpack = int(c_rkr_frame_builder_atom_ids_dlpack(self%b, tensor))
+  end function
+
+  integer function frame_metatensor_positions_block(fr, block)
+    type(frame_t), intent(in) :: fr
+    type(c_ptr), intent(out) :: block
+    block = c_null_ptr
+    frame_metatensor_positions_block = rkr_status_null_pointer
+    if (.not. c_associated(fr%handle)) return
+    frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
+  end function
+
+  subroutine mts_block_free_rkr(block)
+    type(c_ptr), intent(inout) :: block
+    if (c_associated(block)) then
+      call c_rkr_mts_block_free(block)
+      block = c_null_ptr
+    end if
+  end subroutine
+
 
 end module readcon

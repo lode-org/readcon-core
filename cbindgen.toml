@@ -49,6 +49,9 @@ header = """
  * ABI only passes the pointer through. */
 struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
+
+/* Metatensor block (include metatensor.h to use mts_block_*). */
+struct mts_block_t;
 """
 include_guard = "READCON_H"
 include_version = true
@@ -77,6 +80,7 @@ line_endings = "LF"
 # symbols; builds without the feature omit the symbols and the guard
 # keeps the declarations out of reach.
 "feature = zstd" = "READCON_CORE_HAS_ZSTD"
+"feature = metatensor" = "READCON_CORE_HAS_METATENSOR"
 # Chemfiles selection symbols are always declared (stubbed in Rust when the
 # `chemfiles` feature is off) so C++ wrappers compile without -DREADCON_CORE_HAS_CHEMFILES.
 
