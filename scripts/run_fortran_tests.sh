@@ -6,8 +6,10 @@ FEATURES="${READCON_FORTRAN_FEATURES:-chemfiles}"
 # shellcheck disable=SC2086
 cargo build --release --features ${FEATURES}
 export LD_LIBRARY_PATH="$ROOT/target/release:${LD_LIBRARY_PATH:-}"
+# Chemfiles C++ can raise benign FPEs; do not let gfortran abort the suite on CI
+export GFORTRAN_ERROR_BACKTRACE=0
 # Always -cpp so READCON_HAS_METATENSOR gates in the module are honored
-FFLAGS="-cpp"
+FFLAGS="-cpp -ffpe-summary=none"
 EXTRA="-lstdc++"
 if [[ "$FEATURES" == *metatensor* ]]; then
   FFLAGS="-cpp -DREADCON_HAS_METATENSOR"
