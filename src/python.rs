@@ -829,6 +829,12 @@ impl PyConFrame {
 
 /// Read frames from a .con or .convel file path.
 #[pyfunction]
+#[pyo3(name = "read_all_frames")]
+fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
+    read_con(py, path)
+}
+
+#[pyfunction]
 fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
     let frames = crate::iterators::read_all_frames(Path::new(path))
         .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
@@ -1302,6 +1308,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
+    // Ergonomic alias for multi-language matrix (batch all frames).
+    m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
