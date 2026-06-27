@@ -141,7 +141,7 @@ a full chemfiles =Trajectory= object. In practice that means:
 - Match indices come back in CON =atom_data= order. If you compare them to a
   selection run in chemfiles directly, compare as an *unordered multiset* after
   mapping through =atom_id=; do not expect the same index list byte-for-byte.
-  The =chemfiles_selection_cpp_regression= tests encode that contract.
+  The =chemfiles_selection_cpp_regression= tests check exactly that.
 
 A few things chemfiles can do in a PDB or GRO file do **not** apply here,
 because CON never stored the data:
