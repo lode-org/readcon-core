@@ -110,3 +110,29 @@ class TestChemfilesSelectionCppRegression:
         )
         assert readcon.select_atom_indices(frame, "name O") == [0]
         assert readcon.select_atom_indices(frame, "name H") == [1]
+
+
+def test_select_on_frames_name_h_positions_trajectory():
+    """Multi-frame selection returns H positions across tiny_multi_cuh2.con."""
+    from pathlib import Path
+    multi = Path(__file__).resolve().parents[2] / "resources" / "test" / "tiny_multi_cuh2.con"
+    frames = readcon.read_con(str(multi))
+    assert len(frames) >= 2
+    out = readcon.select_on_frames(frames, "name H")
+    assert out["selection"] == "name H"
+    assert len(out["frames"]) == len(frames)
+    for fi, fr in enumerate(out["frames"]):
+        assert fr["frame_index"] == fi
+        assert fr["context_size"] == 1
+        assert len(fr["atom_indices"]) >= 1
+        assert len(fr["positions"]) == len(fr["atom_indices"])
+        # oracle: single-frame select_atoms + coords
+        idxs = readcon.select_atom_indices(frames[fi], "name H")
+        assert fr["atom_indices"] == idxs
+        coords = frames[fi].coords_array()
+        for k, idx in enumerate(idxs):
+            assert list(fr["positions"][k]) == list(coords[idx])
+    # H moves between frames on this fixture
+    p0 = out["frames"][0]["positions"]
+    p1 = out["frames"][1]["positions"]
+    assert any(a != b for a, b in zip(p0, p1))

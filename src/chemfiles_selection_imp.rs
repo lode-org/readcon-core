@@ -211,6 +211,76 @@ pub fn select_atom_indices(selection: &str, frame: &ConFrame) -> Result<Vec<usiz
     Ok(idxs)
 }
 
+fn positions_for_atom_indices(frame: &ConFrame, indices: &[usize]) -> Vec<[f64; 3]> {
+    indices
+        .iter()
+        .filter_map(|&i| {
+            frame.atom_data.get(i).map(|a| [a.x, a.y, a.z])
+        })
+        .collect()
+}
+
+/// Evaluate `selection` on **each** frame independently (safer for reactive topology).
+///
+/// For atom-context selections (`context_size == 1`), each [`FrameSelectionSlice`]
+/// also carries sorted unique indices and their xyz coordinates on that frame so
+/// callers can collect e.g. H positions across a trajectory without re-selecting
+/// in user code.
+pub fn evaluate_selection_on_frames(
+    selection: &str,
+    frames: &[ConFrame],
+) -> Result<super::MultiFrameSelectionResult, ChemfilesImportError> {
+    let mut out = Vec::with_capacity(frames.len());
+    for (frame_index, frame) in frames.iter().enumerate() {
+        let result = evaluate_selection_on_con_frame(selection, frame)?;
+        let (atom_indices, positions) = if result.context_size == 1 {
+            let mut idxs = result.primary_indices();
+            idxs.sort_unstable();
+            idxs.dedup();
+            let pos = positions_for_atom_indices(frame, &idxs);
+            (idxs, pos)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        out.push(super::FrameSelectionSlice {
+            frame_index,
+            result,
+            positions,
+            atom_indices,
+        });
+    }
+    Ok(super::MultiFrameSelectionResult {
+        selection: selection.to_string(),
+        frames: out,
+    })
+}
+
+/// Atom-context multi-frame selection: same as [`evaluate_selection_on_frames`] but
+/// errors if the selection is not atom context (size 1) on the **first** frame.
+///
+/// Use for trajectory position extraction (`name H`, `name O`, …).
+pub fn select_atom_positions_on_frames(
+    selection: &str,
+    frames: &[ConFrame],
+) -> Result<super::MultiFrameSelectionResult, ChemfilesImportError> {
+    if frames.is_empty() {
+        return Ok(super::MultiFrameSelectionResult {
+            selection: selection.to_string(),
+            frames: Vec::new(),
+        });
+    }
+    let multi = evaluate_selection_on_frames(selection, frames)?;
+    if let Some(first) = multi.frames.first() {
+        if first.result.context_size != 1 {
+            return Err(ChemfilesImportError::InvalidFrame(format!(
+                "select_atom_positions_on_frames requires atom context (size 1), got {}",
+                first.result.context_size
+            )));
+        }
+    }
+    Ok(multi)
+}
+
 /// Validate that a selection string parses (does not evaluate on a frame).
 pub fn parse_selection_string(selection: &str) -> Result<usize, ChemfilesImportError> {
     let sel = Selection::new(selection).map_err(ChemfilesImportError::from)?;
@@ -699,5 +769,59 @@ mod chemfiles_selection_cpp_regression {
         let con = con_from_cpp_testing_frame();
         let sel = "dihedrals: name(#3) O and name(#4) H1";
         assert_selection_parity_remapped(sel, &chfl, &con);
+    }
+
+    #[test]
+    fn multi_frame_name_h_positions_on_tiny_multi_cuh2() {
+        use crate::iterators::read_all_frames;
+        use std::path::Path;
+        let path = Path::new("resources/test/tiny_multi_cuh2.con");
+        let frames = read_all_frames(path).expect("read multi-frame fixture");
+        assert!(frames.len() >= 2, "fixture must have >=2 frames");
+
+        let multi = select_atom_positions_on_frames("name H", &frames).expect("select H");
+        assert_eq!(multi.selection, "name H");
+        assert_eq!(multi.frames.len(), frames.len());
+
+        for (fi, slice) in multi.frames.iter().enumerate() {
+            assert_eq!(slice.frame_index, fi);
+            assert_eq!(slice.result.context_size, 1);
+            assert!(
+                !slice.atom_indices.is_empty(),
+                "frame {fi}: expected H matches"
+            );
+            assert_eq!(slice.atom_indices.len(), slice.positions.len());
+
+            // Oracle: single-frame select + atom_data coordinates
+            let oracle_idxs = select_atom_indices("name H", &frames[fi]).unwrap();
+            assert_eq!(slice.atom_indices, oracle_idxs);
+            for (k, &idx) in oracle_idxs.iter().enumerate() {
+                let a = &frames[fi].atom_data[idx];
+                assert_eq!(slice.positions[k], [a.x, a.y, a.z]);
+            }
+        }
+
+        // H moves between frame 0 and 1 on this fixture
+        let p0 = &multi.frames[0].positions;
+        let p1 = &multi.frames[1].positions;
+        assert_eq!(p0.len(), p1.len());
+        assert!(
+            p0.iter().zip(p1.iter()).any(|(a, b)| a != b),
+            "expected H coordinates to change across frames in tiny_multi_cuh2.con"
+        );
+    }
+
+    #[test]
+    fn multi_frame_bonds_has_empty_positions_vec() {
+        use crate::types::ConFrameBuilder;
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let frame = b.build();
+        // no topology → bonds: all is empty matches, still pair context
+        let multi = evaluate_selection_on_frames("bonds: all", &[frame]).unwrap();
+        assert_eq!(multi.frames[0].result.context_size, 2);
+        assert!(multi.frames[0].positions.is_empty());
+        assert!(multi.frames[0].atom_indices.is_empty());
     }
 }
