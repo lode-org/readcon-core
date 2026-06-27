@@ -1302,18 +1302,6 @@ struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *filena
                                                               uint8_t precision);
 #endif
 
-#if !defined(READCON_CORE_HAS_ZSTD)
-/**
- * zstd writer — stub when built without `zstd` (always linkable; returns null).
- */
-struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
-#endif
-
-#if !defined(READCON_CORE_HAS_ZSTD)
-struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
-                                                              uint8_t _precision);
-#endif
-
 /**
  * Reads the first frame from a .con file.
  * Uses `read_to_string` for small files (< 64 KiB) and mmap for larger ones.
@@ -1382,6 +1370,15 @@ enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame
                                                         struct mts_block_t **out_block);
 #endif
 
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
+#endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
+                                                              uint8_t _precision);
+#endif
+
 #if !defined(READCON_CORE_HAS_METATENSOR)
 void rkr_mts_block_free(struct mts_block_t *_block);
 #endif
@@ -1405,6 +1402,44 @@ enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *_fram
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *_frame_handle,
                                                         struct mts_block_t **out_block);
 #endif
+
+/**
+ * Number of atoms on the frame (atom_data order).
+ */
+uintptr_t rkr_frame_atom_count(const struct RKRConFrame *frame_handle);
+
+/**
+ * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
+ */
+enum RKRStatus rkr_frame_copy_positions(const struct RKRConFrame *frame_handle,
+                                        double *out,
+                                        uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_velocities(const struct RKRConFrame *frame_handle,
+                                         double *out,
+                                         uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_forces(const struct RKRConFrame *frame_handle,
+                                     double *out,
+                                     uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_handle,
+                                            double *out,
+                                            uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_masses(const struct RKRConFrame *frame_handle,
+                                     double *out,
+                                     uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
+                                       uint64_t *out,
+                                       uintptr_t out_len);
+
+/**
+ * DLPack positions from a frame (dlpk shares a built `ArcArray2`).
+ */
+enum RKRStatus rkr_frame_positions_dlpack(const struct RKRConFrame *frame_handle,
+                                          RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.

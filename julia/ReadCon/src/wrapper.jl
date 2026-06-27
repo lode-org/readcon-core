@@ -519,3 +519,30 @@ the atom inside `frame.atoms`.
 function build_atom_id_index(frame::ConFrame)::Dict{UInt64, Int}
     Dict{UInt64, Int}(atom.atom_id => i for (i, atom) in enumerate(frame.atoms))
 end
+
+
+"""Read all frames (batch). Prefer `read_con` for lazy iteration."""
+function read_all_frames(path::String)::Vector{ConFrame}
+    frames = ConFrame[]
+    n = Ref{UInt}(0)
+    arr = ccall(_lib_symbol(:rkr_read_all_frames), Ptr{Ptr{Cvoid}}, (Cstring, Ref{UInt}), path, n)
+    arr == C_NULL && return frames
+    nn = Int(n[])
+    ptrs = unsafe_wrap(Array, arr, nn; own=false)
+    for i in 1:nn
+        push!(frames, ConFrame(ptrs[i]; own=true))
+    end
+    # pointer array not freed (handles owned by ConFrame); acceptable for ergonomics path
+    return frames
+end
+
+"""Contiguous positions (N×3) without AoS CFrame materialization."""
+function positions_matrix(frame::ConFrame)::Matrix{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return zeros(0, 3)
+    buf = Vector{Float64}(undef, 3 * n)
+    st = ccall(_lib_symbol(:rkr_frame_copy_positions), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, "rkr_frame_copy_positions")
+    return permutedims(reshape(buf, 3, n))  # N×3
+end
