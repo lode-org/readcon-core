@@ -495,8 +495,9 @@ impl Array2Storage {
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::F32(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
-            Self::F16(a) => dlpk::DLPackTensor::try_from(a.clone())
-                .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
+            Self::F16(_) => Err(ParseError::ValidationError(
+                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates".into(),
+            )),
             Self::I8(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::I16(a) => dlpk::DLPackTensor::try_from(a.clone())
@@ -680,8 +681,9 @@ impl Array1Storage {
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::F32(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
-            Self::F16(a) => dlpk::DLPackTensor::try_from(a.clone())
-                .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
+            Self::F16(_) => Err(ParseError::ValidationError(
+                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates".into(),
+            )),
             Self::I8(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::I16(a) => dlpk::DLPackTensor::try_from(a.clone())
@@ -822,7 +824,12 @@ mod tests {
         for &k in ElementKind::all_hosted() {
             let mut a = Array2Storage::zeros(k, 2, 3);
             a.set_f64_row(0, [1.0, 2.0, 3.0]);
-            let t = a.as_dlpack(dlpk::sys::DLDevice::cpu()).unwrap();
+            let t = a.as_dlpack(dlpk::sys::DLDevice::cpu());
+            if k == ElementKind::Float16 {
+                assert!(t.is_err());
+                continue;
+            }
+            let t = t.unwrap();
             // bool exports as 1-D length 6 (Vec<bool> path)
             if k == ElementKind::Bool {
                 assert_eq!(t.shape(), &[6]);
@@ -839,7 +846,12 @@ mod tests {
         for &k in ElementKind::all_hosted() {
             let mut a = Array1Storage::zeros(k, 4);
             a.set_f64(0, 1.0);
-            let t = a.as_dlpack(dlpk::sys::DLDevice::cpu()).unwrap();
+            let t = a.as_dlpack(dlpk::sys::DLDevice::cpu());
+            if k == ElementKind::Float16 {
+                assert!(t.is_err());
+                continue;
+            }
+            let t = t.unwrap();
             assert_eq!(t.shape(), &[4]);
             assert_eq!(t.dtype().bits, k.dlpack_bits());
         }
