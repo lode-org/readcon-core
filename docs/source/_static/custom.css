@@ -339,12 +339,138 @@ div[class*="highlight-"] pre span,
   color: #0f172a;
 }
 
-/* Syntax tokens: ensure not too dim on dark pre (light mode dark_code) */
-.sy-page .highlight .c,
-.sy-page .highlight .c1,
-.sy-page .highlight .cm,
-.sy-page .highlight .cs {
-  opacity: 0.92;
+/* Syntax on dark fences (conf uses dark_code; pre bg is always slate).
+   doxyrest-pygments.css forces many names to #000 !important — unreadable on
+   --rc-pre-bg. Override with AA-friendly GitHub-dark-ish tokens. */
+.sy-page .highlight pre,
+.sy-page div[class*="highlight-"] pre,
+div.highlight pre,
+div[class*="highlight-"] pre,
+.yue.dark-code .highlight pre {
+  --rc-syn-text: #e6edf3;
+  --rc-syn-comment: #8b949e;
+  --rc-syn-keyword: #ff7b72;
+  --rc-syn-string: #a5d6ff;
+  --rc-syn-number: #79c0ff;
+  --rc-syn-function: #d2a8ff;
+  --rc-syn-name: #e6edf3;
+  --rc-syn-operator: #ff7b72;
+  --rc-syn-punct: #c9d1d9;
+  --rc-syn-builtin: #79c0ff;
+  --rc-syn-class: #ffa657;
+  color: var(--rc-syn-text) !important;
+}
+
+/* Beat doxyrest-pygments.css (#000 !important on .nf / names) */
+.sy-page .highlight pre .n,
+.sy-page .highlight pre .nx,
+.sy-page .highlight pre .nv,
+.sy-page .highlight pre .vc,
+.sy-page .highlight pre .vg,
+.sy-page .highlight pre .vi,
+.sy-page .highlight pre .nl,
+.sy-page .highlight pre .nn,
+.sy-page .highlight pre .py,
+.sy-page .highlight pre .bp,
+.sy-page .highlight pre .w,
+div[class*="highlight-"] pre .n,
+div[class*="highlight-"] pre .nx,
+div.highlight pre .n,
+.highlight pre .n {
+  color: var(--rc-syn-name, #e6edf3) !important;
+}
+
+.sy-page .highlight pre .nf,
+.sy-page .highlight pre .fm,
+.sy-page .highlight pre .nc,
+.sy-page .highlight pre .na,
+.sy-page .highlight pre .no,
+.sy-page .highlight pre .nd,
+.sy-page .highlight pre .ni,
+.sy-page .highlight pre .ne,
+.sy-page .highlight pre .nt,
+div[class*="highlight-"] pre .nf,
+div.highlight pre .nf,
+.highlight pre .nf {
+  color: var(--rc-syn-function, #d2a8ff) !important;
+  font-weight: 500 !important;
+}
+
+.sy-page .highlight pre .nb,
+.sy-page .highlight pre .bp,
+div[class*="highlight-"] pre .nb,
+.highlight pre .nb {
+  color: var(--rc-syn-builtin, #79c0ff) !important;
+}
+
+.sy-page .highlight pre .k,
+.sy-page .highlight pre .kc,
+.sy-page .highlight pre .kd,
+.sy-page .highlight pre .kn,
+.sy-page .highlight pre .kp,
+.sy-page .highlight pre .kr,
+.sy-page .highlight pre .kt,
+div[class*="highlight-"] pre .k,
+.highlight pre .k {
+  color: var(--rc-syn-keyword, #ff7b72) !important;
+}
+
+.sy-page .highlight pre .s,
+.sy-page .highlight pre .s1,
+.sy-page .highlight pre .s2,
+.sy-page .highlight pre .sa,
+.sy-page .highlight pre .sb,
+.sy-page .highlight pre .sc,
+.sy-page .highlight pre .dl,
+.sy-page .highlight pre .sd,
+.sy-page .highlight pre .se,
+.sy-page .highlight pre .sh,
+.sy-page .highlight pre .si,
+.sy-page .highlight pre .sx,
+.sy-page .highlight pre .sr,
+.sy-page .highlight pre .ss,
+div[class*="highlight-"] pre .s,
+.highlight pre .s {
+  color: var(--rc-syn-string, #a5d6ff) !important;
+}
+
+.sy-page .highlight pre .m,
+.sy-page .highlight pre .mb,
+.sy-page .highlight pre .mf,
+.sy-page .highlight pre .mh,
+.sy-page .highlight pre .mi,
+.sy-page .highlight pre .mo,
+.sy-page .highlight pre .il,
+div[class*="highlight-"] pre .m,
+.highlight pre .m {
+  color: var(--rc-syn-number, #79c0ff) !important;
+}
+
+.sy-page .highlight pre .o,
+.sy-page .highlight pre .ow,
+div[class*="highlight-"] pre .o,
+.highlight pre .o {
+  color: var(--rc-syn-operator, #ff7b72) !important;
+}
+
+.sy-page .highlight pre .p,
+div[class*="highlight-"] pre .p,
+.highlight pre .p {
+  color: var(--rc-syn-punct, #c9d1d9) !important;
+}
+
+.sy-page .highlight pre .c,
+.sy-page .highlight pre .c1,
+.sy-page .highlight pre .cm,
+.sy-page .highlight pre .cp,
+.sy-page .highlight pre .cs,
+.sy-page .highlight pre .ch,
+.sy-page .highlight pre .cpf,
+div[class*="highlight-"] pre .c1,
+.highlight pre .c1 {
+  color: var(--rc-syn-comment, #8b949e) !important;
+  opacity: 1;
+  font-style: italic;
 }
 
 html.dark .highlight,
