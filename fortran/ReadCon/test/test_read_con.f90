@@ -46,6 +46,25 @@ program test_read_con
     if (st2 /= 0) nfail = nfail + 1
     print *, "frame_copy_positions st=", st2, " natoms=", na
   end block
+  block
+    type(frame_t), allocatable :: allf(:)
+    integer :: ia
+    allf = read_all_frames(trim(tiny))
+    if (.not. allocated(allf) .or. size(allf) < 1) then
+      nfail = nfail + 1
+    else if (.not. allf(1)%valid()) then
+      nfail = nfail + 1
+    else if (int(allf(1)%atom_count()) < 1) then
+      nfail = nfail + 1
+    else
+      print *, "read_all_frames n=", size(allf), " atoms0=", int(allf(1)%atom_count())
+    end if
+    if (allocated(allf)) then
+      do ia = 1, size(allf)
+        call allf(ia)%free()
+      end do
+    end if
+  end block
 
   cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)

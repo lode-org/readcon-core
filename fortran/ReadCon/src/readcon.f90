@@ -117,6 +117,9 @@ module readcon
     procedure :: energy => fr_energy
     procedure :: atom_count => fr_atom_count
     procedure :: copy_positions => fr_copy_positions
+    procedure :: copy_velocities => fr_copy_velocities
+    procedure :: copy_forces => fr_copy_forces
+    procedure :: copy_masses => fr_copy_masses
     procedure :: potential_type => fr_pot
     procedure :: frame_index => fr_fidx
     procedure :: sim_time => fr_time
@@ -227,6 +230,33 @@ module readcon
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_frame_copy_positions
     end function
+    function c_rkr_frame_copy_velocities(f, out, n) bind(C, name="rkr_frame_copy_velocities")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_velocities
+    end function
+    function c_rkr_frame_copy_forces(f, out, n) bind(C, name="rkr_frame_copy_forces")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_forces
+    end function
+    function c_rkr_frame_copy_masses(f, out, n) bind(C, name="rkr_frame_copy_masses")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_masses
+    end function
+    subroutine c_free_rkr_frame_ptr_array(arr, n) bind(C, name="free_rkr_frame_ptr_array")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: arr
+      integer(c_size_t), value :: n
+    end subroutine
+
     function c_rkr_read_all_frames(fn, nout) bind(C, name="rkr_read_all_frames")
       import :: c_char, c_ptr, c_size_t
       character(kind=c_char), intent(in) :: fn(*)
@@ -660,10 +690,7 @@ contains
       frames(i)%handle = ptrs(i)
       frames(i)%cview = c_null_ptr
     end do
-    ! Do not free_rkr_frame_array — ownership transferred into frames(:)%handle
-    ! Leak the pointer array only: C allocated array of pointers; we keep handles.
-    ! Actually free_rkr_frame_array frees frames too — so we must not call it.
-    ! The array storage is leaked (small). Prefer: leave arr without freeing frames.
+    call c_free_rkr_frame_ptr_array(arr, n)
   end function
 
   function open_iterator(path) result(it)
@@ -1293,6 +1320,78 @@ contains
     if (c_associated(block)) call c_rkr_mts_block_free(block)
     block = c_null_ptr
   end subroutine
+
+
+  integer function fr_copy_velocities(self, vel)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: vel(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_velocities = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(vel, 2) < n) then
+      fr_copy_velocities = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_velocities(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_velocities = st
+    if (st /= 0) return
+    do i = 1, n
+      vel(1, i) = real(flat(3*(i-1)+1), real64)
+      vel(2, i) = real(flat(3*(i-1)+2), real64)
+      vel(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  integer function fr_copy_forces(self, frc)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: frc(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_forces = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(frc, 2) < n) then
+      fr_copy_forces = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_forces(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_forces = st
+    if (st /= 0) return
+    do i = 1, n
+      frc(1, i) = real(flat(3*(i-1)+1), real64)
+      frc(2, i) = real(flat(3*(i-1)+2), real64)
+      frc(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  integer function fr_copy_masses(self, mass)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: mass(:)
+    real(c_double), allocatable :: flat(:)
+    integer :: n, st
+    integer(c_size_t) :: nn
+    fr_copy_masses = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(mass) < n) then
+      fr_copy_masses = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(n))
+    st = int(c_rkr_frame_copy_masses(self%handle, flat, int(n, c_size_t)))
+    fr_copy_masses = st
+    if (st /= 0) return
+    mass(1:n) = real(flat(1:n), real64)
+  end function
 
 
 end module readcon

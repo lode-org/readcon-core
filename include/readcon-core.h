@@ -1336,6 +1336,16 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 
+/**
+ * Free only the outer pointer array from `rkr_read_all_frames` (not the frames).
+ *
+ * # Safety
+ * `frames` null or from `rkr_read_all_frames` with length `num_frames`. Frame
+ * pointers must be owned elsewhere (e.g. language wrappers).
+ */
+void free_rkr_frame_ptr_array(struct RKRConFrame **frames,
+                              uintptr_t num_frames);
+
 #if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Free an owned block from `rkr_frame_metatensor_*_block`.

@@ -308,6 +308,53 @@ class ConFrame {
      */
     std::vector<size_t> select_atom_indices(std::string_view selection) const;
 
+
+    /**
+     * Atom count without materializing CFrame / AoS atoms cache.
+     */
+    std::size_t atom_count() const {
+        return frame_handle_ ? static_cast<std::size_t>(rkr_frame_atom_count(frame_handle_.get()))
+                             : 0;
+    }
+
+    /** Row-major xyz length >= 3*N. Status from C ABI. */
+    RKRStatus copy_positions(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_positions(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_velocities(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_velocities(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_forces(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_forces(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_atom_energies(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_atom_energies(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_masses(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_masses(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_atom_ids(uint64_t *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_atom_ids(frame_handle_.get(), out, out_len);
+    }
+    /** DLPack positions (caller: rkr_dlpack_delete). */
+    RKRStatus positions_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_positions_dlpack(frame_handle_.get(), out_tensor);
+    }
+
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
   private:

@@ -532,7 +532,7 @@ function read_all_frames(path::String)::Vector{ConFrame}
     for i in 1:nn
         push!(frames, ConFrame(ptrs[i]; own=true))
     end
-    # pointer array not freed (handles owned by ConFrame); acceptable for ergonomics path
+    ccall(_lib_symbol(:free_rkr_frame_ptr_array), Cvoid, (Ptr{Ptr{Cvoid}}, Csize_t), arr, nn)
     return frames
 end
 
@@ -545,4 +545,33 @@ function positions_matrix(frame::ConFrame)::Matrix{Float64}
                frame.handle, buf, length(buf))
     _check_status(st, "rkr_frame_copy_positions")
     return permutedims(reshape(buf, 3, n))  # N×3
+end
+
+
+function _section_matrix_3(frame::ConFrame, sym::Symbol)::Matrix{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return zeros(0, 3)
+    buf = Vector{Float64}(undef, 3 * n)
+    st = ccall(_lib_symbol(sym), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, String(sym))
+    return permutedims(reshape(buf, 3, n))
+end
+
+function velocities_matrix(frame::ConFrame)::Matrix{Float64}
+    _section_matrix_3(frame, :rkr_frame_copy_velocities)
+end
+
+function forces_matrix(frame::ConFrame)::Matrix{Float64}
+    _section_matrix_3(frame, :rkr_frame_copy_forces)
+end
+
+function masses_vector(frame::ConFrame)::Vector{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return Float64[]
+    buf = Vector{Float64}(undef, n)
+    st = ccall(_lib_symbol(:rkr_frame_copy_masses), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, "rkr_frame_copy_masses")
+    return buf
 end
