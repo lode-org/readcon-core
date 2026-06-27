@@ -257,6 +257,25 @@ typedef struct RKRConFrameBuilder {
     uint8_t _private[0];
 } RKRConFrameBuilder;
 
+/**
+ * Options for DLPack export precision and placement.
+ *
+ * Pass to `*_dlpack_ex` entry points. NULL options on those APIs (or the
+ * legacy non-`_ex` functions) mean **float64 on CPU** (`float_bits=64`,
+ * `device_type=1` kDLCPU, `device_id=0`).
+ *
+ * - `float_bits`: `32` or `64` for float sections (positions, velocities,
+ *   forces, energies, masses). Atom-id exports ignore this and stay u64.
+ * - `device_type` / `device_id`: DLPack device tags. Only **CPU** (`1`) is
+ *   supported today; other values return `RKR_STATUS_VALIDATION_ERROR`.
+ *   Reserved so GPU/device-resident exports can land without another ABI break.
+ */
+typedef struct RKRDlpackExportOptions {
+    uint8_t float_bits;
+    int32_t device_type;
+    int32_t device_id;
+} RKRDlpackExportOptions;
+
 #if !defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
@@ -810,6 +829,18 @@ enum RKRStatus rkr_frame_builder_positions_dlpack(const struct RKRConFrameBuilde
                                                   RKRDLManagedTensorVersioned **out_tensor);
 
 /**
+ * Like [`rkr_frame_builder_positions_dlpack`] with explicit precision/device.
+ *
+ * `opts` may be NULL (float64 / CPU). See [`RKRDlpackExportOptions`].
+ *
+ * # Safety
+ * Same as the non-`_ex` entry; `opts` must be null or point at a valid struct.
+ */
+enum RKRStatus rkr_frame_builder_positions_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                     const struct RKRDlpackExportOptions *opts,
+                                                     RKRDLManagedTensorVersioned **out_tensor);
+
+/**
  * Export builder velocities as a DLPack-managed tensor.
  *
  * Returns `RKR_STATUS_SECTION_ABSENT` if the velocities section is not
@@ -822,6 +853,10 @@ enum RKRStatus rkr_frame_builder_positions_dlpack(const struct RKRConFrameBuilde
  */
 enum RKRStatus rkr_frame_builder_velocities_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                    RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_velocities_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                      const struct RKRDlpackExportOptions *opts,
+                                                      RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Export builder forces as a DLPack-managed tensor.
@@ -836,6 +871,10 @@ enum RKRStatus rkr_frame_builder_velocities_dlpack(const struct RKRConFrameBuild
 enum RKRStatus rkr_frame_builder_forces_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_builder_forces_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                  const struct RKRDlpackExportOptions *opts,
+                                                  RKRDLManagedTensorVersioned **out_tensor);
+
 /**
  * Export builder per-atom energies as a DLPack-managed tensor.
  *
@@ -849,6 +888,10 @@ enum RKRStatus rkr_frame_builder_forces_dlpack(const struct RKRConFrameBuilder *
 enum RKRStatus rkr_frame_builder_atom_energies_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                       RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_builder_atom_energies_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                         const struct RKRDlpackExportOptions *opts,
+                                                         RKRDLManagedTensorVersioned **out_tensor);
+
 /**
  * Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
  *
@@ -858,6 +901,10 @@ enum RKRStatus rkr_frame_builder_atom_energies_dlpack(const struct RKRConFrameBu
  */
 enum RKRStatus rkr_frame_builder_masses_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_masses_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                  const struct RKRDlpackExportOptions *opts,
+                                                  RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
@@ -1469,37 +1516,50 @@ enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
                                        uintptr_t out_len);
 
 /**
- * DLPack positions from a frame (dlpk shares a built `ArcArray2`).
+ * DLPack positions from a frame (default float64 / CPU).
  */
 enum RKRStatus rkr_frame_positions_dlpack(const struct RKRConFrame *frame_handle,
                                           RKRDLManagedTensorVersioned **out_tensor);
 
 /**
- * DLPack velocities from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+ * Frame positions with [`RKRDlpackExportOptions`] (`opts` NULL → f64/CPU).
  *
  * # Safety
- * `frame_handle` and `out_tensor` non-null and valid.
+ * `frame_handle` / `out_tensor` valid; `opts` null or valid.
+ */
+enum RKRStatus rkr_frame_positions_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                             const struct RKRDlpackExportOptions *opts,
+                                             RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack velocities from a frame, or `SECTION_ABSENT` if missing (f64/CPU).
  */
 enum RKRStatus rkr_frame_velocities_dlpack(const struct RKRConFrame *frame_handle,
                                            RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_velocities_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                              const struct RKRDlpackExportOptions *opts,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
 /**
- * DLPack forces from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
- *
- * # Safety
- * `frame_handle` and `out_tensor` non-null and valid.
+ * DLPack forces from a frame, or `SECTION_ABSENT` if missing (f64/CPU default).
  */
 enum RKRStatus rkr_frame_forces_dlpack(const struct RKRConFrame *frame_handle,
                                        RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_forces_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                          const struct RKRDlpackExportOptions *opts,
+                                          RKRDLManagedTensorVersioned **out_tensor);
+
 /**
- * DLPack per-atom energies from a frame `(N,) f64`, or `SECTION_ABSENT` if missing.
- *
- * # Safety
- * `frame_handle` and `out_tensor` non-null and valid.
+ * DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
  */
 enum RKRStatus rkr_frame_atom_energies_dlpack(const struct RKRConFrame *frame_handle,
                                               RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_atom_energies_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                                 const struct RKRDlpackExportOptions *opts,
+                                                 RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.

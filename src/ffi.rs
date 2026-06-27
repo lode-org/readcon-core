@@ -1372,14 +1372,78 @@ fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
         _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// Options for DLPack export precision and placement.
+///
+/// Pass to `*_dlpack_ex` entry points. NULL options on those APIs (or the
+/// legacy non-`_ex` functions) mean **float64 on CPU** (`float_bits=64`,
+/// `device_type=1` kDLCPU, `device_id=0`).
+///
+/// - `float_bits`: `32` or `64` for float sections (positions, velocities,
+///   forces, energies, masses). Atom-id exports ignore this and stay u64.
+/// - `device_type` / `device_id`: DLPack device tags. Only **CPU** (`1`) is
+///   supported today; other values return `RKR_STATUS_VALIDATION_ERROR`.
+///   Reserved so GPU/device-resident exports can land without another ABI break.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDlpackExportOptions {
+    pub float_bits: u8,
+    pub device_type: i32,
+    pub device_id: i32,
+}
+
+impl Default for RKRDlpackExportOptions {
+    fn default() -> Self {
+        Self {
+            float_bits: 64,
+            device_type: 1, // kDLCPU
+            device_id: 0,
+        }
+    }
+}
+
+/// Resolve options pointer; NULL → defaults. Rejects unsupported device/bits.
+fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
+    let o = if opts.is_null() {
+        RKRDlpackExportOptions::default()
+    } else {
+        unsafe { *opts }
+    };
+    // Only CPU for now (kDLCPU == 1 in dlpack.h).
+    if o.device_type != 1 {
+        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    if o.float_bits != 32 && o.float_bits != 64 {
+        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    Ok(o)
+}
+
 fn export_owned_array2_dlpack(
     arr: &ndarray::ArcArray2<f64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    // ArcArray clone is a cheap Arc bump; the resulting tensor stays
-    // safely owned even if the source builder later CoW-mutates.
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
+    export_owned_array2_dlpack_opts(arr, &RKRDlpackExportOptions::default(), out_tensor)
+}
+
+fn export_owned_array2_dlpack_opts(
+    arr: &ndarray::ArcArray2<f64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let result = match opts.float_bits {
+        64 => {
+            let shared = arr.clone();
+            dlpk::DLPackTensor::try_from(shared)
+        }
+        32 => {
+            let f32_arr: ndarray::ArcArray2<f32> = arr.mapv(|x| x as f32);
+            dlpk::DLPackTensor::try_from(f32_arr)
+        }
+        _ => {
+            return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        }
+    };
+    match result {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -1392,12 +1456,28 @@ fn export_owned_array2_dlpack(
         ))),
     }
 }
+
 fn export_owned_array1_f64_dlpack(
     arr: &ndarray::ArcArray1<f64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
+    export_owned_array1_f64_dlpack_opts(arr, &RKRDlpackExportOptions::default(), out_tensor)
+}
+
+fn export_owned_array1_f64_dlpack_opts(
+    arr: &ndarray::ArcArray1<f64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let result = match opts.float_bits {
+        64 => dlpk::DLPackTensor::try_from(arr.clone()),
+        32 => {
+            let f32_arr: ndarray::ArcArray1<f32> = arr.mapv(|x| x as f32);
+            dlpk::DLPackTensor::try_from(f32_arr)
+        }
+        _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    match result {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -1443,12 +1523,32 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_positions_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+/// Like [`rkr_frame_builder_positions_dlpack`] with explicit precision/device.
+///
+/// `opts` may be NULL (float64 / CPU). See [`RKRDlpackExportOptions`].
+///
+/// # Safety
+/// Same as the non-`_ex` entry; `opts` must be null or point at a valid struct.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array2_dlpack(builder.positions_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.positions_2d_ref(), &o, out_tensor)
 }
+
 /// Export builder velocities as a DLPack-managed tensor.
 ///
 /// Returns `RKR_STATUS_SECTION_ABSENT` if the velocities section is not
@@ -1463,15 +1563,29 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_velocities_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_velocities_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array2_dlpack(builder.velocities_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.velocities_2d_ref(), &o, out_tensor)
 }
+
 /// Export builder forces as a DLPack-managed tensor.
 ///
 /// Returns `RKR_STATUS_SECTION_ABSENT` if the forces section is not
@@ -1485,15 +1599,29 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_forces_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_forces_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array2_dlpack(builder.forces_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.forces_2d_ref(), &o, out_tensor)
 }
+
 /// Export builder per-atom energies as a DLPack-managed tensor.
 ///
 /// Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
@@ -1507,15 +1635,31 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe {
+        rkr_frame_builder_atom_energies_dlpack_ex(builder_handle, std::ptr::null(), out_tensor)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_energies_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array1_f64_dlpack(builder.atom_energies_1d_ref(), out_tensor)
+    export_owned_array1_f64_dlpack_opts(builder.atom_energies_1d_ref(), &o, out_tensor)
 }
+
 /// Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
 ///
 /// # Safety
@@ -1526,11 +1670,24 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_masses_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array1_f64_dlpack(builder.masses_1d_ref(), out_tensor)
+    export_owned_array1_f64_dlpack_opts(builder.masses_1d_ref(), &o, out_tensor)
 }
 /// Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
 ///
@@ -2851,42 +3008,73 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
-/// DLPack positions from a frame (dlpk shares a built `ArcArray2`).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_frame_positions_dlpack(
-    frame_handle: *const RKRConFrame,
-    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
-) -> RKRStatus {
-    if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    }
-    unsafe { *out_tensor = std::ptr::null_mut() };
-    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    };
+fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
         data.extend_from_slice(&[a.x, a.y, a.z]);
     }
-    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
-        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
-    export_owned_array2_dlpack(&arr, out_tensor)
+    ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)))
 }
 
-/// DLPack velocities from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+/// DLPack positions from a frame (default float64 / CPU).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_positions_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+/// Frame positions with [`RKRDlpackExportOptions`] (`opts` NULL → f64/CPU).
 ///
 /// # Safety
-/// `frame_handle` and `out_tensor` non-null and valid.
+/// `frame_handle` / `out_tensor` valid; `opts` null or valid.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
+pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
     frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = frame_positions_arc(frame);
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
+}
+
+/// DLPack velocities from a frame, or `SECTION_ABSENT` if missing (f64/CPU).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_velocities_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
@@ -2901,22 +3089,32 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
-    export_owned_array2_dlpack(&arr, out_tensor)
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
 }
 
-/// DLPack forces from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
-///
-/// # Safety
-/// `frame_handle` and `out_tensor` non-null and valid.
+/// DLPack forces from a frame, or `SECTION_ABSENT` if missing (f64/CPU default).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_dlpack(
     frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_forces_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
@@ -2931,22 +3129,32 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack(
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
-    export_owned_array2_dlpack(&arr, out_tensor)
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
 }
 
-/// DLPack per-atom energies from a frame `(N,) f64`, or `SECTION_ABSENT` if missing.
-///
-/// # Safety
-/// `frame_handle` and `out_tensor` non-null and valid.
+/// DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
     frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_atom_energies_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
@@ -2959,7 +3167,7 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
         .map(|a| a.energy.unwrap_or(0.0))
         .collect();
     let arr = ndarray::ArcArray1::from_vec(data);
-    export_owned_array1_f64_dlpack(&arr, out_tensor)
+    export_owned_array1_f64_dlpack_opts(&arr, &o, out_tensor)
 }
 
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
@@ -3625,6 +3833,41 @@ mod tests {
             RKRStatus::RKR_STATUS_SUCCESS
         );
         unsafe { assert_dlpack_cpu_float(eng, 1, &[n_built], 64) };
+        // Explicit f32 export via options (caller-chosen precision)
+        let opts32 = RKRDlpackExportOptions {
+            float_bits: 32,
+            device_type: 1,
+            device_id: 0,
+        };
+        let mut pos32: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &opts32, &mut pos32) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe {
+            assert_dlpack_cpu_float(pos32, 2, &[n_built, 3], 32);
+            rkr_dlpack_delete(pos32);
+        }
+        // Reject unsupported device / bits
+        let bad_dev = RKRDlpackExportOptions {
+            float_bits: 64,
+            device_type: 2,
+            device_id: 0,
+        };
+        let mut junk: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &bad_dev, &mut junk) },
+            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+        );
+        let bad_bits = RKRDlpackExportOptions {
+            float_bits: 16,
+            device_type: 1,
+            device_id: 0,
+        };
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &bad_bits, &mut junk) },
+            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+        );
         unsafe {
             rkr_dlpack_delete(frc);
             rkr_dlpack_delete(eng);
