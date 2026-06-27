@@ -565,8 +565,8 @@ header into =readcon-core.h=; two headers, one pointer ABI.
 
 | Variant | Cargo | =libreadcon_core.so= symbols | C header | Fortran module | Link =libmetatensor= |
 |---------+-------+------------------------------+----------+----------------+----------------------|
-| Lean | default / =chemfiles= only | **omit** =rkr_frame_metatensor_*= | no =READCON_CORE_HAS_METATENSOR= (or undef) | compile with =-cpp= **without** =-DREADCON_HAS_METATENSOR= → helpers return **=RKR_STATUS_FEATURE_DISABLED= (=-11=)** | no |
-| Fat | =--features metatensor= (often =chemfiles,metatensor=) | export all four blocks + =rkr_mts_block_free= | define =READCON_CORE_HAS_METATENSOR= (cbindgen =defines=) | =-cpp -DREADCON_HAS_METATENSOR= (script does this) | **yes** |
+| Lean | default / =chemfiles= only | symbols **always linked** (stubs) | =READCON_CORE_HAS_METATENSOR= optional (capability only) | C decls always present; runtime **=RKR_STATUS_FEATURE_DISABLED= (=-11=)** | no real blocks |
+| Fat | =--features metatensor= (often =chemfiles,metatensor=) | export all four blocks + =rkr_mts_block_free= | =readcon-metatensor.h= sets =READCON_CORE_HAS_METATENSOR= | full TensorBlock transfer | **yes** |
 
 After a fat =cargo build --features metatensor=, =build.rs= writes
 =target/<profile>/readcon-metatensor.env= (=READCON_METATENSOR_INCLUDE=,
@@ -577,7 +577,7 @@ After a fat =cargo build --features metatensor=, =build.rs= writes
 
 | File | When |
 |------+------|
-| =include/readcon-core.h= | Always; metatensor decls only under =#if defined(READCON_CORE_HAS_METATENSOR)=; opaque =mts_block_t= typedef |
+| =include/readcon-core.h= | Always; metatensor + zstd entry points **always declared** (lean stubs =-11=/NULL); opaque =mts_block_t=; =READCON_CORE_HAS_*= documents capability only |
 | =include/readcon-metatensor.h= | Prefer for C consumers: includes **=metatensor.h= first**, then defines the gate and =readcon-core.h= |
 | =metatensor.h= (from env INCLUDE or install) | Values/labels/free via sys C API; **required** to interpret the pointer |
 
