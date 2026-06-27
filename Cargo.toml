@@ -48,7 +48,9 @@ chemfiles = ["dep:chemfiles"]
 # bespoke pointer surface. dlpk is hard-deppy because the C-ABI
 # DLPack export is the v0.11 surface; the `ndarray` and `pyo3`
 # features are turned on conditionally below.
-dlpk = { version = "0.1.5", features = ["ndarray"] }
+dlpk = { version = "0.1.5", features = ["ndarray", "half"] }
+# Same major as dlpk's `half` so `GetDLPackDataType` applies to our arrays.
+half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
 flate2 = "1"

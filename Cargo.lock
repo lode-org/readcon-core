@@ -296,6 +296,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cebd0cf4daf054b82db0150be17f8147c5d35a772da82bab380b0dab7ca08d4"
 dependencies = [
+ "half 1.8.3",
  "ndarray",
 ]
 
@@ -985,6 +986,7 @@ dependencies = [
  "fast-float2",
  "flate2",
  "futures",
+ "half 1.8.3",
  "memchr",
  "memmap2",
  "metatensor",
