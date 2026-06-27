@@ -179,10 +179,12 @@ Selection grammar (implemented on CON frames)
     | ``is_bonded`` / ``is_angle`` / ``is_dihedral`` | yes                      |    2 / 3 / 4 |
     +------------------------------------------------+--------------------------+--------------+
 
-Upstream chemfiles documents the full language. On CON frames, readcon covers
-the patterns above plus the topology cases in
-``chemfiles_selection_cpp_regression``. Format limits (``resname``, properties,
-impropers, geometry assertion suites) are explained in ``chemfiles-explain``.
+These patterns are what CON selection implements (tests under
+``chemfiles_selection_cpp_regression`` for topology cases). Format limits
+(``resname``, properties, impropers, geometry thresholds) are CON limits—see
+``chemfiles-explain`` (*What selection cannot see on CON*). The optional
+conversion stack may reuse a third-party grammar engine; that is an
+implementation detail, not a second public API surface.
 
 CI / release artifacts
 ----------------------
