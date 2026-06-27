@@ -35,6 +35,17 @@
     if (f) f.setAttribute("aria-label", "Search documentation");
   }
   /* Code blocks: ensure pre is keyboard-scrollable and labelled */
+  /* Unwrap Sphinx <span data-line> wrappers: each already ends with a newline;
+     block display (theme/CSS) doubled line gaps, especially visible in R. */
+  document.querySelectorAll("pre [data-line]").forEach(function (span) {
+    var parent = span.parentNode;
+    if (!parent) return;
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span);
+    }
+    parent.removeChild(span);
+  });
+
   document.querySelectorAll(".sy-page pre, .highlight pre, pre.literal-block").forEach(function (pre, i) {
     if (!pre.hasAttribute("tabindex")) pre.setAttribute("tabindex", "0");
     if (!pre.getAttribute("role")) pre.setAttribute("role", "region");
