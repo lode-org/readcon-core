@@ -160,7 +160,7 @@ CON metadata keys (topology / sidecars)
 
 See `spec <spec.rst>`_ § frame topology for normative wording.
 
-Selection grammar (supported subset)
+Selection grammar (implemented on CON frames)
 ------------------------------------
 
 .. table::
@@ -179,8 +179,10 @@ Selection grammar (supported subset)
     | ``is_bonded`` / ``is_angle`` / ``is_dihedral`` | yes                      |    2 / 3 / 4 |
     +------------------------------------------------+--------------------------+--------------+
 
-Upstream chemfiles documents the full language; readcon guarantees the subset
-exercised in ``chemfiles_selection_cpp_regression`` (see bindings gaps).
+Upstream chemfiles documents the full language. On CON frames, readcon covers
+the patterns above plus the topology cases in
+``chemfiles_selection_cpp_regression``. Format limits (``resname``, properties,
+impropers, geometry assertion suites) are explained in ``chemfiles-explain``.
 
 CI / release artifacts
 ----------------------

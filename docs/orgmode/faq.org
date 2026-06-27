@@ -54,22 +54,25 @@ Documentation is Diátaxis-shaped under =docs/orgmode/chemfiles-*.org=:
 - Explanation (optional feature, bonds, indices): =chemfiles-explain.org=
 - Reference (APIs, grammar, install matrix): =chemfiles-reference.org=
 
-Language APIs: =bindings.org=. On-disk =bonds=: =spec.org=. How selection is
-wired: =chemfiles-explain.org=.
+Language APIs: =bindings.org=. On-disk =bonds=: =spec.org=. Projection and
+limits: =chemfiles-explain.org=.
 
 =name= / =type= / =all= work on any frame. =bonds:= / =angles:= / =dihedrals:=
 and =is_bonded= need topology (=bonds= metadata or an import that set it). All
-languages call the same evaluator. Topology-oriented cases from chemfiles
-=tests/selection.cpp= are checked in =chemfiles_selection_cpp_regression= as
-*multisets* of indices (CON order after =atom_id= remap), not as identical lists.
+languages share one evaluator. Topology-oriented cases from chemfiles
+=tests/selection.cpp= land in =chemfiles_selection_cpp_regression= as
+*multisets* of =atom_data= indices (after =atom_id= remap), not as identical
+chemfiles index lists.
 
-On **import**, display names like =H1= vs types like =H= are kept in
-=chemfiles_atom_names= / =chemfiles_atom_types= (still one =symbol= column on
-disk). Hand-built frames without those keys use =symbol= for both.
+On *import*, display names such as =H1= versus types such as =H= are kept in
+=chemfiles_atom_names= / =chemfiles_atom_types=; the on-disk column is still a
+single =symbol=. Hand-built frames without those keys use =symbol= for both.
 
-Residue / =resname=, most chemfiles properties, topology past pair =bonds=, and
-the geometry assertion blocks in =tests/selection.cpp= are not available on CON
-frames. See =chemfiles-explain.org= if you need the “why”.
+The ~con~ format has no residue table, stores only pair =bonds=, and keeps a
+thin property subset on import. Consequently =resname=, most chemfiles
+properties, impropers, and the geometry assertion blocks in
+=tests/selection.cpp= are not part of the CON selection surface. Mechanistic
+detail is in =chemfiles-explain.org= (*Why is selection not full chemfiles?*).
 
 * What problems does atom_id solve?
 
