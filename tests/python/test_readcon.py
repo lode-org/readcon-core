@@ -424,3 +424,13 @@ class TestErrorHandling:
     def test_malformed_data(self):
         with pytest.raises(OSError):
             readcon.read_con_string("not a valid con file\n")
+
+
+def test_read_all_frames_matches_read_con():
+    """Batch ergonomics alias must match read_con on a real fixture."""
+    from pathlib import Path
+    tiny = Path(__file__).resolve().parents[2] / "resources" / "test" / "tiny_cuh2.con"
+    a = readcon.read_con(str(tiny))
+    b = readcon.read_all_frames(str(tiny))
+    assert len(a) == len(b) >= 1
+    assert a[0].coords_array().shape == b[0].coords_array().shape

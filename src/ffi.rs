@@ -14,15 +14,11 @@ use std::path::Path;
 
 use std::ptr;
 
-
-
 //=============================================================================
 
 // Version & Spec Constants (exported as #define by cbindgen)
 
 //=============================================================================
-
-
 
 /// CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
 
@@ -40,8 +36,6 @@ use std::ptr;
 
 pub const RKR_CON_SPEC_VERSION: u32 = 2;
 
-
-
 /// Returns the spec version at runtime (for dynamically linked consumers).
 
 #[unsafe(no_mangle)]
@@ -51,8 +45,6 @@ pub extern "C" fn rkr_con_spec_version() -> u32 {
     crate::CON_SPEC_VERSION
 
 }
-
-
 
 /// Returns a pointer to a static, null-terminated library version string.
 
@@ -69,8 +61,6 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     VERSION_NUL.as_ptr() as *const c_char
 
 }
-
-
 
 /// Returns the position of an atom inside the frame's `atom_data` array
 
@@ -122,8 +112,6 @@ pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
 
 }
 
-
-
 /// Returns the atomic number for a chemical symbol, or 0 if the symbol
 
 /// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
@@ -159,8 +147,6 @@ pub unsafe extern "C" fn rkr_symbol_to_z(symbol: *const c_char) -> u64 {
     }
 
 }
-
-
 
 /// Returns a pointer to a static, NUL-terminated chemical symbol for an
 
@@ -216,8 +202,6 @@ pub extern "C" fn rkr_z_to_symbol(z: u64) -> *const c_char {
 
 }
 
-
-
 /// Returns the spec version stored in a parsed frame's header.
 
 /// Returns 0 on error (null handle).
@@ -235,8 +219,6 @@ pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u3
     }
 
 }
-
-
 
 /// Returns the JSON metadata line from a parsed frame as a heap-allocated
 
@@ -290,8 +272,6 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFram
 
 }
 
-
-
 /// Returns the per-frame energy from metadata, or NaN if absent.
 
 #[unsafe(no_mangle)]
@@ -307,8 +287,6 @@ pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
     }
 
 }
-
-
 
 /// Returns the potential type string from metadata as a heap-allocated
 
@@ -350,8 +328,6 @@ pub unsafe extern "C" fn rkr_frame_potential_type(frame_handle: *const RKRConFra
 
 }
 
-
-
 /// Returns the zero-based frame index from metadata, or UINT64_MAX if absent.
 
 #[unsafe(no_mangle)]
@@ -367,8 +343,6 @@ pub extern "C" fn rkr_frame_frame_index(frame_handle: *const RKRConFrame) -> u64
     }
 
 }
-
-
 
 /// Returns the simulation time from metadata, or NaN if absent.
 
@@ -386,8 +360,6 @@ pub extern "C" fn rkr_frame_time(frame_handle: *const RKRConFrame) -> f64 {
 
 }
 
-
-
 /// Returns the integration timestep from metadata, or NaN if absent.
 
 #[unsafe(no_mangle)]
@@ -403,8 +375,6 @@ pub extern "C" fn rkr_frame_timestep(frame_handle: *const RKRConFrame) -> f64 {
     }
 
 }
-
-
 
 /// Returns the NEB bead index from metadata, or UINT64_MAX if absent.
 
@@ -422,8 +392,6 @@ pub extern "C" fn rkr_frame_neb_bead(frame_handle: *const RKRConFrame) -> u64 {
 
 }
 
-
-
 /// Returns the NEB band index from metadata, or UINT64_MAX if absent.
 
 #[unsafe(no_mangle)]
@@ -440,15 +408,11 @@ pub extern "C" fn rkr_frame_neb_band(frame_handle: *const RKRConFrame) -> u64 {
 
 }
 
-
-
 //=============================================================================
 
 // C-Compatible Structs & Handles
 
 //=============================================================================
-
-
 
 /// Error codes for RKR functions.
 
@@ -514,8 +478,6 @@ pub enum RKRStatus {
 
 }
 
-
-
 /// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
 
 ///
@@ -537,8 +499,6 @@ pub unsafe extern "C" fn rkr_frame_bond_count(frame_handle: *const RKRConFrame) 
     }
 
 }
-
-
 
 /// Read one bond at `index` (0-based into the `bonds` metadata array).
 
@@ -630,8 +590,6 @@ pub unsafe extern "C" fn rkr_frame_bond_at(
 
 }
 
-
-
 /// Returns a stable, static message for a status code.
 
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
@@ -670,8 +628,6 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
 
 }
 
-
-
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 
 /// The C/C++ side needs to treat this as a void pointer
@@ -684,8 +640,6 @@ pub struct RKRConFrame {
 
 }
 
-
-
 /// An opaque handle to a Rust `ConFrameWriter` object.
 
 /// The C/C++ side needs to treat this as a void pointer
@@ -697,8 +651,6 @@ pub struct RKRConFrameWriter {
     _private: [u8; 0],
 
 }
-
-
 
 /// A transparent, "lossy" C-struct containing only the core atomic data.
 
@@ -725,8 +677,6 @@ pub struct CFrame {
     pub has_energies: bool,
 
 }
-
-
 
 /// Transparent atom record extracted via [`rkr_frame_to_c_frame`].
 
@@ -800,8 +750,6 @@ pub struct CAtom {
 
 }
 
-
-
 #[repr(C)]
 
 pub struct CConFrameIterator {
@@ -812,15 +760,11 @@ pub struct CConFrameIterator {
 
 }
 
-
-
 //=============================================================================
 
 // Iterator and Memory Management
 
 //=============================================================================
-
-
 
 /// Creates a new iterator for a .con or .convel file.
 
@@ -892,8 +836,6 @@ pub unsafe extern "C" fn read_con_file_iterator(
 
 }
 
-
-
 /// Reads the next frame from the iterator, returning an opaque handle.
 
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
@@ -930,8 +872,6 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 
 }
 
-
-
 /// Frees the memory for an opaque `RKRConFrame` handle.
 
 ///
@@ -951,8 +891,6 @@ pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
     }
 
 }
-
-
 
 /// Frees the memory for a `CConFrameIterator`.
 
@@ -984,15 +922,11 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 
 }
 
-
-
 //=============================================================================
 
 // Data Accessors (The "Getter" API)
 
 //=============================================================================
-
-
 
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 
@@ -1016,8 +950,6 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 
     };
 
-
-
     let masses_iter = frame
 
         .header
@@ -1030,11 +962,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 
         .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
 
-
-
     let has_velocities = frame.has_velocities();
-
-
 
     let mut c_atoms: Vec<CAtom> = frame
 
@@ -1098,21 +1026,15 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 
         .collect();
 
-
-
     let atoms_ptr = c_atoms.as_mut_ptr();
 
     let num_atoms = c_atoms.len();
 
     std::mem::forget(c_atoms);
 
-
-
     let has_forces = frame.has_forces();
 
     let has_energies = frame.has_energies();
-
-
 
     let c_frame = Box::new(CFrame {
 
@@ -1132,13 +1054,9 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
 
     });
 
-
-
     Box::into_raw(c_frame)
 
 }
-
-
 
 /// Frees the memory of a `CFrame` struct, including its internal atoms array.
 
@@ -1167,8 +1085,6 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
     }
 
 }
-
-
 
 /// Copies a header string line into a caller-provided buffer.
 
@@ -1284,8 +1200,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
 
 }
 
-
-
 /// Gets a header string line as a newly allocated, null-terminated C string.
 
 ///
@@ -1330,8 +1244,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
 
     };
 
-
-
     let line_to_copy: Option<&str> = if is_prebox {
 
         match line_index {
@@ -1349,8 +1261,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
         frame.header.postbox_header.get(line_index).map(String::as_str)
 
     };
-
-
 
     if let Some(line) = line_to_copy {
 
@@ -1371,8 +1281,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
     }
 
 }
-
-
 
 /// Frees a C string that was allocated by Rust (e.g., from
 
@@ -1402,15 +1310,11 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 
 }
 
-
-
 //=============================================================================
 
 // FFI Writer Functions (Writer Object Model)
 
 //=============================================================================
-
-
 
 /// Type-erased writer that backs every `RKRConFrameWriter` handle.
 
@@ -1433,8 +1337,6 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 /// the sink's own `Drop` (gzip/zstd finalize their streams there).
 
 type RkrWriter = ConFrameWriter<Box<dyn std::io::Write>>;
-
-
 
 /// Boxes a sink into an `RKRConFrameWriter` handle at the requested
 
@@ -1462,8 +1364,6 @@ fn into_rkr_writer(
 
 }
 
-
-
 /// Parses a borrowed C string, returning `None` for null or non-UTF-8.
 
 #[inline]
@@ -1479,8 +1379,6 @@ unsafe fn cstr_path<'a>(filename_c: *const c_char) -> Option<&'a str> {
     unsafe { CStr::from_ptr(filename_c).to_str().ok() }
 
 }
-
-
 
 /// Creates a new frame writer for the specified file.
 
@@ -1518,8 +1416,6 @@ pub unsafe extern "C" fn create_writer_from_path_c(
 
 }
 
-
-
 /// Frees the memory for an `RKRConFrameWriter`, closing the associated file.
 
 ///
@@ -1539,8 +1435,6 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
     }
 
 }
-
-
 
 /// Writes multiple frames from an array of handles to the file managed by the writer.
 
@@ -1578,8 +1472,6 @@ pub unsafe extern "C" fn rkr_writer_extend(
 
     }
 
-
-
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
 
     let mut rust_frames: Vec<&ConFrame> = Vec::with_capacity(num_frames);
@@ -1610,8 +1502,6 @@ pub unsafe extern "C" fn rkr_writer_extend(
 
     }
 
-
-
     match writer.extend(rust_frames.into_iter()) {
 
         Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
@@ -1622,15 +1512,11 @@ pub unsafe extern "C" fn rkr_writer_extend(
 
 }
 
-
-
 //=============================================================================
 
 // Writer with Precision
 
 //=============================================================================
-
-
 
 /// Creates a new frame writer with custom floating-point precision.
 
@@ -1670,15 +1556,11 @@ pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
 
 }
 
-
-
 //=============================================================================
 
 // Frame Builder FFI (construct ConFrame from C data)
 
 //=============================================================================
-
-
 
 /// An opaque handle to a Rust `ConFrameBuilder` object.
 
@@ -1689,8 +1571,6 @@ pub struct RKRConFrameBuilder {
     _private: [u8; 0],
 
 }
-
-
 
 #[allow(clippy::too_many_arguments)]
 
@@ -1734,8 +1614,6 @@ unsafe fn add_builder_atom(
 
     };
 
-
-
     builder.add_atom(sym, x, y, z, fixed, atom_id, mass);
 
     if let Some(v) = velocity {
@@ -1750,13 +1628,9 @@ unsafe fn add_builder_atom(
 
     }
 
-
-
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Attaches a velocity vector to the most recently added atom on a builder.
 
@@ -1794,8 +1668,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_velocity(
 
 }
 
-
-
 /// Attaches a force vector to the most recently added atom on a builder.
 
 /// No-op if no atom has been added yet.
@@ -1831,8 +1703,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Attaches a per-atom energy to the most recently added atom on a
 
@@ -1876,8 +1746,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
 
 }
 
-
-
 // ----- v0.11.0 in-place mutation FFI ---------------------------------------
 
 //
@@ -1904,8 +1772,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
 
 // wrong).
 
-
-
 fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
 
     use crate::error::ParseError;
@@ -1923,8 +1789,6 @@ fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
     }
 
 }
-
-
 
 /// Returns the number of atoms currently held in the builder.
 
@@ -1957,8 +1821,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_count(
     builder.atom_count()
 
 }
-
-
 
 /// Updates the Cartesian position of an existing atom.
 
@@ -2000,8 +1862,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_position(
 
 }
 
-
-
 /// Sets the velocity vector of an existing atom from 3 contiguous f64 values.
 
 /// # Safety
@@ -2039,8 +1899,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_velocity(
     }
 
 }
-
-
 
 /// Sets the force vector of an existing atom from 3 contiguous f64 values.
 
@@ -2080,8 +1938,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_force(
 
 }
 
-
-
 /// Sets the per-atom energy contribution of an existing atom.
 
 /// # Safety
@@ -2117,8 +1973,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energy(
     }
 
 }
-
-
 
 /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
 
@@ -2160,8 +2014,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_fixed(
 
 }
 
-
-
 /// Updates the mass of an existing atom.
 
 /// # Safety
@@ -2197,8 +2049,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_mass(
     }
 
 }
-
-
 
 /// Updates the atom_id (pre-grouping index from .con column 5) of an
 
@@ -2242,8 +2092,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_id(
 
 }
 
-
-
 /// Removes velocity / force / energy data from an existing atom.
 
 /// # Safety
@@ -2278,8 +2126,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_velocity(
 
 }
 
-
-
 /// # Safety
 
 /// builder_handle must be valid.
@@ -2312,8 +2158,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_force(
 
 }
 
-
-
 /// # Safety
 
 /// builder_handle must be valid.
@@ -2345,8 +2189,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_energy(
     }
 
 }
-
-
 
 /// Bulk-update positions for every atom from a flat row-major
 
@@ -2388,8 +2230,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_positions_from_flat(
 
 }
 
-
-
 /// Bulk-update forces for every atom.
 
 /// # Safety
@@ -2428,8 +2268,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_forces_from_flat(
 
 }
 
-
-
 /// Bulk-update per-atom energies (one f64 per atom).
 
 /// # Safety
@@ -2467,8 +2305,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energies_from_flat(
     }
 
 }
-
-
 
 /// Reads the position of an existing atom into 3 contiguous f64 out values.
 
@@ -2515,8 +2351,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_position(
     }
 
 }
-
-
 
 /// Reads the velocity / force vector of an atom (if any) into 3 contiguous
 
@@ -2582,8 +2416,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_velocity(
 
 }
 
-
-
 /// # Safety
 
 /// builder_handle, out_xyz, has_value must all be valid pointers.
@@ -2639,8 +2471,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
     }
 
 }
-
-
 
 /// Reads the per-atom energy of an atom (if any). `*has_value` is set to
 
@@ -2700,8 +2530,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_energy(
 
 }
 
-
-
 /// Reads the mass of an existing atom.
 
 /// # Safety
@@ -2744,8 +2572,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 
 }
 
-
-
 // ----- v0.11.0 DLPack tier-3 export FFI -------------------------------------
 
 //
@@ -2782,8 +2608,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 
 // (positions, masses, atom_ids) always return a tensor on success.
 
-
-
 /// Re-export of dlpk's `DLManagedTensorVersioned` for the C ABI surface.
 
 /// Defined here so cbindgen emits a forward declaration without pulling
@@ -2793,8 +2617,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 /// equivalent) and cast through the standard DLPack ABI.
 
 pub use dlpk::sys::DLManagedTensorVersioned as RKRDLManagedTensorVersioned;
-
-
 
 fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
 
@@ -2809,8 +2631,6 @@ fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
     }
 
 }
-
-
 
 fn export_owned_array2_dlpack(
 
@@ -2852,8 +2672,6 @@ fn export_owned_array2_dlpack(
 
 }
 
-
-
 fn export_owned_array1_f64_dlpack(
 
     arr: &ndarray::ArcArray1<f64>,
@@ -2890,8 +2708,6 @@ fn export_owned_array1_f64_dlpack(
 
 }
 
-
-
 fn export_owned_array1_u64_dlpack(
 
     arr: &ndarray::ArcArray1<u64>,
@@ -2927,8 +2743,6 @@ fn export_owned_array1_u64_dlpack(
     }
 
 }
-
-
 
 /// Export builder positions as a DLPack-managed tensor.
 
@@ -2971,8 +2785,6 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack(
     export_owned_array2_dlpack(builder.positions_2d_ref(), out_tensor)
 
 }
-
-
 
 /// Export builder velocities as a DLPack-managed tensor.
 
@@ -3020,8 +2832,6 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack(
 
 }
 
-
-
 /// Export builder forces as a DLPack-managed tensor.
 
 ///
@@ -3065,8 +2875,6 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack(
     export_owned_array2_dlpack(builder.forces_2d_ref(), out_tensor)
 
 }
-
-
 
 /// Export builder per-atom energies as a DLPack-managed tensor.
 
@@ -3112,8 +2920,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack(
 
 }
 
-
-
 /// Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
 
 ///
@@ -3145,8 +2951,6 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack(
     export_owned_array1_f64_dlpack(builder.masses_1d_ref(), out_tensor)
 
 }
-
-
 
 /// Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
 
@@ -3180,8 +2984,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
 
 }
 
-
-
 // ----- v0.11.1 in-process zero-copy raw-pointer FFI -------------------------
 
 //
@@ -3213,8 +3015,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
 // Cross-language ML consumers should use the DLPack tier above; raw
 
 // pointer access is for in-process hot paths only.
-
-
 
 /// Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
 
@@ -3257,8 +3057,6 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_data(
         .unwrap_or(std::ptr::null_mut())
 
 }
-
-
 
 /// Borrow the velocities buffer as a raw `(N, 3) f64` row-major pointer.
 
@@ -3308,8 +3106,6 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_data(
 
 }
 
-
-
 /// Borrow the forces buffer as a raw `(N, 3) f64` row-major pointer.
 
 /// Returns NULL if the forces section is absent.
@@ -3355,8 +3151,6 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_data(
     }
 
 }
-
-
 
 /// Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
 
@@ -3404,8 +3198,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_data(
 
 }
 
-
-
 /// Borrow the per-atom masses buffer as a raw `(N,) f64` pointer.
 
 ///
@@ -3443,8 +3235,6 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_data(
     }
 
 }
-
-
 
 /// Borrow the per-atom atom_ids buffer as a raw `(N,) u64` pointer.
 
@@ -3484,11 +3274,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_data(
 
 }
 
-
-
 // ----- end v0.11.0 in-place mutation FFI ------------------------------------
-
-
 
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
 
@@ -3592,8 +3378,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_full(
 
 }
 
-
-
 /// Creates a new frame builder with the given cell dimensions, angles,
 
 /// and header lines.
@@ -3652,8 +3436,6 @@ pub unsafe extern "C" fn rkr_frame_new(
 
     let angles_arr = unsafe { [*angles, *angles.add(1), *angles.add(2)] };
 
-
-
     let get_str = |p: *const c_char| -> String {
 
         if p.is_null() {
@@ -3674,8 +3456,6 @@ pub unsafe extern "C" fn rkr_frame_new(
 
     };
 
-
-
     // prebox1 is the JSON metadata slot, regenerated on write from
 
     // metadata + sections; it is accepted for ABI continuity but ignored.
@@ -3690,13 +3470,9 @@ pub unsafe extern "C" fn rkr_frame_new(
 
         .postbox_header([get_str(postbox0), get_str(postbox1)]);
 
-
-
     Box::into_raw(Box::new(builder)) as *mut RKRConFrameBuilder
 
 }
-
-
 
 /// Parses and sets JSON metadata on an existing frame builder.
 
@@ -3744,8 +3520,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
 
 }
 
-
-
 /// Sets a numeric metadata key on an existing frame builder.
 
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3789,8 +3563,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Sets a string metadata key on an existing frame builder.
 
@@ -3844,8 +3616,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
 
 }
 
-
-
 /// Sets the per-frame total energy metadata on an existing frame builder.
 
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3879,8 +3649,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_energy(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Sets the zero-based frame index metadata on an existing frame builder.
 
@@ -3916,8 +3684,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
 
 }
 
-
-
 /// Sets the simulation time metadata on an existing frame builder.
 
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3951,8 +3717,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_time(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Sets the timestep metadata on an existing frame builder.
 
@@ -3988,8 +3752,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
 
 }
 
-
-
 /// Sets the NEB bead index metadata on an existing frame builder.
 
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -4023,8 +3785,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Sets the NEB band index metadata on an existing frame builder.
 
@@ -4060,8 +3820,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
 
 }
 
-
-
 // -----------------------------------------------------------------------------
 
 // Legacy add_atom variants (kept for source compatibility)
@@ -4079,8 +3837,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
 // `rkr_frame_add_atom_full`.
 
 // -----------------------------------------------------------------------------
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full` with NULL velocity
 
@@ -4147,8 +3903,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom (no
 
@@ -4217,8 +3971,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_fixed_mask(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
@@ -4289,8 +4041,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
@@ -4366,8 +4116,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_fixed_mask(
 
 }
 
-
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
 /// a force vector and a single uniform fixed flag.
@@ -4437,8 +4185,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
@@ -4513,8 +4259,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces_fixed_mask(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
@@ -4591,8 +4335,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces(
     }
 
 }
-
-
 
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 
@@ -4674,8 +4416,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
 
 }
 
-
-
 /// Consumes the builder and returns a finalized RKRConFrame handle.
 
 /// The builder handle is invalidated after this call.
@@ -4712,8 +4452,6 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
 
 }
 
-
-
 /// Frees a frame builder without building.
 
 ///
@@ -4733,8 +4471,6 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
     }
 
 }
-
-
 
 /// Cheap, copy-on-write clone of a frame builder. Returned handle owns
 
@@ -4790,8 +4526,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clone(
 
 }
 
-
-
 /// Creates a new gzip-compressed frame writer for the specified file.
 
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
@@ -4823,8 +4557,6 @@ pub unsafe extern "C" fn create_writer_gzip_c(filename_c: *const c_char) -> *mut
     }
 
 }
-
-
 
 /// Creates a gzip-compressed frame writer with a custom floating-point
 
@@ -4865,8 +4597,6 @@ pub unsafe extern "C" fn create_writer_gzip_with_precision_c(
     }
 
 }
-
-
 
 /// Creates a new zstd-compressed frame writer for the specified file.
 
@@ -4909,8 +4639,6 @@ pub unsafe extern "C" fn create_writer_zstd_c(filename_c: *const c_char) -> *mut
     }
 
 }
-
-
 
 /// Creates a zstd-compressed frame writer with a custom floating-point
 
@@ -4962,15 +4690,11 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 
 }
 
-
-
 //=============================================================================
 
 // Direct mmap-based Reader FFI
 
 //=============================================================================
-
-
 
 /// Reads the first frame from a .con file.
 
@@ -5015,8 +4739,6 @@ pub unsafe extern "C" fn rkr_read_first_frame(filename_c: *const c_char) -> *mut
     }
 
 }
-
-
 
 /// Reads all frames from a .con file using mmap.
 
@@ -5098,8 +4820,6 @@ pub unsafe extern "C" fn rkr_read_all_frames(
 
 }
 
-
-
 /// Frees an array of frame handles returned by `rkr_read_all_frames`.
 
 /// Each frame is freed individually, then the array itself.
@@ -5138,11 +4858,23 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 
 }
 
+/// Free only the outer pointer array from `rkr_read_all_frames` (not the frames).
+///
+/// # Safety
+/// `frames` null or from `rkr_read_all_frames` with length `num_frames`. Frame
+/// pointers must be owned elsewhere (e.g. language wrappers).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_frame_ptr_array(frames: *mut *mut RKRConFrame, num_frames: usize) {
+    if frames.is_null() {
+        return;
+    }
+    unsafe {
+        let _ptrs = Vec::from_raw_parts(frames, num_frames, num_frames);
+    }
+}
 
 
 //=============================================================================
-
-
 
 // ---------------------------------------------------------------------------
 
@@ -5160,8 +4892,6 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 
 // ---------------------------------------------------------------------------
 
-
-
 /// Free an owned block from `rkr_frame_metatensor_*_block`.
 
 /// Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
@@ -5171,8 +4901,6 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 /// # Safety
 
 /// `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
-
-
 
 #[cfg(feature = "metatensor")]
 
@@ -5184,11 +4912,7 @@ pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_b
 
 }
 
-
-
 /// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
-
-
 
 #[cfg(feature = "metatensor")]
 
@@ -5235,8 +4959,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
     }
 
 }
-
-
 
 #[cfg(feature = "metatensor")]
 
@@ -5286,8 +5008,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
 
 }
 
-
-
 #[cfg(feature = "metatensor")]
 
 #[unsafe(no_mangle)]
@@ -5335,8 +5055,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
     }
 
 }
-
-
 
 #[cfg(feature = "metatensor")]
 
@@ -5386,16 +5104,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
 
 }
 
-
-
-
-
-
-
-
-
-
-
 #[cfg(not(feature = "zstd"))]
 
 #[unsafe(no_mangle)]
@@ -5405,8 +5113,6 @@ pub unsafe extern "C" fn create_writer_zstd_c(_filename_c: *const c_char) -> *mu
     ptr::null_mut()
 
 }
-
-
 
 #[cfg(not(feature = "zstd"))]
 
@@ -5424,15 +5130,11 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 
 }
 
-
-
 //=============================================================================
 
 /// Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
 
 /// Real implementations live under `feature = "metatensor"`.
-
-
 
 #[cfg(not(feature = "metatensor"))]
 
@@ -5444,15 +5146,11 @@ pub struct mts_block_t {
 
 }
 
-
-
 #[cfg(not(feature = "metatensor"))]
 
 #[unsafe(no_mangle)]
 
 pub unsafe extern "C" fn rkr_mts_block_free(_block: *mut mts_block_t) {}
-
-
 
 #[cfg(not(feature = "metatensor"))]
 
@@ -5476,8 +5174,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
 
 }
 
-
-
 #[cfg(not(feature = "metatensor"))]
 
 #[unsafe(no_mangle)]
@@ -5499,8 +5195,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
     RKRStatus::RKR_STATUS_FEATURE_DISABLED
 
 }
-
-
 
 #[cfg(not(feature = "metatensor"))]
 
@@ -5524,8 +5218,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
 
 }
 
-
-
 #[cfg(not(feature = "metatensor"))]
 
 #[unsafe(no_mangle)]
@@ -5548,15 +5240,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
 
 }
 
-
-
-
-
-
-
 // ----- Frame section buffers (no CFrame AoS required) -------------------------
-
-
 
 /// Number of atoms on the frame (atom_data order).
 
@@ -5573,8 +5257,6 @@ pub unsafe extern "C" fn rkr_frame_atom_count(frame_handle: *const RKRConFrame) 
     frame.atom_data.len()
 
 }
-
-
 
 /// Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
 
@@ -5627,8 +5309,6 @@ pub unsafe extern "C" fn rkr_frame_copy_positions(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 #[unsafe(no_mangle)]
 
@@ -5688,8 +5368,6 @@ pub unsafe extern "C" fn rkr_frame_copy_velocities(
 
 }
 
-
-
 #[unsafe(no_mangle)]
 
 pub unsafe extern "C" fn rkr_frame_copy_forces(
@@ -5748,8 +5426,6 @@ pub unsafe extern "C" fn rkr_frame_copy_forces(
 
 }
 
-
-
 #[unsafe(no_mangle)]
 
 pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
@@ -5799,8 +5475,6 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 #[unsafe(no_mangle)]
 
@@ -5858,8 +5532,6 @@ pub unsafe extern "C" fn rkr_frame_copy_masses(
 
 }
 
-
-
 #[unsafe(no_mangle)]
 
 pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
@@ -5903,8 +5575,6 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// DLPack positions from a frame (dlpk shares a built `ArcArray2`).
 
@@ -5950,19 +5620,13 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack(
 
 }
 
-
-
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
 
 //=============================================================================
 
-
-
 /// Opaque handle for a cached selection evaluation result.
 
 pub struct RKRSelectionResult;
-
-
 
 /// Evaluate a chemfiles selection-language string on an `RKRConFrame`.
 
@@ -6034,8 +5698,6 @@ pub unsafe extern "C" fn rkr_frame_select(
 
 }
 
-
-
 /// Number of matches in a selection result.
 
 ///
@@ -6066,8 +5728,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_count(
 
 }
 
-
-
 /// Selection context size (1=atom, 2=pair, 3=angle, 4=dihedral).
 
 ///
@@ -6097,8 +5757,6 @@ pub unsafe extern "C" fn rkr_selection_result_context_size(
     result.context_size as u32
 
 }
-
-
 
 /// Copy match `match_index` atom indices into `out_atoms` (up to 4 slots).
 
@@ -6171,8 +5829,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
     RKRStatus::RKR_STATUS_SUCCESS
 
 }
-
-
 
 /// Fill `out_indices` with primary atom indices for each match (length =
 
@@ -6252,8 +5908,6 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
 
 }
 
-
-
 /// Free a selection result from [`rkr_frame_select`]. Safe with NULL.
 
 ///
@@ -6284,8 +5938,6 @@ pub unsafe extern "C" fn rkr_selection_result_free(result_handle: *mut RKRSelect
 
 }
 
-
-
 /// Returns 1 when this library build includes chemfiles selection support.
 
 #[unsafe(no_mangle)]
@@ -6309,8 +5961,6 @@ pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
     }
 
 }
-
-
 
 /// Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
 
@@ -6347,8 +5997,6 @@ pub unsafe extern "C" fn rkr_read_chemfiles_first(path_c: *const c_char) -> *mut
     }
 
 }
-
-
 
 /// Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
 
@@ -6422,8 +6070,6 @@ pub unsafe extern "C" fn rkr_read_chemfiles_memory(
 
 }
 
-
-
 /// Free a DLPack tensor from `rkr_frame_builder_*_dlpack` (calls deleter). Safe with NULL.
 
 ///
@@ -6456,10 +6102,6 @@ pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersio
 
 }
 
-
-
-
-
 #[cfg(test)]
 
 mod tests {
@@ -6467,10 +6109,6 @@ mod tests {
     use super::*;
 
     use std::ffi::{CStr, CString};
-
-
-
-
 
     #[test]
 
@@ -6518,8 +6156,6 @@ mod tests {
 
     }
 
-
-
     #[test]
 
     fn read_all_frames_c_abi_tiny() {
@@ -6551,7 +6187,24 @@ mod tests {
     }
 
 
-
+    #[test]
+    fn free_rkr_frame_ptr_array_keeps_frames() {
+        let path = std::ffi::CString::new("resources/test/tiny_cuh2.con").unwrap();
+        let mut n: usize = 0;
+        let arr = unsafe { rkr_read_all_frames(path.as_ptr(), &mut n) };
+        assert!(!arr.is_null() && n >= 1);
+        let first = unsafe { *arr };
+        // free only outer array; first frame remains owned
+        let rest: Vec<*mut RKRConFrame> = (1..n).map(|i| unsafe { *arr.add(i) }).collect();
+        unsafe { free_rkr_frame_ptr_array(arr, n) };
+        assert!(unsafe { rkr_frame_atom_count(first) } >= 1);
+        unsafe { free_rkr_frame(first) };
+        for h in rest {
+            if !h.is_null() {
+                unsafe { free_rkr_frame(h) };
+            }
+        }
+    }
     fn test_frame_handle() -> *mut RKRConFrame {
 
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
@@ -6568,8 +6221,6 @@ mod tests {
 
     }
 
-
-
     #[test]
 
     fn header_line_rejects_null_buffer() {
@@ -6580,13 +6231,9 @@ mod tests {
 
         unsafe { free_rkr_frame(frame) };
 
-
-
         assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
 
     }
-
-
 
     #[test]
 
@@ -6600,13 +6247,9 @@ mod tests {
 
         unsafe { free_rkr_frame(frame) };
 
-
-
         assert_eq!(status, RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
 
     }
-
-
 
     #[test]
 
@@ -6622,8 +6265,6 @@ mod tests {
 
         unsafe { free_rkr_frame(frame) };
 
-
-
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
         let copied = unsafe { CStr::from_ptr(buffer.as_ptr()) };
@@ -6631,8 +6272,6 @@ mod tests {
         assert_eq!(copied.to_str().unwrap(), "Generated");
 
     }
-
-
 
     fn test_builder_handle() -> *mut RKRConFrameBuilder {
 
@@ -6662,15 +6301,11 @@ mod tests {
 
     }
 
-
-
     fn c_string(s: &str) -> CString {
 
         CString::new(s).unwrap()
 
     }
-
-
 
     unsafe fn assert_single_atom(
 
@@ -6695,8 +6330,6 @@ mod tests {
         assert_eq!(c_frame_ref.has_velocities, velocity.is_some());
 
         assert_eq!(c_frame_ref.has_forces, forces.is_some());
-
-
 
         let atom = unsafe { &*c_frame_ref.atoms };
 
@@ -6724,15 +6357,11 @@ mod tests {
 
         }
 
-
-
         unsafe { free_c_frame(c_frame) };
 
         unsafe { free_rkr_frame(frame) };
 
     }
-
-
 
     #[test]
 
@@ -6741,8 +6370,6 @@ mod tests {
         let builder = test_builder_handle();
 
         let symbol = c_string("Cu");
-
-
 
         let status = unsafe {
 
@@ -6774,15 +6401,11 @@ mod tests {
 
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
-
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
 
         unsafe { assert_single_atom(frame, [true, false, true], None, None) };
 
     }
-
-
 
     #[test]
 
@@ -6791,8 +6414,6 @@ mod tests {
         let builder = test_builder_handle();
 
         let symbol = c_string("H");
-
-
 
         let status = unsafe {
 
@@ -6830,15 +6451,11 @@ mod tests {
 
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
-
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
 
         unsafe { assert_single_atom(frame, [false, true, false], Some([0.1, 0.2, 0.3]), None) };
 
     }
-
-
 
     #[test]
 
@@ -6847,8 +6464,6 @@ mod tests {
         let builder = test_builder_handle();
 
         let symbol = c_string("O");
-
-
 
         let status = unsafe {
 
@@ -6886,15 +6501,11 @@ mod tests {
 
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
-
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
 
         unsafe { assert_single_atom(frame, [true, true, false], None, Some([-0.1, -0.2, -0.3])) };
 
     }
-
-
 
     #[test]
 
@@ -6903,8 +6514,6 @@ mod tests {
         let builder = test_builder_handle();
 
         let symbol = c_string("N");
-
-
 
         let status = unsafe {
 
@@ -6948,8 +6557,6 @@ mod tests {
 
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
-
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
 
         unsafe {
@@ -6970,8 +6577,6 @@ mod tests {
 
     }
 
-
-
     #[test]
 
     fn builder_bool_fixed_functions_set_all_axes_together() {
@@ -6982,15 +6587,11 @@ mod tests {
 
         let h = c_string("H");
 
-
-
         let atom_status =
 
             unsafe { rkr_frame_add_atom(builder, cu.as_ptr(), 1.0, 2.0, 3.0, true, 1, 63.546) };
 
         assert_eq!(atom_status, RKRStatus::RKR_STATUS_SUCCESS);
-
-
 
         let velocity_status = unsafe {
 
@@ -7024,8 +6625,6 @@ mod tests {
 
         assert_eq!(velocity_status, RKRStatus::RKR_STATUS_SUCCESS);
 
-
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
 
         let c_frame = unsafe { rkr_frame_to_c_frame(frame) };
@@ -7035,8 +6634,6 @@ mod tests {
         let c_frame_ref = unsafe { &*c_frame };
 
         assert_eq!(c_frame_ref.num_atoms, 2);
-
-
 
         let atoms = unsafe { std::slice::from_raw_parts(c_frame_ref.atoms, c_frame_ref.num_atoms) };
 
@@ -7056,15 +6653,11 @@ mod tests {
 
         );
 
-
-
         unsafe { free_c_frame(c_frame) };
 
         unsafe { free_rkr_frame(frame) };
 
     }
-
-
 
     #[test]
 
@@ -7110,8 +6703,6 @@ mod tests {
 
         ];
 
-
-
         for (status, expected) in cases {
 
             let message = unsafe { CStr::from_ptr(rkr_status_message(status)) };
@@ -7122,11 +6713,7 @@ mod tests {
 
     }
 
-
-
     // ----- DLPack FFI smoke tests ----------------------------------------------
-
-
 
     #[test]
 
@@ -7168,8 +6755,6 @@ mod tests {
 
         };
 
-
-
         let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
 
         let status = unsafe { rkr_frame_builder_positions_dlpack(handle, &mut t) };
@@ -7177,8 +6762,6 @@ mod tests {
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
 
         assert!(!t.is_null());
-
-
 
         // Inspect the DLPack tensor: shape (1, 3), dtype kDLFloat / 64, CPU.
 
@@ -7202,8 +6785,6 @@ mod tests {
 
         assert_eq!(data, &[1.0, 2.0, 3.0]);
 
-
-
         // Invoke the deleter the same way a C consumer would.
 
         let deleter = unsafe { (*t).deleter };
@@ -7214,13 +6795,9 @@ mod tests {
 
         }
 
-
-
         unsafe { free_rkr_frame_builder(handle) };
 
     }
-
-
 
     #[test]
 
@@ -7274,8 +6851,6 @@ mod tests {
 
     }
 
-
-
     #[test]
 
     fn ffi_dlpack_null_handle_rejects() {
@@ -7289,8 +6864,6 @@ mod tests {
         assert!(t.is_null());
 
     }
-
-
 
     #[cfg(feature = "chemfiles")]
 
@@ -7396,8 +6969,6 @@ mod tests {
 
         let frame_ptr = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
 
-
-
         let run = |sel: &str| -> (u64, u32) {
 
             let csel = CString::new(sel).unwrap();
@@ -7418,8 +6989,6 @@ mod tests {
 
         };
 
-
-
         assert_eq!(run("bonds: all"), (3, 2));
 
         assert_eq!(run("angles: all"), (2, 3));
@@ -7436,13 +7005,9 @@ mod tests {
 
         );
 
-
-
         unsafe { free_rkr_frame(frame_ptr) };
 
     }
-
-
 
     #[cfg(feature = "metatensor")]
 
@@ -7482,8 +7047,6 @@ mod tests {
 
     }
 
-
-
     #[cfg(feature = "metatensor")]
 
     #[test]
@@ -7501,8 +7064,6 @@ mod tests {
         assert_mts_block_shape(out, 1, 3);
 
         unsafe { rkr_mts_block_free(out) };
-
-
 
         for (name, export) in [
 
@@ -7578,8 +7139,6 @@ mod tests {
 
     }
 
-
-
     #[cfg(feature = "metatensor")]
 
     #[test]
@@ -7610,8 +7169,6 @@ mod tests {
 
         let handle = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
 
-
-
         let mut pos: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
 
         assert_eq!(
@@ -7625,8 +7182,6 @@ mod tests {
         assert_mts_block_shape(pos, 2, 3);
 
         unsafe { rkr_mts_block_free(pos) };
-
-
 
         let mut vel: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
 
@@ -7642,8 +7197,6 @@ mod tests {
 
         unsafe { rkr_mts_block_free(vel) };
 
-
-
         let mut frc: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
 
         assert_eq!(
@@ -7657,8 +7210,6 @@ mod tests {
         assert_mts_block_shape(frc, 2, 3);
 
         unsafe { rkr_mts_block_free(frc) };
-
-
 
         let mut eng: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
 
@@ -7677,7 +7228,5 @@ mod tests {
         unsafe { free_rkr_frame(handle) };
 
     }
-
-
 
 }
