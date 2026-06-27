@@ -186,10 +186,12 @@ article.yue {
   word-break: break-word;
 }
 
-/* Fenced / highlighted blocks — dominate over theme em-sizing */
+/* Fenced / highlighted blocks
+   Sphinx nests div.highlight-LANG > div.highlight > pre. Framing BOTH wrappers
+   drew double borders ("weird lines") around every code block — only frame the
+   outermost highlight-* node (or a lone .highlight / literal-block). */
 .sy-page div.highlight,
 .sy-page div[class*="highlight-"],
-.sy-page .highlight,
 .sy-page pre,
 .sy-page pre.literal-block,
 .sy-page .literal-block,
@@ -200,14 +202,30 @@ article.yue {
   font-family: var(--rc-font-mono) !important;
 }
 
-.sy-page div.highlight,
+/* Outer frame only */
 .sy-page div[class*="highlight-"],
+.sy-page > div.highlight,
+.sy-page article div.highlight:not(div[class*="highlight-"] div.highlight),
 .sy-page pre.literal-block {
   border-radius: 0.55rem;
   margin: 1.15rem 0 1.35rem;
   max-width: 100%;
   border: 1px solid color-mix(in srgb, #64748b 35%, transparent);
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  overflow: hidden;
+  background: var(--rc-pre-bg);
+}
+
+/* Nested inner .highlight must not add a second border/margin/background */
+.sy-page div[class*="highlight-"] > div.highlight,
+.sy-page div[class*="highlight-"] div.highlight {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible;
 }
 
 .sy-page pre,
@@ -227,10 +245,22 @@ article.yue {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  /* Prefer dark code surface always for contrast (Shibuya dark_code + extra) */
   background: var(--rc-pre-bg) !important;
   color: var(--rc-pre-fg) !important;
-  border-radius: 0.55rem;
+  /* no second radius/border on <pre> — outer wrapper owns the chrome */
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+/* sphinx line wrappers — never draw per-line boxes */
+.sy-page .highlight pre [data-line],
+.sy-page .highlight pre span[data-line] {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  display: inline; /* avoid block line frames from theme */
 }
 
 /* Tokens inside blocks must inherit readable size */
@@ -241,13 +271,14 @@ article.yue {
   font-family: inherit !important;
   font-size: inherit !important;
   line-height: inherit !important;
+  border: none !important;
 }
 
 /* Keyboard focus on scrollable pre (extra-foot sets tabindex=0) */
 .sy-page pre:focus-visible,
 .sy-page .highlight pre:focus-visible {
   outline: 3px solid var(--rc-focus);
-  outline-offset: 2px;
+  outline-offset: -3px; /* inside the frame, not a second outer line */
 }
 
 /* Copy button: larger hit target */
