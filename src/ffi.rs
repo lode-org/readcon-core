@@ -16,7 +16,7 @@ use std::ptr;
 /// `CON_SPEC_VERSION`). Both macros are emitted into the C header for
 /// the convenience of either naming convention; they always carry the
 /// same value.
-pub const RKR_CON_SPEC_VERSION: u32 = 2;
+pub const RKR_CON_SPEC_VERSION: u32 = 3;
 /// Returns the spec version at runtime (for dynamically linked consumers).
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_con_spec_version() -> u32 {
@@ -3104,13 +3104,107 @@ fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)))
 }
 
-/// DLPack positions from a frame (default float64 / CPU).
+/// Metatensor-style: export positions as they are stored (CPU f64), with
+/// explicit device request. Non-CPU → `FEATURE_DISABLED`. Prefer this over
+/// dtype-cast `*_dlpack_ex` for new code.
+///
+/// `stream` and `max_version_*` are accepted for ABI alignment with
+/// metatensor `as_dlpack`; CPU ignores stream / version negotiation for now.
+///
+/// # Safety
+/// Handles and `out_tensor` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
+    frame_handle: *const RKRConFrame,
+    device_type: i32,
+    device_id: i32,
+    _stream: i64,
+    _max_version_major: u32,
+    _max_version_minor: u32,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    if device_type != rkr_dl_device_type::RKR_DL_CPU {
+        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+    }
+    let _ = device_id;
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = frame_positions_arc(frame);
+    // Storage dtype is f64 — do not cast; consumers convert after export.
+    let opts = RKRDlpackExportOptions::default();
+    export_owned_array2_dlpack_opts(&arr, &opts, out_tensor)
+}
+
+/// Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
+/// or length 3N). Metatensor-style write path symmetry.
+///
+/// # Safety
+/// `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
+    frame_handle: *mut RKRConFrame,
+    tensor: *const RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let frame = unsafe { &mut *(frame_handle as *mut ConFrame) };
+    let dl = unsafe { &(*tensor).dl_tensor };
+    if dl.device.device_type != dlpk::sys::DLDeviceType::kDLCPU {
+        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+    }
+    let n = frame.atom_data.len();
+    let need = n.saturating_mul(3);
+    let ndim = dl.ndim as usize;
+    let shape = if dl.shape.is_null() {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    } else {
+        unsafe { std::slice::from_raw_parts(dl.shape, ndim) }
+    };
+    let nelem = if ndim == 2 && shape[0] == n as i64 && shape[1] == 3 {
+        need
+    } else if ndim == 1 && shape[0] == need as i64 {
+        need
+    } else {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    };
+    let code = dl.dtype.code as u8;
+    let bits = dl.dtype.bits;
+    if dl.data.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let vals: Vec<f64> = if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 64 {
+        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f64, nelem) };
+        s.to_vec()
+    } else if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 32 {
+        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f32, nelem) };
+        s.iter().map(|&x| x as f64).collect()
+    } else {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    };
+    for (i, a) in frame.atom_data.iter_mut().enumerate() {
+        a.x = vals[i * 3];
+        a.y = vals[i * 3 + 1];
+        a.z = vals[i * 3 + 2];
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// DLPack positions from a frame (default float64 / CPU). Prefer
+/// [`rkr_frame_positions_as_dlpack`] for metatensor-style device negotiation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_positions_dlpack(
     frame_handle: *const RKRConFrame,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    unsafe { rkr_frame_positions_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+    unsafe {
+        rkr_frame_positions_as_dlpack(frame_handle, rkr_dl_device_type::RKR_DL_CPU, 0, 0, 1, 0, out_tensor)
+    }
 }
 
 /// Frame positions with [`RKRDlpackExportOptions`] (`opts` NULL → f64/CPU).
@@ -3972,7 +4066,32 @@ mod tests {
             unsafe { rkr_frame_positions_dlpack_ex(built, &bad_bits, &mut junk) },
             RKRStatus::RKR_STATUS_VALIDATION_ERROR
         );
+        // Metatensor-style as_dlpack reflects storage (f64 CPU), not a cast target
+        let mut as_t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                rkr_frame_positions_as_dlpack(
+                    built,
+                    rkr_dl_device_type::RKR_DL_CPU,
+                    0,
+                    0,
+                    1,
+                    0,
+                    &mut as_t,
+                )
+            },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
         unsafe {
+            assert_dlpack_cpu_float(as_t, 2, &[n_built, 3], 64);
+        }
+        // Ingest back (round-trip values)
+        assert_eq!(
+            unsafe { rkr_frame_positions_from_dlpack(built, as_t) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe {
+            rkr_dlpack_delete(as_t);
             rkr_dlpack_delete(frc);
             rkr_dlpack_delete(eng);
             free_rkr_frame(built);

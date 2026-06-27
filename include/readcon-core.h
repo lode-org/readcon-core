@@ -76,13 +76,13 @@ namespace readcon {
  * - Version 1: column 5 present but semantics undefined. Readers MAY
  *   ignore it. No JSON metadata line.
  * - Version 2: column 5 is the original atom index before type-based
- *   grouping. Readers MUST parse and preserve it. Writers MUST write
- *   the stored value. Line 2 of the header carries a JSON object
- *   with at least `{"con_spec_version": 2}`.
+ *   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
+ * - Version 3: same as v2 plus **required** `metadata["units"]` object
+ *   with non-empty `length` and `energy` unit strings (see `units` module).
  *
  * See `docs/orgmode/spec.org` for the full specification.
  */
-#define CON_SPEC_VERSION 2
+#define CON_SPEC_VERSION 3
 
 /**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
@@ -93,7 +93,7 @@ namespace readcon {
  * the convenience of either naming convention; they always carry the
  * same value.
  */
-#define RKR_CON_SPEC_VERSION 2
+#define RKR_CON_SPEC_VERSION 3
 
 #define RKR_DL_INT 0
 
@@ -184,6 +184,11 @@ typedef enum RKRStatus {
  * robust error handling for each frame.
  */
 typedef struct ConFrameIterator ConFrameIterator;
+
+/**
+ * Physical dimension exponents: L, T, M, Q (charge), Θ (temperature).
+ */
+typedef struct Dimension Dimension;
 
 /**
  * Opaque handle for a cached selection evaluation result.
@@ -345,6 +350,14 @@ typedef struct mts_block_t {
     uint8_t _private[0];
 } mts_block_t;
 #endif
+
+
+
+
+
+
+
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -1580,7 +1593,37 @@ enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
                                        uintptr_t out_len);
 
 /**
- * DLPack positions from a frame (default float64 / CPU).
+ * Metatensor-style: export positions as they are stored (CPU f64), with
+ * explicit device request. Non-CPU → `FEATURE_DISABLED`. Prefer this over
+ * dtype-cast `*_dlpack_ex` for new code.
+ *
+ * `stream` and `max_version_*` are accepted for ABI alignment with
+ * metatensor `as_dlpack`; CPU ignores stream / version negotiation for now.
+ *
+ * # Safety
+ * Handles and `out_tensor` must be valid.
+ */
+enum RKRStatus rkr_frame_positions_as_dlpack(const struct RKRConFrame *frame_handle,
+                                             int32_t device_type,
+                                             int32_t device_id,
+                                             int64_t _stream,
+                                             uint32_t _max_version_major,
+                                             uint32_t _max_version_minor,
+                                             RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
+ * or length 3N). Metatensor-style write path symmetry.
+ *
+ * # Safety
+ * `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
+ */
+enum RKRStatus rkr_frame_positions_from_dlpack(struct RKRConFrame *frame_handle,
+                                               const RKRDLManagedTensorVersioned *tensor);
+
+/**
+ * DLPack positions from a frame (default float64 / CPU). Prefer
+ * [`rkr_frame_positions_as_dlpack`] for metatensor-style device negotiation.
  */
 enum RKRStatus rkr_frame_positions_dlpack(const struct RKRConFrame *frame_handle,
                                           RKRDLManagedTensorVersioned **out_tensor);

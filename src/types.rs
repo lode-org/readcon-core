@@ -1764,6 +1764,11 @@ impl ConFrameBuilder {
             Some(serde_json::Value::Bool(true))
         );
         let sections_declared = !sections.is_empty();
+        let mut metadata = self.metadata;
+        // v3 writers always emit units (defaults if the caller omitted them).
+        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
+            metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
+        }
         let header = FrameHeader {
             prebox_header: PreboxHeader::new(self.prebox_user),
             boxl: self.cell,
@@ -1773,7 +1778,7 @@ impl ConFrameBuilder {
             natms_per_type: type_counts,
             masses_per_type: type_masses,
             spec_version: crate::CON_SPEC_VERSION,
-            metadata: self.metadata,
+            metadata,
             sections,
             strict_validation,
             sections_declared,

@@ -149,7 +149,9 @@ pub fn validate_metadata_schema(
                     return Err(metadata_json_error("potential.type must be a string"));
                 }
             }
-            meta::UNITS => {}
+            meta::UNITS => {
+                // Full v3 checks (required keys) run when con_spec_version >= 3.
+            }
             meta::PBC => validate_pbc_metadata(value)?,
             meta::BONDS => validate_bonds_metadata(value)?,
             meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
@@ -353,6 +355,19 @@ pub fn parse_frame_header<'a>(
             .get(meta::CON_SPEC_VERSION)
             .and_then(|v| v.as_u64())
             .ok_or(ParseError::MissingSpecVersion)? as u32;
+        if ver >= 3 {
+            match json_obj.get(meta::UNITS) {
+                Some(u) => crate::units::validate_v3_units_metadata(u).map_err(|e| {
+                    ParseError::ValidationError(format!("v3 units: {e}"))
+                })?,
+                None => {
+                    return Err(ParseError::ValidationError(
+                        "con_spec_version >= 3 requires metadata \"units\" with length and energy"
+                            .into(),
+                    ));
+                }
+            }
+        }
         if ver > crate::CON_SPEC_VERSION {
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
