@@ -1322,6 +1322,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_chemfiles_memory, m)?)?;
     m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_selection_on_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(select_atom_positions_on_frames, m)?)?;
     Ok(())
 }
 
@@ -1436,5 +1438,76 @@ fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> P
     use crate::chemfiles_selection::select_atom_indices as rust_select;
     let rust_frame = frame.to_con_frame(py)?;
     rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
+}
+
+fn multi_frame_selection_to_py(
+    py: Python<'_>,
+    multi: crate::chemfiles_selection::MultiFrameSelectionResult,
+) -> PyResult<Py<PyAny>> {
+    let frames_list = PyList::empty(py);
+    for slice in multi.frames {
+        let result_dict = selection_result_to_py(py, slice.result)?;
+        let positions: Vec<Vec<f64>> = slice
+            .positions
+            .iter()
+            .map(|p| vec![p[0], p[1], p[2]])
+            .collect();
+        let frame_dict = PyDict::new(py);
+        frame_dict.set_item("frame_index", slice.frame_index)?;
+        frame_dict.set_item("result", result_dict)?;
+        frame_dict.set_item("atom_indices", slice.atom_indices)?;
+        frame_dict.set_item("positions", positions)?;
+        frames_list.append(frame_dict)?;
+    }
+    let dict = PyDict::new(py);
+    dict.set_item("selection", multi.selection)?;
+    dict.set_item("frames", frames_list)?;
+    Ok(dict.into())
+}
+
+fn py_frames_to_con(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
+    let seq = frames.extract::<Vec<PyRef<'_, PyConFrame>>>()?;
+    seq.iter()
+        .map(|f| f.to_con_frame(py))
+        .collect()
+}
+
+/// Evaluate a chemfiles selection on **each** frame (trajectory-safe).
+///
+/// For atom-context selections, each frame entry includes ``atom_indices`` and
+/// ``positions`` (xyz of selected atoms on that frame) so callers can collect
+/// e.g. hydrogen trajectories without re-selecting in Python.
+///
+/// Returns ``{"selection": str, "frames": [{"frame_index", "result", "atom_indices", "positions"}, ...]}``.
+#[pyfunction]
+fn evaluate_selection_on_frames(
+    py: Python<'_>,
+    selection: &str,
+    frames: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::evaluate_selection_on_frames as rust_eval;
+    let rust_frames = py_frames_to_con(py, frames)?;
+    let multi = rust_eval(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    multi_frame_selection_to_py(py, multi)
+}
+
+/// Atom-context multi-frame selection: positions of selected atoms per frame.
+///
+/// Errors if the selection is not atom context (size 1) on the first frame.
+/// Typical use::
+///
+///     frames = readcon.read_all_frames("traj.con")
+///     out = readcon.select_atom_positions_on_frames("name H", frames)
+///     # out["frames"][i]["positions"] — H xyz on frame i
+#[pyfunction]
+fn select_atom_positions_on_frames(
+    py: Python<'_>,
+    selection: &str,
+    frames: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::select_atom_positions_on_frames as rust_sel;
+    let rust_frames = py_frames_to_con(py, frames)?;
+    let multi = rust_sel(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    multi_frame_selection_to_py(py, multi)
 }
 
