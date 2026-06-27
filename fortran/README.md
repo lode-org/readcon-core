@@ -51,7 +51,11 @@ data_p = dlpack_data_ptr(tensor)
 call bd%dlpack_delete(tensor)
 ```
 
-Or copy into Fortran arrays without DLPack: `bd%copy_positions(pos)` / `bd%copy_masses(masses)` (row-major C buffers transposed into `pos(3,n)`).
+Prefer DLPack (`bd%positions_dlpack`, frame exports via C) and inspect
+`dtype%bits` / `ndim` / `shape` before casting `data`—do not assume host
+`real64` is required. Convenience `copy_positions` / `copy_masses` still fill
+`real(real64)` arrays when you already use binary64 locals (row-major C buffers
+transposed into `pos(3,n)`).
 
 ## Metatensor TensorBlocks (optional fat lib — option A)
 

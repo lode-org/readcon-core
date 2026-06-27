@@ -3519,6 +3519,26 @@ mod tests {
         }
     }
     // ----- DLPack FFI smoke tests ----------------------------------------------
+    /// Assert DLPack tensor layout without assuming the host language uses f64
+    /// buffers — consumers must read `dtype` / `ndim` / `shape` from the tensor.
+    unsafe fn assert_dlpack_cpu_float(
+        t: *mut RKRDLManagedTensorVersioned,
+        expect_ndim: i32,
+        expect_shape: &[i64],
+        expect_bits: u8,
+    ) {
+        assert!(!t.is_null());
+        let dl = unsafe { &(*t).dl_tensor };
+        assert_eq!(dl.ndim, expect_ndim);
+        let shape = unsafe { std::slice::from_raw_parts(dl.shape, expect_ndim as usize) };
+        assert_eq!(shape, expect_shape);
+        assert_eq!(dl.dtype.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dl.dtype.bits, expect_bits);
+        assert_eq!(dl.dtype.lanes, 1);
+        assert_eq!(dl.device, dlpk::sys::DLDevice::cpu());
+        assert!(!dl.data.is_null());
+    }
+
     #[test]
     fn frame_optional_section_dlpack_present_and_absent() {
         // Absent on coordinate-only frame
@@ -3539,20 +3559,22 @@ mod tests {
         );
         unsafe { free_rkr_frame(handle) };
 
-        // Present on .convel fixture
+        // Present on .convel fixture — (N, 3) float, N from atom_count
         let path = CString::new("resources/test/tiny_cuh2.convel").unwrap();
         let fr = unsafe { rkr_read_first_frame(path.as_ptr()) };
         assert!(!fr.is_null());
+        let n = unsafe { rkr_frame_atom_count(fr) } as i64;
+        assert!(n > 0);
         let mut vel: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         let st = unsafe { rkr_frame_velocities_dlpack(fr, &mut vel) };
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
-        assert!(!vel.is_null());
         unsafe {
+            assert_dlpack_cpu_float(vel, 2, &[n, 3], 64);
             rkr_dlpack_delete(vel);
             free_rkr_frame(fr);
         }
 
-        // Forces + energies via builder → frame path (build then export)
+        // Forces (N,3) + energies (N,) via builder → frame
         let cell = [10.0f64; 3];
         let ang = [90.0f64; 3];
         let b = unsafe {
@@ -3590,18 +3612,19 @@ mod tests {
         }
         let built = unsafe { rkr_frame_builder_build(b) };
         assert!(!built.is_null());
+        let n_built = unsafe { rkr_frame_atom_count(built) } as i64;
         let mut frc: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         let mut eng: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_forces_dlpack(built, &mut frc) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        assert!(!frc.is_null());
+        unsafe { assert_dlpack_cpu_float(frc, 2, &[n_built, 3], 64) };
         assert_eq!(
             unsafe { rkr_frame_atom_energies_dlpack(built, &mut eng) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        assert!(!eng.is_null());
+        unsafe { assert_dlpack_cpu_float(eng, 1, &[n_built], 64) };
         unsafe {
             rkr_dlpack_delete(frc);
             rkr_dlpack_delete(eng);

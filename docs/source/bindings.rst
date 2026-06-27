@@ -268,12 +268,11 @@ for display names after conversion.
 3.5 NumPy array views and DLPack interop (v0.10.0+)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Every per-atom quantity has a contiguous NumPy ndarray accessor.
-Vector quantities are ``[N, 3]`` float64 arrays in the type-grouped
-order used by the underlying frame; scalars are ``[N]``. NumPy 1.22+
-implements ``__dlpack__`` on its arrays, so the returned ndarrays
-interoperate zero-copy with torch / jax / cupy without readcon-core
-wiring DLPack itself.
+Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
+``atom_data`` order). Prefer **DLPack** and read ``ndim`` / ``shape`` / ``dtype``;
+do not require host ``f64`` copies. On-disk CON is IEEE binary64 today
+(``kDLFloat`` / 64 for vectors; ``kDLUInt`` / 64 for atom ids). C ``copy_*``
+helpers remain for callers that already hold ``double`` buffers.
 
 .. code:: python
 
