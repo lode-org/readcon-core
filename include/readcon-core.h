@@ -1504,27 +1504,6 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
  */
 void rkr_dlpack_delete(RKRDLManagedTensorVersioned *tensor);
 
-/**
- * Arc-shared positions DLPack view (zero-copy; see module comment).
- */
-enum RKRStatus rkr_frame_builder_positions_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                           RKRDLManagedTensorVersioned **out_tensor);
-
-enum RKRStatus rkr_frame_builder_velocities_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                            RKRDLManagedTensorVersioned **out_tensor);
-
-enum RKRStatus rkr_frame_builder_forces_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                        RKRDLManagedTensorVersioned **out_tensor);
-
-enum RKRStatus rkr_frame_builder_atom_energies_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                               RKRDLManagedTensorVersioned **out_tensor);
-
-enum RKRStatus rkr_frame_builder_masses_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                        RKRDLManagedTensorVersioned **out_tensor);
-
-enum RKRStatus rkr_frame_builder_atom_ids_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
-                                                          RKRDLManagedTensorVersioned **out_tensor);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
