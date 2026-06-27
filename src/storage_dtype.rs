@@ -7,7 +7,7 @@
 
 use crate::error::ParseError;
 use crate::types::meta;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 /// Element type for a float SoA field in memory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
