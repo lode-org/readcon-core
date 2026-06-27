@@ -46,8 +46,10 @@ struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
 /* Metatensor block: opaque. Prefer include/readcon-metatensor.h (pulls
- * metatensor.h first). With only this header, define READCON_CORE_HAS_METATENSOR
- * and include <metatensor.h>, or use the incomplete struct typedef below. */
+ * metatensor.h first) when linking a metatensor-enabled library. Symbols below
+ * are always declared; lean builds return RKR_STATUS_FEATURE_DISABLED (-11)
+ * or no-op free. READCON_CORE_HAS_METATENSOR remains an optional *capability*
+ * macro (set by readcon-metatensor.h), not a gate on declarations. */
 struct mts_block_t;
 typedef struct mts_block_t mts_block_t;
 
@@ -1417,37 +1419,28 @@ struct RKRConFrameWriter *create_writer_gzip_c(const char *filename_c);
 struct RKRConFrameWriter *create_writer_gzip_with_precision_c(const char *filename_c,
                                                               uint8_t precision);
 
-#if defined(READCON_CORE_HAS_ZSTD)
 /**
  * Creates a new zstd-compressed frame writer for the specified file.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
  *
- * Only present when readcon-core is built with the `zstd` Cargo
- * feature; the C header guards the declaration with
- * `READCON_CORE_HAS_ZSTD`.
+ * Always declared. Without the `zstd` Cargo feature the library returns NULL
+ * (lean stub). Optional macro `READCON_CORE_HAS_ZSTD` documents capability only.
  *
  * # Safety
  * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_zstd_c(const char *filename_c);
-#endif
 
-#if defined(READCON_CORE_HAS_ZSTD)
 /**
  * Creates a zstd-compressed frame writer with a custom floating-point
  * precision. The caller OWNS the returned pointer and MUST call
- * `free_rkr_writer`.
- *
- * Only present when readcon-core is built with the `zstd` Cargo
- * feature; the C header guards the declaration with
- * `READCON_CORE_HAS_ZSTD`.
+ * `free_rkr_writer`. Always declared; lean builds return NULL.
  *
  * # Safety
  * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *filename_c,
                                                               uint8_t precision);
-#endif
 
 /**
  * Reads the first frame from a .con file.
@@ -1493,72 +1486,40 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 void free_rkr_frame_ptr_array(struct RKRConFrame **frames,
                               uintptr_t num_frames);
 
-#if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Free an owned block from `rkr_frame_metatensor_*_block`.
  * Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
+ * Lean builds: no-op. Always declared (feature gate is runtime -11 on create).
  *
  * # Safety
  * `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
  */
 void rkr_mts_block_free(struct mts_block_t *block);
-#endif
 
-#if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+ * Lean builds: sets *out_block=NULL and returns RKR_STATUS_FEATURE_DISABLED (-11).
  */
 enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
                                                     struct mts_block_t **out_block);
-#endif
 
-#if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Velocities TensorBlock or FEATURE_DISABLED (-11) on lean builds.
+ */
 enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
                                                      struct mts_block_t **out_block);
-#endif
 
-#if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Forces TensorBlock or FEATURE_DISABLED (-11) on lean builds.
+ */
 enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
                                                  struct mts_block_t **out_block);
-#endif
 
-#if defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Per-atom energies TensorBlock or FEATURE_DISABLED (-11) on lean builds.
+ */
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
                                                         struct mts_block_t **out_block);
-#endif
-
-#if !defined(READCON_CORE_HAS_ZSTD)
-struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
-#endif
-
-#if !defined(READCON_CORE_HAS_ZSTD)
-struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
-                                                              uint8_t _precision);
-#endif
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-void rkr_mts_block_free(struct mts_block_t *_block);
-#endif
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *_frame_handle,
-                                                    struct mts_block_t **out_block);
-#endif
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *_frame_handle,
-                                                     struct mts_block_t **out_block);
-#endif
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *_frame_handle,
-                                                 struct mts_block_t **out_block);
-#endif
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *_frame_handle,
-                                                        struct mts_block_t **out_block);
-#endif
 
 /**
  * Number of atoms on the frame (atom_data order).
