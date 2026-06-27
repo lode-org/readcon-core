@@ -2338,6 +2338,49 @@ mod tests {
         assert_eq!(dt.bits, 64);
     }
 
+    /// Omitted `bonds` key vs empty pair list: both mean "no topology" for
+    /// `has_bonds()` / selection; writers drop an empty list so files do not
+    /// accumulate a useless key.
+    #[test]
+    fn bonds_absent_vs_empty_array_are_both_no_topology() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let mut frame = b.build();
+        assert!(!frame.has_bonds());
+        assert!(frame.bonds().is_empty());
+        assert!(!frame.header.metadata.contains_key(meta::BONDS));
+
+        frame.header.set_bonds(&[]);
+        assert!(!frame.has_bonds());
+        assert!(
+            !frame.header.metadata.contains_key(meta::BONDS),
+            "empty bonds must not leave a key on the header"
+        );
+
+        frame.header.set_bonds(&[Bond {
+            i: 0,
+            j: 1,
+            order: None,
+        }]);
+        assert!(frame.has_bonds());
+        assert!(frame.header.metadata.contains_key(meta::BONDS));
+
+        frame.header.clear_bonds();
+        assert!(!frame.has_bonds());
+        assert!(!frame.header.metadata.contains_key(meta::BONDS));
+
+        frame
+            .header
+            .metadata
+            .insert(meta::BONDS.into(), serde_json::json!([]));
+        assert!(parse_bonds_from_metadata(&frame.header.metadata).is_empty());
+        assert!(
+            !frame.has_bonds(),
+            "empty bonds JSON array must not count as has_bonds"
+        );
+    }
+
     #[test]
     fn clone_shares_storage_until_cow() {
         // ArcArray's clone is a shallow Arc bump, so two builders born

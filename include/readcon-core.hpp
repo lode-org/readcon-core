@@ -354,6 +354,24 @@ class ConFrame {
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_positions_dlpack(frame_handle_.get(), out_tensor);
     }
+    /** DLPack velocities; SECTION_ABSENT (-8) if the frame has none. */
+    RKRStatus velocities_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_velocities_dlpack(frame_handle_.get(), out_tensor);
+    }
+    /** DLPack forces; SECTION_ABSENT if missing. */
+    RKRStatus forces_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_forces_dlpack(frame_handle_.get(), out_tensor);
+    }
+    /** DLPack per-atom energies; SECTION_ABSENT if missing. */
+    RKRStatus atom_energies_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_atom_energies_dlpack(frame_handle_.get(), out_tensor);
+    }
 
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 

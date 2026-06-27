@@ -2873,6 +2873,95 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack(
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
     export_owned_array2_dlpack(&arr, out_tensor)
 }
+
+/// DLPack velocities from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+///
+/// # Safety
+/// `frame_handle` and `out_tensor` non-null and valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_velocities() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        let v = a.velocity.unwrap_or([0.0; 3]);
+        data.extend_from_slice(&v);
+    }
+    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
+    export_owned_array2_dlpack(&arr, out_tensor)
+}
+
+/// DLPack forces from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+///
+/// # Safety
+/// `frame_handle` and `out_tensor` non-null and valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_forces() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        let f = a.force.unwrap_or([0.0; 3]);
+        data.extend_from_slice(&f);
+    }
+    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
+    export_owned_array2_dlpack(&arr, out_tensor)
+}
+
+/// DLPack per-atom energies from a frame `(N,) f64`, or `SECTION_ABSENT` if missing.
+///
+/// # Safety
+/// `frame_handle` and `out_tensor` non-null and valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_energies() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let data: Vec<f64> = frame
+        .atom_data
+        .iter()
+        .map(|a| a.energy.unwrap_or(0.0))
+        .collect();
+    let arr = ndarray::ArcArray1::from_vec(data);
+    export_owned_array1_f64_dlpack(&arr, out_tensor)
+}
+
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
 //=============================================================================
 /// Opaque handle for a cached selection evaluation result.
@@ -3430,6 +3519,96 @@ mod tests {
         }
     }
     // ----- DLPack FFI smoke tests ----------------------------------------------
+    #[test]
+    fn frame_optional_section_dlpack_present_and_absent() {
+        // Absent on coordinate-only frame
+        let handle = test_frame_handle();
+        let mut t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_velocities_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        assert!(t.is_null());
+        assert_eq!(
+            unsafe { rkr_frame_forces_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        assert_eq!(
+            unsafe { rkr_frame_atom_energies_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        unsafe { free_rkr_frame(handle) };
+
+        // Present on .convel fixture
+        let path = CString::new("resources/test/tiny_cuh2.convel").unwrap();
+        let fr = unsafe { rkr_read_first_frame(path.as_ptr()) };
+        assert!(!fr.is_null());
+        let mut vel: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        let st = unsafe { rkr_frame_velocities_dlpack(fr, &mut vel) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(!vel.is_null());
+        unsafe {
+            rkr_dlpack_delete(vel);
+            free_rkr_frame(fr);
+        }
+
+        // Forces + energies via builder → frame path (build then export)
+        let cell = [10.0f64; 3];
+        let ang = [90.0f64; 3];
+        let b = unsafe {
+            rkr_frame_new(
+                cell.as_ptr(),
+                ang.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!b.is_null());
+        let sym = CString::new("H").unwrap();
+        unsafe {
+            rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+                b,
+                sym.as_ptr(),
+                0.0,
+                0.0,
+                0.0,
+                false,
+                false,
+                false,
+                0,
+                1.0,
+                0.1,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -1.0,
+            );
+            rkr_frame_builder_set_last_energy(b, -0.5);
+        }
+        let built = unsafe { rkr_frame_builder_build(b) };
+        assert!(!built.is_null());
+        let mut frc: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        let mut eng: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_forces_dlpack(built, &mut frc) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert!(!frc.is_null());
+        assert_eq!(
+            unsafe { rkr_frame_atom_energies_dlpack(built, &mut eng) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert!(!eng.is_null());
+        unsafe {
+            rkr_dlpack_delete(frc);
+            rkr_dlpack_delete(eng);
+            free_rkr_frame(built);
+        }
+    }
+
     #[test]
     fn ffi_positions_dlpack_round_trip() {
         let handle = test_builder_handle();

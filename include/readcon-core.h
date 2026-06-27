@@ -1475,6 +1475,33 @@ enum RKRStatus rkr_frame_positions_dlpack(const struct RKRConFrame *frame_handle
                                           RKRDLManagedTensorVersioned **out_tensor);
 
 /**
+ * DLPack velocities from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+ *
+ * # Safety
+ * `frame_handle` and `out_tensor` non-null and valid.
+ */
+enum RKRStatus rkr_frame_velocities_dlpack(const struct RKRConFrame *frame_handle,
+                                           RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack forces from a frame `(N, 3) f64`, or `SECTION_ABSENT` if missing.
+ *
+ * # Safety
+ * `frame_handle` and `out_tensor` non-null and valid.
+ */
+enum RKRStatus rkr_frame_forces_dlpack(const struct RKRConFrame *frame_handle,
+                                       RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack per-atom energies from a frame `(N,) f64`, or `SECTION_ABSENT` if missing.
+ *
+ * # Safety
+ * `frame_handle` and `out_tensor` non-null and valid.
+ */
+enum RKRStatus rkr_frame_atom_energies_dlpack(const struct RKRConFrame *frame_handle,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
+/**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.
  *
  * On success writes a heap-allocated result handle to `*out_result` (caller
