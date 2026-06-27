@@ -66,7 +66,7 @@ task.
     | Chemfiles import / selection                                                          | yes (``chemfiles`` feature)    | ``select_on_frame`` / ``select_atom_indices``    | ``select_on_frame`` / ``select_atom_indices`` (FFI; chemfiles lib) | ``rkr_frame_select`` / ``read_chemfiles_first``       | ``rkr_frame_select``                                         | ``ConFrame::select`` |
     +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+----------------------+
 
-****Chemfiles selection parity (supported subset).**** One evaluator core; every
+****Chemfiles selection (shared evaluator).**** One evaluator core; every
 surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 ``Selection`` after projecting the frame). Build with ``--features chemfiles``;
 probe with ``rkr_has_chemfiles_support()`` / ``has_chemfiles_support()`` (Julia) /
@@ -153,19 +153,19 @@ Supported contexts when topology is present (``metadata["bonds"]``, 0-based
 the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
 
 ****Indices.**** CON groups atoms by element type. Bond endpoints and selection
-matches use that ``atom_data`` order (chemfiles import remaps via ``atom_id``). If
-you compare to a selection run inside chemfiles itself, match the sets of
-indices, not the exact order of the chemfiles list.
+matches use that ``atom_data`` order (chemfiles import remaps via ``atom_id``).
+Compared with a selection run inside chemfiles, compare *sets* of indices, not
+the exact order of the chemfiles list.
 
 ****Name vs type after import.**** On disk there is still one ``symbol`` column.
 Import also writes optional ``chemfiles_atom_names`` / ``chemfiles_atom_types``
-metadata so ``name H1`` and ``type H`` both work. Frames you build by hand without
-those keys use ``symbol`` for both.
+so ``name H1`` and ``type H`` both work. Frames built by hand without those keys
+use ``symbol`` for both.
 
-****What selection does not cover.**** Residue / ``resname`` filters, most chemfiles
-properties, topology beyond pair ``bonds``, and the geometry-heavy cases in
-chemfiles ``tests/selection.cpp`` are not supported on CON frames. Longer
-explanation: `Chemfiles conversion and selection <chemfiles-explain.rst>`_.
+****Limits from the format.**** Residue / ``resname``, most chemfiles properties,
+topology past pair ``bonds``, and geometry assertion cases in chemfiles
+``tests/selection.cpp`` are not on the CON selection surface—CON never stored
+that data. Detail: `Why is selection not full chemfiles? <chemfiles-explain.rst>`_.
 
 3 Python (PyO3)
 ---------------
@@ -568,7 +568,7 @@ Builder metadata helpers:
 or ``mts_block_free``, not both). We do ****not**** merge metatensor's cbindgen
 header into ``readcon-core.h``; two headers, one pointer ABI.
 
-****Lean vs fat (honest gates)****
+****Lean vs fat builds****
 
 .. table::
 
