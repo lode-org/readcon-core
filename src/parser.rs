@@ -1167,6 +1167,67 @@ mod tests {
     }
 
     #[test]
+    fn test_v3_missing_units_rejected() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":3}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("units") || msg.contains("v3"),
+            "expected units error, got {msg}"
+        );
+    }
+
+    #[test]
+    fn test_v3_invalid_units_rejected() {
+        let lines = vec![
+            "PREBOX1",
+            r#"{"con_spec_version":3,"units":{"length":"eV","energy":"angstrom"}}"#,
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        assert!(parse_frame_header(&mut line_it).is_err());
+    }
+
+    #[test]
+    fn test_v3_valid_units_exposes_length_energy() {
+        let lines = vec![
+            "PREBOX1",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"}}"#,
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        let header = parse_frame_header(&mut line_it).unwrap();
+        assert_eq!(header.spec_version, 3);
+        assert_eq!(header.length_unit(), Some("angstrom"));
+        assert_eq!(header.energy_unit(), Some("eV"));
+        let f = header.conversion_factor_to("length", "nm").unwrap();
+        assert!((f - 0.1).abs() < 1e-12);
+    }
+
+    #[test]
     fn test_parse_frame_header_extra_metadata_preserved() {
         let lines = vec![
             "PREBOX1",
