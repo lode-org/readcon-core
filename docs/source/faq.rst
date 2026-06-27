@@ -82,9 +82,11 @@ Chemfiles display ``name`` vs atomic ``type`` (e.g. ``H1`` / ``H``) is preserved
 second CON column); projection restores both for selection. Hand-built frames
 without those keys use ``symbol`` for both.
 
-Remaining gaps: residue/=resname=, extra props not copied on import, improper
-extras beyond ``bonds``, numeric geometry blocks from full ``selection.cpp`` unless
-trivially projected; multiset-after-remap not byte-identical chemfiles indices.
+****Out of scope for selection:**** residue / ``resname`` filters; chemfiles properties
+not copied on import; topology beyond undirected ``bonds``; full numeric geometry
+assertion suites from upstream ``tests/selection.cpp``. Index contract is multiset
+agreement after ``atom_id`` remap, not byte-identical chemfiles lists. Details:
+``chemfiles-explain`` (selection scope) and ``bindings``.
 
 4 What problems does atom\ :sub:`id`\ solve?
 --------------------------------------------

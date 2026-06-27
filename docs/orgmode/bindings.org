@@ -136,13 +136,15 @@ optional metadata sidecars ~chemfiles_atom_names~ / ~chemfiles_atom_types~
 ~name~ and atomic ~type~ so ~name H1~ and ~type H~ both work after import.
 Hand-built frames without sidecars use ~symbol~ for both (same as before).
 
-**Remaining documented gaps (not claimed parity).** Residue/~resname~ and extra
-atom/residue properties (beyond what import already copies into
-~chemfiles_atom_properties~ / frame extras). Improper topology extras not
-stored in CON ~bonds~. Numeric geometry assertion blocks from chemfiles
-~tests/selection.cpp~ (~distance~ / ~angle~ / ~dihedral~ / ~out_of_plane~
-thresholds with extra atoms) unless trivially projected. Multiset-after-remap
-parity, not byte-identical chemfiles index lists.
+**Selection scope (non-goals).** Residue and =resname= selectors, arbitrary
+chemfiles properties beyond what import stores in
+~chemfiles_atom_properties~ / frame extras, improper topology beyond undirected
+~bonds~ pairs, and upstream numeric geometry *assertion* cases from
+~tests/selection.cpp~ (~distance~ / ~angle~ / ~dihedral~ / ~out_of_plane~ with
+extra atoms) are **out of scope**, not advertised as partial parity. Index
+contract: undirected *multiset* agreement after =atom_id= remap into type-grouped
+~atom_data~ order, not byte-identical chemfiles index lists. Narrative:
+[[file:chemfiles-explain.org][Chemfiles conversion and selection]].
 
 * Python (PyO3)
 
