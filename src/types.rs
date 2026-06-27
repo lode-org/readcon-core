@@ -926,6 +926,9 @@ impl Default for ConFrameBuilder {
 
 impl ConFrameBuilder {
     /// Creates a new builder with the given cell dimensions and angles.
+    ///
+    /// In-memory SoA on [`Self::build`] defaults to float64 unless
+    /// [`Self::storage_dtypes`] / metadata `storage_dtypes` requests otherwise.
     pub fn new(cell: [f64; 3], angles: [f64; 3]) -> Self {
         Self {
             cell,
@@ -945,6 +948,28 @@ impl ConFrameBuilder {
     pub fn postbox_header(&mut self, h: [String; 2]) -> &mut Self {
         self.postbox_header = h;
         self
+    }
+
+    /// Set in-memory SoA element types (written to `metadata["storage_dtypes"]`).
+    ///
+    /// [`Self::build`] **allocates** positions/velocities/forces/energies/masses
+    /// in these types (float32 or float64), then fills from builder f64 scratch
+    /// buffers. On-disk CON text remains binary64.
+    pub fn storage_dtypes(
+        &mut self,
+        dtypes: crate::storage_dtype::StorageDtypes,
+    ) -> &mut Self {
+        dtypes.insert_into(&mut self.metadata);
+        self
+    }
+
+    /// Convenience: allocate positions (and other float fields if still default)
+    /// as float32 in memory on the next [`Self::build`].
+    pub fn storage_float32_positions(&mut self) -> &mut Self {
+        let mut d = crate::storage_dtype::StorageDtypes::from_metadata(&self.metadata)
+            .unwrap_or_default();
+        d.positions = crate::storage_dtype::FloatStorageKind::Float32;
+        self.storage_dtypes(d)
     }
 
     /// Adds extra key-value pairs to the JSON metadata line.
@@ -1915,13 +1940,16 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
-        use crate::storage_dtype::{FloatArray1, FloatArray2};
-        let mut pos = FloatArray2::zeros_f64(n, 3);
-        let mut vel = FloatArray2::zeros_f64(if has_vel { n } else { 0 }, 3);
-        let mut frc = FloatArray2::zeros_f64(if has_frc { n } else { 0 }, 3);
-        let mut eng = FloatArray1::zeros_f64(if has_eng { n } else { 0 });
-        let mut masses_arr = FloatArray1::zeros_f64(n);
+        use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
+        let dt = StorageDtypes::from_metadata(&metadata).unwrap_or_default();
+        // Allocate SoA in the requested storage dtypes (not f64-then-cast).
+        let mut pos = FloatArray2::zeros(dt.positions, n, 3);
+        let mut vel = FloatArray2::zeros(dt.velocities, if has_vel { n } else { 0 }, 3);
+        let mut frc = FloatArray2::zeros(dt.forces, if has_frc { n } else { 0 }, 3);
+        let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
+        let mut masses_arr = FloatArray1::zeros(dt.masses, n);
         let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
+        dt.insert_into(&mut metadata);
         for (i, a) in atom_data.iter().enumerate() {
             pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
@@ -1984,12 +2012,13 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
     let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
     let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
     let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
-    use crate::storage_dtype::{FloatArray1, FloatArray2};
-    let mut pos = FloatArray2::zeros_f64(n, 3);
-    let mut vel = FloatArray2::zeros_f64(if has_vel { n } else { 0 }, 3);
-    let mut frc = FloatArray2::zeros_f64(if has_frc { n } else { 0 }, 3);
-    let mut eng = FloatArray1::zeros_f64(if has_eng { n } else { 0 });
-    let mut masses_arr = FloatArray1::zeros_f64(n);
+    use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let mut pos = FloatArray2::zeros(dt.positions, n, 3);
+    let mut vel = FloatArray2::zeros(dt.velocities, if has_vel { n } else { 0 }, 3);
+    let mut frc = FloatArray2::zeros(dt.forces, if has_frc { n } else { 0 }, 3);
+    let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
+    let mut masses_arr = FloatArray1::zeros(dt.masses, n);
     let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
     let mut off = 0usize;
     for (ti, &count) in header.natms_per_type.iter().enumerate() {
@@ -2018,6 +2047,8 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
             eng.set_f64(i, a.energy.unwrap_or(0.0));
         }
     }
+    let mut header = header;
+    dt.insert_into(&mut header.metadata);
     let mut frame = ConFrame {
         header,
         atom_data,
@@ -2028,9 +2059,7 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         masses: masses_arr,
         atom_ids: ids_arr,
     };
-    if let Ok(dt) = crate::storage_dtype::StorageDtypes::from_metadata(&frame.header.metadata) {
-        frame.project_storage_dtypes(&dt);
-    }
+    frame.sync_atom_data_from_arrays();
     frame
 }
 
@@ -2216,25 +2245,46 @@ mod tests {
 
     #[test]
     fn project_positions_to_float32_storage_and_as_dlpack() {
-        use crate::storage_dtype::{FloatStorageKind, StorageDtypes};
+        use crate::storage_dtype::FloatStorageKind;
+        // Allocate SoA as float32 on build (not f64 then project).
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.storage_float32_positions();
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let mut frame = b.build();
-        let mut dt = StorageDtypes::all_f64();
-        dt.positions = FloatStorageKind::Float32;
-        frame.project_storage_dtypes(&dt);
-        assert_eq!(
-            frame.positions.kind(),
-            FloatStorageKind::Float32
-        );
+        let frame = b.build();
+        assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
         let t = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
             .unwrap();
         assert_eq!(t.shape(), &[1, 3]);
-        // metadata records storage_dtypes
         assert!(frame.header.metadata.get(meta::STORAGE_DTYPES).is_some());
         let row = frame.positions.as_f64_row(0);
         assert!((row[0] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn allocate_all_float_fields_as_f32() {
+        use crate::storage_dtype::{FloatStorageKind, StorageDtypes};
+        let mut dt = StorageDtypes::all_f64();
+        dt.positions = FloatStorageKind::Float32;
+        dt.velocities = FloatStorageKind::Float32;
+        dt.forces = FloatStorageKind::Float32;
+        dt.energies = FloatStorageKind::Float32;
+        dt.masses = FloatStorageKind::Float32;
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.storage_dtypes(dt);
+        b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+            .with_velocity([1.0, 0.0, 0.0])
+            .with_force([0.0, 1.0, 0.0])
+            .with_energy(-1.0);
+        let frame = b.build();
+        assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
+        assert_eq!(frame.velocities.kind(), FloatStorageKind::Float32);
+        assert_eq!(frame.forces.kind(), FloatStorageKind::Float32);
+        assert_eq!(frame.atom_energies.kind(), FloatStorageKind::Float32);
+        assert_eq!(frame.masses.kind(), FloatStorageKind::Float32);
+        assert!(frame.velocities_as_dlpack(dlpk::sys::DLDevice::cpu())
+            .unwrap()
+            .is_some());
     }
 
     #[test]
