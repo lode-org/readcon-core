@@ -1529,7 +1529,7 @@ fn export_f64_slice_as_dlpack(
         (RKR_DL_BOOL, 8) => {
             // bool has no ndarray Zero; use Vec → DLPack (1-D length = element count)
             let v: Vec<bool> = data.iter().map(|&x| x != 0.0).collect();
-            dlpk::DLPackTensor::try_from(v)
+            return finish_dlpack_tensor(dlpk::DLPackTensor::try_from(v), out_tensor);
         }
         // Complex / bfloat / float8 / opaque: not hosted from CON f64 yet
         _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
