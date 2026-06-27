@@ -50,7 +50,11 @@
   document.querySelectorAll(
     ".highlight pre, div[class*='highlight-'] pre, pre.literal-block"
   ).forEach(function (pre) {
-    pre.style.whiteSpace = "pre";
+    /* Shibuya (or theme) sets pre { display: grid }, which blockifies every
+       Pygments <span> into its own row — R looks like one token per line.
+       Restore normal pre flow; keep white-space:pre for real newlines. */
+    pre.style.setProperty("display", "block", "important");
+    pre.style.setProperty("white-space", "pre", "important");
     pre.querySelectorAll("span").forEach(function (s) {
       s.style.setProperty("display", "inline", "important");
       s.style.setProperty("margin", "0", "important");

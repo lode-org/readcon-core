@@ -258,12 +258,16 @@ article.yue {
    Sphinx may also emit <span data-line>…
 </span>; extra-foot unwraps those so
    theme display:block on [data-line] cannot double line gaps (R looked broken). */
+/* Theme may set pre { display: grid } (each token span = grid row). Force block. */
 .sy-page .highlight pre,
 .sy-page div[class*="highlight-"] pre,
 .sy-page pre.literal-block,
 div.highlight pre,
 div[class*="highlight-"] pre {
+  display: block !important;
   white-space: pre !important;
+  grid-template-columns: unset !important;
+  grid-template-rows: unset !important;
 }
 
 .sy-page .highlight pre span,
