@@ -3198,9 +3198,10 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
     }
     for i in 0..n {
-        frame.positions[[i, 0]] = vals[i * 3];
-        frame.positions[[i, 1]] = vals[i * 3 + 1];
-        frame.positions[[i, 2]] = vals[i * 3 + 2];
+        frame.positions.set_f64_row(
+            i,
+            [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]],
+        );
     }
     frame.sync_atom_data_from_arrays();
     RKRStatus::RKR_STATUS_SUCCESS

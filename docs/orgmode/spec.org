@@ -528,6 +528,66 @@ relying on filesystem metadata.
 |       1 | (original) | De facto format from eOn. Column 5 present, undefined.      |
 |       2 | 2026-03-25 | JSON metadata. atom_id semantics. Per-direction constraints. |
 |         |            | Declared sections. Force blocks. Compression.               |
+|       3 | 2026-06-27 | Required =units= (=length=, =energy=). Optional =storage_dtypes= |
+|         |            | for in-memory SoA element types (float32/float64).          |
+
+* Version 3 (normative)
+
+A file with =con_spec_version= equal to 3 SHALL satisfy all Version 2
+requirements and the following additional requirements.
+
+** Units (required)
+
+The metadata object SHALL contain a =units= member whose value is a JSON
+object. That object SHALL contain the string members =length= and =energy=,
+each a non-empty unit expression whose physical dimension matches the
+named quantity (length and energy respectively). Implementations SHALL
+reject Version 3 inputs that omit =units= or supply dimensionally invalid
+strings for those members.
+
+Optional members =mass=, =time=, =velocity=, and =force=, when present,
+SHALL likewise be dimensionally valid for those quantities.
+
+Unit expressions follow the same lexical conventions as metatomic-style
+host unit strings: case-insensitive names, =*= / =/= / =^=, and parentheses.
+The library provides conversion factors between compatible expressions
+(=unit_conversion_factor=); it does not silently rewrite on-disk numeric
+fields when units differ between frames.
+
+** Storage dtypes (optional; in-memory contract)
+
+The metadata object MAY contain a =storage_dtypes= member describing how a
+conforming implementation holds per-atom numeric fields *after* parsing or
+construction. This does **not** change on-disk CON text encoding (coordinates
+and section values remain decimal representations of binary64).
+
+When present, =storage_dtypes= SHALL be a JSON object. Recognized members:
+
+| Member | Permitted values | Default if omitted |
+|--------+------------------+--------------------|
+| =positions= | ="float32"=, ="float64"= | =float64= |
+| =velocities= | ="float32"=, ="float64"= | =float64= |
+| =forces= | ="float32"=, ="float64"= | =float64= |
+| =energies= | ="float32"=, ="float64"= | =float64= |
+| =masses= | ="float32"=, ="float64"= | =float64= |
+| =atom_ids= | ="uint64"= | =uint64= |
+
+Implementations that expose DLPack SHALL export arrays whose element type
+matches the effective storage dtype for that field (queryable prior to
+export). Callers MAY request projection between =float32= and =float64=
+in memory; writers SHALL still serialize binary64 text on disk.
+
+** DLPack interchange (informative for implementations)
+
+Numeric fields are treated as opaque, shaped arrays (metatensor-style):
+implementations SHOULD expose =shape=, element type, and device for each
+field, and an =as_dlpack(device, stream, max_version)= operation that
+returns a =DLManagedTensorVersioned= describing the *actual* backing
+buffer. Ingest (=from_dlpack=) SHALL update that backing and keep any
+AoS projection consistent for CON serialization. Preferred placement is
+negotiated via the device argument; changing element type is a storage
+projection (=storage_dtypes= / =project_storage_dtypes=), not the primary
+export contract.
 
 * Detecting the spec version
 
