@@ -1436,7 +1436,7 @@ fn export_owned_array2_dlpack_opts(
             dlpk::DLPackTensor::try_from(shared)
         }
         32 => {
-            let f32_arr: ndarray::ArcArray2<f32> = arr.mapv(|x| x as f32);
+            let f32_arr: ndarray::ArcArray2<f32> = arr.mapv(|x| x as f32).into();
             dlpk::DLPackTensor::try_from(f32_arr)
         }
         _ => {
@@ -1472,7 +1472,7 @@ fn export_owned_array1_f64_dlpack_opts(
     let result = match opts.float_bits {
         64 => dlpk::DLPackTensor::try_from(arr.clone()),
         32 => {
-            let f32_arr: ndarray::ArcArray1<f32> = arr.mapv(|x| x as f32);
+            let f32_arr: ndarray::ArcArray1<f32> = arr.mapv(|x| x as f32).into();
             dlpk::DLPackTensor::try_from(f32_arr)
         }
         _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
