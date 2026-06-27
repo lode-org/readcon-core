@@ -254,23 +254,37 @@ article.yue {
   outline: none;
 }
 
-/* Sphinx 8+ wraps each source line in <span data-line="N">code\n</span>.
-   Spans must stay inline: the trailing \n is the only line break. Theme or
-   prior rules that set display:block double every line (huge gaps in R). */
+/* Code fences: Sphinx/Pygments use many <span>s (tokens + optional data-line
+   wrappers that already embed "
+"). Everything inside <pre> must stay inline
+   or you get double-spaced R/Python (or one token per visual line). */
+.sy-page .highlight pre,
+.sy-page pre.literal-block {
+  white-space: pre !important;
+}
+
+.sy-page .highlight pre span,
+.sy-page .highlight pre code,
+.sy-page pre.literal-block span,
+.sy-page pre.literal-block code,
 .sy-page .highlight pre [data-line],
 .sy-page .highlight pre span[data-line] {
   display: inline !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
-  background: transparent !important;
   margin: 0 !important;
   padding: 0 !important;
-  line-height: inherit !important;
+  background: transparent; /* token colors come from classes on the same span */
 }
 
-.sy-page .highlight pre {
-  white-space: pre !important;
+/* Token colours need background: transparent only on wrappers; Pygments uses
+   classes on spans for colour — do not zero background on .c1/.nf/etc. */
+.sy-page .highlight pre span[data-line] {
+  background: transparent !important;
 }
 
 /* Tokens inside blocks must inherit readable size */
