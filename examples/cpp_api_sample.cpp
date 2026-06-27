@@ -55,6 +55,45 @@ void print_frame_details(int frame_number, const readcon::ConFrame &frame) {
     }
 }
 
+// Section buffer / DLPack smoke (readcon-core-8cx2): no AoS required.
+static int smoke_section_buffers(const readcon::ConFrame &frame) {
+    using readcon::RKRStatus;
+    using readcon::RKR_STATUS_SUCCESS;
+    using readcon::RKR_STATUS_SECTION_ABSENT;
+    const std::size_t n = frame.atom_count();
+    if (n == 0) {
+        std::cerr << "section smoke: atom_count == 0\n";
+        return 1;
+    }
+    std::vector<double> pos(n * 3);
+    RKRStatus st = frame.copy_positions(pos.data(), pos.size());
+    if (st != RKR_STATUS_SUCCESS) {
+        std::cerr << "copy_positions failed: " << static_cast<int>(st) << "\n";
+        return 1;
+    }
+    std::vector<double> vel(n * 3);
+    st = frame.copy_velocities(vel.data(), vel.size());
+    if (st != RKR_STATUS_SUCCESS && st != RKR_STATUS_SECTION_ABSENT) {
+        std::cerr << "copy_velocities unexpected: " << static_cast<int>(st) << "\n";
+        return 1;
+    }
+    std::vector<double> frc(n * 3);
+    st = frame.copy_forces(frc.data(), frc.size());
+    if (st != RKR_STATUS_SUCCESS && st != RKR_STATUS_SECTION_ABSENT) {
+        std::cerr << "copy_forces unexpected: " << static_cast<int>(st) << "\n";
+        return 1;
+    }
+    std::vector<double> mass(n);
+    st = frame.copy_masses(mass.data(), mass.size());
+    if (st != RKR_STATUS_SUCCESS && st != RKR_STATUS_SECTION_ABSENT) {
+        std::cerr << "copy_masses unexpected: " << static_cast<int>(st) << "\n";
+        return 1;
+    }
+    std::cout << "section_buffers ok natoms=" << n
+              << " pos0=(" << pos[0] << "," << pos[1] << "," << pos[2] << ")\n";
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2 || argc > 3) {
         std::cerr << "Usage: " << argv[0] << " <input.con> [output.con]"
@@ -77,6 +116,11 @@ int main(int argc, char *argv[]) {
             for (const auto &frame : frame_iterator) {
                 frame_count++;
                 print_frame_details(frame_count, frame);
+                if (frame_count == 1) {
+                    if (smoke_section_buffers(frame) != 0) {
+                        return 2;
+                    }
+                }
             }
             std::cout
                 << "\n==================================================\n";

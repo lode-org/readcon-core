@@ -406,19 +406,42 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Creates a new iterator for a .con or .convel file.
+ * Creates a new iterator for a .con / .convel path, including transparent
+ * gzip (`.con.gz`) and zstd (`.con.zst`, requires `zstd` feature) inputs via
+ * [`crate::compression::read_file_contents`].
  *
- * Returns NULL if the file cannot be read (missing, unreadable, or
- * not valid UTF-8). A successfully-opened file with zero frames
- * returns a non-NULL iterator that yields NULL on the first call to
- * [`con_frame_iterator_next`]. The caller OWNS the returned pointer
- * and MUST call [`free_con_frame_iterator`].
+ * Returns NULL if the file cannot be read, decompressed, or is not valid
+ * UTF-8. A successfully-opened file with zero frames returns a non-NULL
+ * iterator that yields NULL on the first call to [`con_frame_iterator_next`].
+ * The caller OWNS the returned pointer and MUST call [`free_con_frame_iterator`].
  *
  * # Safety
  * filename_c must be a valid null-terminated string. The caller takes
  * ownership of the returned iterator.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
+
+/**
+ * Iterate frames from an in-memory CON text buffer (null-terminated C string).
+ *
+ * Use when the caller already decompressed (chemfiles, custom I/O) and wants
+ * to avoid a temp file. Same ownership rules as [`read_con_file_iterator`].
+ *
+ * # Safety
+ * `contents_c` must be a valid null-terminated UTF-8 string, or NULL (returns NULL).
+ */
+struct CConFrameIterator *read_con_string_iterator(const char *contents_c);
+
+/**
+ * Iterate frames from a byte buffer (not necessarily null-terminated).
+ *
+ * `len` is the number of bytes at `data`. Bytes must be valid UTF-8 CON text.
+ *
+ * # Safety
+ * `data` must be valid for `len` bytes if non-null and `len > 0`.
+ */
+struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
+                                                   uintptr_t len);
 
 /**
  * Reads the next frame from the iterator, returning an opaque handle.

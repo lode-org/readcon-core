@@ -15,4 +15,23 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | #12 | EXT: chemfiles | Done | =--features chemfiles=; =ad70e47= Cachegrind conversion scenarios |
 | #19 | 3-component =fixed_flag= | Done | Rust =[bool;3]=; C =fixed_x/y/z=; Fortran =catom_t= |
 
+**Vault vissues (Software/readcon-core/issues.org) — =feat/ffi-matrix-hardening=**
+
+| Id | Topic | Status | Evidence |
+|----+-------+--------+----------|
+| =readcon-core-795z= | C path iterator compression + string/buffer iterators | Done | =read_con_file_iterator= via =compression::read_file_contents=; =read_con_string_iterator= / =read_con_buffer_iterator=; FFI tests |
+| =readcon-core-8cx2= | C++ section API smoke | Done | =examples/cpp_api_sample.cpp= =smoke_section_buffers= |
+| =readcon-core-6vie= | Fortran velocities/forces/masses copies | Done | =fortran/ReadCon/test/test_read_con.f90= |
+| =readcon-core-lrk1= | =src/ffi.rs= double-newline bloat | Done | normalized single-spaced file |
+| =readcon-core-u08i= | Python maturin / mold CI | Done | =python_wheels.yml= sets =RUSTFLAGS=-C link-arg=-fuse-ld=bfd= (no mold) |
+| =readcon-core-y69o= | Julia runtime tests | Done | =ci_julia.yml= when Julia present; docs skip contract in =julia/ReadCon/README.md= |
+| =readcon-core-anp5= | Bindings docs frame buffers / ptr_array free | Done | =docs/orgmode/bindings.org= section buffers + iterators |
+| =readcon-core-47kp= | Feature matrix CI | Done | =.github/workflows/ci_feature_matrix.yml= + =scripts/check_feature_matrix.sh= |
+| =readcon-core-oc8g= / =zs6n= | Parent plan / merge branch | Done (merge-ready) | Branch complete; gitguard blocks PR create — integrate when allowed |
+| =readcon-core-conda-32605= | conda-forge staged-recipes | STARTED | External maintainer gate |
+| =readcon-core-aoqu= | Publish PyPI wheel for rgpot | TODO | Needs release credential / publish workflow run |
+| =readcon-core-r2wh= | SoA refactor | BLOCKED | Architectural; not in-scope |
+| =readcon-core-0tlm= / =bb34= | Morton curves / device dlpk | STARTED | Long-horizon perf; not A/B implementables |
+| =readcon-core-uu0a= / =c6ox= / =box4= | Optional C tier | Deferred | Explicit optional polish |
+
 Fortran details: =fortran/README.md=. Multi-language panels: bindings page.
