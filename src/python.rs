@@ -1322,7 +1322,6 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_chemfiles_memory, m)?)?;
     m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
-    m.add_function(wrap_pyfunction!(select_on_frames, m)?)?;
     Ok(())
 }
 
@@ -1439,69 +1438,3 @@ fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> P
     rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
 }
 
-/// Multi-frame chemfiles selection (evaluate on **each** frame).
-///
-/// For atom-context selections such as ``name H``, each frame entry includes
-/// ``atom_indices`` and ``positions`` (list of ``[x,y,z]``) so trajectory
-/// coordinates for selected atoms are available without re-selecting in Python.
-///
-/// Returns a dict::
-///
-///     {
-///       "selection": str,
-///       "frames": [
-///         {
-///           "frame_index": int,
-///           "context_size": int,
-///           "matches": list[list[int]],
-///           "primary_indices": list[int],
-///           "atom_indices": list[int],  # atom context only
-///           "positions": list[list[float]],  # atom context only, same length as atom_indices
-///         },
-///         ...
-///       ],
-///     }
-#[pyfunction]
-fn select_on_frames(
-    py: Python<'_>,
-    frames: &Bound<'_, PyAny>,
-    selection: &str,
-) -> PyResult<Py<PyAny>> {
-    use crate::chemfiles_selection::select_atom_positions_on_frames;
-    use crate::types::ConFrame;
-    let seq = frames.try_iter()?;
-    let mut rust_frames: Vec<ConFrame> = Vec::new();
-    for item in seq {
-        let obj = item?;
-        let py_frame: PyRef<'_, PyConFrame> = obj.extract()?;
-        rust_frames.push(py_frame.to_con_frame(py)?);
-    }
-    let multi =
-        select_atom_positions_on_frames(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
-    let out = PyDict::new(py);
-    out.set_item("selection", multi.selection)?;
-    let frames_list = PyList::empty(py);
-    for slice in multi.frames {
-        let d = PyDict::new(py);
-        d.set_item("frame_index", slice.frame_index)?;
-        d.set_item("context_size", slice.result.context_size)?;
-        let matches: Vec<Vec<usize>> = slice
-            .result
-            .matches
-            .iter()
-            .map(|m| m.indices().to_vec())
-            .collect();
-        d.set_item("matches", matches)?;
-        d.set_item("primary_indices", slice.result.primary_indices())?;
-        d.set_item("atom_indices", slice.atom_indices.clone())?;
-        let pos: Vec<Vec<f64>> = slice
-            .positions
-            .iter()
-            .map(|p| vec![p[0], p[1], p[2]])
-            .collect();
-        d.set_item("positions", pos)?;
-        frames_list.append(d)?;
-    }
-    out.set_item("frames", frames_list)?;
-    Ok(out.into())
-}
