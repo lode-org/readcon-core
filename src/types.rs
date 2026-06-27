@@ -596,28 +596,99 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 }
 
 /// Represents a single, complete simulation frame, including header and all atomic data.
+///
+/// **Numeric layout (metatensor-shaped):** coordinates and optional sections live in
+/// opaque row-major [`ndarray::ArcArray`] blocks (`positions` is always present;
+/// velocities/forces/energies are empty `(0, …)` when the section is absent). Callers
+/// should treat these as the source of truth for DLPack (`as_dlpack` / FFI
+/// `*_as_dlpack`): query `dtype`/`device`/`shape` from the arrays, then export.
+/// [`Self::atom_data`] is the CON-text AoS projection (symbols, fixed masks, ids)
+/// kept in sync for the writer and legacy consumers—not the primary numeric store.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
-    /// A vector holding all atomic data for the frame.
+    /// AoS projection for CON serialization and symbol/fixed metadata.
     pub atom_data: Vec<AtomDatum>,
+    /// Primary positions `(N, 3)` f64, type-grouped `atom_data` order.
+    pub positions: ndarray::ArcArray2<f64>,
+    /// Velocities `(N, 3)` when the section is present; else shape `(0, 3)`.
+    pub velocities: ndarray::ArcArray2<f64>,
+    /// Forces `(N, 3)` when present; else `(0, 3)`.
+    pub forces: ndarray::ArcArray2<f64>,
+    /// Per-atom energies `(N,)` when present; else `(0,)`.
+    pub atom_energies: ndarray::ArcArray1<f64>,
+    /// Per-atom masses `(N,)` expanded from type masses (always length `N` on a
+    /// non-empty frame).
+    pub masses: ndarray::ArcArray1<f64>,
+    /// Per-atom ids `(N,)` u64.
+    pub atom_ids: ndarray::ArcArray1<u64>,
 }
 
 impl ConFrame {
+    /// Rebuild AoS [`atom_data`] coordinates (and optional sections) from SoA arrays.
+    pub fn sync_atom_data_from_arrays(&mut self) {
+        let n = self.positions.nrows();
+        if self.atom_data.len() != n {
+            return;
+        }
+        let has_vel = self.velocities.nrows() == n;
+        let has_frc = self.forces.nrows() == n;
+        let has_eng = self.atom_energies.len() == n;
+        for i in 0..n {
+            let a = &mut self.atom_data[i];
+            let p = self.positions.row(i);
+            a.x = p[0];
+            a.y = p[1];
+            a.z = p[2];
+            if has_vel {
+                let r = self.velocities.row(i);
+                a.velocity = Some([r[0], r[1], r[2]]);
+            }
+            if has_frc {
+                let r = self.forces.row(i);
+                a.force = Some([r[0], r[1], r[2]]);
+            }
+            if has_eng {
+                a.energy = Some(self.atom_energies[i]);
+            }
+            if i < self.atom_ids.len() {
+                a.atom_id = self.atom_ids[i];
+            }
+        }
+    }
+
+    /// Metatensor-style DLPack export of positions (storage dtype/device; request placement).
+    pub fn positions_as_dlpack(
+        &self,
+        device: dlpk::sys::DLDevice,
+    ) -> Result<dlpk::DLPackTensor, crate::error::ParseError> {
+        if device != dlpk::sys::DLDevice::cpu() {
+            return Err(crate::error::ParseError::ValidationError(
+                "ConFrame positions are CPU-resident; non-CPU as_dlpack unsupported".into(),
+            ));
+        }
+        dlpk::DLPackTensor::try_from(self.positions.clone()).map_err(|e| {
+            crate::error::ParseError::ValidationError(format!("positions as_dlpack: {e}"))
+        })
+    }
+
     /// Returns `true` if any atom in this frame has velocity data.
     pub fn has_velocities(&self) -> bool {
-        self.atom_data.first().is_some_and(|a| a.has_velocity())
+        self.velocities.nrows() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_velocity())
     }
 
     /// Returns `true` if any atom in this frame has force data.
     pub fn has_forces(&self) -> bool {
-        self.atom_data.first().is_some_and(|a| a.has_forces())
+        self.forces.nrows() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_forces())
     }
 
     /// Returns `true` if any atom in this frame carries a per-atom energy.
     pub fn has_energies(&self) -> bool {
-        self.atom_data.first().is_some_and(|a| a.has_energy())
+        self.atom_energies.len() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_energy())
     }
 
     /// Builds an O(1) reverse index from `atom_id` to the position of
@@ -1801,6 +1872,59 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
+        // SoA primary storage (opaque DLPack-shaped); atom_data is AoS projection.
+        let mut pos = ndarray::ArcArray2::<f64>::zeros((n, 3));
+        let mut vel = if has_vel {
+            ndarray::ArcArray2::<f64>::zeros((n, 3))
+        } else {
+            ndarray::ArcArray2::<f64>::zeros((0, 3))
+        };
+        let mut frc = if has_frc {
+            ndarray::ArcArray2::<f64>::zeros((n, 3))
+        } else {
+            ndarray::ArcArray2::<f64>::zeros((0, 3))
+        };
+        let mut eng = if has_eng {
+            ndarray::ArcArray1::<f64>::zeros(n)
+        } else {
+            ndarray::ArcArray1::<f64>::zeros(0)
+        };
+        let mut masses_arr = ndarray::ArcArray1::<f64>::zeros(n);
+        let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
+        for (i, a) in atom_data.iter().enumerate() {
+            pos[[i, 0]] = a.x;
+            pos[[i, 1]] = a.y;
+            pos[[i, 2]] = a.z;
+            ids_arr[i] = a.atom_id;
+            if has_vel {
+                if let Some(v) = a.velocity {
+                    vel[[i, 0]] = v[0];
+                    vel[[i, 1]] = v[1];
+                    vel[[i, 2]] = v[2];
+                }
+            }
+            if has_frc {
+                if let Some(f) = a.force {
+                    frc[[i, 0]] = f[0];
+                    frc[[i, 1]] = f[1];
+                    frc[[i, 2]] = f[2];
+                }
+            }
+            if has_eng {
+                eng[i] = a.energy.unwrap_or(0.0);
+            }
+        }
+        let mut off = 0usize;
+        for (ti, &count) in type_counts.iter().enumerate() {
+            let m = type_masses.get(ti).copied().unwrap_or(0.0);
+            for _ in 0..count {
+                if off < n {
+                    masses_arr[off] = m;
+                    off += 1;
+                }
+            }
+        }
+
         let header = FrameHeader {
             prebox_header: PreboxHeader::new(self.prebox_user),
             boxl: self.cell,
@@ -1816,7 +1940,85 @@ impl ConFrameBuilder {
             sections_declared,
         };
 
-        ConFrame { header, atom_data }
+        ConFrame {
+            header,
+            atom_data,
+            positions: pos,
+            velocities: vel,
+            forces: frc,
+            atom_energies: eng,
+            masses: masses_arr,
+            atom_ids: ids_arr,
+        }
+    }
+}
+
+/// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
+pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) -> ConFrame {
+    let n = atom_data.len();
+    let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
+    let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
+    let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
+    let mut pos = ndarray::ArcArray2::<f64>::zeros((n, 3));
+    let mut vel = if has_vel {
+        ndarray::ArcArray2::<f64>::zeros((n, 3))
+    } else {
+        ndarray::ArcArray2::<f64>::zeros((0, 3))
+    };
+    let mut frc = if has_frc {
+        ndarray::ArcArray2::<f64>::zeros((n, 3))
+    } else {
+        ndarray::ArcArray2::<f64>::zeros((0, 3))
+    };
+    let mut eng = if has_eng {
+        ndarray::ArcArray1::<f64>::zeros(n)
+    } else {
+        ndarray::ArcArray1::<f64>::zeros(0)
+    };
+    let mut masses_arr = ndarray::ArcArray1::<f64>::zeros(n);
+    let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
+    let mut off = 0usize;
+    for (ti, &count) in header.natms_per_type.iter().enumerate() {
+        let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
+        for _ in 0..count {
+            if off < n {
+                masses_arr[off] = m;
+                off += 1;
+            }
+        }
+    }
+    for (i, a) in atom_data.iter().enumerate() {
+        pos[[i, 0]] = a.x;
+        pos[[i, 1]] = a.y;
+        pos[[i, 2]] = a.z;
+        ids_arr[i] = a.atom_id;
+        if has_vel {
+            if let Some(v) = a.velocity {
+                vel[[i, 0]] = v[0];
+                vel[[i, 1]] = v[1];
+                vel[[i, 2]] = v[2];
+            }
+        }
+        if has_frc {
+            if let Some(f) = a.force {
+                frc[[i, 0]] = f[0];
+                frc[[i, 1]] = f[1];
+                frc[[i, 2]] = f[2];
+            }
+        }
+        if has_eng {
+            eng[i] = a.energy.unwrap_or(0.0);
+        }
+    }
+    ConFrame {
+        header,
+        atom_data,
+        positions: pos,
+        velocities: vel,
+        forces: frc,
+        atom_energies: eng,
+        masses: masses_arr,
+        atom_ids: ids_arr,
     }
 }
 
