@@ -576,12 +576,12 @@ These keys are implementation extras: parsers MUST preserve unknown keys;
 writers MUST NOT require them for valid v2 files. Hand-authored frames without
 sidecars behave as symbol-only for selection.
 
-****Selection (library behaviour).**** Implementations SHOULD prefer multiset
-agreement with chemfiles after remapping indices through ``atom_id`` into
-type-grouped ``atom_data`` order. Residue / ``resname``, properties not retained on
-import, topology beyond pair ``bonds``, and geometry assertion suites in chemfiles
-``tests/selection.cpp`` are outside the CON selection surface (format limits, not
-optional extras). Narrative: ``chemfiles-explain``; APIs: ``bindings``.
+****Selection (library behaviour).**** Match indices are reported in type-grouped
+``atom_data`` order; bond endpoints use the same index space (``atom_id`` remap on
+import). Residue / ``resname``, properties not retained on import, topology beyond
+pair ``bonds``, and geometry-threshold minidialects are outside the CON selection
+surface because the format does not carry that data. Narrative:
+``chemfiles-explain``; APIs: ``bindings``.
 
 .. _units:
 

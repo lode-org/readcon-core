@@ -66,7 +66,7 @@ task.
     | Chemfiles import / selection                                                          | yes (``chemfiles`` feature)    | ``select_on_frame`` / ``select_atom_indices``    | ``select_on_frame`` / ``select_atom_indices`` (FFI; chemfiles lib) | ``rkr_frame_select`` / ``read_chemfiles_first``       | ``rkr_frame_select``                                         | ``ConFrame::select`` |
     +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+----------------------+
 
-****Chemfiles selection (shared evaluator).**** One evaluator core; every
+****Selection (shared evaluator).**** One evaluator core; every
 surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 ``Selection`` after projecting the frame). Build with ``--features chemfiles``;
 probe with ``rkr_has_chemfiles_support()`` / ``has_chemfiles_support()`` (Julia) /
@@ -152,20 +152,15 @@ Supported contexts when topology is present (``metadata["bonds"]``, 0-based
 ``three:`` / ``four:``, and predicates ``is_bonded`` / ``is_angle`` / ``is_dihedral`` on
 the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
 
-****Indices.**** CON groups atoms by element type. Bond endpoints and selection
-matches use that ``atom_data`` order (chemfiles import remaps via ``atom_id``).
-Compared with a selection run inside chemfiles, compare *sets* of indices, not
-the exact order of the chemfiles list.
+****Selection on CON frames.**** With ``metadata["bonds"]`` (0-based ``atom_data``
+pairs): ``bonds:`` / ``angles:`` / ``dihedrals:`` and ``is_bonded`` family. Without bonds,
+``name`` / ``type`` / ``all`` still work. Matches are CON ``atom_data`` indices.
 
-****Name vs type after import.**** On disk there is still one ``symbol`` column.
-Import also writes optional ``chemfiles_atom_names`` / ``chemfiles_atom_types``
-so ``name H1`` and ``type H`` both work. Frames built by hand without those keys
-use ``symbol`` for both.
+****Name vs type after foreign import.**** One on-disk ``symbol``; optional sidecars
+for display names after conversion.
 
-****Limits from the format.**** Residue / ``resname``, most chemfiles properties,
-topology past pair ``bonds``, and geometry assertion cases in chemfiles
-``tests/selection.cpp`` are not on the CON selection surface—CON never stored
-that data. Detail: `Why is selection not full chemfiles? <chemfiles-explain.rst>`_.
+****Format limits.**** No residues, pair ``bonds`` only, thin properties—see
+`What selection cannot see on CON <chemfiles-explain.rst>`_.
 
 3 Python (PyO3)
 ---------------
