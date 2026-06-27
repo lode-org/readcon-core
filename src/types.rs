@@ -2028,7 +2028,7 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         masses: masses_arr,
         atom_ids: ids_arr,
     };
-    if let Ok(dt) = StorageDtypes::from_metadata(&frame.header.metadata) {
+    if let Ok(dt) = crate::storage_dtype::StorageDtypes::from_metadata(&frame.header.metadata) {
         frame.project_storage_dtypes(&dt);
     }
     frame
