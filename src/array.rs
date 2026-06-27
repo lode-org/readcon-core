@@ -1,17 +1,18 @@
-//! In-memory array storage for the v0.11 ConFrameBuilder.
+//! Opaque numeric storage for builders and frames (metatensor v0.2.x shape).
 //!
-//! Mirrors metatensor v2's `Array` trait shape so readcon's per-atom
-//! buffers (positions / velocities / forces / atom_energies / masses /
-//! atom_ids / fixed) live behind a `Box<dyn Array>` and can swap
-//! between dtypes (f32 / f64 / u64 / bool), devices (CPU / future GPU
-//! backings), and ownership models (owned `ArrayD<T>`,
-//! `Arc<RwLock<ArrayD<T>>>` for shared mut, mmap'd, ...) without
-//! changing the builder's surface.
+//! **Design:** internal data is DLPack-shaped (`shape` / `dtype` / `device` /
+//! `as_dlpack(device, stream, max_version)`), not “AoS structs with a DLPack
+//! export bolt-on.” Callers **query** storage dtype/device, then `as_dlpack`
+//! with a **requested device** (and stream / max version)—same contract as
+//! metatensor `mts_array_t`. Choosing f32 vs f64 is choosing **storage**
+//! (or a future typed builder), not passing a cast-target on every export.
 //!
-//! DLPack is the cross-language export protocol; every `Array`
-//! implementor returns a `DLPackTensor` view via `as_dlpack` so C /
-//! C++ / Python (NumPy / PyTorch / JAX / ...) / Julia consumers all
-//! see the same memory through one ABI.
+//! `ConFrame` keeps row-major `ArcArray` blocks for positions and optional
+//! sections; `atom_data` is the CON-text AoS projection for the writer.
+//!
+//! Implementors can swap dtypes (f32 / f64 / u64 / bool), devices (CPU /
+//! future GPU), and ownership (`ArrayD`, `Arc<RwLock<...>>`, …) without
+//! changing the public surface.
 //!
 //! The default backing is `Arc<RwLock<ndarray::ArrayD<T>>>` --
 //!   * `Arc`     : multiple DLPack views can share the same buffer

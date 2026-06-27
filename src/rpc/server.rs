@@ -187,7 +187,7 @@ impl read_con_service::Server for ReadConServiceImpl {
                 sections_declared: false,
             };
 
-            frames.push(ConFrame { header, atom_data });
+            frames.push(crate::types::con_frame_from_atom_data(header, atom_data));
         }
 
         let mut buffer: Vec<u8> = Vec::new();

@@ -3134,10 +3134,17 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    let arr = frame_positions_arc(frame);
-    // Storage dtype is f64 — do not cast; consumers convert after export.
-    let opts = RKRDlpackExportOptions::default();
-    export_owned_array2_dlpack_opts(&arr, &opts, out_tensor)
+    // Opaque SoA storage → DLPack (metatensor-style: export what is held).
+    match frame.positions_as_dlpack(dlpk::sys::DLDevice::cpu()) {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(e),
+    }
 }
 
 /// Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
@@ -3187,11 +3194,15 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     } else {
         return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
     };
-    for (i, a) in frame.atom_data.iter_mut().enumerate() {
-        a.x = vals[i * 3];
-        a.y = vals[i * 3 + 1];
-        a.z = vals[i * 3 + 2];
+    if frame.positions.nrows() != n {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
     }
+    for i in 0..n {
+        frame.positions[[i, 0]] = vals[i * 3];
+        frame.positions[[i, 1]] = vals[i * 3 + 1];
+        frame.positions[[i, 2]] = vals[i * 3 + 2];
+    }
+    frame.sync_atom_data_from_arrays();
     RKRStatus::RKR_STATUS_SUCCESS
 }
 

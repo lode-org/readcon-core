@@ -556,7 +556,7 @@ pub fn parse_single_frame<'a>(
             global_atom_idx += 1;
         }
     }
-    Ok(ConFrame { header, atom_data })
+    Ok(crate::types::con_frame_from_atom_data(header, atom_data))
 }
 
 fn validate_header_geometry(
