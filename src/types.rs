@@ -73,8 +73,14 @@ pub mod meta {
     /// Producing tool name (string).
     pub const GENERATOR: &str = "generator";
     /// Unit identifiers (object). Common subkeys: `length`, `energy`,
-    /// `time`.
+    /// `time`. **Required** for `con_spec_version` ≥ 3.
     pub const UNITS: &str = "units";
+    /// In-memory SoA element types (object). Subkeys: `positions`,
+    /// `velocities`, `forces`, `energies`, `masses` → `"float32"`|`"float64"`;
+    /// `atom_ids` → `"uint64"`. On-disk CON text remains binary64; this key
+    /// governs library storage and `as_dlpack` dtype. Optional on v3;
+    /// absent means all-float64 / uint64.
+    pub const STORAGE_DTYPES: &str = "storage_dtypes";
     /// Force-field descriptor (object). When a `type` field is
     /// present it must be a string.
     pub const POTENTIAL: &str = "potential";
@@ -598,34 +604,50 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 /// Represents a single, complete simulation frame, including header and all atomic data.
 ///
 /// **Numeric layout (metatensor-shaped):** coordinates and optional sections live in
-/// opaque row-major [`ndarray::ArcArray`] blocks (`positions` is always present;
-/// velocities/forces/energies are empty `(0, …)` when the section is absent). Callers
-/// should treat these as the source of truth for DLPack (`as_dlpack` / FFI
-/// `*_as_dlpack`): query `dtype`/`device`/`shape` from the arrays, then export.
-/// [`Self::atom_data`] is the CON-text AoS projection (symbols, fixed masks, ids)
-/// kept in sync for the writer and legacy consumers—not the primary numeric store.
+/// opaque [`crate::storage_dtype::FloatArray2`] / [`FloatArray1`] blocks. Callers treat
+/// these as the source of truth for DLPack (`as_dlpack` exports **storage** dtype).
+/// Project in-memory representation with [`Self::project_storage_dtypes`]. On-disk CON
+/// text remains binary64. [`Self::atom_data`] is the AoS projection for the writer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
     /// AoS projection for CON serialization and symbol/fixed metadata.
     pub atom_data: Vec<AtomDatum>,
-    /// Primary positions `(N, 3)` f64, type-grouped `atom_data` order.
-    pub positions: ndarray::ArcArray2<f64>,
-    /// Velocities `(N, 3)` when the section is present; else shape `(0, 3)`.
-    pub velocities: ndarray::ArcArray2<f64>,
+    /// Primary positions `(N, 3)`, type-grouped order (f32 or f64 storage).
+    pub positions: crate::storage_dtype::FloatArray2,
+    /// Velocities `(N, 3)` when present; else `(0, 3)`.
+    pub velocities: crate::storage_dtype::FloatArray2,
     /// Forces `(N, 3)` when present; else `(0, 3)`.
-    pub forces: ndarray::ArcArray2<f64>,
+    pub forces: crate::storage_dtype::FloatArray2,
     /// Per-atom energies `(N,)` when present; else `(0,)`.
-    pub atom_energies: ndarray::ArcArray1<f64>,
-    /// Per-atom masses `(N,)` expanded from type masses (always length `N` on a
-    /// non-empty frame).
-    pub masses: ndarray::ArcArray1<f64>,
-    /// Per-atom ids `(N,)` u64.
+    pub atom_energies: crate::storage_dtype::FloatArray1,
+    /// Per-atom masses `(N,)`.
+    pub masses: crate::storage_dtype::FloatArray1,
+    /// Per-atom ids `(N,)` u64 (always).
     pub atom_ids: ndarray::ArcArray1<u64>,
 }
 
 impl ConFrame {
+    /// Apply [`crate::storage_dtype::StorageDtypes`] from metadata (or argument) to SoA fields.
+    pub fn project_storage_dtypes(&mut self, dtypes: &crate::storage_dtype::StorageDtypes) {
+        self.positions.project_to(dtypes.positions);
+        if self.velocities.nrows() > 0 {
+            self.velocities.project_to(dtypes.velocities);
+        }
+        if self.forces.nrows() > 0 {
+            self.forces.project_to(dtypes.forces);
+        }
+        if self.atom_energies.len() > 0 {
+            self.atom_energies.project_to(dtypes.energies);
+        }
+        if self.masses.len() > 0 {
+            self.masses.project_to(dtypes.masses);
+        }
+        dtypes.insert_into(&mut self.header.metadata);
+        self.sync_atom_data_from_arrays();
+    }
+
     /// Rebuild AoS [`atom_data`] coordinates (and optional sections) from SoA arrays.
     pub fn sync_atom_data_from_arrays(&mut self) {
         let n = self.positions.nrows();
@@ -637,20 +659,18 @@ impl ConFrame {
         let has_eng = self.atom_energies.len() == n;
         for i in 0..n {
             let a = &mut self.atom_data[i];
-            let p = self.positions.row(i);
+            let p = self.positions.as_f64_row(i);
             a.x = p[0];
             a.y = p[1];
             a.z = p[2];
             if has_vel {
-                let r = self.velocities.row(i);
-                a.velocity = Some([r[0], r[1], r[2]]);
+                a.velocity = Some(self.velocities.as_f64_row(i));
             }
             if has_frc {
-                let r = self.forces.row(i);
-                a.force = Some([r[0], r[1], r[2]]);
+                a.force = Some(self.forces.as_f64_row(i));
             }
             if has_eng {
-                a.energy = Some(self.atom_energies[i]);
+                a.energy = Some(self.atom_energies.get_f64(i));
             }
             if i < self.atom_ids.len() {
                 a.atom_id = self.atom_ids[i];
@@ -658,19 +678,42 @@ impl ConFrame {
         }
     }
 
-    /// Metatensor-style DLPack export of positions (storage dtype/device; request placement).
+    /// Metatensor-style: export **stored** positions (f32 or f64) via DLPack.
     pub fn positions_as_dlpack(
         &self,
         device: dlpk::sys::DLDevice,
     ) -> Result<dlpk::DLPackTensor, crate::error::ParseError> {
-        if device != dlpk::sys::DLDevice::cpu() {
-            return Err(crate::error::ParseError::ValidationError(
-                "ConFrame positions are CPU-resident; non-CPU as_dlpack unsupported".into(),
-            ));
+        self.positions.as_dlpack(device)
+    }
+
+    pub fn velocities_as_dlpack(
+        &self,
+        device: dlpk::sys::DLDevice,
+    ) -> Result<Option<dlpk::DLPackTensor>, crate::error::ParseError> {
+        if self.velocities.nrows() == 0 {
+            return Ok(None);
         }
-        dlpk::DLPackTensor::try_from(self.positions.clone()).map_err(|e| {
-            crate::error::ParseError::ValidationError(format!("positions as_dlpack: {e}"))
-        })
+        Ok(Some(self.velocities.as_dlpack(device)?))
+    }
+
+    pub fn forces_as_dlpack(
+        &self,
+        device: dlpk::sys::DLDevice,
+    ) -> Result<Option<dlpk::DLPackTensor>, crate::error::ParseError> {
+        if self.forces.nrows() == 0 {
+            return Ok(None);
+        }
+        Ok(Some(self.forces.as_dlpack(device)?))
+    }
+
+    pub fn atom_energies_as_dlpack(
+        &self,
+        device: dlpk::sys::DLDevice,
+    ) -> Result<Option<dlpk::DLPackTensor>, crate::error::ParseError> {
+        if self.atom_energies.len() == 0 {
+            return Ok(None);
+        }
+        Ok(Some(self.atom_energies.as_dlpack(device)?))
     }
 
     /// Returns `true` if any atom in this frame has velocity data.
@@ -1872,46 +1915,28 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
-        // SoA primary storage (opaque DLPack-shaped); atom_data is AoS projection.
-        let mut pos = ndarray::ArcArray2::<f64>::zeros((n, 3));
-        let mut vel = if has_vel {
-            ndarray::ArcArray2::<f64>::zeros((n, 3))
-        } else {
-            ndarray::ArcArray2::<f64>::zeros((0, 3))
-        };
-        let mut frc = if has_frc {
-            ndarray::ArcArray2::<f64>::zeros((n, 3))
-        } else {
-            ndarray::ArcArray2::<f64>::zeros((0, 3))
-        };
-        let mut eng = if has_eng {
-            ndarray::ArcArray1::<f64>::zeros(n)
-        } else {
-            ndarray::ArcArray1::<f64>::zeros(0)
-        };
-        let mut masses_arr = ndarray::ArcArray1::<f64>::zeros(n);
+        use crate::storage_dtype::{FloatArray1, FloatArray2};
+        let mut pos = FloatArray2::zeros_f64(n, 3);
+        let mut vel = FloatArray2::zeros_f64(if has_vel { n } else { 0 }, 3);
+        let mut frc = FloatArray2::zeros_f64(if has_frc { n } else { 0 }, 3);
+        let mut eng = FloatArray1::zeros_f64(if has_eng { n } else { 0 });
+        let mut masses_arr = FloatArray1::zeros_f64(n);
         let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
         for (i, a) in atom_data.iter().enumerate() {
-            pos[[i, 0]] = a.x;
-            pos[[i, 1]] = a.y;
-            pos[[i, 2]] = a.z;
+            pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
             if has_vel {
                 if let Some(v) = a.velocity {
-                    vel[[i, 0]] = v[0];
-                    vel[[i, 1]] = v[1];
-                    vel[[i, 2]] = v[2];
+                    vel.set_f64_row(i, v);
                 }
             }
             if has_frc {
                 if let Some(f) = a.force {
-                    frc[[i, 0]] = f[0];
-                    frc[[i, 1]] = f[1];
-                    frc[[i, 2]] = f[2];
+                    frc.set_f64_row(i, f);
                 }
             }
             if has_eng {
-                eng[i] = a.energy.unwrap_or(0.0);
+                eng.set_f64(i, a.energy.unwrap_or(0.0));
             }
         }
         let mut off = 0usize;
@@ -1919,7 +1944,7 @@ impl ConFrameBuilder {
             let m = type_masses.get(ti).copied().unwrap_or(0.0);
             for _ in 0..count {
                 if off < n {
-                    masses_arr[off] = m;
+                    masses_arr.set_f64(off, m);
                     off += 1;
                 }
             }
@@ -1959,58 +1984,41 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
     let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
     let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
     let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
-    let mut pos = ndarray::ArcArray2::<f64>::zeros((n, 3));
-    let mut vel = if has_vel {
-        ndarray::ArcArray2::<f64>::zeros((n, 3))
-    } else {
-        ndarray::ArcArray2::<f64>::zeros((0, 3))
-    };
-    let mut frc = if has_frc {
-        ndarray::ArcArray2::<f64>::zeros((n, 3))
-    } else {
-        ndarray::ArcArray2::<f64>::zeros((0, 3))
-    };
-    let mut eng = if has_eng {
-        ndarray::ArcArray1::<f64>::zeros(n)
-    } else {
-        ndarray::ArcArray1::<f64>::zeros(0)
-    };
-    let mut masses_arr = ndarray::ArcArray1::<f64>::zeros(n);
+    use crate::storage_dtype::{FloatArray1, FloatArray2};
+    let mut pos = FloatArray2::zeros_f64(n, 3);
+    let mut vel = FloatArray2::zeros_f64(if has_vel { n } else { 0 }, 3);
+    let mut frc = FloatArray2::zeros_f64(if has_frc { n } else { 0 }, 3);
+    let mut eng = FloatArray1::zeros_f64(if has_eng { n } else { 0 });
+    let mut masses_arr = FloatArray1::zeros_f64(n);
     let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
     let mut off = 0usize;
     for (ti, &count) in header.natms_per_type.iter().enumerate() {
         let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
         for _ in 0..count {
             if off < n {
-                masses_arr[off] = m;
+                masses_arr.set_f64(off, m);
                 off += 1;
             }
         }
     }
     for (i, a) in atom_data.iter().enumerate() {
-        pos[[i, 0]] = a.x;
-        pos[[i, 1]] = a.y;
-        pos[[i, 2]] = a.z;
+        pos.set_f64_row(i, [a.x, a.y, a.z]);
         ids_arr[i] = a.atom_id;
         if has_vel {
             if let Some(v) = a.velocity {
-                vel[[i, 0]] = v[0];
-                vel[[i, 1]] = v[1];
-                vel[[i, 2]] = v[2];
+                vel.set_f64_row(i, v);
             }
         }
         if has_frc {
             if let Some(f) = a.force {
-                frc[[i, 0]] = f[0];
-                frc[[i, 1]] = f[1];
-                frc[[i, 2]] = f[2];
+                frc.set_f64_row(i, f);
             }
         }
         if has_eng {
-            eng[i] = a.energy.unwrap_or(0.0);
+            eng.set_f64(i, a.energy.unwrap_or(0.0));
         }
     }
-    ConFrame {
+    let mut frame = ConFrame {
         header,
         atom_data,
         positions: pos,
@@ -2019,8 +2027,14 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         atom_energies: eng,
         masses: masses_arr,
         atom_ids: ids_arr,
+    };
+    if let Ok(dt) = StorageDtypes::from_metadata(&frame.header.metadata) {
+        frame.project_storage_dtypes(&dt);
     }
+    frame
 }
+
+// }
 
 impl ConFrame {
     /// Creates a new builder for constructing a `ConFrame`.
@@ -2198,6 +2212,29 @@ mod tests {
         assert_eq!(header.timestep(), Some(0.5));
         assert_eq!(header.neb_bead(), Some(3));
         assert_eq!(header.neb_band(), Some(1));
+    }
+
+    #[test]
+    fn project_positions_to_float32_storage_and_as_dlpack() {
+        use crate::storage_dtype::{FloatStorageKind, StorageDtypes};
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
+        let mut frame = b.build();
+        let mut dt = StorageDtypes::all_f64();
+        dt.positions = FloatStorageKind::Float32;
+        frame.project_storage_dtypes(&dt);
+        assert_eq!(
+            frame.positions.kind(),
+            FloatStorageKind::Float32
+        );
+        let t = frame
+            .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
+            .unwrap();
+        assert_eq!(t.shape(), &[1, 3]);
+        // metadata records storage_dtypes
+        assert!(frame.header.metadata.get(meta::STORAGE_DTYPES).is_some());
+        let row = frame.positions.as_f64_row(0);
+        assert!((row[0] - 1.0).abs() < 1e-5);
     }
 
     #[test]

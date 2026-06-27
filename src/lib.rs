@@ -6,6 +6,7 @@ pub mod helpers;
 pub mod iterators;
 pub mod parser;
 pub mod types;
+pub mod storage_dtype;
 pub mod units;
 pub mod writer;
 
