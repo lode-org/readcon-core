@@ -348,11 +348,18 @@ class ConFrame {
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_copy_atom_ids(frame_handle_.get(), out, out_len);
     }
-    /** DLPack positions (caller: rkr_dlpack_delete). */
+    /** DLPack positions (caller: rkr_dlpack_delete). Default float64/CPU. */
     RKRStatus positions_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
         if (!frame_handle_ || !out_tensor)
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_positions_dlpack(frame_handle_.get(), out_tensor);
+    }
+    /** Positions with precision/device options (`float_bits` 32 or 64; CPU only for now). */
+    RKRStatus positions_dlpack(const RKRDlpackExportOptions &opts,
+                               RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_positions_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
     }
     /** DLPack velocities; SECTION_ABSENT (-8) if the frame has none. */
     RKRStatus velocities_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
@@ -360,17 +367,35 @@ class ConFrame {
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_velocities_dlpack(frame_handle_.get(), out_tensor);
     }
+    RKRStatus velocities_dlpack(const RKRDlpackExportOptions &opts,
+                                RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_velocities_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
     /** DLPack forces; SECTION_ABSENT if missing. */
     RKRStatus forces_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
         if (!frame_handle_ || !out_tensor)
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_forces_dlpack(frame_handle_.get(), out_tensor);
     }
+    RKRStatus forces_dlpack(const RKRDlpackExportOptions &opts,
+                            RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_forces_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
     /** DLPack per-atom energies; SECTION_ABSENT if missing. */
     RKRStatus atom_energies_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
         if (!frame_handle_ || !out_tensor)
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_atom_energies_dlpack(frame_handle_.get(), out_tensor);
+    }
+    RKRStatus atom_energies_dlpack(const RKRDlpackExportOptions &opts,
+                                   RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_atom_energies_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
     }
 
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
