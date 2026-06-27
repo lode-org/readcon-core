@@ -34,6 +34,18 @@
     var f = search.tagName === "FORM" ? search : search.closest("form");
     if (f) f.setAttribute("aria-label", "Search documentation");
   }
+  /* Sphinx line wrappers: <span data-line="N">…\n</span> (inline in HTML).
+     Some theme CSS forces block on [data-line], which doubles every newline
+     (R fences look broken). Unwrap so only the embedded \n breaks lines;
+     token spans stay for Pygments colours (CSS forces them inline). */
+  document.querySelectorAll("pre [data-line]").forEach(function (span) {
+    var parent = span.parentNode;
+    if (!parent) return;
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span);
+    }
+    parent.removeChild(span);
+  });
   /* Code blocks: ensure pre is keyboard-scrollable and labelled */
   document.querySelectorAll(".sy-page pre, .highlight pre, pre.literal-block").forEach(function (pre, i) {
     if (!pre.hasAttribute("tabindex")) pre.setAttribute("tabindex", "0");

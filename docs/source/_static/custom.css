@@ -254,21 +254,28 @@ article.yue {
   outline: none;
 }
 
-/* Code fences: Sphinx/Pygments use many <span>s (tokens + optional data-line
-   wrappers that already embed "
-"). Everything inside <pre> must stay inline
-   or you get double-spaced R/Python (or one token per visual line). */
+/* Code fences: Pygments token <span>s must be inline (colour via class, not box).
+   Sphinx may also emit <span data-line>…
+</span>; extra-foot unwraps those so
+   theme display:block on [data-line] cannot double line gaps (R looked broken). */
 .sy-page .highlight pre,
-.sy-page pre.literal-block {
+.sy-page div[class*="highlight-"] pre,
+.sy-page pre.literal-block,
+div.highlight pre,
+div[class*="highlight-"] pre {
   white-space: pre !important;
 }
 
 .sy-page .highlight pre span,
 .sy-page .highlight pre code,
+.sy-page div[class*="highlight-"] pre span,
+.sy-page div[class*="highlight-"] pre code,
 .sy-page pre.literal-block span,
 .sy-page pre.literal-block code,
-.sy-page .highlight pre [data-line],
-.sy-page .highlight pre span[data-line] {
+div.highlight pre span,
+div[class*="highlight-"] pre span,
+.highlight pre span[data-line],
+.highlight pre [data-line] {
   display: inline !important;
   font-family: inherit !important;
   font-size: inherit !important;
@@ -278,13 +285,6 @@ article.yue {
   outline: none !important;
   margin: 0 !important;
   padding: 0 !important;
-  background: transparent; /* token colors come from classes on the same span */
-}
-
-/* Token colours need background: transparent only on wrappers; Pygments uses
-   classes on spans for colour — do not zero background on .c1/.nf/etc. */
-.sy-page .highlight pre span[data-line] {
-  background: transparent !important;
 }
 
 /* Tokens inside blocks must inherit readable size */
