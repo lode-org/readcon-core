@@ -22,6 +22,19 @@ thin FFI and language-specific wrapper layers.
                 Rust core library
            types | parser | writer | iterators
 
+**Ecosystem split.** This crate is the **interchange and ABI** layer: parse/write
+CON/convel, optional chemfiles ingress into ``ConFrame``, typed metadata
+(``energy``, ``sections``, …). Campaign-scale corpora (many trajectories,
+selective access without loading every frame into heap RAM) live in the
+companion **readcon-db** store
+(`repository <https://github.com/lode-org/readcon-db>`_,
+`docs site <https://lode-org.github.io/readcon-db/>`_ when published). Blobs
+there remain CON text and are always decoded with readcon-core—no forked
+metadata schema. Day-to-day path: CON files or chemfiles→``ConFrame`` in core;
+campaign filters (natoms, symbols, **energy range**, **forces/velocities
+flags**, xxHash3 exact match) in readcon-db. ASE is optional only for
+calculator ``Atoms`` hand-off, not campaign storage.
+
 2 Core types (types.rs)
 -----------------------
 
@@ -31,7 +44,9 @@ thin FFI and language-specific wrapper layers.
     records the CON spec version from the JSON metadata line. The
     ``metadata`` field (``BTreeMap<String, serde_json::Value>``) holds
     additional key-value pairs from the JSON, preserving unrecognized
-    keys through round-trips.
+    keys through round-trips. Recommended key ``energy`` (finite number) and
+    declared ``sections`` (e.g. ``forces``, ``velocities``) are the authority
+    for corpus secondary indexes in readcon-db.
 
 ``AtomDatum``
     Single atom data (symbol, coordinates, fixed flag,
