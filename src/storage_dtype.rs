@@ -129,6 +129,14 @@ impl FloatArray2 {
         Self::F64(ndarray::ArcArray2::zeros((n, c)))
     }
 
+    /// Allocate empty storage in the requested element type (no later project needed).
+    pub fn zeros(kind: FloatStorageKind, n: usize, c: usize) -> Self {
+        match kind {
+            FloatStorageKind::Float64 => Self::F64(ndarray::ArcArray2::zeros((n, c))),
+            FloatStorageKind::Float32 => Self::F32(ndarray::ArcArray2::zeros((n, c))),
+        }
+    }
+
     pub fn kind(&self) -> FloatStorageKind {
         match self {
             Self::F64(_) => FloatStorageKind::Float64,
@@ -244,6 +252,14 @@ pub enum FloatArray1 {
 impl FloatArray1 {
     pub fn zeros_f64(n: usize) -> Self {
         Self::F64(ndarray::ArcArray1::zeros(n))
+    }
+
+    /// Allocate empty 1-D storage in the requested element type.
+    pub fn zeros(kind: FloatStorageKind, n: usize) -> Self {
+        match kind {
+            FloatStorageKind::Float64 => Self::F64(ndarray::ArcArray1::zeros(n)),
+            FloatStorageKind::Float32 => Self::F32(ndarray::ArcArray1::zeros(n)),
+        }
     }
 
     pub fn kind(&self) -> FloatStorageKind {
