@@ -132,14 +132,13 @@ empty results—not a hard error unless the grammar is invalid.
 * Selection scope (what is in and out)
 
 readcon evaluates the chemfiles selection *grammar* on a projected CON frame
-(positions, cell, optional =bonds=, name/type sidecars). That is enough for
-common atom filters (=name=, =type=, =all=), bond/angle/dihedral contexts when
-=bonds= is present, and the regression cases in
-=chemfiles_selection_cpp_regression= (multiset match lists after =atom_id=
-remap into CON =atom_data= order).
+(positions, cell, optional =bonds=, name/type sidecars). That covers common atom
+filters (=name=, =type=, =all=), bond/angle/dihedral contexts when =bonds= is
+present, and the regression cases in =chemfiles_selection_cpp_regression=
+(multiset match lists after =atom_id= remap into CON =atom_data= order).
 
-The following are **outside** the supported subset: not half-implemented
-features, but explicit non-goals unless a later release says otherwise.
+Treat the rows below as **outside** the supported subset: explicit non-goals,
+not half-implemented features, unless a later release widens the contract.
 
 | Out of scope | Why |
 |--------------|-----|
