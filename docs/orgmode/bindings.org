@@ -225,12 +225,18 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 
 ** NumPy array views and DLPack interop (v0.10.0+)
 
-Every per-atom quantity has a contiguous NumPy ndarray accessor.
-Vector quantities are =[N, 3]= float64 arrays in the type-grouped
-order used by the underlying frame; scalars are =[N]=. NumPy 1.22+
-implements =__dlpack__= on its arrays, so the returned ndarrays
-interoperate zero-copy with torch / jax / cupy without readcon-core
-wiring DLPack itself.
+Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
+~atom_data~ order). Prefer **DLPack** for cross-framework hand-off: read
+~ndim~, ~shape~, and ~dtype~ (code/bits) from the tensor—do **not** assume the
+host language must allocate =f64= / =real64= copies. On-disk CON numerics are
+IEEE binary64 today, and current exports report =kDLFloat= / 64 for vectors and
+scalars (=kDLUInt= / 64 for =atom_id=), but consumers should branch on the
+tensor metadata so a future dtype change does not force a host =f64= ABI.
+
+C / C++ / Fortran: =rkr_frame_*_dlpack= / builder =*_dlpack= (and
+=rkr_dlpack_delete=) are the portable path; =rkr_frame_copy_*= remains a
+convenience that fills a caller =double*= buffer when you already hold f64
+storage.
 
 #+begin_src python
 import numpy as np
@@ -239,13 +245,13 @@ import readcon
 
 frame = readcon.read_first_frame("trajectory.con")
 
-coords = frame.coords_array()         # np.ndarray shape (N, 3) float64
-forces = frame.forces_array()         # Optional[np.ndarray]; None if absent
-velocities = frame.velocities_array() # Optional[np.ndarray]
-energies = frame.energies_array()     # Optional[np.ndarray] shape (N,)
-atom_ids = frame.atom_ids_array()     # np.ndarray shape (N,) uint64
+coords = frame.coords_array()         # ndarray (N, 3); inspect .dtype
+forces = frame.forces_array()         # Optional; None if absent
+velocities = frame.velocities_array()
+energies = frame.energies_array()     # Optional shape (N,)
+atom_ids = frame.atom_ids_array()     # typically uint64
 
-# Zero-copy hand-off into torch via DLPack.
+# Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
 coords_torch = torch.from_dlpack(coords)
 assert coords_torch.shape == (len(frame), 3)
 
@@ -633,25 +639,27 @@ runs lean (=chemfiles=) and fat (=chemfiles,metatensor=) via
 on CI (SIGFPE under gfortran traps); chemfiles stays on Rust CI. Python/Julia:
 no first-class TensorBlock helpers (matrix =n/a=); use C or Rust.
 
-* Builder DLPack export (C / Fortran)
+* Builder and frame DLPack export (C / Fortran)
 
-Owned =DLManagedTensorVersioned= tensors from a =ConFrameBuilder=
-(mirror of =dlpack.h= layout). Fortran binds the C struct fields
-(=dl_managed_tensor_versioned_t= / =dl_tensor_t=) for =dlpack_inspect=
-(ndim, shape, dtype bits) and =dlpack_data_ptr=.
+Owned =DLManagedTensorVersioned= tensors (mirror of =dlpack.h=). Fortran binds
+struct fields for =dlpack_inspect= (ndim, shape, **dtype bits**) and
+=dlpack_data_ptr=. **Inspect dtype before casting the data pointer**—do not
+require host =real64= solely because CON text uses binary64; use the bits field
+(64 for float sections today; 64 uint for atom ids).
 
-| Section | C ABI | Fortran method |
-|---------+-------+----------------|
-| positions =[N,3]= | =rkr_frame_builder_positions_dlpack= | =bd%positions_dlpack= |
-| velocities | =…_velocities_dlpack= | =bd%velocities_dlpack= |
+| Section | C (builder / frame) | Fortran |
+|---------+---------------------+---------|
+| positions =[N,3]= | =rkr_frame_builder_positions_dlpack= / =rkr_frame_positions_dlpack= | =bd%positions_dlpack= |
+| velocities | =…_velocities_dlpack= (frame + builder) | =bd%velocities_dlpack= |
 | forces | =…_forces_dlpack= | =bd%forces_dlpack= |
 | atom energies | =…_atom_energies_dlpack= | =bd%atom_energies_dlpack= |
-| masses =[N]= | =…_masses_dlpack= | =bd%masses_dlpack= |
-| atom ids =[N]= u64 | =…_atom_ids_dlpack= | =bd%atom_ids_dlpack= |
+| masses =[N]= | =…_masses_dlpack= (builder) | =bd%masses_dlpack= |
+| atom ids =[N]= | =…_atom_ids_dlpack= (builder; uint) | =bd%atom_ids_dlpack= |
 | free | =rkr_dlpack_delete= | =bd%dlpack_delete= |
 
-Absent optional sections return =RKR_STATUS_SECTION_ABSENT=. Not
-zero-copy views of live builder storage (owned clones only).
+Absent optional sections return =RKR_STATUS_SECTION_ABSENT=. Builder exports are
+owned clones, not live views of internal storage. Frame =copy_*= helpers still
+take =double*= for hosts that already use f64; prefer DLPack when interoperating.
 
 * Compression formats
 

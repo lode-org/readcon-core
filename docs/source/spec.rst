@@ -963,39 +963,12 @@ supported by PyTorch, TensorFlow, JAX, NumPy, CuPy, MXNet, TVM,
 OneFlow, MNN, OneAPI, and mlx, plus a stable C ABI
 (``DLManagedTensorVersioned``) for non-Python consumers.
 
-The DLPack tier exposes:
-
-- ``positions_dlpack(&self) -> DLPackTensorRef<'_>``, shape ``(N, 3)``, dtype f64.
-
-- ``positions_dlpack_mut(&mut self) -> DLPackTensorRefMut<'_>``,
-  same shape/dtype, write-through to the builder's storage.
-
-- ``velocities_dlpack(&self) -> Option<DLPackTensorRef<'_>>`` (``None`` when
-  the section is absent), shape ``(N, 3)``, dtype f64.
-
-- ``forces_dlpack``, same contract as ``velocities_dlpack``.
-
-- ``atom_energies_dlpack(&self) -> Option<DLPackTensorRef<'_>>``,
-  shape ``(N,)``, dtype f64.
-
-- ``masses_dlpack(&self) -> DLPackTensorRef<'_>``, shape ``(N,)``, dtype f64.
-
-- ``atom_ids_dlpack(&self) -> DLPackTensorRef<'_>``, shape ``(N,)``, dtype u64.
-
-The returned tensor MUST report:
-
-- shape: the field's natural shape (``(N, 3)`` or ``(N,)``).
-
-- strides: row-major standard layout for the dtype.
-
-- dtype: ``kDLFloat / 64`` for vector and scalar f64 fields,
-  ``kDLUInt / 64`` for atom\ :sub:`ids`\.
-
-- device: ``kDLCPU`` (device id 0) for the default backing. GPU /
-  device-resident backings (future versions) MAY surface a
-  non-CPU device tag.
-
-- data pointer: the backing array's first element.
+The DLPack tier exposes builder and frame exports for positions, optional
+velocities/forces/energies, masses, and atom ids. Consumers MUST read shape and
+**dtype** from the tensor; they MUST NOT assume a host ``f64`` buffer type.
+Current implementations use IEEE binary64 on disk and report ``kDLFloat`` / 64
+(or ``kDLUInt`` / 64 for atom ids). The returned tensor MUST report shape,
+strides, dtype, device (default CPU), and data pointer.
 
 Lifetime: ``DLPackTensorRef<'a>`` borrows from ``&'a self`` and MUST
 NOT outlive the builder. C / FFI consumers that need an owning
