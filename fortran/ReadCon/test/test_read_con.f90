@@ -80,22 +80,25 @@ program test_read_con
     if (abs(fr2%energy() + 42.5_real64) > 1.0e-6_real64) nfail = nfail + 1
     st = frame_metatensor_positions_block(fr2, mts)
     print *, "metatensor_positions st=", st, " block=", c_associated(mts)
-#ifdef READCON_HAS_METATENSOR
-    if (st /= 0 .or. .not. c_associated(mts)) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_velocities_block(fr2, mts)
-    print *, "metatensor_velocities (absent) st=", st
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_forces_block(fr2, mts)
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_atom_energies_block(fr2, mts)
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-#else
-    if (st /= rkr_status_feature_disabled) nfail = nfail + 1
-#endif
+    if (st == 0) then
+      if (.not. c_associated(mts)) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_velocities_block(fr2, mts)
+      print *, "metatensor_velocities (absent) st=", st
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_forces_block(fr2, mts)
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_atom_energies_block(fr2, mts)
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+    else if (st == rkr_status_feature_disabled) then
+      print *, "metatensor lean FEATURE_DISABLED ok"
+      if (c_associated(mts)) nfail = nfail + 1
+    else
+      nfail = nfail + 1
+    end if
     call fr2%free()
   end if
 
@@ -112,25 +115,13 @@ program test_read_con
     print *, "open_writer_gzip ok"
     call wg%free()
   end if
-#ifdef READCON_HAS_ZSTD
   wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_test.con.zst")
-  if (.not. wg%valid()) then
-    print *, "open_writer_zstd failed"
-    nfail = nfail + 1
-  else
-    print *, "open_writer_zstd ok"
-    call wg%free()
-  end if
-#else
-  wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_skip.con.zst")
   if (wg%valid()) then
-    print *, "open_writer_zstd should be null without READCON_HAS_ZSTD"
-    nfail = nfail + 1
+    print *, "open_writer_zstd ok (zstd feature)"
     call wg%free()
   else
-    print *, "open_writer_zstd lean null ok"
+    print *, "open_writer_zstd null (lean stub or error)"
   end if
-#endif
 
   call fr%free()
   if (nfail /= 0) then

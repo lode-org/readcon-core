@@ -257,6 +257,16 @@ typedef struct RKRConFrameBuilder {
     uint8_t _private[0];
 } RKRConFrameBuilder;
 
+#if !defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
+ * Real implementations live under `feature = "metatensor"`.
+ */
+typedef struct mts_block_t {
+    uint8_t _private[0];
+} mts_block_t;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -1292,6 +1302,18 @@ struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *filena
                                                               uint8_t precision);
 #endif
 
+#if !defined(READCON_CORE_HAS_ZSTD)
+/**
+ * zstd writer — stub when built without `zstd` (always linkable; returns null).
+ */
+struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
+#endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
+                                                              uint8_t _precision);
+#endif
+
 /**
  * Reads the first frame from a .con file.
  * Uses `read_to_string` for small files (< 64 KiB) and mmap for larger ones.
@@ -1334,7 +1356,7 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
  * # Safety
  * `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
  */
-void rkr_mts_block_free(mts_block_t *block);
+void rkr_mts_block_free(struct mts_block_t *block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
@@ -1342,22 +1364,46 @@ void rkr_mts_block_free(mts_block_t *block);
  * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
  */
 enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
-                                                    mts_block_t **out_block);
+                                                    struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
-                                                     mts_block_t **out_block);
+                                                     struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
-                                                 mts_block_t **out_block);
+                                                 struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
-                                                        mts_block_t **out_block);
+                                                        struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+void rkr_mts_block_free(struct mts_block_t *_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *_frame_handle,
+                                                    struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *_frame_handle,
+                                                     struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *_frame_handle,
+                                                 struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *_frame_handle,
+                                                        struct mts_block_t **out_block);
 #endif
 
 /**
@@ -1457,6 +1503,27 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
  * `tensor` must be NULL or a pointer from a dlpack export of this library.
  */
 void rkr_dlpack_delete(RKRDLManagedTensorVersioned *tensor);
+
+/**
+ * Arc-shared positions DLPack view (zero-copy; see module comment).
+ */
+enum RKRStatus rkr_frame_builder_positions_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                           RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_velocities_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                            RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_forces_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                        RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_atom_energies_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                               RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_masses_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                        RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_atom_ids_dlpack_borrowed(const struct RKRConFrameBuilder *builder_handle,
+                                                          RKRDLManagedTensorVersioned **out_tensor);
 
 #ifdef __cplusplus
 }  // extern "C"

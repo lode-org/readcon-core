@@ -1,0 +1,33 @@
+name: Feature matrix (C ABI)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - chemfiles
+          - chemfiles,zstd
+          - chemfiles,metatensor
+          - chemfiles,zstd,metatensor
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cbindgen (header check)
+        run: cargo install cbindgen --locked || cargo install cbindgen
+      - name: Build + symbol/header matrix
+        env:
+          FEATURES: ${{ matrix.features }}
+          PROFILE: release
+        run: bash scripts/check_feature_matrix.sh
+      - name: Lib tests for this feature set
+        # shellcheck disable=SC2086
+        run: cargo test --release --features ${{ matrix.features }} --lib

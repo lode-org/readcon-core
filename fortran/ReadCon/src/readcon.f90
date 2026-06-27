@@ -7,7 +7,10 @@ module readcon
   private
 
   public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
-  public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_feature_disabled
+  public :: rkr_status_invalid_utf8, rkr_status_invalid_json, rkr_status_io_error
+  public :: rkr_status_index_out_of_bounds, rkr_status_buffer_too_small
+  public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_validation_error
+  public :: rkr_status_feature_disabled
   public :: catom_t, cframe_t
   public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
   public :: dlpack_inspect, dlpack_data_ptr
@@ -19,13 +22,20 @@ module readcon
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
+  public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
   public :: read_chemfiles_first
 
   ! Mirror include/readcon-core.h RKRStatus (keep in sync with src/ffi.rs)
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
+  integer(c_int), parameter :: rkr_status_invalid_utf8 = -2
+  integer(c_int), parameter :: rkr_status_invalid_json = -3
+  integer(c_int), parameter :: rkr_status_io_error = -4
+  integer(c_int), parameter :: rkr_status_index_out_of_bounds = -5
+  integer(c_int), parameter :: rkr_status_buffer_too_small = -6
   integer(c_int), parameter :: rkr_status_internal_error = -7
   integer(c_int), parameter :: rkr_status_section_absent = -8
+  integer(c_int), parameter :: rkr_status_validation_error = -9
   integer(c_int), parameter :: rkr_status_selection_error = -10
   integer(c_int), parameter :: rkr_status_feature_disabled = -11
 
@@ -295,13 +305,23 @@ module readcon
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_create_writer_gzip_c
     end function
-#ifdef READCON_HAS_ZSTD
+    function c_create_writer_gzip_with_precision_c(fn, prec) bind(C, name="create_writer_gzip_with_precision_c")
+      import :: c_char, c_ptr, c_int8_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_int8_t), value :: prec
+      type(c_ptr) :: c_create_writer_gzip_with_precision_c
+    end function
+    function c_create_writer_zstd_with_precision_c(fn, prec) bind(C, name="create_writer_zstd_with_precision_c")
+      import :: c_char, c_ptr, c_int8_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_int8_t), value :: prec
+      type(c_ptr) :: c_create_writer_zstd_with_precision_c
+    end function
     function c_create_writer_zstd_c(fn) bind(C, name="create_writer_zstd_c")
       import :: c_char, c_ptr
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_create_writer_zstd_c
     end function
-#endif
     subroutine c_free_rkr_writer(w) bind(C, name="free_rkr_writer")
       import :: c_ptr
       type(c_ptr), value :: w
@@ -435,7 +455,6 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: tensor
     end subroutine
-#ifdef READCON_HAS_METATENSOR
     ! Metatensor cbindgen C API handles (mts_block_t*) — ownership via rkr_mts_block_free
     function c_rkr_frame_metatensor_positions_block(f, out) &
          bind(C, name="rkr_frame_metatensor_positions_block")
@@ -469,7 +488,6 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: block
     end subroutine
-#endif
     function c_rkr_selection_result_primary_indices(r, out_idx, capacity, out_written) &
          bind(C, name="rkr_selection_result_primary_indices")
       import :: c_ptr, c_int, c_int64_t
@@ -901,6 +919,24 @@ contains
     w%w = c_create_writer_from_path_c(c)
   end function
 
+  function open_writer_gzip_with_precision(path, precision) result(w)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: precision
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_gzip_with_precision_c(c, int(precision, c_int8_t))
+  end function
+
+  function open_writer_zstd_with_precision(path, precision) result(w)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: precision
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_zstd_with_precision_c(c, int(precision, c_int8_t))
+  end function
+
   function open_writer_gzip(path) result(w)
     ! Always in C ABI (create_writer_gzip_c)
     character(len=*), intent(in) :: path
@@ -911,18 +947,11 @@ contains
   end function
 
   function open_writer_zstd(path) result(w)
-    ! Requires lib built with --features zstd and -DREADCON_HAS_ZSTD when compiling this module
     character(len=*), intent(in) :: path
     type(writer_t) :: w
     character(kind=c_char), allocatable :: c(:)
-    w%w = c_null_ptr
-#ifdef READCON_HAS_ZSTD
     call to_c(path, c)
     w%w = c_create_writer_zstd_c(c)
-#else
-    ! Associate remains null — caller checks wr_valid; no false success
-    if (.false.) call to_c(path, c)
-#endif
   end function
 
   logical function wr_valid(self)
@@ -1140,13 +1169,8 @@ contains
     block = c_null_ptr
     frame_metatensor_positions_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
-#else
-    ! Lean lib omits metatensor C symbols (READCON_CORE_HAS_METATENSOR gate)
-    frame_metatensor_positions_block = rkr_status_feature_disabled
-    block = c_null_ptr
-#endif
+
   end function
 
   integer function frame_metatensor_velocities_block(fr, block)
@@ -1155,11 +1179,8 @@ contains
     block = c_null_ptr
     frame_metatensor_velocities_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_velocities_block = int(c_rkr_frame_metatensor_velocities_block(fr%handle, block))
-#else
-    frame_metatensor_velocities_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   integer function frame_metatensor_forces_block(fr, block)
@@ -1168,11 +1189,8 @@ contains
     block = c_null_ptr
     frame_metatensor_forces_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_forces_block = int(c_rkr_frame_metatensor_forces_block(fr%handle, block))
-#else
-    frame_metatensor_forces_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   integer function frame_metatensor_atom_energies_block(fr, block)
@@ -1181,18 +1199,13 @@ contains
     block = c_null_ptr
     frame_metatensor_atom_energies_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_atom_energies_block = int(c_rkr_frame_metatensor_atom_energies_block(fr%handle, block))
-#else
-    frame_metatensor_atom_energies_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   subroutine mts_block_free_rkr(block)
     type(c_ptr), intent(inout) :: block
-#ifdef READCON_HAS_METATENSOR
     if (c_associated(block)) call c_rkr_mts_block_free(block)
-#endif
     block = c_null_ptr
   end subroutine
 
