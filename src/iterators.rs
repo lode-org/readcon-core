@@ -18,7 +18,7 @@ use std::path::Path;
 /// The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
-    lines: Peekable<std::str::Lines<'a>>,
+    pub(crate) lines: Peekable<std::str::Lines<'a>>,
     /// Raw bytes of the source string, alongside a cursor. Used by
     /// [`Self::forward_fast`] to skip frames via direct memchr-bulk
     /// `\n` lookup instead of advancing the line iterator one call at
@@ -239,6 +239,28 @@ impl<'a> ConFrameIterator<'a> {
         }
 
         Some(Ok(()))
+    }
+
+    /// Next frame plus the exact substring of the buffer passed to [`Self::new`].
+    /// Enables corpus stores to persist on-disk text without re-serialization.
+    pub fn next_with_raw_span(
+        &mut self,
+        file_contents: &'a str,
+    ) -> Option<Result<(types::ConFrame, &'a str), error::ParseError>> {
+        let base = file_contents.as_ptr() as usize;
+        let start = {
+            let line = self.lines.peek()?;
+            line.as_ptr() as usize - base
+        };
+        let frame = match self.next()? {
+            Ok(f) => f,
+            Err(e) => return Some(Err(e)),
+        };
+        let end = match self.lines.peek() {
+            Some(line) => line.as_ptr() as usize - base,
+            None => file_contents.len(),
+        };
+        Some(Ok((frame, &file_contents[start..end])))
     }
 }
 
