@@ -36,6 +36,16 @@ program test_read_con
 
   fr = read_first_frame(trim(tiny))
   if (.not. fr%valid()) error stop "read tiny"
+  ! section buffer without CFrame AoS
+  block
+    real(real64), allocatable :: pbuf(:,:)
+    integer :: na, st2
+    na = int(fr%atom_count())
+    allocate(pbuf(3, na))
+    st2 = fr%copy_positions(pbuf)
+    if (st2 /= 0) nfail = nfail + 1
+    print *, "frame_copy_positions st=", st2, " natoms=", na
+  end block
 
   cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)

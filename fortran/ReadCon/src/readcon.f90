@@ -20,7 +20,7 @@ module readcon
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
-  public :: read_first_frame, open_iterator, new_builder, open_writer
+  public :: read_first_frame, read_all_frames, open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
   public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
   public :: read_chemfiles_first
@@ -115,6 +115,8 @@ module readcon
     procedure :: has_forces => fr_has_frc
     procedure :: metadata_json => fr_meta
     procedure :: energy => fr_energy
+    procedure :: atom_count => fr_atom_count
+    procedure :: copy_positions => fr_copy_positions
     procedure :: potential_type => fr_pot
     procedure :: frame_index => fr_fidx
     procedure :: sim_time => fr_time
@@ -212,6 +214,30 @@ module readcon
       type(c_ptr), value :: f
       type(c_ptr) :: c_rkr_frame_metadata_json
     end function
+
+    function c_rkr_frame_atom_count(f) bind(C, name="rkr_frame_atom_count")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: f
+      integer(c_size_t) :: c_rkr_frame_atom_count
+    end function
+    function c_rkr_frame_copy_positions(f, out, n) bind(C, name="rkr_frame_copy_positions")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_positions
+    end function
+    function c_rkr_read_all_frames(fn, nout) bind(C, name="rkr_read_all_frames")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), intent(out) :: nout
+      type(c_ptr) :: c_rkr_read_all_frames
+    end function
+    subroutine c_free_rkr_frame_array(arr, n) bind(C, name="free_rkr_frame_array")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: arr
+      integer(c_size_t), value :: n
+    end subroutine
     function c_rkr_frame_energy(f) bind(C, name="rkr_frame_energy")
       import :: c_ptr, c_double
       type(c_ptr), value :: f
@@ -579,6 +605,65 @@ contains
     call to_c(path, c)
     fr%handle = c_rkr_read_first_frame(c)
     fr%cview = c_null_ptr
+  end function
+
+
+  integer(c_size_t) function fr_atom_count(self)
+    class(frame_t), intent(in) :: self
+    fr_atom_count = 0_c_size_t
+    if (.not. c_associated(self%handle)) return
+    fr_atom_count = c_rkr_frame_atom_count(self%handle)
+  end function
+
+  integer function fr_copy_positions(self, pos)
+    ! pos(3, n) column-major Fortran layout from row-major C buffer
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: pos(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_positions = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(pos, 2) < n) then
+      fr_copy_positions = -6
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_positions(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_positions = st
+    if (st /= 0) return
+    do i = 1, n
+      pos(1, i) = real(flat(3*(i-1)+1), real64)
+      pos(2, i) = real(flat(3*(i-1)+2), real64)
+      pos(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  function read_all_frames(path) result(frames)
+    character(len=*), intent(in) :: path
+    type(frame_t), allocatable :: frames(:)
+    character(kind=c_char), allocatable :: c(:)
+    type(c_ptr) :: arr, fp
+    integer(c_size_t) :: n, i
+    type(c_ptr), pointer :: ptrs(:)
+    call to_c(path, c)
+    arr = c_rkr_read_all_frames(c, n)
+    if (.not. c_associated(arr) .or. n == 0_c_size_t) then
+      allocate(frames(0))
+      return
+    end if
+    call c_f_pointer(arr, ptrs, [n])
+    allocate(frames(n))
+    do i = 1_c_size_t, n
+      frames(i)%handle = ptrs(i)
+      frames(i)%cview = c_null_ptr
+    end do
+    ! Do not free_rkr_frame_array — ownership transferred into frames(:)%handle
+    ! Leak the pointer array only: C allocated array of pointers; we keep handles.
+    ! Actually free_rkr_frame_array frees frames too — so we must not call it.
+    ! The array storage is leaked (small). Prefer: leave arr without freeing frames.
   end function
 
   function open_iterator(path) result(it)
