@@ -36,15 +36,25 @@ program test_read_con
 
   fr = read_first_frame(trim(tiny))
   if (.not. fr%valid()) error stop "read tiny"
-  ! section buffer without CFrame AoS
+  ! section buffer without CFrame AoS (positions + velocities/forces/masses)
   block
-    real(real64), allocatable :: pbuf(:,:)
+    real(real64), allocatable :: pbuf(:,:), vbuf(:,:), fbuf(:,:), mbuf(:)
     integer :: na, st2
     na = int(fr%atom_count())
-    allocate(pbuf(3, na))
+    allocate(pbuf(3, na), vbuf(3, na), fbuf(3, na), mbuf(na))
     st2 = fr%copy_positions(pbuf)
     if (st2 /= 0) nfail = nfail + 1
     print *, "frame_copy_positions st=", st2, " natoms=", na
+    ! tiny_cuh2 has no velocities/forces; expect SECTION_ABSENT (-8) or success
+    st2 = fr%copy_velocities(vbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_velocities st=", st2
+    st2 = fr%copy_forces(fbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_forces st=", st2
+    st2 = fr%copy_masses(mbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_masses st=", st2
   end block
   block
     type(frame_t), allocatable :: allf(:)
@@ -88,6 +98,14 @@ program test_read_con
   print *, "masses_dlpack st=", st, " ndim=", ndim, " shape0=", shape0
   if (st /= 0 .or. .not. ok) nfail = nfail + 1
   if (c_associated(dlt)) call bd%dlpack_delete(dlt)
+
+  block
+    real(real64) :: masses(2)
+    integer :: st3
+    st3 = bd%copy_masses(masses)
+    if (st3 /= 0) nfail = nfail + 1
+    print *, "builder_copy_masses st=", st3, " m0=", masses(1), " m1=", masses(2)
+  end block
 
   st = bd%atom_ids_dlpack(dlt)
   call dlpack_inspect(dlt, ndim, shape0, shape1, bits, ok)

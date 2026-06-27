@@ -773,3 +773,10 @@ Full API: ``frame_t``, ``iterator_t``, ``builder_t``, ``writer_t``, all six DLPa
 exports, four metatensor block exports (when linked), ``symbol_to_z`` /
 ``z_to_symbol``, ``has_chemfiles_support``. Details: ``fortran/README.md``.
 CI: ``.github/workflows/ci_fortran.yml`` (lean and fat jobs).
+
+.. note:: Frame section buffers and multi-frame selection
+   Canonical narrative lives in ``docs/orgmode/bindings.org`` (export via docs CI).
+   C APIs: ``read_con_file_iterator`` (gzip/zstd-aware), ``read_con_string_iterator``,
+   ``read_con_buffer_iterator``, ``rkr_frame_atom_count``, ``rkr_frame_copy_*``,
+   ``free_rkr_frame_ptr_array``. Python: ``select_atom_positions_on_frames``,
+   ``evaluate_selection_on_frames``. Lean builds use ``RKR_STATUS_FEATURE_DISABLED`` (-11).

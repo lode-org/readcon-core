@@ -416,6 +416,53 @@ while ((handle = con_frame_iterator_next(iter)) != NULL) {
 free_con_frame_iterator(iter);
 #+end_src
 
+*** Path iterator + compression + in-memory buffers
+
+~read_con_file_iterator(path)~ routes through ~compression::read_file_contents~:
+plain ~.con~, gzip (~.con.gz~ / magic ~1f 8b~), and zstd (~.con.zst~, requires
+~--features zstd~) all work without a temp file. Prefer these when the consumer
+already holds text in memory (no temp file bridge):
+
+| Entry | Input | Notes |
+|-------+-------+-------|
+| ~read_con_file_iterator(path)~ | filesystem path | transparent gzip/zstd |
+| ~read_con_string_iterator(cstr)~ | null-terminated CON UTF-8 | caller-decompressed buffer |
+| ~read_con_buffer_iterator(ptr, len)~ | byte slice (not necessarily NUL-terminated) | same ownership as path iterator |
+
+Free with ~free_con_frame_iterator~; frames from ~con_frame_iterator_next~ with
+~free_rkr_frame~. Bulk path: ~rkr_read_all_frames~ / ~free_rkr_frame_array~ or
+~free_rkr_frame_ptr_array~ (outer pointer array only).
+
+*** Frame section buffers (no AoS required)
+
+| C | C++ (~readcon::ConFrame~) | Meaning |
+|---+---------------------------+|
+| ~rkr_frame_atom_count~ | ~atom_count()~ | ~N~ |
+| ~rkr_frame_copy_positions(out, 3N)~ | ~copy_positions~ | row-major xyz; always present |
+| ~rkr_frame_copy_velocities~ / ~forces~ / ~atom_energies~ / ~masses~ / ~atom_ids~ | matching ~copy_*~ | ~RKR_STATUS_SECTION_ABSENT~ (=-8=) if missing |
+| ~rkr_frame_positions_dlpack~ | ~positions_dlpack~ | owned DLPack share (dlpk ~ArcArray~); free via tensor deleter / ~rkr_dlpack_delete~ |
+
+Fortran: ~fr%atom_count()~, ~fr%copy_positions(pbuf)~, ~fr%copy_velocities~,
+~fr%copy_forces~, ~fr%copy_masses~ (same status codes). Builder: ~bd%copy_positions~,
+~bd%copy_masses~, plus ~*_dlpack~ helpers in =fortran/README.md=.
+
+*** Multi-frame chemfiles selection (Rust + Python)
+
+Atom-context trajectory positions (e.g. ~name H~) without re-selecting in user code:
+
+- Rust: ~evaluate_selection_on_frames~ / ~select_atom_positions_on_frames~ in
+  ~chemfiles_selection~ (feature ~chemfiles~; lean builds return
+  ~ChemfilesImportError::FeatureDisabled~).
+- Python: ~readcon.evaluate_selection_on_frames(sel, frames)~ and
+  ~readcon.select_atom_positions_on_frames("name H", frames)~ →
+  ~{"selection", "frames": [{"frame_index", "result", "atom_indices", "positions"}, ...]}~.
+  Single-frame: ~select_on_frame~ / ~select_atom_indices~ / ~ConFrame.select~ /
+  ~select_atoms~ remain. Indices are CON ~atom_data~ order (species-contiguous).
+
+No C ABI multi-frame selection entry in this cut (call per-frame ~rkr_frame_select~
+or use Rust/Python). Lean builds: gated selection / metatensor return
+~RKR_STATUS_FEATURE_DISABLED~ (=-11=), never confused with internal error (=-7=).
+
 Metadata builder helpers:
 
 #+begin_src c
