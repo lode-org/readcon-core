@@ -150,6 +150,19 @@ impl<W: Write> ConFrameWriter<W> {
                 }
                 meta_obj.insert(k.clone(), v.clone());
             }
+            // v3 compliance: always emit valid units (inject defaults if missing/invalid).
+            if spec_version >= 3 {
+                let need_default = match meta_obj.get(meta::UNITS) {
+                    None => true,
+                    Some(u) => crate::units::validate_v3_units_metadata(u).is_err(),
+                };
+                if need_default {
+                    meta_obj.insert(
+                        meta::UNITS.into(),
+                        crate::units::default_v3_units_json(),
+                    );
+                }
+            }
             let serialized = serde_json::Value::Object(meta_obj).to_string();
             self.metadata_cache = Some(MetadataCacheEntry {
                 spec_version,

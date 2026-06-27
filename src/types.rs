@@ -305,6 +305,38 @@ impl FrameHeader {
         self.metadata.get(meta::UNITS)
     }
 
+    /// Unit string for a dimension key (`length`, `energy`, …) from `metadata["units"]`.
+    pub fn unit_for(&self, dimension: &str) -> Option<&str> {
+        self.units()
+            .and_then(|u| u.as_object())
+            .and_then(|o| o.get(dimension))
+            .and_then(|v| v.as_str())
+    }
+
+    /// `length` unit string when present (v3 frames should always have it).
+    pub fn length_unit(&self) -> Option<&str> {
+        self.unit_for("length")
+    }
+
+    /// `energy` unit string when present.
+    pub fn energy_unit(&self) -> Option<&str> {
+        self.unit_for("energy")
+    }
+
+    /// Factor: `value_in_to = factor * value_in_frame_unit` for `dimension`.
+    pub fn conversion_factor_to(
+        &self,
+        dimension: &str,
+        to_unit: &str,
+    ) -> Result<f64, crate::error::ParseError> {
+        let from = self.unit_for(dimension).ok_or_else(|| {
+            crate::error::ParseError::ValidationError(format!(
+                "metadata units.{dimension} is missing"
+            ))
+        })?;
+        crate::units::unit_conversion_factor(from, to_unit)
+    }
+
     /// Sets the unit system.
     pub fn set_units(&mut self, units: serde_json::Value) {
         self.metadata.insert(meta::UNITS.into(), units);
@@ -1793,6 +1825,25 @@ impl ConFrame {
     pub fn builder(cell: [f64; 3], angles: [f64; 3]) -> ConFrameBuilder {
         ConFrameBuilder::new(cell, angles)
     }
+
+    /// Delegate: `length` unit from header metadata.
+    pub fn length_unit(&self) -> Option<&str> {
+        self.header.length_unit()
+    }
+
+    /// Delegate: `energy` unit from header metadata.
+    pub fn energy_unit(&self) -> Option<&str> {
+        self.header.energy_unit()
+    }
+
+    /// Delegate: conversion factor from this frame's unit for `dimension` to `to_unit`.
+    pub fn conversion_factor_to(
+        &self,
+        dimension: &str,
+        to_unit: &str,
+    ) -> Result<f64, crate::error::ParseError> {
+        self.header.conversion_factor_to(dimension, to_unit)
+    }
 }
 
 #[cfg(test)]
@@ -1945,6 +1996,21 @@ mod tests {
         assert_eq!(header.timestep(), Some(0.5));
         assert_eq!(header.neb_bead(), Some(3));
         assert_eq!(header.neb_band(), Some(1));
+    }
+
+    #[test]
+    fn typed_units_and_conversion_on_built_frame() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
+        let frame = b.build();
+        assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
+        // Builder injects default v3 units
+        assert_eq!(frame.length_unit(), Some("angstrom"));
+        assert_eq!(frame.energy_unit(), Some("eV"));
+        let to_nm = frame.conversion_factor_to("length", "nm").unwrap();
+        assert!((to_nm - 0.1).abs() < 1e-12);
+        let x_nm = frame.atom_data[0].x * to_nm;
+        assert!((x_nm - 0.1).abs() < 1e-12);
     }
 
     #[test]
@@ -2346,6 +2412,34 @@ mod tests {
     /// Omitted `bonds` key vs empty pair list: both mean "no topology" for
     /// `has_bonds()` / selection; writers drop an empty list so files do not
     /// accumulate a useless key.
+    #[test]
+    fn writer_emits_units_for_v3_frame_without_units_key() {
+        use crate::writer::ConFrameWriter;
+        use std::io::Cursor;
+        let mut frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        frame.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let mut fr = frame.build();
+        // Strip units to simulate hand-built non-compliant header still claiming v3
+        fr.header.metadata.remove(meta::UNITS);
+        fr.header.spec_version = 3;
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut w = ConFrameWriter::new(&mut buf);
+            w.write_frame(&fr).unwrap();
+        }
+        let s = String::from_utf8(buf.into_inner()).unwrap();
+        assert!(s.contains("\"units\""), "writer must emit units for v3: {s}");
+        assert!(s.contains("angstrom") || s.contains("length"), "{s}");
+        // Round-trip parse must succeed as v3
+        let parsed = crate::iterators::ConFrameIterator::new(&s)
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.header.spec_version, 3);
+        assert_eq!(parsed.length_unit(), Some("angstrom"));
+    }
+
+
     #[test]
     fn bonds_absent_vs_empty_array_are_both_no_topology() {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);

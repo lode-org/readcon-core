@@ -4085,12 +4085,48 @@ mod tests {
         unsafe {
             assert_dlpack_cpu_float(as_t, 2, &[n_built, 3], 64);
         }
-        // Ingest back (round-trip values)
+        // Mutate frame positions, then ingest tensor and require values restored
+        {
+            let fr = unsafe { &mut *(built as *mut ConFrame) };
+            for a in fr.atom_data.iter_mut() {
+                a.x = -99.0;
+                a.y = -99.0;
+                a.z = -99.0;
+            }
+        }
         assert_eq!(
             unsafe { rkr_frame_positions_from_dlpack(built, as_t) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
+        {
+            let fr = unsafe { &*(built as *const ConFrame) };
+            assert!((fr.atom_data[0].x - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].y - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].z - 0.0).abs() < 1e-12);
+        }
+        // Re-export must match ingested coordinates (not zeros / garbage)
+        let mut again: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                rkr_frame_positions_as_dlpack(
+                    built,
+                    rkr_dl_device_type::RKR_DL_CPU,
+                    0,
+                    0,
+                    1,
+                    0,
+                    &mut again,
+                )
+            },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
         unsafe {
+            let dl = &(*again).dl_tensor;
+            let data = std::slice::from_raw_parts(dl.data as *const f64, 3);
+            assert!((data[0] - 0.0).abs() < 1e-12);
+            assert!((data[1] - 0.0).abs() < 1e-12);
+            assert!((data[2] - 0.0).abs() < 1e-12);
+            rkr_dlpack_delete(again);
             rkr_dlpack_delete(as_t);
             rkr_dlpack_delete(frc);
             rkr_dlpack_delete(eng);
