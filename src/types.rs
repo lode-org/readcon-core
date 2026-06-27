@@ -2048,8 +2048,12 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         }
     }
     let mut header = header;
-    dt.insert_into(&mut header.metadata);
-    let mut frame = ConFrame {
+    // Only persist storage_dtypes when non-default (avoid metadata churn on hot parse).
+    if dt != crate::storage_dtype::StorageDtypes::all_f64() {
+        dt.insert_into(&mut header.metadata);
+    }
+    // AoS and SoA already agree (filled from atom_data); no sync pass.
+    ConFrame {
         header,
         atom_data,
         positions: pos,
@@ -2058,9 +2062,7 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         atom_energies: eng,
         masses: masses_arr,
         atom_ids: ids_arr,
-    };
-    frame.sync_atom_data_from_arrays();
-    frame
+    }
 }
 
 // }

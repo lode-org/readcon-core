@@ -191,17 +191,21 @@ impl FloatArray2 {
         }
     }
 
+    #[inline]
     pub fn set_f64_row(&mut self, i: usize, v: [f64; 3]) {
         match self {
             Self::F64(a) => {
-                a[[i, 0]] = v[0];
-                a[[i, 1]] = v[1];
-                a[[i, 2]] = v[2];
+                // Fast path: hot parse/build is overwhelmingly f64 storage.
+                let mut row = a.row_mut(i);
+                row[0] = v[0];
+                row[1] = v[1];
+                row[2] = v[2];
             }
             Self::F32(a) => {
-                a[[i, 0]] = v[0] as f32;
-                a[[i, 1]] = v[1] as f32;
-                a[[i, 2]] = v[2] as f32;
+                let mut row = a.row_mut(i);
+                row[0] = v[0] as f32;
+                row[1] = v[1] as f32;
+                row[2] = v[2] as f32;
             }
         }
     }
