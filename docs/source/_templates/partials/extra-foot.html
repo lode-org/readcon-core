@@ -34,10 +34,11 @@
     var f = search.tagName === "FORM" ? search : search.closest("form");
     if (f) f.setAttribute("aria-label", "Search documentation");
   }
-  /* Sphinx line wrappers: <span data-line="N">…\n</span> (inline in HTML).
-     Some theme CSS forces block on [data-line], which doubles every newline
-     (R fences look broken). Unwrap so only the embedded \n breaks lines;
-     token spans stay for Pygments colours (CSS forces them inline). */
+  /* Code fence whitespace (R/Python looked broken on rsx docs):
+     1) Unwrap <span data-line> (theme may force display:block → double \n).
+     2) Force every Pygments token <span> to display:inline (CSS alone loses
+        to theme layers in some builds).
+     3) pre uses white-space:pre so only real newlines break lines. */
   document.querySelectorAll("pre [data-line]").forEach(function (span) {
     var parent = span.parentNode;
     if (!parent) return;
@@ -45,6 +46,17 @@
       parent.insertBefore(span.firstChild, span);
     }
     parent.removeChild(span);
+  });
+  document.querySelectorAll(
+    ".highlight pre, div[class*='highlight-'] pre, pre.literal-block"
+  ).forEach(function (pre) {
+    pre.style.whiteSpace = "pre";
+    pre.querySelectorAll("span").forEach(function (s) {
+      s.style.display = "inline";
+      s.style.margin = "0";
+      s.style.padding = "0";
+      s.style.border = "none";
+    });
   });
   /* Code blocks: ensure pre is keyboard-scrollable and labelled */
   document.querySelectorAll(".sy-page pre, .highlight pre, pre.literal-block").forEach(function (pre, i) {
