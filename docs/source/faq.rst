@@ -69,24 +69,22 @@ Documentation is Diátaxis-shaped under ``docs/orgmode/chemfiles-*.org``:
 
 - Reference (APIs, grammar, install matrix): ``chemfiles-reference.org``
 
-Binding matrix and gaps: ``bindings.org``. On-disk ``bonds``: ``spec.org``.
+Language APIs: ``bindings``. On-disk ``bonds``: ``spec``. How selection is
+wired: ``chemfiles-explain``.
 
-Supported topology selectors (``bonds:``, ``angles:``, ``dihedrals:``, ``is_bonded``,
-``is_angle``, ``is_dihedral``) need ``bonds`` or an import that carried topology;
-name/type/=all= work without it. Surfaces share one evaluator; multiset
-parity with chemfiles is tested against ``tests/selection.cpp`` topology cases
-(see ``chemfiles_selection_cpp_regression``).
+``name`` / ``type`` / ``all`` work on any frame. ``bonds:`` / ``angles:`` / ``dihedrals:``
+and ``is_bonded`` need topology (``bonds`` metadata or an import that set it). All
+languages call the same evaluator. Topology-oriented cases from chemfiles
+``tests/selection.cpp`` are checked in ``chemfiles_selection_cpp_regression`` as
+*multisets* of indices (CON order after ``atom_id`` remap), not as identical lists.
 
-Chemfiles display ``name`` vs atomic ``type`` (e.g. ``H1`` / ``H``) is preserved on
-****import**** via metadata ``chemfiles_atom_names`` / ``chemfiles_atom_types`` (not a
-second CON column); projection restores both for selection. Hand-built frames
-without those keys use ``symbol`` for both.
+On **import**, display names like ``H1`` vs types like ``H`` are kept in
+``chemfiles_atom_names`` / ``chemfiles_atom_types`` (still one ``symbol`` column on
+disk). Hand-built frames without those keys use ``symbol`` for both.
 
-****Out of scope for selection:**** residue / ``resname`` filters; chemfiles properties
-not copied on import; topology beyond undirected ``bonds``; full numeric geometry
-assertion suites from upstream ``tests/selection.cpp``. Index contract is multiset
-agreement after ``atom_id`` remap, not byte-identical chemfiles lists. Details:
-``chemfiles-explain`` (selection scope) and ``bindings``.
+Residue / ``resname``, most chemfiles properties, topology past pair ``bonds``, and
+the geometry assertion blocks in ``tests/selection.cpp`` are not available on CON
+frames. See ``chemfiles-explain`` if you need the “why”.
 
 4 What problems does atom\ :sub:`id`\ solve?
 --------------------------------------------

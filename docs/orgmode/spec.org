@@ -451,12 +451,12 @@ These keys are implementation extras: parsers MUST preserve unknown keys;
 writers MUST NOT require them for valid v2 files. Hand-authored frames without
 sidecars behave as symbol-only for selection.
 
-**Selection parity scope (library).** Multiset agreement with chemfiles after
-remapping chemfiles indices through =atom_id= into type-grouped =atom_data=
-order. **Out of scope** (explicit non-goals, not partial support): residue /
-=resname= filters; arbitrary extra properties beyond import sidecars; topology
-beyond undirected =bonds= pairs; full numeric geometry assertion suites from
-chemfiles =tests/selection.cpp=. See =chemfiles-explain.org= and =bindings.org=.
+**Selection (library behaviour).** Prefer multiset agreement with chemfiles after
+remapping indices through =atom_id= into type-grouped =atom_data= order. Residue
+/ =resname=, properties not kept on import, topology beyond pair =bonds=, and
+the geometry assertion suites in chemfiles =tests/selection.cpp= are not part of
+the CON selection surface. User-facing notes: =chemfiles-explain.org=,
+=bindings.org=.
 
 ** Units
 :PROPERTIES:
