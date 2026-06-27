@@ -32,6 +32,7 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | =readcon-core-aoqu= | Publish PyPI wheel for rgpot | TODO | Needs release credential / publish workflow run |
 | =readcon-core-r2wh= | SoA refactor | BLOCKED | Architectural; not in-scope |
 | =readcon-core-0tlm= / =bb34= | Morton curves / device dlpk | STARTED | Long-horizon perf; not A/B implementables |
-| =readcon-core-uu0a= / =c6ox= / =box4= | Optional C tier | Deferred | Explicit optional polish |
+| =readcon-core-uu0a= | Frame velocities/forces/energies DLPack | Done | =rkr_frame_*_dlpack= + FFI test + C++ wrappers |
+| =readcon-core-c6ox= / =box4= | Optional C tier polish | Deferred | Header always-declare / cachegrind process |
 
 Fortran details: =fortran/README.md=. Multi-language panels: bindings page.
