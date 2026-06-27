@@ -563,19 +563,20 @@ and section values remain decimal representations of binary64).
 
 When present, =storage_dtypes= SHALL be a JSON object. Recognized members:
 
-| Member | Permitted values | Default if omitted |
-|--------+------------------+--------------------|
-| =positions= | ="float32"=, ="float64"= | =float64= |
-| =velocities= | ="float32"=, ="float64"= | =float64= |
-| =forces= | ="float32"=, ="float64"= | =float64= |
-| =energies= | ="float32"=, ="float64"= | =float64= |
-| =masses= | ="float32"=, ="float64"= | =float64= |
-| =atom_ids= | ="uint64"= | =uint64= |
+| Member | Permitted values (host DLPack) | Default if omitted |
+|--------+--------------------------------+--------------------|
+| =positions= / =velocities= / =forces= / =energies= / =masses= | =float16=, =float32=, =float64=, =int8=…=int64=, =uint8=…=uint64=, =bool=, =complex64=, =complex128= | =float64= |
+| =atom_ids= | =uint8=…=uint64=, =int8=…=int64= | =uint64= |
+
+Hosted element types are those **dlpk** can own on the CPU (=float16= via
+=half=, complex as =[f32;2]= / =[f64;2]=, integers, =bool=). DLPack ABI codes
+without a host (=bfloat16=, =float8_*=, =opaque=) SHALL be rejected in
+=storage_dtypes= with a validation error.
 
 Implementations that expose DLPack SHALL export arrays whose element type
 matches the effective storage dtype for that field (queryable prior to
-export). Callers MAY request projection between =float32= and =float64=
-in memory; writers SHALL still serialize binary64 text on disk.
+export). Callers MAY request projection between hosted dtypes in memory;
+writers SHALL still serialize binary64 text on disk.
 
 ** DLPack interchange (informative for implementations)
 
