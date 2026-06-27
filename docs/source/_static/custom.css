@@ -254,15 +254,15 @@ article.yue {
   outline: none;
 }
 
-/* sphinx line wrappers — never draw per-line boxes; keep block so newlines
-   and R/Python fences don't collapse into one run-on line */
+/* Sphinx 8+ wraps each source line in <span data-line="N">…\n</span> (inline).
+   Do NOT set display:block — that doubles every newline (blank lines between
+   R/Python statements). Only kill accidental per-line chrome. */
 .sy-page .highlight pre [data-line],
 .sy-page .highlight pre span[data-line] {
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
   background: transparent !important;
-  display: block;
 }
 
 /* Tokens inside blocks must inherit readable size */
