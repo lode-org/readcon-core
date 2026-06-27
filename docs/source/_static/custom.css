@@ -254,15 +254,25 @@ article.yue {
   outline: none;
 }
 
-/* Sphinx 8+ wraps each source line in <span data-line> with a trailing newline (inline).
-   Do NOT set display:block — that doubles every newline (blank lines between
-   R/Python statements). Only kill accidental per-line chrome. */
+/* Sphinx 8+ wraps each source line in <span data-line="N">code
+</span>.
+   Spans must stay inline: the trailing 
+ is the only line break. Theme or
+   prior rules that set display:block double every line (huge gaps in R). */
 .sy-page .highlight pre [data-line],
 .sy-page .highlight pre span[data-line] {
+  display: inline !important;
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
   background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
+.sy-page .highlight pre {
+  white-space: pre !important;
 }
 
 /* Tokens inside blocks must inherit readable size */
