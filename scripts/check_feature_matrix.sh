@@ -14,7 +14,6 @@ echo "== matrix check FEATURES=$FEATURES LIB=$LIB =="
 
 for s in create_writer_from_path_c create_writer_gzip_c create_writer_zstd_c \
          rkr_dlpack_delete rkr_frame_builder_positions_dlpack \
-         rkr_frame_builder_positions_dlpack_borrowed \
          rkr_frame_metatensor_positions_block rkr_mts_block_free; do
   if has "$s"; then
     echo "  ok $s"

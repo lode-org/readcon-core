@@ -351,6 +351,6 @@ still export metatensor entry points that return ``RKR_STATUS_FEATURE_DISABLED``
 
 Same symbol names either way. Without ``--features metatensor``, blocks return
 ``-11``. Without ``--features zstd``, ``create_writer_zstd_*`` returns a null writer.
-gzip writers and DLPack (including ``\*_dlpack_borrowed`` Arc-share aliases) are
+gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C aliases) are
 always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
 lists include/lib paths for ``libmetatensor``.

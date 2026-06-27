@@ -160,7 +160,7 @@ Metatensor and zstd entry points exist in lean builds but return
 `RKR_STATUS_FEATURE_DISABLED` (-11) or a null writer (zstd). Never confuse with
 `RKR_STATUS_INTERNAL_ERROR` (-7). Prefer `include/readcon-metatensor.h` when using
 blocks; source `target/<profile>/readcon-metatensor.env` for `libmetatensor` paths.
-DLPack builder exports are Arc-backed zero-copy (`*_dlpack` and `*_dlpack_borrowed`).
+DLPack builder exports use dlpk `ArcArray -> DLPackTensor` (**shared** allocation, not a deep copy; no separate `_borrowed` C API).
 Gzip writers are always on; Fortran: `open_writer_gzip` / `_zstd` (+ precision variants).
 Details: Sphinx **Language bindings** and `fortran/README.md`.
 
