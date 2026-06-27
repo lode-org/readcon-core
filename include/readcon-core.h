@@ -310,14 +310,20 @@ typedef struct RKRDLDevice {
 } RKRDLDevice;
 
 /**
- * Options for DLPack export: requested **DLPack** dtype and device.
+ * Options for DLPack export: requested **DLPack** `DLDataType` + `DLDevice`.
  *
- * Pass to `*_dlpack_ex`. NULL → float64 (`code=2`, `bits=64`, `lanes=1`) on CPU
- * (`device_type=1`, `device_id=0`).
+ * Pass to `*_dlpack_ex`. NULL → `kDLFloat` / 64 / lanes 1 on **CPU**.
  *
- * Supported for float sections today: `code = RKR_DL_FLOAT` (2), `bits ∈ {32,64}`,
- * `lanes = 1`, `device_type = RKR_DL_CPU` (1). Atom-id exports ignore `dtype`
- * (always uint64). Other combinations return `RKR_STATUS_VALIDATION_ERROR`.
+ * **Dtype (CPU):** any combination dlpk can host from converted CON data —
+ * signed/unsigned ints (8/16/32/64), IEEE floats (32/64), and bool (8-bit
+ * DLPack convention). Values are cast from on-disk binary64 (or u64 for atom
+ * ids). Complex / bfloat / float8 / opaque / multi-lane types return
+ * `RKR_STATUS_VALIDATION_ERROR` until implemented.
+ *
+ * **Device:** only `device_type = kDLCPU` (1) is backed today; CUDA and other
+ * `DLDeviceType` values are accepted in the struct but return
+ * `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect without an ABI
+ * break when device-resident exports land.
  */
 typedef struct RKRDlpackExportOptions {
     /**
@@ -969,6 +975,10 @@ enum RKRStatus rkr_frame_builder_masses_dlpack_ex(const struct RKRConFrameBuilde
  */
 enum RKRStatus rkr_frame_builder_atom_ids_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                  RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_atom_ids_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                    const struct RKRDlpackExportOptions *opts,
+                                                    RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.

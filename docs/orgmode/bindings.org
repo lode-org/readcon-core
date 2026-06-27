@@ -235,13 +235,16 @@ tensor metadata so a future dtype change does not force a host =f64= ABI.
 
 C / C++ / Fortran: =rkr_frame_*_dlpack= / builder =*_dlpack= (and
 =rkr_dlpack_delete=) are the portable path. **Choose output dtype and device**
-with =RKRDlpackExportOptions= on =*_dlpack_ex=: fields are DLPack's own
-=DLDataType= (=code= / =bits= / =lanes=, e.g. =kDLFloat= + 32 or 64) and
-=DLDevice= (=device_type= / =device_id=, e.g. =kDLCPU=). Only CPU + float32/64
-(lanes=1) are implemented for section exports today; other combinations return
-=RKR_STATUS_VALIDATION_ERROR=. Legacy =*_dlpack= without options is
-=kDLFloat= / 64 on CPU. =rkr_frame_copy_*= still fills a caller =double*=
-buffer when you already hold host f64 storage.
+with =RKRDlpackExportOptions= on =*_dlpack_ex= — fields are DLPack
+=DLDataType= (=code= / =bits= / =lanes=) and =DLDevice= (=device_type= /
+=device_id=), layout-compatible with =<dlpack/dlpack.h>=.
+
+On **CPU**, float sections accept the DLPack host types we can fill from CON
+binary64 storage: =kDLFloat= 32/64, =kDLInt= / =kDLUInt= 8/16/32/64, =kDLBool=
+(8-bit). Complex / bfloat / float8 / opaque / =lanes≠1= → validation error
+until implemented. Non-CPU =device_type= (CUDA, …) → =RKR_STATUS_FEATURE_DISABLED=
+(struct accepts the full DLPack device space; no GPU allocator yet). Legacy
+=*_dlpack= is =kDLFloat=/64 on CPU. =rkr_frame_copy_*= still fills =double*=.
 
 #+begin_src python
 import numpy as np

@@ -1416,14 +1416,20 @@ pub struct RKRDLDevice {
     pub device_id: i32,
 }
 
-/// Options for DLPack export: requested **DLPack** dtype and device.
+/// Options for DLPack export: requested **DLPack** `DLDataType` + `DLDevice`.
 ///
-/// Pass to `*_dlpack_ex`. NULL → float64 (`code=2`, `bits=64`, `lanes=1`) on CPU
-/// (`device_type=1`, `device_id=0`).
+/// Pass to `*_dlpack_ex`. NULL → `kDLFloat` / 64 / lanes 1 on **CPU**.
 ///
-/// Supported for float sections today: `code = RKR_DL_FLOAT` (2), `bits ∈ {32,64}`,
-/// `lanes = 1`, `device_type = RKR_DL_CPU` (1). Atom-id exports ignore `dtype`
-/// (always uint64). Other combinations return `RKR_STATUS_VALIDATION_ERROR`.
+/// **Dtype (CPU):** any combination dlpk can host from converted CON data —
+/// signed/unsigned ints (8/16/32/64), IEEE floats (32/64), and bool (8-bit
+/// DLPack convention). Values are cast from on-disk binary64 (or u64 for atom
+/// ids). Complex / bfloat / float8 / opaque / multi-lane types return
+/// `RKR_STATUS_VALIDATION_ERROR` until implemented.
+///
+/// **Device:** only `device_type = kDLCPU` (1) is backed today; CUDA and other
+/// `DLDeviceType` values are accepted in the struct but return
+/// `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect without an ABI
+/// break when device-resident exports land.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RKRDlpackExportOptions {
@@ -1449,7 +1455,7 @@ impl Default for RKRDlpackExportOptions {
     }
 }
 
-/// Resolve options pointer; NULL → defaults. Rejects unsupported dtype/device.
+/// Resolve options; NULL → defaults. Device must be CPU (else FEATURE_DISABLED).
 fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
     let o = if opts.is_null() {
         RKRDlpackExportOptions::default()
@@ -1457,22 +1463,78 @@ fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackE
         unsafe { *opts }
     };
     if o.device.device_type != rkr_dl_device_type::RKR_DL_CPU {
-        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        // Full DLPack device space is representable; we do not allocate GPU yet.
+        return Err(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
     }
     if o.dtype.lanes != 1 {
-        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
-    }
-    if o.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || (o.dtype.bits != 32 && o.dtype.bits != 64) {
         return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     Ok(o)
 }
 
-fn export_owned_array2_dlpack(
-    arr: &ndarray::ArcArray2<f64>,
+fn finish_dlpack_tensor<E: std::fmt::Display>(
+    result: Result<dlpk::DLPackTensor, E>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    export_owned_array2_dlpack_opts(arr, &RKRDlpackExportOptions::default(), out_tensor)
+    match result {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
+            "DLPack export failed: {e}"
+        ))),
+    }
+}
+
+/// Cast CON `f64` samples into a DLPack tensor with the requested dtype (CPU).
+/// `shape` is 1-D `[n]` or 2-D `[rows, cols]` with `rows * cols == data.len()`.
+fn export_f64_slice_as_dlpack(
+    data: &[f64],
+    shape: &[usize],
+    dtype: RKRDLDataType,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    use rkr_dl_type_code::*;
+    if dtype.lanes != 1 {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    }
+    macro_rules! arc_export {
+        ($ty:ty, $map:expr) => {{
+            let v: Vec<$ty> = data.iter().map($map).collect();
+            match *shape {
+                [r, c] => match ndarray::ArcArray2::from_shape_vec((r, c), v) {
+                    Ok(a) => dlpk::DLPackTensor::try_from(a),
+                    Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                },
+                [_] => dlpk::DLPackTensor::try_from(ndarray::ArcArray1::from_vec(v)),
+                _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+            }
+        }};
+    }
+    let tensor = match (dtype.code, dtype.bits) {
+        (RKR_DL_FLOAT, 64) => arc_export!(f64, |&x| x),
+        (RKR_DL_FLOAT, 32) => arc_export!(f32, |&x| x as f32),
+        (RKR_DL_INT, 8) => arc_export!(i8, |&x| x as i8),
+        (RKR_DL_INT, 16) => arc_export!(i16, |&x| x as i16),
+        (RKR_DL_INT, 32) => arc_export!(i32, |&x| x as i32),
+        (RKR_DL_INT, 64) => arc_export!(i64, |&x| x as i64),
+        (RKR_DL_UINT, 8) => arc_export!(u8, |&x| x as u8),
+        (RKR_DL_UINT, 16) => arc_export!(u16, |&x| x as u16),
+        (RKR_DL_UINT, 32) => arc_export!(u32, |&x| x as u32),
+        (RKR_DL_UINT, 64) => arc_export!(u64, |&x| x as u64),
+        (RKR_DL_BOOL, 8) => {
+            // bool has no ndarray Zero; use Vec → DLPack (1-D length = element count)
+            let v: Vec<bool> = data.iter().map(|&x| x != 0.0).collect();
+            dlpk::DLPackTensor::try_from(v)
+        }
+        // Complex / bfloat / float8 / opaque: not hosted from CON f64 yet
+        _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    finish_dlpack_tensor(tensor, out_tensor)
 }
 
 fn export_owned_array2_dlpack_opts(
@@ -1480,38 +1542,9 @@ fn export_owned_array2_dlpack_opts(
     opts: &RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let result = match opts.dtype.bits {
-        64 => {
-            let shared = arr.clone();
-            dlpk::DLPackTensor::try_from(shared)
-        }
-        32 => {
-            let f32_arr: ndarray::ArcArray2<f32> = arr.mapv(|x| x as f32).into();
-            dlpk::DLPackTensor::try_from(f32_arr)
-        }
-        _ => {
-            return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
-        }
-    };
-    match result {
-        Ok(tensor) => {
-            let raw = tensor.into_raw();
-            unsafe {
-                *out_tensor = raw.as_ptr();
-            }
-            RKRStatus::RKR_STATUS_SUCCESS
-        }
-        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
-            "DLPack export failed: {e}"
-        ))),
-    }
-}
-
-fn export_owned_array1_f64_dlpack(
-    arr: &ndarray::ArcArray1<f64>,
-    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
-) -> RKRStatus {
-    export_owned_array1_f64_dlpack_opts(arr, &RKRDlpackExportOptions::default(), out_tensor)
+    let (r, c) = arr.dim();
+    let flat: Vec<f64> = arr.iter().copied().collect();
+    export_f64_slice_as_dlpack(&flat, &[r, c], opts.dtype, out_tensor)
 }
 
 fn export_owned_array1_f64_dlpack_opts(
@@ -1519,44 +1552,34 @@ fn export_owned_array1_f64_dlpack_opts(
     opts: &RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let result = match opts.dtype.bits {
-        64 => dlpk::DLPackTensor::try_from(arr.clone()),
-        32 => {
-            let f32_arr: ndarray::ArcArray1<f32> = arr.mapv(|x| x as f32).into();
-            dlpk::DLPackTensor::try_from(f32_arr)
-        }
-        _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
-    };
-    match result {
-        Ok(tensor) => {
-            let raw = tensor.into_raw();
-            unsafe {
-                *out_tensor = raw.as_ptr();
-            }
-            RKRStatus::RKR_STATUS_SUCCESS
-        }
-        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
-            "DLPack export failed: {e}"
-        ))),
-    }
+    let flat = arr.to_vec();
+    let n = flat.len();
+    export_f64_slice_as_dlpack(&flat, &[n], opts.dtype, out_tensor)
 }
+
 fn export_owned_array1_u64_dlpack(
     arr: &ndarray::ArcArray1<u64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
-        Ok(tensor) => {
-            let raw = tensor.into_raw();
-            unsafe {
-                *out_tensor = raw.as_ptr();
-            }
-            RKRStatus::RKR_STATUS_SUCCESS
-        }
-        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
-            "DLPack export failed: {e}"
-        ))),
+    finish_dlpack_tensor(
+        dlpk::DLPackTensor::try_from(arr.clone()),
+        out_tensor,
+    )
+}
+
+/// Atom ids: default uint64; or cast via f64 path when `opts.dtype` requests another host type.
+fn export_owned_array1_u64_dlpack_opts(
+    arr: &ndarray::ArcArray1<u64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    use rkr_dl_type_code::*;
+    if opts.dtype.code == RKR_DL_UINT && opts.dtype.bits == 64 && opts.dtype.lanes == 1 {
+        return export_owned_array1_u64_dlpack(arr, out_tensor);
     }
+    let as_f64: Vec<f64> = arr.iter().map(|&x| x as f64).collect();
+    let n = as_f64.len();
+    export_f64_slice_as_dlpack(&as_f64, &[n], opts.dtype, out_tensor)
 }
 /// Export builder positions as a DLPack-managed tensor.
 ///
@@ -1749,11 +1772,24 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_atom_ids_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array1_u64_dlpack(builder.atom_ids_1d_ref(), out_tensor)
+    export_owned_array1_u64_dlpack_opts(builder.atom_ids_1d_ref(), &o, out_tensor)
 }
 // ----- v0.11.1 in-process zero-copy raw-pointer FFI -------------------------
 //
@@ -3919,7 +3955,7 @@ mod tests {
         let mut junk: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack_ex(built, &bad_dev, &mut junk) },
-            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+            RKRStatus::RKR_STATUS_FEATURE_DISABLED
         );
         let bad_bits = RKRDlpackExportOptions {
             dtype: RKRDLDataType {
