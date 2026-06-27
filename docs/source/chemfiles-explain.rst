@@ -132,42 +132,44 @@ What selection does under the hood
 3. Map match indices back as CON ``atom_data`` indices (already in that order
    on the projected frame).
 
-Without bonds, atom selectors (``name``, ``type``, ``all``) still work;
-topology selectors (``bonds:``, ``angles:``, ``is_bonded``, …) yield no matches or
-empty results—not a hard error unless the grammar is invalid.
+Without bonds, atom selectors (``name``, ``type``, ``all``) still work.
+Topology selectors (``bonds:``, ``angles:``, ``is_bonded``, …) simply return no
+matches (empty results). That is not an error unless the selection string is
+invalid.
 
-Selection scope (what is in and out)
-------------------------------------
+What you can select (and what you cannot)
+-----------------------------------------
 
-readcon evaluates the chemfiles selection *grammar* on a projected CON frame
-(positions, cell, optional ``bonds``, name/type sidecars). That covers common atom
-filters (``name``, ``type``, ``all``), bond/angle/dihedral contexts when ``bonds`` is
-present, and the regression cases in ``chemfiles_selection_cpp_regression``
-(multiset match lists after ``atom_id`` remap into CON ``atom_data`` order).
+You get the chemfiles *selection language* applied to that temporary frame, not
+a full chemfiles ``Trajectory`` object. In practice that means:
 
-Treat the rows below as **outside** the supported subset: explicit non-goals,
-not half-implemented features, unless a later release widens the contract.
+- Atom filters such as ``name H``, ``type O``, and ``all`` work on any frame.
+- With ``bonds`` present (or after an import that filled ``metadata["bonds"]``),
+  you can use ``bonds:`` / ``angles:`` / ``dihedrals:`` and the ``is_bonded`` family.
+- Match indices come back in CON ``atom_data`` order. If you compare them to a
+  selection run in chemfiles directly, compare as an *unordered multiset* after
+  mapping through ``atom_id``; do not expect the same index list byte-for-byte.
+  The ``chemfiles_selection_cpp_regression`` tests encode that behaviour.
 
-+--------------------------------------------------+--------------------------------------------------------------+
-| Out of scope                                     | Why                                                          |
-+==================================================+==============================================================+
-| Residue / ``resname`` (and most residue-centric  | CON has no residue table; import does not synthesize one for |
-| selectors)                                       | selection                                                    |
-+--------------------------------------------------+--------------------------------------------------------------+
-| Full chemfiles per-atom / per-residue property   | Import stores only a subset under ``chemfiles_atom_properties`` / |
-| surface                                          | frame metadata                                                    |
-+--------------------------------------------------+--------------------------------------------------------------+
-| Improper torsions and other topology beyond      | On-disk CON stores pair bonds only                           |
-| undirected ``bonds`` pairs                       |                                                              |
-+--------------------------------------------------+--------------------------------------------------------------+
-| Numeric geometry *assertion* suites from         | We do not claim line-by-line parity with every chemfiles     |
-| upstream ``tests/selection.cpp`` (``distance`` / | unit test; trivial projections may work by accident          |
-| ``angle`` / ``dihedral`` / ``out_of_plane``       |                                                              |
-| thresholds with extra atoms)                     |                                                              |
-+--------------------------------------------------+--------------------------------------------------------------+
+A few things chemfiles can do in a PDB or GRO file do **not** apply here,
+because CON never stored the data:
 
-For the supported API matrix and language surfaces, see `Language bindings
-<bindings.rst>`_ and `Reference — Chemfiles conversion and selection
+- **Residues.** There is no residue table on disk, so ``resname`` and most
+  residue-based selectors have nothing to attach to. We do not invent residues
+  at import time just to please the selector.
+- **Arbitrary atom properties.** Import may stash a subset under
+  ``chemfiles_atom_properties`` (and a few frame-level extras). Everything else
+  from the chemfiles property map is dropped.
+- **Topology beyond pair bonds.** CON ``bonds`` is an undirected pair list. No
+  impropers, no ring metadata, no residue connectivity beyond those pairs.
+- **Geometry assertion tests from chemfiles.** Upstream
+  ``tests/selection.cpp`` has cases that assert on ``distance`` / ``angle`` /
+  ``dihedral`` / ``out_of_plane`` with carefully placed extra atoms. We do not
+  promise those tests pass unchanged. Some strings may still evaluate; treat
+  that as luck, not API.
+
+API entry points and the install matrix live in `Language bindings
+<bindings.rst>`_ and `Chemfiles conversion and selection (reference)
 <chemfiles-reference.rst>`_.
 
 Place in the LODE / eOn ecosystem

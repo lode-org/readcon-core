@@ -152,28 +152,20 @@ Supported contexts when topology is present (``metadata["bonds"]``, 0-based
 ``three:`` / ``four:``, and predicates ``is_bonded`` / ``is_angle`` / ``is_dihedral`` on
 the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
 
-****Index space / multiset contract.**** CON type-groups atoms on write/import;
-bond endpoints are stored in ``atom_data`` order (chemfiles import remaps via
-``atom_id``). Surfaces return matches in that CON order. Parity with chemfiles
-direct evaluation is an **undirected multiset** after remapping chemfiles
-indices through ~atom\ :sub:`id`\~—not byte-identical index lists.
+****Indices.**** CON groups atoms by element type. Bond endpoints and selection
+matches use that ``atom_data`` order (chemfiles import remaps via ``atom_id``). If
+you compare to a selection run inside chemfiles itself, match the sets of
+indices, not the exact order of the chemfiles list.
 
-****Chemfiles name vs type (fixed for import path).**** On-disk CON still has one
-``symbol`` column (element/type for layout). Chemfiles import additionally stores
-optional metadata sidecars ``chemfiles_atom_names`` / ``chemfiles_atom_types``
-(indexed by chemfiles / ``atom_id`` order). Selection projection restores display
-``name`` and atomic ``type`` so ``name H1`` and ``type H`` both work after import.
-Hand-built frames without sidecars use ``symbol`` for both (same as before).
+****Name vs type after import.**** On disk there is still one ``symbol`` column.
+Import also writes optional ``chemfiles_atom_names`` / ``chemfiles_atom_types``
+metadata so ``name H1`` and ``type H`` both work. Frames you build by hand without
+those keys use ``symbol`` for both.
 
-****Selection scope (non-goals).**** Residue and ``resname`` selectors, arbitrary
-chemfiles properties beyond what import stores in
-``chemfiles_atom_properties`` / frame extras, improper topology beyond undirected
-``bonds`` pairs, and upstream numeric geometry *assertion* cases from
-``tests/selection.cpp`` (``distance`` / ``angle`` / ``dihedral`` / ``out_of_plane`` with
-extra atoms) are **out of scope**, not advertised as partial parity. Index
-contract: undirected *multiset* agreement after ``atom_id`` remap into type-grouped
-``atom_data`` order, not byte-identical chemfiles index lists. Narrative:
-`Chemfiles conversion and selection <chemfiles-explain.rst>`_.
+****What selection does not cover.**** Residue / ``resname`` filters, most chemfiles
+properties, topology beyond pair ``bonds``, and the geometry-heavy cases in
+chemfiles ``tests/selection.cpp`` are not supported on CON frames. Longer
+explanation: `Chemfiles conversion and selection <chemfiles-explain.rst>`_.
 
 3 Python (PyO3)
 ---------------
