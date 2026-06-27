@@ -27,6 +27,11 @@ into CON without inventing another reader for each format.
    **Format rules?** → :doc:`spec` · **APIs?** → :doc:`bindings` ·
    :doc:`chemfiles-reference`
 
+   **Campaign corpora (many trajectories, indexes)?** → companion
+   `readcon-db <https://github.com/lode-org/readcon-db>`_
+   (LMDB / energy & section indexes / multi-reader) — see nav **Ecosystem**
+   and :doc:`architecture`.
+
 
 .. figure:: /_static/figures/conversion-pipeline.svg
    :alt: Convert XYZ PDB or GRO into CON for eOn and LODE

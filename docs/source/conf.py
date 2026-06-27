@@ -129,6 +129,26 @@ html_theme_options = {
                 },
             ],
         },
+        {
+            "title": "Ecosystem",
+            "children": [
+                {
+                    "title": "readcon-core (this docs)",
+                    "url": "architecture",
+                    "summary": "CON/convel interchange, chemfiles ingress, multi-language ABI",
+                },
+                {
+                    "title": "readcon-db (campaign store)",
+                    "url": "https://github.com/lode-org/readcon-db",
+                    "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
+                },
+                {
+                    "title": "readcon-db Sphinx (when hosted)",
+                    "url": "https://lode-org.github.io/readcon-db/",
+                    "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
+                },
+            ],
+        },
         {"title": "Spec", "url": "spec"},
         {"title": "Benchmarks", "url": "benchmarks"},
         {"title": "GitHub", "url": "https://github.com/lode-org/readcon-core"},
@@ -145,6 +165,8 @@ copybutton_here_doc_delimiter = "EOF"
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
+    # Hosted objects.inv may be absent in offline CI; explicit URL still documents the peer.
+    "readcon-db": ("https://lode-org.github.io/readcon-db/", None),
 }
 
 
