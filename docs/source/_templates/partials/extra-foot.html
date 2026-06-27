@@ -52,10 +52,11 @@
   ).forEach(function (pre) {
     pre.style.whiteSpace = "pre";
     pre.querySelectorAll("span").forEach(function (s) {
-      s.style.display = "inline";
-      s.style.margin = "0";
-      s.style.padding = "0";
-      s.style.border = "none";
+      s.style.setProperty("display", "inline", "important");
+      s.style.setProperty("margin", "0", "important");
+      s.style.setProperty("padding", "0", "important");
+      s.style.setProperty("border", "none", "important");
+      s.style.setProperty("line-height", "inherit", "important");
     });
   });
   /* Code blocks: ensure pre is keyboard-scrollable and labelled */
