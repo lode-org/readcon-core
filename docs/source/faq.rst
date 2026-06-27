@@ -336,3 +336,21 @@ behavior across languages.
 The conversion preserves ``atom_id`` (via a custom per-atom array),
 velocities, forces (via SinglePointCalculator), masses, and
 constraints (FixAtoms).
+
+15 Why both ``readcon-core.h`` and ``metatensor.h`` / ``readcon-metatensor.h``?
+-------------------------------------------------------------------------------
+
+readcon's cbindgen surface and metatensor-sys's cbindgen surface are separate
+crates. We hand off opaque ``mts_block_t *``; values and labels use metatensor's
+C API. Prefer ``include/readcon-metatensor.h`` (``metatensor.h`` first). Lean builds
+still export metatensor entry points that return ``RKR_STATUS_FEATURE_DISABLED``
+(``-11``), distinct from internal error (``-7``).
+
+16 Lean vs fat ``libreadcon_core`` for C/Fortran?
+-------------------------------------------------
+
+Same symbol names either way. Without ``--features metatensor``, blocks return
+``-11``. Without ``--features zstd``, ``create_writer_zstd_*`` returns a null writer.
+gzip writers and DLPack (including ``\*_dlpack_borrowed`` Arc-share aliases) are
+always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
+lists include/lib paths for ``libmetatensor``.

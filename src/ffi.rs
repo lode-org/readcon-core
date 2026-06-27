@@ -1377,15 +1377,11 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 // Cross-language zero-copy via the DLPack 1.0 ABI. Each per-atom field of
 // the builder is exported as an owning `DLManagedTensorVersioned*`. The
 // caller is responsible for invoking the tensor's deleter callback to
-// release the backing storage when finished. v0.11 ships the OWNING /
-// CLONED variant: the tensor carries its own copy of the field data so it
-// remains valid past the builder's lifetime. This is the conservative
-// choice for cross-process / language-runtime consumers (Python GC,
-// Julia GC, ...) where the consumer may outlive the Rust-side
-// ConFrameBuilder. A future v0.12 will add a `*_dlpack_borrowed` variant
-// that hands out a non-owning view backed by `Arc<ndarray::Array<...>>`
-// storage (matches metatensor v2's `Arc<RwLock<ArrayD<T>>>` pattern) for
-// in-process zero-copy.
+// release the backing storage when finished. Exports use `ArcArray` sharing (`clone` is an Arc bump, not a deep memcpy):
+// the tensor keeps the allocation alive via Arc, so it remains valid past the
+// builder's lifetime. Mutating the builder may CoW-fork builder storage without
+// rewriting an already-exported tensor. `*_dlpack_borrowed` is the explicit
+// name for the same Arc-backed zero-copy path (alias of the primary exports).
 //
 // Optional sections (velocities, forces, atom_energies) return
 // RKR_STATUS_SECTION_ABSENT when the section is not declared on the
@@ -2482,6 +2478,23 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
     }
 }
 
+
+/// zstd writer — stub when built without `zstd` (always linkable; returns null).
+#[cfg(not(feature = "zstd"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_c(_filename_c: *const c_char) -> *mut RKRConFrameWriter {
+    ptr::null_mut()
+}
+
+#[cfg(not(feature = "zstd"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
+    _filename_c: *const c_char,
+    _precision: u8,
+) -> *mut RKRConFrameWriter {
+    ptr::null_mut()
+}
+
 //=============================================================================
 // Direct mmap-based Reader FFI
 //=============================================================================
@@ -2697,6 +2710,68 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
 
 
 
+
+
+/// Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
+/// Real implementations live under `feature = "metatensor"`.
+
+#[cfg(not(feature = "metatensor"))]
+#[repr(C)]
+pub struct mts_block_t {
+    _private: [u8; 0],
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_mts_block_free(_block: *mut mts_block_t) {}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
 
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
 //=============================================================================
@@ -2950,6 +3025,62 @@ pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersio
         }
     }
 }
+
+
+// Arc-backed zero-copy (same storage as owned exports: ArcArray clone = Arc bump, not a deep
+// memcpy). Name `*_dlpack_borrowed` documents in-process sharing; the tensor remains valid
+// via Arc even if the builder is freed. Mutating the builder CoW-forks builder storage and
+// does not mutate an already-exported tensor.
+
+/// Arc-shared positions DLPack view (zero-copy; see module comment).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_positions_dlpack(builder_handle, out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_velocities_dlpack(builder_handle, out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_forces_dlpack(builder_handle, out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_atom_energies_dlpack(builder_handle, out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_masses_dlpack(builder_handle, out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_borrowed(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_builder_atom_ids_dlpack(builder_handle, out_tensor) }
+}
+
 
 
 #[cfg(test)]

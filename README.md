@@ -155,6 +155,15 @@ The library is designed with the following principles in mind:
 
 ### FFI Layer
 
+**C/Fortran quick map (v0.13.1+):** optional Cargo features gate *behavior*, not always symbols.
+Metatensor and zstd entry points exist in lean builds but return
+`RKR_STATUS_FEATURE_DISABLED` (-11) or a null writer (zstd). Never confuse with
+`RKR_STATUS_INTERNAL_ERROR` (-7). Prefer `include/readcon-metatensor.h` when using
+blocks; source `target/<profile>/readcon-metatensor.env` for `libmetatensor` paths.
+DLPack builder exports are Arc-backed zero-copy (`*_dlpack` and `*_dlpack_borrowed`).
+Gzip writers are always on; Fortran: `open_writer_gzip` / `_zstd` (+ precision variants).
+Details: Sphinx **Language bindings** and `fortran/README.md`.
+
 A key challenge in designing an FFI is deciding how data is exposed to the C-compatible world. This library uses a hybrid approach to offer both safety and convenience:
 
 1.  **Opaque Pointers (The Handle Pattern):** The primary way to interact with
