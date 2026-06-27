@@ -1949,7 +1949,9 @@ impl ConFrameBuilder {
         let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
         let mut masses_arr = FloatArray1::zeros(dt.masses, n);
         let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
-        dt.insert_into(&mut metadata);
+        if dt != StorageDtypes::all_f64() {
+            dt.insert_into(&mut metadata);
+        }
         for (i, a) in atom_data.iter().enumerate() {
             pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
