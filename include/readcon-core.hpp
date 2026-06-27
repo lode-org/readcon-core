@@ -354,7 +354,7 @@ class ConFrame {
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_positions_dlpack(frame_handle_.get(), out_tensor);
     }
-    /** Positions with precision/device options (`float_bits` 32 or 64; CPU only for now). */
+    /** Positions with DLPack dtype/device (`DLDataType` + `DLDevice`; CPU + f32/f64 for now). */
     RKRStatus positions_dlpack(const RKRDlpackExportOptions &opts,
                                RKRDLManagedTensorVersioned **out_tensor) const {
         if (!frame_handle_ || !out_tensor)

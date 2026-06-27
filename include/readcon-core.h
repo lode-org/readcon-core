@@ -95,6 +95,26 @@ namespace readcon {
  */
 #define RKR_CON_SPEC_VERSION 2
 
+#define RKR_DL_INT 0
+
+#define RKR_DL_UINT 1
+
+#define RKR_DL_FLOAT 2
+
+#define RKR_DL_OPAQUE_HANDLE 3
+
+#define RKR_DL_BFLOAT 4
+
+#define RKR_DL_COMPLEX 5
+
+#define RKR_DL_BOOL 6
+
+#define RKR_DL_CPU 1
+
+#define RKR_DL_CUDA 2
+
+#define RKR_DL_CUDA_HOST 3
+
 /**
  * Error codes for RKR functions.
  */
@@ -258,22 +278,56 @@ typedef struct RKRConFrameBuilder {
 } RKRConFrameBuilder;
 
 /**
- * Options for DLPack export precision and placement.
- *
- * Pass to `*_dlpack_ex` entry points. NULL options on those APIs (or the
- * legacy non-`_ex` functions) mean **float64 on CPU** (`float_bits=64`,
- * `device_type=1` kDLCPU, `device_id=0`).
- *
- * - `float_bits`: `32` or `64` for float sections (positions, velocities,
- *   forces, energies, masses). Atom-id exports ignore this and stay u64.
- * - `device_type` / `device_id`: DLPack device tags. Only **CPU** (`1`) is
- *   supported today; other values return `RKR_STATUS_VALIDATION_ERROR`.
- *   Reserved so GPU/device-resident exports can land without another ABI break.
+ * Element type request — **layout-identical** to DLPack `DLDataType`
+ * (`uint8_t code`, `uint8_t bits`, `uint16_t lanes`). Interchangeable with
+ * `DLDataType` from `<dlpack/dlpack.h>` when that header is included.
  */
-typedef struct RKRDlpackExportOptions {
-    uint8_t float_bits;
+typedef struct RKRDLDataType {
+    /**
+     * `DLDataTypeCode` (e.g. [`rkr_dl_type_code::RKR_DL_FLOAT`]).
+     */
+    uint8_t code;
+    /**
+     * Bit width (32 or 64 for float sections today).
+     */
+    uint8_t bits;
+    /**
+     * Vector lanes (must be 1 for current exports).
+     */
+    uint16_t lanes;
+} RKRDLDataType;
+
+/**
+ * Device request — **layout-identical** to DLPack `DLDevice`
+ * (`DLDeviceType device_type`, `int32_t device_id`).
+ */
+typedef struct RKRDLDevice {
+    /**
+     * `DLDeviceType` (e.g. [`rkr_dl_device_type::RKR_DL_CPU`]).
+     */
     int32_t device_type;
     int32_t device_id;
+} RKRDLDevice;
+
+/**
+ * Options for DLPack export: requested **DLPack** dtype and device.
+ *
+ * Pass to `*_dlpack_ex`. NULL → float64 (`code=2`, `bits=64`, `lanes=1`) on CPU
+ * (`device_type=1`, `device_id=0`).
+ *
+ * Supported for float sections today: `code = RKR_DL_FLOAT` (2), `bits ∈ {32,64}`,
+ * `lanes = 1`, `device_type = RKR_DL_CPU` (1). Atom-id exports ignore `dtype`
+ * (always uint64). Other combinations return `RKR_STATUS_VALIDATION_ERROR`.
+ */
+typedef struct RKRDlpackExportOptions {
+    /**
+     * Requested element type (DLPack `DLDataType` layout).
+     */
+    struct RKRDLDataType dtype;
+    /**
+     * Requested placement (DLPack `DLDevice` layout).
+     */
+    struct RKRDLDevice device;
 } RKRDlpackExportOptions;
 
 #if !defined(READCON_CORE_HAS_METATENSOR)
