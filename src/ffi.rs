@@ -1372,47 +1372,97 @@ fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
         _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
-/// Options for DLPack export precision and placement.
+/// DLPack `DLDataTypeCode` values (same numerics as `dlpack.h` / dlpk).
 ///
-/// Pass to `*_dlpack_ex` entry points. NULL options on those APIs (or the
-/// legacy non-`_ex` functions) mean **float64 on CPU** (`float_bits=64`,
-/// `device_type=1` kDLCPU, `device_id=0`).
+/// Use with [`RKRDLDataType::code`]. Common: `RKR_DL_FLOAT = 2`, `RKR_DL_UINT = 1`.
+pub mod rkr_dl_type_code {
+    pub const RKR_DL_INT: u8 = 0;
+    pub const RKR_DL_UINT: u8 = 1;
+    pub const RKR_DL_FLOAT: u8 = 2;
+    pub const RKR_DL_OPAQUE_HANDLE: u8 = 3;
+    pub const RKR_DL_BFLOAT: u8 = 4;
+    pub const RKR_DL_COMPLEX: u8 = 5;
+    pub const RKR_DL_BOOL: u8 = 6;
+}
+
+/// DLPack `DLDeviceType` values (same numerics as `dlpack.h`). CPU = 1.
+pub mod rkr_dl_device_type {
+    pub const RKR_DL_CPU: i32 = 1;
+    pub const RKR_DL_CUDA: i32 = 2;
+    pub const RKR_DL_CUDA_HOST: i32 = 3;
+}
+
+/// Element type request — **layout-identical** to DLPack `DLDataType`
+/// (`uint8_t code`, `uint8_t bits`, `uint16_t lanes`). Interchangeable with
+/// `DLDataType` from `<dlpack/dlpack.h>` when that header is included.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDLDataType {
+    /// `DLDataTypeCode` (e.g. [`rkr_dl_type_code::RKR_DL_FLOAT`]).
+    pub code: u8,
+    /// Bit width (32 or 64 for float sections today).
+    pub bits: u8,
+    /// Vector lanes (must be 1 for current exports).
+    pub lanes: u16,
+}
+
+/// Device request — **layout-identical** to DLPack `DLDevice`
+/// (`DLDeviceType device_type`, `int32_t device_id`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDLDevice {
+    /// `DLDeviceType` (e.g. [`rkr_dl_device_type::RKR_DL_CPU`]).
+    pub device_type: i32,
+    pub device_id: i32,
+}
+
+/// Options for DLPack export: requested **DLPack** dtype and device.
 ///
-/// - `float_bits`: `32` or `64` for float sections (positions, velocities,
-///   forces, energies, masses). Atom-id exports ignore this and stay u64.
-/// - `device_type` / `device_id`: DLPack device tags. Only **CPU** (`1`) is
-///   supported today; other values return `RKR_STATUS_VALIDATION_ERROR`.
-///   Reserved so GPU/device-resident exports can land without another ABI break.
+/// Pass to `*_dlpack_ex`. NULL → float64 (`code=2`, `bits=64`, `lanes=1`) on CPU
+/// (`device_type=1`, `device_id=0`).
+///
+/// Supported for float sections today: `code = RKR_DL_FLOAT` (2), `bits ∈ {32,64}`,
+/// `lanes = 1`, `device_type = RKR_DL_CPU` (1). Atom-id exports ignore `dtype`
+/// (always uint64). Other combinations return `RKR_STATUS_VALIDATION_ERROR`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RKRDlpackExportOptions {
-    pub float_bits: u8,
-    pub device_type: i32,
-    pub device_id: i32,
+    /// Requested element type (DLPack `DLDataType` layout).
+    pub dtype: RKRDLDataType,
+    /// Requested placement (DLPack `DLDevice` layout).
+    pub device: RKRDLDevice,
 }
 
 impl Default for RKRDlpackExportOptions {
     fn default() -> Self {
         Self {
-            float_bits: 64,
-            device_type: 1, // kDLCPU
-            device_id: 0,
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
         }
     }
 }
 
-/// Resolve options pointer; NULL → defaults. Rejects unsupported device/bits.
+/// Resolve options pointer; NULL → defaults. Rejects unsupported dtype/device.
 fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
     let o = if opts.is_null() {
         RKRDlpackExportOptions::default()
     } else {
         unsafe { *opts }
     };
-    // Only CPU for now (kDLCPU == 1 in dlpack.h).
-    if o.device_type != 1 {
+    if o.device.device_type != rkr_dl_device_type::RKR_DL_CPU {
         return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    if o.float_bits != 32 && o.float_bits != 64 {
+    if o.dtype.lanes != 1 {
+        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    if o.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || (o.dtype.bits != 32 && o.dtype.bits != 64) {
         return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     Ok(o)
@@ -1430,7 +1480,7 @@ fn export_owned_array2_dlpack_opts(
     opts: &RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let result = match opts.float_bits {
+    let result = match opts.dtype.bits {
         64 => {
             let shared = arr.clone();
             dlpk::DLPackTensor::try_from(shared)
@@ -1469,7 +1519,7 @@ fn export_owned_array1_f64_dlpack_opts(
     opts: &RKRDlpackExportOptions,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let result = match opts.float_bits {
+    let result = match opts.dtype.bits {
         64 => dlpk::DLPackTensor::try_from(arr.clone()),
         32 => {
             let f32_arr: ndarray::ArcArray1<f32> = arr.mapv(|x| x as f32).into();
@@ -3833,11 +3883,17 @@ mod tests {
             RKRStatus::RKR_STATUS_SUCCESS
         );
         unsafe { assert_dlpack_cpu_float(eng, 1, &[n_built], 64) };
-        // Explicit f32 export via options (caller-chosen precision)
+        // Explicit f32 via DLPack-shaped DLDataType (code=kDLFloat=2, bits=32)
         let opts32 = RKRDlpackExportOptions {
-            float_bits: 32,
-            device_type: 1,
-            device_id: 0,
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 32,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
         };
         let mut pos32: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
@@ -3848,11 +3904,17 @@ mod tests {
             assert_dlpack_cpu_float(pos32, 2, &[n_built, 3], 32);
             rkr_dlpack_delete(pos32);
         }
-        // Reject unsupported device / bits
+        // Reject non-CPU device / unsupported dtype bits
         let bad_dev = RKRDlpackExportOptions {
-            float_bits: 64,
-            device_type: 2,
-            device_id: 0,
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CUDA,
+                device_id: 0,
+            },
         };
         let mut junk: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
@@ -3860,9 +3922,15 @@ mod tests {
             RKRStatus::RKR_STATUS_VALIDATION_ERROR
         );
         let bad_bits = RKRDlpackExportOptions {
-            float_bits: 16,
-            device_type: 1,
-            device_id: 0,
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 16,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
         };
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack_ex(built, &bad_bits, &mut junk) },
