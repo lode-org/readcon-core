@@ -355,6 +355,9 @@ pub fn parse_frame_header<'a>(
             .get(meta::CON_SPEC_VERSION)
             .and_then(|v| v.as_u64())
             .ok_or(ParseError::MissingSpecVersion)? as u32;
+        if ver > crate::CON_SPEC_VERSION {
+            return Err(ParseError::UnsupportedSpecVersion(ver));
+        }
         if ver >= 3 {
             match json_obj.get(meta::UNITS) {
                 Some(u) => crate::units::validate_v3_units_metadata(u).map_err(|e| {
@@ -367,9 +370,6 @@ pub fn parse_frame_header<'a>(
                     ));
                 }
             }
-        }
-        if ver > crate::CON_SPEC_VERSION {
-            return Err(ParseError::UnsupportedSpecVersion(ver));
         }
 
         // Single pass over the JSON object: collect sections, capture the
