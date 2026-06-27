@@ -136,13 +136,40 @@ Without bonds, atom selectors (``name``, ``type``, ``all``) still work;
 topology selectors (``bonds:``, ``angles:``, ``is_bonded``, …) yield no matches or
 empty results—not a hard error unless the grammar is invalid.
 
-Gaps (honest limits)
---------------------
+Selection scope (what is in and out)
+------------------------------------
 
-Residue/=resname= filters, full chemfiles property surface, improper
-topology extras, and numeric geometry assertion blocks from chemfiles
-``tests/selection.cpp`` are not fully mirrored. See `bindings <bindings.rst>`_ and
-`reference <chemfiles-reference.rst>`_ for the supported subset.
+readcon evaluates the chemfiles selection *grammar* on a projected CON frame
+(positions, cell, optional ``bonds``, name/type sidecars). That is enough for
+common atom filters (``name``, ``type``, ``all``), bond/angle/dihedral contexts when
+``bonds`` is present, and the regression cases in
+``chemfiles_selection_cpp_regression`` (multiset match lists after ``atom_id``
+remap into CON ``atom_data`` order).
+
+The following are **outside** the supported subset: not half-implemented
+features, but explicit non-goals unless a later release says otherwise.
+
++--------------------------------------------------+--------------------------------------------------------------+
+| Out of scope                                     | Why                                                          |
++==================================================+==============================================================+
+| Residue / ``resname`` (and most residue-centric  | CON has no residue table; import does not synthesize one for |
+| selectors)                                       | selection                                                    |
++--------------------------------------------------+--------------------------------------------------------------+
+| Full chemfiles per-atom / per-residue property   | Import stores only a subset under ``chemfiles_atom_properties`` / |
+| surface                                          | frame metadata                                                    |
++--------------------------------------------------+--------------------------------------------------------------+
+| Improper torsions and other topology beyond      | On-disk CON stores pair bonds only                           |
+| undirected ``bonds`` pairs                       |                                                              |
++--------------------------------------------------+--------------------------------------------------------------+
+| Numeric geometry *assertion* suites from         | We do not claim line-by-line parity with every chemfiles     |
+| upstream ``tests/selection.cpp`` (``distance`` / | unit test; trivial projections may work by accident          |
+| ``angle`` / ``dihedral`` / ``out_of_plane``       |                                                              |
+| thresholds with extra atoms)                     |                                                              |
++--------------------------------------------------+--------------------------------------------------------------+
+
+For the supported API matrix and language surfaces, see `Language bindings
+<bindings.rst>`_ and `Reference — Chemfiles conversion and selection
+<chemfiles-reference.rst>`_.
 
 Place in the LODE / eOn ecosystem
 ---------------------------------
