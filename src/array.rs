@@ -389,10 +389,13 @@ mod tests {
         assert_eq!(tensor.shape(), &[4, 3]);
     }
 
+    /// Without `--features cuda`, non-CPU allocate must fail with a clear error
+    /// (never panic inside a missing driver loader).
+    #[cfg(not(feature = "cuda"))]
     #[test]
     fn allocate_non_cpu_fails_clearly() {
         match allocate_array_on_device(&[2, 3], DLDevice::cuda(0)) {
-            Ok(_) => panic!("non-CPU allocate must fail in default build"),
+            Ok(_) => panic!("non-CPU allocate must fail without --features cuda"),
             Err(err) => {
                 let msg = format!("{err:?}");
                 assert!(
@@ -401,7 +404,26 @@ mod tests {
                 );
             }
         }
-        // Must not look like a silent CPU success.
+        let cpu = allocate_array_on_device(&[2, 3], DLDevice::cpu()).unwrap();
+        assert_eq!(cpu.device(), DLDevice::cpu());
+    }
+
+    /// With `--features cuda` and a working driver, allocate on CUDA must succeed
+    /// and report `kDLCUDA` (real device memory path).
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn allocate_cuda_succeeds_with_feature() {
+        let a = allocate_array_on_device(&[2, 3], DLDevice::cuda(0))
+            .expect("CUDA allocate must succeed with --features cuda and a driver");
+        assert_eq!(a.device(), DLDevice::cuda(0));
+        assert_eq!(
+            a.device().device_type,
+            dlpk::sys::DLDeviceType::kDLCUDA
+        );
+        let t = a
+            .as_dlpack(DLDevice::cuda(0), None, DLPackVersion::current())
+            .expect("matching as_dlpack");
+        assert_eq!(t.device().device_type, dlpk::sys::DLDeviceType::kDLCUDA);
         let cpu = allocate_array_on_device(&[2, 3], DLDevice::cpu()).unwrap();
         assert_eq!(cpu.device(), DLDevice::cpu());
     }
