@@ -477,6 +477,20 @@ mod tests {
         assert!(!h.is_empty());
     }
 
+    /// Projection contract vs shipped frame parse (regression if index_proj drifts from CON).
+    #[test]
+    fn projection_matches_iterator_frame_fields() {
+        let text = fixture_text();
+        let fr = ConFrameIterator::new(&text).next().unwrap().unwrap();
+        let p = FrameIndexProjection::from_frame(&fr);
+        assert_eq!(p.n_atoms as usize, fr.atom_data.len());
+        assert_eq!(p.n_atoms, fr.positions.nrows() as u32);
+        assert!(!p.formula.is_empty());
+        assert!(p.total_mass.is_some_and(|m| m > 0.0));
+        assert!(p.cell_volume.is_some_and(|v| v > 0.0));
+        assert_eq!(p.has_forces, fr.has_forces() || fr.atom_data.iter().any(|a| a.force.is_some()));
+    }
+
     #[test]
     fn canonical_writer_deterministic() {
         let text = fixture_text();

@@ -257,14 +257,6 @@ impl<'a> ConFrameIterator<'a> {
         &mut self,
         file_contents: &'a str,
     ) -> Option<Result<(types::ConFrame, &'a str), error::ParseError>> {
-        debug_assert!(
-            std::ptr::eq(
-                file_contents.as_bytes().as_ptr(),
-                // best-effort: caller must pass the same allocation as `new`
-                file_contents.as_ptr() as *const u8
-            ) || true,
-            "file_contents must be the buffer passed to ConFrameIterator::new"
-        );
         let base = file_contents.as_ptr() as usize;
         let start = {
             let line = self.lines.peek()?;
@@ -354,6 +346,33 @@ mod aos_soa_agreement_tests {
                 assert_eq!(f, fr.forces.as_f64_row(i));
             }
         }
+    }
+
+    /// After SoA-primary parse, section sync must not require rewriting positions
+    /// (nrows already equals N); forces SoA still filled from AoS.
+    #[test]
+    fn sync_skips_pos_when_nrows_matches_keeps_force_soa() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2_forces.con");
+        let text = std::fs::read_to_string(&p).expect("fixture");
+        let fr = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = fr.atom_data.len();
+        assert_eq!(fr.positions.nrows(), n);
+        assert_eq!(fr.forces.nrows(), n);
+        // Snapshot first position SoA row then re-sync; coords must stay bit-identical
+        // (no needless rewrite would change nothing but we still require agreement).
+        let p0 = fr.positions.as_f64_row(0);
+        let mut fr2 = fr.clone();
+        fr2.sync_arrays_from_atom_data();
+        assert_eq!(fr2.positions.as_f64_row(0), p0);
+        assert_eq!(fr2.forces.nrows(), n);
+        assert_eq!(
+            fr2.forces.as_f64_row(0),
+            fr2.atom_data[0].force.expect("force")
+        );
     }
 }
 

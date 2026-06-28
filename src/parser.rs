@@ -1914,6 +1914,17 @@ Coordinates of Component 1
     }
 
     #[test]
+    fn test_parse_line_of_range_f64_stack_matches_vec_api() {
+        let defaults = [0.0, 0.0, 0.0, 0.0, 7.0];
+        let line = "1.0 2.0 3.0 0.0";
+        let mut buf = [0.0f64; 5];
+        parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
+        let via_vec = parse_line_of_range_f64(line, 4, 5, &defaults).unwrap();
+        assert_eq!(&buf[..5], via_vec.as_slice());
+        assert_eq!(buf[4], 7.0);
+    }
+
+    #[test]
     fn test_parse_line_of_range_f64_padded() {
         let defaults = [0.0, 0.0, 0.0, 0.0, 99.0];
         let vals = parse_line_of_range_f64("1.0 2.0 3.0 0.0", 4, 5, &defaults).unwrap();
