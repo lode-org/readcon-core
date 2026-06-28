@@ -3,6 +3,8 @@ pub mod compression;
 pub mod error;
 pub mod ffi;
 pub mod helpers;
+/// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
+pub mod index_proj;
 pub mod iterators;
 pub mod parser;
 pub mod types;

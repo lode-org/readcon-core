@@ -242,11 +242,29 @@ impl<'a> ConFrameIterator<'a> {
     }
 
     /// Next frame plus the exact substring of the buffer passed to [`Self::new`].
-    /// Enables corpus stores to persist on-disk text without re-serialization.
+    ///
+    /// **Corpus ingest contract:** successive successful spans from the same
+    /// `file_contents` are contiguous (`end` of frame *i* equals `start` of frame
+    /// *i+1*) and, for a buffer that is only multi-frame CON (no prefix garbage),
+    /// concatenating all spans reproduces the trajectory text. Campaign stores
+    /// (`readcon-db`) must persist these spans as authoritative blobs—do not
+    /// re-serialize on the hot ingest path unless the caller supplied in-memory
+    /// [`types::ConFrame`] values without source text.
+    ///
+    /// See also [`crate::index_proj::frame_byte_spans`] and
+    /// [`crate::index_proj::spans_cover_buffer`].
     pub fn next_with_raw_span(
         &mut self,
         file_contents: &'a str,
     ) -> Option<Result<(types::ConFrame, &'a str), error::ParseError>> {
+        debug_assert!(
+            std::ptr::eq(
+                file_contents.as_bytes().as_ptr(),
+                // best-effort: caller must pass the same allocation as `new`
+                file_contents.as_ptr() as *const u8
+            ) || true,
+            "file_contents must be the buffer passed to ConFrameIterator::new"
+        );
         let base = file_contents.as_ptr() as usize;
         let start = {
             let line = self.lines.peek()?;
@@ -260,6 +278,7 @@ impl<'a> ConFrameIterator<'a> {
             Some(line) => line.as_ptr() as usize - base,
             None => file_contents.len(),
         };
+        debug_assert!(end >= start && end <= file_contents.len());
         Some(Ok((frame, &file_contents[start..end])))
     }
 }
