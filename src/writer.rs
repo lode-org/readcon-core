@@ -107,11 +107,21 @@ impl<W: Write> ConFrameWriter<W> {
     /// materialization and content-stable hashes; not required for on-disk fidelity
     /// of spans preserved from `next_with_raw_span`.
     pub fn canonical(mut self, on: bool) -> Self {
+        self.set_canonical(on);
+        self
+    }
+
+    /// Set or clear canonical mode on an existing writer (C ABI / FFI).
+    pub fn set_canonical(&mut self, on: bool) {
         self.canonical = on;
         if on {
             self.metadata_cache = None;
         }
-        self
+    }
+
+    /// Whether canonical serialization is enabled.
+    pub fn is_canonical(&self) -> bool {
+        self.canonical
     }
 
     /// Writes a single `ConFrame` to the output stream.

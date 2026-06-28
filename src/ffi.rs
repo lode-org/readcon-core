@@ -921,6 +921,100 @@ pub unsafe extern "C" fn rkr_writer_extend(
         Err(_) => RKRStatus::RKR_STATUS_IO_ERROR,
     }
 }
+
+/// Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
+/// Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
+///
+/// # Safety
+/// `writer_handle` must be valid or null (null → `RKR_STATUS_NULL_POINTER`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_set_canonical(
+    writer_handle: *mut RKRConFrameWriter,
+    canonical: u8,
+) -> RKRStatus {
+    let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
+        Some(w) => w,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    writer.set_canonical(canonical != 0);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_is_canonical(writer_handle: *const RKRConFrameWriter) -> u8 {
+    match unsafe { (writer_handle as *const RkrWriter).as_ref() } {
+        Some(w) => u8::from(w.is_canonical()),
+        None => 0,
+    }
+}
+
+#[cfg(test)]
+mod index_proj_ffi_tests {
+    use super::*;
+    use std::ffi::CStr;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn fixture_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con")
+    }
+
+    #[test]
+    fn ffi_projection_matches_index_proj() {
+        let frames = crate::iterators::read_all_frames(&fixture_path()).unwrap();
+        let fr = &frames[0];
+        let handle = fr as *const ConFrame as *const RKRConFrame;
+        let proj = crate::index_proj::FrameIndexProjection::from_frame(fr);
+        assert_eq!(rkr_frame_index_natoms(handle), proj.n_atoms);
+        assert_eq!(rkr_frame_sections_mask(handle), proj.sections_mask);
+        let formula_c = unsafe { rkr_frame_composition_formula(handle) };
+        assert!(!formula_c.is_null());
+        let formula = unsafe { CStr::from_ptr(formula_c) }.to_str().unwrap();
+        assert_eq!(formula, proj.formula);
+        unsafe { rkr_free_string(formula_c) };
+        let ie = rkr_frame_index_energy(handle);
+        match proj.energy {
+            Some(e) => assert!((ie - e).abs() < 1e-12 || ie.is_nan() && e.is_nan()),
+            None => assert!(ie.is_nan()),
+        }
+        let json_c = unsafe { rkr_frame_index_projection_json(handle) };
+        assert!(!json_c.is_null());
+        let json = unsafe { CStr::from_ptr(json_c) }.to_str().unwrap();
+        assert!(json.contains("\"formula\""));
+        assert!(json.contains(&proj.formula) || proj.formula.is_empty());
+        unsafe { rkr_free_string(json_c) };
+    }
+
+    #[test]
+    fn ffi_canonical_writer_byte_identical() {
+        let frames = crate::iterators::read_all_frames(&fixture_path()).unwrap();
+        let fr = &frames[0];
+        let dir = tempfile::tempdir().unwrap();
+        let p1 = dir.path().join("a.con");
+        let p2 = dir.path().join("b.con");
+        for p in [&p1, &p2] {
+            let path_c = std::ffi::CString::new(p.to_str().unwrap()).unwrap();
+            let w = unsafe { create_writer_from_path_c(path_c.as_ptr()) };
+            assert!(!w.is_null());
+            assert_eq!(
+                unsafe { rkr_writer_set_canonical(w, 1) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert_eq!(unsafe { rkr_writer_is_canonical(w) }, 1);
+            let handles = [fr as *const ConFrame as *const RKRConFrame];
+            assert_eq!(
+                unsafe { rkr_writer_extend(w, handles.as_ptr(), 1) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            unsafe { free_rkr_writer(w) };
+        }
+        let b1 = fs::read(&p1).unwrap();
+        let b2 = fs::read(&p2).unwrap();
+        assert_eq!(b1, b2);
+        assert!(!b1.is_empty());
+    }
+}
 //=============================================================================
 // Writer with Precision
 //=============================================================================

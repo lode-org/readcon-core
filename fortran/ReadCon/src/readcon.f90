@@ -182,6 +182,8 @@ module readcon
     procedure :: valid => wr_valid
     procedure :: free => wr_free
     procedure :: extend_one => wr_extend_one
+    procedure :: set_canonical => wr_set_canonical
+    procedure :: is_canonical => wr_is_canonical
   end type
 
   interface
@@ -436,6 +438,17 @@ module readcon
       type(c_ptr), intent(in) :: frames(*)
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_writer_extend
+    end function
+    function c_rkr_writer_set_canonical(w, canonical) bind(C, name="rkr_writer_set_canonical")
+      import :: c_ptr, c_int8_t, c_int
+      type(c_ptr), value :: w
+      integer(c_int8_t), value :: canonical
+      integer(c_int) :: c_rkr_writer_set_canonical
+    end function
+    function c_rkr_writer_is_canonical(w) bind(C, name="rkr_writer_is_canonical")
+      import :: c_ptr, c_int8_t
+      type(c_ptr), value :: w
+      integer(c_int8_t) :: c_rkr_writer_is_canonical
     end function
     function c_rkr_frame_new(cell, angles, pb0, pb1, pob0, pob1) bind(C, name="rkr_frame_new")
       import :: c_ptr, c_double, c_char
@@ -1184,6 +1197,23 @@ contains
       self%w = c_null_ptr
     end if
   end subroutine
+
+  integer function wr_set_canonical(self, on)
+    class(writer_t), intent(inout) :: self
+    logical, intent(in) :: on
+    integer(c_int8_t) :: flag
+    wr_set_canonical = rkr_status_null_pointer
+    if (.not. c_associated(self%w)) return
+    flag = merge(1_c_int8_t, 0_c_int8_t, on)
+    wr_set_canonical = int(c_rkr_writer_set_canonical(self%w, flag))
+  end function
+
+  logical function wr_is_canonical(self)
+    class(writer_t), intent(in) :: self
+    wr_is_canonical = .false.
+    if (.not. c_associated(self%w)) return
+    wr_is_canonical = (c_rkr_writer_is_canonical(self%w) /= 0_c_int8_t)
+  end function
 
   integer function wr_extend_one(self, fr)
     class(writer_t), intent(inout) :: self
