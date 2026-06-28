@@ -129,6 +129,21 @@ html_theme_options = {
                 },
             ],
         },
+        {
+            "title": "Ecosystem",
+            "children": [
+                {
+                    "title": "readcon-db (campaign store)",
+                    "url": "https://github.com/lode-org/readcon-db",
+                    "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
+                },
+                {
+                    "title": "readcon-db docs",
+                    "url": "https://lode-org.github.io/readcon-db/",
+                    "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
+                },
+            ],
+        },
         {"title": "Spec", "url": "spec"},
         {"title": "Benchmarks", "url": "benchmarks"},
         {"title": "GitHub", "url": "https://github.com/lode-org/readcon-core"},
