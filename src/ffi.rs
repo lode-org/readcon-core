@@ -346,6 +346,10 @@ pub enum RKRStatus {
     /// Requested API is not in this build (Cargo feature off / symbols omitted).
     /// Never use `-7` for this — that is [`RKR_STATUS_INTERNAL_ERROR`].
     RKR_STATUS_FEATURE_DISABLED = -11,
+    /// Requested DLPack device does not match the array's residency.
+    RKR_STATUS_DEVICE_MISMATCH = -12,
+    /// Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
+    RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
 }
 /// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
 ///
@@ -420,6 +424,10 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_VALIDATION_ERROR => c"validation error".as_ptr(),
         RKRStatus::RKR_STATUS_SELECTION_ERROR => c"selection error".as_ptr(),
         RKRStatus::RKR_STATUS_FEATURE_DISABLED => c"feature disabled in this build".as_ptr(),
+        RKRStatus::RKR_STATUS_DEVICE_MISMATCH => c"DLPack device mismatch".as_ptr(),
+        RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED => {
+            c"device allocation unsupported in this build".as_ptr()
+        }
     }
 }
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
@@ -1589,6 +1597,14 @@ pub use dlpk::sys::DLManagedTensorVersioned as RKRDLManagedTensorVersioned;
 fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match e {
+        ParseError::ValidationError(ref msg) if msg.contains("device mismatch") => {
+            RKRStatus::RKR_STATUS_DEVICE_MISMATCH
+        }
+        ParseError::ValidationError(ref msg)
+            if msg.contains("no device allocator") || msg.contains("allocator") =>
+        {
+            RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED
+        }
         ParseError::ValidationError(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
         _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
