@@ -414,12 +414,30 @@ pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::err
 /// 1).sum()` on every frame, which is O(N^2) in line count and
 /// dominated runtime on multi-frame trajectories.
 ///
-/// Phase 2: parallel parse of each frame slice using rayon.
+/// Phase 2: parallel parse of each frame slice using rayon on the
+/// **global** Rayon pool (see also [`parse_frames_parallel_with_threads`]
+/// for strong-scaling control of the worker count).
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
 pub fn parse_frames_parallel(
     file_contents: &str,
+) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    parse_frames_parallel_with_threads(file_contents, None)
+}
+
+/// Like [`parse_frames_parallel`], but runs phase-2 on an explicit Rayon
+/// pool with `num_threads` workers when `Some(n)` (`n` is clamped to at
+/// least 1). `None` uses the global pool (same as [`parse_frames_parallel`]).
+///
+/// Strong-scaling tests pin worker counts without racing the global pool.
+/// Results are ordered by frame index (stable vs sequential iterator order).
+///
+/// Requires the `parallel` feature.
+#[cfg(feature = "parallel")]
+pub fn parse_frames_parallel_with_threads(
+    file_contents: &str,
+    num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
     use rayon::prelude::*;
 
@@ -439,23 +457,91 @@ pub fn parse_frames_parallel(
         }
     }
 
-    // Phase 2: parallel parse each frame chunk
-    let num_frames = boundaries.len();
-    (0..num_frames)
-        .into_par_iter()
-        .map(|i| {
-            let start = boundaries[i];
-            let end = if i + 1 < num_frames {
-                boundaries[i + 1]
-            } else {
-                file_contents.len()
-            };
-            let chunk = &file_contents[start..end];
-            let mut iter = ConFrameIterator::new(chunk);
-            match iter.next() {
-                Some(result) => result,
-                None => Err(error::ParseError::IncompleteFrame),
-            }
-        })
-        .collect()
+    let parse_chunks = || {
+        let num_frames = boundaries.len();
+        (0..num_frames)
+            .into_par_iter()
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < num_frames {
+                    boundaries[i + 1]
+                } else {
+                    file_contents.len()
+                };
+                let chunk = &file_contents[start..end];
+                let mut iter = ConFrameIterator::new(chunk);
+                match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                }
+            })
+            .collect()
+    };
+
+    match num_threads {
+        None => parse_chunks(),
+        Some(n) => {
+            let n = n.max(1);
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(n)
+                .build()
+                .expect("rayon pool");
+            pool.install(parse_chunks)
+        }
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_strong_scale_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn multi_frame_fixture() -> String {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2.con");
+        let one = std::fs::read_to_string(p).expect("fixture");
+        // Enough frames for >1 worker to exercise the pool.
+        one.repeat(8)
+    }
+
+    fn sequential_frames(text: &str) -> Vec<types::ConFrame> {
+        ConFrameIterator::new(text)
+            .map(|r| r.expect("seq frame"))
+            .collect()
+    }
+
+    fn frames_payload_key(f: &types::ConFrame) -> (usize, Vec<(String, f64, f64, f64)>) {
+        let atoms: Vec<_> = f
+            .atom_data
+            .iter()
+            .map(|a| (a.symbol.to_string(), a.x, a.y, a.z))
+            .collect();
+        (f.atom_data.len(), atoms)
+    }
+
+    #[test]
+    fn parallel_workers_match_sequential_payloads() {
+        let text = multi_frame_fixture();
+        let seq = sequential_frames(&text);
+        assert!(seq.len() >= 8);
+        let seq_keys: Vec<_> = seq.iter().map(frames_payload_key).collect();
+
+        for workers in [1usize, 2, 4] {
+            let par = parse_frames_parallel_with_threads(&text, Some(workers));
+            assert_eq!(par.len(), seq.len(), "workers={workers}");
+            let par_keys: Vec<_> = par
+                .into_iter()
+                .map(|r| frames_payload_key(&r.expect("par frame")))
+                .collect();
+            assert_eq!(par_keys, seq_keys, "workers={workers} frame payloads");
+        }
+
+        // Global pool path agrees too.
+        let par_default = parse_frames_parallel(&text);
+        let def_keys: Vec<_> = par_default
+            .into_iter()
+            .map(|r| frames_payload_key(&r.expect("par")))
+            .collect();
+        assert_eq!(def_keys, seq_keys);
+    }
 }
