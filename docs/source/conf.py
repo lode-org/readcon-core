@@ -143,7 +143,7 @@ html_theme_options = {
                     "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
                 },
                 {
-                    "title": "readcon-db Sphinx (when hosted)",
+                    "title": "readcon-db docs",
                     "url": "https://lode-org.github.io/readcon-db/",
                     "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
                 },
