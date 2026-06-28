@@ -46,10 +46,8 @@ struct DLManagedTensorVersioned;
 typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 
 /* Metatensor block: opaque. Prefer include/readcon-metatensor.h (pulls
- * metatensor.h first) when linking a metatensor-enabled library. Symbols below
- * are always declared; lean builds return RKR_STATUS_FEATURE_DISABLED (-11)
- * or no-op free. READCON_CORE_HAS_METATENSOR remains an optional *capability*
- * macro (set by readcon-metatensor.h), not a gate on declarations. */
+ * metatensor.h first). With only this header, define READCON_CORE_HAS_METATENSOR
+ * and include <metatensor.h>, or use the incomplete struct typedef below. */
 struct mts_block_t;
 typedef struct mts_block_t mts_block_t;
 
@@ -116,6 +114,21 @@ namespace readcon {
 #define RKR_DL_CUDA 2
 
 #define RKR_DL_CUDA_HOST 3
+
+/**
+ * Bit 0: forces section or per-atom forces present.
+ */
+#define SECTIONS_MASK_FORCES (1 << 0)
+
+/**
+ * Bit 1: velocities section or per-atom velocities present.
+ */
+#define SECTIONS_MASK_VELOCITIES (1 << 1)
+
+/**
+ * Bit 2: energies section or finite frame energy present.
+ */
+#define SECTIONS_MASK_ENERGIES (1 << 2)
 
 /**
  * Error codes for RKR functions.
@@ -434,35 +447,44 @@ char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
 double rkr_frame_energy(const struct RKRConFrame *frame_handle);
 
 /**
- * Campaign finite energy (readcon-core index_proj): NaN if missing or non-finite.
- * Prefer when aligning with readcon-db energy indexes.
+ * Campaign **finite** energy ([`crate::index_proj::finite_energy`]): NaN if missing or non-finite.
+ * Prefer this over [`rkr_frame_energy`] when mirroring `readcon-db` indexes.
  */
 double rkr_frame_index_energy(const struct RKRConFrame *frame_handle);
 
 /**
- * Canonical multiset formula (e.g. "Cu:2|H:2"). Free with rkr_free_string.
+ * Canonical multiset formula (`Cu:2|H:2`) for campaign `idx_formula`. Free with `rkr_free_string`.
  */
 char *rkr_frame_composition_formula(const struct RKRConFrame *frame_handle);
 
-/** Total mass Σ m_i * n_i; NaN if not all finite. */
+/**
+ * Total mass from type masses × counts; NaN if not all finite.
+ */
 double rkr_frame_total_mass(const struct RKRConFrame *frame_handle);
 
-/** Cell volume; NaN if unavailable. */
+/**
+ * Cell volume (lattice det or triclinic); NaN if unavailable.
+ */
 double rkr_frame_cell_volume(const struct RKRConFrame *frame_handle);
 
-/** Max force magnitude; NaN if no finite forces. */
+/**
+ * Max \(\|F_i\|\); NaN if no finite forces.
+ */
 double rkr_frame_fmax(const struct RKRConFrame *frame_handle);
 
 /**
- * Sections presence mask for campaign flags: bit0=forces, bit1=velocities, bit2=energies.
+ * Sections presence bitmask: bit0 forces, bit1 velocities, bit2 energies (see `index_proj`).
  */
 uint8_t rkr_frame_sections_mask(const struct RKRConFrame *frame_handle);
 
-/** Atom count for idx_natoms (atom_data length). */
+/**
+ * Atom count used for campaign `idx_natoms` (same as `atom_data.len()`).
+ */
 uint32_t rkr_frame_index_natoms(const struct RKRConFrame *frame_handle);
 
 /**
- * JSON object of campaign index projection fields. Free with rkr_free_string.
+ * Compact JSON of [`crate::index_proj::FrameIndexProjection`] (campaign screening fields).
+ * Free with `rkr_free_string`. NULL on error.
  */
 char *rkr_frame_index_projection_json(const struct RKRConFrame *frame_handle);
 
@@ -685,16 +707,6 @@ struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 
 /**
- * Enable (canonical != 0) campaign-stable CON writes (deterministic metadata key order).
- * Same as Rust ConFrameWriter::canonical(true).
- */
-enum RKRStatus rkr_writer_set_canonical(struct RKRConFrameWriter *writer_handle,
-                                        uint8_t canonical);
-
-/** Returns 1 if writer is in canonical mode, else 0. */
-uint8_t rkr_writer_is_canonical(const struct RKRConFrameWriter *writer_handle);
-
-/**
  * Writes multiple frames from an array of handles to the file managed by the writer.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
@@ -704,6 +716,21 @@ uint8_t rkr_writer_is_canonical(const struct RKRConFrameWriter *writer_handle);
 enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
                                  const struct RKRConFrame *const *frame_handles,
                                  uintptr_t num_frames);
+
+/**
+ * Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
+ * Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
+ *
+ * # Safety
+ * `writer_handle` must be valid or null (null → `RKR_STATUS_NULL_POINTER`).
+ */
+enum RKRStatus rkr_writer_set_canonical(struct RKRConFrameWriter *writer_handle,
+                                        uint8_t canonical);
+
+/**
+ * Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
+ */
+uint8_t rkr_writer_is_canonical(const struct RKRConFrameWriter *writer_handle);
 
 /**
  * Creates a new frame writer with custom floating-point precision.
@@ -1462,28 +1489,37 @@ struct RKRConFrameWriter *create_writer_gzip_c(const char *filename_c);
 struct RKRConFrameWriter *create_writer_gzip_with_precision_c(const char *filename_c,
                                                               uint8_t precision);
 
+#if defined(READCON_CORE_HAS_ZSTD)
 /**
  * Creates a new zstd-compressed frame writer for the specified file.
  * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
  *
- * Always declared. Without the `zstd` Cargo feature the library returns NULL
- * (lean stub). Optional macro `READCON_CORE_HAS_ZSTD` documents capability only.
+ * Only present when readcon-core is built with the `zstd` Cargo
+ * feature; the C header guards the declaration with
+ * `READCON_CORE_HAS_ZSTD`.
  *
  * # Safety
  * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_zstd_c(const char *filename_c);
+#endif
 
+#if defined(READCON_CORE_HAS_ZSTD)
 /**
  * Creates a zstd-compressed frame writer with a custom floating-point
  * precision. The caller OWNS the returned pointer and MUST call
- * `free_rkr_writer`. Always declared; lean builds return NULL.
+ * `free_rkr_writer`.
+ *
+ * Only present when readcon-core is built with the `zstd` Cargo
+ * feature; the C header guards the declaration with
+ * `READCON_CORE_HAS_ZSTD`.
  *
  * # Safety
  * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *filename_c,
                                                               uint8_t precision);
+#endif
 
 /**
  * Reads the first frame from a .con file.
@@ -1529,40 +1565,72 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 void free_rkr_frame_ptr_array(struct RKRConFrame **frames,
                               uintptr_t num_frames);
 
+#if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Free an owned block from `rkr_frame_metatensor_*_block`.
  * Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
- * Lean builds: no-op. Always declared (feature gate is runtime -11 on create).
  *
  * # Safety
  * `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
  */
 void rkr_mts_block_free(struct mts_block_t *block);
+#endif
 
+#if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
- * Lean builds: sets *out_block=NULL and returns RKR_STATUS_FEATURE_DISABLED (-11).
  */
 enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
                                                     struct mts_block_t **out_block);
+#endif
 
-/**
- * Velocities TensorBlock or FEATURE_DISABLED (-11) on lean builds.
- */
+#if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
                                                      struct mts_block_t **out_block);
+#endif
 
-/**
- * Forces TensorBlock or FEATURE_DISABLED (-11) on lean builds.
- */
+#if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
                                                  struct mts_block_t **out_block);
+#endif
 
-/**
- * Per-atom energies TensorBlock or FEATURE_DISABLED (-11) on lean builds.
- */
+#if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
                                                         struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
+#endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
+                                                              uint8_t _precision);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+void rkr_mts_block_free(struct mts_block_t *_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *_frame_handle,
+                                                    struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *_frame_handle,
+                                                     struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *_frame_handle,
+                                                 struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *_frame_handle,
+                                                        struct mts_block_t **out_block);
+#endif
 
 /**
  * Number of atoms on the frame (atom_data order).
