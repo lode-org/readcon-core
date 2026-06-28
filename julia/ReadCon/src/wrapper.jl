@@ -575,3 +575,47 @@ function masses_vector(frame::ConFrame)::Vector{Float64}
     _check_status(st, "rkr_frame_copy_masses")
     return buf
 end
+
+# --- Campaign index projection (readcon_core::index_proj via C ABI) ---
+
+function _with_frame_handle(frame::ConFrame, f)
+    handle = _build_frame_handle(frame)
+    try
+        return f(handle)
+    finally
+        handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
+    end
+end
+
+"""Finite campaign energy (NaN → nothing); aligns with readcon-db energy index."""
+function index_energy(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_index_energy), Float64, (Ptr{Cvoid},), h)))
+end
+
+function composition_formula(frame::ConFrame)
+    _with_frame_handle(frame, h -> _take_string(ccall(_lib_symbol(:rkr_frame_composition_formula), Ptr{UInt8}, (Ptr{Cvoid},), h)))
+end
+
+function total_mass(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_total_mass), Float64, (Ptr{Cvoid},), h)))
+end
+
+function cell_volume(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_cell_volume), Float64, (Ptr{Cvoid},), h)))
+end
+
+function fmax(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_fmax), Float64, (Ptr{Cvoid},), h)))
+end
+
+function sections_mask(frame::ConFrame)
+    _with_frame_handle(frame, h -> ccall(_lib_symbol(:rkr_frame_sections_mask), UInt8, (Ptr{Cvoid},), h))
+end
+
+function index_natoms(frame::ConFrame)
+    _with_frame_handle(frame, h -> ccall(_lib_symbol(:rkr_frame_index_natoms), UInt32, (Ptr{Cvoid},), h))
+end
+
+function index_projection_json(frame::ConFrame)
+    _with_frame_handle(frame, h -> _take_string(ccall(_lib_symbol(:rkr_frame_index_projection_json), Ptr{UInt8}, (Ptr{Cvoid},), h)))
+end

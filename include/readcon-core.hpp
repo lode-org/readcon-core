@@ -608,6 +608,15 @@ class ConFrameWriter {
      */
     void extend(const std::vector<ConFrame> &frames);
 
+    /// Campaign-stable CON serialization (deterministic metadata key order).
+    void set_canonical(bool on) {
+        throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
+                       "rkr_writer_set_canonical");
+    }
+    [[nodiscard]] bool is_canonical() const {
+        return rkr_writer_is_canonical(writer_handle_.get()) != 0;
+    }
+
   private:
     struct WriterDeleter {
         void operator()(RKRConFrameWriter *ptr) const {

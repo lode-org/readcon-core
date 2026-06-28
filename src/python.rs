@@ -543,6 +543,70 @@ impl PyConFrame {
         Ok(crate::index_proj::sections_present_mask(&frame))
     }
 
+    /// Campaign finite energy (None if missing or non-finite); aligns with readcon-db energy index.
+    #[getter]
+    fn index_energy(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::finite_energy(&frame))
+    }
+
+    /// Total mass Σ m_i n_i when finite.
+    #[getter]
+    fn total_mass(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_total_mass(&frame))
+    }
+
+    /// Cell volume when finite.
+    #[getter]
+    fn cell_volume(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_cell_volume(&frame))
+    }
+
+    /// Max force magnitude when forces present.
+    #[getter]
+    fn fmax(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_fmax(&frame))
+    }
+
+    /// Atom count for campaign `idx_natoms`.
+    #[getter]
+    fn index_natoms(&self, py: Python<'_>) -> PyResult<u32> {
+        let frame = self.to_con_frame(py)?;
+        Ok(frame.atom_data.len() as u32)
+    }
+
+    /// Full projection as JSON string (same payload as `rkr_frame_index_projection_json`).
+    fn index_projection_json(&self, py: Python<'_>) -> PyResult<String> {
+        use crate::index_proj::FrameIndexProjection;
+        let frame = self.to_con_frame(py)?;
+        let p = FrameIndexProjection::from_frame(&frame);
+        let v = serde_json::json!({
+            "n_atoms": p.n_atoms,
+            "formula": p.formula,
+            "energy": p.energy,
+            "fmax": p.fmax,
+            "total_mass": p.total_mass,
+            "cell_volume": p.cell_volume,
+            "sections_mask": p.sections_mask,
+            "has_forces": p.has_forces,
+            "has_velocities": p.has_velocities,
+            "has_energy": p.has_energy,
+            "symbols": p.symbols,
+            "species_counts": p.species_counts.iter().map(|(s,c)| serde_json::json!([s, c])).collect::<Vec<_>>(),
+            "time": p.time,
+            "timestep": p.timestep,
+            "frame_index": p.frame_index,
+            "neb_bead": p.neb_bead,
+            "neb_band": p.neb_band,
+            "charge": p.charge,
+            "magmom": p.magmom,
+        });
+        Ok(v.to_string())
+    }
+
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
@@ -744,10 +808,12 @@ impl PyConFrame {
     }
 
     /// Write this frame to a CON path (single-frame convenience).
-    fn write_con(&self, py: Python<'_>, path: &str) -> PyResult<()> {
+    #[pyo3(signature = (path, *, canonical=false))]
+    fn write_con(&self, py: Python<'_>, path: &str, canonical: bool) -> PyResult<()> {
         let frame = self.to_con_frame(py)?;
         let mut writer = ConFrameWriter::from_path(Path::new(path))
-            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+            .map_err(|e| PyIOError::new_err(e.to_string()))?
+            .canonical(canonical);
         writer
             .write_frame(&frame)
             .map_err(|e| PyIOError::new_err(e.to_string()))?;
@@ -943,13 +1009,14 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=6, compression=None))]
+#[pyo3(signature = (path, frames, precision=6, compression=None, *, canonical=false))]
 fn write_con(
     py: Python<'_>,
     path: &str,
     frames: &Bound<'_, PyAny>,
     precision: usize,
     compression: Option<&str>,
+    canonical: bool,
 ) -> PyResult<()> {
     let rust_frames = py_frames_to_rust(py, frames)?;
 
@@ -966,13 +1033,15 @@ fn write_con(
 
     if use_gzip {
         let mut writer = ConFrameWriter::from_path_gzip_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?;
+            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?
+            .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
     } else {
         let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?;
+            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?
+            .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -982,16 +1051,17 @@ fn write_con(
 
 /// Write frames to a string in .con format.
 #[pyfunction]
-#[pyo3(signature = (frames, precision=6))]
+#[pyo3(signature = (frames, precision=6, *, canonical=false))]
 fn write_con_string(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
     precision: usize,
+    canonical: bool,
 ) -> PyResult<String> {
     let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
-        let mut writer = ConFrameWriter::with_precision(&mut buffer, precision);
+        let mut writer = ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;

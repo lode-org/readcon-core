@@ -685,6 +685,16 @@ struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 
 /**
+ * Enable (canonical != 0) campaign-stable CON writes (deterministic metadata key order).
+ * Same as Rust ConFrameWriter::canonical(true).
+ */
+enum RKRStatus rkr_writer_set_canonical(struct RKRConFrameWriter *writer_handle,
+                                        uint8_t canonical);
+
+/** Returns 1 if writer is in canonical mode, else 0. */
+uint8_t rkr_writer_is_canonical(const struct RKRConFrameWriter *writer_handle);
+
+/**
  * Writes multiple frames from an array of handles to the file managed by the writer.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
