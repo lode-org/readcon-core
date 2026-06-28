@@ -14,9 +14,11 @@ import pytest
 
 import readcon
 
+# APIs are always exported; lean builds return FEATURE_DISABLED / errors unless
+# the extension was built with chemfiles. Gate on the shipped capability flag.
 pytestmark = pytest.mark.skipif(
-    not (hasattr(readcon, "select_on_frame") and callable(readcon.select_on_frame)),
-    reason="chemfiles select not in this wheel",
+    not getattr(readcon, "has_chemfiles_support", lambda: False)(),
+    reason="chemfiles feature not enabled in this wheel (has_chemfiles_support() is False)",
 )
 
 _REPO = Path(__file__).resolve().parents[2]

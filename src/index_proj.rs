@@ -43,9 +43,10 @@ pub fn composition_formula(counts: &[(String, u32)]) -> String {
 }
 
 /// Species multiset from atom symbols (non-empty only), sorted by symbol.
-pub fn species_counts_from_symbols<'a>(symbols: impl Iterator<Item = &'a str>) -> Vec<(String, u32)> {
+pub fn species_counts_from_symbols(symbols: impl Iterator<Item = impl AsRef<str>>) -> Vec<(String, u32)> {
     let mut m = BTreeMap::new();
     for s in symbols {
+        let s = s.as_ref();
         if s.is_empty() {
             continue;
         }
@@ -336,7 +337,12 @@ impl FrameByteSpan {
         self.end.saturating_sub(self.start)
     }
 
-    pub fn slice<'a>(self, file_contents: &'a str) -> Option<&'a str> {
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn slice(self, file_contents: &str) -> Option<&str> {
         file_contents.get(self.start..self.end)
     }
 }
@@ -485,10 +491,28 @@ mod tests {
         let p = FrameIndexProjection::from_frame(&fr);
         assert_eq!(p.n_atoms as usize, fr.atom_data.len());
         assert_eq!(p.n_atoms, fr.positions.nrows() as u32);
+        let expect_formula = frame_composition_formula(&fr);
+        assert_eq!(p.formula, expect_formula);
         assert!(!p.formula.is_empty());
+        assert_eq!(p.species_counts, frame_species_counts(&fr));
         assert!(p.total_mass.is_some_and(|m| m > 0.0));
         assert!(p.cell_volume.is_some_and(|v| v > 0.0));
-        assert_eq!(p.has_forces, fr.has_forces() || fr.atom_data.iter().any(|a| a.force.is_some()));
+        let expect_forces = frame_has_forces(&fr);
+        let expect_vel = frame_has_velocities(&fr);
+        assert_eq!(p.has_forces, expect_forces);
+        assert_eq!(p.has_velocities, expect_vel);
+        let mut expect_mask = 0u8;
+        if expect_forces {
+            expect_mask |= SECTIONS_MASK_FORCES;
+        }
+        if expect_vel {
+            expect_mask |= SECTIONS_MASK_VELOCITIES;
+        }
+        if frame_has_energies(&fr) {
+            expect_mask |= SECTIONS_MASK_ENERGIES;
+        }
+        assert_eq!(p.sections_mask, expect_mask);
+        assert_eq!(p.sections_mask, sections_present_mask(&fr));
     }
 
     #[test]
