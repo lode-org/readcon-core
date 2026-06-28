@@ -143,6 +143,115 @@ pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
         None => f64::NAN,
     }
 }
+
+/// Campaign **finite** energy ([`crate::index_proj::finite_energy`]): NaN if missing or non-finite.
+/// Prefer this over [`rkr_frame_energy`] when mirroring `readcon-db` indexes.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_index_energy(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::finite_energy(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Canonical multiset formula (`Cu:2|H:2`) for campaign `idx_formula`. Free with `rkr_free_string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_composition_formula(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    let s = crate::index_proj::frame_composition_formula(frame);
+    match CString::new(s) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Total mass from type masses × counts; NaN if not all finite.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_total_mass(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_total_mass(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Cell volume (lattice det or triclinic); NaN if unavailable.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_cell_volume(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_cell_volume(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Max \(\|F_i\|\); NaN if no finite forces.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_fmax(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_fmax(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Sections presence bitmask: bit0 forces, bit1 velocities, bit2 energies (see `index_proj`).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_sections_mask(frame_handle: *const RKRConFrame) -> u8 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::sections_present_mask(f),
+        None => 0,
+    }
+}
+
+/// Atom count used for campaign `idx_natoms` (same as `atom_data.len()`).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_index_natoms(frame_handle: *const RKRConFrame) -> u32 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.atom_data.len() as u32,
+        None => 0,
+    }
+}
+
+/// Compact JSON of [`crate::index_proj::FrameIndexProjection`] (campaign screening fields).
+/// Free with `rkr_free_string`. NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_index_projection_json(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    let p = crate::index_proj::FrameIndexProjection::from_frame(frame);
+    let v = serde_json::json!({
+        "n_atoms": p.n_atoms,
+        "formula": p.formula,
+        "energy": p.energy,
+        "fmax": p.fmax,
+        "total_mass": p.total_mass,
+        "cell_volume": p.cell_volume,
+        "sections_mask": p.sections_mask,
+        "has_forces": p.has_forces,
+        "has_velocities": p.has_velocities,
+        "has_energy": p.has_energy,
+        "symbols": p.symbols,
+        "species_counts": p.species_counts.iter().map(|(s,c)| serde_json::json!([s, c])).collect::<Vec<_>>(),
+        "time": p.time,
+        "timestep": p.timestep,
+        "frame_index": p.frame_index,
+        "neb_bead": p.neb_bead,
+        "neb_band": p.neb_band,
+        "charge": p.charge,
+        "magmom": p.magmom,
+    });
+    match CString::new(v.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
 /// Returns the potential type string from metadata as a heap-allocated
 /// null-terminated C string. The caller MUST free with `rkr_free_string`.
 /// Returns NULL if absent or on error.

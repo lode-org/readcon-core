@@ -115,6 +115,14 @@ module readcon
     procedure :: has_forces => fr_has_frc
     procedure :: metadata_json => fr_meta
     procedure :: energy => fr_energy
+    procedure :: index_energy => fr_index_energy
+    procedure :: composition_formula => fr_composition_formula
+    procedure :: total_mass => fr_total_mass
+    procedure :: cell_volume => fr_cell_volume
+    procedure :: fmax => fr_fmax
+    procedure :: sections_mask => fr_sections_mask
+    procedure :: index_natoms => fr_index_natoms
+    procedure :: index_projection_json => fr_index_projection_json
     procedure :: atom_count => fr_atom_count
     procedure :: copy_positions => fr_copy_positions
     procedure :: copy_velocities => fr_copy_velocities
@@ -272,6 +280,46 @@ module readcon
       import :: c_ptr, c_double
       type(c_ptr), value :: f
       real(c_double) :: c_rkr_frame_energy
+    end function
+    function c_rkr_frame_index_energy(f) bind(C, name="rkr_frame_index_energy")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_index_energy
+    end function
+    function c_rkr_frame_composition_formula(f) bind(C, name="rkr_frame_composition_formula")
+      import :: c_ptr
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_composition_formula
+    end function
+    function c_rkr_frame_total_mass(f) bind(C, name="rkr_frame_total_mass")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_total_mass
+    end function
+    function c_rkr_frame_cell_volume(f) bind(C, name="rkr_frame_cell_volume")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_cell_volume
+    end function
+    function c_rkr_frame_fmax(f) bind(C, name="rkr_frame_fmax")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_fmax
+    end function
+    function c_rkr_frame_sections_mask(f) bind(C, name="rkr_frame_sections_mask")
+      import :: c_ptr, c_int8_t
+      type(c_ptr), value :: f
+      integer(c_int8_t) :: c_rkr_frame_sections_mask
+    end function
+    function c_rkr_frame_index_natoms(f) bind(C, name="rkr_frame_index_natoms")
+      import :: c_ptr, c_int32_t
+      type(c_ptr), value :: f
+      integer(c_int32_t) :: c_rkr_frame_index_natoms
+    end function
+    function c_rkr_frame_index_projection_json(f) bind(C, name="rkr_frame_index_projection_json")
+      import :: c_ptr
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_index_projection_json
     end function
     function c_rkr_frame_potential_type(f) bind(C, name="rkr_frame_potential_type")
       import :: c_ptr
@@ -810,6 +858,64 @@ contains
     fr_energy = 0.0_real64
     if (.not. c_associated(self%handle)) return
     fr_energy = real(c_rkr_frame_energy(self%handle), real64)
+  end function
+
+  real(real64) function fr_index_energy(self)
+    class(frame_t), intent(in) :: self
+    fr_index_energy = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_index_energy = real(c_rkr_frame_index_energy(self%handle), real64)
+  end function
+
+  function fr_composition_formula(self) result(s)
+    class(frame_t), intent(in) :: self
+    character(len=:), allocatable :: s
+    s = ""
+    if (.not. c_associated(self%handle)) return
+    s = from_c(c_rkr_frame_composition_formula(self%handle), .true.)
+  end function
+
+  real(real64) function fr_total_mass(self)
+    class(frame_t), intent(in) :: self
+    fr_total_mass = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_total_mass = real(c_rkr_frame_total_mass(self%handle), real64)
+  end function
+
+  real(real64) function fr_cell_volume(self)
+    class(frame_t), intent(in) :: self
+    fr_cell_volume = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_cell_volume = real(c_rkr_frame_cell_volume(self%handle), real64)
+  end function
+
+  real(real64) function fr_fmax(self)
+    class(frame_t), intent(in) :: self
+    fr_fmax = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_fmax = real(c_rkr_frame_fmax(self%handle), real64)
+  end function
+
+  integer(c_int8_t) function fr_sections_mask(self)
+    class(frame_t), intent(in) :: self
+    fr_sections_mask = 0_c_int8_t
+    if (.not. c_associated(self%handle)) return
+    fr_sections_mask = c_rkr_frame_sections_mask(self%handle)
+  end function
+
+  integer(c_int32_t) function fr_index_natoms(self)
+    class(frame_t), intent(in) :: self
+    fr_index_natoms = 0_c_int32_t
+    if (.not. c_associated(self%handle)) return
+    fr_index_natoms = c_rkr_frame_index_natoms(self%handle)
+  end function
+
+  function fr_index_projection_json(self) result(s)
+    class(frame_t), intent(in) :: self
+    character(len=:), allocatable :: s
+    s = "{}"
+    if (.not. c_associated(self%handle)) return
+    s = from_c(c_rkr_frame_index_projection_json(self%handle), .true.)
   end function
 
   function fr_pot(self) result(s)
