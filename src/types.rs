@@ -678,6 +678,67 @@ impl ConFrame {
         }
     }
 
+    /// After section parsers mutate AoS only, refill SoA velocities/forces/energies
+    /// (and re-assert positions/ids from AoS). Used on the shipped iterator path so
+    /// SoA section nrows match AoS optional fields.
+    pub fn sync_arrays_from_atom_data(&mut self) {
+        let n = self.atom_data.len();
+        if n == 0 {
+            return;
+        }
+        use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
+        let dt = StorageDtypes::from_metadata(&self.header.metadata).unwrap_or_default();
+        let has_vel = self.atom_data.iter().any(|a| a.has_velocity());
+        let has_frc = self.atom_data.iter().any(|a| a.has_forces());
+        let has_eng = self.atom_data.iter().any(|a| a.has_energy());
+        // Positions may already be SoA-primary from parse; still mirror for agreement.
+        if self.positions.nrows() != n {
+            self.positions = FloatArray2::zeros(dt.positions, n, 3);
+        }
+        if has_vel {
+            if self.velocities.nrows() != n {
+                self.velocities = FloatArray2::zeros(dt.velocities, n, 3);
+            }
+        } else {
+            self.velocities = FloatArray2::zeros(dt.velocities, 0, 3);
+        }
+        if has_frc {
+            if self.forces.nrows() != n {
+                self.forces = FloatArray2::zeros(dt.forces, n, 3);
+            }
+        } else {
+            self.forces = FloatArray2::zeros(dt.forces, 0, 3);
+        }
+        if has_eng {
+            if self.atom_energies.len() != n {
+                self.atom_energies = FloatArray1::zeros(dt.energies, n);
+            }
+        } else {
+            self.atom_energies = FloatArray1::zeros(dt.energies, 0);
+        }
+        if self.atom_ids.len() != n {
+            self.atom_ids = ndarray::ArcArray1::<u64>::zeros(n);
+        }
+        for (i, a) in self.atom_data.iter().enumerate() {
+            self.positions.set_f64_row(i, [a.x, a.y, a.z]);
+            self.atom_ids[i] = a.atom_id;
+            if has_vel {
+                if let Some(v) = a.velocity {
+                    self.velocities.set_f64_row(i, v);
+                }
+            }
+            if has_frc {
+                if let Some(f) = a.force {
+                    self.forces.set_f64_row(i, f);
+                }
+            }
+            if has_eng {
+                self.atom_energies
+                    .set_f64(i, a.energy.unwrap_or(0.0));
+            }
+        }
+    }
+
     /// Metatensor-style: export **stored** positions (f32 or f64) via DLPack.
     pub fn positions_as_dlpack(
         &self,
