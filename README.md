@@ -36,7 +36,7 @@ ASE. ASE adapters are optional and only for calculator hand-off.
 | Layer | Crate | Responsibility |
 |-------|-------|----------------|
 | Interchange | **readcon-core** / Python **`readcon`** | Parse/write CON & convel, spec v2–v3 metadata, chemfiles ingress, hourglass C/Python/Julia FFI |
-| Corpus | **[readcon-db](https://github.com/lode-org/readcon-db)** / **`readcon_db`** | Heed/LMDB store, secondary indexes, exact-match dedup, CLI + C/Python/Fortran |
+| Corpus | **[readcon-db](https://github.com/lode-org/readcon-db)** / **`readcon_db`** | Heed/LMDB store, secondary indexes, exact-match dedup, CLI + C/Python/Fortran (`cargo add readcon-db`, `pip install readcon-db`) |
 
 
 <a id="orgdaee6f9"></a>
