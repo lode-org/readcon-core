@@ -174,12 +174,19 @@ pub fn allocate_array_on_device(
     shape: &[usize],
     device: DLDevice,
 ) -> Result<Box<dyn Array>, ParseError> {
-    if device != DLDevice::cpu() {
-        return Err(ParseError::ValidationError(format!(
-            "no device allocator in this build for {device:?}; use caller-supplied device buffers via from_dlpack / array_from_host_f64_on_device"
-        )));
+    if device == DLDevice::cpu() {
+        return Ok(array_from_shape::<f64>(shape));
     }
-    Ok(array_from_shape::<f64>(shape))
+    #[cfg(feature = "cuda")]
+    {
+        use dlpk::sys::DLDeviceType;
+        if device.device_type == DLDeviceType::kDLCUDA {
+            return crate::cuda_array::allocate_cuda_f64(shape, device.device_id);
+        }
+    }
+    Err(ParseError::ValidationError(format!(
+        "no device allocator in this build for {device:?}; use caller-supplied device buffers via from_dlpack / array_from_host_f64_on_device, or build with `--features cuda` for CUDA devices"
+    )))
 }
 
 /// Host-resident `f64` buffer tagged with a DLPack `device` (CPU or non-CPU).

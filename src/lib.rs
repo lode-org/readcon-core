@@ -1,4 +1,6 @@
 pub mod array;
+#[cfg(feature = "cuda")]
+pub mod cuda_array;
 pub mod compression;
 pub mod error;
 pub mod ffi;
