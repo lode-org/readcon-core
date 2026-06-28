@@ -26,6 +26,11 @@ const DEFAULT_FLOAT_PRECISION: usize = 6;
 pub struct ConFrameWriter<W: Write> {
     writer: BufWriter<W>,
     precision: usize,
+    /// When true: sort metadata keys in JSON, emit sections in canonical
+    /// order (velocities, forces, energies), fixed precision suitable for
+    /// content-stable corpus writes / semantic-ish dedup. Opt-in so default
+    /// writes keep historical float formatting.
+    canonical: bool,
     /// Cache for the JSON metadata line: when consecutive frames share
     /// the same (spec_version, sections-set, metadata) triple the
     /// serialized JSON object is identical, so reusing the cached
@@ -77,6 +82,7 @@ impl<W: Write> ConFrameWriter<W> {
         Self {
             writer: BufWriter::new(writer),
             precision: DEFAULT_FLOAT_PRECISION,
+            canonical: false,
             metadata_cache: None,
         }
     }
@@ -91,8 +97,21 @@ impl<W: Write> ConFrameWriter<W> {
         Self {
             writer: BufWriter::new(writer),
             precision,
+            canonical: false,
             metadata_cache: None,
         }
+    }
+
+    /// Opt-in **canonical** serialization: BTree-ordered metadata keys in JSON,
+    /// fixed section order, stable float precision (default 6). Use for corpus
+    /// materialization and content-stable hashes; not required for on-disk fidelity
+    /// of spans preserved from `next_with_raw_span`.
+    pub fn canonical(mut self, on: bool) -> Self {
+        self.canonical = on;
+        if on {
+            self.metadata_cache = None;
+        }
+        self
     }
 
     /// Writes a single `ConFrame` to the output stream.
@@ -114,10 +133,11 @@ impl<W: Write> ConFrameWriter<W> {
         let has_frc = frame.has_forces();
         let has_eng = frame.has_energies();
 
-        let cache_hit = self
-            .metadata_cache
-            .as_ref()
-            .is_some_and(|c| c.matches(spec_version, has_vel, has_frc, has_eng, &frame.header.metadata));
+        let cache_hit = !self.canonical
+            && self
+                .metadata_cache
+                .as_ref()
+                .is_some_and(|c| c.matches(spec_version, has_vel, has_frc, has_eng, &frame.header.metadata));
 
         if !cache_hit {
             let mut meta_obj = serde_json::Map::new();
@@ -144,6 +164,7 @@ impl<W: Write> ConFrameWriter<W> {
             if !sections.is_empty() || validate {
                 meta_obj.insert(meta::SECTIONS.into(), json!(sections));
             }
+            // Canonical: insert remaining keys in BTree order (metadata is already BTreeMap).
             for (k, v) in &frame.header.metadata {
                 if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
                     continue;
@@ -163,6 +184,7 @@ impl<W: Write> ConFrameWriter<W> {
                     );
                 }
             }
+            // serde_json::Map iterates in key order → stable string for corpus hashes.
             let serialized = serde_json::Value::Object(meta_obj).to_string();
             self.metadata_cache = Some(MetadataCacheEntry {
                 spec_version,
