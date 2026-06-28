@@ -434,6 +434,39 @@ char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
 double rkr_frame_energy(const struct RKRConFrame *frame_handle);
 
 /**
+ * Campaign finite energy (readcon-core index_proj): NaN if missing or non-finite.
+ * Prefer when aligning with readcon-db energy indexes.
+ */
+double rkr_frame_index_energy(const struct RKRConFrame *frame_handle);
+
+/**
+ * Canonical multiset formula (e.g. "Cu:2|H:2"). Free with rkr_free_string.
+ */
+char *rkr_frame_composition_formula(const struct RKRConFrame *frame_handle);
+
+/** Total mass Σ m_i * n_i; NaN if not all finite. */
+double rkr_frame_total_mass(const struct RKRConFrame *frame_handle);
+
+/** Cell volume; NaN if unavailable. */
+double rkr_frame_cell_volume(const struct RKRConFrame *frame_handle);
+
+/** Max force magnitude; NaN if no finite forces. */
+double rkr_frame_fmax(const struct RKRConFrame *frame_handle);
+
+/**
+ * Sections presence mask for campaign flags: bit0=forces, bit1=velocities, bit2=energies.
+ */
+uint8_t rkr_frame_sections_mask(const struct RKRConFrame *frame_handle);
+
+/** Atom count for idx_natoms (atom_data length). */
+uint32_t rkr_frame_index_natoms(const struct RKRConFrame *frame_handle);
+
+/**
+ * JSON object of campaign index projection fields. Free with rkr_free_string.
+ */
+char *rkr_frame_index_projection_json(const struct RKRConFrame *frame_handle);
+
+/**
  * Returns the potential type string from metadata as a heap-allocated
  * null-terminated C string. The caller MUST free with `rkr_free_string`.
  * Returns NULL if absent or on error.

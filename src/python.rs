@@ -495,6 +495,54 @@ impl PyConFrame {
         self.metadata_get_f64(py, meta::ENERGY)
     }
 
+    /// Campaign screening projection (`readcon_core::index_proj`), same fields as
+    /// `readcon-db` secondary indexes. Prefer over ad-hoc metadata parsing for corpus work.
+    fn index_projection(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        use crate::index_proj::FrameIndexProjection;
+        let frame = self.to_con_frame(py)?;
+        let p = FrameIndexProjection::from_frame(&frame);
+        let dict = PyDict::new(py);
+        dict.set_item("n_atoms", p.n_atoms)?;
+        dict.set_item("formula", p.formula)?;
+        dict.set_item("energy", p.energy)?;
+        dict.set_item("fmax", p.fmax)?;
+        dict.set_item("total_mass", p.total_mass)?;
+        dict.set_item("cell_volume", p.cell_volume)?;
+        dict.set_item("sections_mask", p.sections_mask)?;
+        dict.set_item("has_forces", p.has_forces)?;
+        dict.set_item("has_velocities", p.has_velocities)?;
+        dict.set_item("has_energy", p.has_energy)?;
+        dict.set_item("symbols", p.symbols)?;
+        dict.set_item("species_counts", p.species_counts)?;
+        dict.set_item("time", p.time)?;
+        dict.set_item("timestep", p.timestep)?;
+        dict.set_item("frame_index", p.frame_index)?;
+        dict.set_item("neb_bead", p.neb_bead)?;
+        dict.set_item("neb_band", p.neb_band)?;
+        dict.set_item("charge", p.charge)?;
+        dict.set_item("magmom", p.magmom)?;
+        if let Some(pbc) = p.pbc {
+            dict.set_item("pbc", (pbc[0], pbc[1], pbc[2]))?;
+        } else {
+            dict.set_item("pbc", py.None())?;
+        }
+        Ok(dict.into())
+    }
+
+    /// Canonical multiset formula (`Cu:2|H:2`) for campaign composition index.
+    #[getter]
+    fn composition_formula(&self, py: Python<'_>) -> PyResult<String> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_composition_formula(&frame))
+    }
+
+    /// Sections presence mask: bit0 forces, bit1 velocities, bit2 energies.
+    #[getter]
+    fn sections_mask(&self, py: Python<'_>) -> PyResult<u8> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::sections_present_mask(&frame))
+    }
+
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {

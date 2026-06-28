@@ -251,6 +251,18 @@ class ConFrame {
     /// Per-frame total energy. Returns NaN if absent (legacy, prefer
     /// `energy_opt()`).
     double energy() const;
+    /// Campaign finite energy (index_proj); NaN if missing or non-finite.
+    double index_energy() const;
+    /// Canonical multiset formula for campaign indexes (e.g. Cu:2|H:2).
+    std::string composition_formula() const;
+    double total_mass() const;
+    double cell_volume() const;
+    double fmax() const;
+    /// bit0 forces, bit1 velocities, bit2 energies.
+    uint8_t sections_mask() const;
+    uint32_t index_natoms() const;
+    /// Full campaign projection as JSON (same fields as readcon-db prepare).
+    std::string index_projection_json() const;
     /// Zero-based frame index. Returns UINT64_MAX if absent (legacy,
     /// prefer `frame_index_opt()`).
     uint64_t frame_index() const;
@@ -1071,6 +1083,48 @@ inline std::string ConFrame::metadata_json() const {
 
 inline double ConFrame::energy() const {
     return rkr_frame_energy(frame_handle_.get());
+}
+
+inline double ConFrame::index_energy() const {
+    return rkr_frame_index_energy(frame_handle_.get());
+}
+
+inline std::string ConFrame::composition_formula() const {
+    char *s = rkr_frame_composition_formula(frame_handle_.get());
+    if (!s)
+        return "";
+    std::string result(s);
+    rkr_free_string(s);
+    return result;
+}
+
+inline double ConFrame::total_mass() const {
+    return rkr_frame_total_mass(frame_handle_.get());
+}
+
+inline double ConFrame::cell_volume() const {
+    return rkr_frame_cell_volume(frame_handle_.get());
+}
+
+inline double ConFrame::fmax() const {
+    return rkr_frame_fmax(frame_handle_.get());
+}
+
+inline uint8_t ConFrame::sections_mask() const {
+    return rkr_frame_sections_mask(frame_handle_.get());
+}
+
+inline uint32_t ConFrame::index_natoms() const {
+    return rkr_frame_index_natoms(frame_handle_.get());
+}
+
+inline std::string ConFrame::index_projection_json() const {
+    char *s = rkr_frame_index_projection_json(frame_handle_.get());
+    if (!s)
+        return "{}";
+    std::string result(s);
+    rkr_free_string(s);
+    return result;
 }
 
 inline uint64_t ConFrame::frame_index() const {
