@@ -24,6 +24,13 @@ Oxidized rust re-implementation of [readCon](https://github.com/HaoZeke/readCon)
 Reads and writes both `.con` (coordinate-only) and `.convel` (coordinates
 plus velocities) simulation configuration files used by [eOn](https://theory.cm.utexas.edu/eon/).
 
+**Ecosystem:** interchange and multi-language ABI live here. Campaign-scale corpora
+(mmap LMDB, indexes, xxHash3 dedup) use companion
+**[readcon-db](https://github.com/lode-org/readcon-db)** —
+`cargo add readcon-db`, `pip install readcon-db`, docs at
+<https://lode-org.github.io/readcon-db/>. Corpus blobs remain CON text decoded with
+**readcon-core**.
+
 
 <a id="orgdaee6f9"></a>
 
