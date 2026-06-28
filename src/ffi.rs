@@ -966,6 +966,7 @@ mod index_proj_ffi_tests {
         let fr = &frames[0];
         let handle = fr as *const ConFrame as *const RKRConFrame;
         let proj = crate::index_proj::FrameIndexProjection::from_frame(fr);
+        // Full eight-surface campaign contract (plus JSON) via shipped C symbols.
         assert_eq!(rkr_frame_index_natoms(handle), proj.n_atoms);
         assert_eq!(rkr_frame_sections_mask(handle), proj.sections_mask);
         let formula_c = unsafe { rkr_frame_composition_formula(handle) };
@@ -975,14 +976,31 @@ mod index_proj_ffi_tests {
         unsafe { rkr_free_string(formula_c) };
         let ie = rkr_frame_index_energy(handle);
         match proj.energy {
-            Some(e) => assert!((ie - e).abs() < 1e-12 || ie.is_nan() && e.is_nan()),
+            Some(e) => assert!((ie - e).abs() < 1e-12 || (ie.is_nan() && e.is_nan())),
             None => assert!(ie.is_nan()),
+        }
+        let tm = rkr_frame_total_mass(handle);
+        match proj.total_mass {
+            Some(m) => assert!((tm - m).abs() < 1e-9, "total_mass C={tm} proj={m}"),
+            None => assert!(tm.is_nan()),
+        }
+        let cv = rkr_frame_cell_volume(handle);
+        match proj.cell_volume {
+            Some(v) => assert!((cv - v).abs() < 1e-6 * v.max(1.0), "cell_volume C={cv} proj={v}"),
+            None => assert!(cv.is_nan()),
+        }
+        let fm = rkr_frame_fmax(handle);
+        match proj.fmax {
+            Some(f) => assert!((fm - f).abs() < 1e-12 || (fm.is_nan() && f.is_nan())),
+            None => assert!(fm.is_nan()),
         }
         let json_c = unsafe { rkr_frame_index_projection_json(handle) };
         assert!(!json_c.is_null());
         let json = unsafe { CStr::from_ptr(json_c) }.to_str().unwrap();
         assert!(json.contains("\"formula\""));
         assert!(json.contains(&proj.formula) || proj.formula.is_empty());
+        assert!(json.contains("\"n_atoms\""));
+        assert!(json.contains("\"total_mass\"") || json.contains("\"cell_volume\""));
         unsafe { rkr_free_string(json_c) };
     }
 
