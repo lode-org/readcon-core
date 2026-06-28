@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "readcon-chemfiles"
-version = "0.13.1"
+version = "0.14.0"
 description = "Python bindings for readcon-core with chemfiles import/selection (libchemfiles linked)"
 requires-python = ">=3.10"
 license = "MIT"

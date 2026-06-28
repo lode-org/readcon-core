@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.14.0 - 2026-06-28
+#### Features
+- (**core**) `index_proj` campaign screening projection (formula, finite scalars, sections mask) with C/Python/Fortran exposure
+- (**ffi**) projection and writer-canonical C ABI surfaces for corpus alignment
+#### Performance
+- (**parser**) SoA-primary coordinate write + stack line floats; section SoA sync without redundant position rewrite
+#### Bug Fixes
+- (**parse**) iterator fills SoA velocities/forces after declared sections (`sync_arrays_from_atom_data`)
+#### Tests
+- SoA/AoS agreement, projection equality, chemfiles pytest gated on `has_chemfiles_support()`, integration force SoA asserts
+
+- - -
+
 ## v0.13.1 - 2026-06-26
 #### Features
 - (**python**) `read_chemfiles` / `read_chemfiles_first` / `read_chemfiles_memory` ingress APIs
