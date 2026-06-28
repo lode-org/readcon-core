@@ -279,6 +279,7 @@ impl<'a> ConFrameIterator<'a> {
             None => file_contents.len(),
         };
         debug_assert!(end >= start && end <= file_contents.len());
+        // frame already went through next() → sync_arrays_from_atom_data
         Some(Ok((frame, &file_contents[start..end])))
     }
 }
@@ -304,11 +305,55 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             Err(e) => return Some(Err(e)),
         };
         // Parse declared sections (velocities, forces) or fall back to legacy velocity detection
+        // (mutates AoS only; SoA sections filled below).
         match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data) {
             Ok(_) => {}
             Err(e) => return Some(Err(e)),
         }
+        frame.sync_arrays_from_atom_data();
         Some(Ok(frame))
+    }
+}
+
+#[cfg(test)]
+mod aos_soa_agreement_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn iterator_vel_forces_soa_matches_aos() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2_vel_forces.con");
+        let text = std::fs::read_to_string(&p).expect("fixture");
+        let fr = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = fr.atom_data.len();
+        assert!(n > 0);
+        assert_eq!(fr.positions.nrows(), n);
+        let has_vel = fr.atom_data.iter().any(|a| a.velocity.is_some());
+        let has_frc = fr.atom_data.iter().any(|a| a.force.is_some());
+        if has_vel {
+            assert_eq!(
+                fr.velocities.nrows(),
+                n,
+                "SoA velocities must match AoS after section parse"
+            );
+        }
+        if has_frc {
+            assert_eq!(fr.forces.nrows(), n, "SoA forces must match AoS");
+        }
+        for (i, a) in fr.atom_data.iter().enumerate() {
+            let p = fr.positions.as_f64_row(i);
+            assert_eq!([a.x, a.y, a.z], p);
+            if let Some(v) = a.velocity {
+                assert_eq!(v, fr.velocities.as_f64_row(i));
+            }
+            if let Some(f) = a.force {
+                assert_eq!(f, fr.forces.as_f64_row(i));
+            }
+        }
     }
 }
 
