@@ -2009,14 +2009,34 @@ impl ConFrameBuilder {
 }
 
 /// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
+/// Prefer [`con_frame_from_atom_data_with_positions`] on the CON parse hot path
+/// when positions were already written into SoA during coordinate parsing.
 pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) -> ConFrame {
     let n = atom_data.len();
+    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let mut pos = FloatArray2::zeros(dt.positions, n, 3);
+    for (i, a) in atom_data.iter().enumerate() {
+        pos.set_f64_row(i, [a.x, a.y, a.z]);
+    }
+    con_frame_from_atom_data_with_positions(header, atom_data, pos)
+}
+
+/// Like [`con_frame_from_atom_data`], but **reuses** prefilled `positions` SoA
+/// (no second O(N) position write). Velocities/forces/energies still filled from AoS.
+pub fn con_frame_from_atom_data_with_positions(
+    header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    positions: crate::storage_dtype::FloatArray2,
+) -> ConFrame {
+    let n = atom_data.len();
+    debug_assert_eq!(positions.nrows(), n);
     let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
     let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
     let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
-    let mut pos = FloatArray2::zeros(dt.positions, n, 3);
+    let pos = positions;
     let mut vel = FloatArray2::zeros(dt.velocities, if has_vel { n } else { 0 }, 3);
     let mut frc = FloatArray2::zeros(dt.forces, if has_frc { n } else { 0 }, 3);
     let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
@@ -2033,7 +2053,7 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
         }
     }
     for (i, a) in atom_data.iter().enumerate() {
-        pos.set_f64_row(i, [a.x, a.y, a.z]);
+        // Positions already in SoA; only ids + optional sections.
         ids_arr[i] = a.atom_id;
         if has_vel {
             if let Some(v) = a.velocity {
@@ -2054,7 +2074,7 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
     if dt != crate::storage_dtype::StorageDtypes::all_f64() {
         dt.insert_into(&mut header.metadata);
     }
-    // AoS and SoA already agree (filled from atom_data); no sync pass.
+    // AoS and SoA agree on positions (written during parse); sections mirrored above.
     ConFrame {
         header,
         atom_data,
