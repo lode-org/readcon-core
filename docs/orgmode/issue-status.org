@@ -31,7 +31,7 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | =readcon-core-conda-32605= | conda-forge staged-recipes | STARTED | External maintainer gate (@conda-forge/help-rust) |
 | =readcon-core-aoqu= | Publish PyPI wheel for rgpot | TODO | External gate: PyPI credentials / publish workflow |
 | =readcon-core-r2wh= | SoA ArcArray primary numeric store | Done | =de4b276= + =FloatArray= SoA; =project_storage_dtypes=; DLPack-shaped |
-| =readcon-core-bb34= | dlpk host element kinds (CPU slice) | Done (CPU) | =fe5ea6c= all dlpk-hosted kinds; non-CPU =as_dlpack= rejects; GPU deferred |
+| =readcon-core-bb34= | dlpk host element kinds + optional CUDA | Done (CPU + opt =cuda=) | =fe5ea6c= hosted kinds; =406160e=/=30611f9= real allocate + H2D frame/FFI; default still rejects non-CPU |
 | =readcon-core-0tlm= | Morton spatial sort | CANCELLED | Revert =2ee6daa= rationale stands; not re-landed on SoA in this pass |
 | =readcon-core-uu0a= | Frame velocities/forces/energies DLPack | Done | =rkr_frame_*_dlpack= + FFI test + C++ wrappers |
 | =readcon-core-c6ox= | C optional APIs always declared | Done | =include/readcon-core.h= metatensor/zstd decls unconditional; lean =-11=/NULL |

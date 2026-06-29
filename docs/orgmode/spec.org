@@ -883,8 +883,8 @@ The returned tensor MUST report:
 - strides: row-major standard layout for the dtype.
 - dtype: as carried by the implementation (see above for current values).
 - device: =kDLCPU= (device id 0) for the default backing. GPU /
-  device-resident backings (future versions) MAY surface a
-  non-CPU device tag.
+  optional =--features cuda= enables real CUDA allocate and H2D export
+  for matching =kDLCUDA= requests; default builds reject non-CPU devices.
 - data pointer: the backing array's first element.
 
 Lifetime: =DLPackTensorRef<'a>= borrows from =&'a self= and MUST
