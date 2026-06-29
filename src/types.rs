@@ -2351,6 +2351,44 @@ mod tests {
         assert!((row[0] - 1.0).abs() < 1e-5);
     }
 
+    /// With `--features cuda`, requesting CUDA on frame positions H2D-exports
+    /// real device memory (not host pointers labeled as CUDA).
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn frame_positions_as_dlpack_cuda_h2d() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
+        b.add_atom("O", 4.0, 5.0, 6.0, [false; 3], 0, 16.0);
+        let frame = b.build();
+        let t = frame
+            .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
+            .expect("CUDA H2D export");
+        assert_eq!(t.device().device_type, dlpk::sys::DLDeviceType::kDLCUDA);
+        assert_eq!(t.shape(), &[2, 3]);
+        let p = t.data_ptr::<f64>().expect("device data_ptr");
+        assert!(!p.is_null());
+        // CPU still works
+        let cpu = frame
+            .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
+            .unwrap();
+        assert_eq!(cpu.device(), dlpk::sys::DLDevice::cpu());
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    #[test]
+    fn frame_positions_as_dlpack_cuda_rejected_without_feature() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
+        let frame = b.build();
+        let err = frame
+            .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
+            .unwrap_err();
+        assert!(
+            format!("{err:?}").contains("non-CPU") || format!("{err:?}").contains("cuda"),
+            "{err:?}"
+        );
+    }
+
     #[test]
     fn allocate_all_float_fields_as_f32() {
         use crate::storage_dtype::{FloatStorageKind, StorageDtypes};

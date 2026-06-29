@@ -486,8 +486,26 @@ impl Array2Storage {
         device: dlpk::sys::DLDevice,
     ) -> Result<dlpk::DLPackTensor, ParseError> {
         if device != dlpk::sys::DLDevice::cpu() {
+            #[cfg(feature = "cuda")]
+            {
+                use dlpk::sys::DLDeviceType;
+                if device.device_type == DLDeviceType::kDLCUDA {
+                    // Frame SoA stays on host; H2D into real CUDA memory then export.
+                    let nrows = self.nrows();
+                    let ncols = self.ncols();
+                    let mut host = Vec::with_capacity(nrows.saturating_mul(ncols));
+                    for i in 0..nrows {
+                        host.extend_from_slice(&self.as_f64_row(i));
+                    }
+                    return crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                        &[nrows, ncols],
+                        &host,
+                        device.device_id,
+                    );
+                }
+            }
             return Err(ParseError::ValidationError(
-                "Array2Storage is CPU-resident; non-CPU as_dlpack unsupported".into(),
+                "Array2Storage is CPU-resident; non-CPU as_dlpack unsupported (build with --features cuda for CUDA H2D export)".into(),
             ));
         }
         match self {
@@ -672,8 +690,24 @@ impl Array1Storage {
         device: dlpk::sys::DLDevice,
     ) -> Result<dlpk::DLPackTensor, ParseError> {
         if device != dlpk::sys::DLDevice::cpu() {
+            #[cfg(feature = "cuda")]
+            {
+                use dlpk::sys::DLDeviceType;
+                if device.device_type == DLDeviceType::kDLCUDA {
+                    let n = self.len();
+                    let mut host = Vec::with_capacity(n);
+                    for i in 0..n {
+                        host.push(self.get_f64(i));
+                    }
+                    return crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                        &[n],
+                        &host,
+                        device.device_id,
+                    );
+                }
+            }
             return Err(ParseError::ValidationError(
-                "Array1Storage is CPU-resident; non-CPU as_dlpack unsupported".into(),
+                "Array1Storage is CPU-resident; non-CPU as_dlpack unsupported (build with --features cuda for CUDA H2D export)".into(),
             ));
         }
         match self {

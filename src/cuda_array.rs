@@ -239,6 +239,19 @@ pub fn allocate_cuda_f64(shape: &[usize], device_id: i32) -> Result<Box<dyn Arra
     Ok(Box::new(CudaArrayHandle(Arc::new(inner))))
 }
 
+/// Copy host f64 SoA into CUDA memory and export a matching-device DLPack tensor
+/// (H2D + real device pointer). Used by frame `*_as_dlpack` when the consumer
+/// requests `kDLCUDA` while frame storage remains CPU-resident.
+pub fn export_host_f64_as_cuda_dlpack(
+    shape: &[usize],
+    host: &[f64],
+    device_id: i32,
+) -> Result<DLPackTensor, ParseError> {
+    let inner = CudaF64Array::from_host(shape, host, device_id)?;
+    let handle = CudaArrayHandle(Arc::new(inner));
+    handle.as_dlpack(DLDevice::cuda(device_id), None, DLPackVersion::current())
+}
+
 /// True if at least one CUDA device is visible.
 pub fn cuda_device_count() -> Result<usize, ParseError> {
     // Probe device 0; if it fails, report zero.
