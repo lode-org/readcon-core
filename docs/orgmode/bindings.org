@@ -242,8 +242,11 @@ with =RKRDlpackExportOptions= on =*_dlpack_ex= — fields are DLPack
 On **CPU**, float sections accept the DLPack host types we can fill from CON
 binary64 storage: =kDLFloat= 32/64, =kDLInt= / =kDLUInt= 8/16/32/64, =kDLBool=
 (8-bit). Complex / bfloat / float8 / opaque / =lanes≠1= → validation error
-until implemented. Non-CPU =device_type= (CUDA, …) → =RKR_STATUS_FEATURE_DISABLED=
-(struct accepts the full DLPack device space; no GPU allocator yet). Legacy
+until implemented. Non-CPU =device_type= without =--features cuda= →
+=RKR_STATUS_FEATURE_DISABLED= (or validation error on Rust =as_dlpack=). With
+optional =cuda=, =kDLCUDA= / =RKR_DL_CUDA= allocates real device memory and
+frame/FFI export uses H2D for CPU-resident SoA (not host pointers labeled as
+CUDA). Legacy
 =*_dlpack= is =kDLFloat=/64 on CPU. =rkr_frame_copy_*= still fills =double*=.
 
 #+begin_src python

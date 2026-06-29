@@ -195,7 +195,8 @@ pub fn allocate_array_on_device(
 /// buffers that logically live on CUDA/ROCm/etc. without requiring a CUDA
 /// driver in the default build. [`Array::device`] and matching
 /// [`Array::as_dlpack`] requests preserve the tag; mismatched device requests
-/// fail; allocating on a non-CPU device via [`allocate_array_on_device`] fails.
+/// fail without `--features cuda`; with that feature, CUDA allocate uses real
+/// device memory (see [`crate::cuda_array`]).
 pub struct DeviceTaggedF64Array {
     shape: Vec<usize>,
     device: DLDevice,
