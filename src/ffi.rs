@@ -1663,10 +1663,9 @@ pub struct RKRDLDevice {
 /// ids). Complex / bfloat / float8 / opaque / multi-lane types return
 /// `RKR_STATUS_VALIDATION_ERROR` until implemented.
 ///
-/// **Device:** only `device_type = kDLCPU` (1) is backed today; CUDA and other
-/// `DLDeviceType` values are accepted in the struct but return
-/// `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect without an ABI
-/// break when device-resident exports land.
+/// **Device:** `kDLCPU` always; with `--features cuda`, `kDLCUDA` performs H2D
+/// into real device memory then exports DLPack. Other devices return
+/// `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RKRDlpackExportOptions {
@@ -1692,15 +1691,27 @@ impl Default for RKRDlpackExportOptions {
     }
 }
 
-/// Resolve options; NULL → defaults. Device must be CPU (else FEATURE_DISABLED).
+/// Resolve options; NULL → defaults.
+/// CPU always; CUDA accepted when built with `--features cuda` (H2D export).
 fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
     let o = if opts.is_null() {
         RKRDlpackExportOptions::default()
     } else {
         unsafe { *opts }
     };
-    if o.device.device_type != rkr_dl_device_type::RKR_DL_CPU {
-        // Full DLPack device space is representable; we do not allocate GPU yet.
+    let dt = o.device.device_type;
+    if dt == rkr_dl_device_type::RKR_DL_CPU {
+        // ok
+    } else if dt == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(not(feature = "cuda"))]
+        {
+            return Err(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
+        }
+        #[cfg(feature = "cuda")]
+        {
+            // accepted — H2D in frame as_dlpack / storage layer
+        }
+    } else {
         return Err(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
     }
     if o.dtype.lanes != 1 {
@@ -1781,6 +1792,27 @@ fn export_owned_array2_dlpack_opts(
 ) -> RKRStatus {
     let (r, c) = arr.dim();
     let flat: Vec<f64> = arr.iter().copied().collect();
+    if opts.device.device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            // H2D into real device memory (f64 only for CUDA path here).
+            if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
+                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+            }
+            return finish_dlpack_tensor(
+                crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                    &[r, c],
+                    &flat,
+                    opts.device.device_id,
+                ),
+                out_tensor,
+            );
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    }
     export_f64_slice_as_dlpack(&flat, &[r, c], opts.dtype, out_tensor)
 }
 
@@ -1791,6 +1823,26 @@ fn export_owned_array1_f64_dlpack_opts(
 ) -> RKRStatus {
     let flat = arr.to_vec();
     let n = flat.len();
+    if opts.device.device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
+                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+            }
+            return finish_dlpack_tensor(
+                crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                    &[n],
+                    &flat,
+                    opts.device.device_id,
+                ),
+                out_tensor,
+            );
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    }
     export_f64_slice_as_dlpack(&flat, &[n], opts.dtype, out_tensor)
 }
 
@@ -3364,15 +3416,25 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
-    if device_type != rkr_dl_device_type::RKR_DL_CPU {
+    let dl_device = if device_type == rkr_dl_device_type::RKR_DL_CPU {
+        dlpk::sys::DLDevice::cpu()
+    } else if device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            dlpk::sys::DLDevice::cuda(device_id)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    } else {
         return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
-    }
-    let _ = device_id;
+    };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    // Opaque SoA storage → DLPack (metatensor-style: export what is held).
-    match frame.positions_as_dlpack(dlpk::sys::DLDevice::cpu()) {
+    // Opaque SoA storage → DLPack; CUDA requests H2D via storage_dtype / cuda_array.
+    match frame.positions_as_dlpack(dl_device) {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -4283,8 +4345,9 @@ mod tests {
             assert_dlpack_cpu_float(pos32, 2, &[n_built, 3], 32);
             rkr_dlpack_delete(pos32);
         }
-        // Reject non-CPU device / unsupported dtype bits
-        let bad_dev = RKRDlpackExportOptions {
+        // CUDA device requests: FEATURE_DISABLED without --features cuda;
+        // with cuda, H2D export succeeds (kDLCUDA).
+        let cuda_dev = RKRDlpackExportOptions {
             dtype: RKRDLDataType {
                 code: rkr_dl_type_code::RKR_DL_FLOAT,
                 bits: 64,
@@ -4296,10 +4359,48 @@ mod tests {
             },
         };
         let mut junk: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        #[cfg(not(feature = "cuda"))]
         assert_eq!(
-            unsafe { rkr_frame_positions_dlpack_ex(built, &bad_dev, &mut junk) },
+            unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
             RKRStatus::RKR_STATUS_FEATURE_DISABLED
         );
+        #[cfg(feature = "cuda")]
+        {
+            assert_eq!(
+                unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert!(!junk.is_null());
+            let dl = unsafe { &(*junk).dl_tensor };
+            assert_eq!(dl.device.device_type, dlpk::sys::DLDeviceType::kDLCUDA);
+            assert!(!dl.data.is_null());
+            unsafe { rkr_dlpack_delete(junk) };
+            // Also rkr_frame_positions_as_dlpack with CUDA
+            let mut as_cuda: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+            assert_eq!(
+                unsafe {
+                    rkr_frame_positions_as_dlpack(
+                        built,
+                        rkr_dl_device_type::RKR_DL_CUDA,
+                        0,
+                        0,
+                        1,
+                        0,
+                        &mut as_cuda,
+                    )
+                },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert!(!as_cuda.is_null());
+            unsafe {
+                assert_eq!(
+                    (*as_cuda).dl_tensor.device.device_type,
+                    dlpk::sys::DLDeviceType::kDLCUDA
+                );
+                rkr_dlpack_delete(as_cuda);
+            }
+        }
+        // Unsupported dtype bits on CPU
         let bad_bits = RKRDlpackExportOptions {
             dtype: RKRDLDataType {
                 code: rkr_dl_type_code::RKR_DL_FLOAT,
