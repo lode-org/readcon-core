@@ -214,15 +214,21 @@ def plot_feature_matrix():
 # ---------------------------------------------------------------------------
 
 def plot_pareto():
-    # Only points with timings from compare_readers / Criterion-style runs — no invented chemfiles bars.
-    # (name, feature_count, parse_time_ms_per_100frames_218atoms, color)
+    # Measured timings only for 100 frames × 218 atoms (cuh2-class).
+    # ASE CON / ASE extXYZ / readcon from multiformat_traj_terra.json (equal geometry).
+    # C sscanf from compare_readers.py on the same atom×frame product (CON workload).
+    # Never label ASE CON as extxyz — that was a historical proxy mistake.
+    # (name, feature_count, parse_time_ms, color)
+    orange = "#E65100"
     points = [
-        ("CON v2\n(readcon-core)", 10, 4.4, TEAL),
-        ("CON v2\n(C sscanf)", 10, 10.6, LIGHT_TEAL),
-        ("extxyz\n(ASE)", 6, 36.1, CORAL),  # ASE timing proxy from compare_readers.py
+        ("CON v2\n(readcon-core)", 10, 2.9, TEAL),  # multiformat_traj cuh2 N=100
+        ("CON v2\n(C sscanf)", 10, 10.6, LIGHT_TEAL),  # compare_readers.py
+        ("ASE CON\n(ase.io eon)", 6, 34.0, CORAL),  # multiformat equal-geometry ASE CON
+        ("ASE extXYZ", 6, 29.2, orange),  # multiformat ASE extxyz (not CON proxy)
     ]
 
     fig, ax = plt.subplots(figsize=(10, 6))
+    rc_ms = 2.9
 
     for name, feat, ms, color in points:
         ax.scatter(feat, ms, s=120, c=color, edgecolors="white", linewidth=1.5, zorder=3)
@@ -231,12 +237,14 @@ def plot_pareto():
                     xytext=offset, fontsize=8, ha="left")
 
     # Pareto front line (non-dominated: more features AND faster)
-    ax.plot([10, 10], [0, 4.4], '--', color=TEAL, alpha=0.3, linewidth=1)
-    ax.plot([0, 10], [4.4, 4.4], '--', color=TEAL, alpha=0.3, linewidth=1)
+    ax.plot([10, 10], [0, rc_ms], '--', color=TEAL, alpha=0.3, linewidth=1)
+    ax.plot([0, 10], [rc_ms, rc_ms], '--', color=TEAL, alpha=0.3, linewidth=1)
 
     ax.set_xlabel("Features supported (out of 10)")
     ax.set_ylabel("Parse time for 100 frames x 218 atoms (ms, lower is better)")
-    ax.set_title("Feature coverage vs parse speed (measured points only)")
+    ax.set_title(
+        "Feature coverage vs parse speed (measured; ASE CON ≠ extXYZ)"
+    )
     ax.set_xlim(1, 11.5)
     ax.set_ylim(0, 42)
     ax.invert_yaxis()  # Lower (faster) is better, so flip
