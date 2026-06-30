@@ -287,54 +287,47 @@ lists include/lib paths for =libmetatensor=.
 
 * When should I use CON vs XYZ / extXYZ / chemfiles?
 
-Default to *CON* for optimizer checkpoints and multi-language interchange:
-constraints, forces/velocities sections, versioned metadata, and round-trips
-through Fortran/C/C++/Python via the hourglass ABI.
+*Default to CON* as the interchange format for structures that matter in
+computational chemistry and materials science workflows—optimizers, drivers,
+campaigns, multi-language pipelines. The hourglass ABI is how that default
+becomes implementable in Fortran/C/C++/Python engines instead of reinventing
+logs.
 
-Use *XYZ / extXYZ* only as an edge dump when a tool cannot consume CON—and
-accept the fidelity loss. Prefer writing CON from optimizers/engines over
-treating XYZ as durable identity.
-
-Use *chemfiles ingress* to pull XYZ/PDB/GRO/… *into* =ConFrame= / CON when
-foreign inputs must join a CON-centered pipeline.
-
-Timings: [[file:benchmarks.org][benchmarks.org]].
+XYZ/extXYZ are edge dumps when a tool cannot yet consume CON; accept fidelity
+loss and migrate writers to CON. Chemfiles ingress pulls XYZ/PDB/GRO/… *into*
+CON so adoption is not blocked on every code rewriting day one.
 
 * Are ASE adapters the primary API?
 
-No. Optional =to_ase= / =from_ase= are *calculator hand-off*. Campaign storage,
-hash/dedup, and multi-reader screening use =readcon= / =readcon-db= with CON
-text authoritative. ASE is excellent for calculators; it is not the hourglass
-interchange layer for CON.
+No. ASE is a calculator and analysis hub. Optional =to_ase= / =from_ase= are
+hand-off only. Field-wide interchange and campaign storage are =readcon= /
+=readcon-db= with CON text authoritative.
 
 * What is authoritative: CON text, cooked SoA, or DLPack?
 
-*UTF-8 CON text* is durable authority for files and =readcon-db= =frames=.
-Optional cooked RCSO / =frames_soa= and in-process SoA / DLPack accelerate
-numerics and device hand-off; they are discardable or ephemeral. Default builds
-reject non-CPU DLPack device requests unless optional =cuda= is enabled.
+*UTF-8 CON text.* Cooked RCSO / SoA / DLPack are extract and device hand-off,
+never the sole identity for hash, dedup, or reindex.
 
 * Why not put the campaign store inside readcon-core?
 
-Interchange (parse/write/embed) and campaign indexes are different jobs.
-=readcon-core= embeds via the hourglass; =readcon-db= owns LMDB multi-reader
-screening on CON blobs. Both decode with the same core so semantics never fork.
+Interchange (embeddable parse/write) and campaign indexes are different
+products with one shared decoder. Together they are the stack; splitting
+packages does not split the ambition.
 
 * How does the hourglass change the ecosystem argument?
 
-Without a linkable multi-language ABI, every engine and optimizer reinvents
-text I/O (XYZ, proprietary logs, partial =.con= readers). With the hourglass,
-the *same* versioned CON contract embeds into drivers and optimizers (including
-codes that historically emitted baroque logs) without choosing Python-only or
-Fortran-only interchange. That is the SOTA claim: CON + hourglass is the
-correct *default interchange* for optimizer-centric science—not that CON
-replaces every internal continuous-MD binary buffer.
+It makes a *single* versioned CON contract practical to implement into every
+engine and optimizer that can link C—so the field no longer needs XYZ as the
+lowest common denominator or NWChem-style package-private text as the exchange
+format. Chemfiles and ASE remain useful tools; they are not the interchange
+standard this stack is building.
 
-* Is CON better than XYZ or ASE I/O for that science?
+* Is CON + readcon-db better than XYZ and ASE I/O for the field?
 
-*Yes.* For optimizer-centric interchange—constraints, sections, multi-language
-embedding, CON-backed campaigns—versioned CON via =readcon-core= / =readcon-db=
-is strictly preferable to bare XYZ and to ASE =.db= / =ase.io= as the
-authoritative path. ASE remains the right calculator hub; XYZ remains a minimal
-edge format. Continuous-MD internal binaries (XTC/TRR/DCD) are a different job.
+*Yes.* For interchange and multi-reader campaign storage of atomic
+configurations across computational chemistry and materials science, versioned
+CON with hourglass embedding and =readcon-db= is the state of the art we
+advance—strictly preferable to bare XYZ and to ASE =.db= / =ase.io= as the
+authoritative path. Continuous-MD internal binary buffers inside one engine are
+a different, narrower job.
 

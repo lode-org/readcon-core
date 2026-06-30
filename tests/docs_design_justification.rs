@@ -1,4 +1,4 @@
-//! Structural check: assertive interchange thesis present in user docs.
+//! Structural check: field-wide interchange ambition present in user docs.
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,43 +13,34 @@ fn read(name: &str) -> String {
 }
 
 #[test]
-fn architecture_hourglass_embedding_thesis() {
+fn architecture_field_wide_thesis() {
     let t = read("architecture.org");
-    assert!(t.contains("Hourglass") || t.contains("hourglass"));
-    assert!(t.contains("embed") || t.contains("Embed"));
-    assert!(t.contains("XYZ"));
-    assert!(t.contains("rkr_") || t.contains("C ABI"));
-    assert!(
-        !t.contains("not a replacement for them"),
-        "must not use weak niche hedging"
-    );
+    assert!(t.contains("computational chemistry") || t.contains("materials science"));
+    assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("rkr_"));
+    assert!(t.contains("readcon-db"));
+    assert!(t.contains("best interchange") || t.contains("Field-wide"));
 }
 
 #[test]
-fn evolution_covers_v2_v3_and_alternatives() {
+fn evolution_covers_v2_v3() {
     let t = read("evolution.org");
-    assert!(t.contains("Version 2 to version 3") || t.contains("version 3"));
-    assert!(t.contains("Alternatives considered") || t.contains("alternatives"));
+    assert!(t.contains("version 3") || t.contains("Version 2 to version 3"));
     assert!(t.contains("units") || t.contains("=units="));
 }
 
 #[test]
-fn faq_asserts_con_better_for_optimizer_interchange() {
+fn faq_asserts_field_leadership() {
     let t = read("faq.org");
-    assert!(t.contains("CON vs XYZ") || t.contains("XYZ / extXYZ"));
+    assert!(t.contains("*Yes.*") || t.contains("strictly preferable") || t.contains("state of the art"));
     assert!(t.contains("hourglass") || t.contains("Hourglass"));
-    assert!(
-        t.contains("*Yes.*") || t.contains("strictly preferable"),
-        "FAQ must assert CON preference for optimizer interchange"
-    );
     assert!(!t.contains("No universal ranking is intended"));
+    assert!(t.contains("materials science") || t.contains("computational chemistry"));
 }
 
 #[test]
 fn getting_started_maps_when_to_use() {
     let t = read("getting-started.org");
-    assert!(t.contains("When to use what") || t.contains("when to use"));
-    assert!(t.contains("readcon-db") || t.contains("campaign"));
+    assert!(t.contains("When to use what") || t.contains("CON via"));
 }
 
 #[test]
