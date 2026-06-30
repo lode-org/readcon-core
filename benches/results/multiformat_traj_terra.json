@@ -1,0 +1,53 @@
+{
+  "fixture": "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/tiny_cuh2.con",
+  "ladder": [
+    50,
+    100,
+    200
+  ],
+  "repeats": 7,
+  "protocol": "equal geometry multi-frame; full parse all frames; median of repeats",
+  "non_claims": "ASCII interchange (CON vs XYZ/ASE CON); not binary MD (XTC/TRR/DCD)",
+  "rows": [
+    {
+      "n_frames": 50,
+      "n_atoms": 4,
+      "repeats": 7,
+      "readcon_con_median_s": 0.00010481700883246958,
+      "readcon_con_frames_per_s": 477021.8169449546,
+      "ase_xyz_median_s": 0.004435665992787108,
+      "ase_xyz_frames_per_s": 11272.264431385418,
+      "ratio_vs_ase_xyz": 42.318189024805044,
+      "ase_con_median_s": 0.006307425006525591,
+      "ase_con_frames_per_s": 7927.165197885121,
+      "ratio_vs_ase_con": 60.17558673713759
+    },
+    {
+      "n_frames": 100,
+      "n_atoms": 4,
+      "repeats": 7,
+      "readcon_con_median_s": 0.0002133410016540438,
+      "readcon_con_frames_per_s": 468733.15126813337,
+      "ase_xyz_median_s": 0.008778849005466327,
+      "ase_xyz_frames_per_s": 11391.014919807025,
+      "ratio_vs_ase_xyz": 41.149375588393504,
+      "ase_con_median_s": 0.012337157008005306,
+      "ase_con_frames_per_s": 8105.595149280522,
+      "ratio_vs_ase_con": 57.82834482052063
+    },
+    {
+      "n_frames": 200,
+      "n_atoms": 4,
+      "repeats": 7,
+      "readcon_con_median_s": 0.0004077159974258393,
+      "readcon_con_frames_per_s": 490537.53412356257,
+      "ase_xyz_median_s": 0.015189778001513332,
+      "ase_xyz_frames_per_s": 13166.749374485547,
+      "ratio_vs_ase_xyz": 37.25578122373343,
+      "ase_con_median_s": 0.01843042898690328,
+      "ase_con_frames_per_s": 10851.619359599314,
+      "ratio_vs_ase_con": 45.204085940374824
+    }
+  ],
+  "gate_ge_2x_all_peers": true
+}
