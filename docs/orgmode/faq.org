@@ -287,47 +287,50 @@ lists include/lib paths for =libmetatensor=.
 
 * When should I use CON vs XYZ / extXYZ / chemfiles?
 
-*Default to CON* as the interchange format for structures that matter in
-computational chemistry and materials science workflows—optimizers, drivers,
-campaigns, multi-language pipelines. The hourglass ABI is how that default
-becomes implementable in Fortran/C/C++/Python engines instead of reinventing
-logs.
+Use CON when structures must retain optimizer-relevant fields (three-axis
+constraints, forces/velocities sections, versioned metadata) and move between
+languages via the hourglass ABI (Fortran/C/C++/Python/Julia).
 
-XYZ/extXYZ are edge dumps when a tool cannot yet consume CON; accept fidelity
-loss and migrate writers to CON. Chemfiles ingress pulls XYZ/PDB/GRO/… *into*
-CON so adoption is not blocked on every code rewriting day one.
+XYZ/extXYZ are suitable when only positions (and optionally a lattice) are
+required and fidelity loss is acceptable. Prefer CON as the durable form in
+multi-code pipelines; convert at the edge if needed.
+
+Chemfiles ingress maps XYZ/PDB/GRO and similar formats into =ConFrame= / CON
+when inputs originate elsewhere. See [[file:benchmarks.org][benchmarks.org]]
+for equal-geometry parse comparisons.
 
 * Are ASE adapters the primary API?
 
-No. ASE is a calculator and analysis hub. Optional =to_ase= / =from_ase= are
-hand-off only. Field-wide interchange and campaign storage are =readcon= /
-=readcon-db= with CON text authoritative.
+No. Optional =to_ase= / =from_ase= support calculator hand-off. Interchange
+and multi-reader campaign storage use =readcon= / =readcon-db= with CON text
+authoritative.
 
 * What is authoritative: CON text, cooked SoA, or DLPack?
 
-*UTF-8 CON text.* Cooked RCSO / SoA / DLPack are extract and device hand-off,
-never the sole identity for hash, dedup, or reindex.
+UTF-8 CON text is authoritative for files and for =readcon-db= =frames= (hash,
+dedup, join/split, =reindex=). Cooked RCSO / SoA / DLPack buffers accelerate
+extract and device hand-off and are discardable or ephemeral.
 
-* Why not put the campaign store inside readcon-core?
+* Why is the campaign store a separate package?
 
-Interchange (embeddable parse/write) and campaign indexes are different
-products with one shared decoder. Together they are the stack; splitting
-packages does not split the ambition.
+Parse/write embeddability and multi-reader indexing are separate concerns with
+one shared decoder (=readcon-core=). =readcon-db= owns LMDB indexes and SWMR
+campaign access.
 
-* How does the hourglass change the ecosystem argument?
+* Why an hourglass C ABI?
 
-It makes a *single* versioned CON contract practical to implement into every
-engine and optimizer that can link C—so the field no longer needs XYZ as the
-lowest common denominator or NWChem-style package-private text as the exchange
-format. Chemfiles and ASE remain useful tools; they are not the interchange
-standard this stack is building.
+Optimizers and drivers are often Fortran or C++. A single =rkr_*= surface
+gives those codes the same CON semantics as Python and Julia without embedding
+a Python interpreter on the I/O path, and without maintaining separate text
+dialects (minimal XYZ or package-private logs) per language.
 
-* Is CON + readcon-db better than XYZ and ASE I/O for the field?
+* How does CON + readcon-db compare to XYZ and ASE I/O?
 
-*Yes.* For interchange and multi-reader campaign storage of atomic
-configurations across computational chemistry and materials science, versioned
-CON with hourglass embedding and =readcon-db= is the state of the art we
-advance—strictly preferable to bare XYZ and to ASE =.db= / =ase.io= as the
-authoritative path. Continuous-MD internal binary buffers inside one engine are
-a different, narrower job.
+For interchange that must preserve CON sections and for multi-reader campaign
+screening with CON as on-disk authority, versioned CON with the hourglass
+implementation and =readcon-db= is the design this project implements and
+measures against ASE XYZ/CON and ASE =.db= under fair protocols. ASE remains
+appropriate for calculators and analysis; XYZ remains appropriate for minimal
+position dumps. Continuous-MD internal binary formats inside a given engine
+serve a different role (high-density dynamics I/O).
 
