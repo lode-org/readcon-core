@@ -184,35 +184,32 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the =[lib]= name (=readcon_core=), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
 
-* Hourglass embedding and interchange thesis
+* Field-wide interchange thesis
 :PROPERTIES:
 :CUSTOM_ID: design-rationale
 :END:
 
-The point of =readcon-core= is not to sit politely beside every other format.
-It is to make a *versioned CON contract* trivial to embed in optimizers and
-drivers written in Fortran, C, C++, Julia, or Python—so those codes no longer
-need to default to lossy XYZ or to package-private text dumps (NWChem-style
-logs, one-off restart dialects, informal =.con= readers that drop sections).
+=readcon-core= and =readcon-db= aim to be the *best interchange and campaign
+layer for computational chemistry and materials science*: versioned CON text,
+hourglass embedding into every language that matters, and a CON-authoritative
+mmap campaign store. That is a higher bar than sitting beside XYZ and ASE as
+optional conveniences.
 
-**Hourglass.** One Rust core behind the =rkr_*= C ABI is the shared semantics
-surface. Linking CON I/O does not require a Python runtime on the hot path;
-Python and Julia bind the same implementation. Optional chemfiles *ingress*
-pulls foreign structures *into* CON when a pipeline wants one checkpoint
-contract; optional metatensor/DLPack exports hand off tensors without making
-binary blobs authoritative on disk. Lean builds stub optional symbols
-(=RKR_STATUS_FEATURE_DISABLED=) so engines link one symbol set.
+**Hourglass.** One Rust core behind =rkr_*= links into Fortran, C, C++, Julia,
+and Python optimizers, drivers, and engines with the same semantics—so the
+field is not forced into Python-only I/O or into baroque per-package logs
+(NWChem-style dumps, informal =.con= readers). Chemfiles ingress pulls legacy
+formats *into* CON; metatensor/DLPack hand off tensors without a second on-disk
+authority. Lean builds stub optional features (=RKR_STATUS_FEATURE_DISABLED=).
 
-**Authority and campaigns.** Durable identity is UTF-8 CON (hash, dedup,
-reindex). Cooked SoA / RCSO / DLPack are extract and device hand-off, not a
-second source of truth. Multi-reader optimizer ensembles use =readcon-db=
-(mmap indexes on CON-derivable fields)—preferable to ASE =.db= as the
-*authoritative campaign substrate* when CON fidelity matters. ASE remains the
-right *calculator* environment; optional =to_ase= is hand-off only.
+**Campaign store.** =readcon-db= keeps UTF-8 CON authoritative for hash, dedup,
+and multi-reader screening—preferable to ASE =.db= as the field-wide campaign
+substrate. ASE remains excellent for calculators; it is not the interchange
+standard.
 
-**Evolution and detail:** [[file:evolution.org][evolution.org]],
-[[file:faq.org][faq.org]], [[file:spec.org][spec.org]],
-[[file:benchmarks.org][benchmarks.org]]. Continuous MD engines keep their
-internal binary trajectory encodings for long dynamics; that does not make XYZ
-or baroque logs an acceptable *interchange* default for optimizer science.
+**Detail:** [[file:evolution.org][evolution.org]], [[file:faq.org][faq.org]],
+[[file:spec.org][spec.org]], [[file:benchmarks.org][benchmarks.org]]. Internal
+MD binary buffers for continuous dynamics inside one engine are an
+implementation detail of that engine—not an excuse for the field to exchange
+science through lossy XYZ.
 

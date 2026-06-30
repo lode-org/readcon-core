@@ -33,11 +33,12 @@ decoded with **readcon-core**—semantics never fork. Foreign formats (XYZ, PDB,
 GRO, …) enter via the optional **chemfiles** feature (`read_chemfiles*`), not
 ASE. ASE adapters are optional and only for calculator hand-off.
 
-**Thesis:** versioned CON behind an hourglass C ABI is the interchange layer
-for optimizer-centric science—embeddable in Fortran/C/C++/Python engines and
-drivers so you are not stuck with lossy XYZ or package-private log formats.
-Campaign indexes: [readcon-db](https://github.com/lode-org/readcon-db). Design
-docs: `architecture`, `evolution`, `faq`, `spec` under `docs/orgmode/`.
+**Thesis:** versioned CON + hourglass multi-language embedding + [readcon-db](https://github.com/lode-org/readcon-db)
+campaign store aims to be the best interchange and corpus layer for
+computational chemistry and materials science—so engines and optimizers link
+one contract instead of defaulting to XYZ or package-private logs. Docs:
+`architecture`, `evolution`, `faq`, `spec` under `docs/orgmode/`.
+
 
 
 | Layer | Crate | Responsibility |
