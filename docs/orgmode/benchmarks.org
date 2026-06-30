@@ -47,7 +47,11 @@ path you care to regress; CON I/O is the core library cost.
 hot-path changes (0.13 chemfiles is orthogonal to CON parse unless you
 measure conversion). Prefer treating Criterion tables as **illustrative** and
 Cachegrind as **authoritative for CI**. Re-run =cargo bench= +
-=benches/make_plots.py= when preparing a paper or major release — Pareto plot uses **measured** CON/ASE points only; conversion cost is in the Cachegrind table (``chemfiles_*`` scenarios).
+=benches/make_plots.py= when preparing a paper or major release — Pareto plot uses
+**measured** points only: =readcon= / ASE CON / ASE extXYZ from
+=multiformat_traj_terra.json= (equal geometry, 100 frames × 218 atoms) plus C
+sscanf from =compare_readers.py=; ASE CON is labeled as CON, not as extXYZ.
+Conversion cost is in the Cachegrind table (``chemfiles_*`` scenarios).
 
 * Frame parsing throughput
 
@@ -248,13 +252,14 @@ per-direction constraints, atom identity tracking, and a formal
 specification. LAMMPS dump format supports many features but is
 tightly coupled to the LAMMPS ecosystem.
 
-#+CAPTION: Feature coverage vs parsing performance (Pareto front)
+#+CAPTION: Feature coverage vs parse speed (measured =readcon= / ASE CON / ASE extXYZ from multiformat harness; C sscanf from =compare_readers=; ASE CON is not plotted as extXYZ)
 [[file:img/pareto_features_vs_speed.svg]]
 
 readcon-core occupies the Pareto-optimal corner: maximum feature
-coverage at the fastest parse speed among text-based formats. Binary
+coverage at the fastest parse speed among the measured text formats
+(CON via =readcon= vs ASE CON and ASE extXYZ on equal geometry). Binary
 formats (DCD, TRR) trade features for raw throughput -- they lack
-metadata, constraints, and human readability.
+metadata, constraints, and human readability; they are not on this plot.
 
 * Statistical analysis
 
