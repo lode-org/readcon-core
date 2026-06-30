@@ -14,22 +14,18 @@ fn read(name: &str) -> String {
 }
 
 #[test]
-fn architecture_states_rejected_alternatives() {
+fn architecture_situates_in_ecosystem() {
     let t = read("architecture.org");
     assert!(
-        t.contains("Design rationale") || t.contains("design-rationale"),
-        "architecture.org needs Design rationale section"
+        t.contains("wider ecosystem") || t.contains("design-rationale"),
+        "architecture.org needs ecosystem placement section"
     );
-    assert!(t.contains("Rejected") || t.contains("rejected"), "name rejected alternatives");
-    assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("C ABI"));
+    assert!(t.contains("chemfiles") || t.contains("ASE"));
+    assert!(t.contains("GROMACS") || t.contains("LAMMPS") || t.contains("MD engine"));
     assert!(t.contains("readcon-db") || t.contains("campaign"));
     assert!(
-        t.contains("Scoped") || t.contains("scoped"),
-        "scoped superiority language required"
-    );
-    assert!(
-        t.contains("XTC") || t.contains("binary MD") || t.contains("TRR"),
-        "non-claim for binary MD"
+        t.contains("H5MD") || t.contains("XYZ") || t.contains("checkpoint"),
+        "name peer formats / niche"
     );
 }
 
@@ -48,7 +44,10 @@ fn faq_answers_con_vs_xyz_ase_authority() {
     assert!(t.contains("CON vs XYZ") || t.contains("XYZ / extXYZ"));
     assert!(t.contains("ASE") && (t.contains("hand-off") || t.contains("hand off") || t.contains("calculator")));
     assert!(t.contains("authoritative") || t.contains("authority") || t.contains("Authoritative"));
-    assert!(t.contains("always better") || t.contains("Scoped yes"));
+    assert!(
+        t.contains("relate to ASE") || t.contains("MD engines") || t.contains("whole ecosystem")
+            || t.contains("No universal ranking")
+    );
 }
 
 #[test]
