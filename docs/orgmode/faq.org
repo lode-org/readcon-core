@@ -329,9 +329,29 @@ access. Both decode with the same core so semantics never fork. Rejected
 alternative: ASE =.db= as the multi-reader CON corpus (pickled =Atoms=, weak
 multi-writer story).
 
-* Are we "always better" than XYZ and ASE?
+* How does readcon relate to ASE, chemfiles, MDAnalysis, and MD engines?
 
-*Scoped yes* for optimizer-centric ASCII interchange and CON-fidelity campaign
-screening (design + measured multiformat / fair ASE =.db= evidence). *No* as a
-universal claim against engine-native binary MD (XTC/TRR/DCD) or multi-node
-filesystem performance. Prefer precise wording in papers and talks.
+They solve different problems and should be combined deliberately:
+
+- *MD engines* (GROMACS, LAMMPS, …): primary owners of continuous dynamics and
+  their binary trajectory formats. Do not replace them with CON for production MD.
+- *chemfiles / Atomsk-class converters*: many formats in. Use chemfiles
+  *ingress* when you want foreign structures *as* =ConFrame= / CON checkpoints.
+- *ASE*: calculators, builders, and a broad Python integration hub—including
+  =.db= stores of =Atoms=. Use ASE when the workflow *is* ASE; use optional
+  =to_ase= / =from_ase= only for hand-off, not as the durable identity of a
+  multi-reader CON campaign.
+- *MDAnalysis / OVITO-class tools*: analysis and visualization over many
+  trajectory types. Prefer their native paths for large binary MD; use CON when
+  the science object is an optimizer checkpoint with CON fields.
+- *readcon-core / readcon-db*: specified CON/convel interchange and optional
+  CON-backed campaign indexes. Complementary to the above, not a ranking over
+  the whole ecosystem.
+
+* Is CON "always better" than XYZ or ASE I/O?
+
+No universal ranking is intended. CON is the right *durable* choice when
+optimizer fidelity (constraints, sections, versioned metadata) and
+multi-language interchange matter. XYZ/extXYZ, ASE, chemfiles, and engine
+binaries remain the right tools in their roles. Papers and talks should state
+that niche explicitly.

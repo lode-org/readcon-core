@@ -33,13 +33,11 @@ decoded with **readcon-core**—semantics never fork. Foreign formats (XYZ, PDB,
 GRO, …) enter via the optional **chemfiles** feature (`read_chemfiles*`), not
 ASE. ASE adapters are optional and only for calculator hand-off.
 
-**Design for reviewers:** why CON text is authoritative, how `con_spec_version`
-evolved (legacy → v2 → v3), hourglass ABI, lean optional features, and why
-campaign screening belongs in [readcon-db](https://github.com/lode-org/readcon-db)
-rather than ASE `.db`—see Sphinx/org docs `architecture`, `evolution`, `faq`,
-and `spec` under `docs/orgmode/`. Superiority claims are **scoped** to
-optimizer-centric ASCII interchange and CON-fidelity campaigns (not universal
-binary-MD or multi-node FS dominance).
+**In the ecosystem:** CON/convel is an optimizer-centric checkpoint niche
+beside MD engines (binary trajectories), converters (chemfiles, Atomsk), Python
+environments (ASE, MDAnalysis), and hierarchical archives (H5MD)—not a
+replacement for them. Docs: `architecture`, `evolution`, `faq`, `spec` under
+`docs/orgmode/`. Campaign indexes: [readcon-db](https://github.com/lode-org/readcon-db).
 
 
 | Layer | Crate | Responsibility |

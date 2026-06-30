@@ -184,25 +184,34 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the =[lib]= name (=readcon_core=), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
 
-* Design rationale (reviewer map)
+* Place in the wider ecosystem
 :PROPERTIES:
 :CUSTOM_ID: design-rationale
 :END:
 
-This section states *why* the hourglass exists and what was rejected. Detailed
-format evolution lives in [[file:evolution.org][evolution.org]]; user Q&A in
-[[file:faq.org][faq.org]].
+Atomic configurations already travel through several *roles* of software. MD
+engines (GROMACS, LAMMPS, …) own continuous dynamics and define binary
+trajectory formats. Converters (chemfiles, Atomsk, …) and analysis stacks
+(ASE, MDAnalysis, OVITO-class tools) move and interpret many formats. Hierarchical
+archives (H5MD and other HDF5 layouts) serve long-term analysis. CON/convel is
+none of those roles in full: it is an *optimizer-centric checkpoint* format
+(constraints, optional forces, inspectable text) historically used by eOn-class
+codes. =readcon-core= is the interchange library for that contract; optional
+chemfiles ingress feeds *into* CON when a pipeline wants a common checkpoint,
+it does not replace chemfiles as a universal converter.
 
-| Decision | Rejected / secondary alternative | Reviewer-visible benefit |
-|----------------------------------+------------------------------------------+-----------------------------------------------|
-| Rust core + C ABI hourglass | Python-only library; per-language forks | One semantics surface for Fortran/C/C++/Julia/Python; no Python required on optimizer I/O path |
-| CON text authoritative on disk | Cooked binary blob or ASE pickle as identity | Human inspectability; independent reimplementers; lossless constraints/forces/metadata |
-| Optional RCSO / SoA / DLPack views | Always cook on ingest; DLPack as LMDB format | Hot numeric extract when opted in; durable identity remains UTF-8 CON |
-| Optional chemfiles / cuda / zstd | Mandatory fat link for all clients | Lean builds for coordinate-only C/Fortran; clear =FEATURE_DISABLED= when off |
-| Companion =readcon-db= for campaigns | ASE =.db= / SQLite as multi-reader corpus | mmap SWMR indexes on CON-derivable fields without SQL or =Atoms= as authority |
-| Versioned =con_spec_version= | Silent layout changes; sidecar metadata | Detectable compatibility; legacy permissive reads; v3 =units= on new writes |
+**Why a dedicated library and companion store.** A Rust core behind a C ABI gives
+Fortran/C/C++/Julia/Python one semantics surface without forcing Python on
+optimizer I/O. Durable identity stays UTF-8 CON (inspectable, reimplementable);
+cooked SoA / DLPack / metatensor views are extract and hand-off paths, not a
+second on-disk authority. Campaign-scale multi-reader screening belongs in
+=readcon-db= (mmap indexes on CON-derivable fields), which is related to but not
+identical with ASE =.db= as a calculator-centric Python store—ASE remains the
+right tool for many calculator and analysis workflows; it is not the only
+substrate when CON section fidelity must survive multi-reader campaigns.
 
-*Scoped* claims: better for optimizer-centric ASCII interchange and CON-fidelity
-campaign screening—not universal superiority over binary MD engines (XTC/TRR/DCD)
-or multi-node filesystems. Measured peer comparisons live in
-[[file:benchmarks.org][benchmarks.org]] (=multiformat_traj.py=) and the CPC paper.
+**Format evolution** (legacy → v2 JSON metadata → v3 units) and detailed
+alternatives considered for header layout and sections: [[file:evolution.org][evolution.org]].
+Practical Q&A (CON vs XYZ, ASE hand-off, when to use HDF5/engine binaries):
+[[file:faq.org][faq.org]]. Benchmarks compare *peers in context*; they do not claim
+CON displaces engine-native binary trajectories or multi-node filesystems.
