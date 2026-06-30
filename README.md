@@ -33,11 +33,11 @@ decoded with **readcon-core**—semantics never fork. Foreign formats (XYZ, PDB,
 GRO, …) enter via the optional **chemfiles** feature (`read_chemfiles*`), not
 ASE. ASE adapters are optional and only for calculator hand-off.
 
-**In the ecosystem:** CON/convel is an optimizer-centric checkpoint niche
-beside MD engines (binary trajectories), converters (chemfiles, Atomsk), Python
-environments (ASE, MDAnalysis), and hierarchical archives (H5MD)—not a
-replacement for them. Docs: `architecture`, `evolution`, `faq`, `spec` under
-`docs/orgmode/`. Campaign indexes: [readcon-db](https://github.com/lode-org/readcon-db).
+**Thesis:** versioned CON behind an hourglass C ABI is the interchange layer
+for optimizer-centric science—embeddable in Fortran/C/C++/Python engines and
+drivers so you are not stuck with lossy XYZ or package-private log formats.
+Campaign indexes: [readcon-db](https://github.com/lode-org/readcon-db). Design
+docs: `architecture`, `evolution`, `faq`, `spec` under `docs/orgmode/`.
 
 
 | Layer | Crate | Responsibility |

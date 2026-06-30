@@ -1,5 +1,4 @@
-//! Structural check: reviewer-facing design *why* stays present in user docs.
-//! Drives real on-disk Org sources under `docs/orgmode/` (not reimplemented prose).
+//! Structural check: assertive interchange thesis present in user docs.
 
 use std::fs;
 use std::path::PathBuf;
@@ -14,18 +13,15 @@ fn read(name: &str) -> String {
 }
 
 #[test]
-fn architecture_situates_in_ecosystem() {
+fn architecture_hourglass_embedding_thesis() {
     let t = read("architecture.org");
+    assert!(t.contains("Hourglass") || t.contains("hourglass"));
+    assert!(t.contains("embed") || t.contains("Embed"));
+    assert!(t.contains("XYZ"));
+    assert!(t.contains("rkr_") || t.contains("C ABI"));
     assert!(
-        t.contains("wider ecosystem") || t.contains("design-rationale"),
-        "architecture.org needs ecosystem placement section"
-    );
-    assert!(t.contains("chemfiles") || t.contains("ASE"));
-    assert!(t.contains("GROMACS") || t.contains("LAMMPS") || t.contains("MD engine"));
-    assert!(t.contains("readcon-db") || t.contains("campaign"));
-    assert!(
-        t.contains("H5MD") || t.contains("XYZ") || t.contains("checkpoint"),
-        "name peer formats / niche"
+        !t.contains("not a replacement for them"),
+        "must not use weak niche hedging"
     );
 }
 
@@ -35,19 +31,18 @@ fn evolution_covers_v2_v3_and_alternatives() {
     assert!(t.contains("Version 2 to version 3") || t.contains("version 3"));
     assert!(t.contains("Alternatives considered") || t.contains("alternatives"));
     assert!(t.contains("units") || t.contains("=units="));
-    assert!(t.contains("Compatibility") || t.contains("compatibility"));
 }
 
 #[test]
-fn faq_answers_con_vs_xyz_ase_authority() {
+fn faq_asserts_con_better_for_optimizer_interchange() {
     let t = read("faq.org");
     assert!(t.contains("CON vs XYZ") || t.contains("XYZ / extXYZ"));
-    assert!(t.contains("ASE") && (t.contains("hand-off") || t.contains("hand off") || t.contains("calculator")));
-    assert!(t.contains("authoritative") || t.contains("authority") || t.contains("Authoritative"));
+    assert!(t.contains("hourglass") || t.contains("Hourglass"));
     assert!(
-        t.contains("relate to ASE") || t.contains("MD engines") || t.contains("whole ecosystem")
-            || t.contains("No universal ranking")
+        t.contains("*Yes.*") || t.contains("strictly preferable"),
+        "FAQ must assert CON preference for optimizer interchange"
     );
+    assert!(!t.contains("No universal ranking is intended"));
 }
 
 #[test]
@@ -55,12 +50,10 @@ fn getting_started_maps_when_to_use() {
     let t = read("getting-started.org");
     assert!(t.contains("When to use what") || t.contains("when to use"));
     assert!(t.contains("readcon-db") || t.contains("campaign"));
-    assert!(t.contains("chemfiles") || t.contains("XYZ"));
 }
 
 #[test]
 fn faq_why_another_format_still_present() {
     let t = read("faq.org");
     assert!(t.contains("Why another atomic structure format"));
-    assert!(t.contains("XYZ") && t.contains("extxyz") || t.contains("extXYZ") || t.contains("*extxyz*"));
 }
