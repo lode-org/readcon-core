@@ -33,11 +33,12 @@ decoded with **readcon-core**—semantics never fork. Foreign formats (XYZ, PDB,
 GRO, …) enter via the optional **chemfiles** feature (`read_chemfiles*`), not
 ASE. ASE adapters are optional and only for calculator hand-off.
 
-**Thesis:** versioned CON + hourglass multi-language embedding + [readcon-db](https://github.com/lode-org/readcon-db)
-campaign store aims to be the best interchange and corpus layer for
-computational chemistry and materials science—so engines and optimizers link
-one contract instead of defaulting to XYZ or package-private logs. Docs:
-`architecture`, `evolution`, `faq`, `spec` under `docs/orgmode/`.
+**Interchange stack:** versioned CON/convel with an hourglass C ABI
+(`readcon-core` / `readcon`) for multi-language optimizers and drivers, and
+[readcon-db](https://github.com/lode-org/readcon-db) for multi-reader campaigns
+with CON text authoritative. Docs: `architecture`, `evolution`, `faq`, `spec`
+under `docs/orgmode/`.
+
 
 
 

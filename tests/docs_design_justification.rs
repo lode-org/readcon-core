@@ -1,4 +1,4 @@
-//! Structural check: field-wide interchange ambition present in user docs.
+//! Structural check: design rationale present in user docs (CPC-aligned substance).
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,12 +13,13 @@ fn read(name: &str) -> String {
 }
 
 #[test]
-fn architecture_field_wide_thesis() {
+fn architecture_design_rationale() {
     let t = read("architecture.org");
-    assert!(t.contains("computational chemistry") || t.contains("materials science"));
     assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("rkr_"));
     assert!(t.contains("readcon-db"));
-    assert!(t.contains("best interchange") || t.contains("Field-wide"));
+    assert!(t.contains("authoritative") || t.contains("authority") || t.contains("CON text"));
+    assert!(!t.contains("No universal ranking is intended"));
+    assert!(!t.contains("sit politely"));
 }
 
 #[test]
@@ -29,12 +30,12 @@ fn evolution_covers_v2_v3() {
 }
 
 #[test]
-fn faq_asserts_field_leadership() {
+fn faq_hourglass_and_con_vs_xyz() {
     let t = read("faq.org");
-    assert!(t.contains("*Yes.*") || t.contains("strictly preferable") || t.contains("state of the art"));
-    assert!(t.contains("hourglass") || t.contains("Hourglass"));
+    assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("rkr_"));
+    assert!(t.contains("CON vs XYZ") || t.contains("XYZ / extXYZ"));
+    assert!(t.contains("authoritative") || t.contains("Authoritative") || t.contains("UTF-8 CON"));
     assert!(!t.contains("No universal ranking is intended"));
-    assert!(t.contains("materials science") || t.contains("computational chemistry"));
 }
 
 #[test]

@@ -184,32 +184,28 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the =[lib]= name (=readcon_core=), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
 
-* Field-wide interchange thesis
+* Design rationale
 :PROPERTIES:
 :CUSTOM_ID: design-rationale
 :END:
 
-=readcon-core= and =readcon-db= aim to be the *best interchange and campaign
-layer for computational chemistry and materials science*: versioned CON text,
-hourglass embedding into every language that matters, and a CON-authoritative
-mmap campaign store. That is a higher bar than sitting beside XYZ and ASE as
-optional conveniences.
+=readcon-core= implements a versioned CON/convel contract behind an hourglass
+C ABI so optimizers and drivers in Fortran, C, C++, Julia, and Python share
+one semantics surface without requiring a Python runtime on the I/O path.
+Optional chemfiles ingress maps foreign formats into =ConFrame=; optional
+metatensor/DLPack exports provide tensor hand-off without a second
+authoritative on-disk representation. Lean builds expose optional features as
+stubs (=RKR_STATUS_FEATURE_DISABLED=).
 
-**Hourglass.** One Rust core behind =rkr_*= links into Fortran, C, C++, Julia,
-and Python optimizers, drivers, and engines with the same semantics—so the
-field is not forced into Python-only I/O or into baroque per-package logs
-(NWChem-style dumps, informal =.con= readers). Chemfiles ingress pulls legacy
-formats *into* CON; metatensor/DLPack hand off tensors without a second on-disk
-authority. Lean builds stub optional features (=RKR_STATUS_FEATURE_DISABLED=).
+=readcon-db= provides multi-reader campaign indexes while retaining UTF-8 CON
+as durable identity (hash, dedup, reindex). ASE remains effective for
+calculators and interactive analysis; optional =to_ase= is calculator
+hand-off when CON sections must be preserved under multi-reader screening.
 
-**Campaign store.** =readcon-db= keeps UTF-8 CON authoritative for hash, dedup,
-and multi-reader screening—preferable to ASE =.db= as the field-wide campaign
-substrate. ASE remains excellent for calculators; it is not the interchange
-standard.
-
-**Detail:** [[file:evolution.org][evolution.org]], [[file:faq.org][faq.org]],
-[[file:spec.org][spec.org]], [[file:benchmarks.org][benchmarks.org]]. Internal
-MD binary buffers for continuous dynamics inside one engine are an
-implementation detail of that engine—not an excuse for the field to exchange
-science through lossy XYZ.
+Format evolution and layout alternatives: [[file:evolution.org][evolution.org]].
+Q&A: [[file:faq.org][faq.org]]. Spec: [[file:spec.org][spec.org]].
+Measured interchange and campaign comparisons: [[file:benchmarks.org][benchmarks.org]].
+Engine-native binary trajectories remain appropriate high-density encodings
+inside continuous MD; they are complementary to a multi-language CON
+checkpoint and campaign layer.
 
