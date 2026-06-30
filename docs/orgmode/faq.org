@@ -284,3 +284,54 @@ Same symbol names either way. Without =--features metatensor=, blocks return
 gzip writers and DLPack (=ArcArray= share via dlpk; no fake =_borrowed= C aliases) are
 always present. After a metatensor-enabled build, =target/<profile>/readcon-metatensor.env=
 lists include/lib paths for =libmetatensor=.
+
+* When should I use CON vs XYZ / extXYZ / chemfiles?
+
+Use *CON* when optimizer fidelity matters: three-axis constraints, forces /
+velocities sections, versioned metadata (=energy=, =potential=, NEB keys), and
+round-trips through eOn / LODE / multi-language clients.
+
+Use *XYZ / extXYZ* for lightweight visualization or tools that only need
+positions (and maybe Lattice). Expect loss of CON constraint masks and
+section structure on a round-trip.
+
+Use *chemfiles ingress* (=--features chemfiles= / =readcon-chemfiles=) when you
+must *import* foreign formats (XYZ, PDB, GRO, …) *into* =ConFrame=—not as a
+replacement for CON authority on disk. Lean builds expose conversion symbols
+but return a clear feature-disabled error until linked.
+
+Fair equal-geometry timings (CON vs ASE XYZ/CON, chemfiles XYZ, MDAnalysis)
+are in [[file:benchmarks.org][benchmarks.org]]; they support *scoped* interchange
+claims, not "CON beats every binary MD format."
+
+* Are ASE adapters the primary API?
+
+No. Optional =to_ase= / =from_ase= (and similar) are *calculator hand-off*
+only. Campaign storage, hash/dedup, and multi-reader screening must not route
+through ASE =Atoms= or ASE =.db= when CON fidelity is required. Prefer
+=readcon= / =readcon-db= for those paths; see the CPC fair ASE =.db= campaign
+discussion and [[file:architecture.org][architecture.org]] (*Design rationale*).
+
+* What is authoritative: CON text, cooked SoA, or DLPack?
+
+*UTF-8 CON text* is durable authority for files and for =readcon-db= =frames=
+(hash, dedup, join/split, =reindex=). Optional cooked RCSO / =frames_soa= and
+in-process SoA / DLPack views accelerate numerics and device interchange; they
+are discardable or ephemeral. Missing or corrupt cooked data falls back to
+parsing CON. Default builds reject non-CPU DLPack device requests unless
+optional =cuda= is enabled (real allocate / H2D)—no silent CPU reinterpret.
+
+* Why not put the campaign store inside readcon-core?
+
+Interchange libraries should not accumulate a query engine. =readcon-core=
+streams and validates CON; =readcon-db= owns LMDB indexes and SWMR campaign
+access. Both decode with the same core so semantics never fork. Rejected
+alternative: ASE =.db= as the multi-reader CON corpus (pickled =Atoms=, weak
+multi-writer story).
+
+* Are we "always better" than XYZ and ASE?
+
+*Scoped yes* for optimizer-centric ASCII interchange and CON-fidelity campaign
+screening (design + measured multiformat / fair ASE =.db= evidence). *No* as a
+universal claim against engine-native binary MD (XTC/TRR/DCD) or multi-node
+filesystem performance. Prefer precise wording in papers and talks.
