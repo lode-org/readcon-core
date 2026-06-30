@@ -104,6 +104,20 @@ regardless of size, since mmap cannot decompress on the fly.
 
 * Cross-implementation comparison
 
+
+** Multi-format trajectory (CON vs ASE XYZ / ASE CON)
+
+Fair equal-geometry harness: =benches/multiformat_traj.py= writes multi-frame
+CON (concatenated fixture) and multi-frame extended XYZ (ASE from the same
+frames), then times full multi-frame load with =readcon.read_all_frames=,
+=ase.io.read(..., index=':')= on XYZ, and ASE on CON. Median of 7 repeats.
+Artifact: =benches/results/multiformat_traj_terra.json= (dual runs on the
+measurement host both satisfy $\ge 2\times$ frames/s vs ASE XYZ and ASE CON;
+observed margins $\sim 37$--$46\times$ vs XYZ and $\sim 44$--$64\times$ vs ASE CON
+for $N\in\{50,100,200\}$, 4 atoms/frame).
+
+Not a claim against binary MD trajectory formats (XTC/TRR/DCD) or multi-node FS.
+
 Measured with =benches/compare_readers.py= on a 100-frame trajectory
 (218 atoms per frame, 1.6 MiB file). Median of 5 runs.
 
