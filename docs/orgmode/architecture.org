@@ -183,3 +183,26 @@ The =[package.metadata.capi.pkg_config] filename = "readcon-core"=
 override is load-bearing: without it cargo-c defaults the .pc filename
 to the =[lib]= name (=readcon_core=), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
+
+* Design rationale (reviewer map)
+:PROPERTIES:
+:CUSTOM_ID: design-rationale
+:END:
+
+This section states *why* the hourglass exists and what was rejected. Detailed
+format evolution lives in [[file:evolution.org][evolution.org]]; user Q&A in
+[[file:faq.org][faq.org]].
+
+| Decision | Rejected / secondary alternative | Reviewer-visible benefit |
+|----------------------------------+------------------------------------------+-----------------------------------------------|
+| Rust core + C ABI hourglass | Python-only library; per-language forks | One semantics surface for Fortran/C/C++/Julia/Python; no Python required on optimizer I/O path |
+| CON text authoritative on disk | Cooked binary blob or ASE pickle as identity | Human inspectability; independent reimplementers; lossless constraints/forces/metadata |
+| Optional RCSO / SoA / DLPack views | Always cook on ingest; DLPack as LMDB format | Hot numeric extract when opted in; durable identity remains UTF-8 CON |
+| Optional chemfiles / cuda / zstd | Mandatory fat link for all clients | Lean builds for coordinate-only C/Fortran; clear =FEATURE_DISABLED= when off |
+| Companion =readcon-db= for campaigns | ASE =.db= / SQLite as multi-reader corpus | mmap SWMR indexes on CON-derivable fields without SQL or =Atoms= as authority |
+| Versioned =con_spec_version= | Silent layout changes; sidecar metadata | Detectable compatibility; legacy permissive reads; v3 =units= on new writes |
+
+*Scoped* claims: better for optimizer-centric ASCII interchange and CON-fidelity
+campaign screening—not universal superiority over binary MD engines (XTC/TRR/DCD)
+or multi-node filesystems. Measured peer comparisons live in
+[[file:benchmarks.org][benchmarks.org]] (=multiformat_traj.py=) and the CPC paper.
