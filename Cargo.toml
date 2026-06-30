@@ -29,7 +29,8 @@ rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util"
 # graph. v0.11 builds its own __dlpack__ PyCapsule wrapper using
 # dlpk's sys::DLManagedTensorVersioned types directly. Once dlpk
 # bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
-python = ["dep:pyo3", "dep:numpy"]
+# Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
+python = ["dep:pyo3", "dep:numpy", "parallel"]
 zstd = ["dep:zstd"]
 metatensor = ["dep:metatensor"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).

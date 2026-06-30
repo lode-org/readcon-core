@@ -105,18 +105,23 @@ regardless of size, since mmap cannot decompress on the fly.
 * Cross-implementation comparison
 
 
-** Multi-format trajectory (CON vs ASE XYZ / ASE CON)
+** Multi-format trajectory (CON vs XYZ-class peers)
 
 Fair equal-geometry harness: =benches/multiformat_traj.py= writes multi-frame
-CON (concatenated fixture) and multi-frame extended XYZ (ASE from the same
-frames), then times full multi-frame load with =readcon.read_all_frames=,
-=ase.io.read(..., index=':')= on XYZ, and ASE on CON. Median of 7 repeats.
-Artifact: =benches/results/multiformat_traj_terra.json= (dual runs on the
-measurement host both satisfy $\ge 2\times$ frames/s vs ASE XYZ and ASE CON;
-observed margins $\sim 37$--$46\times$ vs XYZ and $\sim 44$--$64\times$ vs ASE CON
-for $N\in\{50,100,200\}$, 4 atoms/frame).
+CON (concatenated fixture) and multi-frame plain/ext XYZ (ASE from the same
+frames), then times full multi-frame load for =readcon.read_all_frames= (Python
+wheels enable Rayon multi-frame parse above a size threshold), ASE extXYZ, ASE
+plain XYZ, ASE CON, optional chemfiles Trajectory (XYZ), and MDAnalysis XYZ.
+Median of 7 repeats. Fixtures: =tiny_cuh2= (4 atoms) and =cuh2= (218 atoms).
+Artifact: =benches/results/multiformat_traj_terra.json= (dual runs: gate
+$\ge 2\times$ vs ASE/MDA peers and $\ge 1\times$ vs chemfiles lean XYZ;
+observed $\sim 10$--$41\times$ ASE extXYZ, $\sim 4$--$10\times$ ASE plain XYZ,
+$\sim 11$--$59\times$ ASE CON, $\sim 2.5$--$6\times$ MDA, $\sim 1.2$--$1.6\times$
+chemfiles).
 
 Not a claim against binary MD trajectory formats (XTC/TRR/DCD) or multi-node FS.
+CON carries richer sections than lean XYZ; chemfiles remains the toughest C++
+ASCII peer and is still beaten on every ladder point.
 
 Measured with =benches/compare_readers.py= on a 100-frame trajectory
 (218 atoms per frame, 1.6 MiB file). Median of 5 runs.
