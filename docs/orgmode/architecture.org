@@ -184,34 +184,35 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the =[lib]= name (=readcon_core=), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
 
-* Place in the wider ecosystem
+* Hourglass embedding and interchange thesis
 :PROPERTIES:
 :CUSTOM_ID: design-rationale
 :END:
 
-Atomic configurations already travel through several *roles* of software. MD
-engines (GROMACS, LAMMPS, …) own continuous dynamics and define binary
-trajectory formats. Converters (chemfiles, Atomsk, …) and analysis stacks
-(ASE, MDAnalysis, OVITO-class tools) move and interpret many formats. Hierarchical
-archives (H5MD and other HDF5 layouts) serve long-term analysis. CON/convel is
-none of those roles in full: it is an *optimizer-centric checkpoint* format
-(constraints, optional forces, inspectable text) historically used by eOn-class
-codes. =readcon-core= is the interchange library for that contract; optional
-chemfiles ingress feeds *into* CON when a pipeline wants a common checkpoint,
-it does not replace chemfiles as a universal converter.
+The point of =readcon-core= is not to sit politely beside every other format.
+It is to make a *versioned CON contract* trivial to embed in optimizers and
+drivers written in Fortran, C, C++, Julia, or Python—so those codes no longer
+need to default to lossy XYZ or to package-private text dumps (NWChem-style
+logs, one-off restart dialects, informal =.con= readers that drop sections).
 
-**Why a dedicated library and companion store.** A Rust core behind a C ABI gives
-Fortran/C/C++/Julia/Python one semantics surface without forcing Python on
-optimizer I/O. Durable identity stays UTF-8 CON (inspectable, reimplementable);
-cooked SoA / DLPack / metatensor views are extract and hand-off paths, not a
-second on-disk authority. Campaign-scale multi-reader screening belongs in
-=readcon-db= (mmap indexes on CON-derivable fields), which is related to but not
-identical with ASE =.db= as a calculator-centric Python store—ASE remains the
-right tool for many calculator and analysis workflows; it is not the only
-substrate when CON section fidelity must survive multi-reader campaigns.
+**Hourglass.** One Rust core behind the =rkr_*= C ABI is the shared semantics
+surface. Linking CON I/O does not require a Python runtime on the hot path;
+Python and Julia bind the same implementation. Optional chemfiles *ingress*
+pulls foreign structures *into* CON when a pipeline wants one checkpoint
+contract; optional metatensor/DLPack exports hand off tensors without making
+binary blobs authoritative on disk. Lean builds stub optional symbols
+(=RKR_STATUS_FEATURE_DISABLED=) so engines link one symbol set.
 
-**Format evolution** (legacy → v2 JSON metadata → v3 units) and detailed
-alternatives considered for header layout and sections: [[file:evolution.org][evolution.org]].
-Practical Q&A (CON vs XYZ, ASE hand-off, when to use HDF5/engine binaries):
-[[file:faq.org][faq.org]]. Benchmarks compare *peers in context*; they do not claim
-CON displaces engine-native binary trajectories or multi-node filesystems.
+**Authority and campaigns.** Durable identity is UTF-8 CON (hash, dedup,
+reindex). Cooked SoA / RCSO / DLPack are extract and device hand-off, not a
+second source of truth. Multi-reader optimizer ensembles use =readcon-db=
+(mmap indexes on CON-derivable fields)—preferable to ASE =.db= as the
+*authoritative campaign substrate* when CON fidelity matters. ASE remains the
+right *calculator* environment; optional =to_ase= is hand-off only.
+
+**Evolution and detail:** [[file:evolution.org][evolution.org]],
+[[file:faq.org][faq.org]], [[file:spec.org][spec.org]],
+[[file:benchmarks.org][benchmarks.org]]. Continuous MD engines keep their
+internal binary trajectory encodings for long dynamics; that does not make XYZ
+or baroque logs an acceptable *interchange* default for optimizer science.
+

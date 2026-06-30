@@ -287,71 +287,54 @@ lists include/lib paths for =libmetatensor=.
 
 * When should I use CON vs XYZ / extXYZ / chemfiles?
 
-Use *CON* when optimizer fidelity matters: three-axis constraints, forces /
-velocities sections, versioned metadata (=energy=, =potential=, NEB keys), and
-round-trips through eOn / LODE / multi-language clients.
+Default to *CON* for optimizer checkpoints and multi-language interchange:
+constraints, forces/velocities sections, versioned metadata, and round-trips
+through Fortran/C/C++/Python via the hourglass ABI.
 
-Use *XYZ / extXYZ* for lightweight visualization or tools that only need
-positions (and maybe Lattice). Expect loss of CON constraint masks and
-section structure on a round-trip.
+Use *XYZ / extXYZ* only as an edge dump when a tool cannot consume CON—and
+accept the fidelity loss. Prefer writing CON from optimizers/engines over
+treating XYZ as durable identity.
 
-Use *chemfiles ingress* (=--features chemfiles= / =readcon-chemfiles=) when you
-must *import* foreign formats (XYZ, PDB, GRO, …) *into* =ConFrame=—not as a
-replacement for CON authority on disk. Lean builds expose conversion symbols
-but return a clear feature-disabled error until linked.
+Use *chemfiles ingress* to pull XYZ/PDB/GRO/… *into* =ConFrame= / CON when
+foreign inputs must join a CON-centered pipeline.
 
-Fair equal-geometry timings (CON vs ASE XYZ/CON, chemfiles XYZ, MDAnalysis)
-are in [[file:benchmarks.org][benchmarks.org]]; they support *scoped* interchange
-claims, not "CON beats every binary MD format."
+Timings: [[file:benchmarks.org][benchmarks.org]].
 
 * Are ASE adapters the primary API?
 
-No. Optional =to_ase= / =from_ase= (and similar) are *calculator hand-off*
-only. Campaign storage, hash/dedup, and multi-reader screening must not route
-through ASE =Atoms= or ASE =.db= when CON fidelity is required. Prefer
-=readcon= / =readcon-db= for those paths; see the CPC fair ASE =.db= campaign
-discussion and [[file:architecture.org][architecture.org]] (*Design rationale*).
+No. Optional =to_ase= / =from_ase= are *calculator hand-off*. Campaign storage,
+hash/dedup, and multi-reader screening use =readcon= / =readcon-db= with CON
+text authoritative. ASE is excellent for calculators; it is not the hourglass
+interchange layer for CON.
 
 * What is authoritative: CON text, cooked SoA, or DLPack?
 
-*UTF-8 CON text* is durable authority for files and for =readcon-db= =frames=
-(hash, dedup, join/split, =reindex=). Optional cooked RCSO / =frames_soa= and
-in-process SoA / DLPack views accelerate numerics and device interchange; they
-are discardable or ephemeral. Missing or corrupt cooked data falls back to
-parsing CON. Default builds reject non-CPU DLPack device requests unless
-optional =cuda= is enabled (real allocate / H2D)—no silent CPU reinterpret.
+*UTF-8 CON text* is durable authority for files and =readcon-db= =frames=.
+Optional cooked RCSO / =frames_soa= and in-process SoA / DLPack accelerate
+numerics and device hand-off; they are discardable or ephemeral. Default builds
+reject non-CPU DLPack device requests unless optional =cuda= is enabled.
 
 * Why not put the campaign store inside readcon-core?
 
-Interchange libraries should not accumulate a query engine. =readcon-core=
-streams and validates CON; =readcon-db= owns LMDB indexes and SWMR campaign
-access. Both decode with the same core so semantics never fork. Rejected
-alternative: ASE =.db= as the multi-reader CON corpus (pickled =Atoms=, weak
-multi-writer story).
+Interchange (parse/write/embed) and campaign indexes are different jobs.
+=readcon-core= embeds via the hourglass; =readcon-db= owns LMDB multi-reader
+screening on CON blobs. Both decode with the same core so semantics never fork.
 
-* How does readcon relate to ASE, chemfiles, MDAnalysis, and MD engines?
+* How does the hourglass change the ecosystem argument?
 
-They solve different problems and should be combined deliberately:
+Without a linkable multi-language ABI, every engine and optimizer reinvents
+text I/O (XYZ, proprietary logs, partial =.con= readers). With the hourglass,
+the *same* versioned CON contract embeds into drivers and optimizers (including
+codes that historically emitted baroque logs) without choosing Python-only or
+Fortran-only interchange. That is the SOTA claim: CON + hourglass is the
+correct *default interchange* for optimizer-centric science—not that CON
+replaces every internal continuous-MD binary buffer.
 
-- *MD engines* (GROMACS, LAMMPS, …): primary owners of continuous dynamics and
-  their binary trajectory formats. Do not replace them with CON for production MD.
-- *chemfiles / Atomsk-class converters*: many formats in. Use chemfiles
-  *ingress* when you want foreign structures *as* =ConFrame= / CON checkpoints.
-- *ASE*: calculators, builders, and a broad Python integration hub—including
-  =.db= stores of =Atoms=. Use ASE when the workflow *is* ASE; use optional
-  =to_ase= / =from_ase= only for hand-off, not as the durable identity of a
-  multi-reader CON campaign.
-- *MDAnalysis / OVITO-class tools*: analysis and visualization over many
-  trajectory types. Prefer their native paths for large binary MD; use CON when
-  the science object is an optimizer checkpoint with CON fields.
-- *readcon-core / readcon-db*: specified CON/convel interchange and optional
-  CON-backed campaign indexes. Complementary to the above, not a ranking over
-  the whole ecosystem.
+* Is CON better than XYZ or ASE I/O for that science?
 
-* Is CON "always better" than XYZ or ASE I/O?
+*Yes.* For optimizer-centric interchange—constraints, sections, multi-language
+embedding, CON-backed campaigns—versioned CON via =readcon-core= / =readcon-db=
+is strictly preferable to bare XYZ and to ASE =.db= / =ase.io= as the
+authoritative path. ASE remains the right calculator hub; XYZ remains a minimal
+edge format. Continuous-MD internal binaries (XTC/TRR/DCD) are a different job.
 
-No universal ranking is intended. CON is the right *durable* choice when
-optimizer fidelity (constraints, sections, versioned metadata) and
-multi-language interchange matter. XYZ/extXYZ, ASE, chemfiles, and engine
-binaries remain the right tools in their roles. Papers and talks should state
-that niche explicitly.
