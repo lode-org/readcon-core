@@ -2,17 +2,17 @@
 The CON File Format Specification
 =================================
 
-    :Date: 2026-03-25
+    :Date: 2026-06-27
 
 
 Specification
 -------------
 
 Version
-    2
+    3
 
 Date
-    2026-03-25
+    2026-06-27
 
 Status
     Stable
@@ -20,9 +20,10 @@ Status
 Reference implementation
     `readcon-core <https://github.com/lode-org/readcon-core>`_
 
-This document defines version 2 of the CON file format. It supersedes
-all prior informal descriptions. New implementations SHOULD target
-this version.
+This document defines versions 2 and 3 of the CON file format; version 3
+is the current version and adds required ``units`` metadata on top of the
+version 2 requirements. It supersedes all prior informal descriptions.
+New implementations SHOULD target version 3 and MUST accept version 2.
 
 The keywords MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT,
 MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ semantics.
