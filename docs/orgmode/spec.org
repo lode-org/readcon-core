@@ -411,7 +411,7 @@ All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 | =fmax=               | float           | Current maximum force component across free atoms        |
 | =bonds=              | array           | Optional frame topology (see [[#bonds]]); NOT a =sections= block |
 
-** Frame topology (=bonds=)
+** Frame topology (bonds)
 :PROPERTIES:
 :CUSTOM_ID: bonds
 :END:

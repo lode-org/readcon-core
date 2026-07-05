@@ -535,8 +535,8 @@ All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
 
 .. _bonds:
 
-Frame topology (``bonds``)
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Frame topology (bonds)
+~~~~~~~~~~~~~~~~~~~~~~
 
 The ``bonds`` key is OPTIONAL frame-level topology for tools that need explicit
 connectivity (chemfiles selection grammar ``bonds:`` / ``angles:`` / ``is_bonded``,
