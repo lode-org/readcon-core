@@ -727,12 +727,24 @@ aside.sy-rside {
 
 /* Mermaid sits on its own light plate (like the static figures) so node and
    edge labels keep AA contrast when the page theme is dark. */
-.sy-page .mermaid {
+.sy-page .mermaid,
+.sy-page pre.mermaid {
   margin: 1.25rem 0 1.5rem;
-  background: #f8fafc;
+  background: #f8fafc !important;
   border-radius: 0.55rem;
   padding: 0.75rem;
   border: 1px solid color-mix(in srgb, #64748b 35%, transparent);
+}
+
+/* Shibuya dark mode runs mermaid SVGs through brightness/invert/contrast
+   filters, which is exactly what produced dark boxes with near-black labels.
+   The plate above is already theme-safe; never invert the diagram. */
+.sy-page .mermaid > svg,
+.sy-page pre.mermaid > svg,
+html.dark .mermaid > svg,
+html[data-theme="dark"] .mermaid > svg,
+.yue .mermaid > svg {
+  filter: none !important;
 }
 
 .sy-page .section > h1:first-child {
