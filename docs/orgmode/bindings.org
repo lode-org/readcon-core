@@ -34,7 +34,7 @@ task.
 | Optional frame ~bonds~ topology | yes | ~PyConFrame.bonds~ / ~has_bonds~ | ~metadata_json~ + ~frame_bond_count~ | ~rkr_frame_bond_*~ | ~ConFrame::bonds()~ |
 | Chemfiles import / selection | yes (~chemfiles~ feature) | ~select_on_frame~ / ~select_atom_indices~ | ~select_on_frame~ / ~select_atom_indices~ (FFI; chemfiles lib) | ~rkr_frame_select~ / ~read_chemfiles_first~ | ~rkr_frame_select~ | ~ConFrame::select~ |
 
-**Chemfiles selection parity (supported subset).** One evaluator core; every
+**Selection (shared evaluator).** One evaluator core; every
 surface is a pass-through (~evaluate_selection_on_con_frame~ → chemfiles
 ~Selection~ after projecting the frame). Build with ~--features chemfiles~;
 probe with ~rkr_has_chemfiles_support()~ / ~has_chemfiles_support()~ (Julia) /
@@ -118,31 +118,19 @@ Same task in each user-facing language (paths are examples).
          free_rkr_frame(f);
 #+end_export
 
-Supported contexts when topology is present (~metadata["bonds"]~, 0-based
-~atom_data~ pairs): ~bonds:~ / ~angles:~ / ~dihedrals:~ / ~pairs:~ / ~two:~ /
-~three:~ / ~four:~, and predicates ~is_bonded~ / ~is_angle~ / ~is_dihedral~ on
-the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
+**Selection on CON frames.** With ~metadata["bonds"]~ (0-based ~atom_data~
+pairs): ~bonds:~ / ~angles:~ / ~dihedrals:~ / ~pairs:~ / ~two:~ / ~three:~ /
+~four:~, and ~is_bonded~ / ~is_angle~ / ~is_dihedral~. Without bonds,
+~name~ / ~type~ / ~all~ / ~none~ still work. Matches are always in CON
+~atom_data~ order (type-grouped; import remaps bond endpoints via ~atom_id~).
 
-**Index space / multiset contract.** CON type-groups atoms on write/import;
-bond endpoints are stored in ~atom_data~ order (chemfiles import remaps via
-~atom_id~). Surfaces return matches in that CON order. Parity with chemfiles
-direct evaluation is an *undirected multiset* after remapping chemfiles
-indices through ~atom_id~—not byte-identical index lists.
+**Name vs type after foreign import.** On disk: one ~symbol~ column. Optional
+sidecars ~chemfiles_atom_names~ / ~chemfiles_atom_types~ let ~name H1~ and
+~type H~ differ after conversion. Hand-built frames use ~symbol~ for both.
 
-**Chemfiles name vs type (fixed for import path).** On-disk CON still has one
-~symbol~ column (element/type for layout). Chemfiles import additionally stores
-optional metadata sidecars ~chemfiles_atom_names~ / ~chemfiles_atom_types~
-(indexed by chemfiles / ~atom_id~ order). Selection projection restores display
-~name~ and atomic ~type~ so ~name H1~ and ~type H~ both work after import.
-Hand-built frames without sidecars use ~symbol~ for both (same as before).
-
-**Remaining documented gaps (not claimed parity).** Residue/~resname~ and extra
-atom/residue properties (beyond what import already copies into
-~chemfiles_atom_properties~ / frame extras). Improper topology extras not
-stored in CON ~bonds~. Numeric geometry assertion blocks from chemfiles
-~tests/selection.cpp~ (~distance~ / ~angle~ / ~dihedral~ / ~out_of_plane~
-thresholds with extra atoms) unless trivially projected. Multiset-after-remap
-parity, not byte-identical chemfiles index lists.
+**Format limits.** No residues, pair ~bonds~ only, thin property sidecars—so
+~resname~, impropers, and most external property maps are not selectable.
+[[file:chemfiles-explain.org][What selection cannot see on CON]].
 
 * Python (PyO3)
 
@@ -237,12 +225,29 @@ frame2 = readcon.ConFrame.from_ase(ase_atoms)
 
 ** NumPy array views and DLPack interop (v0.10.0+)
 
-Every per-atom quantity has a contiguous NumPy ndarray accessor.
-Vector quantities are =[N, 3]= float64 arrays in the type-grouped
-order used by the underlying frame; scalars are =[N]=. NumPy 1.22+
-implements =__dlpack__= on its arrays, so the returned ndarrays
-interoperate zero-copy with torch / jax / cupy without readcon-core
-wiring DLPack itself.
+Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
+~atom_data~ order). Prefer **DLPack** for cross-framework hand-off: read
+~ndim~, ~shape~, and ~dtype~ (code/bits) from the tensor—do **not** assume the
+host language must allocate =f64= / =real64= copies. On-disk CON numerics are
+IEEE binary64 today, and current exports report =kDLFloat= / 64 for vectors and
+scalars (=kDLUInt= / 64 for =atom_id=), but consumers should branch on the
+tensor metadata so a future dtype change does not force a host =f64= ABI.
+
+C / C++ / Fortran: =rkr_frame_*_dlpack= / builder =*_dlpack= (and
+=rkr_dlpack_delete=) are the portable path. **Choose output dtype and device**
+with =RKRDlpackExportOptions= on =*_dlpack_ex= — fields are DLPack
+=DLDataType= (=code= / =bits= / =lanes=) and =DLDevice= (=device_type= /
+=device_id=), layout-compatible with =<dlpack/dlpack.h>=.
+
+On **CPU**, float sections accept the DLPack host types we can fill from CON
+binary64 storage: =kDLFloat= 32/64, =kDLInt= / =kDLUInt= 8/16/32/64, =kDLBool=
+(8-bit). Complex / bfloat / float8 / opaque / =lanes≠1= → validation error
+until implemented. Non-CPU =device_type= without =--features cuda= →
+=RKR_STATUS_FEATURE_DISABLED= (or validation error on Rust =as_dlpack=). With
+optional =cuda=, =kDLCUDA= / =RKR_DL_CUDA= allocates real device memory and
+frame/FFI export uses H2D for CPU-resident SoA (not host pointers labeled as
+CUDA). Legacy
+=*_dlpack= is =kDLFloat=/64 on CPU. =rkr_frame_copy_*= still fills =double*=.
 
 #+begin_src python
 import numpy as np
@@ -251,13 +256,13 @@ import readcon
 
 frame = readcon.read_first_frame("trajectory.con")
 
-coords = frame.coords_array()         # np.ndarray shape (N, 3) float64
-forces = frame.forces_array()         # Optional[np.ndarray]; None if absent
-velocities = frame.velocities_array() # Optional[np.ndarray]
-energies = frame.energies_array()     # Optional[np.ndarray] shape (N,)
-atom_ids = frame.atom_ids_array()     # np.ndarray shape (N,) uint64
+coords = frame.coords_array()         # ndarray (N, 3); inspect .dtype
+forces = frame.forces_array()         # Optional; None if absent
+velocities = frame.velocities_array()
+energies = frame.energies_array()     # Optional shape (N,)
+atom_ids = frame.atom_ids_array()     # typically uint64
 
-# Zero-copy hand-off into torch via DLPack.
+# Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
 coords_torch = torch.from_dlpack(coords)
 assert coords_torch.shape == (len(frame), 3)
 
@@ -416,6 +421,53 @@ while ((handle = con_frame_iterator_next(iter)) != NULL) {
 free_con_frame_iterator(iter);
 #+end_src
 
+*** Path iterator + compression + in-memory buffers
+
+~read_con_file_iterator(path)~ routes through ~compression::read_file_contents~:
+plain ~.con~, gzip (~.con.gz~ / magic ~1f 8b~), and zstd (~.con.zst~, requires
+~--features zstd~) all work without a temp file. Prefer these when the consumer
+already holds text in memory (no temp file bridge):
+
+| Entry | Input | Notes |
+|-------+-------+-------|
+| ~read_con_file_iterator(path)~ | filesystem path | transparent gzip/zstd |
+| ~read_con_string_iterator(cstr)~ | null-terminated CON UTF-8 | caller-decompressed buffer |
+| ~read_con_buffer_iterator(ptr, len)~ | byte slice (not necessarily NUL-terminated) | same ownership as path iterator |
+
+Free with ~free_con_frame_iterator~; frames from ~con_frame_iterator_next~ with
+~free_rkr_frame~. Bulk path: ~rkr_read_all_frames~ / ~free_rkr_frame_array~ or
+~free_rkr_frame_ptr_array~ (outer pointer array only).
+
+*** Frame section buffers (no AoS required)
+
+| C | C++ (~readcon::ConFrame~) | Meaning |
+|---+---------------------------+|
+| ~rkr_frame_atom_count~ | ~atom_count()~ | ~N~ |
+| ~rkr_frame_copy_positions(out, 3N)~ | ~copy_positions~ | row-major xyz; always present |
+| ~rkr_frame_copy_velocities~ / ~forces~ / ~atom_energies~ / ~masses~ / ~atom_ids~ | matching ~copy_*~ | ~RKR_STATUS_SECTION_ABSENT~ (=-8=) if missing |
+| ~rkr_frame_positions_dlpack~ | ~positions_dlpack~ | owned DLPack share (dlpk ~ArcArray~); free via tensor deleter / ~rkr_dlpack_delete~ |
+
+Fortran: ~fr%atom_count()~, ~fr%copy_positions(pbuf)~, ~fr%copy_velocities~,
+~fr%copy_forces~, ~fr%copy_masses~ (same status codes). Builder: ~bd%copy_positions~,
+~bd%copy_masses~, plus ~*_dlpack~ helpers in =fortran/README.md=.
+
+*** Multi-frame chemfiles selection (Rust + Python)
+
+Atom-context trajectory positions (e.g. ~name H~) without re-selecting in user code:
+
+- Rust: ~evaluate_selection_on_frames~ / ~select_atom_positions_on_frames~ in
+  ~chemfiles_selection~ (feature ~chemfiles~; lean builds return
+  ~ChemfilesImportError::FeatureDisabled~).
+- Python: ~readcon.evaluate_selection_on_frames(sel, frames)~ and
+  ~readcon.select_atom_positions_on_frames("name H", frames)~ →
+  ~{"selection", "frames": [{"frame_index", "result", "atom_indices", "positions"}, ...]}~.
+  Single-frame: ~select_on_frame~ / ~select_atom_indices~ / ~ConFrame.select~ /
+  ~select_atoms~ remain. Indices are CON ~atom_data~ order (species-contiguous).
+
+No C ABI multi-frame selection entry in this cut (call per-frame ~rkr_frame_select~
+or use Rust/Python). Lean builds: gated selection / metatensor return
+~RKR_STATUS_FEATURE_DISABLED~ (=-11=), never confused with internal error (=-7=).
+
 Metadata builder helpers:
 
 #+begin_src c
@@ -512,12 +564,12 @@ target_link_libraries(my_app PRIVATE readcon-core::readcon-core)
 or =mts_block_free=, not both). We do **not** merge metatensor's cbindgen
 header into =readcon-core.h=; two headers, one pointer ABI.
 
-**Lean vs fat (honest gates)**
+**Lean vs fat builds**
 
 | Variant | Cargo | =libreadcon_core.so= symbols | C header | Fortran module | Link =libmetatensor= |
 |---------+-------+------------------------------+----------+----------------+----------------------|
-| Lean | default / =chemfiles= only | **omit** =rkr_frame_metatensor_*= | no =READCON_CORE_HAS_METATENSOR= (or undef) | compile with =-cpp= **without** =-DREADCON_HAS_METATENSOR= → helpers return **=RKR_STATUS_FEATURE_DISABLED= (=-11=)** | no |
-| Fat | =--features metatensor= (often =chemfiles,metatensor=) | export all four blocks + =rkr_mts_block_free= | define =READCON_CORE_HAS_METATENSOR= (cbindgen =defines=) | =-cpp -DREADCON_HAS_METATENSOR= (script does this) | **yes** |
+| Lean | default / =chemfiles= only | symbols **always linked** (stubs) | =READCON_CORE_HAS_METATENSOR= optional (capability only) | C decls always present; runtime **=RKR_STATUS_FEATURE_DISABLED= (=-11=)** | no real blocks |
+| Fat | =--features metatensor= (often =chemfiles,metatensor=) | export all four blocks + =rkr_mts_block_free= | =readcon-metatensor.h= sets =READCON_CORE_HAS_METATENSOR= | full TensorBlock transfer | **yes** |
 
 After a fat =cargo build --features metatensor=, =build.rs= writes
 =target/<profile>/readcon-metatensor.env= (=READCON_METATENSOR_INCLUDE=,
@@ -528,7 +580,7 @@ After a fat =cargo build --features metatensor=, =build.rs= writes
 
 | File | When |
 |------+------|
-| =include/readcon-core.h= | Always; metatensor decls only under =#if defined(READCON_CORE_HAS_METATENSOR)=; opaque =mts_block_t= typedef |
+| =include/readcon-core.h= | Always; metatensor + zstd entry points **always declared** (lean stubs =-11=/NULL); opaque =mts_block_t=; =READCON_CORE_HAS_*= documents capability only |
 | =include/readcon-metatensor.h= | Prefer for C consumers: includes **=metatensor.h= first**, then defines the gate and =readcon-core.h= |
 | =metatensor.h= (from env INCLUDE or install) | Values/labels/free via sys C API; **required** to interpret the pointer |
 
@@ -598,25 +650,27 @@ runs lean (=chemfiles=) and fat (=chemfiles,metatensor=) via
 on CI (SIGFPE under gfortran traps); chemfiles stays on Rust CI. Python/Julia:
 no first-class TensorBlock helpers (matrix =n/a=); use C or Rust.
 
-* Builder DLPack export (C / Fortran)
+* Builder and frame DLPack export (C / Fortran)
 
-Owned =DLManagedTensorVersioned= tensors from a =ConFrameBuilder=
-(mirror of =dlpack.h= layout). Fortran binds the C struct fields
-(=dl_managed_tensor_versioned_t= / =dl_tensor_t=) for =dlpack_inspect=
-(ndim, shape, dtype bits) and =dlpack_data_ptr=.
+Owned =DLManagedTensorVersioned= tensors (mirror of =dlpack.h=). Fortran binds
+struct fields for =dlpack_inspect= (ndim, shape, **dtype bits**) and
+=dlpack_data_ptr=. **Inspect dtype before casting the data pointer**—do not
+require host =real64= solely because CON text uses binary64; use the bits field
+(64 for float sections today; 64 uint for atom ids).
 
-| Section | C ABI | Fortran method |
-|---------+-------+----------------|
-| positions =[N,3]= | =rkr_frame_builder_positions_dlpack= | =bd%positions_dlpack= |
-| velocities | =…_velocities_dlpack= | =bd%velocities_dlpack= |
+| Section | C (builder / frame) | Fortran |
+|---------+---------------------+---------|
+| positions =[N,3]= | =rkr_frame_builder_positions_dlpack= / =rkr_frame_positions_dlpack= | =bd%positions_dlpack= |
+| velocities | =…_velocities_dlpack= (frame + builder) | =bd%velocities_dlpack= |
 | forces | =…_forces_dlpack= | =bd%forces_dlpack= |
 | atom energies | =…_atom_energies_dlpack= | =bd%atom_energies_dlpack= |
-| masses =[N]= | =…_masses_dlpack= | =bd%masses_dlpack= |
-| atom ids =[N]= u64 | =…_atom_ids_dlpack= | =bd%atom_ids_dlpack= |
+| masses =[N]= | =…_masses_dlpack= (builder) | =bd%masses_dlpack= |
+| atom ids =[N]= | =…_atom_ids_dlpack= (builder; uint) | =bd%atom_ids_dlpack= |
 | free | =rkr_dlpack_delete= | =bd%dlpack_delete= |
 
-Absent optional sections return =RKR_STATUS_SECTION_ABSENT=. Not
-zero-copy views of live builder storage (owned clones only).
+Absent optional sections return =RKR_STATUS_SECTION_ABSENT=. Builder exports are
+owned clones, not live views of internal storage. Frame =copy_*= helpers still
+take =double*= for hosts that already use f64; prefer DLPack when interoperating.
 
 * Compression formats
 

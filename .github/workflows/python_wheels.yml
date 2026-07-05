@@ -25,6 +25,10 @@ env:
   CARGO_HTTP_MULTIPLEXING: "false"
   CARGO_NET_RETRY: "10"
   CARGO_HTTP_TIMEOUT: "120"
+  # Avoid mold/lld linker breakage in manylinux maturin images (readcon-core-u08i).
+  # Prefer the system BFD linker for stable cdylib links.
+  RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: "cc"
 
 jobs:
   # Lean `readcon` + chemfiles-linked `readcon-chemfiles` (separate PyPI names,

@@ -121,28 +121,47 @@ single symbol column; import stores optional sidecars
 ``chemfiles_atom_names`` / ``chemfiles_atom_types`` (chemfiles/=atom\ :sub:`id`\= order)
 and restores them when projecting for selection.
 
-What selection does under the hood
-----------------------------------
+How does selection work on a CON frame?
+---------------------------------------
 
-1. Build a temporary chemfiles ``Frame`` from CON positions, cell, optional
-   bonds, and name/type sidecars.
+You pass a selection string; the library returns matches as CON ``atom_data``
+indices (type-grouped order on that frame). Typical strings:
 
-2. Run chemfiles ``Selection`` on that frame.
+- *Always useful*: ``name H``, ``type O``, ``all`` (need symbols, or import sidecars
+  for display names distinct from ``symbol``).
+- *Need topology*: ``bonds:`` / ``angles:`` / ``dihedrals:`` and ``is_bonded`` /
+  ``is_angle`` / ``is_dihedral`` when ``metadata["bonds"]`` is present. Angles and
+  dihedrals are derived from the pair list at evaluation time; v0.13 does not
+  store them as separate on-disk sections.
+- *Empty topology*: without ``bonds``, topology selectors return no matches (not
+  a hard error unless the string is invalid).
 
-3. Map match indices back as CON ``atom_data`` indices (already in that order
-   on the projected frame).
+Under the hood, evaluation may go through a small optional ingress stack
+(currently chemfiles when that feature is linked). Callers do not need to care:
+the public APIs (``select_on_frame``, ``select_atom_indices``, ``rkr_frame_select``,
+trajectory helpers such as ``select_atom_positions_on_frames``) all speak CON
+indices.
 
-Without bonds, atom selectors (``name``, ``type``, ``all``) still work;
-topology selectors (``bonds:``, ``angles:``, ``is_bonded``, …) yield no matches or
-empty results—not a hard error unless the grammar is invalid.
+What selection cannot see on CON
+--------------------------------
 
-Gaps (honest limits)
---------------------
+The ``con`` format is deliberately small. Selection only sees what is on the
+frame (plus a few import sidecars). In particular:
 
-Residue/=resname= filters, full chemfiles property surface, improper
-topology extras, and numeric geometry assertion blocks from chemfiles
-``tests/selection.cpp`` are not fully mirrored. See `bindings <bindings.rst>`_ and
-`reference <chemfiles-reference.rst>`_ for the supported subset.
+- *No residues*: there is no residue table, so ``resname`` and residue-centric
+  filters have nothing to attach to. Import does not invent residues.
+- *Thin properties*: optional ``chemfiles_atom_properties`` (and similar) may
+  carry a subset of foreign keys after conversion; most per-atom property maps
+  from other formats are dropped.
+- *Pair bonds only*: ``bonds`` is an undirected edge list. No impropers, no ring
+  tables, no residue connectivity beyond those pairs.
+- *No geometry minidialect*: distance / angle / dihedral *threshold* strings
+  that depend on carefully staged extra atoms (as in some third-party test
+  suites) are not part of the CON regression surface. A string may still parse;
+  that is not a promise of behaviour from another toolkit.
+
+APIs and install matrices: `bindings <bindings.rst>`_,
+`reference <chemfiles-reference.rst>`_ (feature-gated conversion stack).
 
 Place in the LODE / eOn ecosystem
 ---------------------------------

@@ -44,49 +44,34 @@ entry is a 0-based ``atom_data`` index pair (optionally with chemfiles-style
 order). It enables tools such as chemfiles selection (``bonds:`` / ``angles:`` /
 ``is_bonded``) when the library is built with ``--features chemfiles``.
 
-3 How does chemfiles fit in?
-----------------------------
+How do I select atoms (and optional bonds) on a CON frame?
+---------------------------------------------------------
 
-Chemfiles is an optional Cargo/build feature (default off for lean C-only
-builds and for the default PyPI wheel). When enabled, readcon-core provides:
+Selection is a CON API: strings such as ``name H`` or ``bonds: all`` return
+``atom_data`` indices (or structured matches) via ``select_on_frame`` /
+``select_atom_indices`` / ``rkr_frame_select`` and language wrappers. ``name`` /
+``type`` / ``all`` need only symbols. Topology selectors need ``metadata["bonds"]``
+(hand-authored or filled when converting *into* CON). All languages share one
+evaluator.
 
-1. A **multi-format converter** (``chemfiles_import``): chemfiles ``Frame`` /
-   trajectory path or memory → ``ConFrame``, with optional ``metadata["bonds"]``
-   and name/type sidecars.
+The ``con`` format has no residue table, stores pair ``bonds`` only, and keeps a
+thin optional property subset after foreign-format import. So ``resname``, most
+external property maps, impropers, and geometry-threshold minidialects are not
+on the selection surface—there is simply no data for them. Detail:
+``chemfiles-explain`` (*What selection cannot see on CON*).
 
-2. A **bond / angle / atom selector** (``chemfiles_selection``): chemfiles
-   selection-language strings evaluated on a ``ConFrame`` after projecting
-   geometry and topology into a temporary chemfiles frame
-   (``select_on_frame`` / ``rkr_frame_select`` / Rust ``select_atom_indices``).
+Foreign formats (XYZ, PDB, …) enter through an *optional* conversion feature
+(Cargo ``chemfiles``, PyPI ``readcon-chemfiles``). Lean builds still expose the
+selection *symbols* but error clearly until that feature is linked. Docs for
+conversion live under ``docs/orgmode/chemfiles-*.org``; language APIs in
+``bindings``; on-disk ``bonds`` in ``spec``.
 
-Documentation is Diátaxis-shaped under ``docs/orgmode/chemfiles-*.org``:
+On *import* only, display names such as ``H1`` versus types such as ``H`` may be
+kept in sidecars (``chemfiles_atom_names`` / ``chemfiles_atom_types``); the on-disk
+column remains a single ``symbol``. Hand-built frames without sidecars use
+``symbol`` for both.
 
-- Tutorial (conversion-first): ``chemfiles-tutorial.org``
-
-- How-to recipes: ``chemfiles-howto.org``
-
-- Explanation (optional feature, bonds, indices): ``chemfiles-explain.org``
-
-- Reference (APIs, grammar, install matrix): ``chemfiles-reference.org``
-
-Binding matrix and gaps: ``bindings.org``. On-disk ``bonds``: ``spec.org``.
-
-Supported topology selectors (``bonds:``, ``angles:``, ``dihedrals:``, ``is_bonded``,
-``is_angle``, ``is_dihedral``) need ``bonds`` or an import that carried topology;
-name/type/=all= work without it. Surfaces share one evaluator; multiset
-parity with chemfiles is tested against ``tests/selection.cpp`` topology cases
-(see ``chemfiles_selection_cpp_regression``).
-
-Chemfiles display ``name`` vs atomic ``type`` (e.g. ``H1`` / ``H``) is preserved on
-****import**** via metadata ``chemfiles_atom_names`` / ``chemfiles_atom_types`` (not a
-second CON column); projection restores both for selection. Hand-built frames
-without those keys use ``symbol`` for both.
-
-Remaining gaps: residue/=resname=, extra props not copied on import, improper
-extras beyond ``bonds``, numeric geometry blocks from full ``selection.cpp`` unless
-trivially projected; multiset-after-remap not byte-identical chemfiles indices.
-
-4 What problems does atom\ :sub:`id`\ solve?
+What problems does atom\ :sub:`id`\ solve?
 --------------------------------------------
 
 The ``con`` format groups atoms by element type. A structure with atoms
@@ -336,3 +321,21 @@ behavior across languages.
 The conversion preserves ``atom_id`` (via a custom per-atom array),
 velocities, forces (via SinglePointCalculator), masses, and
 constraints (FixAtoms).
+
+15 Why both ``readcon-core.h`` and ``metatensor.h`` / ``readcon-metatensor.h``?
+-------------------------------------------------------------------------------
+
+readcon's cbindgen surface and metatensor-sys's cbindgen surface are separate
+crates. We hand off opaque ``mts_block_t *``; values and labels use metatensor's
+C API. Prefer ``include/readcon-metatensor.h`` (``metatensor.h`` first). Lean builds
+still export metatensor entry points that return ``RKR_STATUS_FEATURE_DISABLED``
+(``-11``), distinct from internal error (``-7``).
+
+16 Lean vs fat ``libreadcon_core`` for C/Fortran?
+-------------------------------------------------
+
+Same symbol names either way. Without ``--features metatensor``, blocks return
+``-11``. Without ``--features zstd``, ``create_writer_zstd_*`` returns a null writer.
+gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C aliases) are
+always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
+lists include/lib paths for ``libmetatensor``.

@@ -519,3 +519,103 @@ the atom inside `frame.atoms`.
 function build_atom_id_index(frame::ConFrame)::Dict{UInt64, Int}
     Dict{UInt64, Int}(atom.atom_id => i for (i, atom) in enumerate(frame.atoms))
 end
+
+
+"""Read all frames (batch). Prefer `read_con` for lazy iteration."""
+function read_all_frames(path::String)::Vector{ConFrame}
+    frames = ConFrame[]
+    n = Ref{UInt}(0)
+    arr = ccall(_lib_symbol(:rkr_read_all_frames), Ptr{Ptr{Cvoid}}, (Cstring, Ref{UInt}), path, n)
+    arr == C_NULL && return frames
+    nn = Int(n[])
+    ptrs = unsafe_wrap(Array, arr, nn; own=false)
+    for i in 1:nn
+        push!(frames, ConFrame(ptrs[i]; own=true))
+    end
+    ccall(_lib_symbol(:free_rkr_frame_ptr_array), Cvoid, (Ptr{Ptr{Cvoid}}, Csize_t), arr, nn)
+    return frames
+end
+
+"""Contiguous positions (N×3) without AoS CFrame materialization."""
+function positions_matrix(frame::ConFrame)::Matrix{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return zeros(0, 3)
+    buf = Vector{Float64}(undef, 3 * n)
+    st = ccall(_lib_symbol(:rkr_frame_copy_positions), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, "rkr_frame_copy_positions")
+    return permutedims(reshape(buf, 3, n))  # N×3
+end
+
+
+function _section_matrix_3(frame::ConFrame, sym::Symbol)::Matrix{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return zeros(0, 3)
+    buf = Vector{Float64}(undef, 3 * n)
+    st = ccall(_lib_symbol(sym), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, String(sym))
+    return permutedims(reshape(buf, 3, n))
+end
+
+function velocities_matrix(frame::ConFrame)::Matrix{Float64}
+    _section_matrix_3(frame, :rkr_frame_copy_velocities)
+end
+
+function forces_matrix(frame::ConFrame)::Matrix{Float64}
+    _section_matrix_3(frame, :rkr_frame_copy_forces)
+end
+
+function masses_vector(frame::ConFrame)::Vector{Float64}
+    n = Int(ccall(_lib_symbol(:rkr_frame_atom_count), Csize_t, (Ptr{Cvoid},), frame.handle))
+    n == 0 && return Float64[]
+    buf = Vector{Float64}(undef, n)
+    st = ccall(_lib_symbol(:rkr_frame_copy_masses), Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+               frame.handle, buf, length(buf))
+    _check_status(st, "rkr_frame_copy_masses")
+    return buf
+end
+
+# --- Campaign index projection (readcon_core::index_proj via C ABI) ---
+
+function _with_frame_handle(frame::ConFrame, f)
+    handle = _build_frame_handle(frame)
+    try
+        return f(handle)
+    finally
+        handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
+    end
+end
+
+"""Finite campaign energy (NaN → nothing); aligns with readcon-db energy index."""
+function index_energy(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_index_energy), Float64, (Ptr{Cvoid},), h)))
+end
+
+function composition_formula(frame::ConFrame)
+    _with_frame_handle(frame, h -> _take_string(ccall(_lib_symbol(:rkr_frame_composition_formula), Ptr{UInt8}, (Ptr{Cvoid},), h)))
+end
+
+function total_mass(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_total_mass), Float64, (Ptr{Cvoid},), h)))
+end
+
+function cell_volume(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_cell_volume), Float64, (Ptr{Cvoid},), h)))
+end
+
+function fmax(frame::ConFrame)
+    _with_frame_handle(frame, h -> _maybe_float(ccall(_lib_symbol(:rkr_frame_fmax), Float64, (Ptr{Cvoid},), h)))
+end
+
+function sections_mask(frame::ConFrame)
+    _with_frame_handle(frame, h -> ccall(_lib_symbol(:rkr_frame_sections_mask), UInt8, (Ptr{Cvoid},), h))
+end
+
+function index_natoms(frame::ConFrame)
+    _with_frame_handle(frame, h -> ccall(_lib_symbol(:rkr_frame_index_natoms), UInt32, (Ptr{Cvoid},), h))
+end
+
+function index_projection_json(frame::ConFrame)
+    _with_frame_handle(frame, h -> _take_string(ccall(_lib_symbol(:rkr_frame_index_projection_json), Ptr{UInt8}, (Ptr{Cvoid},), h)))
+end

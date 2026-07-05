@@ -66,7 +66,7 @@ task.
     | Chemfiles import / selection                                                          | yes (``chemfiles`` feature)    | ``select_on_frame`` / ``select_atom_indices``    | ``select_on_frame`` / ``select_atom_indices`` (FFI; chemfiles lib) | ``rkr_frame_select`` / ``read_chemfiles_first``       | ``rkr_frame_select``                                         | ``ConFrame::select`` |
     +---------------------------------------------------------------------------------------+--------------------------------+--------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+----------------------+
 
-****Chemfiles selection parity (supported subset).**** One evaluator core; every
+****Selection (shared evaluator).**** One evaluator core; every
 surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 ``Selection`` after projecting the frame). Build with ``--features chemfiles``;
 probe with ``rkr_has_chemfiles_support()`` / ``has_chemfiles_support()`` (Julia) /
@@ -152,26 +152,15 @@ Supported contexts when topology is present (``metadata["bonds"]``, 0-based
 ``three:`` / ``four:``, and predicates ``is_bonded`` / ``is_angle`` / ``is_dihedral`` on
 the projected chemfiles graph. Atom/name/type/~all~/~none~ work without bonds.
 
-****Index space / multiset contract.**** CON type-groups atoms on write/import;
-bond endpoints are stored in ``atom_data`` order (chemfiles import remaps via
-``atom_id``). Surfaces return matches in that CON order. Parity with chemfiles
-direct evaluation is an **undirected multiset** after remapping chemfiles
-indices through ~atom\ :sub:`id`\~—not byte-identical index lists.
+****Selection on CON frames.**** With ``metadata["bonds"]`` (0-based ``atom_data``
+pairs): ``bonds:`` / ``angles:`` / ``dihedrals:`` and ``is_bonded`` family. Without bonds,
+``name`` / ``type`` / ``all`` still work. Matches are CON ``atom_data`` indices.
 
-****Chemfiles name vs type (fixed for import path).**** On-disk CON still has one
-``symbol`` column (element/type for layout). Chemfiles import additionally stores
-optional metadata sidecars ``chemfiles_atom_names`` / ``chemfiles_atom_types``
-(indexed by chemfiles / ``atom_id`` order). Selection projection restores display
-``name`` and atomic ``type`` so ``name H1`` and ``type H`` both work after import.
-Hand-built frames without sidecars use ``symbol`` for both (same as before).
+****Name vs type after foreign import.**** One on-disk ``symbol``; optional sidecars
+for display names after conversion.
 
-****Remaining documented gaps (not claimed parity).**** Residue/~resname~ and extra
-atom/residue properties (beyond what import already copies into
-``chemfiles_atom_properties`` / frame extras). Improper topology extras not
-stored in CON ``bonds``. Numeric geometry assertion blocks from chemfiles
-``tests/selection.cpp`` (``distance`` / ``angle`` / ``dihedral`` / ``out_of_plane``
-thresholds with extra atoms) unless trivially projected. Multiset-after-remap
-parity, not byte-identical chemfiles index lists.
+****Format limits.**** No residues, pair ``bonds`` only, thin properties—see
+`What selection cannot see on CON <chemfiles-explain.rst>`_.
 
 3 Python (PyO3)
 ---------------
@@ -279,12 +268,11 @@ parity, not byte-identical chemfiles index lists.
 3.5 NumPy array views and DLPack interop (v0.10.0+)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Every per-atom quantity has a contiguous NumPy ndarray accessor.
-Vector quantities are ``[N, 3]`` float64 arrays in the type-grouped
-order used by the underlying frame; scalars are ``[N]``. NumPy 1.22+
-implements ``__dlpack__`` on its arrays, so the returned ndarrays
-interoperate zero-copy with torch / jax / cupy without readcon-core
-wiring DLPack itself.
+Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
+``atom_data`` order). Prefer **DLPack** and read ``ndim`` / ``shape`` / ``dtype``;
+do not require host ``f64`` copies. On-disk CON is IEEE binary64 today
+(``kDLFloat`` / 64 for vectors; ``kDLUInt`` / 64 for atom ids). C ``copy_*``
+helpers remain for callers that already hold ``double`` buffers.
 
 .. code:: python
 
@@ -574,7 +562,7 @@ Builder metadata helpers:
 or ``mts_block_free``, not both). We do ****not**** merge metatensor's cbindgen
 header into ``readcon-core.h``; two headers, one pointer ABI.
 
-****Lean vs fat (honest gates)****
+****Lean vs fat builds****
 
 .. table::
 
@@ -773,3 +761,10 @@ Full API: ``frame_t``, ``iterator_t``, ``builder_t``, ``writer_t``, all six DLPa
 exports, four metatensor block exports (when linked), ``symbol_to_z`` /
 ``z_to_symbol``, ``has_chemfiles_support``. Details: ``fortran/README.md``.
 CI: ``.github/workflows/ci_fortran.yml`` (lean and fat jobs).
+
+.. note:: Frame section buffers and multi-frame selection
+   Canonical narrative lives in ``docs/orgmode/bindings.org`` (export via docs CI).
+   C APIs: ``read_con_file_iterator`` (gzip/zstd-aware), ``read_con_string_iterator``,
+   ``read_con_buffer_iterator``, ``rkr_frame_atom_count``, ``rkr_frame_copy_*``,
+   ``free_rkr_frame_ptr_array``. Python: ``select_atom_positions_on_frames``,
+   ``evaluate_selection_on_frames``. Lean builds use ``RKR_STATUS_FEATURE_DISABLED`` (-11).

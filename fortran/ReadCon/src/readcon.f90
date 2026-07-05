@@ -7,7 +7,10 @@ module readcon
   private
 
   public :: rkr_status_success, rkr_status_null_pointer, rkr_status_selection_error
-  public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_feature_disabled
+  public :: rkr_status_invalid_utf8, rkr_status_invalid_json, rkr_status_io_error
+  public :: rkr_status_index_out_of_bounds, rkr_status_buffer_too_small
+  public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_validation_error
+  public :: rkr_status_feature_disabled
   public :: catom_t, cframe_t
   public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
   public :: dlpack_inspect, dlpack_data_ptr
@@ -17,15 +20,22 @@ module readcon
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
-  public :: read_first_frame, open_iterator, new_builder, open_writer
+  public :: read_first_frame, read_all_frames, open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
+  public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
   public :: read_chemfiles_first
 
   ! Mirror include/readcon-core.h RKRStatus (keep in sync with src/ffi.rs)
   integer(c_int), parameter :: rkr_status_success = 0
   integer(c_int), parameter :: rkr_status_null_pointer = -1
+  integer(c_int), parameter :: rkr_status_invalid_utf8 = -2
+  integer(c_int), parameter :: rkr_status_invalid_json = -3
+  integer(c_int), parameter :: rkr_status_io_error = -4
+  integer(c_int), parameter :: rkr_status_index_out_of_bounds = -5
+  integer(c_int), parameter :: rkr_status_buffer_too_small = -6
   integer(c_int), parameter :: rkr_status_internal_error = -7
   integer(c_int), parameter :: rkr_status_section_absent = -8
+  integer(c_int), parameter :: rkr_status_validation_error = -9
   integer(c_int), parameter :: rkr_status_selection_error = -10
   integer(c_int), parameter :: rkr_status_feature_disabled = -11
 
@@ -105,6 +115,19 @@ module readcon
     procedure :: has_forces => fr_has_frc
     procedure :: metadata_json => fr_meta
     procedure :: energy => fr_energy
+    procedure :: index_energy => fr_index_energy
+    procedure :: composition_formula => fr_composition_formula
+    procedure :: total_mass => fr_total_mass
+    procedure :: cell_volume => fr_cell_volume
+    procedure :: fmax => fr_fmax
+    procedure :: sections_mask => fr_sections_mask
+    procedure :: index_natoms => fr_index_natoms
+    procedure :: index_projection_json => fr_index_projection_json
+    procedure :: atom_count => fr_atom_count
+    procedure :: copy_positions => fr_copy_positions
+    procedure :: copy_velocities => fr_copy_velocities
+    procedure :: copy_forces => fr_copy_forces
+    procedure :: copy_masses => fr_copy_masses
     procedure :: potential_type => fr_pot
     procedure :: frame_index => fr_fidx
     procedure :: sim_time => fr_time
@@ -159,6 +182,8 @@ module readcon
     procedure :: valid => wr_valid
     procedure :: free => wr_free
     procedure :: extend_one => wr_extend_one
+    procedure :: set_canonical => wr_set_canonical
+    procedure :: is_canonical => wr_is_canonical
   end type
 
   interface
@@ -202,10 +227,101 @@ module readcon
       type(c_ptr), value :: f
       type(c_ptr) :: c_rkr_frame_metadata_json
     end function
+
+    function c_rkr_frame_atom_count(f) bind(C, name="rkr_frame_atom_count")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: f
+      integer(c_size_t) :: c_rkr_frame_atom_count
+    end function
+    function c_rkr_frame_copy_positions(f, out, n) bind(C, name="rkr_frame_copy_positions")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_positions
+    end function
+    function c_rkr_frame_copy_velocities(f, out, n) bind(C, name="rkr_frame_copy_velocities")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_velocities
+    end function
+    function c_rkr_frame_copy_forces(f, out, n) bind(C, name="rkr_frame_copy_forces")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_forces
+    end function
+    function c_rkr_frame_copy_masses(f, out, n) bind(C, name="rkr_frame_copy_masses")
+      import :: c_ptr, c_int, c_double, c_size_t
+      type(c_ptr), value :: f
+      real(c_double), intent(out) :: out(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_masses
+    end function
+    subroutine c_free_rkr_frame_ptr_array(arr, n) bind(C, name="free_rkr_frame_ptr_array")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: arr
+      integer(c_size_t), value :: n
+    end subroutine
+
+    function c_rkr_read_all_frames(fn, nout) bind(C, name="rkr_read_all_frames")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), intent(out) :: nout
+      type(c_ptr) :: c_rkr_read_all_frames
+    end function
+    subroutine c_free_rkr_frame_array(arr, n) bind(C, name="free_rkr_frame_array")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: arr
+      integer(c_size_t), value :: n
+    end subroutine
     function c_rkr_frame_energy(f) bind(C, name="rkr_frame_energy")
       import :: c_ptr, c_double
       type(c_ptr), value :: f
       real(c_double) :: c_rkr_frame_energy
+    end function
+    function c_rkr_frame_index_energy(f) bind(C, name="rkr_frame_index_energy")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_index_energy
+    end function
+    function c_rkr_frame_composition_formula(f) bind(C, name="rkr_frame_composition_formula")
+      import :: c_ptr
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_composition_formula
+    end function
+    function c_rkr_frame_total_mass(f) bind(C, name="rkr_frame_total_mass")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_total_mass
+    end function
+    function c_rkr_frame_cell_volume(f) bind(C, name="rkr_frame_cell_volume")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_cell_volume
+    end function
+    function c_rkr_frame_fmax(f) bind(C, name="rkr_frame_fmax")
+      import :: c_ptr, c_double
+      type(c_ptr), value :: f
+      real(c_double) :: c_rkr_frame_fmax
+    end function
+    function c_rkr_frame_sections_mask(f) bind(C, name="rkr_frame_sections_mask")
+      import :: c_ptr, c_int8_t
+      type(c_ptr), value :: f
+      integer(c_int8_t) :: c_rkr_frame_sections_mask
+    end function
+    function c_rkr_frame_index_natoms(f) bind(C, name="rkr_frame_index_natoms")
+      import :: c_ptr, c_int32_t
+      type(c_ptr), value :: f
+      integer(c_int32_t) :: c_rkr_frame_index_natoms
+    end function
+    function c_rkr_frame_index_projection_json(f) bind(C, name="rkr_frame_index_projection_json")
+      import :: c_ptr
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_index_projection_json
     end function
     function c_rkr_frame_potential_type(f) bind(C, name="rkr_frame_potential_type")
       import :: c_ptr
@@ -295,13 +411,23 @@ module readcon
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_create_writer_gzip_c
     end function
-#ifdef READCON_HAS_ZSTD
+    function c_create_writer_gzip_with_precision_c(fn, prec) bind(C, name="create_writer_gzip_with_precision_c")
+      import :: c_char, c_ptr, c_int8_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_int8_t), value :: prec
+      type(c_ptr) :: c_create_writer_gzip_with_precision_c
+    end function
+    function c_create_writer_zstd_with_precision_c(fn, prec) bind(C, name="create_writer_zstd_with_precision_c")
+      import :: c_char, c_ptr, c_int8_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_int8_t), value :: prec
+      type(c_ptr) :: c_create_writer_zstd_with_precision_c
+    end function
     function c_create_writer_zstd_c(fn) bind(C, name="create_writer_zstd_c")
       import :: c_char, c_ptr
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_create_writer_zstd_c
     end function
-#endif
     subroutine c_free_rkr_writer(w) bind(C, name="free_rkr_writer")
       import :: c_ptr
       type(c_ptr), value :: w
@@ -312,6 +438,17 @@ module readcon
       type(c_ptr), intent(in) :: frames(*)
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_writer_extend
+    end function
+    function c_rkr_writer_set_canonical(w, canonical) bind(C, name="rkr_writer_set_canonical")
+      import :: c_ptr, c_int8_t, c_int
+      type(c_ptr), value :: w
+      integer(c_int8_t), value :: canonical
+      integer(c_int) :: c_rkr_writer_set_canonical
+    end function
+    function c_rkr_writer_is_canonical(w) bind(C, name="rkr_writer_is_canonical")
+      import :: c_ptr, c_int8_t
+      type(c_ptr), value :: w
+      integer(c_int8_t) :: c_rkr_writer_is_canonical
     end function
     function c_rkr_frame_new(cell, angles, pb0, pb1, pob0, pob1) bind(C, name="rkr_frame_new")
       import :: c_ptr, c_double, c_char
@@ -435,7 +572,6 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: tensor
     end subroutine
-#ifdef READCON_HAS_METATENSOR
     ! Metatensor cbindgen C API handles (mts_block_t*) — ownership via rkr_mts_block_free
     function c_rkr_frame_metatensor_positions_block(f, out) &
          bind(C, name="rkr_frame_metatensor_positions_block")
@@ -469,7 +605,6 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: block
     end subroutine
-#endif
     function c_rkr_selection_result_primary_indices(r, out_idx, capacity, out_written) &
          bind(C, name="rkr_selection_result_primary_indices")
       import :: c_ptr, c_int, c_int64_t
@@ -561,6 +696,62 @@ contains
     call to_c(path, c)
     fr%handle = c_rkr_read_first_frame(c)
     fr%cview = c_null_ptr
+  end function
+
+
+  integer(c_size_t) function fr_atom_count(self)
+    class(frame_t), intent(in) :: self
+    fr_atom_count = 0_c_size_t
+    if (.not. c_associated(self%handle)) return
+    fr_atom_count = c_rkr_frame_atom_count(self%handle)
+  end function
+
+  integer function fr_copy_positions(self, pos)
+    ! pos(3, n) column-major Fortran layout from row-major C buffer
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: pos(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_positions = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(pos, 2) < n) then
+      fr_copy_positions = -6
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_positions(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_positions = st
+    if (st /= 0) return
+    do i = 1, n
+      pos(1, i) = real(flat(3*(i-1)+1), real64)
+      pos(2, i) = real(flat(3*(i-1)+2), real64)
+      pos(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  function read_all_frames(path) result(frames)
+    character(len=*), intent(in) :: path
+    type(frame_t), allocatable :: frames(:)
+    character(kind=c_char), allocatable :: c(:)
+    type(c_ptr) :: arr, fp
+    integer(c_size_t) :: n, i
+    type(c_ptr), pointer :: ptrs(:)
+    call to_c(path, c)
+    arr = c_rkr_read_all_frames(c, n)
+    if (.not. c_associated(arr) .or. n == 0_c_size_t) then
+      allocate(frames(0))
+      return
+    end if
+    call c_f_pointer(arr, ptrs, [n])
+    allocate(frames(n))
+    do i = 1_c_size_t, n
+      frames(i)%handle = ptrs(i)
+      frames(i)%cview = c_null_ptr
+    end do
+    call c_free_rkr_frame_ptr_array(arr, n)
   end function
 
   function open_iterator(path) result(it)
@@ -680,6 +871,64 @@ contains
     fr_energy = 0.0_real64
     if (.not. c_associated(self%handle)) return
     fr_energy = real(c_rkr_frame_energy(self%handle), real64)
+  end function
+
+  real(real64) function fr_index_energy(self)
+    class(frame_t), intent(in) :: self
+    fr_index_energy = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_index_energy = real(c_rkr_frame_index_energy(self%handle), real64)
+  end function
+
+  function fr_composition_formula(self) result(s)
+    class(frame_t), intent(in) :: self
+    character(len=:), allocatable :: s
+    s = ""
+    if (.not. c_associated(self%handle)) return
+    s = from_c(c_rkr_frame_composition_formula(self%handle), .true.)
+  end function
+
+  real(real64) function fr_total_mass(self)
+    class(frame_t), intent(in) :: self
+    fr_total_mass = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_total_mass = real(c_rkr_frame_total_mass(self%handle), real64)
+  end function
+
+  real(real64) function fr_cell_volume(self)
+    class(frame_t), intent(in) :: self
+    fr_cell_volume = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_cell_volume = real(c_rkr_frame_cell_volume(self%handle), real64)
+  end function
+
+  real(real64) function fr_fmax(self)
+    class(frame_t), intent(in) :: self
+    fr_fmax = 0.0_real64
+    if (.not. c_associated(self%handle)) return
+    fr_fmax = real(c_rkr_frame_fmax(self%handle), real64)
+  end function
+
+  integer(c_int8_t) function fr_sections_mask(self)
+    class(frame_t), intent(in) :: self
+    fr_sections_mask = 0_c_int8_t
+    if (.not. c_associated(self%handle)) return
+    fr_sections_mask = c_rkr_frame_sections_mask(self%handle)
+  end function
+
+  integer(c_int32_t) function fr_index_natoms(self)
+    class(frame_t), intent(in) :: self
+    fr_index_natoms = 0_c_int32_t
+    if (.not. c_associated(self%handle)) return
+    fr_index_natoms = c_rkr_frame_index_natoms(self%handle)
+  end function
+
+  function fr_index_projection_json(self) result(s)
+    class(frame_t), intent(in) :: self
+    character(len=:), allocatable :: s
+    s = "{}"
+    if (.not. c_associated(self%handle)) return
+    s = from_c(c_rkr_frame_index_projection_json(self%handle), .true.)
   end function
 
   function fr_pot(self) result(s)
@@ -901,6 +1150,24 @@ contains
     w%w = c_create_writer_from_path_c(c)
   end function
 
+  function open_writer_gzip_with_precision(path, precision) result(w)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: precision
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_gzip_with_precision_c(c, int(precision, c_int8_t))
+  end function
+
+  function open_writer_zstd_with_precision(path, precision) result(w)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: precision
+    type(writer_t) :: w
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    w%w = c_create_writer_zstd_with_precision_c(c, int(precision, c_int8_t))
+  end function
+
   function open_writer_gzip(path) result(w)
     ! Always in C ABI (create_writer_gzip_c)
     character(len=*), intent(in) :: path
@@ -911,18 +1178,11 @@ contains
   end function
 
   function open_writer_zstd(path) result(w)
-    ! Requires lib built with --features zstd and -DREADCON_HAS_ZSTD when compiling this module
     character(len=*), intent(in) :: path
     type(writer_t) :: w
     character(kind=c_char), allocatable :: c(:)
-    w%w = c_null_ptr
-#ifdef READCON_HAS_ZSTD
     call to_c(path, c)
     w%w = c_create_writer_zstd_c(c)
-#else
-    ! Associate remains null — caller checks wr_valid; no false success
-    if (.false.) call to_c(path, c)
-#endif
   end function
 
   logical function wr_valid(self)
@@ -937,6 +1197,23 @@ contains
       self%w = c_null_ptr
     end if
   end subroutine
+
+  integer function wr_set_canonical(self, on)
+    class(writer_t), intent(inout) :: self
+    logical, intent(in) :: on
+    integer(c_int8_t) :: flag
+    wr_set_canonical = rkr_status_null_pointer
+    if (.not. c_associated(self%w)) return
+    flag = merge(1_c_int8_t, 0_c_int8_t, on)
+    wr_set_canonical = int(c_rkr_writer_set_canonical(self%w, flag))
+  end function
+
+  logical function wr_is_canonical(self)
+    class(writer_t), intent(in) :: self
+    wr_is_canonical = .false.
+    if (.not. c_associated(self%w)) return
+    wr_is_canonical = (c_rkr_writer_is_canonical(self%w) /= 0_c_int8_t)
+  end function
 
   integer function wr_extend_one(self, fr)
     class(writer_t), intent(inout) :: self
@@ -1140,13 +1417,8 @@ contains
     block = c_null_ptr
     frame_metatensor_positions_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_positions_block = int(c_rkr_frame_metatensor_positions_block(fr%handle, block))
-#else
-    ! Lean lib omits metatensor C symbols (READCON_CORE_HAS_METATENSOR gate)
-    frame_metatensor_positions_block = rkr_status_feature_disabled
-    block = c_null_ptr
-#endif
+
   end function
 
   integer function frame_metatensor_velocities_block(fr, block)
@@ -1155,11 +1427,8 @@ contains
     block = c_null_ptr
     frame_metatensor_velocities_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_velocities_block = int(c_rkr_frame_metatensor_velocities_block(fr%handle, block))
-#else
-    frame_metatensor_velocities_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   integer function frame_metatensor_forces_block(fr, block)
@@ -1168,11 +1437,8 @@ contains
     block = c_null_ptr
     frame_metatensor_forces_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_forces_block = int(c_rkr_frame_metatensor_forces_block(fr%handle, block))
-#else
-    frame_metatensor_forces_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   integer function frame_metatensor_atom_energies_block(fr, block)
@@ -1181,20 +1447,87 @@ contains
     block = c_null_ptr
     frame_metatensor_atom_energies_block = rkr_status_null_pointer
     if (.not. c_associated(fr%handle)) return
-#ifdef READCON_HAS_METATENSOR
     frame_metatensor_atom_energies_block = int(c_rkr_frame_metatensor_atom_energies_block(fr%handle, block))
-#else
-    frame_metatensor_atom_energies_block = rkr_status_feature_disabled
-#endif
+
   end function
 
   subroutine mts_block_free_rkr(block)
     type(c_ptr), intent(inout) :: block
-#ifdef READCON_HAS_METATENSOR
     if (c_associated(block)) call c_rkr_mts_block_free(block)
-#endif
     block = c_null_ptr
   end subroutine
+
+
+  integer function fr_copy_velocities(self, vel)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: vel(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_velocities = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(vel, 2) < n) then
+      fr_copy_velocities = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_velocities(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_velocities = st
+    if (st /= 0) return
+    do i = 1, n
+      vel(1, i) = real(flat(3*(i-1)+1), real64)
+      vel(2, i) = real(flat(3*(i-1)+2), real64)
+      vel(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  integer function fr_copy_forces(self, frc)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: frc(:,:)
+    real(c_double), allocatable :: flat(:)
+    integer :: i, n, st
+    integer(c_size_t) :: nn
+    fr_copy_forces = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(frc, 2) < n) then
+      fr_copy_forces = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(3*n))
+    st = int(c_rkr_frame_copy_forces(self%handle, flat, int(3*n, c_size_t)))
+    fr_copy_forces = st
+    if (st /= 0) return
+    do i = 1, n
+      frc(1, i) = real(flat(3*(i-1)+1), real64)
+      frc(2, i) = real(flat(3*(i-1)+2), real64)
+      frc(3, i) = real(flat(3*(i-1)+3), real64)
+    end do
+  end function
+
+  integer function fr_copy_masses(self, mass)
+    class(frame_t), intent(in) :: self
+    real(real64), intent(out) :: mass(:)
+    real(c_double), allocatable :: flat(:)
+    integer :: n, st
+    integer(c_size_t) :: nn
+    fr_copy_masses = rkr_status_null_pointer
+    if (.not. c_associated(self%handle)) return
+    nn = c_rkr_frame_atom_count(self%handle)
+    n = int(nn)
+    if (size(mass) < n) then
+      fr_copy_masses = rkr_status_buffer_too_small
+      return
+    end if
+    allocate(flat(n))
+    st = int(c_rkr_frame_copy_masses(self%handle, flat, int(n, c_size_t)))
+    fr_copy_masses = st
+    if (st /= 0) return
+    mass(1:n) = real(flat(1:n), real64)
+  end function
 
 
 end module readcon

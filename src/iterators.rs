@@ -18,7 +18,7 @@ use std::path::Path;
 /// The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
-    lines: Peekable<std::str::Lines<'a>>,
+    pub(crate) lines: Peekable<std::str::Lines<'a>>,
     /// Raw bytes of the source string, alongside a cursor. Used by
     /// [`Self::forward_fast`] to skip frames via direct memchr-bulk
     /// `\n` lookup instead of advancing the line iterator one call at
@@ -240,6 +240,40 @@ impl<'a> ConFrameIterator<'a> {
 
         Some(Ok(()))
     }
+
+    /// Next frame plus the exact substring of the buffer passed to [`Self::new`].
+    ///
+    /// **Corpus ingest contract:** successive successful spans from the same
+    /// `file_contents` are contiguous (`end` of frame *i* equals `start` of frame
+    /// *i+1*) and, for a buffer that is only multi-frame CON (no prefix garbage),
+    /// concatenating all spans reproduces the trajectory text. Campaign stores
+    /// (`readcon-db`) must persist these spans as authoritative blobs—do not
+    /// re-serialize on the hot ingest path unless the caller supplied in-memory
+    /// [`types::ConFrame`] values without source text.
+    ///
+    /// See also [`crate::index_proj::frame_byte_spans`] and
+    /// [`crate::index_proj::spans_cover_buffer`].
+    pub fn next_with_raw_span(
+        &mut self,
+        file_contents: &'a str,
+    ) -> Option<Result<(types::ConFrame, &'a str), error::ParseError>> {
+        let base = file_contents.as_ptr() as usize;
+        let start = {
+            let line = self.lines.peek()?;
+            line.as_ptr() as usize - base
+        };
+        let frame = match self.next()? {
+            Ok(f) => f,
+            Err(e) => return Some(Err(e)),
+        };
+        let end = match self.lines.peek() {
+            Some(line) => line.as_ptr() as usize - base,
+            None => file_contents.len(),
+        };
+        debug_assert!(end >= start && end <= file_contents.len());
+        // frame already went through next() → sync_arrays_from_atom_data
+        Some(Ok((frame, &file_contents[start..end])))
+    }
 }
 
 impl<'a> Iterator for ConFrameIterator<'a> {
@@ -263,11 +297,82 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             Err(e) => return Some(Err(e)),
         };
         // Parse declared sections (velocities, forces) or fall back to legacy velocity detection
+        // (mutates AoS only; SoA sections filled below).
         match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data) {
             Ok(_) => {}
             Err(e) => return Some(Err(e)),
         }
+        frame.sync_arrays_from_atom_data();
         Some(Ok(frame))
+    }
+}
+
+#[cfg(test)]
+mod aos_soa_agreement_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn iterator_vel_forces_soa_matches_aos() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2_vel_forces.con");
+        let text = std::fs::read_to_string(&p).expect("fixture");
+        let fr = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = fr.atom_data.len();
+        assert!(n > 0);
+        assert_eq!(fr.positions.nrows(), n);
+        let has_vel = fr.atom_data.iter().any(|a| a.velocity.is_some());
+        let has_frc = fr.atom_data.iter().any(|a| a.force.is_some());
+        if has_vel {
+            assert_eq!(
+                fr.velocities.nrows(),
+                n,
+                "SoA velocities must match AoS after section parse"
+            );
+        }
+        if has_frc {
+            assert_eq!(fr.forces.nrows(), n, "SoA forces must match AoS");
+        }
+        for (i, a) in fr.atom_data.iter().enumerate() {
+            let p = fr.positions.as_f64_row(i);
+            assert_eq!([a.x, a.y, a.z], p);
+            if let Some(v) = a.velocity {
+                assert_eq!(v, fr.velocities.as_f64_row(i));
+            }
+            if let Some(f) = a.force {
+                assert_eq!(f, fr.forces.as_f64_row(i));
+            }
+        }
+    }
+
+    /// After SoA-primary parse, section sync must not require rewriting positions
+    /// (nrows already equals N); forces SoA still filled from AoS.
+    #[test]
+    fn sync_skips_pos_when_nrows_matches_keeps_force_soa() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2_forces.con");
+        let text = std::fs::read_to_string(&p).expect("fixture");
+        let fr = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = fr.atom_data.len();
+        assert_eq!(fr.positions.nrows(), n);
+        assert_eq!(fr.forces.nrows(), n);
+        // Snapshot first position SoA row then re-sync; coords must stay bit-identical
+        // (no needless rewrite would change nothing but we still require agreement).
+        let p0 = fr.positions.as_f64_row(0);
+        let mut fr2 = fr.clone();
+        fr2.sync_arrays_from_atom_data();
+        assert_eq!(fr2.positions.as_f64_row(0), p0);
+        assert_eq!(fr2.forces.nrows(), n);
+        assert_eq!(
+            fr2.forces.as_f64_row(0),
+            fr2.atom_data[0].force.expect("force")
+        );
     }
 }
 
@@ -280,6 +385,38 @@ impl<'a> Iterator for ConFrameIterator<'a> {
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
+    #[cfg(feature = "parallel")]
+    {
+        // Cheap frame-count estimate: CON frames typically begin with a header
+        // line then a JSON metadata line starting with '{'. Count '{' at line
+        // starts as a proxy; fall back to sequential when too few frames for
+        // Rayon to amortize pool/scheduling overhead (small multi-frame files).
+        let approx_frames = text
+            .as_bytes()
+            .windows(2)
+            .filter(|w| w[0] == b'\n' && w[1] == b'{')
+            .count()
+            .max(if text.as_bytes().first() == Some(&b'{') {
+                1
+            } else {
+                0
+            });
+        // Prefer sequential on tiny multi-frame blobs (Rayon pool overhead);
+        // prefer parallel when frame count or byte size amortizes it (large
+        // cells / long trajectories vs lean C++ XYZ readers).
+        const PARALLEL_FRAME_THRESHOLD: usize = 80;
+        const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
+        let use_parallel = approx_frames >= PARALLEL_FRAME_THRESHOLD
+            || text.len() >= PARALLEL_BYTES_THRESHOLD;
+        if use_parallel {
+            let parts = parse_frames_parallel(text);
+            let mut frames = Vec::with_capacity(parts.len());
+            for r in parts {
+                frames.push(r?);
+            }
+            return Ok(frames);
+        }
+    }
     let iter = ConFrameIterator::new(text);
     let frames: Result<Vec<_>, _> = iter.collect();
     Ok(frames?)
@@ -309,12 +446,30 @@ pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::err
 /// 1).sum()` on every frame, which is O(N^2) in line count and
 /// dominated runtime on multi-frame trajectories.
 ///
-/// Phase 2: parallel parse of each frame slice using rayon.
+/// Phase 2: parallel parse of each frame slice using rayon on the
+/// **global** Rayon pool (see also [`parse_frames_parallel_with_threads`]
+/// for strong-scaling control of the worker count).
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
 pub fn parse_frames_parallel(
     file_contents: &str,
+) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    parse_frames_parallel_with_threads(file_contents, None)
+}
+
+/// Like [`parse_frames_parallel`], but runs phase-2 on an explicit Rayon
+/// pool with `num_threads` workers when `Some(n)` (`n` is clamped to at
+/// least 1). `None` uses the global pool (same as [`parse_frames_parallel`]).
+///
+/// Strong-scaling tests pin worker counts without racing the global pool.
+/// Results are ordered by frame index (stable vs sequential iterator order).
+///
+/// Requires the `parallel` feature.
+#[cfg(feature = "parallel")]
+pub fn parse_frames_parallel_with_threads(
+    file_contents: &str,
+    num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
     use rayon::prelude::*;
 
@@ -334,23 +489,91 @@ pub fn parse_frames_parallel(
         }
     }
 
-    // Phase 2: parallel parse each frame chunk
-    let num_frames = boundaries.len();
-    (0..num_frames)
-        .into_par_iter()
-        .map(|i| {
-            let start = boundaries[i];
-            let end = if i + 1 < num_frames {
-                boundaries[i + 1]
-            } else {
-                file_contents.len()
-            };
-            let chunk = &file_contents[start..end];
-            let mut iter = ConFrameIterator::new(chunk);
-            match iter.next() {
-                Some(result) => result,
-                None => Err(error::ParseError::IncompleteFrame),
-            }
-        })
-        .collect()
+    let parse_chunks = || {
+        let num_frames = boundaries.len();
+        (0..num_frames)
+            .into_par_iter()
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < num_frames {
+                    boundaries[i + 1]
+                } else {
+                    file_contents.len()
+                };
+                let chunk = &file_contents[start..end];
+                let mut iter = ConFrameIterator::new(chunk);
+                match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                }
+            })
+            .collect()
+    };
+
+    match num_threads {
+        None => parse_chunks(),
+        Some(n) => {
+            let n = n.max(1);
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(n)
+                .build()
+                .expect("rayon pool");
+            pool.install(parse_chunks)
+        }
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_strong_scale_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn multi_frame_fixture() -> String {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2.con");
+        let one = std::fs::read_to_string(p).expect("fixture");
+        // Enough frames for >1 worker to exercise the pool.
+        one.repeat(8)
+    }
+
+    fn sequential_frames(text: &str) -> Vec<types::ConFrame> {
+        ConFrameIterator::new(text)
+            .map(|r| r.expect("seq frame"))
+            .collect()
+    }
+
+    fn frames_payload_key(f: &types::ConFrame) -> (usize, Vec<(String, f64, f64, f64)>) {
+        let atoms: Vec<_> = f
+            .atom_data
+            .iter()
+            .map(|a| (a.symbol.to_string(), a.x, a.y, a.z))
+            .collect();
+        (f.atom_data.len(), atoms)
+    }
+
+    #[test]
+    fn parallel_workers_match_sequential_payloads() {
+        let text = multi_frame_fixture();
+        let seq = sequential_frames(&text);
+        assert!(seq.len() >= 8);
+        let seq_keys: Vec<_> = seq.iter().map(frames_payload_key).collect();
+
+        for workers in [1usize, 2, 4] {
+            let par = parse_frames_parallel_with_threads(&text, Some(workers));
+            assert_eq!(par.len(), seq.len(), "workers={workers}");
+            let par_keys: Vec<_> = par
+                .into_iter()
+                .map(|r| frames_payload_key(&r.expect("par frame")))
+                .collect();
+            assert_eq!(par_keys, seq_keys, "workers={workers} frame payloads");
+        }
+
+        // Global pool path agrees too.
+        let par_default = parse_frames_parallel(&text);
+        let def_keys: Vec<_> = par_default
+            .into_iter()
+            .map(|r| frames_payload_key(&r.expect("par")))
+            .collect();
+        assert_eq!(def_keys, seq_keys);
+    }
 }

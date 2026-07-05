@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 //! Build-time wiring. With `metatensor`, locate metatensor-sys install artifacts
 //! (include + lib) and emit link metadata so C/Fortran consumers do not guess paths.
 //!

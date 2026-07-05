@@ -186,3 +186,34 @@ installable packages and do not need archiving.
 
 All reference implementations support v1 only (no JSON metadata, no
 sections, no bitmask constraints).
+
+* Version 2 to version 3
+
+** What changed
+
+Version 3 keeps the nine-line header and type-grouped coordinates. Writers
+prefer emitting =units= inside the line-2 JSON object so quantities (length,
+energy, force, …) are not under-specified. Readers that implement v3 accept
+v2 files; strict mode rejects unknown =con_spec_version= values and missing
+v3 =units= when required by the library's write policy.
+
+** Alternatives considered
+
+1. *Bump the entire grammar* (new extensions, binary framing): rejected—breaks
+   human inspectability and eOn/LODE interoperability that motivated CON.
+2. *Leave units forever optional*: rejected for *new* writes—downstream
+   optimizers and ML tools mis-scale energies and forces silently.
+3. *Encode units only in filenames or READMEs*: rejected—pairing and provenance
+   loss under campaign stores.
+
+** Compatibility expectations
+
+| Writer / reader | Expectation |
+|-----------------+-------------|
+| Legacy (no JSON line 2) | Permissive read as implicit v1; writers should emit ≥ v2 JSON |
+| v2 JSON without =units= | Readable by v3 implementations; new writes should add =units= |
+| v3 with =units= | Preferred interchange for new tools |
+| Unknown future version | Strict mode errors; permissive mode may warn and best-effort parse |
+
+Out of scope for interchange CON: replacing GROMACS/LAMMPS binary trajectory
+I/O, claiming multi-node FS dominance, or requiring GPU parsing of ASCII CON.

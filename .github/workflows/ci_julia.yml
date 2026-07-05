@@ -1,0 +1,39 @@
+name: Julia ReadCon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'julia/**'
+      - 'src/ffi.rs'
+      - 'include/readcon-core.h'
+      - 'Cargo.toml'
+      - '.github/workflows/ci_julia.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'julia/**'
+      - 'src/ffi.rs'
+      - 'include/readcon-core.h'
+      - 'Cargo.toml'
+      - '.github/workflows/ci_julia.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - name: Build libreadcon_core
+        run: cargo build --release --features chemfiles
+      - name: Julia tests
+        env:
+          READCON_CORE_LIB: ${{ github.workspace }}/target/release/libreadcon_core.so
+          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
+        run: |
+          cd julia/ReadCon
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'

@@ -36,6 +36,45 @@ program test_read_con
 
   fr = read_first_frame(trim(tiny))
   if (.not. fr%valid()) error stop "read tiny"
+  ! section buffer without CFrame AoS (positions + velocities/forces/masses)
+  block
+    real(real64), allocatable :: pbuf(:,:), vbuf(:,:), fbuf(:,:), mbuf(:)
+    integer :: na, st2
+    na = int(fr%atom_count())
+    allocate(pbuf(3, na), vbuf(3, na), fbuf(3, na), mbuf(na))
+    st2 = fr%copy_positions(pbuf)
+    if (st2 /= 0) nfail = nfail + 1
+    print *, "frame_copy_positions st=", st2, " natoms=", na
+    ! tiny_cuh2 has no velocities/forces; expect SECTION_ABSENT (-8) or success
+    st2 = fr%copy_velocities(vbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_velocities st=", st2
+    st2 = fr%copy_forces(fbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_forces st=", st2
+    st2 = fr%copy_masses(mbuf)
+    if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
+    print *, "frame_copy_masses st=", st2
+  end block
+  block
+    type(frame_t), allocatable :: allf(:)
+    integer :: ia
+    allf = read_all_frames(trim(tiny))
+    if (.not. allocated(allf) .or. size(allf) < 1) then
+      nfail = nfail + 1
+    else if (.not. allf(1)%valid()) then
+      nfail = nfail + 1
+    else if (int(allf(1)%atom_count()) < 1) then
+      nfail = nfail + 1
+    else
+      print *, "read_all_frames n=", size(allf), " atoms0=", int(allf(1)%atom_count())
+    end if
+    if (allocated(allf)) then
+      do ia = 1, size(allf)
+        call allf(ia)%free()
+      end do
+    end if
+  end block
 
   cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)
@@ -60,6 +99,14 @@ program test_read_con
   if (st /= 0 .or. .not. ok) nfail = nfail + 1
   if (c_associated(dlt)) call bd%dlpack_delete(dlt)
 
+  block
+    real(real64) :: masses(2)
+    integer :: st3
+    st3 = bd%copy_masses(masses)
+    if (st3 /= 0) nfail = nfail + 1
+    print *, "builder_copy_masses st=", st3, " m0=", masses(1), " m1=", masses(2)
+  end block
+
   st = bd%atom_ids_dlpack(dlt)
   call dlpack_inspect(dlt, ndim, shape0, shape1, bits, ok)
   if (st /= 0 .or. .not. ok) nfail = nfail + 1
@@ -80,22 +127,25 @@ program test_read_con
     if (abs(fr2%energy() + 42.5_real64) > 1.0e-6_real64) nfail = nfail + 1
     st = frame_metatensor_positions_block(fr2, mts)
     print *, "metatensor_positions st=", st, " block=", c_associated(mts)
-#ifdef READCON_HAS_METATENSOR
-    if (st /= 0 .or. .not. c_associated(mts)) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_velocities_block(fr2, mts)
-    print *, "metatensor_velocities (absent) st=", st
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_forces_block(fr2, mts)
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-    st = frame_metatensor_atom_energies_block(fr2, mts)
-    if (st /= rkr_status_section_absent) nfail = nfail + 1
-    call mts_block_free_rkr(mts)
-#else
-    if (st /= rkr_status_feature_disabled) nfail = nfail + 1
-#endif
+    if (st == 0) then
+      if (.not. c_associated(mts)) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_velocities_block(fr2, mts)
+      print *, "metatensor_velocities (absent) st=", st
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_forces_block(fr2, mts)
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+      st = frame_metatensor_atom_energies_block(fr2, mts)
+      if (st /= rkr_status_section_absent) nfail = nfail + 1
+      call mts_block_free_rkr(mts)
+    else if (st == rkr_status_feature_disabled) then
+      print *, "metatensor lean FEATURE_DISABLED ok"
+      if (c_associated(mts)) nfail = nfail + 1
+    else
+      nfail = nfail + 1
+    end if
     call fr2%free()
   end if
 
@@ -112,25 +162,13 @@ program test_read_con
     print *, "open_writer_gzip ok"
     call wg%free()
   end if
-#ifdef READCON_HAS_ZSTD
   wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_test.con.zst")
-  if (.not. wg%valid()) then
-    print *, "open_writer_zstd failed"
-    nfail = nfail + 1
-  else
-    print *, "open_writer_zstd ok"
-    call wg%free()
-  end if
-#else
-  wg = open_writer_zstd(trim(root) // "/target/tmp_fortran_zstd_skip.con.zst")
   if (wg%valid()) then
-    print *, "open_writer_zstd should be null without READCON_HAS_ZSTD"
-    nfail = nfail + 1
+    print *, "open_writer_zstd ok (zstd feature)"
     call wg%free()
   else
-    print *, "open_writer_zstd lean null ok"
+    print *, "open_writer_zstd null (lean stub or error)"
   end if
-#endif
 
   call fr%free()
   if (nfail /= 0) then

@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.13.1"
+version = "0.14.0"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage."
@@ -29,7 +29,8 @@ rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util"
 # graph. v0.11 builds its own __dlpack__ PyCapsule wrapper using
 # dlpk's sys::DLManagedTensorVersioned types directly. Once dlpk
 # bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
-python = ["dep:pyo3", "dep:numpy"]
+# Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
+python = ["dep:pyo3", "dep:numpy", "parallel"]
 zstd = ["dep:zstd"]
 metatensor = ["dep:metatensor"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).
@@ -39,6 +40,10 @@ metatensor = ["dep:metatensor"]
 # Enable with `--features chemfiles`. Python: optional extra `chemfiles`
 # documents source installs with MATURIN_PEP517_ARGS=--features python,chemfiles.
 chemfiles = ["dep:chemfiles"]
+# Real CUDA allocate/export for DLPack device buffers (cudarc links the driver
+# at runtime). Default builds stay CPU-only; enable with `--features cuda`.
+# Requires NVIDIA driver + libcudart (e.g. Arch `cuda` package / /opt/cuda).
+cuda = ["dep:cudarc"]
 
 [dependencies]
 # v0.11 storage abstraction. The `Array` trait + DLPack export pattern
@@ -48,7 +53,9 @@ chemfiles = ["dep:chemfiles"]
 # bespoke pointer surface. dlpk is hard-deppy because the C-ABI
 # DLPack export is the v0.11 surface; the `ndarray` and `pyo3`
 # features are turned on conditionally below.
-dlpk = { version = "0.1.5", features = ["ndarray"] }
+dlpk = { version = "0.1.5", features = ["ndarray", "half"] }
+# Same major as dlpk's `half` so `GetDLPackDataType` applies to our arrays.
+half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
 flate2 = "1"
@@ -67,6 +74,8 @@ numpy = { version = "0.28", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 chemfiles = { version = "0.10", optional = true }
+# Driver API for cudaMalloc/cudaMemcpy; versions track CUDA major loosely.
+cudarc = { version = "0.13", optional = true, default-features = false, features = ["cuda-12040", "driver"] }
 
 [dev-dependencies]
 cog = "0.1.0"

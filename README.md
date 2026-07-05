@@ -24,12 +24,27 @@ Oxidized rust re-implementation of [readCon](https://github.com/HaoZeke/readCon)
 Reads and writes both `.con` (coordinate-only) and `.convel` (coordinates
 plus velocities) simulation configuration files used by [eOn](https://theory.cm.utexas.edu/eon/).
 
-**Ecosystem:** interchange and multi-language ABI live here. Campaign-scale corpora
-(mmap LMDB, indexes, xxHash3 dedup) use companion
-**[readcon-db](https://github.com/lode-org/readcon-db)** —
-`cargo add readcon-db`, `pip install readcon-db`, docs at
-<https://lode-org.github.io/readcon-db/>. Corpus blobs remain CON text decoded with
-**readcon-core**.
+**Ecosystem:** this crate is the **interchange and multi-language ABI** layer.
+For campaign-scale corpora (mmap LMDB, non-SQL indexes on natoms / symbols /
+energy / forces / velocities, xxHash3 dedup, multi-reader), use the companion
+crate **[readcon-db](https://github.com/lode-org/readcon-db)** (`cargo add
+readcon-db`, `pip install readcon-db`, docs at
+<https://lode-org.github.io/readcon-db/>). Blobs in the corpus remain CON text
+and are always decoded with **readcon-core**—semantics never fork. Foreign
+formats (XYZ, PDB, GRO, …) enter via the optional **chemfiles** feature
+(`read_chemfiles*`), not ASE. ASE adapters are optional and only for calculator
+hand-off.
+
+**Interchange stack:** versioned CON/convel with an hourglass C ABI
+(`readcon-core` / `readcon`) for multi-language optimizers and drivers, and
+[readcon-db](https://github.com/lode-org/readcon-db) for multi-reader campaigns
+with CON text authoritative. Docs: `architecture`, `evolution`, `faq`, `spec`
+under `docs/orgmode/`.
+
+| Layer | Crate | Responsibility |
+|-------|-------|----------------|
+| Interchange | **readcon-core** / Python **`readcon`** | Parse/write CON & convel, spec v2–v3 metadata, chemfiles ingress, hourglass C/Python/Julia FFI |
+| Corpus | **[readcon-db](https://github.com/lode-org/readcon-db)** / **`readcon_db`** | Heed/LMDB store, secondary indexes, exact-match dedup, CLI + C/Python/Fortran (`cargo add readcon-db`, `pip install readcon-db`) |
 
 
 <a id="orgdaee6f9"></a>
@@ -37,13 +52,14 @@ plus velocities) simulation configuration files used by [eOn](https://theory.cm.
 ## Features
 
 -   **CON and convel support:** Parses both coordinate-only and velocity-augmented files. Velocity sections are auto-detected without relying on file extensions.
--   **Lazy iteration:** `ConFrameIterator` parses one frame at a time for memory-efficient trajectory processing.
+-   **Lazy iteration:** `ConFrameIterator` parses one frame at a time for memory-efficient trajectory processing; `next_with_raw_span` preserves the on-disk blob for corpus ingest without re-serialization.
 -   **Performance:** Uses [fast-float2](https://github.com/aldanor/fast-float-rust) (Eisel-Lemire algorithm) for the f64 parsing hot path and [memmap2](https://docs.rs/memmap2) for large trajectory files.
 -   **Parallel parsing:** Optional rayon-based parallel frame parsing behind the `parallel` feature gate.
 -   **Language bindings:** Python (PyO3), Julia (ccall), C (cbindgen FFI), and C++ (RAII header-only wrapper), following the hourglass design from [Metatensor](https://github.com/metatensor/metatensor).
 -   **Spec-v2 metadata helpers:** Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, and `neb_band`, while still allowing raw JSON metadata when needed.
 -   **Spec-v2 validation:** `validate=true` enforces finite numeric values, reserved metadata schema, physical header geometry, exact component labels, valid symbols, declared section presence, and matching per-atom identity columns.
 -   **Force and constraint fidelity:** Writers preserve velocities, forces, original atom ids, and per-axis fixed masks across Rust, Python, Julia, C, and C++.
+-   **Campaign corpora:** pair with [readcon-db](https://github.com/lode-org/readcon-db) for indexed multi-trajectory stores (see its `docs/design.md`).
 -   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
 
 
@@ -161,6 +177,15 @@ The library is designed with the following principles in mind:
 <a id="org821878d"></a>
 
 ### FFI Layer
+
+**C/Fortran quick map (v0.13.1+):** optional Cargo features gate *behavior*, not always symbols.
+Metatensor and zstd entry points exist in lean builds but return
+`RKR_STATUS_FEATURE_DISABLED` (-11) or a null writer (zstd). Never confuse with
+`RKR_STATUS_INTERNAL_ERROR` (-7). Prefer `include/readcon-metatensor.h` when using
+blocks; source `target/<profile>/readcon-metatensor.env` for `libmetatensor` paths.
+DLPack builder exports use dlpk `ArcArray -> DLPackTensor` (**shared** allocation, not a deep copy; no separate `_borrowed` C API).
+Gzip writers are always on; Fortran: `open_writer_gzip` / `_zstd` (+ precision variants).
+Details: Sphinx **Language bindings** and `fortran/README.md`.
 
 A key challenge in designing an FFI is deciding how data is exposed to the C-compatible world. This library uses a hybrid approach to offer both safety and convenience:
 

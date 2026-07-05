@@ -1,112 +1,102 @@
-"""Chemfiles selection-language parity via shipped Python entry points.
+"""Chemfiles selection via shipped Python APIs (atom context + multi-frame).
 
-Requires a build with the ``chemfiles`` Cargo feature. Tests skip when
-``select_on_frame`` is unavailable.
+Topology-heavy selections are covered by Rust ``chemfiles_selection`` tests;
+this suite exercises ``select_on_frame`` / ``select_atom_indices`` on simple
+frames that do not set CON bonds, and multi-frame H positions on the
+``tiny_multi_cuh2.con`` trajectory fixture.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
 import readcon
 
+# APIs are always exported; lean builds return FEATURE_DISABLED / errors unless
+# the extension was built with chemfiles. Gate on the shipped capability flag.
+pytestmark = pytest.mark.skipif(
+    not getattr(readcon, "has_chemfiles_support", lambda: False)(),
+    reason="chemfiles feature not enabled in this wheel (has_chemfiles_support() is False)",
+)
 
-def _has_select():
-    return hasattr(readcon, "select_on_frame") and callable(readcon.select_on_frame)
+_REPO = Path(__file__).resolve().parents[2]
+_TINY_MULTI = _REPO / "resources" / "test" / "tiny_multi_cuh2.con"
 
 
-pytestmark = pytest.mark.skipif(not _has_select(), reason="chemfiles select not in this wheel")
-
-
-def _cpp_regression_frame():
-    """Mirror chemfiles tests/selection.cpp testing_frame topology in CON order."""
+def _ho_frame():
+    """CON atom_data order: species are contiguous (H then O), not interleaved."""
     atoms = [
-        readcon.Atom("H", 0.0, 1.0, 2.0, fixed=[False, False, False], atom_id=0, mass=1.0),
-        readcon.Atom("O", 1.0, 2.0, 3.0, fixed=[False, False, False], atom_id=1, mass=16.0),
-        readcon.Atom("O", 2.0, 3.0, 4.0, fixed=[False, False, False], atom_id=2, mass=16.0),
-        readcon.Atom("H", 3.0, 4.0, 5.0, fixed=[False, False, False], atom_id=3, mass=1.0),
+        readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=0, mass=1.0),
+        readcon.Atom(symbol="H", x=2.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=1, mass=1.0),
+        readcon.Atom(symbol="O", x=1.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=2, mass=16.0),
     ]
-    # Builder groups H,H,O,O; chemfiles id bonds 0-1,1-2,2-3 → data via id map
-    id_to_data = {0: 0, 3: 1, 1: 2, 2: 3}
-    bonds = [
-        [id_to_data[0], id_to_data[1]],
-        [id_to_data[1], id_to_data[2]],
-        [id_to_data[2], id_to_data[3]],
-    ]
-    meta = {"con_spec_version": 2, "bonds": bonds}
     return readcon.ConFrame(
         cell=[10.0, 10.0, 10.0],
         angles=[90.0, 90.0, 90.0],
         atoms=atoms,
-        metadata=meta,
     )
 
 
-class TestChemfilesSelectionCppRegression:
-    def test_bonds_all_count_and_context(self):
-        frame = _cpp_regression_frame()
-        assert frame.has_bonds
-        res = readcon.select_on_frame(frame, "bonds: all")
-        assert res["context_size"] == 2
-        assert len(res["matches"]) == 3
+def test_select_atom_indices_name_h():
+    frame = _ho_frame()
+    idxs = readcon.select_atom_indices(frame, "name H")
+    assert idxs == [0, 1]
+    coords = frame.coords_array()
+    assert coords.shape[0] == 3
+    assert list(coords[0]) == [0.0, 0.0, 0.0]
+    assert list(coords[1]) == [2.0, 0.0, 0.0]
 
-    def test_angles_all_count_and_context(self):
-        frame = _cpp_regression_frame()
-        res = readcon.select_on_frame(frame, "angles: all")
-        assert res["context_size"] == 3
-        assert len(res["matches"]) == 2
 
-    def test_dihedrals_all_single_match(self):
-        frame = _cpp_regression_frame()
-        res = readcon.select_on_frame(frame, "dihedrals: all")
-        assert res["context_size"] == 4
-        assert len(res["matches"]) == 1
+def test_select_on_frame_name_o_context():
+    frame = _ho_frame()
+    out = readcon.select_on_frame(frame, "name O")
+    assert out["selection"] == "name O"
+    assert out["context_size"] == 1
+    assert out["primary_indices"] == [2]
+    assert len(out["matches"]) == 1
 
-    def test_bonds_filtered_o_h_count(self):
-        frame = _cpp_regression_frame()
-        res = readcon.select_on_frame(frame, "bonds: name(#1) O and type(#2) H")
-        assert res["context_size"] == 2
-        assert len(res["matches"]) == 2
 
-    def test_is_bonded_equiv_bonds_context(self):
-        frame = _cpp_regression_frame()
-        a = readcon.select_on_frame(
-            frame, "two: type(#1) H and name(#2) O and is_bonded(#1, #2)"
-        )
-        b = readcon.select_on_frame(frame, "bonds: type(#1) H and name(#2) O")
-        assert len(a["matches"]) == len(b["matches"])
-        assert a["context_size"] == b["context_size"] == 2
+def test_select_all_atom_count():
+    frame = _ho_frame()
+    out = readcon.select_on_frame(frame, "all")
+    assert out["context_size"] == 1
+    assert len(out["primary_indices"]) == 3
 
-    def test_topology_empty_without_bonds(self):
-        atoms = [
-            readcon.Atom("H", 0.0, 1.0, 2.0, fixed=[False, False, False], atom_id=0, mass=1.0),
-            readcon.Atom("O", 1.0, 2.0, 3.0, fixed=[False, False, False], atom_id=1, mass=16.0),
-        ]
-        frame = readcon.ConFrame(
-            cell=[10.0, 10.0, 10.0],
-            angles=[90.0, 90.0, 90.0],
-            atoms=atoms,
-            metadata={"con_spec_version": 2},
-        )
-        assert not frame.has_bonds
-        for sel in ("bonds: all", "angles: all", "dihedrals: all"):
-            res = readcon.select_on_frame(frame, sel)
-            assert res["matches"] == [], sel
 
-    def test_select_atom_indices_name_o(self):
-        frame = _cpp_regression_frame()
-        idxs = readcon.select_atom_indices(frame, "name O")
-        assert idxs == [2, 3]
+@pytest.mark.skipif(
+    not (
+        hasattr(readcon, "select_atom_positions_on_frames")
+        and callable(readcon.select_atom_positions_on_frames)
+        and _TINY_MULTI.is_file()
+    ),
+    reason="multi-frame select API or fixture missing",
+)
+def test_select_atom_positions_on_frames_name_h_trajectory():
+    """``name H`` yields per-frame positions across the multi-frame CON trajectory."""
+    frames = readcon.read_all_frames(str(_TINY_MULTI))
+    assert len(frames) >= 2
 
-    def test_name_only_without_topology(self):
-        atoms = [
-            readcon.Atom("O", 0.0, 0.0, 0.0, fixed=[False, False, False], atom_id=0, mass=16.0),
-            readcon.Atom("H", 1.0, 0.0, 0.0, fixed=[False, False, False], atom_id=1, mass=1.0),
-        ]
-        frame = readcon.ConFrame(
-            cell=[5.0, 5.0, 5.0],
-            angles=[90.0, 90.0, 90.0],
-            atoms=atoms,
-        )
-        assert readcon.select_atom_indices(frame, "name O") == [0]
-        assert readcon.select_atom_indices(frame, "name H") == [1]
+    multi = readcon.select_atom_positions_on_frames("name H", frames)
+    assert multi["selection"] == "name H"
+    assert len(multi["frames"]) == len(frames)
+
+    for fi, slice_ in enumerate(multi["frames"]):
+        assert slice_["frame_index"] == fi
+        assert slice_["result"]["context_size"] == 1
+        assert slice_["atom_indices"], f"frame {fi}: expected H matches"
+        assert len(slice_["atom_indices"]) == len(slice_["positions"])
+
+        oracle = readcon.select_atom_indices(frames[fi], "name H")
+        assert slice_["atom_indices"] == oracle
+        coords = frames[fi].coords_array()
+        for k, idx in enumerate(oracle):
+            assert list(slice_["positions"][k]) == list(coords[idx])
+
+    p0 = multi["frames"][0]["positions"]
+    p1 = multi["frames"][1]["positions"]
+    assert len(p0) == len(p1)
+    assert any(a != b for a, b in zip(p0, p1)), (
+        "expected H coordinates to change across frames in tiny_multi_cuh2.con"
+    )

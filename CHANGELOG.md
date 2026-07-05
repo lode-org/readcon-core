@@ -1,25 +1,141 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased (611aa4a..815585c)
+#### Maintenance
+- bump to v0.14.0 - (cd7522e) - *HaoZeke*
+#### Benchmarks
+- chemfiles Cachegrind scenarios, measured-only Pareto, refresh I-refs - (ad70e47) - *HaoZeke*
+#### Features
+- (**bindings**) frame section buffers and multi-frame ergonomics - (09c4e8a) - *HaoZeke*
+- (**ffi**) complete index_proj wiring across languages - (d1141d4) - *HaoZeke*
+- (**ffi**) expose index_proj through C, C++, Python, Fortran - (1fb91b0) - *HaoZeke*
+- (**ffi**) DLPack export accepts full DLDataType/DLDevice space - (f3212a0) - *HaoZeke*
+- (**ffi**) DLPack export options use DLDataType and DLDevice layout - (f67a9da) - *HaoZeke*
+- (**ffi**) RKRDlpackExportOptions for float32/64 and device tags - (2527756) - *HaoZeke*
+- (**ffi**) assert DLPack shape/dtype; drop host-f64 consumer requirement - (620015d) - *HaoZeke*
+- (**ffi**) frame velocities/forces/energies DLPack (uu0a) - (30b2eee) - *HaoZeke*
+- (**ffi**) finalize open readcon vissues — iterators, sections, docs - (479aecc) - *HaoZeke*
+- (**ffi**) feature matrix CI, lean stubs, Arc DLPack borrowed aliases - (e821cf4) - *HaoZeke*
+- (**ffi**) full metatensor C API + DLPack Fortran parity - (4c4dbe7) - *HaoZeke*
+- (**ffi**) metatensor TensorBlock C ABI + full Fortran DLPack layout - (de6213b) - *HaoZeke*
+- (**ffi,fortran**) chemfiles read C API, DLPack delete, buffer/dlpack Fortran - (ecbb57c) - *HaoZeke*
+- (**fortran**) full C-ABI surface — iter/builder/writer/select + fpm CI - (a1e2c86) - *HaoZeke*
+- (**fortran**) fpm ReadCon package, frame_t metadata API, multi-lang panels - (5ec88c2) - *HaoZeke*
+- (**fortran**) ISO_C_BINDING module; document closed trackers - (ac56a3a) - *HaoZeke*
+- (**index_proj**) campaign screening projection and ingest contracts - (234cad3) - *HaoZeke*
+- (**iter**) next_with_raw_span for zero-copy corpus ingest - (1ec7650) - *HaoZeke*
+- (**python**) multi-frame chemfiles selection for trajectory H positions - (9c9ef96) - *HaoZeke*
+- (**python**) export read_all_frames alias for batch ergonomics - (9fe7d9d) - *HaoZeke*
+- (**selection**) multi-frame chemfiles select with per-frame H positions - (91002a6) - *HaoZeke*
+- (**selection**) multi-frame chemfiles select with per-frame H positions - (6abeed3) - *HaoZeke*
+- host all dlpk-owned DLPack element types in SoA storage - (fe5ea6c) - *HaoZeke*
+- allocate SoA in any supported storage dtype on build - (d9db3d0) - *HaoZeke*
+- v3 storage_dtypes + FloatArray SoA; standards DLPack/units prose - (6169854) - *HaoZeke*
+- CON v3 mandates units; metatensor-style as_dlpack/from_dlpack - (e72e60f) - *HaoZeke*
+#### Bug Fixes
+- (**bindings**) complete ergonomics gaps from skeptic review - (6319843) - *HaoZeke*
+- (**c6ox**) always declare optional metatensor and zstd C APIs - (16dd0a3) - *HaoZeke*
+- (**ci**) drop Fortran chemfiles runtime; exclude lagging Pages URLs - (660a16d) - *HaoZeke*
+- (**ci**) repair pixi.lock conflicts; harden Fortran chemfiles FPE - (d3318cc) - *HaoZeke*
+- (**ci**) sync cbindgen headers; Fortran tests via script and ROOT env - (6ca0bdf) - *HaoZeke*
+- (**ci,docs**) refresh pixi.lock, shibuya logos, reliable Sphinx build - (483bfe9) - *HaoZeke*
+- (**docs**) do not treat Sphinx warnings as errors in CI docbld - (695a0d0) - *HaoZeke*
+- (**docs**) remove sphinxcontrib-rust from pixi docs env - (b56a9a1) - *HaoZeke*
+- (**docs**) drop sphinxcontrib_rust in Sphinx CI path - (9d5dfad) - *HaoZeke*
+- (**docs**) never run sphinx-rustdocgen in CI Sphinx builds - (41a52fd) - *HaoZeke*
+- (**ffi**) bool DLPack arm error type mismatch - (5ca5143) - *HaoZeke*
+- (**ffi**) ArcArray f32 cast for DLPack float_bits=32 - (a2cc6ec) - *HaoZeke*
+- (**ffi**) drop fake *_dlpack_borrowed; document dlpk ArcArray share - (3ad5613) - *HaoZeke*
+- (**ffi**) FEATURE_DISABLED (-11); Fortran gzip/zstd writers - (bf232ec) - *HaoZeke*
+- (**ffi**) gate metatensor C ABI; assert block shape and label counts - (adf52a3) - *HaoZeke*
+- (**ffi**) metatensor always-link stubs; complete Fortran DLPack+mts surface - (5a2e205) - *HaoZeke*
+- (**ffi**) always export metatensor symbols (stubs without feature) for Fortran link - (04e72e7) - *HaoZeke*
+- (**fortran**) no lean-link dependency on metatensor C symbols; cpp only in tests - (6fb9969) - *HaoZeke*
+- (**fortran**) PUBLIC only in specification part; fpm tests pass - (2d7f930) - *HaoZeke*
+- (**metatensor**) unique sample labels; catch_unwind on C exports - (af95200) - *HaoZeke*
+- (**parse**) sync SoA sections after declared section parse - (2852498) - *HaoZeke*
+- (**parser**) reject unsupported version before v3 units check - (6a587ea) - *HaoZeke*
+- defer float16 as_dlpack on half/dlpk version skew - (26b174e) - *HaoZeke*
+- StorageDtypes path in con_frame_from_atom_data - (a07c5b0) - *HaoZeke*
+- skeptic gaps — DLPack value RT, v3 units parse/write, typed units - (50d0009) - *HaoZeke*
+#### Performance
+- (**parse**) skip position SoA rewrite in section sync - (db86a1a) - *HaoZeke*
+- (**parser**) SoA-primary coords and stack line floats on hot path - (a17fd1e) - *HaoZeke*
+- skip default storage_dtypes metadata on hot build path - (a0e3c86) - *HaoZeke*
+- avoid redundant SoA sync and default storage_dtypes metadata - (4187934) - *HaoZeke*
+#### Documentation
+- (**a11y**) darken logo-light CORE subtitle for WCAG AA on white - (815585c) - *HaoZeke*
+- (**architecture**) point at metatensor gate and env file - (c37d8c9) - *HaoZeke*
+- (**brand**) original CON-ingress logo and clearer site map - (9129fde) - *HaoZeke*
+- (**chemfiles**) Org-mode is sole executable notebook source - (611aa4a) - *HaoZeke*
+- (**css**) accessible token colours on dark code fences - (1cf08ca) - *HaoZeke*
+- (**css**) force inline spans in code fences (fix whitespace) - (8694c5d) - *HaoZeke*
+- (**css**) force inline data-line spans for correct fence whitespace - (3132cf0) - *HaoZeke*
+- (**css**) restore normal code whitespace (no block on data-line) - (8300cce) - *HaoZeke*
+- (**css**) keep code [data-line] as block (R/Python fences) - (568b367) - *HaoZeke*
+- (**css**) single frame on code blocks (no nested border lines) - (f965edc) - *HaoZeke*
+- (**readme**) link readcon-db as ecosystem corpus layer - (189c84d) - *HaoZeke*
+- (**site**) ecosystem nav, figures, shibuya features like rgpot - (36c3fe2) - *HaoZeke*
+- (**site**) fix Sphinx links, Atkinson Hyperlegible, clearer home - (b306ef4) - *HaoZeke*
+- (**sphinx**) ecosystem nav and intersphinx to readcon-db - (627846b) - *HaoZeke*
+- (**sphinx**) theme-align Org chemfiles pages with shibuya site - (a9d53cd) - *HaoZeke*
+- override theme pre{display:grid} for code fences - (c6f8f87) - *HaoZeke*
+- setProperty important for inline code token spans - (cf00fb8) - *HaoZeke*
+- force inline code token spans in page JS - (6958d72) - *HaoZeke*
+- fix code fence whitespace (unwrap data-line + inline tokens) - (e60c4a4) - *HaoZeke*
+- unwrap Sphinx data-line spans for correct code whitespace - (391f026) - *HaoZeke*
+- center CON selection; chemfiles is optional ingress only - (9d859b0) - *HaoZeke*
+- align chemfiles selection prose with in-repo FAQ voice - (27f7edc) - *HaoZeke*
+- drop leftover 'contract' wording in selection notes - (355c735) - *HaoZeke*
+- write selection limits in a human, NumPy-like voice - (27ca4c7) - *HaoZeke*
+- tighten selection-scope prose (vale E-Prime soft) - (22511b6) - *HaoZeke*
+- rewrite chemfiles selection scope (no vague gap list) - (66207ca) - *HaoZeke*
+- map lean/fat metatensor and option A moving parts - (10fff21) - *HaoZeke*
+- metatensor C/Fortran ABI and full DLPack parity in bindings - (b60d924) - *HaoZeke*
+- export issue-status RST for Sphinx - (a9cc066) - *HaoZeke*
+- larger code type, stronger a11y and contrast - (401fbbe) - *HaoZeke*
+- add fix_doc_links.py required by docbld - (d0357c4) - *HaoZeke*
+- fix broken in-page .rst links; keep Pages deploy unblocked - (4ab3685) - *HaoZeke*
+- remove leftover fake-viz claims from tutorial and nav - (7f5d285) - *HaoZeke*
+- delete fabricated figure assets entirely - (c3505c5) - *HaoZeke*
+- conversion-first getting started, drop fake molecule art - (d6c8cbc) - *HaoZeke*
+- lychee link gate, track RST, WCAG-oriented site chrome - (f990148) - *HaoZeke*
+- WBO-style figures, full Shibuya sidebars, ecosystem nav - (bdc7e30) - *HaoZeke*
+#### Tests
+- (**core**) skeptic pass — chemfiles skip gate, projection equality, C sample - (fc8a967) - *HaoZeke*
+- (**core**) strengthen SoA/sync contracts and stack line parse checks - (626401f) - *HaoZeke*
+- (**ffi**) assert positions block shape via mts_array without mts_labels_count - (e340f0e) - *HaoZeke*
+- (**ffi,python**) drive full projection contract and canonical writes - (693d387) - *HaoZeke*
+- (**python**) restore single-frame chemfiles selection (atom context) - (4fddf86) - *HaoZeke*
+- (**python**) restore single-frame chemfiles selection regression suite - (868d34c) - *HaoZeke*
+#### CI
+- (**bench**) Cachegrind I-refs on main for always-fresh docs numbers - (a5af9d4) - *HaoZeke*
+#### Refactoring
+- (**ffi**) option A — metatensor-sys on the C boundary - (0abc86d) - *HaoZeke*
+- ConFrame SoA ArcArray is primary numeric store (DLPack-shaped) - (de4b276) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (386d1d1) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (6835f7e) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (4ce3288) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (851ca9b) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (538e1be) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (0af969e) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (22301d7) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (f266768) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (486831f) - github-actions[bot]
+- (**capi**) regenerate headers after index_proj FFI - (e8e9112) - *HaoZeke*
+
+- - -
+
 ## v0.13.1 - 2026-06-26
 #### Features
-- (**python**) `read_chemfiles` / `read_chemfiles_first` / `read_chemfiles_memory` ingress APIs
-- (**python**) `ConFrame.select` / `select_atoms` / `write_con` method style
-- (**docs**) Diátaxis chemfiles pages + papermill executable notebook
-- (**ffi**) metatensor `mts_block_t*` C ABI (`rkr_frame_metatensor_*_block`, `rkr_mts_block_free`) gated by `READCON_CORE_HAS_METATENSOR`
-- (**ffi**) full builder DLPack set + `rkr_dlpack_delete`; Fortran binds `dlpack.h` layout (`dlpack_inspect`)
-- (**fortran**) all six DLPack exports + four metatensor block helpers (fat lib / `-DREADCON_HAS_METATENSOR`)
-#### Build
-- (**ci**) dual PyPI matrix `readcon` + `readcon-chemfiles` (no Windows chemfiles wheel)
-- (**capi**) selection FFI always exported (stubs without chemfiles feature)
-- (**ci**) Fortran lean + metatensor jobs via `scripts/run_fortran_tests.sh`; cbindgen header check
-- (**docs**) bindings matrix + Fortran README for DLPack/metatensor C API parity
-- (**ffi**) `RKR_STATUS_FEATURE_DISABLED` (-11) for lean/missing optional APIs (not `-7`)
-- (**fortran**) `open_writer_gzip` / `open_writer_zstd` (zstd gated); metatensor lean uses -11
-- (**ffi**) option A: sys on C boundary (`tensor_block_into_raw_mts` / `mts_block_free_sys`); `build.rs` → `readcon-metatensor.env`; `include/readcon-metatensor.h`
-- (**docs**) lean/fat gates, status codes, header order, env paths on bindings + architecture + `fortran/README.md`
-#### Examples
-- `examples/c_metatensor_sample.c` — `readcon-metatensor.h` + `mts_block_data` / `mts_block_labels`
+- (**docs**) papermill-executable chemfiles ingress notebook - (6cc9895) - *HaoZeke*
+- (**python**) idiomatic chemfiles ingress and frame.select APIs - (0a12c24) - *HaoZeke*
+#### Documentation
+- (**chemfiles**) Diátaxis tutorial, how-to, explanation, and reference - (486fd8f) - *HaoZeke*
+#### Chores
+- (**release**) prepare v0.13.1 - (94b9f53) - *HaoZeke*
 
 - - -
 
@@ -30,16 +146,22 @@ All notable changes to this project will be documented in this file. See [conven
 - land v0.11–v0.12 builder mutation, SoA, DLPack, ArcArray - (eb2101f) - *HaoZeke*
 #### Features
 - (**bindings**) chemfiles selection parity across C/Python/Julia surfaces - (ecfa758) - *HaoZeke*
+- (**chemfiles**) Python chemfiles extra and always-on Rust API stubs - (376b407) - *HaoZeke*
 - (**chemfiles**) selection grammar via C/C++/Python when enabled - (af76eea) - *HaoZeke*
 - (**cpp**) compressed ConFrameWriter - (ef1c924) - *HaoZeke*
 - (**ffi**) C ABI for gzip/zstd compressed writers - (c5ccbaf) - *HaoZeke*
 - (**topology**) optional frame bonds + chemfiles projection (v0.13.0) - (84c7ab3) - *HaoZeke*
 - optional chemfiles import into ConFrame with metadata - (c7d68a5) - *HaoZeke*
 #### Bug Fixes
+- (**capi**) always export chemfiles selection FFI; skip Win chemfiles wheels - (a17339e) - *HaoZeke*
 - (**chemfiles**) preserve display name/type sidecars for selection parity - (fae51fe) - *HaoZeke*
+- (**cpp**) use RKR_STATUS_SUCCESS in compressed writer wrapper - (aaa0932) - *HaoZeke*
 - (**docs**) bind antics tracker to site token - (5b54192) - *HaoZeke*
 #### Documentation
 - (**changelog**) complete v0.11–v0.13 narrative for the v0.13.0 cut - (d696f08) - *HaoZeke*
+- (**contributing**) release-PR, crates.io token, and tag CI map - (1aa4c3e) - *HaoZeke*
+- (**faq,bindings**) point chemfiles FAQ and matrix at tutorials - (8f8d275) - *HaoZeke*
+- (**tutorials**) chemfiles converter and bond-angle selection guides - (492fb3a) - *HaoZeke*
 #### Tests
 - (**chemfiles**) port selection.cpp topology regression + fix bond index remap - (59efd43) - *HaoZeke*
 - cover compressed writer round-trip through the C ABI - (dae4743) - *HaoZeke*
@@ -47,6 +169,15 @@ All notable changes to this project will be documented in this file. See [conven
 - (**cbindgen**) sync header and define chemfiles feature guard - (0e92d3a) - *HaoZeke*
 - (**cbindgen**) regenerate C header for compressed writers - (4182f9b) - *HaoZeke*
 - (**chemfiles**) set CMAKE_POLICY_VERSION_MINIMUM for chemfiles-sys - (6d1b173) - *HaoZeke*
+#### CI
+- (**crates**) resolve publish version from Cargo.toml - (6595554) - *HaoZeke*
+- (**release**) cargo-dist PR plan, crates.io secret workflow, checklist script - (b8a80c8) - *HaoZeke*
+- (**wheels**) run pyproject variant select under bash on Windows - (d5212e5) - *HaoZeke*
+- (**wheels**) use include-only matrix for dual distributions - (f1de0d8) - *HaoZeke*
+- (**wheels**) dual matrix for readcon and readcon-chemfiles on PyPI - (2d294b0) - *HaoZeke*
+- (**wheels**) retry maturin on transient crates.io failures - (2f843e8) - *HaoZeke*
+#### Chores
+- (**release**) prepare v0.13.0 - (9d34e66) - *HaoZeke*
 
 - - -
 
@@ -118,6 +249,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.10.0 - 2026-05-10
+#### Generated
+- regenerate CHANGELOG.md from cog - (303be90) - *HaoZeke*
+- regenerate CHANGELOG.md from cog - (b3caca7) - *HaoZeke*
+#### Maintenance
+- bump to v0.10.0 - (35ee566) - *HaoZeke*
 #### Documentation
 - (**analytics**) swap site-foot Umami credit for antics - (4ac3f97) - *HaoZeke*
 - (**architecture**) document cargo-c install contract - (9a64ac4) - *HaoZeke*
@@ -126,14 +262,9 @@ All notable changes to this project will be documented in this file. See [conven
 - (**faq,bindings**) cover v0.10.0 surface (energies, zstd, atom_id index, NumPy views, metatensor) - (17ce6fc) - *HaoZeke*
 - (**spec**) expand energies section with RFC 2119 normative language - (1c4020f) - *HaoZeke*
 - (**spec**) document the energies section format - (effb179) - *HaoZeke*
-#### Maintenance
-- bump to v0.10.0 - (35ee566) - *HaoZeke*
 #### Benchmarks
 - add trajectory-style write fixture with heavy shared metadata - (71cbbb5) - *HaoZeke*
 - write 100-frame trajectory through ConFrameWriter - (4b960b9) - *HaoZeke*
-#### Generated
-- regenerate CHANGELOG.md from cog - (303be90) - *HaoZeke*
-- regenerate CHANGELOG.md from cog - (b3caca7) - *HaoZeke*
 #### Features
 - (**bindings**) plumb per-atom energies through every binding - (596862c) - *HaoZeke*
 - (**cpp**) morton_sort + atom_index_by_id mirroring the FFI - (a198e57) - *HaoZeke*
@@ -176,11 +307,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.9.0 - 2026-05-10
+#### Maintenance
+- bump to v0.9.0 - (b1cc006) - *HaoZeke*
 #### Buildsystem
 - (**capi**) trim cargo-c metadata to defaults, fold drift check into script - (71c1380) - *HaoZeke*
 - (**capi**) ship pre-generated header, drop cbindgen build dep - (c4379bd) - *HaoZeke*
-#### Maintenance
-- bump to v0.9.0 - (b1cc006) - *HaoZeke*
 #### Features
 - (**builder**) validate metadata schema in set_metadata_json - (ed1b470) - *HaoZeke*
 - (**cpp**) mark legacy fields deprecated, document standard, polish iterator - (df5f6b4) - *HaoZeke*
@@ -241,10 +372,10 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.8.0 - 2026-04-20
-#### Maintenance
-- bump to v0.8.0 - (f5b14a8) - *HaoZeke*
 #### Buildsystem
 - (**capi**) add cargo-c metadata and compatibility feature - (f776281) - *HaoZeke*
+#### Maintenance
+- bump to v0.8.0 - (f5b14a8) - *HaoZeke*
 #### Generated
 - regenerate CHANGELOG.md from cog - (4520b3e) - *HaoZeke*
 #### Features
@@ -279,6 +410,11 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.7.0 - 2026-03-25
+#### Benchmarks
+- publication-quality plots, feature matrix, Pareto front - (a44e269) - *HaoZeke*
+- scaling benchmarks with memory usage across file sizes - (851076a) - *HaoZeke*
+- add C sscanf reader, real 4-way comparison - (861191e) - *HaoZeke*
+- real cross-implementation numbers (readcon 8-9x faster than ASE) - (3e40cdd) - *HaoZeke*
 #### Documentation
 - rewrite spec.org as implementation-neutral format standard - (75f55b6) - *HaoZeke*
 - evolution rationale, reference impls, benchmark script, spec bitmask table - (06c26d2) - *HaoZeke*
@@ -286,11 +422,6 @@ All notable changes to this project will be documented in this file. See [conven
 - add recommended metadata keys to CON spec - (389d16f) - *HaoZeke*
 #### Maintenance
 - rebuild .gitignore with gibo (Rust, C++, C, Python, CMake, macOS, Linux) - (e4458cb) - *HaoZeke*
-#### Benchmarks
-- publication-quality plots, feature matrix, Pareto front - (a44e269) - *HaoZeke*
-- scaling benchmarks with memory usage across file sizes - (851076a) - *HaoZeke*
-- add C sscanf reader, real 4-way comparison - (861191e) - *HaoZeke*
-- real cross-implementation numbers (readcon 8-9x faster than ASE) - (3e40cdd) - *HaoZeke*
 #### Features
 - per-direction constraint bitmask (column 4) - (c67a499) - *HaoZeke*
 - test fixtures, integration tests, version bump to v0.7.0 - (e018c08) - *HaoZeke*
@@ -457,8 +588,9 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.2.0 - 2025-08-14
-#### Documentation
-- Discuss the design.. - (9229f0d) - *HaoZeke*
+#### Buildsystem
+- Bump for doctests - (bfe85e1) - *HaoZeke*
+- Enable doctests - (1d79f3a) - *HaoZeke*, *bonzini*
 #### Maintenance
 - Bump versions - (3619311) - *HaoZeke*
 - Even faster fails - (f729de5) - *HaoZeke*
@@ -475,6 +607,13 @@ All notable changes to this project will be documented in this file. See [conven
 - Update gitig - (64e9a79) - *HaoZeke*
 - Add an inverse helper for writes - (6170681) - *HaoZeke*
 - Minor documentation update - (b89931a) - *HaoZeke*
+#### Tests
+- Add some for writers - (0a59fcd) - *HaoZeke*
+#### Generated
+- Update generated readme - (0277e8b) - *HaoZeke*
+- Update with a void pointer - (f415740) - *HaoZeke*
+#### Documentation
+- Discuss the design.. - (9229f0d) - *HaoZeke*
 #### Enhancements
 - Single pass for the writer - (ae39401) - *HaoZeke*
 - More ergonomic without constants for C++ - (7d78227) - *HaoZeke*
@@ -487,14 +626,6 @@ All notable changes to this project will be documented in this file. See [conven
 - Update the C API sample - (5854ccc) - *HaoZeke*
 - Rework CLI to test things a bit - (a1177b6) - *HaoZeke*
 - Add a basic writer - (9b825f8) - *HaoZeke*
-#### Generated
-- Update generated readme - (0277e8b) - *HaoZeke*
-- Update with a void pointer - (f415740) - *HaoZeke*
-#### Buildsystem
-- Bump for doctests - (bfe85e1) - *HaoZeke*
-- Enable doctests - (1d79f3a) - *HaoZeke*, *bonzini*
-#### Tests
-- Add some for writers - (0a59fcd) - *HaoZeke*
 #### CI
 - Try to run benchmarks more - (049c077) - *HaoZeke*
 #### Chores
@@ -503,12 +634,6 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 ## v0.1.1 - 2025-07-19
-#### Generated
-- Update for criterion - (f1fcfa2) - *HaoZeke*
-#### Tests
-- Add a test for the forward iterator - (0917875) - *HaoZeke*
-#### Bugfixes
-- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
 #### Maintenance
 - Fix category tags - (19b7499) - *HaoZeke*
 - Bump version - (09ae400) - *HaoZeke*
@@ -518,8 +643,10 @@ All notable changes to this project will be documented in this file. See [conven
 - Rework to better explain behavior - (d65634a) - *HaoZeke*
 - Try to use cargo-dist for generating things - (2ff5ce6) - *HaoZeke*
 - Fix license and keywords - (aa016b2) - *HaoZeke*
-#### Buildsystem
-- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
+#### Bugfixes
+- Fixup a misunderstanding of lifetimes - (038cc5c) - *HaoZeke*
+#### Generated
+- Update for criterion - (f1fcfa2) - *HaoZeke*
 #### Enhancements
 - Demonstrate more of the C++ usage - (f9f838c) - *HaoZeke*
 - Setup the iterator usage in the C example - (596f65a) - *HaoZeke*
@@ -528,6 +655,10 @@ All notable changes to this project will be documented in this file. See [conven
 - Implement a basic forward skipper - (6e2c8a4) - *HaoZeke*
 #### Benchmarks
 - Add iterator validation - (9c49c86) - *HaoZeke*
+#### Tests
+- Add a test for the forward iterator - (0917875) - *HaoZeke*
+#### Buildsystem
+- Use the multi con for examples - (cbdfd6a) - *HaoZeke*
 #### CI
 - Only run benchmarks on request - (222d727) - *HaoZeke*
 - Kill useless release thing - (96aa79a) - *HaoZeke*
@@ -544,19 +675,20 @@ All notable changes to this project will be documented in this file. See [conven
 - Add more unit tests - (7cd595d) - *HaoZeke*
 - Add a more interesting test - (b4c0049) - *HaoZeke*
 - Start with a simple test - (fbd71c7) - *HaoZeke*
-#### Documentation
-- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
-- Minor updates - (f46b178) - *HaoZeke*
-- Minor updates - (bcd4df7) - *HaoZeke*
-- Add some more - (6529b22) - *HaoZeke*
-- Add a bunch - (0ba1212) - *HaoZeke*
-- Minor note - (1ecc856) - *HaoZeke*
-- Minor update - (489e9df) - *HaoZeke*
-- Update readme from readCon - (7751124) - *HaoZeke*
-#### Buildsystem
-- Remove unstable rust module for stable - (bb7a200) - *HaoZeke*
-- Let meson run cargo tests too - (99d4362) - *HaoZeke*
-- Finalize first pass for readcon core - (ddff2bc) - *HaoZeke*
+#### Data
+- Import test data from readCon - (c5cf85e) - *HaoZeke*
+#### Enhancements
+- Add and check a C++ interface - (b713997) - *HaoZeke*
+- Add an example for the C API usage - (94cd71d) - *HaoZeke*
+- First pass at a baseline C FFI - (577d185) - *HaoZeke*
+- Start wiring up C connections for readcon - (5f35e54) - *HaoZeke*
+- Add in first working CLI - (74c25fb) - *HaoZeke*
+- Add in an iterator - (f7a618d) - *HaoZeke*
+- Parse a single frame - (d79938a) - *HaoZeke*
+- Setup the parse header function - (4491175) - *HaoZeke*
+- Start with error types and a parser - (817e8a8) - *HaoZeke*
+- Setup some nicer error handling - (f054edd) - *HaoZeke*
+- Use cog - (7d09a68) - *HaoZeke*
 #### Maintenance
 - Use a tag prefix - (f1f68af) - *HaoZeke*
 - Minor renaming - (a871512) - *HaoZeke*
@@ -583,23 +715,22 @@ All notable changes to this project will be documented in this file. See [conven
 - Add a test helper - (c896963) - *HaoZeke*
 - Start with a project configuration - (5730540) - *HaoZeke*
 - Initialize with cargo new - (059e4eb) - *HaoZeke*
-#### Data
-- Import test data from readCon - (c5cf85e) - *HaoZeke*
+#### Documentation
+- Kang from rgpycrumbs - (07435a7) - *HaoZeke*
+- Minor updates - (f46b178) - *HaoZeke*
+- Minor updates - (bcd4df7) - *HaoZeke*
+- Add some more - (6529b22) - *HaoZeke*
+- Add a bunch - (0ba1212) - *HaoZeke*
+- Minor note - (1ecc856) - *HaoZeke*
+- Minor update - (489e9df) - *HaoZeke*
+- Update readme from readCon - (7751124) - *HaoZeke*
+#### Buildsystem
+- Remove unstable rust module for stable - (bb7a200) - *HaoZeke*
+- Let meson run cargo tests too - (99d4362) - *HaoZeke*
+- Finalize first pass for readcon core - (ddff2bc) - *HaoZeke*
 #### Generated
 - Update readme - (6524e55) - *HaoZeke*
 - Vendor a copy of the generated header - (127dd98) - *HaoZeke*
-#### Enhancements
-- Add and check a C++ interface - (b713997) - *HaoZeke*
-- Add an example for the C API usage - (94cd71d) - *HaoZeke*
-- First pass at a baseline C FFI - (577d185) - *HaoZeke*
-- Start wiring up C connections for readcon - (5f35e54) - *HaoZeke*
-- Add in first working CLI - (74c25fb) - *HaoZeke*
-- Add in an iterator - (f7a618d) - *HaoZeke*
-- Parse a single frame - (d79938a) - *HaoZeke*
-- Setup the parse header function - (4491175) - *HaoZeke*
-- Start with error types and a parser - (817e8a8) - *HaoZeke*
-- Setup some nicer error handling - (f054edd) - *HaoZeke*
-- Use cog - (7d09a68) - *HaoZeke*
 #### CI
 - Check commits too - (0f636f1) - *HaoZeke*
 - Setup a basic build and run workflow - (ff9be41) - *HaoZeke*

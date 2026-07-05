@@ -251,6 +251,18 @@ class ConFrame {
     /// Per-frame total energy. Returns NaN if absent (legacy, prefer
     /// `energy_opt()`).
     double energy() const;
+    /// Campaign finite energy (index_proj); NaN if missing or non-finite.
+    double index_energy() const;
+    /// Canonical multiset formula for campaign indexes (e.g. Cu:2|H:2).
+    std::string composition_formula() const;
+    double total_mass() const;
+    double cell_volume() const;
+    double fmax() const;
+    /// bit0 forces, bit1 velocities, bit2 energies.
+    uint8_t sections_mask() const;
+    uint32_t index_natoms() const;
+    /// Full campaign projection as JSON (same fields as readcon-db prepare).
+    std::string index_projection_json() const;
     /// Zero-based frame index. Returns UINT64_MAX if absent (legacy,
     /// prefer `frame_index_opt()`).
     uint64_t frame_index() const;
@@ -307,6 +319,96 @@ class ConFrame {
      * selections such as `"name H"`. Throws if the selection is not atom context.
      */
     std::vector<size_t> select_atom_indices(std::string_view selection) const;
+
+
+    /**
+     * Atom count without materializing CFrame / AoS atoms cache.
+     */
+    std::size_t atom_count() const {
+        return frame_handle_ ? static_cast<std::size_t>(rkr_frame_atom_count(frame_handle_.get()))
+                             : 0;
+    }
+
+    /** Row-major xyz length >= 3*N. Status from C ABI. */
+    RKRStatus copy_positions(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_positions(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_velocities(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_velocities(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_forces(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_forces(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_atom_energies(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_atom_energies(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_masses(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_masses(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_atom_ids(uint64_t *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_atom_ids(frame_handle_.get(), out, out_len);
+    }
+    /** DLPack positions (caller: rkr_dlpack_delete). Default float64/CPU. */
+    RKRStatus positions_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_positions_dlpack(frame_handle_.get(), out_tensor);
+    }
+    /** Positions with DLPack dtype/device (`DLDataType` + `DLDevice`; CPU + f32/f64 for now). */
+    RKRStatus positions_dlpack(const RKRDlpackExportOptions &opts,
+                               RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_positions_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
+    /** DLPack velocities; SECTION_ABSENT (-8) if the frame has none. */
+    RKRStatus velocities_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_velocities_dlpack(frame_handle_.get(), out_tensor);
+    }
+    RKRStatus velocities_dlpack(const RKRDlpackExportOptions &opts,
+                                RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_velocities_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
+    /** DLPack forces; SECTION_ABSENT if missing. */
+    RKRStatus forces_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_forces_dlpack(frame_handle_.get(), out_tensor);
+    }
+    RKRStatus forces_dlpack(const RKRDlpackExportOptions &opts,
+                            RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_forces_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
+    /** DLPack per-atom energies; SECTION_ABSENT if missing. */
+    RKRStatus atom_energies_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_atom_energies_dlpack(frame_handle_.get(), out_tensor);
+    }
+    RKRStatus atom_energies_dlpack(const RKRDlpackExportOptions &opts,
+                                   RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_atom_energies_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
 
     const RKRConFrame *get_handle() const { return frame_handle_.get(); }
 
@@ -505,6 +607,15 @@ class ConFrameWriter {
      * @throws std::runtime_error if the write operation fails.
      */
     void extend(const std::vector<ConFrame> &frames);
+
+    /// Campaign-stable CON serialization (deterministic metadata key order).
+    void set_canonical(bool on) {
+        throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
+                       "rkr_writer_set_canonical");
+    }
+    [[nodiscard]] bool is_canonical() const {
+        return rkr_writer_is_canonical(writer_handle_.get()) != 0;
+    }
 
   private:
     struct WriterDeleter {
@@ -981,6 +1092,48 @@ inline std::string ConFrame::metadata_json() const {
 
 inline double ConFrame::energy() const {
     return rkr_frame_energy(frame_handle_.get());
+}
+
+inline double ConFrame::index_energy() const {
+    return rkr_frame_index_energy(frame_handle_.get());
+}
+
+inline std::string ConFrame::composition_formula() const {
+    char *s = rkr_frame_composition_formula(frame_handle_.get());
+    if (!s)
+        return "";
+    std::string result(s);
+    rkr_free_string(s);
+    return result;
+}
+
+inline double ConFrame::total_mass() const {
+    return rkr_frame_total_mass(frame_handle_.get());
+}
+
+inline double ConFrame::cell_volume() const {
+    return rkr_frame_cell_volume(frame_handle_.get());
+}
+
+inline double ConFrame::fmax() const {
+    return rkr_frame_fmax(frame_handle_.get());
+}
+
+inline uint8_t ConFrame::sections_mask() const {
+    return rkr_frame_sections_mask(frame_handle_.get());
+}
+
+inline uint32_t ConFrame::index_natoms() const {
+    return rkr_frame_index_natoms(frame_handle_.get());
+}
+
+inline std::string ConFrame::index_projection_json() const {
+    char *s = rkr_frame_index_projection_json(frame_handle_.get());
+    if (!s)
+        return "{}";
+    std::string result(s);
+    rkr_free_string(s);
+    return result;
 }
 
 inline uint64_t ConFrame::frame_index() const {

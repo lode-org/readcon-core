@@ -45,6 +45,38 @@ impl SelectionResult {
     }
 }
 
+/// One frame’s contribution to a multi-frame selection.
+#[derive(Debug, Clone)]
+pub struct FrameSelectionSlice {
+    /// Index of this frame in the input slice (0-based).
+    pub frame_index: usize,
+    /// Full selection result on this frame.
+    pub result: SelectionResult,
+    /// For atom-context selections (`context_size == 1`): xyz of each selected
+    /// atom in `atom_data` order for that frame (same length as sorted unique
+    /// primary indices). Empty for pair/angle/dihedral contexts (use `result.matches`).
+    pub positions: Vec<[f64; 3]>,
+    /// Atom-context indices that produced [`Self::positions`] (sorted unique).
+    pub atom_indices: Vec<usize>,
+}
+
+/// Multi-frame chemfiles selection: evaluate the same string on each frame.
+#[derive(Debug, Clone)]
+pub struct MultiFrameSelectionResult {
+    /// Selection string evaluated on every frame.
+    pub selection: String,
+    /// Per-frame slices (same length as the input frame list).
+    pub frames: Vec<FrameSelectionSlice>,
+}
+
+impl MultiFrameSelectionResult {
+    /// Atom-context trajectory positions: for each frame, the `positions` vec
+    /// (empty if that frame’s selection was not atom context or had no matches).
+    pub fn positions_per_frame(&self) -> impl Iterator<Item = &Vec<[f64; 3]>> {
+        self.frames.iter().map(|f| &f.positions)
+    }
+}
+
 #[cfg(feature = "chemfiles")]
 #[path = "chemfiles_selection_imp.rs"]
 mod imp;
@@ -52,8 +84,9 @@ mod imp;
 #[cfg(feature = "chemfiles")]
 pub use imp::{
     apply_con_bonds_to_chemfiles_frame, chemfiles_frame_from_con_frame,
-    evaluate_selection_on_chemfiles_frame, evaluate_selection_on_con_frame, parse_selection_string,
-    select_atom_indices,
+    evaluate_selection_on_chemfiles_frame, evaluate_selection_on_con_frame,
+    evaluate_selection_on_frames, parse_selection_string, select_atom_indices,
+    select_atom_positions_on_frames,
 };
 
 #[cfg(not(feature = "chemfiles"))]
@@ -86,6 +119,24 @@ pub fn parse_selection_string(_selection: &str) -> Result<usize, ChemfilesImport
     Err(ChemfilesImportError::FeatureDisabled)
 }
 
+#[cfg(not(feature = "chemfiles"))]
+/// Multi-frame selection (stub without `chemfiles` feature).
+pub fn evaluate_selection_on_frames(
+    _selection: &str,
+    _frames: &[ConFrame],
+) -> Result<MultiFrameSelectionResult, ChemfilesImportError> {
+    Err(ChemfilesImportError::FeatureDisabled)
+}
+
+#[cfg(not(feature = "chemfiles"))]
+/// Atom-context multi-frame positions (stub without `chemfiles` feature).
+pub fn select_atom_positions_on_frames(
+    _selection: &str,
+    _frames: &[ConFrame],
+) -> Result<MultiFrameSelectionResult, ChemfilesImportError> {
+    Err(ChemfilesImportError::FeatureDisabled)
+}
+
 #[cfg(all(test, not(feature = "chemfiles")))]
 mod stub_tests {
     use super::*;
@@ -97,5 +148,15 @@ mod stub_tests {
         let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
         let err = evaluate_selection_on_con_frame("name O", &frame).unwrap_err();
         assert!(matches!(err, ChemfilesImportError::FeatureDisabled));
+    }
+
+    #[test]
+    fn multi_frame_selection_stub_is_feature_disabled() {
+        let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
+        let err = evaluate_selection_on_frames("name H", &[frame]).unwrap_err();
+        assert!(matches!(err, ChemfilesImportError::FeatureDisabled));
+        let frame2 = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
+        let err2 = select_atom_positions_on_frames("name H", &[frame2]).unwrap_err();
+        assert!(matches!(err2, ChemfilesImportError::FeatureDisabled));
     }
 }

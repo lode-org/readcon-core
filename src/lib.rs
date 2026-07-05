@@ -1,11 +1,17 @@
 pub mod array;
+#[cfg(feature = "cuda")]
+pub mod cuda_array;
 pub mod compression;
 pub mod error;
 pub mod ffi;
 pub mod helpers;
+/// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
+pub mod index_proj;
 pub mod iterators;
 pub mod parser;
 pub mod types;
+pub mod storage_dtype;
+pub mod units;
 pub mod writer;
 
 #[cfg(feature = "metatensor")]
@@ -32,12 +38,12 @@ pub mod python;
 /// - Version 1: column 5 present but semantics undefined. Readers MAY
 ///   ignore it. No JSON metadata line.
 /// - Version 2: column 5 is the original atom index before type-based
-///   grouping. Readers MUST parse and preserve it. Writers MUST write
-///   the stored value. Line 2 of the header carries a JSON object
-///   with at least `{"con_spec_version": 2}`.
+///   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
+/// - Version 3: same as v2 plus **required** `metadata["units"]` object
+///   with non-empty `length` and `energy` unit strings (see `units` module).
 ///
 /// See `docs/orgmode/spec.org` for the full specification.
-pub const CON_SPEC_VERSION: u32 = 2;
+pub const CON_SPEC_VERSION: u32 = 3;
 
 /// Library version string, injected from Cargo.toml at compile time.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -47,13 +53,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_spec_version_is_2() {
-        assert_eq!(CON_SPEC_VERSION, 2);
+    fn test_spec_version_is_current() {
+        assert_eq!(CON_SPEC_VERSION, 3);
         assert_eq!(ffi::RKR_CON_SPEC_VERSION, CON_SPEC_VERSION);
     }
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.13.1");
+        assert_eq!(VERSION, "0.14.0");
     }
 }
