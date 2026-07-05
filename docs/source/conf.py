@@ -62,6 +62,8 @@ mermaid.initialize({
 # Pre-generated crate RST under docs/source/crates/ (no sphinxcontrib-rust in CI)
 html_theme = "shibuya"
 html_static_path = ["_static"]
+# Serve the metadata JSON Schema at its $id URL (…/schema/con-metadata.schema.json)
+html_extra_path = ["_extra"]
 html_favicon = "_static/favicon.svg"
 html_title = "readcon-core documentation"
 html_baseurl = "https://lode-org.github.io/readcon-core/"
