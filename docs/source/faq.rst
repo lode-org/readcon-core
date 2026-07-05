@@ -3,11 +3,9 @@ Frequently Asked Questions
 ==========================
 
 
-.. contents::
 
-
-1 Why another atomic structure format?
---------------------------------------
+Why another atomic structure format?
+------------------------------------
 
 The ``con`` format addresses a specific gap: lossless round-tripping of
 atomic configurations through saddle-point search, NEB, and dimer
@@ -35,8 +33,8 @@ The ``con`` format is deliberately minimal: a fixed 9-line header, typed
 atom blocks, and optional velocity/force sections. The v2 JSON
 metadata line adds extensibility without breaking the core simplicity.
 
-2 Is frame topology (``bonds``) required?
------------------------------------------
+Is frame topology (``bonds``) required?
+---------------------------------------
 
 No. ``bonds`` is an optional v2 metadata key (not a ``sections`` block and
 not a CON spec v3 change). Legacy files omit it. When present, each
@@ -45,34 +43,34 @@ order). It enables tools such as chemfiles selection (``bonds:`` / ``angles:`` /
 ``is_bonded``) when the library is built with ``--features chemfiles``.
 
 How do I select atoms (and optional bonds) on a CON frame?
----------------------------------------------------------
+----------------------------------------------------------
 
 Selection is a CON API: strings such as ``name H`` or ``bonds: all`` return
 ``atom_data`` indices (or structured matches) via ``select_on_frame`` /
 ``select_atom_indices`` / ``rkr_frame_select`` and language wrappers. ``name`` /
 ``type`` / ``all`` need only symbols. Topology selectors need ``metadata["bonds"]``
-(hand-authored or filled when converting *into* CON). All languages share one
+(hand-authored or filled when converting **into** CON). All languages share one
 evaluator.
 
 The ``con`` format has no residue table, stores pair ``bonds`` only, and keeps a
 thin optional property subset after foreign-format import. So ``resname``, most
 external property maps, impropers, and geometry-threshold minidialects are not
 on the selection surface—there is simply no data for them. Detail:
-``chemfiles-explain`` (*What selection cannot see on CON*).
+``chemfiles-explain.org`` (**What selection cannot see on CON**).
 
-Foreign formats (XYZ, PDB, …) enter through an *optional* conversion feature
+Foreign formats (XYZ, PDB, …) enter through an **optional** conversion feature
 (Cargo ``chemfiles``, PyPI ``readcon-chemfiles``). Lean builds still expose the
-selection *symbols* but error clearly until that feature is linked. Docs for
+selection **symbols** but error clearly until that feature is linked. Docs for
 conversion live under ``docs/orgmode/chemfiles-*.org``; language APIs in
-``bindings``; on-disk ``bonds`` in ``spec``.
+``bindings.org``; on-disk ``bonds`` in ``spec.org``.
 
-On *import* only, display names such as ``H1`` versus types such as ``H`` may be
+On **import** only, display names such as ``H1`` versus types such as ``H`` may be
 kept in sidecars (``chemfiles_atom_names`` / ``chemfiles_atom_types``); the on-disk
 column remains a single ``symbol``. Hand-built frames without sidecars use
 ``symbol`` for both.
 
-What problems does atom\ :sub:`id`\ solve?
---------------------------------------------
+What problems does atom\_id solve?
+----------------------------------
 
 The ``con`` format groups atoms by element type. A structure with atoms
 C, C, C, O, C, C (indices 0-5) gets written as five C atoms followed
@@ -95,8 +93,8 @@ The ``atom_id`` field (column 5) stores the pre-grouping index,
 allowing exact reconstruction of the original ordering after any
 number of read-write cycles.
 
-5 Why JSON on line 2?
----------------------
+Why JSON on line 2?
+-------------------
 
 Line 2 was historically unused ("Time" or empty in eOn files). JSON
 provides:
@@ -117,8 +115,8 @@ provides:
   The parser detects this (line 2 does not start with ``{``) and falls
   back to legacy mode (``spec_version = 1``).
 
-6 When should I use HDF5 instead?
----------------------------------
+When should I use HDF5 instead?
+-------------------------------
 
 Use ``con`` for:
 
@@ -144,8 +142,8 @@ Use HDF5 for:
 The two formats complement each other. readcon-core handles the
 ``con``-to-data pipeline; HDF5 handles long-term archival and analysis.
 
-7 How fast is readcon-core?
----------------------------
+How fast is readcon-core?
+-------------------------
 
 readcon-core parses ``con`` files 10-30x faster than pure-Python
 readers (e.g., eOn's ``fileio.py``) by using:
@@ -162,10 +160,10 @@ readers (e.g., eOn's ``fileio.py``) by using:
 - **Forward skip**: ``forward()`` skips frames by line counting without
   parsing atom data
 
-See `benchmarks <benchmarks.rst>`_ for measured numbers on real datasets.
+See :doc:`benchmarks` for measured numbers on real datasets.
 
-8 What is the sections mechanism?
----------------------------------
+What is the sections mechanism?
+-------------------------------
 
 Version 2 files can include per-atom data beyond coordinates. Each
 additional section (velocities, forces) follows the same block
@@ -197,8 +195,8 @@ for existing ``.convel`` files.
 Legacy ``.convel`` files without a ``sections`` key still work: the
 parser falls back to blank-separator velocity detection.
 
-9 What does validate=true do?
------------------------------
+What does validate=true do?
+---------------------------
 
 The ``validate`` metadata key asks v2 readers to reject frames that do
 not satisfy strict ordering and schema invariants:
@@ -213,8 +211,8 @@ integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
-10 Can I store forces and energies?
------------------------------------
+Can I store forces and energies?
+--------------------------------
 
 Yes, in two complementary places:
 
@@ -240,8 +238,8 @@ per-atom ``energies`` section when both are present. Forces require
 potential identification (the ``potential`` key) so downstream tools
 know how to interpret the values.
 
-11 Does readcon-core support compression?
------------------------------------------
+Does readcon-core support compression?
+--------------------------------------
 
 Yes. Two formats are detected automatically by magic bytes:
 
@@ -260,8 +258,8 @@ Force data roughly triples per-atom file size. Gzip compression
 typically recovers 60-80% of that overhead; zstd usually trims an
 additional 5-15% over gzip for the same content.
 
-12 How do I look up an atom by its ``atom_id``?
------------------------------------------------
+How do I look up an atom by its ``atom_id``?
+--------------------------------------------
 
 readcon-core preserves ``atom_id`` (column 5) through every read-write
 cycle, but the in-memory atom order follows the file's type-grouped
@@ -278,8 +276,8 @@ gap:
 Both APIs mirror across every supported binding (Rust, C ABI, C++,
 Python, Julia).
 
-13 What languages are supported?
---------------------------------
+What languages are supported?
+-----------------------------
 
 .. table::
 
@@ -300,8 +298,8 @@ Python, Julia).
 All bindings share the same Rust core, ensuring identical parsing
 behavior across languages.
 
-14 How do I convert between ASE and ``con``?
---------------------------------------------
+How do I convert between ASE and ``con``?
+-----------------------------------------
 
 .. code:: python
 
@@ -322,8 +320,8 @@ The conversion preserves ``atom_id`` (via a custom per-atom array),
 velocities, forces (via SinglePointCalculator), masses, and
 constraints (FixAtoms).
 
-15 Why both ``readcon-core.h`` and ``metatensor.h`` / ``readcon-metatensor.h``?
--------------------------------------------------------------------------------
+Why both ``readcon-core.h`` and ``metatensor.h`` / ``readcon-metatensor.h``?
+----------------------------------------------------------------------------
 
 readcon's cbindgen surface and metatensor-sys's cbindgen surface are separate
 crates. We hand off opaque ``mts_block_t *``; values and labels use metatensor's
@@ -331,11 +329,66 @@ C API. Prefer ``include/readcon-metatensor.h`` (``metatensor.h`` first). Lean bu
 still export metatensor entry points that return ``RKR_STATUS_FEATURE_DISABLED``
 (``-11``), distinct from internal error (``-7``).
 
-16 Lean vs fat ``libreadcon_core`` for C/Fortran?
--------------------------------------------------
+Lean vs fat ``libreadcon_core`` for C/Fortran?
+----------------------------------------------
 
 Same symbol names either way. Without ``--features metatensor``, blocks return
 ``-11``. Without ``--features zstd``, ``create_writer_zstd_*`` returns a null writer.
 gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C aliases) are
 always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
 lists include/lib paths for ``libmetatensor``.
+
+When should I use CON vs XYZ / extXYZ / chemfiles?
+--------------------------------------------------
+
+Use CON when structures must retain optimizer-relevant fields (three-axis
+constraints, forces/velocities sections, versioned metadata) and move between
+languages via the hourglass ABI (Fortran/C/C++/Python/Julia).
+
+XYZ/extXYZ are suitable when only positions (and optionally a lattice) are
+required and fidelity loss is acceptable. Prefer CON as the durable form in
+multi-code pipelines; convert at the edge if needed.
+
+Chemfiles ingress maps XYZ/PDB/GRO and similar formats into ``ConFrame`` / CON
+when inputs originate elsewhere. See :doc:`benchmarks`
+for equal-geometry parse comparisons.
+
+Are ASE adapters the primary API?
+---------------------------------
+
+No. Optional ``to_ase`` / ``from_ase`` support calculator hand-off. Interchange
+and multi-reader campaign storage use ``readcon`` / ``readcon-db`` with CON text
+authoritative.
+
+What is authoritative: CON text, cooked SoA, or DLPack?
+-------------------------------------------------------
+
+UTF-8 CON text is authoritative for files and for ``readcon-db`` ``frames`` (hash,
+dedup, join/split, ``reindex``). Cooked RCSO / SoA / DLPack buffers accelerate
+extract and device hand-off and are discardable or ephemeral.
+
+Why is the campaign store a separate package?
+---------------------------------------------
+
+Parse/write embeddability and multi-reader indexing are separate concerns with
+one shared decoder (``readcon-core``). ``readcon-db`` owns LMDB indexes and SWMR
+campaign access.
+
+Why an hourglass C ABI?
+-----------------------
+
+Optimizers and drivers are often Fortran or C++. A single ``rkr_*`` surface
+gives those codes the same CON semantics as Python and Julia without embedding
+a Python interpreter on the I/O path, and without maintaining separate text
+dialects (minimal XYZ or package-private logs) per language.
+
+How does CON + readcon-db compare to XYZ and ASE I/O?
+-----------------------------------------------------
+
+For interchange that must preserve CON sections and for multi-reader campaign
+screening with CON as on-disk authority, versioned CON with the hourglass
+implementation and ``readcon-db`` is the design this project implements and
+measures against ASE XYZ/CON and ASE ``.db`` under fair protocols. ASE remains
+appropriate for calculators and analysis; XYZ remains appropriate for minimal
+position dumps. Continuous-MD internal binary formats inside a given engine
+serve a different role (high-density dynamics I/O).

@@ -1,5 +1,5 @@
 #+title: Tracker issue status (lode-org/readcon-core)
-#+options: toc:nil num:nil
+#+options: toc:nil num:nil ^:nil
 
 Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge PRs.
 
@@ -15,7 +15,7 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | #12 | EXT: chemfiles | Done | =--features chemfiles=; =ad70e47= Cachegrind conversion scenarios |
 | #19 | 3-component =fixed_flag= | Done | Rust =[bool;3]=; C =fixed_x/y/z=; Fortran =catom_t= |
 
-**Vault vissues (Software/readcon-core/issues.org) — =feat/ffi-matrix-hardening=**
+*Vault vissues (Software/readcon-core/issues.org) — =feat/ffi-matrix-hardening=*
 
 | Id | Topic | Status | Evidence |
 |----+-------+--------+----------|

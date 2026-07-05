@@ -17,6 +17,8 @@
 (setq org-export-with-toc nil)
 (setq org-export-with-author nil)
 (setq org-export-with-timestamps nil)
+;; a_b in prose is a snake_case identifier, not a subscript
+(setq org-export-with-sub-superscripts nil)
 (setq org-rst-headline-underline ?-)
 
 (setq org-publish-project-alist

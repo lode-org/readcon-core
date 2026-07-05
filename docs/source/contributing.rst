@@ -3,14 +3,12 @@ Developer workflow and release guidelines
 =========================================
 
 
-.. contents::
 
+Development setup
+-----------------
 
-1 Development setup
--------------------
-
-1.1 Prerequisites
-~~~~~~~~~~~~~~~~~
+Prerequisites
+~~~~~~~~~~~~~
 
 - Rust >= 1.88 (edition 2024)
 
@@ -18,8 +16,8 @@ Developer workflow and release guidelines
 
 - `cocogitto <https://github.com/cocogitto/cocogitto>`_ (``cog``) for conventional commits and changelog
 
-1.2 Getting started
-~~~~~~~~~~~~~~~~~~~
+Getting started
+~~~~~~~~~~~~~~~
 
 .. code:: shell
 
@@ -36,8 +34,8 @@ Developer workflow and release guidelines
     # Build release
     pixi r build
 
-1.3 Environment-specific workflows
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Environment-specific workflows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
@@ -52,8 +50,8 @@ Developer workflow and release guidelines
     pixi r -e docs docbld
     # Docs output in docs/build/
 
-2 Commit conventions
---------------------
+Commit conventions
+------------------
 
 The project uses `conventional commits <https://www.conventionalcommits.org/>`_ enforced by cocogitto.
 The CI lint check rejects non-conforming commit messages.
@@ -99,8 +97,8 @@ Examples:
     bld: add CMakeLists.txt for cmake subproject use
     tst: add roundtrip test for convel writer
 
-3 Branching and workflow
-------------------------
+Branching and workflow
+----------------------
 
 - ``main`` is the release branch. All PRs target ``main``.
 
@@ -114,8 +112,8 @@ Examples:
 - The CI runs on every PR: tests, lint, coverage, and benchmark
   regression checks (via Criterion + critcmp + asv-perch).
 
-4 Testing
----------
+Testing
+-------
 
 .. code:: shell
 
@@ -136,8 +134,8 @@ Examples:
 Test data lives in ``resources/test/``. Use the ``test_case!`` macro in
 integration tests to locate test files.
 
-4.1 Profile-guided optimisation (PGO)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Profile-guided optimisation (PGO)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``release`` and ``dist`` profiles in ``Cargo.toml`` already enable
 ``lto = "thin"`` / ``lto = "fat"`` and ``codegen-units = 1``. PGO can give
@@ -169,11 +167,11 @@ The same flow works for ``cargo cinstall`` when you want PGO-optimised
 ``libreadcon_core.so`` for distribution; substitute ``cargo cinstall``
 for ``cargo build --release`` in step 3.
 
-5 Continuous integration
-------------------------
+Continuous integration
+----------------------
 
-5.1 Workflows
-~~~~~~~~~~~~~
+Workflows
+~~~~~~~~~
 
 .. table::
 
@@ -191,8 +189,8 @@ for ``cargo build --release`` in step 3.
     | Lint                      | ``lint.yml``               | push, PR           | Conventional commit check + large file audit  |
     +---------------------------+----------------------------+--------------------+-----------------------------------------------+
 
-5.2 Benchmark regression detection
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Benchmark regression detection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The project uses a two-workflow pattern for safe benchmark PR comments:
 
@@ -209,16 +207,16 @@ for posting comments (GitHub security model).
 
 Regressions above 10x trigger automatic conversion to draft PR.
 
-6 Release process
------------------
+Release process
+---------------
 
 This section is the only guide a new contributor needs to **cut a release**
 without reading CI YAML. Three layers work together; use all of them and do
 **not** short-circuit with a local-only ``cargo publish`` unless CI secrets are
 broken (fallback is documented below).
 
-6.1 Mental model (new contributor)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Mental model (new contributor)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
@@ -253,8 +251,8 @@ broken (fallback is documented below).
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
-6.2 cargo-dist release-PR path
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+cargo-dist release-PR path
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Do **not** push a version tag from a laptop until the version-bump commit is
    on ``main`` (via PR). That PR is the **release PR**: it should contain only the
@@ -293,8 +291,8 @@ Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit
     dist generate --mode=ci
     git add .github/workflows/release.yml dist-workspace.toml
 
-6.3 crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Workflow file: ``.github/workflows/crates_publish.yml`` (name: **Publish to crates.io**).
 
@@ -337,8 +335,8 @@ Local fallback only if CI is red and you must unblock users:
 Prefer fixing the secret and re-running the workflow over making local publish
 the default path.
 
-6.4 PyPI (wheels) on the same tag
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+PyPI (wheels) on the same tag
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``python_wheels.yml`` builds sdist + manylinux/macOS/Windows wheels with maturin
 (``--features python``, **not** ``chemfiles`` by default) and publishes with
@@ -348,8 +346,8 @@ configured (see **Initial PyPI setup** below). Transient crates.io network
 errors are mitigated with ``CARGO_HTTP_MULTIPLEXING=false`` and a one-shot
 maturin retry; tag runs are not cancelled mid-flight by concurrency.
 
-6.5 Version files
-~~~~~~~~~~~~~~~~~
+Version files
+~~~~~~~~~~~~~
 
 Versions are tracked in six source files that must stay synchronized:
 
@@ -365,8 +363,8 @@ Versions are tracked in six source files that must stay synchronized:
 
 6. ``src/lib.rs`` (``assert_eq!(VERSION, "X.Y.Z")`` in the version test)
 
-6.6 Complete release checklist
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Complete release checklist
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Fast path (preferred):
 
@@ -452,8 +450,8 @@ Optional local C ABI tarball for consumers that do not use cargo-dist CLI
 archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or
 ``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
 
-6.7 Initial PyPI setup (first release only)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Initial PyPI setup (first release only)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For the very first release, PyPI trusted publisher is not yet
 configured. Publish manually:
@@ -467,7 +465,7 @@ configured. Publish manually:
     uvx twine upload target/wheels/*
 
 
-Python ships ****two**** distributions from ``python_wheels.yml``:
+Python ships **two** distributions from ``python_wheels.yml``:
 
 .. table::
 
@@ -502,11 +500,11 @@ Then configure trusted publisher on PyPI:
 
 After this, all subsequent tagged releases auto-publish via OIDC.
 
-7 Adding new features
----------------------
+Adding new features
+-------------------
 
-7.1 Feature gates
-~~~~~~~~~~~~~~~~~
+Feature gates
+~~~~~~~~~~~~~
 
 Optional functionality is gated behind Cargo features:
 
@@ -524,8 +522,8 @@ Optional functionality is gated behind Cargo features:
 
 Add new optional features in ``Cargo.toml`` under ``[features]``.
 
-7.2 Adding a new binding
-~~~~~~~~~~~~~~~~~~~~~~~~
+Adding a new binding
+~~~~~~~~~~~~~~~~~~~~
 
 1. Add the binding source under ``src/`` (e.g., ``src/python.rs``) or as
    a separate package (e.g., ``julia/ReadCon/``).
@@ -538,8 +536,8 @@ Add new optional features in ``Cargo.toml`` under ``[features]``.
 
 5. Add a pixi environment and tasks if applicable.
 
-7.3 Updating the C header
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Updating the C header
+~~~~~~~~~~~~~~~~~~~~~
 
 The C header ``include/readcon-core.h`` is generated by cbindgen.
 After modifying ``src/ffi.rs``:

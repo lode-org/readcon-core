@@ -3,14 +3,12 @@ Getting started
 ===============
 
 
-.. contents::
-
 .. figure:: /_static/figures/conversion-pipeline.svg
    :alt: XYZ, PDB, or GRO converted into a CON frame and written for eOn or LODE
    :align: center
    :width: 100%
 
-   **Format conversion** — common structure files become a CON frame, then a
+   *Format conversion* — common structure files become a CON frame, then a
    ``.con`` for eOn / LODE (or any language binding). Needs the *with
    conversions* install below.
 
@@ -19,13 +17,35 @@ Getting started
    :align: center
    :width: 100%
 
-   **Two installs** — default package is CON I/O only; the conversion package
+   *Two installs* — default package is CON I/O only; the conversion package
    adds XYZ / PDB / GRO (and similar) → CON. Same CON APIs either way.
 
 .. tip::
 
-   Start here for install and the shortest paths. Top nav **Convert** is the
+   Start here for install and the shortest paths. Top nav *Convert* is the
    conversion tutorial and recipes.
+
+When to use what (reviewer / practitioner map)
+----------------------------------------------
+
+.. table::
+
+    +----------------------------------------------+----------------------------------------------------+
+    | Need                                         | Use                                                |
+    +==============================================+====================================================+
+    | Optimizer checkpoint with constraints/forces | CON via ``readcon`` / ``readcon-core``             |
+    +----------------------------------------------+----------------------------------------------------+
+    | Import XYZ/PDB/GRO into CON                  | Optional chemfiles build (``readcon-chemfiles``)   |
+    +----------------------------------------------+----------------------------------------------------+
+    | Calculator hand-off to ASE                   | Optional ASE adapters only—not campaign storage    |
+    +----------------------------------------------+----------------------------------------------------+
+    | Indexed multi-trajectory campaign            | Companion ``readcon-db`` (CON blobs authoritative) |
+    +----------------------------------------------+----------------------------------------------------+
+    | Lean C/Fortran link without converters       | Default features (no chemfiles/cuda required)      |
+    +----------------------------------------------+----------------------------------------------------+
+
+Design **why** and format evolution: :doc:`architecture`,
+:doc:`evolution`, :doc:`faq`, :doc:`spec`.
 
 Install
 -------
@@ -111,7 +131,7 @@ Read a CON file
 Convert XYZ (or PDB / GRO) into CON
 -----------------------------------
 
-Needs the ****with conversions**** install.
+Needs the **with conversions** install.
 
 .. code:: python
 

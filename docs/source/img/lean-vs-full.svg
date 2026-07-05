@@ -3,7 +3,7 @@
 <style>
   .t { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; fill: #0F172A; }
   .h { font-weight: 700; font-size: 14px; }
-  .s { font-size: 11px; fill: #475569; }
+  .s { font-size: 11px; fill: #64748B; }
 </style>
 <rect width="680" height="188" fill="#F8FAFC"/>
 <rect x="24" y="24" width="280" height="140" rx="12" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5"/>

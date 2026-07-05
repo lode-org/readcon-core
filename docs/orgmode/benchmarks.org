@@ -1,5 +1,5 @@
 #+title: Performance Benchmarks
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Methodology
 
@@ -17,8 +17,8 @@ cargo bench
 
 * CI Cachegrind (always-on numbers)
 
-Hand-written Criterion tables below can lag releases. For **regression tracking
-on every =main= push**, CI runs Valgrind **Cachegrind** on
+Hand-written Criterion tables below can lag releases. For *regression tracking
+on every =main= push*, CI runs Valgrind *Cachegrind* on
 =examples/cachegrind_harness.rs= and commits instruction counts into the docs.
 
 #+begin_export rst
@@ -32,23 +32,23 @@ scripts/run_cachegrind_bench.sh
 # outputs docs/source/_generated/cachegrind_results.{json,rst}
 #+end_src
 
-**Why Cachegrind instead of Criterion on CI?** Wall-clock medians on shared
+*Why Cachegrind instead of Criterion on CI?* Wall-clock medians on shared
 GitHub runners are noisy (noisy neighbours, CPU migration). Cachegrind counts
-**instruction references** for a fixed binary — stable enough to diff commits
+*instruction references* for a fixed binary — stable enough to diff commits
 and fail a PR workflow later if desired. Criterion remains best for local
 latency intuition; PR workflow =Benchmark PR= still compares Criterion
 baselines with =critcmp=.
 
-**Chemfiles / format conversion** is not in this harness yet (optional feature,
+*Chemfiles / format conversion* is not in this harness yet (optional feature,
 links =libchemfiles=). Add scenarios only when conversion is on the critical
 path you care to regress; CON I/O is the core library cost.
 
-**Do the old tables need updating?** Yes for marketing-style µs claims after
+*Do the old tables need updating?* Yes for marketing-style µs claims after
 hot-path changes (0.13 chemfiles is orthogonal to CON parse unless you
-measure conversion). Prefer treating Criterion tables as **illustrative** and
-Cachegrind as **authoritative for CI**. Re-run =cargo bench= +
+measure conversion). Prefer treating Criterion tables as *illustrative* and
+Cachegrind as *authoritative for CI*. Re-run =cargo bench= +
 =benches/make_plots.py= when preparing a paper or major release — Pareto plot uses
-**measured** points only: =readcon= / ASE CON / ASE extXYZ from
+*measured* points only: =readcon= / ASE CON / ASE extXYZ from
 =multiformat_traj_terra.json= (equal geometry, 100 frames × 218 atoms) plus C
 sscanf from =compare_readers.py=; ASE CON is labeled as CON, not as extXYZ.
 Conversion cost is in the Cachegrind table (``chemfiles_*`` scenarios).

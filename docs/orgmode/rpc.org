@@ -1,5 +1,5 @@
 #+title: Cap'n Proto RPC serving
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Overview
 

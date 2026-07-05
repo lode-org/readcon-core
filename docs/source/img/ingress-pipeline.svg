@@ -7,7 +7,7 @@
   <style>
     .t { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .h { font-size: 13px; font-weight: 700; fill: #0F172A; }
-    .s { font-size: 11px; fill: #475569; }
+    .s { font-size: 11px; fill: #64748B; }
     .w { fill: #F8FAFC; }
   </style>
 </defs>

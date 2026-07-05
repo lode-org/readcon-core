@@ -3,11 +3,9 @@ Library architecture
 ====================
 
 
-.. contents::
 
-
-1 Overview
-----------
+Overview
+--------
 
 readcon-core is structured as an hourglass API: a Rust core with
 thin FFI and language-specific wrapper layers.
@@ -22,35 +20,20 @@ thin FFI and language-specific wrapper layers.
                 Rust core library
            types | parser | writer | iterators
 
-**Ecosystem split.** This crate is the **interchange and ABI** layer: parse/write
-CON/convel, optional chemfiles ingress into ``ConFrame``, typed metadata
-(``energy``, ``sections``, …). Campaign-scale corpora (many trajectories,
-selective access without loading every frame into heap RAM) live in the
-companion **readcon-db** store
-(`repository <https://github.com/lode-org/readcon-db>`_,
-`docs site <https://lode-org.github.io/readcon-db/>`_ when published). Blobs
-there remain CON text and are always decoded with readcon-core—no forked
-metadata schema. Day-to-day path: CON files or chemfiles→``ConFrame`` in core;
-campaign filters (natoms, symbols, **energy range**, **forces/velocities
-flags**, xxHash3 exact match) in readcon-db. ASE is optional only for
-calculator ``Atoms`` hand-off, not campaign storage.
-
-2 Core types (types.rs)
------------------------
+Core types (types.rs)
+---------------------
 
 ``FrameHeader``
     9-line header metadata (cell, angles, atom counts,
-    masses, spec\ :sub:`version`\, metadata). The ``spec_version`` field (``u32``)
+    masses, spec\_version, metadata). The ``spec_version`` field (``u32``)
     records the CON spec version from the JSON metadata line. The
     ``metadata`` field (``BTreeMap<String, serde_json::Value>``) holds
     additional key-value pairs from the JSON, preserving unrecognized
-    keys through round-trips. Recommended key ``energy`` (finite number) and
-    declared ``sections`` (e.g. ``forces``, ``velocities``) are the authority
-    for corpus secondary indexes in readcon-db.
+    keys through round-trips.
 
 ``AtomDatum``
     Single atom data (symbol, coordinates, fixed flag,
-    atom\ :sub:`id`\ (original atom index before type-based reordering),
+    atom\_id (original atom index before type-based reordering),
     optional velocities, optional forces).
 
 ``ConFrame``
@@ -65,8 +48,8 @@ calculator ``Atoms`` hand-off, not campaign storage.
 Symbol strings use ``Arc<str>`` to avoid per-atom string clones
 within a type block and ensure thread-safety for parallel parsing.
 
-3 Parser (parser.rs)
---------------------
+Parser (parser.rs)
+------------------
 
 ``parse_line_of_n<T>``
     Generic whitespace-separated value parser
@@ -79,7 +62,7 @@ within a type block and ensure thread-safety for parallel parsing.
 ``parse_line_of_range_f64``
     Flexible parser accepting between
     ``min`` and ``max`` columns, padding from defaults. Used for atom
-    lines where column 5 (atom\ :sub:`id`\) is optional.
+    lines where column 5 (atom\_id) is optional.
 
 ``parse_frame_header``
     Consumes 9 header lines. Detects JSON
@@ -105,8 +88,8 @@ within a type block and ensure thread-safety for parallel parsing.
     labels, fixed masks, and atom ids against the coordinate blocks
     before attaching velocities or forces.
 
-4 Writer (writer.rs)
---------------------
+Writer (writer.rs)
+------------------
 
 ``ConFrameWriter<W: Write>``
     Generic buffered writer.
@@ -122,8 +105,8 @@ within a type block and ensure thread-safety for parallel parsing.
   ``frame.has_velocities()``), and force blocks (if
   ``frame.has_forces()``).
 
-5 Iterators (iterators.rs)
---------------------------
+Iterators (iterators.rs)
+------------------------
 
 ``ConFrameIterator``
     Lazy frame-by-frame parser with ``next()`` and
@@ -137,8 +120,8 @@ within a type block and ensure thread-safety for parallel parsing.
     Rayon-based parallel parsing behind
     the ``parallel`` feature gate.
 
-6 FFI layer (ffi.rs)
---------------------
+FFI layer (ffi.rs)
+------------------
 
 Opaque handle pattern:
 
@@ -195,8 +178,8 @@ Per-frame metadata accessors:
   variants accept per-axis fixed flags. Force and velocity+force
   variants call the same Rust ``ConFrameBuilder`` paths as native Rust.
 
-7 C++ wrapper (readcon-core.hpp)
---------------------------------
+C++ wrapper (readcon-core.hpp)
+------------------------------
 
 Header-only RAII wrappers with lazy caching:
 
@@ -215,8 +198,8 @@ Header-only RAII wrappers with lazy caching:
     ``std::array<bool, 3>`` masks, with velocity, force, and
     velocity+force atom constructors.
 
-8 Python wrapper (python.rs)
-----------------------------
+Python wrapper (python.rs)
+--------------------------
 
 The PyO3 layer stores ``ConFrame.atoms`` as a live Python list and
 ``ConFrame.metadata`` as a live Python dict. Writers validate metadata
@@ -228,8 +211,8 @@ loop-oriented frame processing.
 ASE conversion maps all-fixed atoms to ``FixAtoms`` and partial masks to
 ``FixCartesian``, preserving ``atom_id`` through a named ASE array.
 
-9 Julia wrapper (wrapper.jl)
-----------------------------
+Julia wrapper (wrapper.jl)
+--------------------------
 
 The Julia ccall layer exposes typed frame metadata fields populated
 from C FFI accessors. ``write_con(path, frames; precision=6)``
@@ -237,8 +220,8 @@ reconstructs opaque frame handles through the C builder API and writes
 them through the Rust writer, preserving velocities, forces, per-axis
 fixed masks, masses, atom ids, and JSON metadata.
 
-10 C ABI install layout (cargo-c)
----------------------------------
+C ABI install layout (cargo-c)
+------------------------------
 
 The ``[package.metadata.capi.*]`` keys in ``Cargo.toml`` drive
 `cargo-c <https://github.com/lu-zero/cargo-c>`_. Running
@@ -278,3 +261,28 @@ The ``[package.metadata.capi.pkg_config] filename = "readcon-core"``
 override is load-bearing: without it cargo-c defaults the .pc filename
 to the ``[lib]`` name (``readcon_core``), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
+
+.. _design-rationale:
+
+Design rationale
+----------------
+
+``readcon-core`` implements a versioned CON/convel contract behind an hourglass
+C ABI so optimizers and drivers in Fortran, C, C++, Julia, and Python share
+one semantics surface without requiring a Python runtime on the I/O path.
+Optional chemfiles ingress maps foreign formats into ``ConFrame``; optional
+metatensor/DLPack exports provide tensor hand-off without a second
+authoritative on-disk representation. Lean builds expose optional features as
+stubs (``RKR_STATUS_FEATURE_DISABLED``).
+
+``readcon-db`` provides multi-reader campaign indexes while retaining UTF-8 CON
+as durable identity (hash, dedup, reindex). ASE remains effective for
+calculators and interactive analysis; optional ``to_ase`` is calculator
+hand-off when CON sections must be preserved under multi-reader screening.
+
+Format evolution and layout alternatives: :doc:`evolution`.
+Q&A: :doc:`faq`. Spec: :doc:`spec`.
+Measured interchange and campaign comparisons: :doc:`benchmarks`.
+Engine-native binary trajectories remain appropriate high-density encodings
+inside continuous MD; they are complementary to a multi-language CON
+checkpoint and campaign layer.

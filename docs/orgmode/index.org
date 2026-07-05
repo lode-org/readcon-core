@@ -1,5 +1,5 @@
 #+title: readcon-core
-#+options: toc:nil num:nil title:nil
+#+options: toc:nil num:nil title:nil ^:nil
 
 #+begin_export rst
 .. raw:: html
@@ -14,20 +14,20 @@
 ``readcon-core``
 ================
 
-Rust library for **reading and writing** ``.con`` / ``.convel`` simulation
+Rust library for *reading and writing* ``.con`` / ``.convel`` simulation
 frames (eOn, LODE). Lazy iterators, spec-v2 JSON metadata, C/C++/Python/Julia
-bindings. From v0.13, convert **XYZ, PDB, GRO,** and other chemfiles formats
+bindings. From v0.13, convert *XYZ, PDB, GRO,* and other chemfiles formats
 into CON without inventing another reader for each format.
 
 .. important::
 
-   **New here?** → :doc:`getting-started`
+   *New here?* → :doc:`getting-started`
 
-   **Bring XYZ/PDB/GRO into CON?** → :doc:`chemfiles-tutorial`
+   *Bring XYZ/PDB/GRO into CON?* → :doc:`chemfiles-tutorial`
    · run the Org notebook :doc:`chemfiles-notebook`
    (``scripts/run-chemfiles-notebook.sh``)
 
-   **Format rules?** → :doc:`spec` · **APIs?** → :doc:`bindings` ·
+   *Format rules?* → :doc:`spec` · *APIs?* → :doc:`bindings` ·
    :doc:`chemfiles-reference`
 #+end_export
 
@@ -38,7 +38,7 @@ into CON without inventing another reader for each format.
    :align: center
    :width: 92%
 
-   **Conversion path** — common structure formats into CON for eOn / LODE.
+   *Conversion path* — common structure formats into CON for eOn / LODE.
 
 .. grid:: 1 1 2 2
    :gutter: 2
@@ -104,7 +104,7 @@ into CON without inventing another reader for each format.
 
    bindings
    rpc
-   crates/readcon_core/lib
+   Rust API (docs.rs) <https://docs.rs/readcon-core>
 
 .. toctree::
    :maxdepth: 1
@@ -112,4 +112,5 @@ into CON without inventing another reader for each format.
 
    contributing
    changelog
+   issue-status
 #+end_export

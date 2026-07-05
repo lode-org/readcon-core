@@ -1,5 +1,5 @@
 #+title: How-to — Chemfiles conversion and selection
-#+options: toc:2 num:nil
+#+options: toc:nil num:nil ^:nil
 
 
 #+begin_export rst

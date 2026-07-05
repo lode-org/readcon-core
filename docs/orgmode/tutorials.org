@@ -1,5 +1,5 @@
 #+title: Tutorials
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Querying the spec version
 
@@ -819,5 +819,5 @@ end
 - *Explanation* (why optional chemfiles, bonds in JSON, index remap): [[file:chemfiles-explain.org][chemfiles-explain.org]]
 - *Reference* (API tables, grammar subset, install matrix): [[file:chemfiles-reference.org][chemfiles-reference.org]]
 
-Start with the tutorial if you need to **drive conversion from XYZ/PDB/GRO/…**
+Start with the tutorial if you need to *drive conversion from XYZ/PDB/GRO/…*
 into CON for LODE tools.

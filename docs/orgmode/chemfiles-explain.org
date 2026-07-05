@@ -1,14 +1,14 @@
 #+title: Explanation — Chemfiles ingress and CON topology
-#+options: toc:2 num:nil
+#+options: toc:nil num:nil ^:nil
 
 #+begin_export rst
-   **Anatomy + geometry** — layered CON layout next to an in-memory structure
+   *Anatomy + geometry* — layered CON layout next to an in-memory structure
    (``tiny_cuh2.con``). Selection indices follow ``atom_data`` order.
 
-   **Why CON matters for viz** — chemparseplot / rgpycrumbs 2D reaction-valley
+   *Why CON matters for viz* — chemparseplot / rgpycrumbs 2D reaction-valley
    landscapes consume CON NEB paths; readcon-core is the reliable I/O layer.
 
-   **Full ecosystem** — eOn, rgpot, LODE consumers; chemparseplot, rgpycrumbs,
+   *Full ecosystem* — eOn, rgpot, LODE consumers; chemparseplot, rgpycrumbs,
    pychum for viz and inputs.
 #+end_export
 

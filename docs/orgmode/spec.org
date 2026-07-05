@@ -1,6 +1,6 @@
 #+title: The CON File Format Specification
 #+date: 2026-03-25
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Specification
 
@@ -442,7 +442,7 @@ When the optional chemfiles feature is enabled, readers/writers MAY project
 back into =bonds= on chemfiles→CON conversion. The CON spec version remains 2;
 =bonds= is an additive optional metadata key (library semver may bump for API).
 
-**Chemfiles import sidecars (optional, not CON columns).** Implementations that
+*Chemfiles import sidecars (optional, not CON columns).* Implementations that
 import via chemfiles MAY store extra JSON keys such as
 =chemfiles_atom_names= and =chemfiles_atom_types= (string arrays in chemfiles /
 =atom_id= order) so selection can restore chemfiles display =name= distinct
@@ -451,7 +451,7 @@ These keys are implementation extras: parsers MUST preserve unknown keys;
 writers MUST NOT require them for valid v2 files. Hand-authored frames without
 sidecars behave as symbol-only for selection.
 
-**Selection (library behaviour).** Match indices are reported in type-grouped
+*Selection (library behaviour).* Match indices are reported in type-grouped
 =atom_data= order; bond endpoints use the same index space (=atom_id= remap on
 import). Residue / =resname=, properties not retained on import, topology beyond
 pair =bonds=, and geometry-threshold minidialects are outside the CON selection
@@ -475,7 +475,7 @@ expressions: named bases combined with =*= / =/= / =^=).
 | =velocity= | derived        | length / time                  |
 | =force=    | derived        | energy / length                |
 
-**Version 3:** =units= is **required**. The object MUST include non-empty
+*Version 3:* =units= is *required*. The object MUST include non-empty
 =length= and =energy= strings whose dimensions match those quantities.
 Optional keys (=mass=, =time=, =velocity=, =force=) MUST be dimensionally
 valid when present. Version 2 MAY omit =units=; readers SHOULD preserve the
@@ -558,7 +558,7 @@ fields when units differ between frames.
 
 The metadata object MAY contain a =storage_dtypes= member describing how a
 conforming implementation holds per-atom numeric fields *after* parsing or
-construction. This does **not** change on-disk CON text encoding (coordinates
+construction. This does *not* change on-disk CON text encoding (coordinates
 and section values remain decimal representations of binary64).
 
 When present, =storage_dtypes= SHALL be a JSON object. Recognized members:
@@ -568,7 +568,7 @@ When present, =storage_dtypes= SHALL be a JSON object. Recognized members:
 | =positions= / =velocities= / =forces= / =energies= / =masses= | =float16=, =float32=, =float64=, =int8=…=int64=, =uint8=…=uint64=, =bool=, =complex64=, =complex128= | =float64= |
 | =atom_ids= | =uint8=…=uint64=, =int8=…=int64= | =uint64= |
 
-Hosted element types are those **dlpk** can own on the CPU (=float16= via
+Hosted element types are those *dlpk* can own on the CPU (=float16= via
 =half=, complex as =[f32;2]= / =[f64;2]=, integers, =bool=). DLPack ABI codes
 without a host (=bfloat16=, =float8_*=, =opaque=) SHALL be rejected in
 =storage_dtypes= with a validation error.
@@ -870,7 +870,7 @@ The DLPack tier exposes (builder and, for optional sections, frame C ABI):
 - =masses_dlpack= — =(N,)=.
 - =atom_ids_dlpack= — =(N,)= integer ids.
 
-Consumers MUST read shape, strides, **dtype** (code/bits/lanes), and device from
+Consumers MUST read shape, strides, *dtype* (code/bits/lanes), and device from
 the tensor; they MUST NOT assume a host =f64= / =double= buffer type. On-disk
 CON coordinates and section values are IEEE binary64 in current writers, and
 implementations today report =kDLFloat= / 64 for those fields and =kDLUInt= / 64

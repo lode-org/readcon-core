@@ -3,18 +3,16 @@ Cap'n Proto RPC serving
 =======================
 
 
-.. contents::
 
-
-1 Overview
-----------
+Overview
+--------
 
 readcon-core provides an optional Cap'n Proto RPC interface (behind
 the ``rpc`` feature flag) that allows any language with a Cap'n Proto
 implementation to request frame parsing and writing over the network.
 
-2 Schema
---------
+Schema
+------
 
 The schema defines a ``ReadConService`` interface with two methods:
 
@@ -32,8 +30,8 @@ indicating the CON format spec version. Clients that do not set this
 field receive the default (spec version 2). Older clients that do not
 know this field will silently ignore it (standard Cap'n Proto evolution).
 
-3 Building
-----------
+Building
+--------
 
 .. code:: shell
 
@@ -43,8 +41,8 @@ know this field will silently ignore it (standard Cap'n Proto evolution).
     # Or via pixi (capnproto is a dependency)
     pixi r build-rpc
 
-4 Server
---------
+Server
+------
 
 .. code:: rust
 
@@ -56,8 +54,8 @@ know this field will silently ignore it (standard Cap'n Proto evolution).
             .unwrap();
     }
 
-5 Client
---------
+Client
+------
 
 .. code:: rust
 
@@ -68,8 +66,8 @@ know this field will silently ignore it (standard Cap'n Proto evolution).
     let frames = client.parse_file(Path::new("input.con")).unwrap();
     let output = client.write_frames(&frames).unwrap();
 
-6 Protocol
-----------
+Protocol
+--------
 
 The RPC uses Cap'n Proto two-party protocol over TCP. The server
 listens on a configurable host:port and handles one connection per

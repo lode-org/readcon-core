@@ -1,5 +1,5 @@
 #+title: Developer workflow and release guidelines
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Development setup
 
@@ -393,7 +393,7 @@ uvx twine upload target/wheels/*
 #+end_src
 
 
-Python ships **two** distributions from =python_wheels.yml=:
+Python ships *two* distributions from =python_wheels.yml=:
 
 | PyPI name | Features | Import |
 |-----------+----------+--------|

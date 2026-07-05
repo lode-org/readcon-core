@@ -22,7 +22,9 @@ bibtex_reference_style = "author_year"
 
 templates_path = ["_templates"]
 exclude_patterns = [
-    "crates/readcon_core/main.rst",
+    # Pre-generated rust:* directive pages need sphinxcontrib-rust, which CI
+    # does not install; the Rust API link points at docs.rs instead.
+    "crates/**",
 ]
 
 myst_enable_extensions = [
