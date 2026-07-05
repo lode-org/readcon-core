@@ -25,6 +25,20 @@
    conversion tutorial and recipes.
 #+end_export
 
+
+* When to use what (reviewer / practitioner map)
+
+| Need | Use |
+|-----------------------------------------------+-----------------------------------------------|
+| Optimizer checkpoint with constraints/forces | CON via =readcon= / =readcon-core= |
+| Import XYZ/PDB/GRO into CON | Optional chemfiles build (=readcon-chemfiles=) |
+| Calculator hand-off to ASE | Optional ASE adapters only—not campaign storage |
+| Indexed multi-trajectory campaign | Companion =readcon-db= (CON blobs authoritative) |
+| Lean C/Fortran link without converters | Default features (no chemfiles/cuda required) |
+
+Design *why* and format evolution: [[file:architecture.org][architecture.org]],
+[[file:evolution.org][evolution.org]], [[file:faq.org][faq.org]], [[file:spec.org][spec.org]].
+
 * Install
 
 #+begin_export rst

@@ -10,17 +10,62 @@ use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
 
+/// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
+/// Returns count of tokens actually present (before padding).
+/// Pads `out[found..max]` from `defaults` when `found < max` and `found >= min`.
+#[inline]
+pub fn parse_line_of_range_f64_stack(
+    line: &str,
+    min: usize,
+    max: usize,
+    defaults: &[f64],
+    out: &mut [f64; 5],
+) -> Result<usize, ParseError> {
+    debug_assert!(max <= 5 && min <= max && defaults.len() >= max);
+    let mut found = 0usize;
+    for token in line.split_ascii_whitespace() {
+        if found >= max {
+            return Err(ParseError::InvalidVectorLength {
+                expected: max,
+                found: found + 1,
+            });
+        }
+        let val: f64 = fast_float2::parse(token)
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        out[found] = val;
+        found += 1;
+    }
+    if found < min || found > max {
+        return Err(ParseError::InvalidVectorLength {
+            expected: max,
+            found,
+        });
+    }
+    while found < max {
+        out[found] = defaults[found];
+        found += 1;
+    }
+    Ok(found)
+}
+
 /// Parses a line of whitespace-separated f64 values using fast-float2.
 ///
 /// This is the hot-path parser for coordinate and velocity lines. It uses
 /// `fast_float2::parse` instead of `str::parse::<f64>()` for better throughput
-/// on the numeric-heavy atom data lines.
+/// on the numeric-heavy atom data lines. Fixed-width atom lines use
+/// [`parse_line_of_range_f64_stack`] to avoid a heap `Vec` per line.
 ///
 /// # Arguments
 ///
 /// * `line` - A string slice representing a single line of data.
 /// * `n` - The exact number of f64 values expected on the line.
 pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
+    if n <= 5 {
+        let defaults = [0.0f64; 5];
+        let mut buf = [0.0f64; 5];
+        parse_line_of_range_f64_stack(line, n, n, &defaults, &mut buf)?;
+        return Ok(buf[..n].to_vec());
+    }
     let mut values = Vec::with_capacity(n);
     for token in line.split_ascii_whitespace() {
         let val: f64 = fast_float2::parse(token)
@@ -42,12 +87,18 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
 /// padding with values from `defaults` when fewer than `max` are present.
 ///
 /// Used for atom lines where column 5 (atom_index) is optional.
+/// Prefer [`parse_line_of_range_f64_stack`] on the atom hot path (`max <= 5`).
 pub fn parse_line_of_range_f64(
     line: &str,
     min: usize,
     max: usize,
     defaults: &[f64],
 ) -> Result<Vec<f64>, ParseError> {
+    if max <= 5 {
+        let mut buf = [0.0f64; 5];
+        parse_line_of_range_f64_stack(line, min, max, defaults, &mut buf)?;
+        return Ok(buf[..max].to_vec());
+    }
     let mut values = Vec::with_capacity(max);
     for token in line.split_ascii_whitespace() {
         let val: f64 = fast_float2::parse(token)
@@ -60,7 +111,6 @@ pub fn parse_line_of_range_f64(
             found: values.len(),
         });
     }
-    // Pad missing columns from defaults
     while values.len() < max {
         let idx = values.len();
         values.push(defaults[idx]);
@@ -149,7 +199,9 @@ pub fn validate_metadata_schema(
                     return Err(metadata_json_error("potential.type must be a string"));
                 }
             }
-            meta::UNITS => {}
+            meta::UNITS => {
+                // Full v3 checks (required keys) run when con_spec_version >= 3.
+            }
             meta::PBC => validate_pbc_metadata(value)?,
             meta::BONDS => validate_bonds_metadata(value)?,
             meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
@@ -356,6 +408,19 @@ pub fn parse_frame_header<'a>(
         if ver > crate::CON_SPEC_VERSION {
             return Err(ParseError::UnsupportedSpecVersion(ver));
         }
+        if ver >= 3 {
+            match json_obj.get(meta::UNITS) {
+                Some(u) => crate::units::validate_v3_units_metadata(u).map_err(|e| {
+                    ParseError::ValidationError(format!("v3 units: {e}"))
+                })?,
+                None => {
+                    return Err(ParseError::ValidationError(
+                        "con_spec_version >= 3 requires metadata \"units\" with length and energy"
+                            .into(),
+                    ));
+                }
+            }
+        }
 
         // Single pass over the JSON object: collect sections, capture the
         // validate flag, copy the rest into metadata. Folds the previous
@@ -504,8 +569,13 @@ pub fn parse_single_frame<'a>(
     let validate = header.strict_validation;
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
+    // SoA positions are primary numeric storage on the hot path (write once).
+    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let mut positions = FloatArray2::zeros(dt.positions, total_atoms, 3);
 
     let mut global_atom_idx: u64 = 0;
+    let mut atom_i = 0usize;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         // Allocate the per-component Arc<str> directly from the trimmed
         // line; going through a String intermediate would add a second
@@ -520,18 +590,21 @@ pub fn parse_single_frame<'a>(
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
             // Column 5 (atom_index) is optional; defaults to sequential index.
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
-            let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(coord_line, 4, 5, &defaults, &mut vals)?;
             let (fixed, atom_id) = if validate {
                 parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
             } else {
                 (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
             };
+            let xyz = [vals[0], vals[1], vals[2]];
+            positions.set_f64_row(atom_i, xyz);
             atom_data.push(AtomDatum {
                 // This is a cheap reference-count increment, not a full string clone.
                 symbol: Arc::clone(&symbol),
-                x: vals[0],
-                y: vals[1],
-                z: vals[2],
+                x: xyz[0],
+                y: xyz[1],
+                z: xyz[2],
                 fixed,
                 atom_id,
                 velocity: None,
@@ -539,9 +612,13 @@ pub fn parse_single_frame<'a>(
                 energy: None,
             });
             global_atom_idx += 1;
+            atom_i += 1;
         }
     }
-    Ok(ConFrame { header, atom_data })
+    // Sections still attach to AoS; assemble uses prefilled positions (no second pos pass).
+    Ok(crate::types::con_frame_from_atom_data_with_positions(
+        header, atom_data, positions,
+    ))
 }
 
 fn validate_header_geometry(
@@ -769,7 +846,8 @@ where
             let vel_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
             // Column 5 (atom_index) is optional in velocity lines too.
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(vel_line, 4, 5, &defaults, &mut vals)?;
             if validate {
                 let (fixed, atom_id) =
                     parse_identity_columns(vel_line, "velocities", 3, 4, 5)?;
@@ -829,7 +907,8 @@ where
         for _ in 0..num_atoms {
             let force_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(force_line, 4, 5, &defaults, &mut vals)?;
             if validate {
                 let (fixed, atom_id) =
                     parse_identity_columns(force_line, "forces", 3, 4, 5)?;
@@ -1149,6 +1228,67 @@ mod tests {
             result.unwrap_err(),
             ParseError::UnsupportedSpecVersion(999)
         ));
+    }
+
+    #[test]
+    fn test_v3_missing_units_rejected() {
+        let lines = vec![
+            "PREBOX1",
+            "{\"con_spec_version\":3}",
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        let err = parse_frame_header(&mut line_it).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("units") || msg.contains("v3"),
+            "expected units error, got {msg}"
+        );
+    }
+
+    #[test]
+    fn test_v3_invalid_units_rejected() {
+        let lines = vec![
+            "PREBOX1",
+            r#"{"con_spec_version":3,"units":{"length":"eV","energy":"angstrom"}}"#,
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        assert!(parse_frame_header(&mut line_it).is_err());
+    }
+
+    #[test]
+    fn test_v3_valid_units_exposes_length_energy() {
+        let lines = vec![
+            "PREBOX1",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"}}"#,
+            "10.0 20.0 30.0",
+            "90.0 90.0 90.0",
+            "POSTBOX1",
+            "POSTBOX2",
+            "1",
+            "1",
+            "1.0",
+        ];
+        let mut line_it = lines.iter().copied();
+        let header = parse_frame_header(&mut line_it).unwrap();
+        assert_eq!(header.spec_version, 3);
+        assert_eq!(header.length_unit(), Some("angstrom"));
+        assert_eq!(header.energy_unit(), Some("eV"));
+        let f = header.conversion_factor_to("length", "nm").unwrap();
+        assert!((f - 0.1).abs() < 1e-12);
     }
 
     #[test]
@@ -1771,6 +1911,17 @@ Coordinates of Component 1
     fn test_parse_line_of_range_f64_exact() {
         let vals = parse_line_of_range_f64("1.0 2.0 3.0 0.0 42", 4, 5, &[0.0; 5]).unwrap();
         assert_eq!(vals, vec![1.0, 2.0, 3.0, 0.0, 42.0]);
+    }
+
+    #[test]
+    fn test_parse_line_of_range_f64_stack_matches_vec_api() {
+        let defaults = [0.0, 0.0, 0.0, 0.0, 7.0];
+        let line = "1.0 2.0 3.0 0.0";
+        let mut buf = [0.0f64; 5];
+        parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
+        let via_vec = parse_line_of_range_f64(line, 4, 5, &defaults).unwrap();
+        assert_eq!(&buf[..5], via_vec.as_slice());
+        assert_eq!(buf[4], 7.0);
     }
 
     #[test]

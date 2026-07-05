@@ -28,6 +28,23 @@ fn test_forces_only() {
     );
     assert_eq!(frame.atom_data[3].force.unwrap()[0], 4.567890);
 
+    // SoA forces filled on shipped iterator path (sync after sections; positions SoA-primary)
+    let n = frame.atom_data.len();
+    assert_eq!(frame.positions.nrows(), n);
+    assert_eq!(frame.forces.nrows(), n);
+    assert_eq!(
+        frame.forces.as_f64_row(0),
+        frame.atom_data[0].force.unwrap()
+    );
+    assert_eq!(
+        frame.positions.as_f64_row(0),
+        [
+            frame.atom_data[0].x,
+            frame.atom_data[0].y,
+            frame.atom_data[0].z
+        ]
+    );
+
     // Check metadata helpers
     assert_eq!(frame.header.energy(), Some(-42.5));
     assert_eq!(frame.header.potential_type(), Some("EMT"));

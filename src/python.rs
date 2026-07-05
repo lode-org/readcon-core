@@ -495,6 +495,118 @@ impl PyConFrame {
         self.metadata_get_f64(py, meta::ENERGY)
     }
 
+    /// Campaign screening projection (`readcon_core::index_proj`), same fields as
+    /// `readcon-db` secondary indexes. Prefer over ad-hoc metadata parsing for corpus work.
+    fn index_projection(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        use crate::index_proj::FrameIndexProjection;
+        let frame = self.to_con_frame(py)?;
+        let p = FrameIndexProjection::from_frame(&frame);
+        let dict = PyDict::new(py);
+        dict.set_item("n_atoms", p.n_atoms)?;
+        dict.set_item("formula", p.formula)?;
+        dict.set_item("energy", p.energy)?;
+        dict.set_item("fmax", p.fmax)?;
+        dict.set_item("total_mass", p.total_mass)?;
+        dict.set_item("cell_volume", p.cell_volume)?;
+        dict.set_item("sections_mask", p.sections_mask)?;
+        dict.set_item("has_forces", p.has_forces)?;
+        dict.set_item("has_velocities", p.has_velocities)?;
+        dict.set_item("has_energy", p.has_energy)?;
+        dict.set_item("symbols", p.symbols)?;
+        dict.set_item("species_counts", p.species_counts)?;
+        dict.set_item("time", p.time)?;
+        dict.set_item("timestep", p.timestep)?;
+        dict.set_item("frame_index", p.frame_index)?;
+        dict.set_item("neb_bead", p.neb_bead)?;
+        dict.set_item("neb_band", p.neb_band)?;
+        dict.set_item("charge", p.charge)?;
+        dict.set_item("magmom", p.magmom)?;
+        if let Some(pbc) = p.pbc {
+            dict.set_item("pbc", (pbc[0], pbc[1], pbc[2]))?;
+        } else {
+            dict.set_item("pbc", py.None())?;
+        }
+        Ok(dict.into())
+    }
+
+    /// Canonical multiset formula (`Cu:2|H:2`) for campaign composition index.
+    #[getter]
+    fn composition_formula(&self, py: Python<'_>) -> PyResult<String> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_composition_formula(&frame))
+    }
+
+    /// Sections presence mask: bit0 forces, bit1 velocities, bit2 energies.
+    #[getter]
+    fn sections_mask(&self, py: Python<'_>) -> PyResult<u8> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::sections_present_mask(&frame))
+    }
+
+    /// Campaign finite energy (None if missing or non-finite); aligns with readcon-db energy index.
+    #[getter]
+    fn index_energy(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::finite_energy(&frame))
+    }
+
+    /// Total mass Σ m_i n_i when finite.
+    #[getter]
+    fn total_mass(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_total_mass(&frame))
+    }
+
+    /// Cell volume when finite.
+    #[getter]
+    fn cell_volume(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_cell_volume(&frame))
+    }
+
+    /// Max force magnitude when forces present.
+    #[getter]
+    fn fmax(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        let frame = self.to_con_frame(py)?;
+        Ok(crate::index_proj::frame_fmax(&frame))
+    }
+
+    /// Atom count for campaign `idx_natoms`.
+    #[getter]
+    fn index_natoms(&self, py: Python<'_>) -> PyResult<u32> {
+        let frame = self.to_con_frame(py)?;
+        Ok(frame.atom_data.len() as u32)
+    }
+
+    /// Full projection as JSON string (same payload as `rkr_frame_index_projection_json`).
+    fn index_projection_json(&self, py: Python<'_>) -> PyResult<String> {
+        use crate::index_proj::FrameIndexProjection;
+        let frame = self.to_con_frame(py)?;
+        let p = FrameIndexProjection::from_frame(&frame);
+        let v = serde_json::json!({
+            "n_atoms": p.n_atoms,
+            "formula": p.formula,
+            "energy": p.energy,
+            "fmax": p.fmax,
+            "total_mass": p.total_mass,
+            "cell_volume": p.cell_volume,
+            "sections_mask": p.sections_mask,
+            "has_forces": p.has_forces,
+            "has_velocities": p.has_velocities,
+            "has_energy": p.has_energy,
+            "symbols": p.symbols,
+            "species_counts": p.species_counts.iter().map(|(s,c)| serde_json::json!([s, c])).collect::<Vec<_>>(),
+            "time": p.time,
+            "timestep": p.timestep,
+            "frame_index": p.frame_index,
+            "neb_bead": p.neb_bead,
+            "neb_band": p.neb_band,
+            "charge": p.charge,
+            "magmom": p.magmom,
+        });
+        Ok(v.to_string())
+    }
+
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
@@ -696,10 +808,12 @@ impl PyConFrame {
     }
 
     /// Write this frame to a CON path (single-frame convenience).
-    fn write_con(&self, py: Python<'_>, path: &str) -> PyResult<()> {
+    #[pyo3(signature = (path, *, canonical=false))]
+    fn write_con(&self, py: Python<'_>, path: &str, canonical: bool) -> PyResult<()> {
         let frame = self.to_con_frame(py)?;
         let mut writer = ConFrameWriter::from_path(Path::new(path))
-            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+            .map_err(|e| PyIOError::new_err(e.to_string()))?
+            .canonical(canonical);
         writer
             .write_frame(&frame)
             .map_err(|e| PyIOError::new_err(e.to_string()))?;
@@ -829,6 +943,12 @@ impl PyConFrame {
 
 /// Read frames from a .con or .convel file path.
 #[pyfunction]
+#[pyo3(name = "read_all_frames")]
+fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
+    read_con(py, path)
+}
+
+#[pyfunction]
 fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
     let frames = crate::iterators::read_all_frames(Path::new(path))
         .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
@@ -889,13 +1009,14 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=6, compression=None))]
+#[pyo3(signature = (path, frames, precision=6, compression=None, *, canonical=false))]
 fn write_con(
     py: Python<'_>,
     path: &str,
     frames: &Bound<'_, PyAny>,
     precision: usize,
     compression: Option<&str>,
+    canonical: bool,
 ) -> PyResult<()> {
     let rust_frames = py_frames_to_rust(py, frames)?;
 
@@ -912,13 +1033,15 @@ fn write_con(
 
     if use_gzip {
         let mut writer = ConFrameWriter::from_path_gzip_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?;
+            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?
+            .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
     } else {
         let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?;
+            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?
+            .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -928,16 +1051,17 @@ fn write_con(
 
 /// Write frames to a string in .con format.
 #[pyfunction]
-#[pyo3(signature = (frames, precision=6))]
+#[pyo3(signature = (frames, precision=6, *, canonical=false))]
 fn write_con_string(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
     precision: usize,
+    canonical: bool,
 ) -> PyResult<String> {
     let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
-        let mut writer = ConFrameWriter::with_precision(&mut buffer, precision);
+        let mut writer = ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -1302,6 +1426,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
+    // Ergonomic alias for multi-language matrix (batch all frames).
+    m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
@@ -1314,6 +1440,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_chemfiles_memory, m)?)?;
     m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_selection_on_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(select_atom_positions_on_frames, m)?)?;
     Ok(())
 }
 
@@ -1429,3 +1557,75 @@ fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> P
     let rust_frame = frame.to_con_frame(py)?;
     rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
 }
+
+fn multi_frame_selection_to_py(
+    py: Python<'_>,
+    multi: crate::chemfiles_selection::MultiFrameSelectionResult,
+) -> PyResult<Py<PyAny>> {
+    let frames_list = PyList::empty(py);
+    for slice in multi.frames {
+        let result_dict = selection_result_to_py(py, slice.result)?;
+        let positions: Vec<Vec<f64>> = slice
+            .positions
+            .iter()
+            .map(|p| vec![p[0], p[1], p[2]])
+            .collect();
+        let frame_dict = PyDict::new(py);
+        frame_dict.set_item("frame_index", slice.frame_index)?;
+        frame_dict.set_item("result", result_dict)?;
+        frame_dict.set_item("atom_indices", slice.atom_indices)?;
+        frame_dict.set_item("positions", positions)?;
+        frames_list.append(frame_dict)?;
+    }
+    let dict = PyDict::new(py);
+    dict.set_item("selection", multi.selection)?;
+    dict.set_item("frames", frames_list)?;
+    Ok(dict.into())
+}
+
+fn py_frames_to_con(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
+    let seq = frames.extract::<Vec<PyRef<'_, PyConFrame>>>()?;
+    seq.iter()
+        .map(|f| f.to_con_frame(py))
+        .collect()
+}
+
+/// Evaluate a chemfiles selection on **each** frame (trajectory-safe).
+///
+/// For atom-context selections, each frame entry includes ``atom_indices`` and
+/// ``positions`` (xyz of selected atoms on that frame) so callers can collect
+/// e.g. hydrogen trajectories without re-selecting in Python.
+///
+/// Returns ``{"selection": str, "frames": [{"frame_index", "result", "atom_indices", "positions"}, ...]}``.
+#[pyfunction]
+fn evaluate_selection_on_frames(
+    py: Python<'_>,
+    selection: &str,
+    frames: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::evaluate_selection_on_frames as rust_eval;
+    let rust_frames = py_frames_to_con(py, frames)?;
+    let multi = rust_eval(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    multi_frame_selection_to_py(py, multi)
+}
+
+/// Atom-context multi-frame selection: positions of selected atoms per frame.
+///
+/// Errors if the selection is not atom context (size 1) on the first frame.
+/// Typical use::
+///
+///     frames = readcon.read_all_frames("traj.con")
+///     out = readcon.select_atom_positions_on_frames("name H", frames)
+///     # out["frames"][i]["positions"] — H xyz on frame i
+#[pyfunction]
+fn select_atom_positions_on_frames(
+    py: Python<'_>,
+    selection: &str,
+    frames: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    use crate::chemfiles_selection::select_atom_positions_on_frames as rust_sel;
+    let rust_frames = py_frames_to_con(py, frames)?;
+    let multi = rust_sel(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    multi_frame_selection_to_py(py, multi)
+}
+

@@ -30,3 +30,5 @@ Maps historical GitHub issues to commits / surfaces. Prefer ``Closes #N`` on mer
     +-------+------------------------------+--------+------------------------------------------------------------------------------------------------------+
 
 Fortran details: ``fortran/README.md``. Multi-language panels: bindings page.
+
+Vault vissues closure for ``feat/ffi-matrix-hardening`` is tracked in ``docs/orgmode/issue-status.org`` (795z, 8cx2, 6vie, lrk1, u08i, y69o, anp5, 47kp).

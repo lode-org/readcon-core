@@ -76,13 +76,13 @@ namespace readcon {
  * - Version 1: column 5 present but semantics undefined. Readers MAY
  *   ignore it. No JSON metadata line.
  * - Version 2: column 5 is the original atom index before type-based
- *   grouping. Readers MUST parse and preserve it. Writers MUST write
- *   the stored value. Line 2 of the header carries a JSON object
- *   with at least `{"con_spec_version": 2}`.
+ *   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
+ * - Version 3: same as v2 plus **required** `metadata["units"]` object
+ *   with non-empty `length` and `energy` unit strings (see `units` module).
  *
  * See `docs/orgmode/spec.org` for the full specification.
  */
-#define CON_SPEC_VERSION 2
+#define CON_SPEC_VERSION 3
 
 /**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
@@ -93,7 +93,42 @@ namespace readcon {
  * the convenience of either naming convention; they always carry the
  * same value.
  */
-#define RKR_CON_SPEC_VERSION 2
+#define RKR_CON_SPEC_VERSION 3
+
+#define RKR_DL_INT 0
+
+#define RKR_DL_UINT 1
+
+#define RKR_DL_FLOAT 2
+
+#define RKR_DL_OPAQUE_HANDLE 3
+
+#define RKR_DL_BFLOAT 4
+
+#define RKR_DL_COMPLEX 5
+
+#define RKR_DL_BOOL 6
+
+#define RKR_DL_CPU 1
+
+#define RKR_DL_CUDA 2
+
+#define RKR_DL_CUDA_HOST 3
+
+/**
+ * Bit 0: forces section or per-atom forces present.
+ */
+#define SECTIONS_MASK_FORCES (1 << 0)
+
+/**
+ * Bit 1: velocities section or per-atom velocities present.
+ */
+#define SECTIONS_MASK_VELOCITIES (1 << 1)
+
+/**
+ * Bit 2: energies section or finite frame energy present.
+ */
+#define SECTIONS_MASK_ENERGIES (1 << 2)
 
 /**
  * Error codes for RKR functions.
@@ -164,6 +199,11 @@ typedef enum RKRStatus {
  * robust error handling for each frame.
  */
 typedef struct ConFrameIterator ConFrameIterator;
+
+/**
+ * Physical dimension exponents: L, T, M, Q (charge), Θ (temperature).
+ */
+typedef struct Dimension Dimension;
 
 /**
  * Opaque handle for a cached selection evaluation result.
@@ -257,6 +297,83 @@ typedef struct RKRConFrameBuilder {
     uint8_t _private[0];
 } RKRConFrameBuilder;
 
+/**
+ * Element type request — **layout-identical** to DLPack `DLDataType`
+ * (`uint8_t code`, `uint8_t bits`, `uint16_t lanes`). Interchangeable with
+ * `DLDataType` from `<dlpack/dlpack.h>` when that header is included.
+ */
+typedef struct RKRDLDataType {
+    /**
+     * `DLDataTypeCode` (e.g. [`rkr_dl_type_code::RKR_DL_FLOAT`]).
+     */
+    uint8_t code;
+    /**
+     * Bit width (32 or 64 for float sections today).
+     */
+    uint8_t bits;
+    /**
+     * Vector lanes (must be 1 for current exports).
+     */
+    uint16_t lanes;
+} RKRDLDataType;
+
+/**
+ * Device request — **layout-identical** to DLPack `DLDevice`
+ * (`DLDeviceType device_type`, `int32_t device_id`).
+ */
+typedef struct RKRDLDevice {
+    /**
+     * `DLDeviceType` (e.g. [`rkr_dl_device_type::RKR_DL_CPU`]).
+     */
+    int32_t device_type;
+    int32_t device_id;
+} RKRDLDevice;
+
+/**
+ * Options for DLPack export: requested **DLPack** `DLDataType` + `DLDevice`.
+ *
+ * Pass to `*_dlpack_ex`. NULL → `kDLFloat` / 64 / lanes 1 on **CPU**.
+ *
+ * **Dtype (CPU):** any combination dlpk can host from converted CON data —
+ * signed/unsigned ints (8/16/32/64), IEEE floats (32/64), and bool (8-bit
+ * DLPack convention). Values are cast from on-disk binary64 (or u64 for atom
+ * ids). Complex / bfloat / float8 / opaque / multi-lane types return
+ * `RKR_STATUS_VALIDATION_ERROR` until implemented.
+ *
+ * **Device:** only `device_type = kDLCPU` (1) is backed today; CUDA and other
+ * `DLDeviceType` values are accepted in the struct but return
+ * `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect without an ABI
+ * break when device-resident exports land.
+ */
+typedef struct RKRDlpackExportOptions {
+    /**
+     * Requested element type (DLPack `DLDataType` layout).
+     */
+    struct RKRDLDataType dtype;
+    /**
+     * Requested placement (DLPack `DLDevice` layout).
+     */
+    struct RKRDLDevice device;
+} RKRDlpackExportOptions;
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+/**
+ * Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
+ * Real implementations live under `feature = "metatensor"`.
+ */
+typedef struct mts_block_t {
+    uint8_t _private[0];
+} mts_block_t;
+#endif
+
+
+
+
+
+
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -330,6 +447,48 @@ char *rkr_frame_metadata_json(const struct RKRConFrame *frame_handle);
 double rkr_frame_energy(const struct RKRConFrame *frame_handle);
 
 /**
+ * Campaign **finite** energy ([`crate::index_proj::finite_energy`]): NaN if missing or non-finite.
+ * Prefer this over [`rkr_frame_energy`] when mirroring `readcon-db` indexes.
+ */
+double rkr_frame_index_energy(const struct RKRConFrame *frame_handle);
+
+/**
+ * Canonical multiset formula (`Cu:2|H:2`) for campaign `idx_formula`. Free with `rkr_free_string`.
+ */
+char *rkr_frame_composition_formula(const struct RKRConFrame *frame_handle);
+
+/**
+ * Total mass from type masses × counts; NaN if not all finite.
+ */
+double rkr_frame_total_mass(const struct RKRConFrame *frame_handle);
+
+/**
+ * Cell volume (lattice det or triclinic); NaN if unavailable.
+ */
+double rkr_frame_cell_volume(const struct RKRConFrame *frame_handle);
+
+/**
+ * Max \(\|F_i\|\); NaN if no finite forces.
+ */
+double rkr_frame_fmax(const struct RKRConFrame *frame_handle);
+
+/**
+ * Sections presence bitmask: bit0 forces, bit1 velocities, bit2 energies (see `index_proj`).
+ */
+uint8_t rkr_frame_sections_mask(const struct RKRConFrame *frame_handle);
+
+/**
+ * Atom count used for campaign `idx_natoms` (same as `atom_data.len()`).
+ */
+uint32_t rkr_frame_index_natoms(const struct RKRConFrame *frame_handle);
+
+/**
+ * Compact JSON of [`crate::index_proj::FrameIndexProjection`] (campaign screening fields).
+ * Free with `rkr_free_string`. NULL on error.
+ */
+char *rkr_frame_index_projection_json(const struct RKRConFrame *frame_handle);
+
+/**
  * Returns the potential type string from metadata as a heap-allocated
  * null-terminated C string. The caller MUST free with `rkr_free_string`.
  * Returns NULL if absent or on error.
@@ -396,19 +555,42 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Creates a new iterator for a .con or .convel file.
+ * Creates a new iterator for a .con / .convel path, including transparent
+ * gzip (`.con.gz`) and zstd (`.con.zst`, requires `zstd` feature) inputs via
+ * [`crate::compression::read_file_contents`].
  *
- * Returns NULL if the file cannot be read (missing, unreadable, or
- * not valid UTF-8). A successfully-opened file with zero frames
- * returns a non-NULL iterator that yields NULL on the first call to
- * [`con_frame_iterator_next`]. The caller OWNS the returned pointer
- * and MUST call [`free_con_frame_iterator`].
+ * Returns NULL if the file cannot be read, decompressed, or is not valid
+ * UTF-8. A successfully-opened file with zero frames returns a non-NULL
+ * iterator that yields NULL on the first call to [`con_frame_iterator_next`].
+ * The caller OWNS the returned pointer and MUST call [`free_con_frame_iterator`].
  *
  * # Safety
  * filename_c must be a valid null-terminated string. The caller takes
  * ownership of the returned iterator.
  */
 struct CConFrameIterator *read_con_file_iterator(const char *filename_c);
+
+/**
+ * Iterate frames from an in-memory CON text buffer (null-terminated C string).
+ *
+ * Use when the caller already decompressed (chemfiles, custom I/O) and wants
+ * to avoid a temp file. Same ownership rules as [`read_con_file_iterator`].
+ *
+ * # Safety
+ * `contents_c` must be a valid null-terminated UTF-8 string, or NULL (returns NULL).
+ */
+struct CConFrameIterator *read_con_string_iterator(const char *contents_c);
+
+/**
+ * Iterate frames from a byte buffer (not necessarily null-terminated).
+ *
+ * `len` is the number of bytes at `data`. Bytes must be valid UTF-8 CON text.
+ *
+ * # Safety
+ * `data` must be valid for `len` bytes if non-null and `len > 0`.
+ */
+struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
+                                                   uintptr_t len);
 
 /**
  * Reads the next frame from the iterator, returning an opaque handle.
@@ -534,6 +716,21 @@ void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
                                  const struct RKRConFrame *const *frame_handles,
                                  uintptr_t num_frames);
+
+/**
+ * Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
+ * Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
+ *
+ * # Safety
+ * `writer_handle` must be valid or null (null → `RKR_STATUS_NULL_POINTER`).
+ */
+enum RKRStatus rkr_writer_set_canonical(struct RKRConFrameWriter *writer_handle,
+                                        uint8_t canonical);
+
+/**
+ * Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
+ */
+uint8_t rkr_writer_is_canonical(const struct RKRConFrameWriter *writer_handle);
 
 /**
  * Creates a new frame writer with custom floating-point precision.
@@ -777,6 +974,18 @@ enum RKRStatus rkr_frame_builder_positions_dlpack(const struct RKRConFrameBuilde
                                                   RKRDLManagedTensorVersioned **out_tensor);
 
 /**
+ * Like [`rkr_frame_builder_positions_dlpack`] with explicit precision/device.
+ *
+ * `opts` may be NULL (float64 / CPU). See [`RKRDlpackExportOptions`].
+ *
+ * # Safety
+ * Same as the non-`_ex` entry; `opts` must be null or point at a valid struct.
+ */
+enum RKRStatus rkr_frame_builder_positions_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                     const struct RKRDlpackExportOptions *opts,
+                                                     RKRDLManagedTensorVersioned **out_tensor);
+
+/**
  * Export builder velocities as a DLPack-managed tensor.
  *
  * Returns `RKR_STATUS_SECTION_ABSENT` if the velocities section is not
@@ -789,6 +998,10 @@ enum RKRStatus rkr_frame_builder_positions_dlpack(const struct RKRConFrameBuilde
  */
 enum RKRStatus rkr_frame_builder_velocities_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                    RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_velocities_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                      const struct RKRDlpackExportOptions *opts,
+                                                      RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Export builder forces as a DLPack-managed tensor.
@@ -803,6 +1016,10 @@ enum RKRStatus rkr_frame_builder_velocities_dlpack(const struct RKRConFrameBuild
 enum RKRStatus rkr_frame_builder_forces_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_builder_forces_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                  const struct RKRDlpackExportOptions *opts,
+                                                  RKRDLManagedTensorVersioned **out_tensor);
+
 /**
  * Export builder per-atom energies as a DLPack-managed tensor.
  *
@@ -816,6 +1033,10 @@ enum RKRStatus rkr_frame_builder_forces_dlpack(const struct RKRConFrameBuilder *
 enum RKRStatus rkr_frame_builder_atom_energies_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                       RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_builder_atom_energies_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                         const struct RKRDlpackExportOptions *opts,
+                                                         RKRDLManagedTensorVersioned **out_tensor);
+
 /**
  * Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
  *
@@ -826,6 +1047,10 @@ enum RKRStatus rkr_frame_builder_atom_energies_dlpack(const struct RKRConFrameBu
 enum RKRStatus rkr_frame_builder_masses_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                RKRDLManagedTensorVersioned **out_tensor);
 
+enum RKRStatus rkr_frame_builder_masses_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                  const struct RKRDlpackExportOptions *opts,
+                                                  RKRDLManagedTensorVersioned **out_tensor);
+
 /**
  * Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
  *
@@ -835,6 +1060,10 @@ enum RKRStatus rkr_frame_builder_masses_dlpack(const struct RKRConFrameBuilder *
  */
 enum RKRStatus rkr_frame_builder_atom_ids_dlpack(const struct RKRConFrameBuilder *builder_handle,
                                                  RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_builder_atom_ids_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                    const struct RKRDlpackExportOptions *opts,
+                                                    RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
@@ -1326,6 +1555,16 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
  */
 void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
 
+/**
+ * Free only the outer pointer array from `rkr_read_all_frames` (not the frames).
+ *
+ * # Safety
+ * `frames` null or from `rkr_read_all_frames` with length `num_frames`. Frame
+ * pointers must be owned elsewhere (e.g. language wrappers).
+ */
+void free_rkr_frame_ptr_array(struct RKRConFrame **frames,
+                              uintptr_t num_frames);
+
 #if defined(READCON_CORE_HAS_METATENSOR)
 /**
  * Free an owned block from `rkr_frame_metatensor_*_block`.
@@ -1334,7 +1573,7 @@ void free_rkr_frame_array(struct RKRConFrame **frames, uintptr_t num_frames);
  * # Safety
  * `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
  */
-void rkr_mts_block_free(mts_block_t *block);
+void rkr_mts_block_free(struct mts_block_t *block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
@@ -1342,23 +1581,164 @@ void rkr_mts_block_free(mts_block_t *block);
  * Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
  */
 enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *frame_handle,
-                                                    mts_block_t **out_block);
+                                                    struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *frame_handle,
-                                                     mts_block_t **out_block);
+                                                     struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *frame_handle,
-                                                 mts_block_t **out_block);
+                                                 struct mts_block_t **out_block);
 #endif
 
 #if defined(READCON_CORE_HAS_METATENSOR)
 enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *frame_handle,
-                                                        mts_block_t **out_block);
+                                                        struct mts_block_t **out_block);
 #endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_c(const char *_filename_c);
+#endif
+
+#if !defined(READCON_CORE_HAS_ZSTD)
+struct RKRConFrameWriter *create_writer_zstd_with_precision_c(const char *_filename_c,
+                                                              uint8_t _precision);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+void rkr_mts_block_free(struct mts_block_t *_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_positions_block(const struct RKRConFrame *_frame_handle,
+                                                    struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_velocities_block(const struct RKRConFrame *_frame_handle,
+                                                     struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_forces_block(const struct RKRConFrame *_frame_handle,
+                                                 struct mts_block_t **out_block);
+#endif
+
+#if !defined(READCON_CORE_HAS_METATENSOR)
+enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame *_frame_handle,
+                                                        struct mts_block_t **out_block);
+#endif
+
+/**
+ * Number of atoms on the frame (atom_data order).
+ */
+uintptr_t rkr_frame_atom_count(const struct RKRConFrame *frame_handle);
+
+/**
+ * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
+ */
+enum RKRStatus rkr_frame_copy_positions(const struct RKRConFrame *frame_handle,
+                                        double *out,
+                                        uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_velocities(const struct RKRConFrame *frame_handle,
+                                         double *out,
+                                         uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_forces(const struct RKRConFrame *frame_handle,
+                                     double *out,
+                                     uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_handle,
+                                            double *out,
+                                            uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_masses(const struct RKRConFrame *frame_handle,
+                                     double *out,
+                                     uintptr_t out_len);
+
+enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
+                                       uint64_t *out,
+                                       uintptr_t out_len);
+
+/**
+ * Metatensor-style: export positions as they are stored (CPU f64), with
+ * explicit device request. Non-CPU → `FEATURE_DISABLED`. Prefer this over
+ * dtype-cast `*_dlpack_ex` for new code.
+ *
+ * `stream` and `max_version_*` are accepted for ABI alignment with
+ * metatensor `as_dlpack`; CPU ignores stream / version negotiation for now.
+ *
+ * # Safety
+ * Handles and `out_tensor` must be valid.
+ */
+enum RKRStatus rkr_frame_positions_as_dlpack(const struct RKRConFrame *frame_handle,
+                                             int32_t device_type,
+                                             int32_t device_id,
+                                             int64_t _stream,
+                                             uint32_t _max_version_major,
+                                             uint32_t _max_version_minor,
+                                             RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
+ * or length 3N). Metatensor-style write path symmetry.
+ *
+ * # Safety
+ * `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
+ */
+enum RKRStatus rkr_frame_positions_from_dlpack(struct RKRConFrame *frame_handle,
+                                               const RKRDLManagedTensorVersioned *tensor);
+
+/**
+ * DLPack positions from a frame (default float64 / CPU). Prefer
+ * [`rkr_frame_positions_as_dlpack`] for metatensor-style device negotiation.
+ */
+enum RKRStatus rkr_frame_positions_dlpack(const struct RKRConFrame *frame_handle,
+                                          RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Frame positions with [`RKRDlpackExportOptions`] (`opts` NULL → f64/CPU).
+ *
+ * # Safety
+ * `frame_handle` / `out_tensor` valid; `opts` null or valid.
+ */
+enum RKRStatus rkr_frame_positions_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                             const struct RKRDlpackExportOptions *opts,
+                                             RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack velocities from a frame, or `SECTION_ABSENT` if missing (f64/CPU).
+ */
+enum RKRStatus rkr_frame_velocities_dlpack(const struct RKRConFrame *frame_handle,
+                                           RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_velocities_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                              const struct RKRDlpackExportOptions *opts,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack forces from a frame, or `SECTION_ABSENT` if missing (f64/CPU default).
+ */
+enum RKRStatus rkr_frame_forces_dlpack(const struct RKRConFrame *frame_handle,
+                                       RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_forces_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                          const struct RKRDlpackExportOptions *opts,
+                                          RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
+ */
+enum RKRStatus rkr_frame_atom_energies_dlpack(const struct RKRConFrame *frame_handle,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
+enum RKRStatus rkr_frame_atom_energies_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                                 const struct RKRDlpackExportOptions *opts,
+                                                 RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * Evaluate a chemfiles selection-language string on an `RKRConFrame`.

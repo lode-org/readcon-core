@@ -169,3 +169,25 @@ end
         end
     end
 end
+
+    @testset "Campaign index projection" begin
+        frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
+        frame = frames[1]
+        @test index_natoms(frame) == UInt32(length(frame.atoms))
+        form = composition_formula(frame)
+        @test occursin(":", form)
+        @test occursin("|", form) || !occursin("H", form)  # multiset has | when multi-species
+        @test !isempty(form)
+        @test total_mass(frame) isa Union{Nothing,Float64}
+        @test total_mass(frame) !== nothing
+        @test cell_volume(frame) !== nothing
+        j = index_projection_json(frame)
+        @test occursin("\"formula\"", j)
+        @test occursin(form, j) || occursin(replace(form, ":" => "\\:"), j)
+        # forces fixture
+        ff = read_con(joinpath(TEST_DIR, "tiny_cuh2_forces.con"))[1]
+        @test sections_mask(ff) != 0x00 || ff.has_forces
+        @test fmax(ff) !== nothing || !ff.has_forces
+        ie = index_energy(ff)
+        @test ie === nothing || ie isa Float64
+    end

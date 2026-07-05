@@ -3,14 +3,12 @@ use crate::iterators::{self, ConFrameIterator};
 use crate::types::{ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 use std::ffi::{CStr, CString, c_char};
-use std::fs::{self, File};
+use std::fs::File;
 use std::path::Path;
 use std::ptr;
-
 //=============================================================================
 // Version & Spec Constants (exported as #define by cbindgen)
 //=============================================================================
-
 /// CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
 /// to gate code that depends on atom_index semantics.
 ///
@@ -18,14 +16,12 @@ use std::ptr;
 /// `CON_SPEC_VERSION`). Both macros are emitted into the C header for
 /// the convenience of either naming convention; they always carry the
 /// same value.
-pub const RKR_CON_SPEC_VERSION: u32 = 2;
-
+pub const RKR_CON_SPEC_VERSION: u32 = 3;
 /// Returns the spec version at runtime (for dynamically linked consumers).
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_con_spec_version() -> u32 {
     crate::CON_SPEC_VERSION
 }
-
 /// Returns a pointer to a static, null-terminated library version string.
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
 #[unsafe(no_mangle)]
@@ -34,7 +30,6 @@ pub extern "C" fn rkr_library_version() -> *const c_char {
     const VERSION_NUL: &[u8] = concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes();
     VERSION_NUL.as_ptr() as *const c_char
 }
-
 /// Returns the position of an atom inside the frame's `atom_data` array
 /// matching the given `atom_id`. Returns `UINT64_MAX` if no atom with
 /// that id exists or `frame_handle` is NULL.
@@ -60,7 +55,6 @@ pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
         None => u64::MAX,
     }
 }
-
 /// Returns the atomic number for a chemical symbol, or 0 if the symbol
 /// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
 /// is case-sensitive: "Fe" works, "fe" does not.
@@ -79,7 +73,6 @@ pub unsafe extern "C" fn rkr_symbol_to_z(symbol: *const c_char) -> u64 {
         Err(_) => 0,
     }
 }
-
 /// Returns a pointer to a static, NUL-terminated chemical symbol for an
 /// atomic number, or "X" for unknown values. Coverage is H..U
 /// (Z = 1..=92). The returned pointer is valid for the lifetime of the
@@ -107,7 +100,6 @@ pub extern "C" fn rkr_z_to_symbol(z: u64) -> *const c_char {
     let idx = if (1..=92).contains(&z) { z as usize } else { 0 };
     TABLE[idx].as_ptr() as *const c_char
 }
-
 /// Returns the spec version stored in a parsed frame's header.
 /// Returns 0 on error (null handle).
 #[unsafe(no_mangle)]
@@ -117,7 +109,6 @@ pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u3
         None => 0,
     }
 }
-
 /// Returns the JSON metadata line from a parsed frame as a heap-allocated
 /// null-terminated C string. The caller MUST free with `rkr_free_string`.
 /// Returns NULL on error.
@@ -144,7 +135,6 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFram
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Returns the per-frame energy from metadata, or NaN if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
@@ -154,6 +144,114 @@ pub extern "C" fn rkr_frame_energy(frame_handle: *const RKRConFrame) -> f64 {
     }
 }
 
+/// Campaign **finite** energy ([`crate::index_proj::finite_energy`]): NaN if missing or non-finite.
+/// Prefer this over [`rkr_frame_energy`] when mirroring `readcon-db` indexes.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_index_energy(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::finite_energy(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Canonical multiset formula (`Cu:2|H:2`) for campaign `idx_formula`. Free with `rkr_free_string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_composition_formula(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    let s = crate::index_proj::frame_composition_formula(frame);
+    match CString::new(s) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Total mass from type masses × counts; NaN if not all finite.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_total_mass(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_total_mass(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Cell volume (lattice det or triclinic); NaN if unavailable.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_cell_volume(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_cell_volume(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Max \(\|F_i\|\); NaN if no finite forces.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_fmax(frame_handle: *const RKRConFrame) -> f64 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::frame_fmax(f).unwrap_or(f64::NAN),
+        None => f64::NAN,
+    }
+}
+
+/// Sections presence bitmask: bit0 forces, bit1 velocities, bit2 energies (see `index_proj`).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_sections_mask(frame_handle: *const RKRConFrame) -> u8 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => crate::index_proj::sections_present_mask(f),
+        None => 0,
+    }
+}
+
+/// Atom count used for campaign `idx_natoms` (same as `atom_data.len()`).
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_frame_index_natoms(frame_handle: *const RKRConFrame) -> u32 {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.atom_data.len() as u32,
+        None => 0,
+    }
+}
+
+/// Compact JSON of [`crate::index_proj::FrameIndexProjection`] (campaign screening fields).
+/// Free with `rkr_free_string`. NULL on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_index_projection_json(
+    frame_handle: *const RKRConFrame,
+) -> *mut c_char {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return ptr::null_mut(),
+    };
+    let p = crate::index_proj::FrameIndexProjection::from_frame(frame);
+    let v = serde_json::json!({
+        "n_atoms": p.n_atoms,
+        "formula": p.formula,
+        "energy": p.energy,
+        "fmax": p.fmax,
+        "total_mass": p.total_mass,
+        "cell_volume": p.cell_volume,
+        "sections_mask": p.sections_mask,
+        "has_forces": p.has_forces,
+        "has_velocities": p.has_velocities,
+        "has_energy": p.has_energy,
+        "symbols": p.symbols,
+        "species_counts": p.species_counts.iter().map(|(s,c)| serde_json::json!([s, c])).collect::<Vec<_>>(),
+        "time": p.time,
+        "timestep": p.timestep,
+        "frame_index": p.frame_index,
+        "neb_bead": p.neb_bead,
+        "neb_band": p.neb_band,
+        "charge": p.charge,
+        "magmom": p.magmom,
+    });
+    match CString::new(v.to_string()) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
 /// Returns the potential type string from metadata as a heap-allocated
 /// null-terminated C string. The caller MUST free with `rkr_free_string`.
 /// Returns NULL if absent or on error.
@@ -174,7 +272,6 @@ pub unsafe extern "C" fn rkr_frame_potential_type(frame_handle: *const RKRConFra
         None => ptr::null_mut(),
     }
 }
-
 /// Returns the zero-based frame index from metadata, or UINT64_MAX if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_frame_index(frame_handle: *const RKRConFrame) -> u64 {
@@ -183,7 +280,6 @@ pub extern "C" fn rkr_frame_frame_index(frame_handle: *const RKRConFrame) -> u64
         None => u64::MAX,
     }
 }
-
 /// Returns the simulation time from metadata, or NaN if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_time(frame_handle: *const RKRConFrame) -> f64 {
@@ -192,7 +288,6 @@ pub extern "C" fn rkr_frame_time(frame_handle: *const RKRConFrame) -> f64 {
         None => f64::NAN,
     }
 }
-
 /// Returns the integration timestep from metadata, or NaN if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_timestep(frame_handle: *const RKRConFrame) -> f64 {
@@ -201,7 +296,6 @@ pub extern "C" fn rkr_frame_timestep(frame_handle: *const RKRConFrame) -> f64 {
         None => f64::NAN,
     }
 }
-
 /// Returns the NEB bead index from metadata, or UINT64_MAX if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_neb_bead(frame_handle: *const RKRConFrame) -> u64 {
@@ -210,7 +304,6 @@ pub extern "C" fn rkr_frame_neb_bead(frame_handle: *const RKRConFrame) -> u64 {
         None => u64::MAX,
     }
 }
-
 /// Returns the NEB band index from metadata, or UINT64_MAX if absent.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_frame_neb_band(frame_handle: *const RKRConFrame) -> u64 {
@@ -219,11 +312,9 @@ pub extern "C" fn rkr_frame_neb_band(frame_handle: *const RKRConFrame) -> u64 {
         None => u64::MAX,
     }
 }
-
 //=============================================================================
 // C-Compatible Structs & Handles
 //=============================================================================
-
 /// Error codes for RKR functions.
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -255,8 +346,11 @@ pub enum RKRStatus {
     /// Requested API is not in this build (Cargo feature off / symbols omitted).
     /// Never use `-7` for this — that is [`RKR_STATUS_INTERNAL_ERROR`].
     RKR_STATUS_FEATURE_DISABLED = -11,
+    /// Requested DLPack device does not match the array's residency.
+    RKR_STATUS_DEVICE_MISMATCH = -12,
+    /// Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
+    RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
 }
-
 /// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
 ///
 /// # Safety
@@ -268,7 +362,6 @@ pub unsafe extern "C" fn rkr_frame_bond_count(frame_handle: *const RKRConFrame) 
         None => 0,
     }
 }
-
 /// Read one bond at `index` (0-based into the `bonds` metadata array).
 ///
 /// Writes 0-based `atom_data` indices into `out_i` / `out_j`. When the bond
@@ -314,7 +407,6 @@ pub unsafe extern "C" fn rkr_frame_bond_at(
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Returns a stable, static message for a status code.
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
 #[unsafe(no_mangle)]
@@ -332,23 +424,24 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_VALIDATION_ERROR => c"validation error".as_ptr(),
         RKRStatus::RKR_STATUS_SELECTION_ERROR => c"selection error".as_ptr(),
         RKRStatus::RKR_STATUS_FEATURE_DISABLED => c"feature disabled in this build".as_ptr(),
+        RKRStatus::RKR_STATUS_DEVICE_MISMATCH => c"DLPack device mismatch".as_ptr(),
+        RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED => {
+            c"device allocation unsupported in this build".as_ptr()
+        }
     }
 }
-
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
 #[repr(C)]
 pub struct RKRConFrame {
     _private: [u8; 0],
 }
-
 /// An opaque handle to a Rust `ConFrameWriter` object.
 /// The C/C++ side needs to treat this as a void pointer
 #[repr(C)]
 pub struct RKRConFrameWriter {
     _private: [u8; 0],
 }
-
 /// A transparent, "lossy" C-struct containing only the core atomic data.
 /// This can be extracted from an `RKRConFrame` handle for direct data access.
 /// The caller is responsible for freeing the `atoms` array using `free_c_frame`.
@@ -362,7 +455,6 @@ pub struct CFrame {
     pub has_forces: bool,
     pub has_energies: bool,
 }
-
 /// Transparent atom record extracted via [`rkr_frame_to_c_frame`].
 ///
 /// `is_fixed` is the OR of `fixed_x`, `fixed_y`, `fixed_z`; it is kept
@@ -399,24 +491,36 @@ pub struct CAtom {
     pub energy: f64,
     pub has_energy: bool,
 }
-
 #[repr(C)]
 pub struct CConFrameIterator {
     iterator: *mut ConFrameIterator<'static>,
     file_contents: *mut String,
 }
 
+/// Build a path/buffer-backed C iterator from an owned CON text buffer.
+fn c_iterator_from_owned_string(contents: String) -> *mut CConFrameIterator {
+    let file_contents_box = Box::new(contents);
+    let file_contents_ptr = Box::into_raw(file_contents_box);
+    let static_file_contents: &'static str = unsafe { &*file_contents_ptr };
+    let iterator = Box::new(ConFrameIterator::new(static_file_contents));
+    let c_iterator = Box::new(CConFrameIterator {
+        iterator: Box::into_raw(iterator),
+        file_contents: file_contents_ptr,
+    });
+    Box::into_raw(c_iterator)
+}
+
 //=============================================================================
 // Iterator and Memory Management
 //=============================================================================
-
-/// Creates a new iterator for a .con or .convel file.
+/// Creates a new iterator for a .con / .convel path, including transparent
+/// gzip (`.con.gz`) and zstd (`.con.zst`, requires `zstd` feature) inputs via
+/// [`crate::compression::read_file_contents`].
 ///
-/// Returns NULL if the file cannot be read (missing, unreadable, or
-/// not valid UTF-8). A successfully-opened file with zero frames
-/// returns a non-NULL iterator that yields NULL on the first call to
-/// [`con_frame_iterator_next`]. The caller OWNS the returned pointer
-/// and MUST call [`free_con_frame_iterator`].
+/// Returns NULL if the file cannot be read, decompressed, or is not valid
+/// UTF-8. A successfully-opened file with zero frames returns a non-NULL
+/// iterator that yields NULL on the first call to [`con_frame_iterator_next`].
+/// The caller OWNS the returned pointer and MUST call [`free_con_frame_iterator`].
 ///
 /// # Safety
 /// filename_c must be a valid null-terminated string. The caller takes
@@ -432,20 +536,61 @@ pub unsafe extern "C" fn read_con_file_iterator(
         Ok(s) => s,
         Err(_) => return ptr::null_mut(),
     };
-    let file_contents_box = match fs::read_to_string(filename) {
-        Ok(contents) => Box::new(contents),
+    let owned = match crate::compression::read_file_contents(Path::new(filename)) {
+        Ok(fc) => match fc.as_str() {
+            Ok(s) => s.to_owned(),
+            Err(_) => return ptr::null_mut(),
+        },
         Err(_) => return ptr::null_mut(),
     };
-    let file_contents_ptr = Box::into_raw(file_contents_box);
-    let static_file_contents: &'static str = unsafe { &*file_contents_ptr };
-    let iterator = Box::new(ConFrameIterator::new(static_file_contents));
-    let c_iterator = Box::new(CConFrameIterator {
-        iterator: Box::into_raw(iterator),
-        file_contents: file_contents_ptr,
-    });
-    Box::into_raw(c_iterator)
+    c_iterator_from_owned_string(owned)
 }
 
+/// Iterate frames from an in-memory CON text buffer (null-terminated C string).
+///
+/// Use when the caller already decompressed (chemfiles, custom I/O) and wants
+/// to avoid a temp file. Same ownership rules as [`read_con_file_iterator`].
+///
+/// # Safety
+/// `contents_c` must be a valid null-terminated UTF-8 string, or NULL (returns NULL).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn read_con_string_iterator(
+    contents_c: *const c_char,
+) -> *mut CConFrameIterator {
+    if contents_c.is_null() {
+        return ptr::null_mut();
+    }
+    let contents = match unsafe { CStr::from_ptr(contents_c).to_str() } {
+        Ok(s) => s.to_owned(),
+        Err(_) => return ptr::null_mut(),
+    };
+    c_iterator_from_owned_string(contents)
+}
+
+/// Iterate frames from a byte buffer (not necessarily null-terminated).
+///
+/// `len` is the number of bytes at `data`. Bytes must be valid UTF-8 CON text.
+///
+/// # Safety
+/// `data` must be valid for `len` bytes if non-null and `len > 0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn read_con_buffer_iterator(
+    data: *const u8,
+    len: usize,
+) -> *mut CConFrameIterator {
+    if data.is_null() && len > 0 {
+        return ptr::null_mut();
+    }
+    if len == 0 {
+        return c_iterator_from_owned_string(String::new());
+    }
+    let slice = unsafe { std::slice::from_raw_parts(data, len) };
+    let contents = match std::str::from_utf8(slice) {
+        Ok(s) => s.to_owned(),
+        Err(_) => return ptr::null_mut(),
+    };
+    c_iterator_from_owned_string(contents)
+}
 /// Reads the next frame from the iterator, returning an opaque handle.
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
 ///
@@ -464,7 +609,6 @@ pub unsafe extern "C" fn con_frame_iterator_next(
         _ => ptr::null_mut(),
     }
 }
-
 /// Frees the memory for an opaque `RKRConFrame` handle.
 ///
 /// # Safety
@@ -475,7 +619,6 @@ pub unsafe extern "C" fn free_rkr_frame(frame_handle: *mut RKRConFrame) {
         let _ = unsafe { Box::from_raw(frame_handle as *mut ConFrame) };
     }
 }
-
 /// Frees the memory for a `CConFrameIterator`.
 ///
 /// # Safety
@@ -491,11 +634,9 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
         let _ = Box::from_raw(c_iterator_box.file_contents);
     }
 }
-
 //=============================================================================
 // Data Accessors (The "Getter" API)
 //=============================================================================
-
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 /// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
 ///
@@ -507,16 +648,13 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         Some(f) => f,
         None => return ptr::null_mut(),
     };
-
     let masses_iter = frame
         .header
         .natms_per_type
         .iter()
         .zip(frame.header.masses_per_type.iter())
         .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
-
     let has_velocities = frame.has_velocities();
-
     let mut c_atoms: Vec<CAtom> = frame
         .atom_data
         .iter()
@@ -548,14 +686,11 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             }
         })
         .collect();
-
     let atoms_ptr = c_atoms.as_mut_ptr();
     let num_atoms = c_atoms.len();
     std::mem::forget(c_atoms);
-
     let has_forces = frame.has_forces();
     let has_energies = frame.has_energies();
-
     let c_frame = Box::new(CFrame {
         atoms: atoms_ptr,
         num_atoms,
@@ -565,10 +700,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         has_forces,
         has_energies,
     });
-
     Box::into_raw(c_frame)
 }
-
 /// Frees the memory of a `CFrame` struct, including its internal atoms array.
 ///
 /// # Safety
@@ -583,7 +716,6 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
         let _ = Vec::from_raw_parts(frame_box.atoms, frame_box.num_atoms, frame_box.num_atoms);
     }
 }
-
 /// Copies a header string line into a caller-provided buffer.
 ///
 /// `is_prebox=true` selects from the two prebox lines (line 0 = user
@@ -641,7 +773,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
         RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS
     }
 }
-
 /// Gets a header string line as a newly allocated, null-terminated C string.
 ///
 /// The caller OWNS the returned pointer and MUST call `rkr_free_string`
@@ -664,7 +795,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
         Some(f) => f,
         None => return ptr::null_mut(),
     };
-
     let line_to_copy: Option<&str> = if is_prebox {
         match line_index {
             0 => Some(frame.header.prebox_header.user.as_str()),
@@ -674,7 +804,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
     } else {
         frame.header.postbox_header.get(line_index).map(String::as_str)
     };
-
     if let Some(line) = line_to_copy {
         // Convert the Rust string slice to a C-compatible, heap-allocated string.
         match CString::new(line) {
@@ -685,7 +814,6 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
         ptr::null_mut() // Index out of bounds
     }
 }
-
 /// Frees a C string that was allocated by Rust (e.g., from
 /// `rkr_frame_metadata_json`, `rkr_frame_potential_type`, or
 /// `rkr_frame_get_header_line_cpp`). Safe to call with NULL (no-op).
@@ -700,11 +828,9 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
         let _ = unsafe { CString::from_raw(s) };
     }
 }
-
 //=============================================================================
 // FFI Writer Functions (Writer Object Model)
 //=============================================================================
-
 /// Type-erased writer that backs every `RKRConFrameWriter` handle.
 ///
 /// `ConFrameWriter<W>` is generic over its sink, so a plain `File`, a
@@ -716,7 +842,6 @@ pub unsafe extern "C" fn rkr_free_string(s: *mut c_char) {
 /// construction. Dropping the box flushes the `BufWriter` and then runs
 /// the sink's own `Drop` (gzip/zstd finalize their streams there).
 type RkrWriter = ConFrameWriter<Box<dyn std::io::Write>>;
-
 /// Boxes a sink into an `RKRConFrameWriter` handle at the requested
 /// precision. `precision == None` selects the writer's built-in default.
 #[inline]
@@ -730,7 +855,6 @@ fn into_rkr_writer(
     };
     Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter
 }
-
 /// Parses a borrowed C string, returning `None` for null or non-UTF-8.
 #[inline]
 unsafe fn cstr_path<'a>(filename_c: *const c_char) -> Option<&'a str> {
@@ -739,7 +863,6 @@ unsafe fn cstr_path<'a>(filename_c: *const c_char) -> Option<&'a str> {
     }
     unsafe { CStr::from_ptr(filename_c).to_str().ok() }
 }
-
 /// Creates a new frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 ///
@@ -758,7 +881,6 @@ pub unsafe extern "C" fn create_writer_from_path_c(
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Frees the memory for an `RKRConFrameWriter`, closing the associated file.
 ///
 /// # Safety
@@ -769,7 +891,6 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
         let _ = unsafe { Box::from_raw(writer_handle as *mut RkrWriter) };
     }
 }
-
 /// Writes multiple frames from an array of handles to the file managed by the writer.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -788,7 +909,6 @@ pub unsafe extern "C" fn rkr_writer_extend(
     if frame_handles.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
-
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
     let mut rust_frames: Vec<&ConFrame> = Vec::with_capacity(num_frames);
     if handles_slice.iter().any(|&handle| handle.is_null()) {
@@ -804,17 +924,126 @@ pub unsafe extern "C" fn rkr_writer_extend(
             None => return RKRStatus::RKR_STATUS_NULL_POINTER,
         }
     }
-
     match writer.extend(rust_frames.into_iter()) {
         Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
         Err(_) => RKRStatus::RKR_STATUS_IO_ERROR,
     }
 }
 
+/// Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
+/// Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
+///
+/// # Safety
+/// `writer_handle` must be valid or null (null → `RKR_STATUS_NULL_POINTER`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_set_canonical(
+    writer_handle: *mut RKRConFrameWriter,
+    canonical: u8,
+) -> RKRStatus {
+    let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
+        Some(w) => w,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    writer.set_canonical(canonical != 0);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_is_canonical(writer_handle: *const RKRConFrameWriter) -> u8 {
+    match unsafe { (writer_handle as *const RkrWriter).as_ref() } {
+        Some(w) => u8::from(w.is_canonical()),
+        None => 0,
+    }
+}
+
+#[cfg(test)]
+mod index_proj_ffi_tests {
+    use super::*;
+    use std::ffi::CStr;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn fixture_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con")
+    }
+
+    #[test]
+    fn ffi_projection_matches_index_proj() {
+        let frames = crate::iterators::read_all_frames(&fixture_path()).unwrap();
+        let fr = &frames[0];
+        let handle = fr as *const ConFrame as *const RKRConFrame;
+        let proj = crate::index_proj::FrameIndexProjection::from_frame(fr);
+        // Full eight-surface campaign contract (plus JSON) via shipped C symbols.
+        assert_eq!(rkr_frame_index_natoms(handle), proj.n_atoms);
+        assert_eq!(rkr_frame_sections_mask(handle), proj.sections_mask);
+        let formula_c = unsafe { rkr_frame_composition_formula(handle) };
+        assert!(!formula_c.is_null());
+        let formula = unsafe { CStr::from_ptr(formula_c) }.to_str().unwrap();
+        assert_eq!(formula, proj.formula);
+        unsafe { rkr_free_string(formula_c) };
+        let ie = rkr_frame_index_energy(handle);
+        match proj.energy {
+            Some(e) => assert!((ie - e).abs() < 1e-12 || (ie.is_nan() && e.is_nan())),
+            None => assert!(ie.is_nan()),
+        }
+        let tm = rkr_frame_total_mass(handle);
+        match proj.total_mass {
+            Some(m) => assert!((tm - m).abs() < 1e-9, "total_mass C={tm} proj={m}"),
+            None => assert!(tm.is_nan()),
+        }
+        let cv = rkr_frame_cell_volume(handle);
+        match proj.cell_volume {
+            Some(v) => assert!((cv - v).abs() < 1e-6 * v.max(1.0), "cell_volume C={cv} proj={v}"),
+            None => assert!(cv.is_nan()),
+        }
+        let fm = rkr_frame_fmax(handle);
+        match proj.fmax {
+            Some(f) => assert!((fm - f).abs() < 1e-12 || (fm.is_nan() && f.is_nan())),
+            None => assert!(fm.is_nan()),
+        }
+        let json_c = unsafe { rkr_frame_index_projection_json(handle) };
+        assert!(!json_c.is_null());
+        let json = unsafe { CStr::from_ptr(json_c) }.to_str().unwrap();
+        assert!(json.contains("\"formula\""));
+        assert!(json.contains(&proj.formula) || proj.formula.is_empty());
+        assert!(json.contains("\"n_atoms\""));
+        assert!(json.contains("\"total_mass\"") || json.contains("\"cell_volume\""));
+        unsafe { rkr_free_string(json_c) };
+    }
+
+    #[test]
+    fn ffi_canonical_writer_byte_identical() {
+        let frames = crate::iterators::read_all_frames(&fixture_path()).unwrap();
+        let fr = &frames[0];
+        let dir = tempfile::tempdir().unwrap();
+        let p1 = dir.path().join("a.con");
+        let p2 = dir.path().join("b.con");
+        for p in [&p1, &p2] {
+            let path_c = std::ffi::CString::new(p.to_str().unwrap()).unwrap();
+            let w = unsafe { create_writer_from_path_c(path_c.as_ptr()) };
+            assert!(!w.is_null());
+            assert_eq!(
+                unsafe { rkr_writer_set_canonical(w, 1) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert_eq!(unsafe { rkr_writer_is_canonical(w) }, 1);
+            let handles = [fr as *const ConFrame as *const RKRConFrame];
+            assert_eq!(
+                unsafe { rkr_writer_extend(w, handles.as_ptr(), 1) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            unsafe { free_rkr_writer(w) };
+        }
+        let b1 = fs::read(&p1).unwrap();
+        let b2 = fs::read(&p2).unwrap();
+        assert_eq!(b1, b2);
+        assert!(!b1.is_empty());
+    }
+}
 //=============================================================================
 // Writer with Precision
 //=============================================================================
-
 /// Creates a new frame writer with custom floating-point precision.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 ///
@@ -834,17 +1063,14 @@ pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
         Err(_) => ptr::null_mut(),
     }
 }
-
 //=============================================================================
 // Frame Builder FFI (construct ConFrame from C data)
 //=============================================================================
-
 /// An opaque handle to a Rust `ConFrameBuilder` object.
 #[repr(C)]
 pub struct RKRConFrameBuilder {
     _private: [u8; 0],
 }
-
 #[allow(clippy::too_many_arguments)]
 unsafe fn add_builder_atom(
     builder_handle: *mut RKRConFrameBuilder,
@@ -866,7 +1092,6 @@ unsafe fn add_builder_atom(
         Ok(s) => s,
         Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
     };
-
     builder.add_atom(sym, x, y, z, fixed, atom_id, mass);
     if let Some(v) = velocity {
         builder.with_velocity(v);
@@ -874,10 +1099,8 @@ unsafe fn add_builder_atom(
     if let Some(f) = forces {
         builder.with_force(f);
     }
-
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Attaches a velocity vector to the most recently added atom on a builder.
 /// No-op if no atom has been added yet.
 ///
@@ -896,7 +1119,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_velocity(
     builder.with_velocity(v);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Attaches a force vector to the most recently added atom on a builder.
 /// No-op if no atom has been added yet.
 ///
@@ -915,7 +1137,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
     builder.with_force(f);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Attaches a per-atom energy to the most recently added atom on a
 /// builder. No-op if no atom has been added yet.
 ///
@@ -937,7 +1158,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
     builder.with_energy(energy);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 // ----- v0.11.0 in-place mutation FFI ---------------------------------------
 //
 // Mirrors `ConFrameBuilder::set_atom_* / clear_atom_* / *_from_flat /
@@ -951,7 +1171,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
 // return RKR_STATUS_NULL_POINTER. Bulk setters with the wrong length return
 // RKR_STATUS_INDEX_OUT_OF_BOUNDS as well (the caller sized the buffer
 // wrong).
-
 fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match e {
@@ -961,7 +1180,6 @@ fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
         _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
-
 /// Returns the number of atoms currently held in the builder.
 ///
 /// # Safety
@@ -978,7 +1196,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_count(
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     builder.atom_count()
 }
-
 /// Updates the Cartesian position of an existing atom.
 /// # Safety
 /// builder_handle must be valid.
@@ -999,7 +1216,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_position(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Sets the velocity vector of an existing atom from 3 contiguous f64 values.
 /// # Safety
 /// builder_handle must be valid; velocity must point to 3 contiguous f64.
@@ -1019,7 +1235,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_velocity(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Sets the force vector of an existing atom from 3 contiguous f64 values.
 /// # Safety
 /// builder_handle must be valid; force must point to 3 contiguous f64.
@@ -1039,7 +1254,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_force(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Sets the per-atom energy contribution of an existing atom.
 /// # Safety
 /// builder_handle must be valid.
@@ -1058,7 +1272,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energy(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
 /// # Safety
 /// builder_handle must be valid.
@@ -1079,7 +1292,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_fixed(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Updates the mass of an existing atom.
 /// # Safety
 /// builder_handle must be valid.
@@ -1098,7 +1310,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_mass(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Updates the atom_id (pre-grouping index from .con column 5) of an
 /// existing atom. The underlying `Array1<u64>` buffer pointer stays
 /// stable; callers that hold a raw `*const u64` via
@@ -1120,7 +1331,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_id(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Removes velocity / force / energy data from an existing atom.
 /// # Safety
 /// builder_handle must be valid.
@@ -1138,7 +1348,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_velocity(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// # Safety
 /// builder_handle must be valid.
 #[unsafe(no_mangle)]
@@ -1155,7 +1364,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_force(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// # Safety
 /// builder_handle must be valid.
 #[unsafe(no_mangle)]
@@ -1172,7 +1380,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_energy(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Bulk-update positions for every atom from a flat row-major
 /// `[x0,y0,z0,x1,y1,z1,...]` buffer of length `3 * atom_count()`.
 /// # Safety
@@ -1193,7 +1400,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_positions_from_flat(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Bulk-update forces for every atom.
 /// # Safety
 /// builder_handle must be valid; forces must point to `3 * len` f64.
@@ -1213,7 +1419,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_forces_from_flat(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Bulk-update per-atom energies (one f64 per atom).
 /// # Safety
 /// builder_handle must be valid; energies must point to `len` f64.
@@ -1233,7 +1438,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energies_from_flat(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Reads the position of an existing atom into 3 contiguous f64 out values.
 /// # Safety
 /// builder_handle must be valid; out_xyz must point to 3 writable f64.
@@ -1257,7 +1461,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_position(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Reads the velocity / force vector of an atom (if any) into 3 contiguous
 /// f64. `*has_value` is set to `true` if the atom carries that vector,
 /// `false` if it does not (in which case `out_xyz` is left untouched).
@@ -1290,7 +1493,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_velocity(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// # Safety
 /// builder_handle, out_xyz, has_value must all be valid pointers.
 #[unsafe(no_mangle)]
@@ -1319,7 +1521,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Reads the per-atom energy of an atom (if any). `*has_value` is set to
 /// `true` if the atom carries an energy contribution, else `false` and
 /// `*out_value` is left untouched.
@@ -1349,7 +1550,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_energy(
         Err(e) => map_builder_err(e),
     }
 }
-
 /// Reads the mass of an existing atom.
 /// # Safety
 /// builder_handle and out_mass must be valid pointers.
@@ -1371,7 +1571,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
         Err(e) => map_builder_err(e),
     }
 }
-
 // ----- v0.11.0 DLPack tier-3 export FFI -------------------------------------
 //
 // Cross-language zero-copy via the DLPack 1.0 ABI. Each per-atom field of
@@ -1382,7 +1581,6 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 // remains valid past the builder's lifetime. This is the conservative
 // choice for cross-process / language-runtime consumers (Python GC,
 // Julia GC, ...) where the consumer may outlive the Rust-side
-// ConFrameBuilder. A future v0.12 will add a `*_dlpack_borrowed` variant
 // that hands out a non-owning view backed by `Arc<ndarray::Array<...>>`
 // storage (matches metatensor v2's `Arc<RwLock<ArrayD<T>>>` pattern) for
 // in-process zero-copy.
@@ -1391,29 +1589,142 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
 // RKR_STATUS_SECTION_ABSENT when the section is not declared on the
 // builder; the out parameter is left untouched. Always-present fields
 // (positions, masses, atom_ids) always return a tensor on success.
-
 /// Re-export of dlpk's `DLManagedTensorVersioned` for the C ABI surface.
 /// Defined here so cbindgen emits a forward declaration without pulling
 /// in the full dlpk header; consumers include `<dlpack/dlpack.h>` (or
 /// equivalent) and cast through the standard DLPack ABI.
 pub use dlpk::sys::DLManagedTensorVersioned as RKRDLManagedTensorVersioned;
-
 fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match e {
+        ParseError::ValidationError(ref msg) if msg.contains("device mismatch") => {
+            RKRStatus::RKR_STATUS_DEVICE_MISMATCH
+        }
+        ParseError::ValidationError(ref msg)
+            if msg.contains("no device allocator") || msg.contains("allocator") =>
+        {
+            RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED
+        }
         ParseError::ValidationError(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
         _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// DLPack `DLDataTypeCode` values (same numerics as `dlpack.h` / dlpk).
+///
+/// Use with [`RKRDLDataType::code`]. Common: `RKR_DL_FLOAT = 2`, `RKR_DL_UINT = 1`.
+pub mod rkr_dl_type_code {
+    pub const RKR_DL_INT: u8 = 0;
+    pub const RKR_DL_UINT: u8 = 1;
+    pub const RKR_DL_FLOAT: u8 = 2;
+    pub const RKR_DL_OPAQUE_HANDLE: u8 = 3;
+    pub const RKR_DL_BFLOAT: u8 = 4;
+    pub const RKR_DL_COMPLEX: u8 = 5;
+    pub const RKR_DL_BOOL: u8 = 6;
+}
 
-fn export_owned_array2_dlpack(
-    arr: &ndarray::ArcArray2<f64>,
+/// DLPack `DLDeviceType` values (same numerics as `dlpack.h`). CPU = 1.
+pub mod rkr_dl_device_type {
+    pub const RKR_DL_CPU: i32 = 1;
+    pub const RKR_DL_CUDA: i32 = 2;
+    pub const RKR_DL_CUDA_HOST: i32 = 3;
+}
+
+/// Element type request — **layout-identical** to DLPack `DLDataType`
+/// (`uint8_t code`, `uint8_t bits`, `uint16_t lanes`). Interchangeable with
+/// `DLDataType` from `<dlpack/dlpack.h>` when that header is included.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDLDataType {
+    /// `DLDataTypeCode` (e.g. [`rkr_dl_type_code::RKR_DL_FLOAT`]).
+    pub code: u8,
+    /// Bit width (32 or 64 for float sections today).
+    pub bits: u8,
+    /// Vector lanes (must be 1 for current exports).
+    pub lanes: u16,
+}
+
+/// Device request — **layout-identical** to DLPack `DLDevice`
+/// (`DLDeviceType device_type`, `int32_t device_id`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDLDevice {
+    /// `DLDeviceType` (e.g. [`rkr_dl_device_type::RKR_DL_CPU`]).
+    pub device_type: i32,
+    pub device_id: i32,
+}
+
+/// Options for DLPack export: requested **DLPack** `DLDataType` + `DLDevice`.
+///
+/// Pass to `*_dlpack_ex`. NULL → `kDLFloat` / 64 / lanes 1 on **CPU**.
+///
+/// **Dtype (CPU):** any combination dlpk can host from converted CON data —
+/// signed/unsigned ints (8/16/32/64), IEEE floats (32/64), and bool (8-bit
+/// DLPack convention). Values are cast from on-disk binary64 (or u64 for atom
+/// ids). Complex / bfloat / float8 / opaque / multi-lane types return
+/// `RKR_STATUS_VALIDATION_ERROR` until implemented.
+///
+/// **Device:** `kDLCPU` always; with `--features cuda`, `kDLCUDA` performs H2D
+/// into real device memory then exports DLPack. Other devices return
+/// `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RKRDlpackExportOptions {
+    /// Requested element type (DLPack `DLDataType` layout).
+    pub dtype: RKRDLDataType,
+    /// Requested placement (DLPack `DLDevice` layout).
+    pub device: RKRDLDevice,
+}
+
+impl Default for RKRDlpackExportOptions {
+    fn default() -> Self {
+        Self {
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
+        }
+    }
+}
+
+/// Resolve options; NULL → defaults.
+/// CPU always; CUDA accepted when built with `--features cuda` (H2D export).
+fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
+    let o = if opts.is_null() {
+        RKRDlpackExportOptions::default()
+    } else {
+        unsafe { *opts }
+    };
+    let dt = o.device.device_type;
+    if dt == rkr_dl_device_type::RKR_DL_CPU {
+        // ok
+    } else if dt == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(not(feature = "cuda"))]
+        {
+            return Err(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
+        }
+        #[cfg(feature = "cuda")]
+        {
+            // accepted — H2D in frame as_dlpack / storage layer
+        }
+    } else {
+        return Err(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
+    }
+    if o.dtype.lanes != 1 {
+        return Err(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    Ok(o)
+}
+
+fn finish_dlpack_tensor<E: std::fmt::Display>(
+    result: Result<dlpk::DLPackTensor, E>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    // ArcArray clone is a cheap Arc bump; the resulting tensor stays
-    // safely owned even if the source builder later CoW-mutates.
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
+    match result {
         Ok(tensor) => {
             let raw = tensor.into_raw();
             unsafe {
@@ -1427,44 +1738,138 @@ fn export_owned_array2_dlpack(
     }
 }
 
-fn export_owned_array1_f64_dlpack(
-    arr: &ndarray::ArcArray1<f64>,
+/// Cast CON `f64` samples into a DLPack tensor with the requested dtype (CPU).
+/// `shape` is 1-D `[n]` or 2-D `[rows, cols]` with `rows * cols == data.len()`.
+fn export_f64_slice_as_dlpack(
+    data: &[f64],
+    shape: &[usize],
+    dtype: RKRDLDataType,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
-        Ok(tensor) => {
-            let raw = tensor.into_raw();
-            unsafe {
-                *out_tensor = raw.as_ptr();
-            }
-            RKRStatus::RKR_STATUS_SUCCESS
-        }
-        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
-            "DLPack export failed: {e}"
-        ))),
+    use rkr_dl_type_code::*;
+    if dtype.lanes != 1 {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
     }
+    macro_rules! arc_export {
+        ($ty:ty, $map:expr) => {{
+            let v: Vec<$ty> = data.iter().map($map).collect();
+            match *shape {
+                [r, c] => match ndarray::ArcArray2::from_shape_vec((r, c), v) {
+                    Ok(a) => dlpk::DLPackTensor::try_from(a),
+                    Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                },
+                [_] => dlpk::DLPackTensor::try_from(ndarray::ArcArray1::from_vec(v)),
+                _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+            }
+        }};
+    }
+    let tensor = match (dtype.code, dtype.bits) {
+        (RKR_DL_FLOAT, 64) => arc_export!(f64, |&x| x),
+        (RKR_DL_FLOAT, 32) => arc_export!(f32, |&x| x as f32),
+        (RKR_DL_INT, 8) => arc_export!(i8, |&x| x as i8),
+        (RKR_DL_INT, 16) => arc_export!(i16, |&x| x as i16),
+        (RKR_DL_INT, 32) => arc_export!(i32, |&x| x as i32),
+        (RKR_DL_INT, 64) => arc_export!(i64, |&x| x as i64),
+        (RKR_DL_UINT, 8) => arc_export!(u8, |&x| x as u8),
+        (RKR_DL_UINT, 16) => arc_export!(u16, |&x| x as u16),
+        (RKR_DL_UINT, 32) => arc_export!(u32, |&x| x as u32),
+        (RKR_DL_UINT, 64) => arc_export!(u64, |&x| x as u64),
+        (RKR_DL_BOOL, 8) => {
+            // bool has no ndarray Zero; use Vec → DLPack (1-D length = element count)
+            let v: Vec<bool> = data.iter().map(|&x| x != 0.0).collect();
+            return finish_dlpack_tensor(dlpk::DLPackTensor::try_from(v), out_tensor);
+        }
+        // Complex / bfloat / float8 / opaque: not hosted from CON f64 yet
+        _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    finish_dlpack_tensor(tensor, out_tensor)
+}
+
+fn export_owned_array2_dlpack_opts(
+    arr: &ndarray::ArcArray2<f64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let (r, c) = arr.dim();
+    let flat: Vec<f64> = arr.iter().copied().collect();
+    if opts.device.device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            // H2D into real device memory (f64 only for CUDA path here).
+            if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
+                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+            }
+            return finish_dlpack_tensor(
+                crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                    &[r, c],
+                    &flat,
+                    opts.device.device_id,
+                ),
+                out_tensor,
+            );
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    }
+    export_f64_slice_as_dlpack(&flat, &[r, c], opts.dtype, out_tensor)
+}
+
+fn export_owned_array1_f64_dlpack_opts(
+    arr: &ndarray::ArcArray1<f64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    let flat = arr.to_vec();
+    let n = flat.len();
+    if opts.device.device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
+                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+            }
+            return finish_dlpack_tensor(
+                crate::cuda_array::export_host_f64_as_cuda_dlpack(
+                    &[n],
+                    &flat,
+                    opts.device.device_id,
+                ),
+                out_tensor,
+            );
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    }
+    export_f64_slice_as_dlpack(&flat, &[n], opts.dtype, out_tensor)
 }
 
 fn export_owned_array1_u64_dlpack(
     arr: &ndarray::ArcArray1<u64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    let shared = arr.clone();
-    match dlpk::DLPackTensor::try_from(shared) {
-        Ok(tensor) => {
-            let raw = tensor.into_raw();
-            unsafe {
-                *out_tensor = raw.as_ptr();
-            }
-            RKRStatus::RKR_STATUS_SUCCESS
-        }
-        Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
-            "DLPack export failed: {e}"
-        ))),
-    }
+    finish_dlpack_tensor(
+        dlpk::DLPackTensor::try_from(arr.clone()),
+        out_tensor,
+    )
 }
 
+/// Atom ids: default uint64; or cast via f64 path when `opts.dtype` requests another host type.
+fn export_owned_array1_u64_dlpack_opts(
+    arr: &ndarray::ArcArray1<u64>,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    use rkr_dl_type_code::*;
+    if opts.dtype.code == RKR_DL_UINT && opts.dtype.bits == 64 && opts.dtype.lanes == 1 {
+        return export_owned_array1_u64_dlpack(arr, out_tensor);
+    }
+    let as_f64: Vec<f64> = arr.iter().map(|&x| x as f64).collect();
+    let n = as_f64.len();
+    export_f64_slice_as_dlpack(&as_f64, &[n], opts.dtype, out_tensor)
+}
 /// Export builder positions as a DLPack-managed tensor.
 ///
 /// On success the caller-supplied `*out_tensor` is set to a newly-
@@ -1480,11 +1885,30 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_positions_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+/// Like [`rkr_frame_builder_positions_dlpack`] with explicit precision/device.
+///
+/// `opts` may be NULL (float64 / CPU). See [`RKRDlpackExportOptions`].
+///
+/// # Safety
+/// Same as the non-`_ex` entry; `opts` must be null or point at a valid struct.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array2_dlpack(builder.positions_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.positions_2d_ref(), &o, out_tensor)
 }
 
 /// Export builder velocities as a DLPack-managed tensor.
@@ -1501,14 +1925,27 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_velocities_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_velocities_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array2_dlpack(builder.velocities_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.velocities_2d_ref(), &o, out_tensor)
 }
 
 /// Export builder forces as a DLPack-managed tensor.
@@ -1524,14 +1961,27 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_forces_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_forces_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array2_dlpack(builder.forces_2d_ref(), out_tensor)
+    export_owned_array2_dlpack_opts(builder.forces_2d_ref(), &o, out_tensor)
 }
 
 /// Export builder per-atom energies as a DLPack-managed tensor.
@@ -1547,14 +1997,29 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe {
+        rkr_frame_builder_atom_energies_dlpack_ex(builder_handle, std::ptr::null(), out_tensor)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_energies_section() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    export_owned_array1_f64_dlpack(builder.atom_energies_1d_ref(), out_tensor)
+    export_owned_array1_f64_dlpack_opts(builder.atom_energies_1d_ref(), &o, out_tensor)
 }
 
 /// Export builder per-atom masses as a DLPack-managed tensor `(N,) f64`.
@@ -1567,13 +2032,25 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_masses_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array1_f64_dlpack(builder.masses_1d_ref(), out_tensor)
+    export_owned_array1_f64_dlpack_opts(builder.masses_1d_ref(), &o, out_tensor)
 }
-
 /// Export builder per-atom ids as a DLPack-managed tensor `(N,) u64`.
 ///
 /// # Safety
@@ -1584,13 +2061,25 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
     builder_handle: *const RKRConFrameBuilder,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
+    unsafe { rkr_frame_builder_atom_ids_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    export_owned_array1_u64_dlpack(builder.atom_ids_1d_ref(), out_tensor)
+    export_owned_array1_u64_dlpack_opts(builder.atom_ids_1d_ref(), &o, out_tensor)
 }
-
 // ----- v0.11.1 in-process zero-copy raw-pointer FFI -------------------------
 //
 // The DLPack tier-3 export above clones field data into an owning tensor so
@@ -1607,7 +2096,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
 //
 // Cross-language ML consumers should use the DLPack tier above; raw
 // pointer access is for in-process hot paths only.
-
 /// Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL on invalid handle. Pointer is valid until the builder
 /// is dropped or `add_atom` reallocates.
@@ -1629,7 +2117,6 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_data(
         .map(|s| s.as_mut_ptr())
         .unwrap_or(std::ptr::null_mut())
 }
-
 /// Borrow the velocities buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the velocities section is absent or the handle is
 /// invalid.
@@ -1654,7 +2141,6 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_data(
         slice.as_mut_ptr()
     }
 }
-
 /// Borrow the forces buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the forces section is absent.
 ///
@@ -1678,7 +2164,6 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_data(
         slice.as_mut_ptr()
     }
 }
-
 /// Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
 /// Returns NULL if the energies section is absent.
 ///
@@ -1702,7 +2187,6 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_data(
         slice.as_mut_ptr()
     }
 }
-
 /// Borrow the per-atom masses buffer as a raw `(N,) f64` pointer.
 ///
 /// # Safety
@@ -1722,7 +2206,6 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_data(
         slice.as_mut_ptr()
     }
 }
-
 /// Borrow the per-atom atom_ids buffer as a raw `(N,) u64` pointer.
 ///
 /// # Safety
@@ -1742,9 +2225,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_data(
         slice.as_ptr()
     }
 }
-
 // ----- end v0.11.0 in-place mutation FFI ------------------------------------
-
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
 ///
 /// `velocity` and `force` are pointers to 3 contiguous f64 values, or NULL if
@@ -1796,7 +2277,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_full(
         )
     }
 }
-
 /// Creates a new frame builder with the given cell dimensions, angles,
 /// and header lines.
 ///
@@ -1826,7 +2306,6 @@ pub unsafe extern "C" fn rkr_frame_new(
     }
     let cell_arr = unsafe { [*cell, *cell.add(1), *cell.add(2)] };
     let angles_arr = unsafe { [*angles, *angles.add(1), *angles.add(2)] };
-
     let get_str = |p: *const c_char| -> String {
         if p.is_null() {
             String::new()
@@ -1837,7 +2316,6 @@ pub unsafe extern "C" fn rkr_frame_new(
                 .to_string()
         }
     };
-
     // prebox1 is the JSON metadata slot, regenerated on write from
     // metadata + sections; it is accepted for ABI continuity but ignored.
     let _ = get_str(prebox1);
@@ -1845,10 +2323,8 @@ pub unsafe extern "C" fn rkr_frame_new(
     builder
         .prebox_header(get_str(prebox0))
         .postbox_header([get_str(postbox0), get_str(postbox1)]);
-
     Box::into_raw(Box::new(builder)) as *mut RKRConFrameBuilder
 }
-
 /// Parses and sets JSON metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1872,7 +2348,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
         Err(_) => RKRStatus::RKR_STATUS_INVALID_JSON,
     }
 }
-
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1895,7 +2370,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
     builder.set_scalar_metadata(key, value);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets a string metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1922,7 +2396,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
     builder.set_string_metadata(key, value);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the per-frame total energy metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1940,7 +2413,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_energy(
     builder.set_energy(energy);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the zero-based frame index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1958,7 +2430,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
     builder.set_frame_index(idx);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the simulation time metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1976,7 +2447,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_time(
     builder.set_time(time);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the timestep metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -1994,7 +2464,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
     builder.set_timestep(dt);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the NEB bead index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -2012,7 +2481,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
     builder.set_neb_bead(bead);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Sets the NEB band index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -2030,7 +2498,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
     builder.set_neb_band(band);
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 // -----------------------------------------------------------------------------
 // Legacy add_atom variants (kept for source compatibility)
 //
@@ -2040,7 +2507,6 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
 // written against earlier 0.x releases. New callers should prefer
 // `rkr_frame_add_atom_full`.
 // -----------------------------------------------------------------------------
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full` with NULL velocity
 /// and force pointers. Adds an atom (no velocity, no forces) to the
 /// builder using a single uniform fixed flag.
@@ -2074,7 +2540,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom (no
 /// velocity, no forces) using per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2109,7 +2574,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_fixed_mask(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// a velocity vector and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2145,7 +2609,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// a velocity vector and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2183,7 +2646,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_fixed_mask(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// a force vector and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2219,7 +2681,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// a force vector and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2257,7 +2718,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_forces_fixed_mask(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// both velocity and force vectors and a single uniform fixed flag.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2296,7 +2756,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces(
         )
     }
 }
-
 /// **Deprecated**: prefer `rkr_frame_add_atom_full`. Adds an atom with
 /// both velocity and force vectors and per-axis fixed flags.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -2337,7 +2796,6 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
         )
     }
 }
-
 /// Consumes the builder and returns a finalized RKRConFrame handle.
 /// The builder handle is invalidated after this call.
 /// The caller OWNS the returned frame and MUST call `free_rkr_frame`.
@@ -2356,7 +2814,6 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
     let frame = builder.build();
     Box::into_raw(Box::new(frame)) as *mut RKRConFrame
 }
-
 /// Frees a frame builder without building.
 ///
 /// # Safety
@@ -2367,7 +2824,6 @@ pub unsafe extern "C" fn free_rkr_frame_builder(builder_handle: *mut RKRConFrame
         let _ = unsafe { Box::from_raw(builder_handle as *mut ConFrameBuilder) };
     }
 }
-
 /// Cheap, copy-on-write clone of a frame builder. Returned handle owns
 /// a new `ConFrameBuilder` whose per-atom buffers share storage with
 /// the source via ArcArray; any subsequent mutation triggers a
@@ -2395,7 +2851,6 @@ pub unsafe extern "C" fn rkr_frame_builder_clone(
     let cloned = builder.clone();
     Box::into_raw(Box::new(cloned)) as *mut RKRConFrameBuilder
 }
-
 /// Creates a new gzip-compressed frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 ///
@@ -2412,7 +2867,6 @@ pub unsafe extern "C" fn create_writer_gzip_c(filename_c: *const c_char) -> *mut
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Creates a gzip-compressed frame writer with a custom floating-point
 /// precision. The caller OWNS the returned pointer and MUST call
 /// `free_rkr_writer`.
@@ -2433,7 +2887,6 @@ pub unsafe extern "C" fn create_writer_gzip_with_precision_c(
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Creates a new zstd-compressed frame writer for the specified file.
 /// The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
 ///
@@ -2455,7 +2908,6 @@ pub unsafe extern "C" fn create_writer_zstd_c(filename_c: *const c_char) -> *mut
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Creates a zstd-compressed frame writer with a custom floating-point
 /// precision. The caller OWNS the returned pointer and MUST call
 /// `free_rkr_writer`.
@@ -2481,11 +2933,9 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
         Err(_) => ptr::null_mut(),
     }
 }
-
 //=============================================================================
 // Direct mmap-based Reader FFI
 //=============================================================================
-
 /// Reads the first frame from a .con file.
 /// Uses `read_to_string` for small files (< 64 KiB) and mmap for larger ones.
 /// Stops after the first frame rather than parsing the entire file.
@@ -2508,7 +2958,6 @@ pub unsafe extern "C" fn rkr_read_first_frame(filename_c: *const c_char) -> *mut
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Reads all frames from a .con file using mmap.
 /// Returns an array of frame handles and sets `num_frames` to the count.
 /// The caller OWNS both the array and each frame handle.
@@ -2549,7 +2998,6 @@ pub unsafe extern "C" fn rkr_read_all_frames(
         Err(_) => ptr::null_mut(),
     }
 }
-
 /// Frees an array of frame handles returned by `rkr_read_all_frames`.
 /// Each frame is freed individually, then the array itself.
 ///
@@ -2569,9 +3017,22 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
         }
     }
 }
+/// Free only the outer pointer array from `rkr_read_all_frames` (not the frames).
+///
+/// # Safety
+/// `frames` null or from `rkr_read_all_frames` with length `num_frames`. Frame
+/// pointers must be owned elsewhere (e.g. language wrappers).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_rkr_frame_ptr_array(frames: *mut *mut RKRConFrame, num_frames: usize) {
+    if frames.is_null() {
+        return;
+    }
+    unsafe {
+        let _ptrs = Vec::from_raw_parts(frames, num_frames, num_frames);
+    }
+}
 
 //=============================================================================
-
 // ---------------------------------------------------------------------------
 // Metatensor TensorBlock exports (`metatensor` Cargo feature)
 //
@@ -2580,21 +3041,17 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 // in that module (`tensor_block_into_raw_mts` / `mts_block_free_sys`).
 // Lean builds omit these symbols (`READCON_CORE_HAS_METATENSOR` in the header).
 // ---------------------------------------------------------------------------
-
 /// Free an owned block from `rkr_frame_metatensor_*_block`.
 /// Prefer this or `mts_block_free` (metatensor.h) — not both on the same pointer.
 ///
 /// # Safety
 /// `block` is NULL or an owning `mts_block_t*` from this library's transfer helper.
-
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_block_t) {
     unsafe { crate::metatensor_export::mts_block_free_sys(block) };
 }
-
 /// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
-
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
@@ -2618,7 +3075,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
-
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
@@ -2643,7 +3099,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
-
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
@@ -2668,7 +3123,6 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
-
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
@@ -2693,17 +3147,524 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+#[cfg(not(feature = "zstd"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_c(_filename_c: *const c_char) -> *mut RKRConFrameWriter {
+    ptr::null_mut()
+}
+#[cfg(not(feature = "zstd"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
+    _filename_c: *const c_char,
+    _precision: u8,
+) -> *mut RKRConFrameWriter {
+    ptr::null_mut()
+}
+//=============================================================================
+/// Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
+/// Real implementations live under `feature = "metatensor"`.
+#[cfg(not(feature = "metatensor"))]
+#[repr(C)]
+pub struct mts_block_t {
+    _private: [u8; 0],
+}
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_mts_block_free(_block: *mut mts_block_t) {}
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+#[cfg(not(feature = "metatensor"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
+    _frame_handle: *const RKRConFrame,
+    out_block: *mut *mut mts_block_t,
+) -> RKRStatus {
+    if !out_block.is_null() {
+        unsafe { *out_block = std::ptr::null_mut() };
+    }
+    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+}
+// ----- Frame section buffers (no CFrame AoS required) -------------------------
+/// Number of atoms on the frame (atom_data order).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_count(frame_handle: *const RKRConFrame) -> usize {
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return 0;
+    };
+    frame.atom_data.len()
+}
+/// Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_positions(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let n = frame.atom_data.len();
+    let need = n.saturating_mul(3);
+    if out_len < need {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        slice[i * 3] = a.x;
+        slice[i * 3 + 1] = a.y;
+        slice[i * 3 + 2] = a.z;
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_velocities(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_velocities() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let need = n.saturating_mul(3);
+    if out_len < need {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        let [vx, vy, vz] = a.velocity.unwrap_or([0.0; 3]);
+        slice[i * 3] = vx;
+        slice[i * 3 + 1] = vy;
+        slice[i * 3 + 2] = vz;
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_forces(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_forces() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let need = n.saturating_mul(3);
+    if out_len < need {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        let [fx, fy, fz] = a.force.unwrap_or([0.0; 3]);
+        slice[i * 3] = fx;
+        slice[i * 3 + 1] = fy;
+        slice[i * 3 + 2] = fz;
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_energies() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    if out_len < n {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        slice[i] = a.energy.unwrap_or(0.0);
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_masses(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let n = frame.atom_data.len();
+    if out_len < n {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    let mut expanded: Vec<f64> = Vec::with_capacity(n);
+    for (ti, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let m = frame.header.masses_per_type.get(ti).copied().unwrap_or(0.0);
+        expanded.extend(std::iter::repeat_n(m, count));
+    }
+    if expanded.len() != n {
+        expanded.resize(n, 0.0);
+    }
+    slice.copy_from_slice(&expanded[..n]);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
+    frame_handle: *const RKRConFrame,
+    out: *mut u64,
+    out_len: usize,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let n = frame.atom_data.len();
+    if out_len < n {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        slice[i] = a.atom_id;
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        data.extend_from_slice(&[a.x, a.y, a.z]);
+    }
+    ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)))
+}
 
+/// Metatensor-style: export positions as they are stored (CPU f64), with
+/// explicit device request. Non-CPU → `FEATURE_DISABLED`. Prefer this over
+/// dtype-cast `*_dlpack_ex` for new code.
+///
+/// `stream` and `max_version_*` are accepted for ABI alignment with
+/// metatensor `as_dlpack`; CPU ignores stream / version negotiation for now.
+///
+/// # Safety
+/// Handles and `out_tensor` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
+    frame_handle: *const RKRConFrame,
+    device_type: i32,
+    device_id: i32,
+    _stream: i64,
+    _max_version_major: u32,
+    _max_version_minor: u32,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let dl_device = if device_type == rkr_dl_device_type::RKR_DL_CPU {
+        dlpk::sys::DLDevice::cpu()
+    } else if device_type == rkr_dl_device_type::RKR_DL_CUDA {
+        #[cfg(feature = "cuda")]
+        {
+            dlpk::sys::DLDevice::cuda(device_id)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        }
+    } else {
+        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    // Opaque SoA storage → DLPack; CUDA requests H2D via storage_dtype / cuda_array.
+    match frame.positions_as_dlpack(dl_device) {
+        Ok(tensor) => {
+            let raw = tensor.into_raw();
+            unsafe {
+                *out_tensor = raw.as_ptr();
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(e) => map_dlpack_err(e),
+    }
+}
 
+/// Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
+/// or length 3N). Metatensor-style write path symmetry.
+///
+/// # Safety
+/// `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
+    frame_handle: *mut RKRConFrame,
+    tensor: *const RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let frame = unsafe { &mut *(frame_handle as *mut ConFrame) };
+    let dl = unsafe { &(*tensor).dl_tensor };
+    if dl.device.device_type != dlpk::sys::DLDeviceType::kDLCPU {
+        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+    }
+    let n = frame.atom_data.len();
+    let need = n.saturating_mul(3);
+    let ndim = dl.ndim as usize;
+    let shape = if dl.shape.is_null() {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    } else {
+        unsafe { std::slice::from_raw_parts(dl.shape, ndim) }
+    };
+    let nelem = if ndim == 2 && shape[0] == n as i64 && shape[1] == 3 {
+        need
+    } else if ndim == 1 && shape[0] == need as i64 {
+        need
+    } else {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    };
+    let code = dl.dtype.code as u8;
+    let bits = dl.dtype.bits;
+    if dl.data.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let vals: Vec<f64> = if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 64 {
+        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f64, nelem) };
+        s.to_vec()
+    } else if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 32 {
+        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f32, nelem) };
+        s.iter().map(|&x| x as f64).collect()
+    } else {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    };
+    if frame.positions.nrows() != n {
+        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    }
+    for i in 0..n {
+        frame.positions.set_f64_row(
+            i,
+            [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]],
+        );
+    }
+    frame.sync_atom_data_from_arrays();
+    RKRStatus::RKR_STATUS_SUCCESS
+}
 
+/// DLPack positions from a frame (default float64 / CPU). Prefer
+/// [`rkr_frame_positions_as_dlpack`] for metatensor-style device negotiation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe {
+        rkr_frame_positions_as_dlpack(frame_handle, rkr_dl_device_type::RKR_DL_CPU, 0, 0, 1, 0, out_tensor)
+    }
+}
 
+/// Frame positions with [`RKRDlpackExportOptions`] (`opts` NULL → f64/CPU).
+///
+/// # Safety
+/// `frame_handle` / `out_tensor` valid; `opts` null or valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = frame_positions_arc(frame);
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
+}
+
+/// DLPack velocities from a frame, or `SECTION_ABSENT` if missing (f64/CPU).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_velocities_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_velocities() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        let v = a.velocity.unwrap_or([0.0; 3]);
+        data.extend_from_slice(&v);
+    }
+    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
+}
+
+/// DLPack forces from a frame, or `SECTION_ABSENT` if missing (f64/CPU default).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_forces_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_forces() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        let f = a.force.unwrap_or([0.0; 3]);
+        data.extend_from_slice(&f);
+    }
+    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
+}
+
+/// DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_atom_energies_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_energies() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let data: Vec<f64> = frame
+        .atom_data
+        .iter()
+        .map(|a| a.energy.unwrap_or(0.0))
+        .collect();
+    let arr = ndarray::ArcArray1::from_vec(data);
+    export_owned_array1_f64_dlpack_opts(&arr, &o, out_tensor)
+}
 
 // Chemfiles selection (always linked; real impl needs --features chemfiles)
 //=============================================================================
-
 /// Opaque handle for a cached selection evaluation result.
 pub struct RKRSelectionResult;
-
 /// Evaluate a chemfiles selection-language string on an `RKRConFrame`.
 ///
 /// On success writes a heap-allocated result handle to `*out_result` (caller
@@ -2739,7 +3700,6 @@ pub unsafe extern "C" fn rkr_frame_select(
         Err(_) => RKRStatus::RKR_STATUS_SELECTION_ERROR,
     }
 }
-
 /// Number of matches in a selection result.
 ///
 /// # Safety
@@ -2755,7 +3715,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_count(
         unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     result.matches.len() as u64
 }
-
 /// Selection context size (1=atom, 2=pair, 3=angle, 4=dihedral).
 ///
 /// # Safety
@@ -2771,7 +3730,6 @@ pub unsafe extern "C" fn rkr_selection_result_context_size(
         unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     result.context_size as u32
 }
-
 /// Copy match `match_index` atom indices into `out_atoms` (up to 4 slots).
 /// Writes actual arity to `*out_size` when non-null.
 ///
@@ -2808,7 +3766,6 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Fill `out_indices` with primary atom indices for each match (length =
 /// match count). Returns `RKR_STATUS_BUFFER_TOO_SMALL` if `capacity` is too small.
 ///
@@ -2848,7 +3805,6 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
-
 /// Free a selection result from [`rkr_frame_select`]. Safe with NULL.
 ///
 /// # Safety
@@ -2864,7 +3820,6 @@ pub unsafe extern "C" fn rkr_selection_result_free(result_handle: *mut RKRSelect
         ));
     }
 }
-
 /// Returns 1 when this library build includes chemfiles selection support.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
@@ -2877,7 +3832,6 @@ pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
         0
     }
 }
-
 /// Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
 /// Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
 ///
@@ -2896,7 +3850,6 @@ pub unsafe extern "C" fn rkr_read_chemfiles_first(path_c: *const c_char) -> *mut
         Err(_) => std::ptr::null_mut(),
     }
 }
-
 /// Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
 /// Sets `*num_frames`. Free frames with `free_rkr_frame` and the array with
 /// `free_rkr_frame_array`. NULL on error / without chemfiles.
@@ -2933,7 +3886,6 @@ pub unsafe extern "C" fn rkr_read_chemfiles_memory(
         Err(_) => std::ptr::null_mut(),
     }
 }
-
 /// Free a DLPack tensor from `rkr_frame_builder_*_dlpack` (calls deleter). Safe with NULL.
 ///
 /// # Safety
@@ -2950,13 +3902,67 @@ pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersio
         }
     }
 }
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::ffi::{CStr, CString};
+    #[test]
+    fn frame_copy_positions_without_cframe() {
+        let handle = test_frame_handle();
+        let n = unsafe { rkr_frame_atom_count(handle) };
+        assert_eq!(n, 1);
+        let mut buf = vec![0.0f64; n * 3];
+        assert_eq!(
+            unsafe { rkr_frame_copy_positions(handle, buf.as_mut_ptr(), buf.len()) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let mut tensor: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack(handle, &mut tensor) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert!(!tensor.is_null());
+        unsafe { rkr_dlpack_delete(tensor) };
+        assert_eq!(
+            unsafe { rkr_frame_copy_velocities(handle, buf.as_mut_ptr(), buf.len()) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        unsafe { free_rkr_frame(handle) };
+    }
+    #[test]
+    fn read_all_frames_c_abi_tiny() {
+        let path = std::ffi::CString::new("resources/test/tiny_cuh2.con").unwrap();
+        let mut n: usize = 0;
+        let arr = unsafe { rkr_read_all_frames(path.as_ptr(), &mut n) };
+        assert!(!arr.is_null() && n >= 1);
+        let first = unsafe { *arr };
+        let nat = unsafe { rkr_frame_atom_count(first) };
+        let mut buf = vec![0.0f64; nat * 3];
+        assert_eq!(
+            unsafe { rkr_frame_copy_positions(first, buf.as_mut_ptr(), buf.len()) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe { free_rkr_frame_array(arr, n) };
+    }
 
+    #[test]
+    fn free_rkr_frame_ptr_array_keeps_frames() {
+        let path = std::ffi::CString::new("resources/test/tiny_cuh2.con").unwrap();
+        let mut n: usize = 0;
+        let arr = unsafe { rkr_read_all_frames(path.as_ptr(), &mut n) };
+        assert!(!arr.is_null() && n >= 1);
+        let first = unsafe { *arr };
+        // free only outer array; first frame remains owned
+        let rest: Vec<*mut RKRConFrame> = (1..n).map(|i| unsafe { *arr.add(i) }).collect();
+        unsafe { free_rkr_frame_ptr_array(arr, n) };
+        assert!(unsafe { rkr_frame_atom_count(first) } >= 1);
+        unsafe { free_rkr_frame(first) };
+        for h in rest {
+            if !h.is_null() {
+                unsafe { free_rkr_frame(h) };
+            }
+        }
+    }
     fn test_frame_handle() -> *mut RKRConFrame {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder
@@ -2965,26 +3971,21 @@ mod tests {
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
         Box::into_raw(Box::new(builder.build())) as *mut RKRConFrame
     }
-
     #[test]
     fn header_line_rejects_null_buffer() {
         let frame = test_frame_handle();
         let status = unsafe { rkr_frame_get_header_line(frame, true, 0, std::ptr::null_mut(), 16) };
         unsafe { free_rkr_frame(frame) };
-
         assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-
     #[test]
     fn header_line_rejects_empty_buffer() {
         let frame = test_frame_handle();
         let mut buffer = [0 as c_char; 1];
         let status = unsafe { rkr_frame_get_header_line(frame, true, 0, buffer.as_mut_ptr(), 0) };
         unsafe { free_rkr_frame(frame) };
-
         assert_eq!(status, RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
-
     #[test]
     fn header_line_truncates_and_terminates_buffer() {
         let frame = test_frame_handle();
@@ -2992,12 +3993,10 @@ mod tests {
         let status =
             unsafe { rkr_frame_get_header_line(frame, true, 0, buffer.as_mut_ptr(), buffer.len()) };
         unsafe { free_rkr_frame(frame) };
-
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
         let copied = unsafe { CStr::from_ptr(buffer.as_ptr()) };
         assert_eq!(copied.to_str().unwrap(), "Generated");
     }
-
     fn test_builder_handle() -> *mut RKRConFrameBuilder {
         let cell = [10.0, 11.0, 12.0];
         let angles = [90.0, 91.0, 92.0];
@@ -3012,11 +4011,9 @@ mod tests {
             )
         }
     }
-
     fn c_string(s: &str) -> CString {
         CString::new(s).unwrap()
     }
-
     unsafe fn assert_single_atom(
         frame: *mut RKRConFrame,
         fixed: [bool; 3],
@@ -3029,7 +4026,6 @@ mod tests {
         assert_eq!(c_frame_ref.num_atoms, 1);
         assert_eq!(c_frame_ref.has_velocities, velocity.is_some());
         assert_eq!(c_frame_ref.has_forces, forces.is_some());
-
         let atom = unsafe { &*c_frame_ref.atoms };
         assert_eq!(atom.fixed_x, fixed[0]);
         assert_eq!(atom.fixed_y, fixed[1]);
@@ -3043,16 +4039,13 @@ mod tests {
         if let Some([fx, fy, fz]) = forces {
             assert_eq!([atom.fx, atom.fy, atom.fz], [fx, fy, fz]);
         }
-
         unsafe { free_c_frame(c_frame) };
         unsafe { free_rkr_frame(frame) };
     }
-
     #[test]
     fn builder_preserves_fixed_mask_for_atom_without_velocity_or_forces() {
         let builder = test_builder_handle();
         let symbol = c_string("Cu");
-
         let status = unsafe {
             rkr_frame_add_atom_with_fixed_mask(
                 builder,
@@ -3068,16 +4061,13 @@ mod tests {
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
         unsafe { assert_single_atom(frame, [true, false, true], None, None) };
     }
-
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_velocity() {
         let builder = test_builder_handle();
         let symbol = c_string("H");
-
         let status = unsafe {
             rkr_frame_add_atom_with_velocity_fixed_mask(
                 builder,
@@ -3096,16 +4086,13 @@ mod tests {
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
         unsafe { assert_single_atom(frame, [false, true, false], Some([0.1, 0.2, 0.3]), None) };
     }
-
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_forces() {
         let builder = test_builder_handle();
         let symbol = c_string("O");
-
         let status = unsafe {
             rkr_frame_add_atom_with_forces_fixed_mask(
                 builder,
@@ -3124,16 +4111,13 @@ mod tests {
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
         unsafe { assert_single_atom(frame, [true, true, false], None, Some([-0.1, -0.2, -0.3])) };
     }
-
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_velocity_and_forces() {
         let builder = test_builder_handle();
         let symbol = c_string("N");
-
         let status = unsafe {
             rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
                 builder,
@@ -3155,7 +4139,6 @@ mod tests {
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
         unsafe {
             assert_single_atom(
@@ -3166,17 +4149,14 @@ mod tests {
             )
         };
     }
-
     #[test]
     fn builder_bool_fixed_functions_set_all_axes_together() {
         let builder = test_builder_handle();
         let cu = c_string("Cu");
         let h = c_string("H");
-
         let atom_status =
             unsafe { rkr_frame_add_atom(builder, cu.as_ptr(), 1.0, 2.0, 3.0, true, 1, 63.546) };
         assert_eq!(atom_status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let velocity_status = unsafe {
             rkr_frame_add_atom_with_velocity(
                 builder,
@@ -3193,13 +4173,11 @@ mod tests {
             )
         };
         assert_eq!(velocity_status, RKRStatus::RKR_STATUS_SUCCESS);
-
         let frame = unsafe { rkr_frame_builder_build(builder) };
         let c_frame = unsafe { rkr_frame_to_c_frame(frame) };
         assert!(!c_frame.is_null());
         let c_frame_ref = unsafe { &*c_frame };
         assert_eq!(c_frame_ref.num_atoms, 2);
-
         let atoms = unsafe { std::slice::from_raw_parts(c_frame_ref.atoms, c_frame_ref.num_atoms) };
         assert_eq!(
             [atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z],
@@ -3209,11 +4187,9 @@ mod tests {
             [atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z],
             [false, false, false]
         );
-
         unsafe { free_c_frame(c_frame) };
         unsafe { free_rkr_frame(frame) };
     }
-
     #[test]
     fn status_message_returns_static_strings_for_all_status_values() {
         let cases = [
@@ -3236,14 +4212,277 @@ mod tests {
                 "feature disabled in this build",
             ),
         ];
-
         for (status, expected) in cases {
             let message = unsafe { CStr::from_ptr(rkr_status_message(status)) };
             assert_eq!(message.to_str().unwrap(), expected);
         }
     }
-
     // ----- DLPack FFI smoke tests ----------------------------------------------
+    /// Assert DLPack tensor layout without assuming the host language uses f64
+    /// buffers — consumers must read `dtype` / `ndim` / `shape` from the tensor.
+    unsafe fn assert_dlpack_cpu_float(
+        t: *mut RKRDLManagedTensorVersioned,
+        expect_ndim: i32,
+        expect_shape: &[i64],
+        expect_bits: u8,
+    ) {
+        assert!(!t.is_null());
+        let dl = unsafe { &(*t).dl_tensor };
+        assert_eq!(dl.ndim, expect_ndim);
+        let shape = unsafe { std::slice::from_raw_parts(dl.shape, expect_ndim as usize) };
+        assert_eq!(shape, expect_shape);
+        assert_eq!(dl.dtype.code, dlpk::sys::DLDataTypeCode::kDLFloat);
+        assert_eq!(dl.dtype.bits, expect_bits);
+        assert_eq!(dl.dtype.lanes, 1);
+        assert_eq!(dl.device, dlpk::sys::DLDevice::cpu());
+        assert!(!dl.data.is_null());
+    }
+
+    #[test]
+    fn frame_optional_section_dlpack_present_and_absent() {
+        // Absent on coordinate-only frame
+        let handle = test_frame_handle();
+        let mut t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_velocities_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        assert!(t.is_null());
+        assert_eq!(
+            unsafe { rkr_frame_forces_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        assert_eq!(
+            unsafe { rkr_frame_atom_energies_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SECTION_ABSENT
+        );
+        unsafe { free_rkr_frame(handle) };
+
+        // Present on .convel fixture — (N, 3) float, N from atom_count
+        let path = CString::new("resources/test/tiny_cuh2.convel").unwrap();
+        let fr = unsafe { rkr_read_first_frame(path.as_ptr()) };
+        assert!(!fr.is_null());
+        let n = unsafe { rkr_frame_atom_count(fr) } as i64;
+        assert!(n > 0);
+        let mut vel: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        let st = unsafe { rkr_frame_velocities_dlpack(fr, &mut vel) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        unsafe {
+            assert_dlpack_cpu_float(vel, 2, &[n, 3], 64);
+            rkr_dlpack_delete(vel);
+            free_rkr_frame(fr);
+        }
+
+        // Forces (N,3) + energies (N,) via builder → frame
+        let cell = [10.0f64; 3];
+        let ang = [90.0f64; 3];
+        let b = unsafe {
+            rkr_frame_new(
+                cell.as_ptr(),
+                ang.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!b.is_null());
+        let sym = CString::new("H").unwrap();
+        unsafe {
+            rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
+                b,
+                sym.as_ptr(),
+                0.0,
+                0.0,
+                0.0,
+                false,
+                false,
+                false,
+                0,
+                1.0,
+                0.1,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -1.0,
+            );
+            rkr_frame_builder_set_last_energy(b, -0.5);
+        }
+        let built = unsafe { rkr_frame_builder_build(b) };
+        assert!(!built.is_null());
+        let n_built = unsafe { rkr_frame_atom_count(built) } as i64;
+        let mut frc: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        let mut eng: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_forces_dlpack(built, &mut frc) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe { assert_dlpack_cpu_float(frc, 2, &[n_built, 3], 64) };
+        assert_eq!(
+            unsafe { rkr_frame_atom_energies_dlpack(built, &mut eng) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe { assert_dlpack_cpu_float(eng, 1, &[n_built], 64) };
+        // Explicit f32 via DLPack-shaped DLDataType (code=kDLFloat=2, bits=32)
+        let opts32 = RKRDlpackExportOptions {
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 32,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
+        };
+        let mut pos32: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &opts32, &mut pos32) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe {
+            assert_dlpack_cpu_float(pos32, 2, &[n_built, 3], 32);
+            rkr_dlpack_delete(pos32);
+        }
+        // CUDA device requests: FEATURE_DISABLED without --features cuda;
+        // with cuda, H2D export succeeds (kDLCUDA).
+        let cuda_dev = RKRDlpackExportOptions {
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 64,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CUDA,
+                device_id: 0,
+            },
+        };
+        let mut junk: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        #[cfg(not(feature = "cuda"))]
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
+            RKRStatus::RKR_STATUS_FEATURE_DISABLED
+        );
+        #[cfg(feature = "cuda")]
+        {
+            assert_eq!(
+                unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert!(!junk.is_null());
+            let dl = unsafe { &(*junk).dl_tensor };
+            assert_eq!(dl.device.device_type, dlpk::sys::DLDeviceType::kDLCUDA);
+            assert!(!dl.data.is_null());
+            unsafe { rkr_dlpack_delete(junk) };
+            // Also rkr_frame_positions_as_dlpack with CUDA
+            let mut as_cuda: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+            assert_eq!(
+                unsafe {
+                    rkr_frame_positions_as_dlpack(
+                        built,
+                        rkr_dl_device_type::RKR_DL_CUDA,
+                        0,
+                        0,
+                        1,
+                        0,
+                        &mut as_cuda,
+                    )
+                },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert!(!as_cuda.is_null());
+            unsafe {
+                assert_eq!(
+                    (*as_cuda).dl_tensor.device.device_type,
+                    dlpk::sys::DLDeviceType::kDLCUDA
+                );
+                rkr_dlpack_delete(as_cuda);
+            }
+        }
+        // Unsupported dtype bits on CPU
+        let bad_bits = RKRDlpackExportOptions {
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 16,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
+        };
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack_ex(built, &bad_bits, &mut junk) },
+            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+        );
+        // Metatensor-style as_dlpack reflects storage (f64 CPU), not a cast target
+        let mut as_t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                rkr_frame_positions_as_dlpack(
+                    built,
+                    rkr_dl_device_type::RKR_DL_CPU,
+                    0,
+                    0,
+                    1,
+                    0,
+                    &mut as_t,
+                )
+            },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe {
+            assert_dlpack_cpu_float(as_t, 2, &[n_built, 3], 64);
+        }
+        // Mutate frame positions, then ingest tensor and require values restored
+        {
+            let fr = unsafe { &mut *(built as *mut ConFrame) };
+            for a in fr.atom_data.iter_mut() {
+                a.x = -99.0;
+                a.y = -99.0;
+                a.z = -99.0;
+            }
+        }
+        assert_eq!(
+            unsafe { rkr_frame_positions_from_dlpack(built, as_t) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        {
+            let fr = unsafe { &*(built as *const ConFrame) };
+            assert!((fr.atom_data[0].x - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].y - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].z - 0.0).abs() < 1e-12);
+        }
+        // Re-export must match ingested coordinates (not zeros / garbage)
+        let mut again: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        assert_eq!(
+            unsafe {
+                rkr_frame_positions_as_dlpack(
+                    built,
+                    rkr_dl_device_type::RKR_DL_CPU,
+                    0,
+                    0,
+                    1,
+                    0,
+                    &mut again,
+                )
+            },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        unsafe {
+            let dl = &(*again).dl_tensor;
+            let data = std::slice::from_raw_parts(dl.data as *const f64, 3);
+            assert!((data[0] - 0.0).abs() < 1e-12);
+            assert!((data[1] - 0.0).abs() < 1e-12);
+            assert!((data[2] - 0.0).abs() < 1e-12);
+            rkr_dlpack_delete(again);
+            rkr_dlpack_delete(as_t);
+            rkr_dlpack_delete(frc);
+            rkr_dlpack_delete(eng);
+            free_rkr_frame(built);
+        }
+    }
 
     #[test]
     fn ffi_positions_dlpack_round_trip() {
@@ -3265,12 +4504,10 @@ mod tests {
                 ptr::null(),
             )
         };
-
         let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
         let status = unsafe { rkr_frame_builder_positions_dlpack(handle, &mut t) };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
         assert!(!t.is_null());
-
         // Inspect the DLPack tensor: shape (1, 3), dtype kDLFloat / 64, CPU.
         let dl = unsafe { &(*t).dl_tensor };
         assert_eq!(dl.ndim, 2);
@@ -3282,16 +4519,13 @@ mod tests {
         assert_eq!(dl.device, dlpk::sys::DLDevice::cpu());
         let data = unsafe { std::slice::from_raw_parts(dl.data as *const f64, 3) };
         assert_eq!(data, &[1.0, 2.0, 3.0]);
-
         // Invoke the deleter the same way a C consumer would.
         let deleter = unsafe { (*t).deleter };
         if let Some(del) = deleter {
             unsafe { del(t) };
         }
-
         unsafe { free_rkr_frame_builder(handle) };
     }
-
     #[test]
     fn ffi_velocities_dlpack_section_absent() {
         let handle = test_builder_handle();
@@ -3318,7 +4552,6 @@ mod tests {
         assert!(t.is_null());
         unsafe { free_rkr_frame_builder(handle) };
     }
-
     #[test]
     fn ffi_dlpack_null_handle_rejects() {
         let mut t: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
@@ -3326,7 +4559,6 @@ mod tests {
         assert_eq!(status, RKRStatus::RKR_STATUS_NULL_POINTER);
         assert!(t.is_null());
     }
-
     #[cfg(feature = "chemfiles")]
     #[test]
     fn rkr_frame_select_finds_oxygen() {
@@ -3379,7 +4611,6 @@ mod tests {
             Bond::new(id_to(2), id_to(3)),
         ]);
         let frame_ptr = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
-
         let run = |sel: &str| -> (u64, u32) {
             let csel = CString::new(sel).unwrap();
             let mut out: *mut RKRSelectionResult = ptr::null_mut();
@@ -3390,7 +4621,6 @@ mod tests {
             unsafe { rkr_selection_result_free(out) };
             (n, ctx)
         };
-
         assert_eq!(run("bonds: all"), (3, 2));
         assert_eq!(run("angles: all"), (2, 3));
         assert_eq!(run("dihedrals: all"), (1, 4));
@@ -3399,10 +4629,8 @@ mod tests {
             run("two: type(#1) H and name(#2) O and is_bonded(#1, #2)").0,
             run("bonds: type(#1) H and name(#2) O").0
         );
-
         unsafe { free_rkr_frame(frame_ptr) };
     }
-
     #[cfg(feature = "metatensor")]
     fn assert_mts_block_shape(block: *mut metatensor::c_api::mts_block_t, n: usize, props: usize) {
         assert!(!block.is_null());
@@ -3422,7 +4650,6 @@ mod tests {
         let prop_lab = unsafe { metatensor::c_api::mts_block_labels(block, 1) };
         assert!(!samples.is_null() && !prop_lab.is_null());
     }
-
     #[cfg(feature = "metatensor")]
     #[test]
     fn metatensor_positions_via_c_abi() {
@@ -3432,7 +4659,6 @@ mod tests {
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
         assert_mts_block_shape(out, 1, 3);
         unsafe { rkr_mts_block_free(out) };
-
         for (name, export) in [
             (
                 "velocities",
@@ -3466,7 +4692,7 @@ mod tests {
                 RKRStatus::RKR_STATUS_SECTION_ABSENT,
                 "{name} must be SECTION_ABSENT on minimal test frame"
             );
-            assert!(o.is_null(), "{name} out block must be null when absent");
+            assert!(o.is_null());
         }
         unsafe { free_rkr_frame(handle) };
     }
@@ -3486,7 +4712,6 @@ mod tests {
         builder.set_atom_energy(1, -1.0).unwrap();
         let frame = builder.build();
         let handle = Box::into_raw(Box::new(frame)) as *mut RKRConFrame;
-
         let mut pos: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_positions_block(handle, &mut pos) },
@@ -3494,7 +4719,6 @@ mod tests {
         );
         assert_mts_block_shape(pos, 2, 3);
         unsafe { rkr_mts_block_free(pos) };
-
         let mut vel: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_velocities_block(handle, &mut vel) },
@@ -3502,7 +4726,6 @@ mod tests {
         );
         assert_mts_block_shape(vel, 2, 3);
         unsafe { rkr_mts_block_free(vel) };
-
         let mut frc: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_forces_block(handle, &mut frc) },
@@ -3510,7 +4733,6 @@ mod tests {
         );
         assert_mts_block_shape(frc, 2, 3);
         unsafe { rkr_mts_block_free(frc) };
-
         let mut eng: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_atom_energies_block(handle, &mut eng) },
@@ -3521,4 +4743,63 @@ mod tests {
         unsafe { free_rkr_frame(handle) };
     }
 
+    #[test]
+    fn string_iterator_yields_frames_from_buffer() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2.con")
+            .expect("fixture tiny_cuh2.con");
+        let c_text = CString::new(text.as_str()).unwrap();
+        let it = unsafe { read_con_string_iterator(c_text.as_ptr()) };
+        assert!(!it.is_null());
+        let mut n = 0usize;
+        loop {
+            let fr = unsafe { con_frame_iterator_next(it) };
+            if fr.is_null() {
+                break;
+            }
+            n += 1;
+            unsafe { free_rkr_frame(fr) };
+        }
+        unsafe { free_con_frame_iterator(it) };
+        assert!(n >= 1, "string iterator should yield >=1 frame");
+
+        let bytes = text.as_bytes();
+        let it2 = unsafe { read_con_buffer_iterator(bytes.as_ptr(), bytes.len()) };
+        assert!(!it2.is_null());
+        let fr2 = unsafe { con_frame_iterator_next(it2) };
+        assert!(!fr2.is_null());
+        unsafe {
+            free_rkr_frame(fr2);
+            free_con_frame_iterator(it2);
+        }
+    }
+
+    #[test]
+    fn file_iterator_reads_gzip_when_present() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        let plain = std::fs::read("resources/test/tiny_cuh2.con").expect("fixture");
+        let dir = tempfile::tempdir().expect("tempdir");
+        let gz_path = dir.path().join("tiny_cuh2.con.gz");
+        {
+            let f = std::fs::File::create(&gz_path).unwrap();
+            let mut enc = GzEncoder::new(f, Compression::default());
+            enc.write_all(&plain).unwrap();
+            enc.finish().unwrap();
+        }
+        let c_path = CString::new(gz_path.to_str().unwrap()).unwrap();
+        let it = unsafe { read_con_file_iterator(c_path.as_ptr()) };
+        assert!(
+            !it.is_null(),
+            "path iterator must decompress .con.gz transparently"
+        );
+        let fr = unsafe { con_frame_iterator_next(it) };
+        assert!(!fr.is_null());
+        let n = unsafe { rkr_frame_atom_count(fr) };
+        assert!(n > 0);
+        unsafe {
+            free_rkr_frame(fr);
+            free_con_frame_iterator(it);
+        }
+    }
 }

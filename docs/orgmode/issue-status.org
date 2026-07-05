@@ -15,4 +15,26 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | #12 | EXT: chemfiles | Done | =--features chemfiles=; =ad70e47= Cachegrind conversion scenarios |
 | #19 | 3-component =fixed_flag= | Done | Rust =[bool;3]=; C =fixed_x/y/z=; Fortran =catom_t= |
 
+**Vault vissues (Software/readcon-core/issues.org) — =feat/ffi-matrix-hardening=**
+
+| Id | Topic | Status | Evidence |
+|----+-------+--------+----------|
+| =readcon-core-795z= | C path iterator compression + string/buffer iterators | Done | =read_con_file_iterator= via =compression::read_file_contents=; =read_con_string_iterator= / =read_con_buffer_iterator=; FFI tests |
+| =readcon-core-8cx2= | C++ section API smoke | Done | =examples/cpp_api_sample.cpp= =smoke_section_buffers= |
+| =readcon-core-6vie= | Fortran velocities/forces/masses copies | Done | =fortran/ReadCon/test/test_read_con.f90= |
+| =readcon-core-lrk1= | =src/ffi.rs= double-newline bloat | Done | normalized single-spaced file |
+| =readcon-core-u08i= | Python maturin / mold CI | Done | =python_wheels.yml= sets =RUSTFLAGS=-C link-arg=-fuse-ld=bfd= (no mold) |
+| =readcon-core-y69o= | Julia runtime tests | Done | =ci_julia.yml= when Julia present; docs skip contract in =julia/ReadCon/README.md= |
+| =readcon-core-anp5= | Bindings docs frame buffers / ptr_array free | Done | =docs/orgmode/bindings.org= section buffers + iterators |
+| =readcon-core-47kp= | Feature matrix CI | Done | =.github/workflows/ci_feature_matrix.yml= + =scripts/check_feature_matrix.sh= |
+| =readcon-core-oc8g= / =zs6n= | Parent plan / merge branch | Done (merge-ready) | Branch complete; gitguard blocks PR create — integrate when allowed |
+| =readcon-core-conda-32605= | conda-forge staged-recipes | STARTED | External maintainer gate (@conda-forge/help-rust) |
+| =readcon-core-aoqu= | Publish PyPI wheel for rgpot | TODO | External gate: PyPI credentials / publish workflow |
+| =readcon-core-r2wh= | SoA ArcArray primary numeric store | Done | =de4b276= + =FloatArray= SoA; =project_storage_dtypes=; DLPack-shaped |
+| =readcon-core-bb34= | dlpk host element kinds + optional CUDA | Done (CPU + opt =cuda=) | =fe5ea6c= hosted kinds; =406160e=/=30611f9= real allocate + H2D frame/FFI; default still rejects non-CPU |
+| =readcon-core-0tlm= | Morton spatial sort | CANCELLED | Revert =2ee6daa= rationale stands; not re-landed on SoA in this pass |
+| =readcon-core-uu0a= | Frame velocities/forces/energies DLPack | Done | =rkr_frame_*_dlpack= + FFI test + C++ wrappers |
+| =readcon-core-c6ox= | C optional APIs always declared | Done | =include/readcon-core.h= metatensor/zstd decls unconditional; lean =-11=/NULL |
+| =readcon-core-box4= | Cachegrind main-only commit | Done | =ci_cachegrind.yml= commit step =if: github.ref == main=; PRs artifacts only |
+
 Fortran details: =fortran/README.md=. Multi-language panels: bindings page.
