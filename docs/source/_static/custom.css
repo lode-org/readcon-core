@@ -519,6 +519,17 @@ html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; 
   html:not([data-theme="light"]) .rc-hero .dark-only { display: block !important; }
 }
 
+/* Navbar brand logos (Shibuya .light-logo/.dark-logo): the light logo's
+   #1E1B4B/#4338CA wordmark is unreadable on the dark head bar, so the swap
+   must also hold in system-dark with no explicit data-theme. */
+html[data-theme="dark"] .light-logo,
+html.dark .light-logo { display: none !important; }
+html:not([data-theme="dark"]):not(.dark) .dark-logo { display: none; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .light-logo { display: none !important; }
+  html:not([data-theme="light"]) .dark-logo { display: inline-block !important; }
+}
+
 /* ---- Admonitions --------------------------------------------------------- */
 .sy-page div.important,
 .sy-page div.note,
