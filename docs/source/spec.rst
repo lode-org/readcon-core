@@ -749,6 +749,30 @@ Read line 2. If it starts with ``{``, parse as JSON and extract
 ``con_spec_version``. Otherwise the file predates this specification
 (implicit version 1).
 
+Machine-readable metadata schema
+--------------------------------
+
+The reserved metadata vocabulary is published as JSON Schema
+(draft 2020-12) at ``schema/con-metadata.schema.json`` in the reference
+implementation repository. The schema accepts every object the
+reference writer emits and rejects the violations this document calls
+out: missing v3 ``units``, malformed ``pbc``, ``storage_dtypes`` element
+types without a host. Unknown keys validate successfully by design;
+parsers MUST preserve them. The reference test suite
+(``tests/spec_metadata_schema.rs``) keeps writer output and the schema
+in lockstep.
+
+Media type and file identification (informative)
+------------------------------------------------
+
+No IANA media type is registered for CON. Until one is,
+implementations SHOULD label CON content ``chemical/x-con`` and fall
+back to ``text/plain; charset=utf-8`` for strict consumers. CON carries
+no magic bytes: identify files by the ``.con`` / ``.convel`` extension
+(optionally with a ``.gz`` / ``.zst`` compression suffix) combined with
+the structural check above (nine-line header; line 2 either JSON with
+``con_spec_version`` or legacy free text).
+
 Examples
 --------
 

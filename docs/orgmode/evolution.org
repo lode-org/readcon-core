@@ -217,3 +217,42 @@ v3 =units= when required by the library's write policy.
 
 Out of scope for interchange CON: replacing GROMACS/LAMMPS binary trajectory
 I/O, claiming multi-node FS dominance, or requiring GPU parsing of ASCII CON.
+
+* Toward version 4 (candidate scope)
+
+Gap analysis against the strongest neighboring formats: extXYZ (arbitrary
+per-atom columns), H5MD (binary trajectory store), mmCIF/PDBx (registered
+vocabulary and dictionaries), OPTIMADE and QCSchema (machine-validated
+metadata). Candidates below preserve the nine-line header and type-grouped
+coordinates; each entry names the interoperability failure it removes.
+
+** Reserved per-atom sections for charge, spin, and magnetic moments
+
+CON's section mechanism already generalizes (=sections= array plus labeled
+per-type blocks); v3 reserves only =velocities=, =forces=, and =energies=.
+Charged-defect and spin-polarized workflows (eOn with DFT drivers, NEB on
+magnetic systems) currently smuggle charges through free-form metadata,
+which no other reader interprets. v4 reserves =charges=, =spins=, and
+=magmoms= (3-vector) section names with the same column contract as
+=energies= / =velocities=, so the existing declared-section parser and
+validation mode cover them without grammar changes.
+
+** Conformance corpus keyed to spec clauses
+
+The metadata schema (=schema/con-metadata.schema.json=) machine-checks
+line 2; whole-file conformance still rests on the reference test suite.
+A published corpus of minimal valid and invalid files, each annotated with
+the normative clause it exercises and the required outcome
+(parse / specific =ParseError= variant), lets an independent implementation
+claim conformance without reading readcon-core source. OPTIMADE and
+JSON Schema both ship this shape of suite; it is the difference between
+"compatible with the reference parser" and "conforms to the specification".
+
+** Vocabulary registry over ad hoc keys
+
+Reserved metadata keys currently live in one table in the spec. A v4
+registry (one file, one key per row: name, type, since-version,
+producer semantics) with a stated extension-key convention (=x_= prefix
+namespacing, mirroring mmCIF local dictionaries) keeps third-party
+producers from colliding on bare names while unrecognized-key
+preservation stays mandatory.
