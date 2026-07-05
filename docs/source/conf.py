@@ -33,6 +33,32 @@ myst_enable_extensions = [
 ]
 myst_fence_as_directive = ["mermaid"]
 
+# Mermaid nodes on their own light plate (matches the static SVG figures);
+# WCAG AA in both page themes instead of theme-recolored boxes with dark text.
+mermaid_init_js = """
+mermaid.initialize({
+  startOnLoad: true,
+  theme: "base",
+  themeVariables: {
+    fontFamily: "Atkinson Hyperlegible, system-ui, sans-serif",
+    fontSize: "14px",
+    primaryColor: "#EEF2FF",
+    primaryTextColor: "#1E1B4B",
+    primaryBorderColor: "#6366F1",
+    secondaryColor: "#E0E7FF",
+    secondaryTextColor: "#1E1B4B",
+    tertiaryColor: "#F8FAFC",
+    tertiaryTextColor: "#1E1B4B",
+    lineColor: "#64748B",
+    textColor: "#1E1B4B",
+    clusterBkg: "#F8FAFC",
+    clusterBorder: "#94A3B8",
+    edgeLabelBackground: "#F8FAFC",
+    titleColor: "#1E1B4B"
+  }
+});
+"""
+
 # Pre-generated crate RST under docs/source/crates/ (no sphinxcontrib-rust in CI)
 html_theme = "shibuya"
 html_static_path = ["_static"]
