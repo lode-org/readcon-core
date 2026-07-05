@@ -98,6 +98,16 @@ html_theme_options = {
             "title": "Ecosystem",
             "children": [
                 {
+                    "title": "readcon-db (campaign store)",
+                    "url": "https://github.com/lode-org/readcon-db",
+                    "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
+                },
+                {
+                    "title": "readcon-db docs",
+                    "url": "https://lode-org.github.io/readcon-db/",
+                    "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
+                },
+                {
                     "title": "eOn",
                     "url": "https://eondocs.org",
                     "summary": "Saddle-point search on PESs",
@@ -126,26 +136,6 @@ html_theme_options = {
                     "title": "LODE org",
                     "url": "https://github.com/lode-org",
                     "summary": "Long-timescale dynamics ecosystem",
-                },
-            ],
-        },
-        {
-            "title": "Ecosystem",
-            "children": [
-                {
-                    "title": "readcon-core (this docs)",
-                    "url": "architecture",
-                    "summary": "CON/convel interchange, chemfiles ingress, multi-language ABI",
-                },
-                {
-                    "title": "readcon-db (campaign store)",
-                    "url": "https://github.com/lode-org/readcon-db",
-                    "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
-                },
-                {
-                    "title": "readcon-db docs",
-                    "url": "https://lode-org.github.io/readcon-db/",
-                    "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
                 },
             ],
         },
