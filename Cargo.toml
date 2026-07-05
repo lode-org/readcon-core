@@ -80,6 +80,7 @@ cudarc = { version = "0.13", optional = true, default-features = false, features
 [dev-dependencies]
 cog = "0.1.0"
 criterion = { version = "0.6.0", features = ["html_reports"] }
+jsonschema = { version = "0.46.9", default-features = false }
 tempfile = "3"
 
 [[example]]
