@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-05T10:29:27Z",
-  "git_sha": "2166ab2",
+  "generated_at": "2026-07-05T11:09:41Z",
+  "git_sha": "1bfd4e1",
   "features": "chemfiles",
   "tool": "cachegrind",
   "metric": "I_refs",
