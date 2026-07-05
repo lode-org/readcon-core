@@ -805,8 +805,8 @@ read and return ``io::ErrorKind::Unsupported`` pointing at the feature
 flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
 
-Fortran (fpm \`\`ReadCon\`\`, ISO\_C\_BINDING)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Fortran (fpm ReadCon, ISO\_C\_BINDING)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
 (issue #6). Link ``libreadcon_core`` (Meson, CMake+Corrosion, or ``cargo build --release``).

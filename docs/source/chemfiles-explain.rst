@@ -71,8 +71,8 @@ Two distributions avoid impossible dual wheels under one PyPI name (same
 platform tag cannot carry two different binaries). Install **one** of
 ``readcon`` or ``readcon-chemfiles`` per environment.
 
-Why bonds live in frame JSON, not ``sections``
-----------------------------------------------
+Why bonds live in frame JSON, not sections
+------------------------------------------
 
 .. figure:: /_static/figures/con-frame-layout.svg
    :alt: CON frame layout
@@ -93,8 +93,8 @@ them from bonds at selection projection time (``add_bond`` graph). That keeps
 CON files small while still supporting ``angles:`` / ``is_angle`` when bonds
 exist.
 
-Index spaces: chemfiles order vs ``atom_data`` vs ``atom_id``
--------------------------------------------------------------
+Index spaces: chemfiles order vs atom\_data vs atom\_id
+-------------------------------------------------------
 
 CON writers **type-group** atoms (all Cu, then all H, …). Column 5 ``atom_id``
 stores the **pre-group** index so NEB and comparisons can recover original

@@ -685,7 +685,7 @@ flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
 
 
-** Fortran (fpm ``ReadCon``, ISO_C_BINDING)
+** Fortran (fpm ReadCon, ISO_C_BINDING)
 
 Wrappers in =fortran/ReadCon/src/readcon.f90= over =include/readcon-core.h=
 (issue #6). Link =libreadcon_core= (Meson, CMake+Corrosion, or =cargo build --release=).
