@@ -3,7 +3,7 @@
 <style>
   .t { font-family: Atkinson Hyperlegible, system-ui, sans-serif; font-size: 12px; fill: #1E1B4B; }
   .h { font-weight: 700; font-size: 13px; }
-  .s { font-size: 11px; fill: #475569; }
+  .s { font-size: 11px; fill: #64748B; }
 </style>
 <rect width="640" height="220" fill="#F8FAFC"/>
 <!-- stacked lines -->

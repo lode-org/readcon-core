@@ -1,5 +1,5 @@
 #+title: Format Evolution and Design Rationale
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Purpose
 

@@ -3,16 +3,14 @@ Reference — Chemfiles conversion and selection
 ==============================================
 
 
-.. contents::
-
 .. note::
 
    Diátaxis *reference*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-`tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see
-`explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds``
-key in `spec <spec.rst>`_.
+:doc:`chemfiles-tutorial`; for tasks see :doc:`chemfiles-howto`; for rationale see
+:doc:`chemfiles-explain`. Binding-wide matrices live in :doc:`bindings`; on-disk ``bonds``
+key in :doc:`spec`.
 
 Feature and install matrix
 --------------------------
@@ -149,7 +147,7 @@ CON metadata keys (topology / sidecars)
     +===============================+=======================================================================+
     | ``bonds``                     | Array of ``[i,j]`` or ``{i,j,order?}``; 0-based ``atom_data`` indices |
     +-------------------------------+-----------------------------------------------------------------------+
-    | ``chemfiles_atom_names``      | Display names, chemfiles/=atom\ :sub:`id`\= order                     |
+    | ``chemfiles_atom_names``      | Display names, chemfiles/=atom\_id= order                             |
     +-------------------------------+-----------------------------------------------------------------------+
     | ``chemfiles_atom_types``      | Atomic types, parallel to names                                       |
     +-------------------------------+-----------------------------------------------------------------------+
@@ -158,10 +156,10 @@ CON metadata keys (topology / sidecars)
     | ``chemfiles::…``              | Unmapped frame properties                                             |
     +-------------------------------+-----------------------------------------------------------------------+
 
-See `spec <spec.rst>`_ § frame topology for normative wording.
+See :doc:`spec` § frame topology for normative wording.
 
 Selection grammar (implemented on CON frames)
-------------------------------------
+---------------------------------------------
 
 .. table::
 
@@ -182,7 +180,7 @@ Selection grammar (implemented on CON frames)
 These patterns are what CON selection implements (tests under
 ``chemfiles_selection_cpp_regression`` for topology cases). Format limits
 (``resname``, properties, impropers, geometry thresholds) are CON limits—see
-``chemfiles-explain`` (*What selection cannot see on CON*). The optional
+``chemfiles-explain.org`` (**What selection cannot see on CON**). The optional
 conversion stack may reuse a third-party grammar engine; that is an
 implementation detail, not a second public API surface.
 

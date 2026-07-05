@@ -1,11 +1,11 @@
 #+title: Convert other formats into CON
-#+options: toc:2 num:nil
+#+options: toc:nil num:nil ^:nil
 #+description: Learning-oriented walkthrough — install chemfiles support, convert XYZ to CON, select, write.
 
 #+begin_export rst
 .. note::
 
-   **Executable Org notebook** (run with Babel, not a committed ``.ipynb``):
+   *Executable Org notebook* (run with Babel, not a committed ``.ipynb``):
    :doc:`chemfiles-notebook` — ``scripts/run-chemfiles-notebook.sh``.
 
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),

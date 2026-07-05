@@ -1,5 +1,5 @@
 #+title: Library architecture
-#+options: toc:2 num:t
+#+options: toc:nil num:nil ^:nil
 
 * Overview
 

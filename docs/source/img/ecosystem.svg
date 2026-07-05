@@ -2,7 +2,7 @@
 <title>LODE ecosystem</title>
 <style>
   .t { font-family: Atkinson Hyperlegible, system-ui, sans-serif; font-size: 12px; fill: #1E1B4B; font-weight: 700; }
-  .s { font-size: 10px; fill: #475569; font-weight: 400; }
+  .s { font-size: 10px; fill: #64748B; font-weight: 400; }
 </style>
 <rect width="700" height="180" fill="#F8FAFC"/>
 <!-- center -->

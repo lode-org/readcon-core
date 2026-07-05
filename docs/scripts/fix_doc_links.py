@@ -14,8 +14,9 @@ def fix_text(t: str) -> str:
         stem = Path(m.group(2)).stem
         return f":doc:`{stem}`"
 
-    t = re.sub(r"`([^\`<>]+)\s+<([^>]+?\.(?:rst|org))>`_", repl, t)
-    t = re.sub(r"(\S)\./(\s|$)", r".", t)
+    # Relative targets only: absolute URLs (https://.../foo.org) are real links
+    t = re.sub(r"`([^\`<>]+)\s+<((?![a-z][a-z0-9+.-]*:)[^>]+?\.(?:rst|org))>`_", repl, t)
+    t = re.sub(r"(\S)\./(\s|$)", r"\1.\2", t)
     return t
 
 

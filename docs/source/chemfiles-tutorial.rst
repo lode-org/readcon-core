@@ -3,11 +3,9 @@ Convert other formats into CON
 ==============================
 
 
-.. contents::
-
 .. note::
 
-   **Executable Org notebook** (run with Babel, not a committed ``.ipynb``):
+   *Executable Org notebook* (run with Babel, not a committed ``.ipynb``):
    :doc:`chemfiles-notebook` — ``scripts/run-chemfiles-notebook.sh``.
 
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
@@ -180,8 +178,8 @@ Prefer a bonded source format
     let frame = con_frame_from_trajectory_path("ligand.pdb")?;
     // has_bonds() often true → angles: / is_bonded work after projection
 
-Or attach bonds after ingress (indices = atom\ :sub:`data`\ order)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Or attach bonds after ingress (indices = atom\_data order)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: rust
 

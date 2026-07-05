@@ -1,5 +1,5 @@
 #+title: Getting started
-#+options: toc:2 num:nil
+#+options: toc:nil num:nil ^:nil
 
 #+begin_export rst
 .. figure:: /_static/figures/conversion-pipeline.svg
@@ -7,7 +7,7 @@
    :align: center
    :width: 100%
 
-   **Format conversion** — common structure files become a CON frame, then a
+   *Format conversion* — common structure files become a CON frame, then a
    ``.con`` for eOn / LODE (or any language binding). Needs the *with
    conversions* install below.
 
@@ -16,12 +16,12 @@
    :align: center
    :width: 100%
 
-   **Two installs** — default package is CON I/O only; the conversion package
+   *Two installs* — default package is CON I/O only; the conversion package
    adds XYZ / PDB / GRO (and similar) → CON. Same CON APIs either way.
 
 .. tip::
 
-   Start here for install and the shortest paths. Top nav **Convert** is the
+   Start here for install and the shortest paths. Top nav *Convert* is the
    conversion tutorial and recipes.
 #+end_export
 
@@ -119,7 +119,7 @@ let frame = read_first_frame(std::path::Path::new("structure.con"))?;
 
 * Convert XYZ (or PDB / GRO) into CON
 
-Needs the **with conversions** install.
+Needs the *with conversions* install.
 
 #+begin_src python
 import readcon

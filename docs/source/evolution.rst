@@ -3,19 +3,17 @@ Format Evolution and Design Rationale
 =====================================
 
 
-.. contents::
 
-
-1 Purpose
----------
+Purpose
+-------
 
 This document records the design decisions behind the ``con`` file
 format version 2, the alternatives considered, and the reasoning for
 each choice. It serves as an institutional memory for contributors
 and a reference for implementers in other languages.
 
-2 Version 1 to version 2 feature matrix
----------------------------------------
+Version 1 to version 2 feature matrix
+-------------------------------------
 
 .. table::
 
@@ -47,11 +45,11 @@ and a reference for implementers in other languages.
     | Compression                | No                | Transparent gzip (.con.gz)               |
     +----------------------------+-------------------+------------------------------------------+
 
-3 Why JSON on line 2 (not elsewhere)
-------------------------------------
+Why JSON on line 2 (not elsewhere)
+----------------------------------
 
-3.1 Alternatives considered
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **New header line**: adding a 10th header line breaks every existing
    parser that expects exactly 9 lines before atom data.
@@ -67,8 +65,8 @@ and a reference for implementers in other languages.
    the format but introduces file-pairing problems (lost sidecar,
    out-of-sync data).
 
-3.2 Decision
-~~~~~~~~~~~~
+Decision
+~~~~~~~~
 
 Line 2 was historically "Time" or empty in eOn files. No tool assigns
 it semantic meaning. The Python writer in eOn emits an empty string.
@@ -76,11 +74,11 @@ The C++ writer round-trips whatever was there. Placing JSON on line 2
 is invisible to old readers (they just see a different comment string)
 and detectable by new readers (starts with ``{``).
 
-4 Why bitmask for constraints (not 3 separate columns)
-------------------------------------------------------
+Why bitmask for constraints (not 3 separate columns)
+----------------------------------------------------
 
-4.1 Alternatives considered
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **Three separate 0/1 columns**: changes atom lines from 5 columns to
    7, breaking all existing parsers.
@@ -93,8 +91,8 @@ and detectable by new readers (starts with ``{``).
    adds complexity without benefit -- the constraint is a property of
    the atom, not a separate dataset.
 
-4.2 Decision
-~~~~~~~~~~~~
+Decision
+~~~~~~~~
 
 A 3-bit bitmask in the existing column 4 preserves the 5-column line
 format. Legacy value 1 (meaning "fully fixed") maps to all-three-set
@@ -102,11 +100,11 @@ format. Legacy value 1 (meaning "fully fixed") maps to all-three-set
 Old readers that check ``!`` 0= for "is fixed" will treat any non-zero
 bitmask value as fixed, which is a safe degradation.
 
-5 Why JSON-declared sections (not positional)
----------------------------------------------
+Why JSON-declared sections (not positional)
+-------------------------------------------
 
-5.1 Alternatives considered
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **Fixed order**: coordinates, then velocities, then forces -- always
    in that order, detected by blank separators. Simple but rigid: new
@@ -118,8 +116,8 @@ bitmask value as fixed, which is a safe degradation.
 3. **File extension encoding**: ``.convelforce`` for velocity+force files.
    Combinatorial explosion of extensions.
 
-5.2 Decision
-~~~~~~~~~~~~
+Decision
+~~~~~~~~
 
 The ``sections`` key in the JSON metadata declares which sections exist
 and their order. The parser reads exactly those sections. Benefits:
@@ -142,11 +140,11 @@ metadata schema, and physical header invariants must all agree. This
 keeps the default reader permissive for existing files while giving
 v2 producers a strict interoperability contract.
 
-6 Why per-frame energy in metadata (not per-atom section)
----------------------------------------------------------
+Why per-frame energy in metadata (not per-atom section)
+-------------------------------------------------------
 
-6.1 Alternatives considered
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **Per-atom energy section**: a "Energies of Component" section with
    one scalar per atom. Useful for ML potentials that provide local
@@ -154,8 +152,8 @@ v2 producers a strict interoperability contract.
 
 2. **Both**: per-frame in metadata, optional per-atom section.
 
-6.2 Decision
-~~~~~~~~~~~~
+Decision
+~~~~~~~~
 
 Most potentials (EMT, EAM, DFT) produce a total energy, not per-atom
 decomposition. Storing per-frame energy in the JSON metadata (``energy``
@@ -166,11 +164,11 @@ The ``potential`` metadata key provides structured provenance:
 ``{"type":"EMT","params":{"cutoff":6.0}}``. This makes energy and force
 values interpretable without external context.
 
-7 Why gzip (not zstd, lz4, or bzip2)
-------------------------------------
+Why gzip (not zstd, lz4, or bzip2)
+----------------------------------
 
-7.1 Alternatives considered
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **zstd**: better compression ratio and speed, but less ubiquitous.
    Not available in Python stdlib. Would require an additional
@@ -182,8 +180,8 @@ values interpretable without external context.
 3. **bzip2**: best compression ratio, slowest. In Python stdlib but
    rarely used for scientific data.
 
-7.2 Decision
-~~~~~~~~~~~~
+Decision
+~~~~~~~~
 
 Gzip is available everywhere: Python stdlib, Rust flate2, C zlib,
 Fortran, Julia. Every Unix system has ``gzip`` and ``zcat``. The magic
@@ -198,11 +196,11 @@ written through ``ConFrameWriter::from_path_zstd`` and the same
 zstd magic bytes and return a clear error pointing at the feature flag,
 so consumers never see a corrupt parse on a zstd file.
 
-8 Migration guide for existing tools
-------------------------------------
+Migration guide for existing tools
+----------------------------------
 
-8.1 Reading v2 files in a v1 reader
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading v2 files in a v1 reader
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A v1 reader will:
 
@@ -219,8 +217,8 @@ A v1 reader will:
 Degradation is safe: the reader gets coordinates and constraints
 (with reduced per-direction granularity) but misses forces.
 
-8.2 Upgrading a v1 writer to v2
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Upgrading a v1 writer to v2
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Emit ``{"con_spec_version":2}`` on line 2.
 
@@ -231,8 +229,8 @@ Degradation is safe: the reader gets coordinates and constraints
 4. If writing forces, add ``,"sections":["forces"]`` to the JSON and
    append a force section after coordinates.
 
-8.3 Reference implementations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reference implementations
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. table::
 
@@ -252,3 +250,47 @@ installable packages and do not need archiving.
 
 All reference implementations support v1 only (no JSON metadata, no
 sections, no bitmask constraints).
+
+Version 2 to version 3
+----------------------
+
+What changed
+~~~~~~~~~~~~
+
+Version 3 keeps the nine-line header and type-grouped coordinates. Writers
+prefer emitting ``units`` inside the line-2 JSON object so quantities (length,
+energy, force, …) are not under-specified. Readers that implement v3 accept
+v2 files; strict mode rejects unknown ``con_spec_version`` values and missing
+v3 ``units`` when required by the library's write policy.
+
+Alternatives considered
+~~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Bump the entire grammar** (new extensions, binary framing): rejected—breaks
+   human inspectability and eOn/LODE interoperability that motivated CON.
+
+2. **Leave units forever optional**: rejected for **new** writes—downstream
+   optimizers and ML tools mis-scale energies and forces silently.
+
+3. **Encode units only in filenames or READMEs**: rejected—pairing and provenance
+   loss under campaign stores.
+
+Compatibility expectations
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. table::
+
+    +---------------------------+--------------------------------------------------------------------+
+    | Writer / reader           | Expectation                                                        |
+    +===========================+====================================================================+
+    | Legacy (no JSON line 2)   | Permissive read as implicit v1; writers should emit ≥ v2 JSON      |
+    +---------------------------+--------------------------------------------------------------------+
+    | v2 JSON without ``units`` | Readable by v3 implementations; new writes should add ``units``    |
+    +---------------------------+--------------------------------------------------------------------+
+    | v3 with ``units``         | Preferred interchange for new tools                                |
+    +---------------------------+--------------------------------------------------------------------+
+    | Unknown future version    | Strict mode errors; permissive mode may warn and best-effort parse |
+    +---------------------------+--------------------------------------------------------------------+
+
+Out of scope for interchange CON: replacing GROMACS/LAMMPS binary trajectory
+I/O, claiming multi-node FS dominance, or requiring GPU parsing of ASCII CON.

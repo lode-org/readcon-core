@@ -3,13 +3,11 @@ Tutorials
 =========
 
 
-.. contents::
 
+Querying the spec version
+-------------------------
 
-1 Querying the spec version
----------------------------
-
-/Added in v0.5.0. Per-frame spec\ :sub:`version`\ added in v0.6.0.
+/Added in v0.5.0. Per-frame spec\_version added in v0.6.0.
 
 There are two distinct version queries:
 
@@ -20,8 +18,8 @@ There are two distinct version queries:
    with, parsed from the JSON metadata on line 2. Legacy files
    without JSON metadata report version 1.
 
-1.1 Rust
-~~~~~~~~
+Rust
+~~~~
 
 .. code:: rust
 
@@ -37,8 +35,8 @@ There are two distinct version queries:
     println!("File spec version: {}", frame.header.spec_version);
     println!("Extra metadata: {:?}", frame.header.metadata);
 
-1.2 C/C++
-~~~~~~~~~
+C/C++
+~~~~~
 
 .. code:: c
 
@@ -63,8 +61,8 @@ There are two distinct version queries:
     rkr_free_string(json);
     free_rkr_frame(handle);
 
-1.3 Python
-~~~~~~~~~~
+Python
+~~~~~~
 
 .. code:: python
 
@@ -82,16 +80,16 @@ There are two distinct version queries:
     print(frames[0].frame_index)
     print(frames[0].timestep)
 
-2 Working with JSON metadata
-----------------------------
+Working with JSON metadata
+--------------------------
 
 /Added in v0.6.0.
 
 Line 2 of every v2 CON file contains a JSON object. The writer always
 stamps ``con_spec_version``; additional keys survive round-trips.
 
-2.1 Rust: attaching custom metadata
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Rust: attaching custom metadata
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: rust
 
@@ -110,8 +108,8 @@ stamps ``con_spec_version``; additional keys survive round-trips.
     // Line 2 of the output:
     // {"con_spec_version":2,"generator":"my-tool 1.0","temperature_K":300.0}
 
-2.2 Python: reading and attaching metadata
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Python: reading and attaching metadata
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -148,8 +146,8 @@ stamps ``con_spec_version``; additional keys survive round-trips.
     )
     readcon.write_con("output.con", [frame])
 
-2.3 Legacy file detection
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Legacy file detection
+~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -163,11 +161,11 @@ stamps ``con_spec_version``; additional keys survive round-trips.
             stacklevel=2,
         )
 
-3 Rust
-------
+Rust
+----
 
-3.1 Reading a CON file
-~~~~~~~~~~~~~~~~~~~~~~
+Reading a CON file
+~~~~~~~~~~~~~~~~~~
 
 .. code:: rust
 
@@ -183,8 +181,8 @@ stamps ``con_spec_version``; additional keys survive round-trips.
         println!("Atoms: {}", frame.atom_data.len());
     }
 
-3.2 Reading a convel file with velocities
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading a convel file with velocities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same iterator handles both ``.con`` and ``.convel`` files.
 Velocity data is detected automatically by the parser.
@@ -211,8 +209,8 @@ Velocity data is detected automatically by the parser.
         }
     }
 
-3.3 Writing frames
-~~~~~~~~~~~~~~~~~~
+Writing frames
+~~~~~~~~~~~~~~
 
 .. code:: rust
 
@@ -229,8 +227,8 @@ Velocity data is detected automatically by the parser.
 Velocity data is written automatically when
 ``frame.has_velocities()`` returns true.
 
-3.4 Building frames from data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -253,8 +251,8 @@ reconstructed.
     let frame = builder.build();
     // Atoms are now grouped: Cu(id=0), Cu(id=1), H(id=2)
 
-3.5 Writing with custom precision
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Writing with custom precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -273,8 +271,8 @@ Control the number of decimal places in output coordinates:
     let file = File::create("precise.con").unwrap();
     let mut writer = ConFrameWriter::with_precision(file, 17);
 
-3.6 Reading a single frame efficiently
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading a single frame efficiently
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.3.
 
@@ -290,8 +288,8 @@ files use memory-mapped I/O.
     let frame = read_first_frame(Path::new("single.con")).unwrap();
     println!("Atoms: {}", frame.atom_data.len());
 
-3.7 Reading all frames from a file
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading all frames from a file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For trajectory files with many frames, ``read_all_frames`` applies
 the same small-file optimization and uses memory-mapped I/O for
@@ -305,8 +303,8 @@ larger files.
     let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
     println!("Loaded {} frames", frames.len());
 
-3.8 Parallel parsing
-~~~~~~~~~~~~~~~~~~~~
+Parallel parsing
+~~~~~~~~~~~~~~~~
 
 Behind the ``parallel`` feature gate, multi-frame files can be parsed
 concurrently using rayon.
@@ -320,11 +318,11 @@ concurrently using rayon.
     let results = parse_frames_parallel(&contents);
     let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
 
-4 Python
---------
+Python
+------
 
-4.1 Installation
-~~~~~~~~~~~~~~~~
+Installation
+~~~~~~~~~~~~
 
 .. code:: shell
 
@@ -337,8 +335,8 @@ concurrently using rayon.
     # Via pixi
     pixi r -e python python-build
 
-4.2 Reading and inspecting frames
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading and inspecting frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -367,8 +365,8 @@ concurrently using rayon.
             print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
             print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
 
-4.3 Working with convel velocity data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Working with convel velocity data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -384,8 +382,8 @@ concurrently using rayon.
             else:
                 print(f"{atom.symbol}: no velocity")
 
-4.4 Constructing frames from data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Constructing frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -409,8 +407,8 @@ Build frames programmatically using ``Atom`` and ``ConFrame`` constructors:
     frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0))
     frame.atoms[0].fixed = [True, False, True]
 
-4.5 Writing frames
-~~~~~~~~~~~~~~~~~~
+Writing frames
+~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -426,8 +424,8 @@ Build frames programmatically using ``Atom`` and ``ConFrame`` constructors:
     output = readcon.write_con_string(frames)
     print(output)
 
-4.6 Writing with custom precision
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Writing with custom precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -444,15 +442,15 @@ Pass the ``precision`` keyword to control decimal places:
     readcon.write_con("precise.con", frames, precision=17)
     output = readcon.write_con_string(frames, precision=17)
 
-4.7 ASE Atoms conversion
-~~~~~~~~~~~~~~~~~~~~~~~~
+ASE Atoms conversion
+~~~~~~~~~~~~~~~~~~~~
 
-/Added in v0.4.0.  atom\ :sub:`id`\, velocity, mass, forces, and per-axis
+/Added in v0.4.0.  atom\_id, velocity, mass, forces, and per-axis
 fixed-mask transfer are preserved.
 
 Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE must be
 installed (it is an optional dependency).  The conversion preserves
-atom\ :sub:`id`\ (via a custom per-atom array), velocities, forces, masses,
+atom\_id (via a custom per-atom array), velocities, forces, masses,
 and per-axis fixed masks.
 
 .. code:: python
@@ -469,8 +467,8 @@ and per-axis fixed masks.
     # Convenience: read a .con file directly as ase.Atoms list
     ase_list = readcon.read_con_as_ase("trajectory.con")
 
-4.7.1 atom\ :sub:`id`\ in ASE roundtrips
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atom\_id in ASE roundtrips
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``to_ase()`` stores each atom's ``atom_id`` as a custom ``atom_id``
 per-atom array on the ASE ``Atoms`` object.  Tags are left untouched
@@ -495,8 +493,8 @@ readcon, ``from_ase()`` checks for the ``atom_id`` array first, then
 falls back to ``tags`` (if any are non-zero), and finally uses
 sequential indices.
 
-4.7.2 Velocities and masses in ASE roundtrips
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Velocities and masses in ASE roundtrips
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Velocities from ``.convel`` files are transferred via
 ``set_velocities()`` / ``get_velocities()``.  Custom masses (when present
@@ -517,8 +515,8 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
     assert frame_back.has_velocities
     assert frame_back.atoms[0].fixed == frames[0].atoms[0].fixed
 
-4.8 Roundtrip test pattern
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Roundtrip test pattern
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: python
 
@@ -533,11 +531,11 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
         assert len(orig) == len(reread)
         assert orig.has_velocities == reread.has_velocities
 
-5 C
----
+C
+-
 
-5.1 Reading and printing frames
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading and printing frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: c
 
@@ -574,8 +572,8 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
         return 0;
     }
 
-5.2 Building frames from data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -619,8 +617,8 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
     free_rkr_writer(writer);
     free_rkr_frame(frame);
 
-5.3 Reading a single frame
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading a single frame
+~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -634,8 +632,8 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
         free_rkr_frame(frame);
     }
 
-5.4 Writing frames
-~~~~~~~~~~~~~~~~~~
+Writing frames
+~~~~~~~~~~~~~~
 
 .. code:: c
 
@@ -651,8 +649,8 @@ on the ``ConFrame``) override ASE's atomic-number defaults via
     }
     free_rkr_writer(writer);
 
-5.5 Memory management
-~~~~~~~~~~~~~~~~~~~~~
+Memory management
+~~~~~~~~~~~~~~~~~
 
 The C API uses two ownership patterns:
 
@@ -664,11 +662,11 @@ The C API uses two ownership patterns:
 
 Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
 
-6 C++
------
+C++
+---
 
-6.1 RAII iteration with range-based for
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+RAII iteration with range-based for
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: cpp
 
@@ -699,8 +697,8 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
         return 0;
     }
 
-6.2 Building frames from data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Building frames from data
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -719,8 +717,8 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
         -0.1, -0.2, -0.3);
     auto frame = builder.build();
 
-6.3 Reading a single frame
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Reading a single frame
+~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
@@ -729,8 +727,8 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
     auto frame = readcon::read_first_frame("input.con");
     std::cout << "Atoms: " << frame.atoms().size() << "\n";
 
-6.4 Collecting and writing frames
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Collecting and writing frames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: cpp
 
@@ -752,8 +750,8 @@ Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
     readcon::ConFrameWriter precise_writer("precise.con", 17);
     precise_writer.extend(all_frames);
 
-6.5 Integration with eOn
-~~~~~~~~~~~~~~~~~~~~~~~~
+Integration with eOn
+~~~~~~~~~~~~~~~~~~~~
 
 The C++ RAII API is used by eOn for all ``.con`` and ``.convel`` I/O:
 
@@ -772,11 +770,11 @@ The C++ RAII API is used by eOn for all ``.con`` and ``.convel`` I/O:
     readcon::ConFrameWriter writer(path, 17);  // 17 digits for lossless roundtrip
     writer.extend({out_frame});
 
-7 Julia
--------
+Julia
+-----
 
-7.1 Installation and setup
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Installation and setup
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: julia
 
@@ -787,8 +785,8 @@ The C++ RAII API is used by eOn for all ``.con`` and ``.convel`` I/O:
     using Pkg
     Pkg.develop(path="julia/ReadCon")
 
-7.2 Reading frames
-~~~~~~~~~~~~~~~~~~
+Reading frames
+~~~~~~~~~~~~~~
 
 .. code:: julia
 
@@ -812,8 +810,8 @@ The C++ RAII API is used by eOn for all ``.con`` and ``.convel`` I/O:
         end
     end
 
-7.3 Writing frames
-~~~~~~~~~~~~~~~~~~
+Writing frames
+~~~~~~~~~~~~~~
 
 .. code:: julia
 
@@ -827,8 +825,8 @@ Julia writes through the C FFI builder and writer. The path preserves
 velocities, forces, per-axis fixed masks, masses, atom ids, and JSON
 metadata exposed by ``metadata_json``.
 
-7.4 Working with convel velocity data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Working with convel velocity data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: julia
 
@@ -845,8 +843,8 @@ metadata exposed by ``metadata_json``.
         end
     end
 
-7.5 Multi-frame trajectory processing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Multi-frame trajectory processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: julia
 
@@ -861,19 +859,19 @@ metadata exposed by ``metadata_json``.
         println("Image $i: $n_free free atoms")
     end
 
-8 Chemfiles — convert other formats into CON
---------------------------------------------
+Chemfiles — convert other formats into CON
+------------------------------------------
 
 /v0.13.0. Documentation for chemfiles ingress is organized in the
 `Diátaxis <https://diataxis.fr/>`_ style (do not use this page as the primary guide):
 
-- **Tutorial** (learning, end-to-end XYZ→CON→selection): `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
+- **Tutorial** (learning, end-to-end XYZ→CON→selection): :doc:`chemfiles-tutorial`
 
-- **How-to** (task recipes, batch convert, C API): `chemfiles-howto.org <chemfiles-howto.rst>`_
+- **How-to** (task recipes, batch convert, C API): :doc:`chemfiles-howto`
 
-- **Explanation** (why optional chemfiles, bonds in JSON, index remap): `chemfiles-explain.org <chemfiles-explain.rst>`_
+- **Explanation** (why optional chemfiles, bonds in JSON, index remap): :doc:`chemfiles-explain`
 
-- **Reference** (API tables, grammar subset, install matrix): `chemfiles-reference.org <chemfiles-reference.rst>`_
+- **Reference** (API tables, grammar subset, install matrix): :doc:`chemfiles-reference`
 
-Start with the tutorial if you need to ****drive conversion from XYZ/PDB/GRO/…****
+Start with the tutorial if you need to **drive conversion from XYZ/PDB/GRO/…**
 into CON for LODE tools.

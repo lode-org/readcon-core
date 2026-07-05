@@ -3,11 +3,9 @@ Executable Chemfiles notebook
 =============================
 
 
-.. contents::
-
 .. note::
 
-   This page is the **Org-mode source** executed by
+   This page is the *Org-mode source* executed by
    ``scripts/run-chemfiles-notebook.sh`` (Emacs Babel). In the HTML site the
    blocks are shown as documentation; run them locally with that script or
    ``C-c C-c`` in Emacs. Same conversion-first story as :doc:`chemfiles-tutorial`.
