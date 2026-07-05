@@ -3425,6 +3425,7 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
         }
         #[cfg(not(feature = "cuda"))]
         {
+            let _ = device_id;
             return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
         }
     } else {

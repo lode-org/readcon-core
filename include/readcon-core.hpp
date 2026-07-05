@@ -609,10 +609,7 @@ class ConFrameWriter {
     void extend(const std::vector<ConFrame> &frames);
 
     /// Campaign-stable CON serialization (deterministic metadata key order).
-    void set_canonical(bool on) {
-        throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
-                       "rkr_writer_set_canonical");
-    }
+    void set_canonical(bool on);
     [[nodiscard]] bool is_canonical() const {
         return rkr_writer_is_canonical(writer_handle_.get()) != 0;
     }
@@ -1295,6 +1292,11 @@ ConFrameWriter::compression_from_extension(
         return Compression::Zstd;
     }
     return Compression::None;
+}
+
+inline void ConFrameWriter::set_canonical(bool on) {
+    throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
+                   "rkr_writer_set_canonical");
 }
 
 inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
