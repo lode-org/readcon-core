@@ -70,4 +70,6 @@ jobs:
             exit 0
           fi
           git commit -m "chore(bench): refresh Cachegrind I-refs for docs"
+          # main may have moved while the benchmark ran; rebase our one commit
+          git pull --rebase origin main
           git push
