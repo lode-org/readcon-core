@@ -184,6 +184,14 @@ typedef enum RKRStatus {
      * Never use `-7` for this — that is [`RKR_STATUS_INTERNAL_ERROR`].
      */
     RKR_STATUS_FEATURE_DISABLED = -11,
+    /**
+     * Requested DLPack device does not match the array's residency.
+     */
+    RKR_STATUS_DEVICE_MISMATCH = -12,
+    /**
+     * Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
+     */
+    RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
 } RKRStatus;
 
 /**
@@ -340,10 +348,9 @@ typedef struct RKRDLDevice {
  * ids). Complex / bfloat / float8 / opaque / multi-lane types return
  * `RKR_STATUS_VALIDATION_ERROR` until implemented.
  *
- * **Device:** only `device_type = kDLCPU` (1) is backed today; CUDA and other
- * `DLDeviceType` values are accepted in the struct but return
- * `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect without an ABI
- * break when device-resident exports land.
+ * **Device:** `kDLCPU` always; with `--features cuda`, `kDLCUDA` performs H2D
+ * into real device memory then exports DLPack. Other devices return
+ * `RKR_STATUS_FEATURE_DISABLED` so callers can feature-detect.
  */
 typedef struct RKRDlpackExportOptions {
     /**
