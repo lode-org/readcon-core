@@ -26,6 +26,9 @@ done
 
 if [[ "$FEATURES" == *metatensor* ]]; then
   if [[ ! -f "$ROOT/target/$PROFILE/readcon-metatensor.env" ]]; then
+    # Cold builds race build.rs against metatensor-sys; force a build.rs
+    # rerun now that metatensor-sys artifacts exist so the env file lands.
+    touch "$ROOT/build.rs"
     # shellcheck disable=SC2086
     cargo build --"$PROFILE" --features ${FEATURES}
   fi
