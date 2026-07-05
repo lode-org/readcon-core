@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lode-org.github.io/readcon-core/schema/con-metadata.schema.json",
+  "title": "CON frame metadata (line 2)",
+  "description": "JSON metadata object carried on line 2 of a CON frame, spec versions 2 and 3. Unrecognized keys are permitted and MUST be preserved by parsers.",
+  "type": "object",
+  "required": ["con_spec_version"],
+  "properties": {
+    "con_spec_version": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 3,
+      "description": "Spec version of this frame. Files without JSON metadata are implicit version 1."
+    },
+    "sections": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Declared per-atom sections following the coordinate blocks."
+    },
+    "validate": {
+      "type": "boolean",
+      "description": "Enable strict validation of declared sections."
+    },
+    "generator": {
+      "type": "string",
+      "description": "Tool name and version that wrote the frame."
+    },
+    "units": {
+      "type": "object",
+      "description": "Unit system, metatomic-style expressions. Required at version 3 with non-empty length and energy.",
+      "properties": {
+        "length": { "type": "string", "minLength": 1 },
+        "energy": { "type": "string", "minLength": 1 },
+        "mass": { "type": "string", "minLength": 1 },
+        "time": { "type": "string", "minLength": 1 },
+        "velocity": { "type": "string", "minLength": 1 },
+        "force": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "pbc": {
+      "type": "array",
+      "items": { "type": "boolean" },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Periodicity of the three cell directions."
+    },
+    "lattice_vectors": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": { "type": "number" }
+      },
+      "description": "Exact 3x3 cell matrix as row vectors."
+    },
+    "energy": { "type": "number", "description": "Per-frame total energy." },
+    "potential": { "type": "object", "description": "Potential/calculator description." },
+    "frame_index": { "type": "integer", "minimum": 0 },
+    "time": { "type": "number" },
+    "timestep": { "type": "number" },
+    "neb_bead": { "type": "integer", "minimum": 0 },
+    "neb_band": { "type": "integer", "minimum": 0 },
+    "convergence_fmax": { "type": "number" },
+    "convergence_energy": { "type": "number" },
+    "converged": { "type": "boolean" },
+    "fmax": { "type": "number" },
+    "bonds": {
+      "type": "array",
+      "description": "Optional frame topology: [i, j] index pairs (0-based atom_data order) or objects with i, j, and optional order.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "integer", "minimum": 0 }
+          },
+          {
+            "type": "object",
+            "required": ["i", "j"],
+            "properties": {
+              "i": { "type": "integer", "minimum": 0 },
+              "j": { "type": "integer", "minimum": 0 },
+              "order": { "type": "number" }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "storage_dtypes": {
+      "type": "object",
+      "description": "In-memory element types after parsing; does not change on-disk text encoding.",
+      "properties": {
+        "positions": { "$ref": "#/$defs/hostedDtype" },
+        "velocities": { "$ref": "#/$defs/hostedDtype" },
+        "forces": { "$ref": "#/$defs/hostedDtype" },
+        "energies": { "$ref": "#/$defs/hostedDtype" },
+        "masses": { "$ref": "#/$defs/hostedDtype" },
+        "atom_ids": { "$ref": "#/$defs/integerDtype" }
+      },
+      "additionalProperties": false
+    },
+    "chemfiles_atom_names": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Display names sidecar from chemfiles import, chemfiles atom order."
+    },
+    "chemfiles_atom_types": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Atomic types sidecar from chemfiles import, chemfiles atom order."
+    },
+    "chemfiles_atom_properties": {
+      "description": "Per-atom property sidecar from chemfiles import.",
+      "type": ["array", "object"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "con_spec_version": { "const": 3 } }
+      },
+      "then": {
+        "required": ["units"],
+        "properties": {
+          "units": { "required": ["length", "energy"] }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "hostedDtype": {
+      "type": "string",
+      "enum": [
+        "float16", "float32", "float64",
+        "int8", "int16", "int32", "int64",
+        "uint8", "uint16", "uint32", "uint64",
+        "bool", "complex64", "complex128"
+      ]
+    },
+    "integerDtype": {
+      "type": "string",
+      "enum": [
+        "int8", "int16", "int32", "int64",
+        "uint8", "uint16", "uint32", "uint64"
+      ]
+    }
+  }
+}
