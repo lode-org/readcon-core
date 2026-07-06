@@ -206,6 +206,37 @@ Reproduce: =bash benches/run_pgo_ab.sh= on a host with =llvm-profdata=. Optional
 Default =cargo build --release= does **not** apply PGO; use the script (or
 equivalent =RUSTFLAGS=) when shipping a tuned binary.
 
+** Profile-driven *design* (default release path; not a build flag)
+
+After the first =perf= pass, structural changes shipped in the library itself
+(artifact =benches/results/design_ab_terra.json=):
+
+1. *Unified memchr line cursor* (=MemchrLines=): full-frame =next= and
+   =forward_fast= share one byte cursor (no =str::Lines= / dual views).
+2. *Coords-only frame assembly* (=con_frame_coords_only=): expand per-type
+   masses with run-length =fill= into a flat buffer (one Arc wrap); copy
+   =atom_id= into a plain =Vec= then share once; leave section SoA empty.
+3. *Skip section re-sync* on plain =.con=: =parse_declared_sections= returns how
+   many sections applied; =sync_arrays_from_atom_data= runs only when >0 (avoids
+   O(N) “any velocity?” scans and id rewrites on the common path).
+
+Same pure-Rust harness, stock release (no PGO), rgam5terra:
+
+| Case | Stock → design | Speedup |
+|------|----------------|---------|
+| cuh2 ×30 | 0.74 → 0.52 ms | ~1.44× |
+| cuh2 ×50 | 1.27 → 0.92 ms | ~1.38× |
+| cuh2 ×100 | 2.65 → 1.95 ms | ~1.36× |
+| tiny ×200 | 0.185 → 0.161 ms | ~1.15× |
+| path =read_all_frames= ×100 | 0.63 → 0.60 ms | ~1.05× |
+
+Geomean **~1.27×** vs the session stock release (and **~1.21×** on top of the
+flat SoA fill alone). Remaining cycles are dominated by =fast_float2= and the
+AoS =AtomDatum= materialization/drop—not a missing hand-SIMD digit kernel.
+Further design headroom: type-index symbols (fewer =Arc= bumps), defer AoS until
+writer/Python needs it, or a positions-only multi-frame API that never builds
+=atom_data=.
+
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 
