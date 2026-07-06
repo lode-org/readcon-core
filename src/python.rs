@@ -7,12 +7,28 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
 use serde_json::{Number, Value};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
+
+/// Build a contiguous `(N, 3) f64` numpy array from a frame's SoA positions
+/// without constructing per-atom Python objects.
+fn frame_positions_pyarray<'py>(
+    py: Python<'py>,
+    frame: &ConFrame,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let n = frame.positions.nrows();
+    let mut data: Vec<f64> = Vec::with_capacity(n * 3);
+    for i in 0..n {
+        data.extend_from_slice(&frame.positions.as_f64_row(i));
+    }
+    let array = Array2::from_shape_vec((n, 3), data)
+        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
+    Ok(array.into_pyarray(py))
+}
 
 /// Python-visible atom data.
 #[pyclass(name = "Atom", from_py_object)]
@@ -978,9 +994,14 @@ fn read_con_string(py: Python<'_>, contents: &str) -> PyResult<Vec<PyConFrame>> 
     Ok(frames)
 }
 
+/// Streaming frame iterator: parses one frame per `__next__` (does not
+/// materialize the full trajectory as `PyConFrame` up front).
 #[pyclass(name = "ConFrameIterator")]
 struct PyConFrameIterator {
-    frames: VecDeque<PyConFrame>,
+    /// Full file text (owned so the iterator is independent of the caller's path).
+    contents: String,
+    /// Byte offset of the next frame start within `contents`.
+    pos: usize,
 }
 
 #[pymethods]
@@ -989,17 +1010,80 @@ impl PyConFrameIterator {
         slf
     }
 
-    fn __next__(&mut self) -> Option<PyConFrame> {
-        self.frames.pop_front()
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<PyConFrame>> {
+        if self.pos >= self.contents.len() {
+            return Ok(None);
+        }
+        // Skip leading blank lines between frames.
+        let bytes = self.contents.as_bytes();
+        while self.pos < bytes.len()
+            && (bytes[self.pos] == b'\n' || bytes[self.pos] == b'\r' || bytes[self.pos] == b' ')
+        {
+            self.pos += 1;
+        }
+        if self.pos >= self.contents.len() {
+            return Ok(None);
+        }
+        let slice = &self.contents[self.pos..];
+        let mut iter = ConFrameIterator::new(slice);
+        match iter.next_with_raw_span(slice) {
+            Some(Ok((frame, span))) => {
+                let consumed =
+                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
+                self.pos += consumed;
+                Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
+            }
+            Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
+            None => {
+                self.pos = self.contents.len();
+                Ok(None)
+            }
+        }
     }
 }
 
-/// Return an iterator over frames from a .con or .convel file path.
+/// Return a **streaming** iterator over frames from a path.
+///
+/// Prefer this over [`read_all_frames`] when you process frames one at a time:
+/// only one `ConFrame` / `PyConFrame` is built per `__next__` call.
 #[pyfunction]
-fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
+fn iter_con(path: &str) -> PyResult<PyConFrameIterator> {
+    let contents = crate::compression::read_file_contents(Path::new(path))
+        .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
+    let text = contents
+        .as_str()
+        .map_err(|e| PyIOError::new_err(format!("failed to decode file: {e}")))?
+        .to_owned();
     Ok(PyConFrameIterator {
-        frames: read_con(py, path)?.into(),
+        contents: text,
+        pos: 0,
     })
+}
+
+/// Count frames without building atom / Python objects (skip walk).
+#[pyfunction]
+fn count_frames(path: &str) -> PyResult<usize> {
+    crate::iterators::count_frames(Path::new(path))
+        .map_err(|e| PyIOError::new_err(format!("failed to count frames: {e}")))
+}
+
+/// Load all frames' positions as a list of contiguous numpy `(N, 3) float64`
+/// arrays **without** constructing full `ConFrame` Python atom lists.
+///
+/// Prefer this for coordinate-only analysis pipelines; use [`read_all_frames`]
+/// when full atom metadata / Python `Atom` objects are required.
+#[pyfunction]
+fn read_all_positions<'py>(
+    py: Python<'py>,
+    path: &str,
+) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
+    let frames = crate::iterators::read_all_frames(Path::new(path))
+        .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
+    let mut out = Vec::with_capacity(frames.len());
+    for frame in &frames {
+        out.push(frame_positions_pyarray(py, frame)?);
+    }
+    Ok(out)
 }
 
 /// Write frames to a .con or .convel file path.
@@ -1430,6 +1514,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
+    m.add_function(wrap_pyfunction!(count_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(read_all_positions, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;

@@ -10,9 +10,11 @@ task.
 
 | Feature | Rust | Python | Julia | Fortran | C | C++ |
 |---------+------+--------+-------+---------+---+-----|
-| Lazy frame iterator | yes | yes | yes | via C iter (planned) | yes | yes |
+| Lazy frame iterator | yes | yes (streaming ~iter_con~) | yes | via C iter (planned) | yes | yes |
 | Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~rkr_read_all_frames~ | ~readcon::read_all_frames~ |
-| Parallel iterator | yes (~parallel~ feature) | no | no | no | no | no |
+| Count frames (skip walk) | ~iterators::count_frames~ | ~readcon.count_frames~ | n/a | n/a | n/a | n/a |
+| Positions-only batch (no full Atom list) | via SoA on ~ConFrame~ | ~readcon.read_all_positions~ | n/a | n/a | n/a | n/a |
+| Parallel multi-frame parse | yes (~parallel~; size gate in ~read_all_frames~) | yes (via ~python~→~parallel~) | no | no | no | no |
 | Builder API | ~ConFrameBuilder~ | ~PyConFrameBuilder~ | ~ConFrameBuilder~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~readcon::ConFrameBuilder~ |
 | Writer API | ~ConFrameWriter~ | ~write_frames~ | ~write_frames~ | ~create_writer_from_path_c~ + ~rkr_writer_extend~ | ~create_writer_from_path_c~ + ~rkr_writer_extend~ | ~readcon::ConFrameWriter~ |
 | Velocity / force sections | yes | yes | yes | yes | yes | yes |
@@ -68,6 +70,8 @@ Same task in each user-facing language (paths are examples).
       .. code-block:: python
 
          import readcon
+         # Prefer first-frame / streaming / skip count when full materialization
+         # is unnecessary (see also count_frames, read_all_positions, iter_con).
          frame = readcon.read_first_frame("structure.con")
          print(len(frame.atoms), frame.metadata)
          print("energy", frame.energy)  # typed accessor when present

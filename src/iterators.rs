@@ -382,33 +382,19 @@ mod aos_soa_agreement_tests {
 /// the fixed overhead of mmap (VMA creation, page fault, munmap). For larger
 /// trajectory files, uses memory-mapped I/O to let the OS page cache handle
 /// the data.
+/// Byte-size gate for Rayon multi-frame parse. Avoids an extra O(n) frame-count
+/// scan: phase-1 of [`parse_frames_parallel`] already walks boundaries when we
+/// choose parallel. Below this size, sequential parse wins on small multi-frame
+/// files (pool scheduling overhead).
+#[cfg(feature = "parallel")]
+pub const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
+
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
     #[cfg(feature = "parallel")]
     {
-        // Cheap frame-count estimate: CON frames typically begin with a header
-        // line then a JSON metadata line starting with '{'. Count '{' at line
-        // starts as a proxy; fall back to sequential when too few frames for
-        // Rayon to amortize pool/scheduling overhead (small multi-frame files).
-        let approx_frames = text
-            .as_bytes()
-            .windows(2)
-            .filter(|w| w[0] == b'\n' && w[1] == b'{')
-            .count()
-            .max(if text.as_bytes().first() == Some(&b'{') {
-                1
-            } else {
-                0
-            });
-        // Prefer sequential on tiny multi-frame blobs (Rayon pool overhead);
-        // prefer parallel when frame count or byte size amortizes it (large
-        // cells / long trajectories vs lean C++ XYZ readers).
-        const PARALLEL_FRAME_THRESHOLD: usize = 80;
-        const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
-        let use_parallel = approx_frames >= PARALLEL_FRAME_THRESHOLD
-            || text.len() >= PARALLEL_BYTES_THRESHOLD;
-        if use_parallel {
+        if text.len() >= PARALLEL_BYTES_THRESHOLD {
             let parts = parse_frames_parallel(text);
             let mut frames = Vec::with_capacity(parts.len());
             for r in parts {
@@ -420,6 +406,25 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
     let iter = ConFrameIterator::new(text);
     let frames: Result<Vec<_>, _> = iter.collect();
     Ok(frames?)
+}
+
+/// Count frames without building atom payloads (uses [`ConFrameIterator::forward_fast`]
+/// when possible, else [`ConFrameIterator::forward`]).
+///
+/// Prefer this over `read_all_frames(...).len()` when only the frame count is needed.
+pub fn count_frames(path: &Path) -> Result<usize, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str()?;
+    let mut n = 0usize;
+    let mut iter = ConFrameIterator::new(text);
+    loop {
+        match iter.forward_fast() {
+            Some(Ok(())) => n += 1,
+            Some(Err(e)) => return Err(Box::new(e)),
+            None => break,
+        }
+    }
+    Ok(n)
 }
 
 /// Reads only the first frame from a file.
