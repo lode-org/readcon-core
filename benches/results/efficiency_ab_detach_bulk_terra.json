@@ -1,0 +1,55 @@
+{
+  "protocol": "same-session A/B rgam5terra; median 15 after 4 warmups; concurrent GIL worker during 10x cuh2*80 loads",
+  "slow_variant": "no Python::detach; row-loop positions only",
+  "fast_variant": "Python::detach + bulk f64 SoA positions",
+  "wall_clock": [
+    {
+      "case": "tiny_n200",
+      "slow_pos_ms": 0.5534739466384053,
+      "fast_pos_ms": 0.49024494364857674,
+      "pos_speedup": 1.1289743092896705,
+      "slow_batch_ms": 0.7588319713249803,
+      "fast_batch_ms": 0.6741220131516457,
+      "batch_speedup": 1.1256596825510856,
+      "slow_count_ms": 0.061466009356081486,
+      "fast_count_ms": 0.05358096677809954
+    },
+    {
+      "case": "cuh2_n50",
+      "slow_pos_ms": 0.8762340294197202,
+      "fast_pos_ms": 0.6930379895493388,
+      "pos_speedup": 1.264337659165709,
+      "slow_batch_ms": 3.06497304700315,
+      "fast_batch_ms": 2.178900991566479,
+      "batch_speedup": 1.4066600817872161,
+      "slow_count_ms": 0.16332801897078753,
+      "fast_count_ms": 0.1578379888087511
+    },
+    {
+      "case": "cuh2_n100",
+      "slow_pos_ms": 1.4543130528181791,
+      "fast_pos_ms": 1.315471949055791,
+      "pos_speedup": 1.1055447087731856,
+      "slow_batch_ms": 5.360263050533831,
+      "fast_batch_ms": 6.122853024862707,
+      "batch_speedup": 0.8754518569640213,
+      "slow_count_ms": 0.34342799335718155,
+      "fast_count_ms": 0.318060046993196
+    }
+  ],
+  "concurrent": {
+    "slow_ticks_per_s": 31913.23280384358,
+    "fast_ticks_per_s": 45973.79761126068,
+    "ticks_per_s_speedup": 1.4405872916053701,
+    "slow": {
+      "elapsed_s": 0.07216442201752216,
+      "worker_ticks": 2303,
+      "ticks_per_s": 31913.23280384358
+    },
+    "fast": {
+      "elapsed_s": 0.10092705499846488,
+      "worker_ticks": 4640,
+      "ticks_per_s": 45973.79761126068
+    }
+  }
+}

@@ -128,24 +128,23 @@ is not faster than batch on parallel-sized files (sequential path), but avoids
 holding the full =PyConFrame= list at once. Criterion on the same host:
 fast-float2 coordinate microbench ~2× std parse (see =cargo bench --bench iterator_bench=).
 
-Python binding efficiency (terra, robust median-of-medians protocol in
-=benches/efficiency_apis_profile.py= / robust runner; artifact
-=benches/results/efficiency_improve_terra.json=):
+Python binding efficiency (terra same-session A/B; artifact
+=benches/results/efficiency_ab_detach_bulk_terra.json=):
 
-- =count_frames= remains ~6–9% of full =read_all_frames= wall time on the ladder.
-- =read_all_positions= uses a bulk f64 SoA copy (no per-row conversion when
-  storage is f64) and avoids building Python =Atom= lists; on large ladders it
-  is a clear fraction of full batch cost (e.g. ~0.26–0.75× batch in the robust
-  run). Prefer it for coordinate-only work; do not treat ratio-to-batch games
-  on micro fixtures as absolute speed claims (absolute times are noisy).
-- Rust multi-frame parse under Python releases the GIL (=Python::detach=) so
-  Rayon is not blocked by the interpreter; this is for concurrent correctness /
-  multi-core use, not a guaranteed single-thread wall-clock win.
-- Streaming =iter_con= is for incremental processing / lower intermediate
-  structure materialization discipline; materializing every frame via the stream
-  is not advertised as faster than parallel batch.
-- =coords_array= always returns a *fresh* ndarray from the current atom list
-  (safe under in-place mutation of prior returns and live atom edits).
+- *SLOW control:* GIL held for the entire Rust parse; =read_all_positions=
+  uses a per-row =as_f64_row= loop.
+- *FAST (shipped):* =Python::detach= during Rust multi-frame I/O/parse so Rayon
+  and other Python threads are not blocked; =read_all_positions= uses a one-shot
+  contiguous f64 SoA copy when storage is already f64.
+- *Measured (median 15 after 4 warmups on the same host/session):* positions
+  wall-clock speedups about 1.11–1.26× on the tiny_n200 / cuh2 ladders; concurrent
+  pure-Python worker throughput during long multi-frame loads about 1.44× higher
+  with detach (worker ticks/s). Batch full-frame materialize is not the primary
+  claim for bulk SoA (it still builds Python atoms for =read_all_frames=).
+- Streaming =iter_con= remains for incremental use, not a wall-clock win vs parallel
+  batch when every frame is materialized. =coords_array= always returns a fresh
+  ndarray from live atoms (no shared cache).
+
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 
