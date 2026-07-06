@@ -263,6 +263,19 @@ impl Array2Storage {
         Self::zeros(ElementKind::Float64, n, c)
     }
 
+    /// Build an f64 `(n, c)` SoA from a flat row-major buffer (`len == n * c`).
+    ///
+    /// Prefer this on the parse hot path: fill a plain `Vec<f64>` (no per-row
+    /// `ArcArray` uniqueness checks), then wrap once. `perf` on multi-frame
+    /// cuh2 parse showed `OwnedArcRepr::try_ensure_unique` at ~16% of cycles
+    /// when writing via repeated `set_f64_row` / `as_slice_memory_order_mut`.
+    pub fn from_f64_row_major(n: usize, c: usize, data: Vec<f64>) -> Self {
+        debug_assert_eq!(data.len(), n.saturating_mul(c));
+        let arr = ndarray::Array2::from_shape_vec((n, c), data)
+            .expect("from_f64_row_major: shape must match buffer length");
+        Self::F64(arr.into_shared())
+    }
+
     pub fn kind(&self) -> ElementKind {
         match self {
             Self::F64(_) => ElementKind::Float64,
