@@ -120,6 +120,14 @@ regardless of size, since mmap cannot decompress on the fly.
   numpy ~(N,3)~ arrays without building full ~Atom~ lists; ~read_all_frames~
   remains the full-fidelity batch path.
 
+Terra release profile (host rgam5terra, median of 11 after warmups; artifact
+=benches/results/efficiency_apis_terra.json=): =count_frames= is ~6–12% of
+=read_all_frames= wall time; =read_all_positions= is ~0.3–0.5× batch on the
+cuh2 / large-tiny ladders; streaming =iter_con= that materializes every frame
+is not faster than batch on parallel-sized files (sequential path), but avoids
+holding the full =PyConFrame= list at once. Criterion on the same host:
+fast-float2 coordinate microbench ~2× std parse (see =cargo bench --bench iterator_bench=).
+
 ** Multi-format trajectory (CON vs XYZ-class peers)
 
 Fair equal-geometry harness: =benches/multiformat_traj.py= writes multi-frame
