@@ -324,9 +324,6 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub spec_version: u32,
     metadata: Py<PyDict>,
-    /// Positions SoA cache when built from Rust [`ConFrame`] (avoids re-walking
-    /// Python `Atom` objects in [`Self::coords_array`]).
-    cached_coords: Option<Py<PyArray2<f64>>>,
 }
 
 #[pymethods]
@@ -355,7 +352,6 @@ impl PyConFrame {
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
             metadata,
-            cached_coords: None,
         })
     }
 
@@ -417,15 +413,13 @@ impl PyConFrame {
     /// `[N, 3] float64` array, in the type-grouped order used by the
     /// underlying frame.
     ///
-    /// When the frame was loaded from Rust CON parse, uses a cached SoA
-    /// buffer; hand-built frames fall back to walking the Python atom list.
+    /// Always allocates a **fresh** array from the current Python atom list so
+    /// in-place mutation of a previous return value cannot corrupt later
+    /// calls, and edits to `atoms` are reflected immediately.
     fn coords_array<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        if let Some(ref cached) = self.cached_coords {
-            return Ok(cached.bind(py).clone());
-        }
         let atoms = self.py_atoms(py)?;
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
         for atom in &atoms {
@@ -893,7 +887,6 @@ impl PyConFrame {
             })
             .collect();
 
-        let cached_coords = frame_positions_pyarray(py, frame)?.unbind();
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -905,7 +898,6 @@ impl PyConFrame {
             atoms: py_atoms_to_list(py, atoms)?,
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
-            cached_coords: Some(cached_coords),
         })
     }
 
@@ -1559,7 +1551,6 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
         metadata: PyDict::new(py).unbind(),
-        cached_coords: None,
     })
 }
 

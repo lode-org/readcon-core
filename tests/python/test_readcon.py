@@ -346,14 +346,21 @@ class TestConFrameConstructor:
             assert pos.shape == (len(fr.atoms), 3)
             assert float(pos[0, 0]) == pytest.approx(fr.atoms[0].x)
 
-    def test_coords_array_matches_atoms_and_cached_path(self):
+    def test_coords_array_fresh_and_tracks_atom_mutation(self):
         path = _resource("tiny_cuh2.con")
         fr = readcon.read_first_frame(path)
-        arr = fr.coords_array()
-        assert arr.shape == (len(fr.atoms), 3)
-        assert float(arr[0, 0]) == pytest.approx(fr.atoms[0].x)
-        assert float(arr[0, 1]) == pytest.approx(fr.atoms[0].y)
-        assert float(arr[0, 2]) == pytest.approx(fr.atoms[0].z)
+        arr1 = fr.coords_array()
+        assert arr1.shape == (len(fr.atoms), 3)
+        assert float(arr1[0, 0]) == pytest.approx(fr.atoms[0].x)
+        # In-place mutation of a previous return must not poison later calls.
+        arr1[0, 0] = -999.0
+        arr2 = fr.coords_array()
+        assert float(arr2[0, 0]) == pytest.approx(fr.atoms[0].x)
+        assert float(arr2[0, 0]) != pytest.approx(-999.0)
+        # Live atom edits must be visible on the next coords_array.
+        fr.atoms[0].x = 12.5
+        arr3 = fr.coords_array()
+        assert float(arr3[0, 0]) == pytest.approx(12.5)
 
 
 class TestMass:
