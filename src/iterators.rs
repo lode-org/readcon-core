@@ -2,7 +2,9 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_declared_sections, parse_single_frame, LineStream};
+use crate::parser::{
+    parse_declared_sections, parse_single_frame, parse_single_frame_positions, LineStream,
+};
 use crate::{error, types};
 use std::path::Path;
 
@@ -293,6 +295,59 @@ impl<'a> Iterator for ConFrameIterator<'a> {
 }
 
 #[cfg(test)]
+mod lean_positions_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn lean_positions_match_full_frame_on_fixtures() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test");
+        for name in ["cuh2.con", "tiny_cuh2.con", "tiny_multi_cuh2.con"] {
+            let p = root.join(name);
+            let text = std::fs::read_to_string(&p).unwrap_or_else(|_| panic!("fixture {name}"));
+            let full: Vec<_> = ConFrameIterator::new(&text)
+                .map(|r| r.expect("full"))
+                .collect();
+            let lean = read_all_positions_str(&text).expect("lean");
+            assert_eq!(lean.len(), full.len(), "{name} frame count");
+            for (i, (pos, fr)) in lean.iter().zip(full.iter()).enumerate() {
+                assert_eq!(pos.nrows(), fr.positions.nrows(), "{name} f{i} nrows");
+                assert_eq!(pos.ncols(), 3);
+                for r in 0..pos.nrows() {
+                    let want = fr.positions.as_f64_row(r);
+                    assert_eq!(
+                        [pos[[r, 0]], pos[[r, 1]], pos[[r, 2]]],
+                        want,
+                        "{name} f{i} atom {r}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lean_positions_skips_vel_section_and_matches_coords() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_cuh2_vel_forces.con");
+        let text = std::fs::read_to_string(&p).expect("fixture");
+        let full = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let lean = read_all_positions_str(&text).expect("lean");
+        assert_eq!(lean.len(), 1);
+        let pos = &lean[0];
+        assert_eq!(pos.nrows(), full.atom_data.len());
+        for r in 0..pos.nrows() {
+            let want = full.positions.as_f64_row(r);
+            assert_eq!([pos[[r, 0]], pos[[r, 1]], pos[[r, 2]]], want);
+        }
+        // full frame still has section data; lean path only positions
+        assert!(full.atom_data.iter().any(|a| a.force.is_some() || a.velocity.is_some()));
+    }
+}
+
+#[cfg(test)]
 mod aos_soa_agreement_tests {
     use super::*;
     use std::path::PathBuf;
@@ -391,6 +446,81 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
     let iter = ConFrameIterator::new(text);
     let frames: Result<Vec<_>, _> = iter.collect();
     Ok(frames?)
+}
+
+/// Multi-frame **positions only**: one owned `(N, 3)` f64 matrix per frame.
+///
+/// Does **not** build [`types::ConFrame`] / `AtomDatum` (no per-atom symbol Arc
+/// traffic). Shares the same coordinate float kernel as full-frame parse; optional
+/// sections are structure-skipped. Prefer for coordinate analysis pipelines.
+///
+/// Full-fidelity callers must use [`read_all_frames`] / [`ConFrameIterator`].
+pub fn read_all_positions(
+    path: &Path,
+) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str()?;
+    read_all_positions_str(text)
+}
+
+/// Like [`read_all_positions`] but on an already-loaded UTF-8 buffer.
+pub fn read_all_positions_str(
+    text: &str,
+) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
+    #[cfg(feature = "parallel")]
+    {
+        if text.len() >= PARALLEL_BYTES_THRESHOLD {
+            let parts = parse_positions_parallel(text);
+            let mut out = Vec::with_capacity(parts.len());
+            for r in parts {
+                out.push(r?);
+            }
+            return Ok(out);
+        }
+    }
+    let mut lines = MemchrLines::new(text);
+    let mut out = Vec::new();
+    while lines.peek_line().is_some() {
+        out.push(parse_single_frame_positions(&mut lines)?);
+    }
+    Ok(out)
+}
+
+/// Parallel positions-only multi-frame parse (same boundary walk as full-frame).
+#[cfg(feature = "parallel")]
+pub fn parse_positions_parallel(
+    file_contents: &str,
+) -> Vec<Result<ndarray::Array2<f64>, error::ParseError>> {
+    use rayon::prelude::*;
+    let mut boundaries: Vec<usize> = Vec::new();
+    let mut scanner = ConFrameIterator::new(file_contents);
+    loop {
+        scanner.lines.clear_peek();
+        let start = scanner.lines.pos;
+        if start >= scanner.lines.bytes.len() {
+            break;
+        }
+        boundaries.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            Some(Err(_)) | None => break,
+        }
+    }
+    let num_frames = boundaries.len();
+    (0..num_frames)
+        .into_par_iter()
+        .map(|i| {
+            let start = boundaries[i];
+            let end = if i + 1 < num_frames {
+                boundaries[i + 1]
+            } else {
+                file_contents.len()
+            };
+            let chunk = &file_contents[start..end];
+            let mut lines = MemchrLines::new(chunk);
+            parse_single_frame_positions(&mut lines)
+        })
+        .collect()
 }
 
 /// Count frames without building atom payloads (uses [`ConFrameIterator::forward_fast`]

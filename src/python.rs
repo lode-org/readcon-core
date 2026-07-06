@@ -1119,22 +1119,25 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
 /// arrays **without** constructing full `ConFrame` Python atom lists.
 ///
 /// Prefer this for coordinate-only analysis pipelines; use [`read_all_frames`]
-/// when full atom metadata / Python `Atom` objects are required. Rust parse
-/// runs with the GIL released (Rayon multi-frame parse can use all cores).
+/// when full atom metadata / Python `Atom` objects are required.
+///
+/// Uses the **lean** Rust path ([`crate::iterators::read_all_positions`]): no
+/// per-atom `AtomDatum` / symbol Arc materialization. GIL released during parse
+/// (Rayon multi-frame when the file exceeds the parallel size gate).
 #[pyfunction]
 fn read_all_positions<'py>(
     py: Python<'py>,
     path: &str,
 ) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
     let path_owned = path.to_owned();
-    let frames = py
+    let matrices = py
         .detach(|| {
-            crate::iterators::read_all_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
+            crate::iterators::read_all_positions(Path::new(&path_owned)).map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    let mut out = Vec::with_capacity(frames.len());
-    for frame in &frames {
-        out.push(frame_positions_pyarray(py, frame)?);
+    let mut out = Vec::with_capacity(matrices.len());
+    for mat in matrices {
+        out.push(mat.into_pyarray(py));
     }
     Ok(out)
 }
