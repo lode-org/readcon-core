@@ -16,15 +16,35 @@ use crate::writer::ConFrameWriter;
 
 /// Build a contiguous `(N, 3) f64` numpy array from a frame's SoA positions
 /// without constructing per-atom Python objects.
+///
+/// When storage is already `f64`, copies the contiguous SoA buffer once
+/// (no per-row conversion loop).
 fn frame_positions_pyarray<'py>(
     py: Python<'py>,
     frame: &ConFrame,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    use crate::storage_dtype::Array2Storage;
     let n = frame.positions.nrows();
-    let mut data: Vec<f64> = Vec::with_capacity(n * 3);
-    for i in 0..n {
-        data.extend_from_slice(&frame.positions.as_f64_row(i));
-    }
+    let data: Vec<f64> = match &frame.positions {
+        Array2Storage::F64(a) => a
+            .as_slice_memory_order()
+            .map(|s| s.to_vec())
+            .unwrap_or_else(|| {
+                let mut v = Vec::with_capacity(n * 3);
+                for i in 0..n {
+                    let r = a.row(i);
+                    v.extend_from_slice(&[r[0], r[1], r[2]]);
+                }
+                v
+            }),
+        _ => {
+            let mut v = Vec::with_capacity(n * 3);
+            for i in 0..n {
+                v.extend_from_slice(&frame.positions.as_f64_row(i));
+            }
+            v
+        }
+    };
     let array = Array2::from_shape_vec((n, 3), data)
         .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
     Ok(array.into_pyarray(py))
@@ -304,6 +324,9 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub spec_version: u32,
     metadata: Py<PyDict>,
+    /// Positions SoA cache when built from Rust [`ConFrame`] (avoids re-walking
+    /// Python `Atom` objects in [`Self::coords_array`]).
+    cached_coords: Option<Py<PyArray2<f64>>>,
 }
 
 #[pymethods]
@@ -332,6 +355,7 @@ impl PyConFrame {
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
             metadata,
+            cached_coords: None,
         })
     }
 
@@ -392,10 +416,16 @@ impl PyConFrame {
     /// Returns the per-atom xyz positions as a contiguous numpy
     /// `[N, 3] float64` array, in the type-grouped order used by the
     /// underlying frame.
+    ///
+    /// When the frame was loaded from Rust CON parse, uses a cached SoA
+    /// buffer; hand-built frames fall back to walking the Python atom list.
     fn coords_array<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if let Some(ref cached) = self.cached_coords {
+            return Ok(cached.bind(py).clone());
+        }
         let atoms = self.py_atoms(py)?;
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
         for atom in &atoms {
@@ -863,6 +893,7 @@ impl PyConFrame {
             })
             .collect();
 
+        let cached_coords = frame_positions_pyarray(py, frame)?.unbind();
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -874,6 +905,7 @@ impl PyConFrame {
             atoms: py_atoms_to_list(py, atoms)?,
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
+            cached_coords: Some(cached_coords),
         })
     }
 
@@ -966,8 +998,14 @@ fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
 
 #[pyfunction]
 fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
-    let frames = crate::iterators::read_all_frames(Path::new(path))
-        .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
+    // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
+    let path_owned = path.to_owned();
+    // `detach` requires Ungil; map errors to String inside the closure.
+    let frames = py
+        .detach(|| {
+            crate::iterators::read_all_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
     frames
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
@@ -977,21 +1015,31 @@ fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
 /// Read only the first frame from a .con or .convel file path.
 #[pyfunction]
 fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
-    let frame = crate::iterators::read_first_frame(Path::new(path))
-        .map_err(|e| PyIOError::new_err(format!("failed to read first frame: {e}")))?;
+    let path_owned = path.to_owned();
+    let frame = py
+        .detach(|| {
+            crate::iterators::read_first_frame(Path::new(&path_owned)).map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
 /// Read frames from a string containing .con or .convel data.
 #[pyfunction]
 fn read_con_string(py: Python<'_>, contents: &str) -> PyResult<Vec<PyConFrame>> {
-    let iter = ConFrameIterator::new(contents);
-    let mut frames = Vec::new();
-    for result in iter {
-        let frame = result.map_err(|e| PyIOError::new_err(format!("parse error: {e}")))?;
-        frames.push(PyConFrame::from_con_frame(py, &frame)?);
-    }
-    Ok(frames)
+    // Clone so parsing can release the GIL (contents may be a borrowed Py str).
+    let owned = contents.to_owned();
+    let frames = py
+        .detach(|| {
+            let iter = ConFrameIterator::new(&owned);
+            iter.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    frames
+        .iter()
+        .map(|frame| PyConFrame::from_con_frame(py, frame))
+        .collect()
 }
 
 /// Streaming frame iterator: parses one frame per `__next__` (does not
@@ -1047,13 +1095,18 @@ impl PyConFrameIterator {
 /// Prefer this over [`read_all_frames`] when you process frames one at a time:
 /// only one `ConFrame` / `PyConFrame` is built per `__next__` call.
 #[pyfunction]
-fn iter_con(path: &str) -> PyResult<PyConFrameIterator> {
-    let contents = crate::compression::read_file_contents(Path::new(path))
-        .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
-    let text = contents
-        .as_str()
-        .map_err(|e| PyIOError::new_err(format!("failed to decode file: {e}")))?
-        .to_owned();
+fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
+    let path_owned = path.to_owned();
+    let text = py
+        .detach(|| {
+            let contents = crate::compression::read_file_contents(Path::new(&path_owned))
+                .map_err(|e| e.to_string())?;
+            contents
+                .as_str()
+                .map(|s| s.to_owned())
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
     Ok(PyConFrameIterator {
         contents: text,
         pos: 0,
@@ -1062,23 +1115,31 @@ fn iter_con(path: &str) -> PyResult<PyConFrameIterator> {
 
 /// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
-fn count_frames(path: &str) -> PyResult<usize> {
-    crate::iterators::count_frames(Path::new(path))
-        .map_err(|e| PyIOError::new_err(format!("failed to count frames: {e}")))
+fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
+    let path_owned = path.to_owned();
+    py.detach(|| {
+        crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
+    })
+    .map_err(PyIOError::new_err)
 }
 
 /// Load all frames' positions as a list of contiguous numpy `(N, 3) float64`
 /// arrays **without** constructing full `ConFrame` Python atom lists.
 ///
 /// Prefer this for coordinate-only analysis pipelines; use [`read_all_frames`]
-/// when full atom metadata / Python `Atom` objects are required.
+/// when full atom metadata / Python `Atom` objects are required. Rust parse
+/// runs with the GIL released (Rayon multi-frame parse can use all cores).
 #[pyfunction]
 fn read_all_positions<'py>(
     py: Python<'py>,
     path: &str,
 ) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
-    let frames = crate::iterators::read_all_frames(Path::new(path))
-        .map_err(|e| PyIOError::new_err(format!("failed to read file: {e}")))?;
+    let path_owned = path.to_owned();
+    let frames = py
+        .detach(|| {
+            crate::iterators::read_all_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
     let mut out = Vec::with_capacity(frames.len());
     for frame in &frames {
         out.push(frame_positions_pyarray(py, frame)?);
@@ -1498,6 +1559,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
         metadata: PyDict::new(py).unbind(),
+        cached_coords: None,
     })
 }
 

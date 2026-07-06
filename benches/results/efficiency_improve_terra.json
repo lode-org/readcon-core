@@ -1,0 +1,67 @@
+{
+  "host": "rg.terra",
+  "readcon": "/home/rgoswami/Git/Github/LODE/readcon-core/.pixi/envs/python/lib/python3.14/site-packages/readcon/__init__.py",
+  "protocol": "median of 11 timed runs after 2 warmups; equal geometry ladders",
+  "cases": [
+    {
+      "case": "tiny_n20",
+      "n_frames": 20,
+      "bytes": 9980,
+      "parallel_gate_48kib": false,
+      "read_all_frames_median_s": 4.390208050608635e-05,
+      "iter_con_materialize_median_s": 3.680901136249304e-05,
+      "count_frames_median_s": 4.117959178984165e-06,
+      "read_all_positions_median_s": 3.17390076816082e-05,
+      "read_first_frame_median_s": 3.5460107028484344e-06,
+      "ratio_count_vs_batch": 0.09379872506072402,
+      "ratio_positions_vs_batch": 0.7229499676492114,
+      "ratio_stream_vs_batch": 0.838434327899108,
+      "batch_frames_per_s": 455559.2757666076
+    },
+    {
+      "case": "tiny_n200",
+      "n_frames": 200,
+      "bytes": 99800,
+      "parallel_gate_48kib": true,
+      "read_all_frames_median_s": 0.0003947309451177716,
+      "iter_con_materialize_median_s": 0.00036553596146404743,
+      "count_frames_median_s": 3.081804607063532e-05,
+      "read_all_positions_median_s": 0.00030340999364852905,
+      "read_first_frame_median_s": 8.506001904606819e-06,
+      "ratio_count_vs_batch": 0.07807354972243301,
+      "ratio_positions_vs_batch": 0.7686501334675038,
+      "ratio_stream_vs_batch": 0.9260382698270245,
+      "batch_frames_per_s": 506674.2358907994
+    },
+    {
+      "case": "cuh2_n20",
+      "n_frames": 20,
+      "bytes": 335420,
+      "parallel_gate_48kib": true,
+      "read_all_frames_median_s": 0.0005877030780538917,
+      "iter_con_materialize_median_s": 0.0008032179903239012,
+      "count_frames_median_s": 3.4965923987329006e-05,
+      "read_all_positions_median_s": 0.00020977400708943605,
+      "read_first_frame_median_s": 4.9421912990510464e-05,
+      "ratio_count_vs_batch": 0.059495900724417634,
+      "ratio_positions_vs_batch": 0.3569387585718924,
+      "ratio_stream_vs_batch": 1.366707135486956,
+      "batch_frames_per_s": 34030.789946221834
+    },
+    {
+      "case": "cuh2_n50",
+      "n_frames": 50,
+      "bytes": 838550,
+      "parallel_gate_48kib": true,
+      "read_all_frames_median_s": 0.0012573309941217303,
+      "iter_con_materialize_median_s": 0.0023568340111523867,
+      "count_frames_median_s": 8.750497363507748e-05,
+      "read_all_positions_median_s": 0.000387066975235939,
+      "read_first_frame_median_s": 6.30280701443553e-05,
+      "ratio_count_vs_batch": 0.06959581370711486,
+      "ratio_positions_vs_batch": 0.3078481140173536,
+      "ratio_stream_vs_batch": 1.8744738037724746,
+      "batch_frames_per_s": 39766.77599912818
+    }
+  ]
+}
