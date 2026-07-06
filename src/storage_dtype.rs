@@ -395,10 +395,19 @@ impl Array2Storage {
     pub fn set_f64_row(&mut self, i: usize, v: [f64; 3]) {
         match self {
             Self::F64(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0];
-                row[1] = v[1];
-                row[2] = v[2];
+                // Contiguous (N,3) layout: three stores at i*3 without ndarray
+                // row view machinery on the coordinate hot path.
+                if let Some(s) = a.as_slice_memory_order_mut() {
+                    let o = i * 3;
+                    s[o] = v[0];
+                    s[o + 1] = v[1];
+                    s[o + 2] = v[2];
+                } else {
+                    let mut row = a.row_mut(i);
+                    row[0] = v[0];
+                    row[1] = v[1];
+                    row[2] = v[2];
+                }
             }
             Self::F32(a) => {
                 let mut row = a.row_mut(i);

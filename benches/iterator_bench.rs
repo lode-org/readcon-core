@@ -149,7 +149,23 @@ fn fast_float_microbench(c: &mut Criterion) {
     let line = "  1.23456789012345  -9.87654321098765  0.00000000000001  1.0  42";
     let mut group = c.benchmark_group("FloatParsing");
 
-    group.bench_function("fast_float2_parse_5", |b| {
+    group.bench_function("stack_fast_float2_parse_5", |b| {
+        b.iter(|| {
+            let defaults = [0.0f64; 5];
+            let mut buf = [0.0f64; 5];
+            readcon_core::parser::parse_line_of_range_f64_stack(
+                black_box(line),
+                5,
+                5,
+                &defaults,
+                &mut buf,
+            )
+            .unwrap();
+            let _ = black_box(buf);
+        })
+    });
+
+    group.bench_function("fast_float2_parse_5_vec", |b| {
         b.iter(|| {
             let vals = readcon_core::parser::parse_line_of_n_f64(black_box(line), 5).unwrap();
             let _ = black_box(vals);
@@ -163,6 +179,22 @@ fn fast_float_microbench(c: &mut Criterion) {
         })
     });
 
+    group.finish();
+}
+
+fn multi_frame_parse_bench(c: &mut Criterion) {
+    // Realistic multi-atom multi-frame workload (SIMD-adjacent token scan lives here).
+    let cuh2 = fs::read_to_string(test_case!("cuh2.con")).expect("cuh2 fixture");
+    let multi: String = cuh2.repeat(30);
+    let mut group = c.benchmark_group("MultiFrameParse");
+    group.sample_size(40);
+    group.bench_function("parse_cuh2_x30_sequential", |b| {
+        b.iter(|| {
+            let iter = ConFrameIterator::new(black_box(&multi));
+            let n: usize = iter.map(|r| r.unwrap().atom_data.len()).sum();
+            let _ = black_box(n);
+        })
+    });
     group.finish();
 }
 
@@ -233,6 +265,7 @@ criterion_group!(
     large_file_bench,
     mmap_vs_read_bench,
     fast_float_microbench,
+    multi_frame_parse_bench,
     writer_bench,
 );
 criterion_main!(benches);

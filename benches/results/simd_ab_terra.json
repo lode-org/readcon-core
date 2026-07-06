@@ -1,0 +1,48 @@
+{
+  "protocol": "same-session A/B rgam5terra release; median 41 after 8 warmups Python read_all_frames",
+  "host": "rgam5terra",
+  "slow": "split_ascii_whitespace + ndarray row_mut + fast_float2::parse(str)",
+  "fast": "byte scan + fast_float2::parse_partial(&[u8]) + contiguous f64 SoA set_f64_row",
+  "cases": [
+    {
+      "case": "tiny_n200",
+      "slow_ms": 0.32931193709373474,
+      "fast_ms": 0.33281894866377115,
+      "speedup": 0.9894627046202848,
+      "slow_p10_ms": 0.31659798696637154,
+      "slow_p90_ms": 0.3666220000013709,
+      "fast_p10_ms": 0.31240005046129227,
+      "fast_p90_ms": 0.35933894105255604
+    },
+    {
+      "case": "cuh2_n30",
+      "slow_ms": 0.7567490683868527,
+      "fast_ms": 0.7598549127578735,
+      "speedup": 0.9959125823642461,
+      "slow_p10_ms": 0.7414300926029682,
+      "slow_p90_ms": 0.8100699633359909,
+      "fast_p10_ms": 0.7324829930439591,
+      "fast_p90_ms": 0.8293059654533863
+    },
+    {
+      "case": "cuh2_n50",
+      "slow_ms": 1.2376169906929135,
+      "fast_ms": 1.2119379825890064,
+      "speedup": 1.0211883846144092,
+      "slow_p10_ms": 1.2034520041197538,
+      "slow_p90_ms": 1.3502399669960141,
+      "fast_p10_ms": 1.1412149760872126,
+      "fast_p90_ms": 1.3190010795369744
+    },
+    {
+      "case": "cuh2_n100",
+      "slow_ms": 2.475944929756224,
+      "fast_ms": 2.413097070530057,
+      "speedup": 1.0260444803458992,
+      "slow_p10_ms": 2.3830499267205596,
+      "slow_p90_ms": 2.7727660490199924,
+      "fast_p10_ms": 2.3250000085681677,
+      "fast_p90_ms": 2.6909810258075595
+    }
+  ]
+}
