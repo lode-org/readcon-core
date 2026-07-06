@@ -4,7 +4,7 @@
 //!   cargo run --release --example profile_train -- measure [label] [out.json]
 //!   cargo run --release --example profile_train -- once
 
-use readcon_core::iterators::{read_all_frames, read_all_positions_str, ConFrameIterator};
+use readcon_core::iterators::{read_all_frames, read_frame_coordinates_str, ConFrameIterator};
 use std::env;
 use std::fs;
 use std::hint::black_box;
@@ -143,25 +143,25 @@ fn measure(label: &str, out: Option<&str>) {
     // Lean positions-only path (no AtomDatum) vs full-frame string collect on same corpus.
     for (name, text, n_frames) in &cases {
         for _ in 0..6 {
-            let _ = black_box(read_all_positions_str(text).unwrap().len());
+            let _ = black_box(read_frame_coordinates_str(text).unwrap().len());
         }
         let mut samples = Vec::with_capacity(31);
         for _ in 0..31 {
             let t0 = Instant::now();
-            let n = read_all_positions_str(text).unwrap().len();
+            let n = read_frame_coordinates_str(text).unwrap().len();
             samples.push(t0.elapsed().as_secs_f64());
             let _ = black_box(n);
         }
         samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let med = samples[samples.len() / 2];
         eprintln!(
-            "{label} lean_pos_{name} med={:.3}ms p10={:.3} p90={:.3} (n_frames={n_frames})",
+            "{label} coords_only_{name} med={:.3}ms p10={:.3} p90={:.3} (n_frames={n_frames})",
             med * 1e3,
             samples[(samples.len() as f64 * 0.1) as usize] * 1e3,
             samples[(samples.len() as f64 * 0.9) as usize] * 1e3
         );
         rows.push(serde_json::json!({
-            "case": format!("lean_pos_{name}"),
+            "case": format!("coords_only_{name}"),
             "n_frames": n_frames,
             "bytes": text.len(),
             "median_s": med,

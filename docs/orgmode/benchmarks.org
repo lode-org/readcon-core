@@ -234,32 +234,26 @@ Geomean **~1.27×** vs the session stock release (and **~1.21×** on top of the
 flat SoA fill alone). Remaining cycles on the *full-frame* path are dominated by
 =fast_float2= and AoS =AtomDatum= materialization/drop.
 
-** Lean multi-frame positions API (no AoS)
+** Coordinates-only API (different product, not a second “read all”)
 
-Shipped structural escape hatch when callers only need coordinates (artifact
-=benches/results/next_design_terra.json=):
+Public story for end users:
 
-- Rust: =iterators::read_all_positions= / =read_all_positions_str= and
-  =parser::parse_single_frame_positions= — owned =(N, 3)= f64 matrices, same
-  float kernel as full-frame parse, optional sections structure-skipped, no
-  =AtomDatum= / per-atom symbol =Arc=.
-- Parallel boundary walk reuses =forward_fast= (same gate as full-frame).
-- Python =read_all_positions= now calls the lean Rust path (not
-  =read_all_frames= + extract).
-- Full-fidelity =read_all_frames= / =ConFrameIterator= unchanged.
+| Need | API |
+|------|-----|
+| Full frames (atoms, symbols, sections, metadata) | =read_all_frames= / =ConFrameIterator= / Python =iter_con= |
+| Only =(N,3)= coordinate matrices | Rust =read_frame_coordinates=; Python =read_coords= |
+| Frame count only | =count_frames= |
 
-Same-session pure-Rust A/B (rgam5terra, release+parallel, median 31):
+=read_all_positions= / =read_all_positions_str= remain **compatibility aliases**
+for =read_frame_coordinates*=; prefer the clearer names in new code. This is
+**not** “a faster =read_all_frames=”: return type and semantics differ.
 
-| Case | Full-frame collect | Lean positions | Speedup |
-|------|--------------------|----------------|---------|
-| cuh2 ×30 | 0.58 ms | 0.18 ms | ~3.3× |
-| cuh2 ×50 | 1.00 ms | 0.28 ms | ~3.6× |
-| cuh2 ×100 | 2.16 ms | 0.42 ms | ~5.1× |
-| tiny ×200 | 0.18 ms | 0.14 ms | ~1.3× |
-
-Geomean lean vs full **~3.0×**. In-repo tests assert lean positions bit-agree
-with full-frame =positions= on fixtures (including vel/forces files for section
-skip).
+Implementation (artifact =benches/results/next_design_terra.json=):
+=parse_single_frame_positions= shares the full-frame float kernel, skips optional
+sections by structure, never builds =AtomDatum=. Measured geomean ~**3×** cheaper
+than full-frame collect when only coordinates are requested (multi-atom ladders
+on rgam5terra). Tests assert coordinate matrices bit-agree with full-frame
+=positions= on fixtures.
 
 
 ** Multi-format trajectory (CON vs XYZ-class peers)

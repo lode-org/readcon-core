@@ -308,9 +308,9 @@ mod lean_positions_tests {
             let full: Vec<_> = ConFrameIterator::new(&text)
                 .map(|r| r.expect("full"))
                 .collect();
-            let lean = read_all_positions_str(&text).expect("lean");
-            assert_eq!(lean.len(), full.len(), "{name} frame count");
-            for (i, (pos, fr)) in lean.iter().zip(full.iter()).enumerate() {
+            let coords = read_frame_coordinates_str(&text).expect("coords-only");
+            assert_eq!(coords.len(), full.len(), "{name} frame count");
+            for (i, (pos, fr)) in coords.iter().zip(full.iter()).enumerate() {
                 assert_eq!(pos.nrows(), fr.positions.nrows(), "{name} f{i} nrows");
                 assert_eq!(pos.ncols(), 3);
                 for r in 0..pos.nrows() {
@@ -334,16 +334,24 @@ mod lean_positions_tests {
             .next()
             .expect("frame")
             .expect("parse");
-        let lean = read_all_positions_str(&text).expect("lean");
-        assert_eq!(lean.len(), 1);
-        let pos = &lean[0];
+        let coords = read_frame_coordinates_str(&text).expect("coords-only");
+        assert_eq!(coords.len(), 1);
+        let pos = &coords[0];
         assert_eq!(pos.nrows(), full.atom_data.len());
         for r in 0..pos.nrows() {
             let want = full.positions.as_f64_row(r);
             assert_eq!([pos[[r, 0]], pos[[r, 1]], pos[[r, 2]]], want);
         }
-        // full frame still has section data; lean path only positions
+        // full frame still has section data; coords-only path returns matrices only
         assert!(full.atom_data.iter().any(|a| a.force.is_some() || a.velocity.is_some()));
+    }
+
+    #[test]
+    fn read_all_positions_alias_matches_read_frame_coordinates() {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
+        let a = read_frame_coordinates(&p).expect("canonical");
+        let b = read_all_positions(&p).expect("alias");
+        assert_eq!(a, b);
     }
 }
 
@@ -448,23 +456,26 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
     Ok(frames?)
 }
 
-/// Multi-frame **positions only**: one owned `(N, 3)` f64 matrix per frame.
+/// Load **only** Cartesian coordinates: one owned `(N, 3)` f64 matrix per frame.
 ///
-/// Does **not** build [`types::ConFrame`] / `AtomDatum` (no per-atom symbol Arc
-/// traffic). Shares the same coordinate float kernel as full-frame parse; optional
-/// sections are structure-skipped. Prefer for coordinate analysis pipelines.
+/// This is **not** a faster substitute for [`read_all_frames`]. It returns a
+/// different product (raw coordinate matrices, no symbols / fixed flags /
+/// velocities / Python `Atom` objects). Use it when the pipeline truly needs
+/// only `xyz`. For anything else, use [`read_all_frames`] or
+/// [`ConFrameIterator`].
 ///
-/// Full-fidelity callers must use [`read_all_frames`] / [`ConFrameIterator`].
-pub fn read_all_positions(
+/// Shares the same coordinate float kernel as full-frame parse; optional
+/// sections are structure-skipped (not decoded into memory).
+pub fn read_frame_coordinates(
     path: &Path,
 ) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
-    read_all_positions_str(text)
+    read_frame_coordinates_str(text)
 }
 
-/// Like [`read_all_positions`] but on an already-loaded UTF-8 buffer.
-pub fn read_all_positions_str(
+/// Like [`read_frame_coordinates`] on an already-loaded UTF-8 buffer.
+pub fn read_frame_coordinates_str(
     text: &str,
 ) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
     #[cfg(feature = "parallel")]
@@ -484,6 +495,22 @@ pub fn read_all_positions_str(
         out.push(parse_single_frame_positions(&mut lines)?);
     }
     Ok(out)
+}
+
+/// Compatibility alias for [`read_frame_coordinates`]. Prefer the clearer name.
+#[inline]
+pub fn read_all_positions(
+    path: &Path,
+) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
+    read_frame_coordinates(path)
+}
+
+/// Compatibility alias for [`read_frame_coordinates_str`].
+#[inline]
+pub fn read_all_positions_str(
+    text: &str,
+) -> Result<Vec<ndarray::Array2<f64>>, Box<dyn std::error::Error>> {
+    read_frame_coordinates_str(text)
 }
 
 /// Parallel positions-only multi-frame parse (same boundary walk as full-frame).
