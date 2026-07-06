@@ -145,6 +145,23 @@ Python binding efficiency (terra same-session A/B; artifact
   batch when every frame is materialized. =coords_array= always returns a fresh
   ndarray from live atoms (no shared cache).
 
+SIMD-adjacent atom-line path (terra same-session A/B; artifact
+=benches/results/simd_ab_terra.json=):
+
+- *SLOW control:* =str::split_ascii_whitespace= + =fast_float2::parse= on =&str=
+  tokens; f64 SoA writes via ndarray =row_mut=.
+- *FAST (shipped):* single-pass byte scan of the coordinate line with
+  =fast_float2::parse_partial= on =&[u8]= (Eisel–Lemire decimal kernel kept as
+  the SIMD-class float parser; no hand-rolled AVX digit parser); contiguous
+  =i*3= stores in =Array2Storage::set_f64_row= for default f64 layout. Frame
+  skip continues to use =memchr= for newlines.
+- *Measured (median 41 after 8 warmups, Python =read_all_frames=, rgam5terra):*
+  non-regression on tiny ladders (~0.99×); about 1.02–1.03× on multi-atom
+  cuh2 ×50/×100. Full multi-frame wall clock is dominated by structure/Python
+  materialize, so token-path changes stay in the few-percent band—do not claim
+  a large end-to-end SIMD win. Criterion microbench (FAST only):
+  =stack_fast_float2_parse_5= ~30 ns/line; =parse_cuh2_x30_sequential= ~695 µs.
+
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 

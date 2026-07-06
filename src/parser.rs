@@ -13,6 +13,11 @@ use std::sync::Arc;
 /// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
 /// Returns count of tokens actually present (before padding).
 /// Pads `out[found..max]` from `defaults` when `found < max` and `found >= min`.
+///
+/// Single-pass over the line bytes: skip ASCII whitespace, then
+/// [`fast_float2::parse_partial`] (Eisel–Lemire / SIMD-class decimal kernel)
+/// with a token-boundary check. No `SplitWhitespace`, no per-token `&str`,
+/// no heap `Vec`. Prefer this over allocating [`parse_line_of_n_f64`] on atom lines.
 #[inline]
 pub fn parse_line_of_range_f64_stack(
     line: &str,
@@ -22,18 +27,53 @@ pub fn parse_line_of_range_f64_stack(
     out: &mut [f64; 5],
 ) -> Result<usize, ParseError> {
     debug_assert!(max <= 5 && min <= max && defaults.len() >= max);
+    let bytes = line.as_bytes();
+    let n = bytes.len();
+    let mut i = 0usize;
     let mut found = 0usize;
-    for token in line.split_ascii_whitespace() {
-        if found >= max {
-            return Err(ParseError::InvalidVectorLength {
-                expected: max,
-                found: found + 1,
-            });
+    while found < max {
+        while i < n && bytes[i].is_ascii_whitespace() {
+            i += 1;
         }
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+        if i >= n {
+            break;
+        }
+        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).map_err(|_| {
+            // Best-effort token for the error message (up to next whitespace).
+            let end = bytes[i..]
+                .iter()
+                .position(|b| b.is_ascii_whitespace())
+                .map(|k| i + k)
+                .unwrap_or(n);
+            let token = String::from_utf8_lossy(&bytes[i..end]);
+            ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
+        })?;
+        let next = i + consumed;
+        // Reject partial tokens like "1.2abc" (must end at whitespace or EOS).
+        if next < n && !bytes[next].is_ascii_whitespace() {
+            let end = bytes[i..]
+                .iter()
+                .position(|b| b.is_ascii_whitespace())
+                .map(|k| i + k)
+                .unwrap_or(n);
+            let token = String::from_utf8_lossy(&bytes[i..end]);
+            return Err(ParseError::InvalidNumberFormat(format!(
+                "invalid float: {token}"
+            )));
+        }
         out[found] = val;
         found += 1;
+        i = next;
+    }
+    while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    // Reject trailing extra tokens (same contract as the old split loop).
+    if i < n {
+        return Err(ParseError::InvalidVectorLength {
+            expected: max,
+            found: found + 1,
+        });
     }
     if found < min || found > max {
         return Err(ParseError::InvalidVectorLength {
@@ -1911,6 +1951,26 @@ Coordinates of Component 1
     fn test_parse_line_of_range_f64_exact() {
         let vals = parse_line_of_range_f64("1.0 2.0 3.0 0.0 42", 4, 5, &[0.0; 5]).unwrap();
         assert_eq!(vals, vec![1.0, 2.0, 3.0, 0.0, 42.0]);
+    }
+
+    #[test]
+    fn test_byte_scan_stack_parses_realistic_coord_line() {
+        // Typical CON atom line: x y z fixed_mask [atom_id]
+        let line = "   0.63939999999999997    0.90449999999999997   -0.00009999999999977 1    0";
+        let defaults = [0.0, 0.0, 0.0, 0.0, 99.0];
+        let mut buf = [0.0f64; 5];
+        let n = parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
+        assert_eq!(n, 5);
+        assert!((buf[0] - 0.6394).abs() < 1e-4);
+        assert!((buf[1] - 0.9045).abs() < 1e-4);
+        assert_eq!(buf[3] as u8, 1);
+        assert_eq!(buf[4] as u64, 0);
+        // trailing junk must error
+        let bad = "1.0 2.0 3.0 1 0 EXTRA";
+        assert!(parse_line_of_range_f64_stack(bad, 4, 5, &defaults, &mut buf).is_err());
+        // partial non-boundary token must error
+        let glued = "1.0 2.0 3.0abc 1 0";
+        assert!(parse_line_of_range_f64_stack(glued, 4, 5, &defaults, &mut buf).is_err());
     }
 
     #[test]
