@@ -128,6 +128,14 @@ is not faster than batch on parallel-sized files (sequential path), but avoids
 holding the full =PyConFrame= list at once. Criterion on the same host:
 fast-float2 coordinate microbench ~2× std parse (see =cargo bench --bench iterator_bench=).
 
+Further terra pass (GIL released during Rust parse via =Python::detach=; bulk f64
+SoA copy for =read_all_positions=; cached coords on =PyConFrame= for =coords_array=):
+artifact =benches/results/efficiency_improve_terra.json=. On the micro ladder
+(=tiny_n20=), =read_all_positions= dropped from ~1.33× batch to ~0.72× batch wall
+time; large ladders keep =pos/batch= ~0.3–0.8 and =count_frames= ~6–10% of batch.
+Streaming =iter_con= that materializes every frame remains a peak-memory path,
+not a guaranteed wall-clock win versus parallel batch.
+
 ** Multi-format trajectory (CON vs XYZ-class peers)
 
 Fair equal-geometry harness: =benches/multiformat_traj.py= writes multi-frame

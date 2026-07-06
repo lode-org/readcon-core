@@ -346,6 +346,15 @@ class TestConFrameConstructor:
             assert pos.shape == (len(fr.atoms), 3)
             assert float(pos[0, 0]) == pytest.approx(fr.atoms[0].x)
 
+    def test_coords_array_matches_atoms_and_cached_path(self):
+        path = _resource("tiny_cuh2.con")
+        fr = readcon.read_first_frame(path)
+        arr = fr.coords_array()
+        assert arr.shape == (len(fr.atoms), 3)
+        assert float(arr[0, 0]) == pytest.approx(fr.atoms[0].x)
+        assert float(arr[0, 1]) == pytest.approx(fr.atoms[0].y)
+        assert float(arr[0, 2]) == pytest.approx(fr.atoms[0].z)
+
 
 class TestMass:
     def test_mass_from_file(self):
