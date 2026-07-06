@@ -14,42 +14,6 @@ use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
-/// Build a contiguous `(N, 3) f64` numpy array from a frame's SoA positions
-/// without constructing per-atom Python objects.
-///
-/// When storage is already `f64`, copies the contiguous SoA buffer once
-/// (no per-row conversion loop).
-fn frame_positions_pyarray<'py>(
-    py: Python<'py>,
-    frame: &ConFrame,
-) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    use crate::storage_dtype::Array2Storage;
-    let n = frame.positions.nrows();
-    let data: Vec<f64> = match &frame.positions {
-        Array2Storage::F64(a) => a
-            .as_slice_memory_order()
-            .map(|s| s.to_vec())
-            .unwrap_or_else(|| {
-                let mut v = Vec::with_capacity(n * 3);
-                for i in 0..n {
-                    let r = a.row(i);
-                    v.extend_from_slice(&[r[0], r[1], r[2]]);
-                }
-                v
-            }),
-        _ => {
-            let mut v = Vec::with_capacity(n * 3);
-            for i in 0..n {
-                v.extend_from_slice(&frame.positions.as_f64_row(i));
-            }
-            v
-        }
-    };
-    let array = Array2::from_shape_vec((n, 3), data)
-        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
-    Ok(array.into_pyarray(py))
-}
-
 /// Python-visible atom data.
 #[pyclass(name = "Atom", from_py_object)]
 #[derive(Clone)]
