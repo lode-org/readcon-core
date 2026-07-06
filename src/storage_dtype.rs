@@ -621,6 +621,11 @@ impl Array1Storage {
         Self::zeros(ElementKind::Float64, n)
     }
 
+    /// One-shot f64 column from a owned buffer (parse/assembly hot path).
+    pub fn from_f64_vec(data: Vec<f64>) -> Self {
+        Self::F64(ndarray::Array1::from(data).into_shared())
+    }
+
     pub fn kind(&self) -> ElementKind {
         match self {
             Self::F64(_) => ElementKind::Float64,

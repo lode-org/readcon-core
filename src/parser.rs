@@ -10,6 +10,29 @@ use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
 
+/// Line source with peek for section detection (blank-line separators).
+///
+/// Implemented by the memchr cursor on the hot iterator path and by
+/// `Peekable<I>` for tests / ad-hoc callers.
+pub trait LineStream<'a> {
+    fn next_line(&mut self) -> Option<&'a str>;
+    fn peek_line(&mut self) -> Option<&'a str>;
+}
+
+impl<'a, I> LineStream<'a> for Peekable<I>
+where
+    I: Iterator<Item = &'a str>,
+{
+    #[inline]
+    fn next_line(&mut self) -> Option<&'a str> {
+        Iterator::next(self)
+    }
+    #[inline]
+    fn peek_line(&mut self) -> Option<&'a str> {
+        Peekable::peek(self).copied()
+    }
+}
+
 /// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
 /// Returns count of tokens actually present (before padding).
 /// Pads `out[found..max]` from `defaults` when `found < max` and `found >= min`.
@@ -861,20 +884,17 @@ fn validate_section_atom_identity(
 /// If the next line is not blank (or is absent), no velocities are parsed.
 ///
 /// Returns `Ok(true)` if velocities were found and parsed, `Ok(false)` otherwise.
-pub fn parse_velocity_section<'a, I>(
-    lines: &mut Peekable<I>,
+pub fn parse_velocity_section<'a>(
+    lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
-) -> Result<bool, ParseError>
-where
-    I: Iterator<Item = &'a str>,
-{
+) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
     // Peek at the next line to check for blank separator
-    match lines.peek() {
+    match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
             // Consume the blank separator
-            lines.next();
+            lines.next_line();
         }
         _ => return Ok(false),
     }
@@ -883,12 +903,12 @@ where
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         // Symbol line
         let symbol = lines
-            .next()
+            .next_line()
             .ok_or(ParseError::IncompleteVelocitySection)?
             .trim();
 
         // "Velocities of Component N" line
-        let comp_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
+        let comp_line = lines.next_line().ok_or(ParseError::IncompleteVelocitySection)?;
         // Validate it looks like a velocity header (optional strictness)
         if !comp_line.contains("Velocities of Component") {
             return Err(ParseError::IncompleteVelocitySection);
@@ -906,7 +926,7 @@ where
         }
 
         for _ in 0..num_atoms {
-            let vel_line = lines.next().ok_or(ParseError::IncompleteVelocitySection)?;
+            let vel_line = lines.next_line().ok_or(ParseError::IncompleteVelocitySection)?;
             // Column 5 (atom_index) is optional in velocity lines too.
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let mut vals = [0.0f64; 5];
@@ -933,19 +953,16 @@ where
 /// `fx fy fz fixed_flag atom_id`).
 ///
 /// Returns `Ok(true)` if forces were found and parsed, `Ok(false)` otherwise.
-pub fn parse_force_section<'a, I>(
-    lines: &mut Peekable<I>,
+pub fn parse_force_section<'a>(
+    lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
-) -> Result<bool, ParseError>
-where
-    I: Iterator<Item = &'a str>,
-{
+) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
     // Peek at the next line to check for blank separator
-    match lines.peek() {
+    match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
-            lines.next();
+            lines.next_line();
         }
         _ => return Ok(false),
     }
@@ -953,11 +970,11 @@ where
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
-            .next()
+            .next_line()
             .ok_or(ParseError::IncompleteForceSection)?
             .trim();
 
-        let comp_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
+        let comp_line = lines.next_line().ok_or(ParseError::IncompleteForceSection)?;
         if !comp_line.contains("Forces of Component") {
             return Err(ParseError::IncompleteForceSection);
         }
@@ -968,7 +985,7 @@ where
         }
 
         for _ in 0..num_atoms {
-            let force_line = lines.next().ok_or(ParseError::IncompleteForceSection)?;
+            let force_line = lines.next_line().ok_or(ParseError::IncompleteForceSection)?;
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(force_line, 4, 5, &defaults, &mut vals)?;
@@ -999,18 +1016,15 @@ where
 ///
 /// Returns `Ok(true)` if energies were found and parsed, `Ok(false)`
 /// otherwise.
-pub fn parse_energy_section<'a, I>(
-    lines: &mut Peekable<I>,
+pub fn parse_energy_section<'a>(
+    lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
-) -> Result<bool, ParseError>
-where
-    I: Iterator<Item = &'a str>,
-{
+) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    match lines.peek() {
+    match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
-            lines.next();
+            lines.next_line();
         }
         _ => return Ok(false),
     }
@@ -1018,11 +1032,11 @@ where
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
-            .next()
+            .next_line()
             .ok_or(ParseError::IncompleteEnergySection)?
             .trim();
 
-        let comp_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+        let comp_line = lines.next_line().ok_or(ParseError::IncompleteEnergySection)?;
         if !comp_line.contains("Energies of Component") {
             return Err(ParseError::IncompleteEnergySection);
         }
@@ -1033,7 +1047,7 @@ where
         }
 
         for _ in 0..num_atoms {
-            let energy_line = lines.next().ok_or(ParseError::IncompleteEnergySection)?;
+            let energy_line = lines.next_line().ok_or(ParseError::IncompleteEnergySection)?;
             // Single energy column, plus optional fixed flag and atom_id
             // for round-trip identity checks.
             let defaults = [0.0, 0.0, atom_idx as f64];
@@ -1058,19 +1072,18 @@ where
 /// If `header.sections` is non-empty (v2 file with `"sections"` key in JSON),
 /// parses each declared section in order. Otherwise falls back to legacy
 /// blank-separator velocity detection.
-pub fn parse_declared_sections<'a, I>(
-    lines: &mut Peekable<I>,
+pub fn parse_declared_sections<'a>(
+    lines: &mut impl LineStream<'a>,
     header: &mut FrameHeader,
     atom_data: &mut [AtomDatum],
-) -> Result<(), ParseError>
-where
-    I: Iterator<Item = &'a str>,
-{
+) -> Result<usize, ParseError> {
+    let mut applied = 0usize;
     if !header.sections_declared && header.sections.is_empty() {
         // Legacy: try velocity detection via blank separator
         let found = parse_velocity_section(lines, header, atom_data)?;
         if found {
             header.sections.push(SECTION_VELOCITIES.into());
+            applied = 1;
         }
     } else {
         let sections = std::mem::take(&mut header.sections);
@@ -1081,25 +1094,28 @@ where
                     if !found {
                         return Err(ParseError::IncompleteVelocitySection);
                     }
+                    applied += 1;
                 }
                 SECTION_FORCES => {
                     let found = parse_force_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteForceSection);
                     }
+                    applied += 1;
                 }
                 SECTION_ENERGIES => {
                     let found = parse_energy_section(lines, header, atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteEnergySection);
                     }
+                    applied += 1;
                 }
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
         header.sections = sections;
     }
-    Ok(())
+    Ok(applied)
 }
 
 #[cfg(test)]

@@ -2088,18 +2088,80 @@ pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) 
     con_frame_from_atom_data_with_positions(header, atom_data, pos)
 }
 
-/// Like [`con_frame_from_atom_data`], but **reuses** prefilled `positions` SoA
-/// (no second O(N) position write). Velocities/forces/energies still filled from AoS.
-pub fn con_frame_from_atom_data_with_positions(
+/// Coords-only frame assembly (the common `.con` path after coordinate parse,
+/// before optional velocity/force sections).
+///
+/// Design (profile-driven): positions are already filled; **do not** O(N)-scan
+/// for optional sections; expand per-type masses with a run-length `fill` into a
+/// flat buffer (one Arc wrap); copy `atom_id` into a plain `Vec` then share once.
+/// Section SoA is left empty — callers that attach velocities/forces must run
+/// [`ConFrame::sync_arrays_from_atom_data`] afterward.
+pub fn con_frame_coords_only(
     header: FrameHeader,
     atom_data: Vec<AtomDatum>,
     positions: crate::storage_dtype::FloatArray2,
 ) -> ConFrame {
     let n = atom_data.len();
     debug_assert_eq!(positions.nrows(), n);
+    use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+
+    let mut mass_flat = vec![0.0f64; n];
+    let mut off = 0usize;
+    for (ti, &count) in header.natms_per_type.iter().enumerate() {
+        let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
+        let end = (off + count).min(n);
+        mass_flat[off..end].fill(m);
+        off = end;
+    }
+    let masses_arr = if dt.masses == crate::storage_dtype::ElementKind::Float64 {
+        FloatArray1::from_f64_vec(mass_flat)
+    } else {
+        let mut m = FloatArray1::zeros(dt.masses, n);
+        for (i, &v) in mass_flat.iter().enumerate() {
+            m.set_f64(i, v);
+        }
+        m
+    };
+
+    let mut ids = vec![0u64; n];
+    for (i, a) in atom_data.iter().enumerate() {
+        ids[i] = a.atom_id;
+    }
+    let ids_arr = ndarray::Array1::from(ids).into_shared();
+
+    let mut header = header;
+    if dt != StorageDtypes::all_f64() {
+        dt.insert_into(&mut header.metadata);
+    }
+    ConFrame {
+        header,
+        atom_data,
+        positions,
+        velocities: FloatArray2::zeros(dt.velocities, 0, 3),
+        forces: FloatArray2::zeros(dt.forces, 0, 3),
+        atom_energies: FloatArray1::zeros(dt.energies, 0),
+        masses: masses_arr,
+        atom_ids: ids_arr,
+    }
+}
+
+/// Like [`con_frame_from_atom_data`], but **reuses** prefilled `positions` SoA
+/// (no second O(N) position write). Velocities/forces/energies still filled from AoS
+/// when present; the common coords-only case delegates to [`con_frame_coords_only`].
+pub fn con_frame_from_atom_data_with_positions(
+    header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    positions: crate::storage_dtype::FloatArray2,
+) -> ConFrame {
     let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
     let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
     let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
+    if !has_vel && !has_frc && !has_eng {
+        return con_frame_coords_only(header, atom_data, positions);
+    }
+    let n = atom_data.len();
+    debug_assert_eq!(positions.nrows(), n);
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let pos = positions;
