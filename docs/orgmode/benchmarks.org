@@ -162,6 +162,50 @@ SIMD-adjacent atom-line path (terra same-session A/B; artifact
   a large end-to-end SIMD win. Criterion microbench (FAST only):
   =stack_fast_float2_parse_5= ~30 ns/line; =parse_cuh2_x30_sequential= ~695 µs.
 
+** Profile-guided work (perf + LLVM PGO; not token guessing)
+
+Harness: =examples/profile_train.rs= (train / measure / once) and
+=benches/run_pgo_ab.sh=. Artifacts: =benches/results/pgo_ab_terra.json=,
+=benches/results/pgo_profile_guided_terra.json=.
+
+=perf record -F 997 -g= on pure-Rust multi-frame cuh2 parse (rgam5terra,
+release, =--features parallel=) before the flat-buffer change showed:
+
+| Overhead (approx.) | Symbol |
+|--------------------|--------|
+| ~20% | =fast_float2::parse_float_partial= |
+| ~19% | =fast_float2::compute_float= |
+| ~18% | =parse_line_of_range_f64_stack= |
+| ~16%+ | =ndarray::OwnedArcRepr::try_ensure_unique= (per-row Arc COW) |
+| ~7% | =ConFrameIterator::next= |
+
+So the decimal kernel already owns the float cost; further hand SIMD on digits
+is the wrong lever. The actionable structural cost was repeated Arc uniqueness
+checks while filling SoA rows.
+
+*Code change (default f64 positions):* fill a flat =Vec<f64>= during
+=parse_single_frame=, then =Array2Storage::from_f64_row_major= (one Arc wrap).
+Measured geomean ~1.05× vs the prior release default on the same harness
+(mixed per-case; not the headline win).
+
+*LLVM PGO (build-time, not a runtime feature):* instrument → train on the
+profile corpus → =-Cprofile-use=. Same harness, same host:
+
+| Build | Geomean vs stock release |
+|-------|---------------------------|
+| Flat fill only | ~1.05× |
+| PGO only (pre-flat train binary) | ~1.34× |
+| Flat fill + PGO | ~1.41× |
+
+Representative case (cuh2 ×100 string collect): stock **2.65 ms** → flat+PGO
+**1.73 ms** (~1.53×). Path-based =read_all_frames= (parallel) improves less
+(~1.13×) because it is already multi-threaded and I/O-adjacent.
+
+Reproduce: =bash benches/run_pgo_ab.sh= on a host with =llvm-profdata=. Optional:
+=perf record -g -- target/release/examples/profile_train once=.
+Default =cargo build --release= does **not** apply PGO; use the script (or
+equivalent =RUSTFLAGS=) when shipping a tuned binary.
+
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 

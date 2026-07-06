@@ -609,10 +609,21 @@ pub fn parse_single_frame<'a>(
     let validate = header.strict_validation;
     let total_atoms: usize = header.natms_per_type.iter().sum();
     let mut atom_data = Vec::with_capacity(total_atoms);
-    // SoA positions are primary numeric storage on the hot path (write once).
-    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    // SoA positions: default f64 fills a flat `Vec` then one Arc wrap (profile:
+    // per-row ArcArray mut checks were a real cost on multi-atom parse).
+    use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
-    let mut positions = FloatArray2::zeros(dt.positions, total_atoms, 3);
+    let f64_positions = dt.positions == ElementKind::Float64;
+    let mut pos_flat = if f64_positions {
+        vec![0.0f64; total_atoms.saturating_mul(3)]
+    } else {
+        Vec::new()
+    };
+    let mut positions_other = if f64_positions {
+        None
+    } else {
+        Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
+    };
 
     let mut global_atom_idx: u64 = 0;
     let mut atom_i = 0usize;
@@ -638,7 +649,14 @@ pub fn parse_single_frame<'a>(
                 (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
             };
             let xyz = [vals[0], vals[1], vals[2]];
-            positions.set_f64_row(atom_i, xyz);
+            if f64_positions {
+                let o = atom_i * 3;
+                pos_flat[o] = xyz[0];
+                pos_flat[o + 1] = xyz[1];
+                pos_flat[o + 2] = xyz[2];
+            } else if let Some(ref mut pos) = positions_other {
+                pos.set_f64_row(atom_i, xyz);
+            }
             atom_data.push(AtomDatum {
                 // This is a cheap reference-count increment, not a full string clone.
                 symbol: Arc::clone(&symbol),
@@ -655,6 +673,11 @@ pub fn parse_single_frame<'a>(
             atom_i += 1;
         }
     }
+    let positions = if f64_positions {
+        FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat)
+    } else {
+        positions_other.expect("non-f64 positions allocated")
+    };
     // Sections still attach to AoS; assemble uses prefilled positions (no second pos pass).
     Ok(crate::types::con_frame_from_atom_data_with_positions(
         header, atom_data, positions,
