@@ -182,3 +182,18 @@ fn test_read_all_frames_matches_iterator() {
     assert_eq!(frames[0].atom_data.len(), 4);
     assert_eq!(frames[1].atom_data.len(), 4);
 }
+
+#[test]
+fn test_count_frames_matches_read_all_len() {
+    let path = test_case!("tiny_multi_cuh2.con");
+    let n = iterators::count_frames(&path).expect("count_frames");
+    let frames = iterators::read_all_frames(&path).expect("read_all_frames");
+    assert_eq!(n, frames.len());
+    assert_eq!(n, 2);
+}
+
+#[test]
+fn test_count_frames_single() {
+    let path = test_case!("tiny_cuh2.con");
+    assert_eq!(iterators::count_frames(&path).expect("count"), 1);
+}

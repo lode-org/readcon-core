@@ -326,6 +326,26 @@ class TestConFrameConstructor:
         assert len(frames) == 2
         assert [len(frame) for frame in frames] == [4, 4]
 
+    def test_count_frames_and_streaming_matches_batch(self):
+        path = _resource("tiny_multi_cuh2.con")
+        assert readcon.count_frames(path) == 2
+        batch = readcon.read_all_frames(path)
+        streamed = list(readcon.iter_con(path))
+        assert len(streamed) == len(batch)
+        for a, b in zip(streamed, batch):
+            assert len(a) == len(b)
+            assert a.atoms[0].symbol == b.atoms[0].symbol
+            assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
+
+    def test_read_all_positions_shape_matches_atoms(self):
+        path = _resource("tiny_multi_cuh2.con")
+        positions = readcon.read_all_positions(path)
+        frames = readcon.read_all_frames(path)
+        assert len(positions) == len(frames)
+        for pos, fr in zip(positions, frames):
+            assert pos.shape == (len(fr.atoms), 3)
+            assert float(pos[0, 0]) == pytest.approx(fr.atoms[0].x)
+
 
 class TestMass:
     def test_mass_from_file(self):
