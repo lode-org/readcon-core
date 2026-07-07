@@ -393,10 +393,7 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
     Ok(frames?)
 }
 
-/// Count frames without building atom payloads (uses [`ConFrameIterator::forward_fast`]
-/// when possible, else [`ConFrameIterator::forward`]).
-///
-/// Prefer this over `read_all_frames(...).len()` when only the frame count is needed.
+/// Count frames without building atom payloads ([`ConFrameIterator::forward_fast`]).
 pub fn count_frames(path: &Path) -> Result<usize, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;

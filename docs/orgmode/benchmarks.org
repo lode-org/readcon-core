@@ -146,9 +146,10 @@ development tools, not publication-grade evidence.
 **Profiling tools (optional, developer-facing)**
 
 - =perf record -g -- … profile_train once= — sample-based cost centers (noisy;
-  use to pick *what* to inspect, not to quote a speedup).
-- =benches/run_pgo_ab.sh= / =examples/profile_train= — LLVM PGO train/use for a
-  *tuned binary*; default =cargo build --release= does not apply PGO.
+  use to pick *what* to inspect, not to quote a figure).
+- =benches/run_pgo_ab.sh= / =examples/profile_train= (=train= / =once= only) —
+  LLVM PGO train/use for an opt-in tuned binary; no wall-clock median report;
+  default =cargo build --release= does not apply PGO.
 - Criterion (=cargo bench --bench iterator_bench=) — microbench relative costs
   of float helpers, not end-to-end science.
 

@@ -1052,10 +1052,7 @@ impl PyConFrameIterator {
     }
 }
 
-/// Return a **streaming** iterator over frames from a path.
-///
-/// Prefer this over [`read_all_frames`] when you process frames one at a time:
-/// only one `ConFrame` / `PyConFrame` is built per `__next__` call.
+/// Stream full frames from a path (one `ConFrame` per step).
 #[pyfunction]
 fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     let path_owned = path.to_owned();
@@ -1075,7 +1072,7 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     })
 }
 
-/// Count frames without building atom / Python objects (skip walk).
+/// Count frames without materializing atom data (header/structure skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
