@@ -946,18 +946,12 @@ impl PyConFrame {
 }
 
 /// Read frames from a .con or .convel file path.
-/// Load a trajectory as full ``ConFrame`` objects (atoms, symbols, sections).
-///
-/// This is the multi-frame API. For streaming one frame at a time, use
-/// ``iter_con``. Coordinates live on each frame (SoA / per-atom fields)—there
-/// is no separate “coords-only” load path.
 #[pyfunction]
 #[pyo3(name = "read_all_frames")]
 fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
     read_con(py, path)
 }
 
-/// Same as ``read_all_frames`` (full ``ConFrame`` list).
 #[pyfunction]
 fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
@@ -1052,7 +1046,10 @@ impl PyConFrameIterator {
     }
 }
 
-/// Stream full frames from a path (one `ConFrame` per step).
+/// Return a **streaming** iterator over frames from a path.
+///
+/// Prefer this over [`read_all_frames`] when you process frames one at a time:
+/// only one `ConFrame` / `PyConFrame` is built per `__next__` call.
 #[pyfunction]
 fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     let path_owned = path.to_owned();
@@ -1072,7 +1069,7 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     })
 }
 
-/// Count frames without materializing atom data (header/structure skip walk).
+/// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
@@ -1498,10 +1495,6 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
 }
 
 /// readcon Python module implemented in Rust.
-///
-/// Trajectories are full ``ConFrame`` objects (``read_all_frames`` /
-/// ``iter_con`` / ``read_first_frame``). Use ``count_frames`` only when the
-/// payload is not needed.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

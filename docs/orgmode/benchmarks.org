@@ -127,31 +127,21 @@ development tools, not publication-grade evidence.
 - Coordinates on a *loaded* frame: SoA on =ConFrame= / Python =coords_array()=.
 - No separate public “coords-only” trajectory load.
 
-**Hot-path structure (shipped)**
+**Fast cut (what actually matters)**
 
-- Multi-frame parse: mmap above 64 KiB; Rayon when file size ≥ 48 KiB
-  (~parallel~ feature / Python wheels).
-- Decimals: =fast_float2= (Eisel–Lemire class); atom lines use byte scan +
-  =parse_partial= on =&[u8]=, not a hand-rolled digit SIMD parser.
-- Newline skip: =memchr= (=forward_fast= / shared =MemchrLines= cursor for full
-  parse and skip—no dual =str::Lines= view).
-- Default f64 positions: flat =Vec= fill then one Arc wrap
-  (=from_f64_row_major=); =con_frame_coords_only= for full-frame assembly
-  (masses by type run-length fill, atom ids one-shot).
-- Optional sections: =sync_arrays_from_atom_data= only when sections applied.
-- Python: =Python::detach= around Rust multi-frame parse so the GIL does not
-  block Rayon / other Python threads; =coords_array= is always a fresh view of
-  live atoms (no shared stale cache).
+1. *Full multi-frame load:* =read_all_frames= — mmap large files; **Rayon
+   multi-frame parse** when the buffer is ≥ 48 KiB (~parallel~ / Python wheels).
+   That is the primary throughput path.
+2. *Skip when you only need structure:* =count_frames= / =forward_fast= use
+   =memchr= newline walking (no atom materialize).
+3. *Decimals:* stack buffer + =fast_float2= on atom lines (not hand-rolled SIMD).
+4. *Python:* =Python::detach= around Rust parse so Rayon is not GIL-blocked;
+   stream with =iter_con= when you process one full frame at a time.
+5. *Coordinates after load:* =ConFrame= SoA / Python =coords_array()= on a full
+   frame—not a second load API.
 
-**Profiling tools (optional, developer-facing)**
-
-- =perf record -g -- … profile_train once= — sample-based cost centers (noisy;
-  use to pick *what* to inspect, not to quote a figure).
-- =benches/run_pgo_ab.sh= / =examples/profile_train= (=train= / =once= only) —
-  LLVM PGO train/use for an opt-in tuned binary; no wall-clock median report;
-  default =cargo build --release= does not apply PGO.
-- Criterion (=cargo bench --bench iterator_bench=) — microbench relative costs
-  of float helpers, not end-to-end science.
+Criterion (=cargo bench --bench iterator_bench=) and Cachegrind remain optional
+developer tools, not product claims.
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 

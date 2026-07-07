@@ -183,7 +183,7 @@ fn fast_float_microbench(c: &mut Criterion) {
 }
 
 fn multi_frame_parse_bench(c: &mut Criterion) {
-    // Realistic multi-atom multi-frame workload (SIMD-adjacent token scan lives here).
+    // Multi-atom multi-frame full-frame parse (sequential iterator path).
     let cuh2 = fs::read_to_string(test_case!("cuh2.con")).expect("cuh2 fixture");
     let multi: String = cuh2.repeat(30);
     let mut group = c.benchmark_group("MultiFrameParse");
