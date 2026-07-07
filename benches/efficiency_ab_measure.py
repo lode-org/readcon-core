@@ -26,7 +26,9 @@ def main(label, out_path):
             p.write_text(text * n)
             ps = str(p)
             m_batch = timeit(lambda ps=ps: readcon.read_all_frames(ps))
-            m_pos = timeit(lambda ps=ps: readcon.read_all_positions(ps))
+            m_coords = timeit(
+                lambda ps=ps: [f.coords_array() for f in readcon.read_all_frames(ps)]
+            )
             m_count = timeit(lambda ps=ps: readcon.count_frames(ps))
             cases.append(
                 dict(
@@ -34,12 +36,13 @@ def main(label, out_path):
                     n_frames=n,
                     bytes=p.stat().st_size,
                     batch_s=m_batch,
-                    pos_s=m_pos,
+                    pos_s=m_coords,
                     count_s=m_count,
                 )
             )
             print(
-                f"{label} {name} batch={m_batch*1e3:.3f}ms pos={m_pos*1e3:.3f}ms count={m_count*1e3:.3f}ms",
+                f"{label} {name} batch={m_batch*1e3:.3f}ms "
+                f"batch+coords_array={m_coords*1e3:.3f}ms count={m_count*1e3:.3f}ms",
                 flush=True,
             )
 

@@ -111,39 +111,31 @@ regardless of size, since mmap cannot decompress on the fly.
 
 ** Efficiency notes (hot paths)
 
-- Full multi-frame load: ~iterators::read_all_frames~ (mmap above 64 KiB; Rayon
-  multi-frame parse when file size ≥ 48 KiB under the ~parallel~ feature).
-- Prefer ~count_frames~ / ~forward~ / ~forward_fast~ when atom payloads are not
-  needed; ~I_refs~ for skip is substantially lower than full parse (Cachegrind
-  table).
-- Python: ~iter_con~ streams one frame per step; ~read_all_positions~ returns
-  numpy ~(N,3)~ arrays without building full ~Atom~ lists; ~read_all_frames~
-  remains the full-fidelity batch path.
+- Full multi-frame load is always full frames: ~iterators::read_all_frames~
+  (mmap above 64 KiB; Rayon multi-frame parse when file size ≥ 48 KiB under the
+  ~parallel~ feature). There is no separate “coords-only” public load path.
+- Prefer ~count_frames~ / ~forward~ / ~forward_fast~ when the atom payload is not
+  needed at all; ~I_refs~ for skip is substantially lower than full parse
+  (Cachegrind table).
+- Python: ~read_all_frames~ / ~iter_con~ / ~read_first_frame~ for ~ConFrame~
+  objects; coordinates via ~ConFrame.coords_array()~ on a loaded frame.
 
-Terra release profile (host rgam5terra, median of 11 after warmups; artifact
-=benches/results/efficiency_apis_terra.json=): =count_frames= is ~6–12% of
-=read_all_frames= wall time; =read_all_positions= is ~0.3–0.5× batch on the
-cuh2 / large-tiny ladders; streaming =iter_con= that materializes every frame
-is not faster than batch on parallel-sized files (sequential path), but avoids
-holding the full =PyConFrame= list at once. Criterion on the same host:
-fast-float2 coordinate microbench ~2× std parse (see =cargo bench --bench iterator_bench=).
+Terra release profile (host rgam5terra; historical artifacts under
+=benches/results/efficiency_*=): =count_frames= is a small fraction of
+=read_all_frames= wall time. Streaming =iter_con= that materializes every frame
+is not faster than batch on parallel-sized files, but avoids holding the full
+=PyConFrame= list at once. Criterion: fast-float2 coordinate microbench ~2× std
+parse (see =cargo bench --bench iterator_bench=).
 
 Python binding efficiency (terra same-session A/B; artifact
 =benches/results/efficiency_ab_detach_bulk_terra.json=):
 
-- *SLOW control:* GIL held for the entire Rust parse; =read_all_positions=
-  uses a per-row =as_f64_row= loop.
 - *FAST (shipped):* =Python::detach= during Rust multi-frame I/O/parse so Rayon
-  and other Python threads are not blocked; =read_all_positions= uses a one-shot
-  contiguous f64 SoA copy when storage is already f64.
-- *Measured (median 15 after 4 warmups on the same host/session):* positions
-  wall-clock speedups about 1.11–1.26× on the tiny_n200 / cuh2 ladders; concurrent
-  pure-Python worker throughput during long multi-frame loads about 1.44× higher
-  with detach (worker ticks/s). Batch full-frame materialize is not the primary
-  claim for bulk SoA (it still builds Python atoms for =read_all_frames=).
-- Streaming =iter_con= remains for incremental use, not a wall-clock win vs parallel
-  batch when every frame is materialized. =coords_array= always returns a fresh
-  ndarray from live atoms (no shared cache).
+  and other Python threads are not blocked during =read_all_frames=.
+- Concurrent pure-Python worker throughput during long multi-frame loads was
+  about 1.44× higher with detach (worker ticks/s) in that harness.
+- Streaming =iter_con= remains for incremental use. =coords_array= always returns
+  a fresh ndarray from live atoms (no shared cache).
 
 SIMD-adjacent atom-line path (terra same-session A/B; artifact
 =benches/results/simd_ab_terra.json=):
@@ -231,29 +223,9 @@ Same pure-Rust harness, stock release (no PGO), rgam5terra:
 | path =read_all_frames= ×100 | 0.63 → 0.60 ms | ~1.05× |
 
 Geomean **~1.27×** vs the session stock release (and **~1.21×** on top of the
-flat SoA fill alone). Remaining cycles on the *full-frame* path are dominated by
-=fast_float2= and AoS =AtomDatum= materialization/drop.
-
-** Coordinates-only API (different product, not a second “read all”)
-
-Public story for end users:
-
-| Need | API |
-|------|-----|
-| Full frames (atoms, symbols, sections, metadata) | =read_all_frames= / =ConFrameIterator= / Python =iter_con= |
-| Only =(N,3)= coordinate matrices | Rust =read_frame_coordinates=; Python =read_coords= |
-| Frame count only | =count_frames= |
-
-=read_all_positions= / =read_all_positions_str= remain **compatibility aliases**
-for =read_frame_coordinates*=; prefer the clearer names in new code. This is
-**not** “a faster =read_all_frames=”: return type and semantics differ.
-
-Implementation (artifact =benches/results/next_design_terra.json=):
-=parse_single_frame_positions= shares the full-frame float kernel, skips optional
-sections by structure, never builds =AtomDatum=. Measured geomean ~**3×** cheaper
-than full-frame collect when only coordinates are requested (multi-atom ladders
-on rgam5terra). Tests assert coordinate matrices bit-agree with full-frame
-=positions= on fixtures.
+flat SoA fill alone). The public model remains **full frames only**
+(=read_all_frames= / =ConFrameIterator=); internal assembly shortcuts
+(=con_frame_coords_only=, flat f64 fill) do not expose a reduced product.
 
 
 ** Multi-format trajectory (CON vs XYZ-class peers)

@@ -337,12 +337,12 @@ class TestConFrameConstructor:
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
-    def test_read_all_positions_shape_matches_atoms(self):
+    def test_coords_array_matches_atoms_after_full_frame_load(self):
         path = _resource("tiny_multi_cuh2.con")
-        positions = readcon.read_all_positions(path)
         frames = readcon.read_all_frames(path)
-        assert len(positions) == len(frames)
-        for pos, fr in zip(positions, frames):
+        assert len(frames) == 2
+        for fr in frames:
+            pos = fr.coords_array()
             assert pos.shape == (len(fr.atoms), 3)
             assert float(pos[0, 0]) == pytest.approx(fr.atoms[0].x)
 
