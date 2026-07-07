@@ -127,21 +127,25 @@ development tools, not publication-grade evidence.
 - Coordinates on a *loaded* frame: SoA on =ConFrame= / Python =coords_array()=.
 - No separate public “coords-only” trajectory load.
 
-**Fast cut (what actually matters)**
+**Fast cut (public model: full frames only)**
 
 1. *Full multi-frame load:* =read_all_frames= — mmap large files; **Rayon
    multi-frame parse** when the buffer is ≥ 48 KiB (~parallel~ / Python wheels).
-   That is the primary throughput path.
-2. *Skip when you only need structure:* =count_frames= / =forward_fast= use
-   =memchr= newline walking (no atom materialize).
-3. *Decimals:* stack buffer + =fast_float2= on atom lines (not hand-rolled SIMD).
-4. *Python:* =Python::detach= around Rust parse so Rayon is not GIL-blocked;
-   stream with =iter_con= when you process one full frame at a time.
-5. *Coordinates after load:* =ConFrame= SoA / Python =coords_array()= on a full
-   frame—not a second load API.
+2. *Skip when you only need a count:* =count_frames= / =forward_fast= (=memchr=
+   newline walk, no atom materialize).
+3. *Python:* =Python::detach= around Rust multi-frame parse; =iter_con= streams
+   full frames; coordinates via =coords_array()= on a loaded frame.
 
-Criterion (=cargo bench --bench iterator_bench=) and Cachegrind remain optional
-developer tools, not product claims.
+**Internal parse implementation (users do not see these)**
+
+- Shared =MemchrLines= cursor for full parse and skip (one buffer view).
+- Atom lines: single-pass byte scan + =fast_float2::parse_partial= (stack
+  buffer; same float kernel, no extra public API).
+- Default f64 positions: flat =Vec= then one Arc wrap; full-frame assembly
+  (=con_frame_coords_only=) fills masses/ids without a second “any section?”
+  scan when sections are absent; section SoA sync only when sections applied.
+
+Criterion / Cachegrind remain optional developer tools, not product claims.
 
 ** Multi-format trajectory (CON vs XYZ-class peers)
 
