@@ -9,6 +9,8 @@ pub mod helpers;
 pub mod index_proj;
 pub mod iterators;
 pub mod parser;
+#[cfg(feature = "grammar")]
+pub mod grammar;
 pub mod types;
 pub mod storage_dtype;
 pub mod units;

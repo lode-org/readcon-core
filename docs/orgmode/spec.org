@@ -8,6 +8,7 @@
 - Date :: 2026-06-27
 - Status :: Stable
 - Reference implementation :: [[https://github.com/lode-org/readcon-core][readcon-core]]
+- Surface grammar (PEG) :: =grammar/con.pest= (Pest); validate with =cargo test --features grammar=
 
 This document defines versions 2 and 3 of the CON file format; version 3
 is the current version and adds required =units= metadata on top of the
@@ -40,6 +41,25 @@ add velocities, forces, or other per-atom vector/scalar data.
 CON files MUST use UTF-8. Line endings MAY be LF (=\n=) or CRLF
 (=\r\n=); parsers MUST accept both. All numeric values use ASCII
 decimal representation (no locale-dependent formatting).
+
+* Surface grammar (PEG)
+:PROPERTIES:
+:CUSTOM_ID: surface-grammar
+:END:
+
+The machine-readable surface syntax for CON/convel lives in the repository at
+=grammar/con.pest= (a [[https://pest.rs][Pest]] PEG). It is the formal companion to this
+prose specification for *syntactic* structure (header layout, type blocks,
+optional section blocks, multi-frame concatenation).
+
+The reference implementation in =readcon-core= does **not** use the PEG on the
+I/O hot path; it implements the same surface rules plus semantic checks (atom
+counts, metadata JSON, validation flags). Enable the =grammar= Cargo feature to
+parse buffers with the PEG for tooling or tests:
+
+#+begin_example
+cargo test --features grammar
+#+end_example
 
 * Frame structure
 

@@ -1,0 +1,103 @@
+// CON / convel surface syntax (PEG / Pest).
+//
+// Aligns with docs/orgmode/spec.org (CON v2–v3). This grammar defines the
+// *syntactic* shape of one or more concatenated frames. Semantic rules
+// (atom counts matching header N_i, Component index order, JSON metadata
+// keys, fixed-mask values, validate=true geometry) are enforced by the
+// reference implementation in src/parser.rs — not by this PEG alone.
+//
+// Hot-path I/O does not depend on Pest; this file is the formal grammar
+// artifact shipped with the repo, validated in tests via the optional
+// `grammar` feature / dev-dependencies.
+
+/// One or more frames, no inter-frame marker (frames are concatenated).
+file = { SOI ~ frame+ ~ EOI }
+
+/// Header + per-type coordinate blocks + optional section blocks.
+frame = { header ~ type_block+ ~ section* }
+
+/// Nine-line header (lines 1–9 of the specification).
+header = {
+    free_line ~ NL
+    ~ free_line ~ NL
+    ~ float3_line
+    ~ float3_line
+    ~ free_line ~ NL
+    ~ free_line ~ NL
+    ~ integer_line
+    ~ integer_list_line
+    ~ float_list_line
+}
+
+/// Free-form line (generator comment, JSON metadata, or reserved text).
+/// Does not consume the trailing newline.
+free_line = { (!NL ~ ANY)* }
+
+float3_line = { ws* ~ float ~ ws+ ~ float ~ ws+ ~ float ~ ws* ~ NL }
+
+integer_line = { ws* ~ integer ~ ws* ~ NL }
+
+integer_list_line = { ws* ~ integer ~ (ws+ ~ integer)* ~ ws* ~ NL }
+
+float_list_line = { ws* ~ float ~ (ws+ ~ float)* ~ ws* ~ NL }
+
+/// One chemical-type block: symbol, "Coordinates of Component k", atom lines.
+type_block = {
+    symbol_line ~ NL
+    ~ coord_label ~ NL
+    ~ atom_line ~ (NL ~ atom_line)*
+    ~ NL?
+}
+
+symbol_line = { ws* ~ symbol ~ ws* }
+
+/// Element / type symbol (letters, optional trailing digits/underscore).
+symbol = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+coord_label = {
+    ws* ~ "Coordinates of Component" ~ ws+ ~ integer ~ ws*
+}
+
+/// x y z fixed_mask [atom_id]
+atom_line = {
+    ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
+    ~ ws+ ~ integer
+    ~ (ws+ ~ integer)?
+    ~ ws*
+}
+
+/// Optional velocity / force / energy section: blank separator + type blocks.
+/// After a type_block's trailing newline, one more newline is the blank line
+/// (empty / whitespace-only) required by the specification before a section.
+section = {
+    ws* ~ NL
+    ~ section_type_block+
+}
+
+section_type_block = {
+    symbol_line ~ NL
+    ~ section_label ~ NL
+    ~ atom_line ~ (NL ~ atom_line)*
+    ~ NL?
+}
+
+section_label = {
+    ws* ~ section_kind ~ ws+ ~ "of Component" ~ ws+ ~ integer ~ ws*
+}
+
+section_kind = {
+    "Velocities" | "Forces" | "Energies"
+}
+
+/// ASCII decimal float (optional sign, fraction, scientific exponent).
+float = @{
+    "-"?
+    ~ ASCII_DIGIT+
+    ~ ("." ~ ASCII_DIGIT*)?
+    ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+
+ws = _{ " " | "\t" }
+NL = _{ "\r\n" | "\n" }
