@@ -948,9 +948,9 @@ impl PyConFrame {
 /// Read frames from a .con or .convel file path.
 /// Load a trajectory as full ``ConFrame`` objects (atoms, symbols, sections).
 ///
-/// This is the default multi-frame API. For coordinate matrices only, use
-/// ``read_coords`` (different return type). For streaming one frame at a time,
-/// use ``iter_con``.
+/// This is the multi-frame API. For streaming one frame at a time, use
+/// ``iter_con``. Coordinates live on each frame (SoA / per-atom fields)—there
+/// is no separate “coords-only” load path.
 #[pyfunction]
 #[pyo3(name = "read_all_frames")]
 fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
@@ -1083,48 +1083,6 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
         crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
     })
     .map_err(PyIOError::new_err)
-}
-
-/// Load **only** coordinates: a list of numpy `(N, 3) float64` arrays (one per
-/// frame). This is **not** a list of `ConFrame` objects.
-///
-/// **When to use what (Python):**
-///
-/// - Need atoms, symbols, fixed flags, velocities, forces, metadata →
-///   ``read_all_frames`` / ``iter_con`` / ``read_first_frame``.
-/// - Need only ``xyz`` matrices for analysis → ``read_coords`` (this function).
-/// - Need only how many frames → ``count_frames``.
-///
-/// Do not treat this as “a faster ``read_all_frames``”: the return type and
-/// semantics differ (no symbols, no sections, no Python atom lists).
-#[pyfunction]
-#[pyo3(name = "read_coords")]
-fn read_coords<'py>(
-    py: Python<'py>,
-    path: &str,
-) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
-    let path_owned = path.to_owned();
-    let matrices = py
-        .detach(|| {
-            crate::iterators::read_frame_coordinates(Path::new(&path_owned))
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
-    let mut out = Vec::with_capacity(matrices.len());
-    for mat in matrices {
-        out.push(mat.into_pyarray(py));
-    }
-    Ok(out)
-}
-
-/// Compatibility alias for [`read_coords`]. Prefer ``read_coords`` in new code.
-#[pyfunction]
-#[pyo3(name = "read_all_positions")]
-fn read_all_positions_alias<'py>(
-    py: Python<'py>,
-    path: &str,
-) -> PyResult<Vec<Bound<'py, PyArray2<f64>>>> {
-    read_coords(py, path)
 }
 
 /// Write frames to a .con or .convel file path.
@@ -1544,28 +1502,13 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
 
 /// readcon Python module implemented in Rust.
 ///
-/// Default mental model: **frames are full `ConFrame` objects**. Use
-/// ``read_all_frames`` / ``iter_con`` unless you only need coordinate matrices
-/// (``read_coords``) or a frame count (``count_frames``).
+/// Trajectories are full ``ConFrame`` objects (``read_all_frames`` /
+/// ``iter_con`` / ``read_first_frame``). Use ``count_frames`` only when the
+/// payload is not needed.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
-    m.add(
-        "__doc__",
-        "CON/convel I/O.\n\
-         \n\
-         Full frames (default):\n\
-           read_all_frames(path)  -> list[ConFrame]\n\
-           iter_con(path)         -> iterator of ConFrame\n\
-           read_first_frame(path) -> ConFrame\n\
-         \n\
-         Reduced products (different return types, not faster aliases):\n\
-           read_coords(path)  -> list[ndarray (N,3)]  coordinates only\n\
-           count_frames(path) -> int\n\
-         \n\
-         read_all_positions is a compatibility alias for read_coords.\n",
-    )?;
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
@@ -1575,8 +1518,6 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
     m.add_function(wrap_pyfunction!(count_frames, m)?)?;
-    m.add_function(wrap_pyfunction!(read_coords, m)?)?;
-    m.add_function(wrap_pyfunction!(read_all_positions_alias, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;

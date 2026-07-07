@@ -64,7 +64,9 @@ def main():
                 lambda p=str(path): [f for f in readcon.iter_con(p)]
             )
             t_count = timeit(lambda p=str(path): readcon.count_frames(p))
-            t_pos = timeit(lambda p=str(path): readcon.read_all_positions(p))
+            t_coords = timeit(
+                lambda p=str(path): [f.coords_array() for f in readcon.read_all_frames(p)]
+            )
             # first frame only
             t_first = timeit(lambda p=str(path): readcon.read_first_frame(p))
 
@@ -77,10 +79,10 @@ def main():
                 "read_all_frames_median_s": m_batch,
                 "iter_con_materialize_median_s": med(t_stream),
                 "count_frames_median_s": med(t_count),
-                "read_all_positions_median_s": med(t_pos),
+                "batch_plus_coords_array_median_s": med(t_coords),
                 "read_first_frame_median_s": med(t_first),
                 "ratio_count_vs_batch": med(t_count) / m_batch if m_batch else None,
-                "ratio_positions_vs_batch": med(t_pos) / m_batch if m_batch else None,
+                "ratio_coords_extract_vs_batch": med(t_coords) / m_batch if m_batch else None,
                 "ratio_stream_vs_batch": med(t_stream) / m_batch if m_batch else None,
                 "batch_frames_per_s": n / m_batch if m_batch else None,
             }
@@ -88,10 +90,10 @@ def main():
             print(
                 f"{name} bytes={size} par={row['parallel_gate_48kib']} "
                 f"batch={m_batch*1e3:.3f}ms stream={med(t_stream)*1e3:.3f}ms "
-                f"count={med(t_count)*1e3:.3f}ms pos={med(t_pos)*1e3:.3f}ms "
+                f"count={med(t_count)*1e3:.3f}ms coords_extract={med(t_coords)*1e3:.3f}ms "
                 f"first={med(t_first)*1e3:.3f}ms "
                 f"count/batch={row['ratio_count_vs_batch']:.3f} "
-                f"pos/batch={row['ratio_positions_vs_batch']:.3f}",
+                f"coords_extract/batch={row['ratio_coords_extract_vs_batch']:.3f}",
                 flush=True,
             )
 

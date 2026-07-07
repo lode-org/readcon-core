@@ -31,15 +31,17 @@ def main():
                 p=str(path)
                 m_batch=timeit(lambda p=p: readcon.read_all_frames(p))
                 m_count=timeit(lambda p=p: readcon.count_frames(p))
-                m_pos=timeit(lambda p=p: readcon.read_all_positions(p))
+                m_coords=timeit(lambda p=p: [f.coords_array() for f in readcon.read_all_frames(p)])
                 m_first=timeit(lambda p=p: readcon.read_first_frame(p))
                 row=dict(case=name,n_frames=n,bytes=size,parallel_gate_48kib=size>=48*1024,
                     read_all_frames_median_s=m_batch,count_frames_median_s=m_count,
-                    read_all_positions_median_s=m_pos,read_first_frame_median_s=m_first,
-                    ratio_count_vs_batch=m_count/m_batch,ratio_positions_vs_batch=m_pos/m_batch)
+                    batch_plus_coords_array_median_s=m_coords,read_first_frame_median_s=m_first,
+                    ratio_count_vs_batch=m_count/m_batch,ratio_coords_extract_vs_batch=m_coords/m_batch)
                 rows.append(row)
-                print(f"trial{trial} {name} batch={m_batch*1e3:.3f}ms count={m_count*1e3:.3f}ms pos={m_pos*1e3:.3f}ms "
-                      f"count/b={row['ratio_count_vs_batch']:.3f} pos/b={row['ratio_positions_vs_batch']:.3f}", flush=True)
+                print(f"trial{trial} {name} batch={m_batch*1e3:.3f}ms count={m_count*1e3:.3f}ms "
+                      f"coords_extract={m_coords*1e3:.3f}ms "
+                      f"count/b={row['ratio_count_vs_batch']:.3f} "
+                      f"coords/b={row['ratio_coords_extract_vs_batch']:.3f}", flush=True)
         all_trials.append(rows)
     # median of medians per case
     summary=[]
@@ -51,10 +53,10 @@ def main():
             parallel_gate_48kib=all_trials[0][i]["parallel_gate_48kib"],
             read_all_frames_median_s=col("read_all_frames_median_s"),
             count_frames_median_s=col("count_frames_median_s"),
-            read_all_positions_median_s=col("read_all_positions_median_s"),
+            batch_plus_coords_array_median_s=col("batch_plus_coords_array_median_s"),
             read_first_frame_median_s=col("read_first_frame_median_s"),
             ratio_count_vs_batch=col("ratio_count_vs_batch"),
-            ratio_positions_vs_batch=col("ratio_positions_vs_batch"),
+            ratio_coords_extract_vs_batch=col("ratio_coords_extract_vs_batch"),
         ))
     result=dict(host="rg.terra",protocol="median-of-medians over 3 trials; each trial median of 21 after 5 warmups",
                 readcon=readcon.__file__,cases=summary,trials=all_trials)
