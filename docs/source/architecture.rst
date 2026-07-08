@@ -267,22 +267,30 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 Design rationale
 ----------------
 
-``readcon-core`` implements a versioned CON/convel contract behind an hourglass
+``readcon-core`` is the **definitive CON / convel interchange layer** for eOn and
+LODE multi-language pipelines: a versioned on-disk contract behind an hourglass
 C ABI so optimizers and drivers in Fortran, C, C++, Julia, and Python share
 one semantics surface without requiring a Python runtime on the I/O path.
-Optional chemfiles ingress maps foreign formats into ``ConFrame``; optional
-metatensor/DLPack exports provide tensor hand-off without a second
-authoritative on-disk representation. Lean builds expose optional features as
-stubs (``RKR_STATUS_FEATURE_DISABLED``).
+Lossless round-trip covers three-axis constraints, forces / velocities,
+``atom_id``, and JSON metadata. Optional chemfiles ingress maps foreign formats
+into ``ConFrame``; optional metatensor/DLPack exports provide tensor hand-off
+without a second authoritative on-disk representation. Lean builds expose
+optional features as stubs (``RKR_STATUS_FEATURE_DISABLED``).
 
 ``readcon-db`` provides multi-reader campaign indexes while retaining UTF-8 CON
 as durable identity (hash, dedup, reindex). ASE remains effective for
 calculators and interactive analysis; optional ``to_ase`` is calculator
-hand-off when CON sections must be preserved under multi-reader screening.
+hand-off—not campaign storage—when CON sections must be preserved under
+multi-reader screening.
+
+**State-of-the-art** here means domain-scoped excellence (CON interchange +
+hourglass ABI + measured parse discipline), not generic MD-format supremacy.
+Speed claims map to Cachegrind I-refs and equal-geometry harnesses only
+(:doc:`benchmarks`).
 
 Format evolution and layout alternatives: :doc:`evolution`.
 Q&A: :doc:`faq`. Spec: :doc:`spec`.
-Measured interchange and campaign comparisons: :doc:`benchmarks`.
+Measured interchange comparisons: :doc:`benchmarks`.
 Engine-native binary trajectories remain appropriate high-density encodings
 inside continuous MD; they are complementary to a multi-language CON
 checkpoint and campaign layer.

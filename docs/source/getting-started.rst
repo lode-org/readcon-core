@@ -25,27 +25,56 @@ Getting started
    Start here for install and the shortest paths. Top nav *Convert* is the
    conversion tutorial and recipes.
 
+Positioning (what this library is for)
+--------------------------------------
+
+``readcon-core`` is the **definitive CON / convel interchange layer** for eOn and
+LODE multi-language pipelines: lossless section fidelity, hourglass C ABI
+across Rust / C / C++ / Python / Julia / Fortran, optional chemfiles ingress,
+and a companion campaign store (``readcon-db``) that keeps CON text authoritative.
+It is state-of-the-art \*in that domain\*—not a generic claim of fastest structure
+I/O across all of computational chemistry.
+
+.. table::
+
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+    | Differentiator               | Vs legacy / peers                                                                                                                     |
+    +==============================+=======================================================================================================================================+
+    | Lossless CON round-trip      | Constraints, forces, velocities, ``atom_id``, JSON metadata survive read→write (legacy readCon / lean XYZ drop or underspecify these) |
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+    | Hourglass multi-language ABI | One ``rkr_*`` surface; no Python interpreter required on the optimizer I/O path                                                       |
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+    | Measured speed               | CI Cachegrind I-refs + equal-geometry harnesses vs ASE CON and C sscanf—see :doc:`benchmarks`                        |
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+    | Chemfiles as ingress only    | XYZ / PDB / GRO → CON; no second on-disk CON dialect                                                                                  |
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+    | Campaign companion           | ``readcon-db`` indexes multi-trajectory corpora; blobs remain CON text decoded by this crate                                          |
+    +------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+
+
 When to use what (reviewer / practitioner map)
 ----------------------------------------------
 
 .. table::
 
-    +----------------------------------------------+----------------------------------------------------+
-    | Need                                         | Use                                                |
-    +==============================================+====================================================+
-    | Optimizer checkpoint with constraints/forces | CON via ``readcon`` / ``readcon-core``             |
-    +----------------------------------------------+----------------------------------------------------+
-    | Import XYZ/PDB/GRO into CON                  | Optional chemfiles build (``readcon-chemfiles``)   |
-    +----------------------------------------------+----------------------------------------------------+
-    | Calculator hand-off to ASE                   | Optional ASE adapters only—not campaign storage    |
-    +----------------------------------------------+----------------------------------------------------+
-    | Indexed multi-trajectory campaign            | Companion ``readcon-db`` (CON blobs authoritative) |
-    +----------------------------------------------+----------------------------------------------------+
-    | Lean C/Fortran link without converters       | Default features (no chemfiles/cuda required)      |
-    +----------------------------------------------+----------------------------------------------------+
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Need                                         | Use                                                            |
+    +==============================================+================================================================+
+    | Optimizer checkpoint with constraints/forces | CON via ``readcon`` / ``readcon-core``                         |
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Import XYZ/PDB/GRO into CON                  | Optional chemfiles build (``readcon-chemfiles``)               |
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Calculator hand-off to ASE                   | Optional ASE adapters only—not campaign storage                |
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Indexed multi-trajectory campaign            | Companion ``readcon-db`` (CON blobs authoritative)             |
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Lean C/Fortran link without converters       | Default features (no chemfiles/cuda required)                  |
+    +----------------------------------------------+----------------------------------------------------------------+
+    | Continuous MD binary trajectories            | Engine-native XTC/TRR/DCD (complementary; not CON interchange) |
+    +----------------------------------------------+----------------------------------------------------------------+
 
 Design **why** and format evolution: :doc:`architecture`,
 :doc:`evolution`, :doc:`faq`, :doc:`spec`.
+Speed evidence and methodology: :doc:`benchmarks`.
 
 Install
 -------
