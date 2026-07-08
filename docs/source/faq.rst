@@ -10,32 +10,32 @@ What CON is for
 CON is the atomic configuration format this stack is pushing into everything
 that needs a durable structure on disk: optimizers, potential drivers,
 analysis, campaign stores, and ML hand-off. One frame keeps cell, constraints,
-forces, velocities, ``atom_id``, and JSON metadata so tools stop inventing
+``atom_id``, optional per-atom sections, and JSON metadata so tools stop inventing
 private dumps.
 
 .. table::
 
-    +--------------------------+--------------------------------------------------------------+
-    | On disk                  | Role                                                         |
-    +==========================+==============================================================+
-    | Cell + angles            | Periodic box                                                 |
-    +--------------------------+--------------------------------------------------------------+
-    | Type-grouped coordinates | Stable ``head``-able layout                                  |
-    +--------------------------+--------------------------------------------------------------+
-    | Column 4 fixed mask      | Per-direction constraints (bitmask 0–7)                      |
-    +--------------------------+--------------------------------------------------------------+
-    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching         |
-    +--------------------------+--------------------------------------------------------------+
-    | Optional sections        | Velocities, forces, per-atom energies                        |
-    +--------------------------+--------------------------------------------------------------+
-    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
-    +--------------------------+--------------------------------------------------------------+
+    +--------------------------+----------------------------------------------------------------------------+
+    | On disk                  | Role                                                                       |
+    +==========================+============================================================================+
+    | Cell + angles            | Periodic box                                                               |
+    +--------------------------+----------------------------------------------------------------------------+
+    | Type-grouped coordinates | Stable ``head``-able layout                                                |
+    +--------------------------+----------------------------------------------------------------------------+
+    | Column 4 fixed mask      | Per-direction constraints (bitmask 0–7)                                    |
+    +--------------------------+----------------------------------------------------------------------------+
+    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching                       |
+    +--------------------------+----------------------------------------------------------------------------+
+    | Optional sections        | Velocities, forces, energies, charges, spins, magmoms (v2/v3 ``sections``) |
+    +--------------------------+----------------------------------------------------------------------------+
+    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …               |
+    +--------------------------+----------------------------------------------------------------------------+
 
 Saddle, dimer, and NEB pipelines already depend on that payload. ``readcon-core``
 is how CON spreads: formalized spec v2–v3, hourglass ``rkr_*`` ABI in every
 major language, chemfiles **into** CON, DLPack / metatensor **out** of CON,
 ``index_proj`` + ``readcon-db`` for corpora that stay CON text. Spec:
-:doc:`spec`. Design history: :doc:`evolution`.
+`spec.org <spec.rst>`_. Design history: `evolution.org <evolution.rst>`_.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -129,7 +129,7 @@ How fast is readcon-core?
 2. **CON peers** (``benches/compare_readers.py``). Same CON text vs ASE
    ``ase.io.eon`` and eOn-style C sscanf. Historical host snapshot on a 218×100
    trajectory: readcon about 8× ASE CON and about 2× C sscanf; re-run for your
-   machine. See :doc:`benchmarks`.
+   machine. See `benchmarks <benchmarks.rst>`_.
 
 Hot path: **fast-float2** on atom lines, **mmap** for large trajectories,
 ``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /
@@ -138,24 +138,36 @@ Hot path: **fast-float2** on atom lines, **mmap** for large trajectories,
 What is the sections mechanism?
 -------------------------------
 
-Version 2 files can include per-atom data beyond coordinates. Each
-additional section (velocities, forces) follows the same block
-structure as coordinates: blank separator, symbol line, label line,
-data lines.
+Version 2+ files can include per-atom data beyond coordinates. Each
+additional section follows the same block structure as coordinates:
+blank separator, symbol line, label line, data lines.
 
 The ``sections`` key in the JSON metadata declares which sections exist
-and their order:
+and their order. Known names on the v2/v3 surface:
+
+.. table::
+
+    +-----------------------------------------+--------------------------------+
+    | Name                                    | Layout                         |
+    +=========================================+================================+
+    | ``velocities``, ``forces``, ``magmoms`` | 3-vector + fixed + ``atom_id`` |
+    +-----------------------------------------+--------------------------------+
+    | ``energies``, ``charges``, ``spins``    | scalar + fixed + ``atom_id``   |
+    +-----------------------------------------+--------------------------------+
 
 ::
 
-    {"con_spec_version":2,"sections":["velocities","forces"]}
+    {"con_spec_version":2,"sections":["velocities","forces","charges"]}
+
+Optional physics blocks such as ``charges`` / ``spins`` / ``magmoms`` use the same
+declared-section channel; they do not require a new ``con_spec_version``.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
 separator):
 
 - Declared sections fix what the reader must consume
 
-- New section types need no positional guesswork
+- New section names need no positional guesswork once reserved in the spec
 
 - Section order is explicit
 
@@ -184,31 +196,38 @@ integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
-Can I store forces and energies?
---------------------------------
+Can I store forces, energies, charges, spins, magmoms?
+------------------------------------------------------
 
-Yes, in two complementary places:
+Yes. Per-frame total energy lives in JSON under the ``energy`` key.
+Per-atom data uses declared ``sections``:
 
-- **Per-frame total energy** lives in the JSON metadata under the
-  ``energy`` key.
+- **Forces** (3-vector): ``sections`` includes ``forces``
 
-- **Forces** are a per-atom vector section, declared via ``sections``:
+- **Per-atom energies** (scalar): ``energies``
+
+- **Charges** / **spins** (scalar): ``charges``, ``spins``
+
+- **Magnetic moments** (3-vector): ``magmoms``
 
 ::
 
     {"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
 
 For ML potentials that decompose total energy into per-atom
-contributions, declare the ``energies`` section alongside ``forces`` and
-emit one scalar per atom in an ``Energies of Component i`` block:
+contributions, declare ``energies`` alongside ``forces``:
 
 ::
 
     {"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
 
+Charges, spins, and magmoms use the same wire format: list them in
+``sections`` and emit the matching component blocks (see `spec.org <spec.rst>`_).
+Example fixture: ``resources/test/tiny_cuh2_charges_spins_magmoms.con``.
+
 The per-frame ``energy`` metadata key SHOULD equal the sum of the
-per-atom ``energies`` section when both are present. Forces require
-potential identification (the ``potential`` key) so downstream tools
+per-atom ``energies`` section when both are present. Frames with forces
+SHOULD identify the potential (``potential`` key) so downstream tools
 know how to interpret the values.
 
 Does readcon-core support compression?

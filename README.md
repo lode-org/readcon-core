@@ -1,35 +1,35 @@
 
 # Table of Contents
 
-1.  [About](#org491d0f1)
-    1.  [Features](#org4244b82)
-    2.  [Install](#orgff0a0bd)
-    3.  [Tutorial](#orgb706010)
-    4.  [Design Decisions](#orgf1506d0)
-        1.  [FFI Layer](#org2b73fd7)
-    5.  [Specification](#org7854838)
-        1.  [CON format](#orgb1cf2dc)
-        2.  [convel format](#org047cabc)
-    6.  [Capabilities](#orgb0cd649)
-    7.  [Citation](#orgf3e93d7)
-2.  [License](#org42ba638)
+1.  [About](#orgb2f4773)
+    1.  [Features](#orgbdedcad)
+    2.  [Install](#orgc709ba8)
+    3.  [Tutorial](#orga81d341)
+    4.  [Design Decisions](#org4cd74c9)
+        1.  [FFI Layer](#org06cfdd3)
+    5.  [Specification](#org0a92def)
+        1.  [CON format](#org500121e)
+        2.  [convel format](#org533d96c)
+    6.  [Capabilities](#orga1264fd)
+    7.  [Citation](#org6a688da)
+2.  [License](#org444deed)
 
 
-<a id="org491d0f1"></a>
+<a id="orgb2f4773"></a>
 
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
-The point of the stack is to **put CON everywhere**: every optimizer, potential
-driver, analysis tool, campaign store, and ML hand-off that needs a durable
-atomic configuration with constraints, forces, and identity.
+This stack **puts CON everywhere**: every optimizer, potential driver, analysis
+tool, campaign store, and ML hand-off that needs a durable atomic configuration
+with constraints, forces, and identity.
 
 CON is human-readable and complete on one frame: cell, type-grouped
-coordinates, per-direction fixed masks, column-5 `atom_id`, optional velocity /
-force / energy sections, JSON metadata (spec v2–v3,
-[docs/orgmode/spec.org](docs/orgmode/spec.md)). That payload is why
-saddle, dimer, and NEB codes already work on CON; the library exists so the
-rest of the atomistic stack adopts the same file.
+coordinates, per-direction fixed masks, column-5 `atom_id`, optional per-atom
+sections (velocities, forces, energies, charges, spins, magmoms), and JSON
+metadata (spec v2–v3, [docs/orgmode/spec.org](docs/orgmode/spec.md)).
+That payload is why saddle, dimer, and NEB codes already work on CON; the
+library exists so the rest of the atomistic stack adopts the same file.
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -82,26 +82,28 @@ memory.
 
 Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 `benches/compare_readers.py`. See
-[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
+[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.md).
 
 
-<a id="org4244b82"></a>
+<a id="orgbdedcad"></a>
 
 ## Features
 
--   **CON and convel:** Coordinates; velocities auto-detected or declared in `sections`.
+-   **CON and convel:** Coordinates; optional sections declared in `sections`
+    (velocities, forces, energies, charges, spins, magmoms). Velocities also
+    auto-detect on legacy `.convel` without a `sections` key.
 -   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
 -   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
 -   **Parallel frames:** Rayon behind the `parallel` Cargo feature.
 -   **Bindings:** Python (PyO3), Julia (ccall), C (cbindgen), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [metatensor](https://github.com/metatensor/metatensor).
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
--   **Fidelity:** Velocities, forces, `atom_id`, per-direction fixed masks round-trip on every binding.
+-   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
 -   **Campaigns:** Pair with [readcon-db](https://github.com/lode-org/readcon-db).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgff0a0bd"></a>
+<a id="orgc709ba8"></a>
 
 ## Install
 
@@ -150,7 +152,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgb706010"></a>
+<a id="orga81d341"></a>
 
 ## Tutorial
 
@@ -201,7 +203,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="orgf1506d0"></a>
+<a id="org4cd74c9"></a>
 
 ## Design Decisions
 
@@ -209,7 +211,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org2b73fd7"></a>
+<a id="org06cfdd3"></a>
 
 ### FFI Layer
 
@@ -223,14 +225,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org7854838"></a>
+<a id="org0a92def"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orgb1cf2dc"></a>
+<a id="org500121e"></a>
 
 ### CON format
 
@@ -241,7 +243,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org047cabc"></a>
+<a id="org533d96c"></a>
 
 ### convel format
 
@@ -251,7 +253,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgb0cd649"></a>
+<a id="orga1264fd"></a>
 
 ## Capabilities
 
@@ -266,13 +268,13 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 <thead>
 <tr>
 <th scope="col" class="org-left">Area</th>
-<th scope="col" class="org-left">What ships</th>
+<th scope="col" class="org-left">Surface</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td class="org-left">Payload</td>
-<td class="org-left">Velocities, forces, per-direction constraints, <code>atom_id</code>, versioned JSON</td>
+<td class="org-left">Constraints, <code>atom_id</code>; optional velocities / forces / energies / charges / spins / magmoms; versioned JSON</td>
 </tr>
 
 <tr>
@@ -282,7 +284,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 <tr>
 <td class="org-left">Spec</td>
-<td class="org-left">v2–v3, <code>validate=true</code>, declared sections, units (v3)</td>
+<td class="org-left">v2–v3, <code>validate=true</code>, declared sections (including optional physics blocks above), units (v3)</td>
 </tr>
 
 <tr>
@@ -310,14 +312,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orgf3e93d7"></a>
+<a id="org6a688da"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org42ba638"></a>
+<a id="org444deed"></a>
 
 # License
 

@@ -13,10 +13,11 @@
 
 Reference implementation of versioned ``.con`` / ``.convel``. Spec v2–v3 frames
 (cell, type-grouped coordinates, per-direction constraints, ``atom_id``,
-optional velocities and forces, JSON metadata). Hourglass ABI so Fortran, C,
-C++, Python, Julia, and Rust share one file; chemfiles to land foreign
-structures in CON; DLPack / metatensor for ML and device hand-off;
-``readcon-db`` for campaigns that still store CON text.
+optional sections such as velocities, forces, energies, charges, spins, and
+magmoms, plus JSON metadata). Hourglass ABI so Fortran, C, C++, Python, Julia,
+and Rust share one file; chemfiles to land foreign structures in CON; DLPack /
+metatensor for ML and device hand-off; ``readcon-db`` for campaigns that still
+store CON text.
 
 Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 :doc:`getting-started`.

@@ -163,7 +163,7 @@ sidecars ``chemfiles_atom_names`` / ``chemfiles_atom_types`` let ``name H1`` and
 
 **Format limits.** No residues, pair ``bonds`` only, thin property sidecars—so
 ``resname``, impropers, and most external property maps are not selectable.
-:doc:`chemfiles-explain`.
+`What selection cannot see on CON <chemfiles-explain.rst>`_.
 
 Python (PyO3)
 -------------

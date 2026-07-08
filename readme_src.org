@@ -1,16 +1,16 @@
 * About
 
 ~readcon-core~ is the reference implementation of versioned =.con= / =.convel=.
-The point of the stack is to *put CON everywhere*: every optimizer, potential
-driver, analysis tool, campaign store, and ML hand-off that needs a durable
-atomic configuration with constraints, forces, and identity.
+This stack *puts CON everywhere*: every optimizer, potential driver, analysis
+tool, campaign store, and ML hand-off that needs a durable atomic configuration
+with constraints, forces, and identity.
 
 CON is human-readable and complete on one frame: cell, type-grouped
-coordinates, per-direction fixed masks, column-5 =atom_id=, optional velocity /
-force / energy sections, JSON metadata (spec v2–v3,
-[[file:docs/orgmode/spec.org][docs/orgmode/spec.org]]). That payload is why
-saddle, dimer, and NEB codes already work on CON; the library exists so the
-rest of the atomistic stack adopts the same file.
+coordinates, per-direction fixed masks, column-5 =atom_id=, optional per-atom
+sections (velocities, forces, energies, charges, spins, magmoms), and JSON
+metadata (spec v2–v3, [[file:docs/orgmode/spec.org][docs/orgmode/spec.org]]).
+That payload is why saddle, dimer, and NEB codes already work on CON; the
+library exists so the rest of the atomistic stack adopts the same file.
 
 | Layer | Role in spreading CON |
 |-------+------------------------|
@@ -33,14 +33,16 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 
 ** Features
 
-- *CON and convel:* Coordinates; velocities auto-detected or declared in =sections=.
+- *CON and convel:* Coordinates; optional sections declared in =sections=
+  (velocities, forces, energies, charges, spins, magmoms). Velocities also
+  auto-detect on legacy =.convel= without a =sections= key.
 - *Lazy iteration:* ~ConFrameIterator~; =next_with_raw_span= keeps the on-disk blob for corpus ingest.
 - *Hot path:* [[https://github.com/aldanor/fast-float-rust][fast-float2]], [[https://docs.rs/memmap2][memmap2]], Cachegrind-tracked scenarios.
 - *Parallel frames:* Rayon behind the ~parallel~ Cargo feature.
 - *Bindings:* Python (PyO3), Julia (ccall), C (cbindgen), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [[https://github.com/metatensor/metatensor][metatensor]].
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
-- *Fidelity:* Velocities, forces, =atom_id=, per-direction fixed masks round-trip on every binding.
+- *Fidelity:* =atom_id=, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
 - *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]].
 - *RPC:* Cap'n Proto behind the ~rpc~ feature.
 
@@ -148,11 +150,11 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 ** Capabilities
 
-| Area | What ships |
-|------+------------|
-| Payload | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON |
+| Area | Surface |
+|------+---------|
+| Payload | Constraints, =atom_id=; optional velocities / forces / energies / charges / spins / magmoms; versioned JSON |
 | Languages | One =rkr_*= surface for Fortran / C / C++ / Python / Julia |
-| Spec | v2–v3, =validate=true=, declared sections, units (v3) |
+| Spec | v2–v3, =validate=true=, declared sections (including optional physics blocks above), units (v3) |
 | Tensors | DLPack; optional metatensor =TensorBlock= |
 | Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] |
 | Import | Optional chemfiles → CON |

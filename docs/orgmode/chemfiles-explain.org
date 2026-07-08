@@ -30,8 +30,8 @@
 #+end_export
 
 
-CON is a complete checkpoint format (typed blocks, fixed flags, velocities /
-forces / energies, JSON line-2 metadata). Structures still often arrive from
+CON is a complete checkpoint format (typed blocks, fixed flags, optional
+per-atom sections, JSON line-2 metadata). Structures still often arrive from
 elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other chemfiles-readable layouts.
 
 Rather than reimplement every reader in readcon-core, v0.13 uses *chemfiles
@@ -83,7 +83,8 @@ platform tag cannot carry two different binaries). Install *one* of
 
 
 =sections= is the channel for *per-atom* optional blocks (velocities,
-forces, energies) with fixed column layouts and one row per atom. Bonds are
+forces, energies, charges, spins, magmoms) with fixed column layouts and one
+row per atom. Bonds are
 *frame-scoped edges* (variable count, not N-aligned). Putting them in JSON
 metadata matches =energy= / =pbc= / =lattice_vectors=: optional, preservable
 by ignorant readers, validated when =validate=true=.
