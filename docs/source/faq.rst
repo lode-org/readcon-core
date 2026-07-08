@@ -7,10 +7,11 @@ Frequently Asked Questions
 What CON is for
 ---------------
 
-CON is a versioned, human-readable atomic configuration format for
-**checkpoints** in rare-event and transition-state work: saddle search, dimer
-modes, NEB bands, and any multi-code pipeline that must keep constraints,
-forces, and atom identity on the same file.
+CON is the atomic configuration format this stack is pushing into everything
+that needs a durable structure on disk: optimizers, potential drivers,
+analysis, campaign stores, and ML hand-off. One frame keeps cell, constraints,
+forces, velocities, ``atom_id``, and JSON metadata so tools stop inventing
+private dumps.
 
 .. table::
 
@@ -30,10 +31,10 @@ forces, and atom identity on the same file.
     | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
     +--------------------------+--------------------------------------------------------------+
 
-``readcon-core`` is the formalized spec (v2–v3) and the multi-language
-implementation: hourglass ``rkr_*`` C ABI, Python / Julia / Fortran wrappers,
-chemfiles ingress, DLPack / metatensor tensor export, and ``index_proj``
-contracts for campaign stores (``readcon-db``). Spec:
+Saddle, dimer, and NEB pipelines already depend on that payload. ``readcon-core``
+is how CON spreads: formalized spec v2–v3, hourglass ``rkr_*`` ABI in every
+major language, chemfiles **into** CON, DLPack / metatensor **out** of CON,
+``index_proj`` + ``readcon-db`` for corpora that stay CON text. Spec:
 :doc:`spec`. Design history: :doc:`evolution`.
 
 Is frame topology (``bonds``) required?
@@ -313,26 +314,27 @@ lists include/lib paths for ``libmetatensor``.
 What is the stack for?
 ----------------------
 
+Putting CON into every language and tool path that touches atomic structures:
+
 .. table::
 
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | Component                            | Job                                                                          |
-    +======================================+==============================================================================+
-    | CON on disk                          | Checkpoint contract (this format)                                            |
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | ``readcon-core``                     | Spec implementation + hourglass ABI + optional chemfiles + DLPack/metatensor |
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | ``readcon-db``                       | Multi-reader campaign index over CON blobs                                   |
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | Chemfiles                            | Foreign structure → ``ConFrame``                                             |
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | ASE adapters                         | Calculator hand-off                                                          |
-    +--------------------------------------+------------------------------------------------------------------------------+
-    | rgpot / eOn / rgpycrumbs / amsel / … | Domain consumers of the same file                                            |
-    +--------------------------------------+------------------------------------------------------------------------------+
+    +--------------------------------------+-------------------------------------------------------------+
+    | Component                            | Job                                                         |
+    +======================================+=============================================================+
+    | CON on disk                          | The format                                                  |
+    +--------------------------------------+-------------------------------------------------------------+
+    | ``readcon-core``                     | Spec + hourglass ABI + chemfiles in + DLPack/metatensor out |
+    +--------------------------------------+-------------------------------------------------------------+
+    | ``readcon-db``                       | Campaigns still indexed as CON blobs                        |
+    +--------------------------------------+-------------------------------------------------------------+
+    | Chemfiles                            | Land foreign structures **as** CON                          |
+    +--------------------------------------+-------------------------------------------------------------+
+    | ASE adapters                         | Calculators without abandoning CON interchange              |
+    +--------------------------------------+-------------------------------------------------------------+
+    | rgpot / eOn / rgpycrumbs / amsel / … | Consumers of the same file                                  |
+    +--------------------------------------+-------------------------------------------------------------+
 
-The complexity is intentional: one on-disk format, many languages and tools,
-no private dialects.
+One on-disk format. Every language. No private dialects.
 
 Are ASE adapters the primary API?
 ---------------------------------

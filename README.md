@@ -1,34 +1,35 @@
 
 # Table of Contents
 
-1.  [About](#orgd736c59)
-    1.  [Features](#orge3cd48e)
-    2.  [Install](#org7b46c89)
-    3.  [Tutorial](#orgaacb7fe)
-    4.  [Design Decisions](#org64af52a)
-        1.  [FFI Layer](#org057a19f)
-    5.  [Specification](#org4cf5d3e)
-        1.  [CON format](#org4dd0873)
-        2.  [convel format](#orgd466ec6)
-    6.  [Capabilities](#org436dcbf)
-    7.  [Citation](#org406ce81)
-2.  [License](#orgc7db735)
+1.  [About](#org491d0f1)
+    1.  [Features](#org4244b82)
+    2.  [Install](#orgff0a0bd)
+    3.  [Tutorial](#orgb706010)
+    4.  [Design Decisions](#orgf1506d0)
+        1.  [FFI Layer](#org2b73fd7)
+    5.  [Specification](#org7854838)
+        1.  [CON format](#orgb1cf2dc)
+        2.  [convel format](#org047cabc)
+    6.  [Capabilities](#orgb0cd649)
+    7.  [Citation](#orgf3e93d7)
+2.  [License](#org42ba638)
 
 
-<a id="orgd736c59"></a>
+<a id="org491d0f1"></a>
 
 # About
 
-`readcon-core` is the reference implementation of versioned `.con` / `.convel`:
-a human-readable atomic configuration format with cell, type-grouped
-coordinates, per-direction constraints, stable `atom_id`, optional velocity /
-force / energy sections, and JSON metadata (spec v2–v3, see
-[docs/orgmode/spec.org](docs/orgmode/spec.md)).
+`readcon-core` is the reference implementation of versioned `.con` / `.convel`.
+The point of the stack is to **put CON everywhere**: every optimizer, potential
+driver, analysis tool, campaign store, and ML hand-off that needs a durable
+atomic configuration with constraints, forces, and identity.
 
-What CON carries is what multi-code rare-event and transition-state pipelines
-need on disk: frozen axes for constrained searches, identity through
-type-grouping for NEB and dimer modes, forces and energies on the same frame,
-and one ABI so Fortran optimizers and Python analysis share a file.
+CON is human-readable and complete on one frame: cell, type-grouped
+coordinates, per-direction fixed masks, column-5 `atom_id`, optional velocity /
+force / energy sections, JSON metadata (spec v2–v3,
+[docs/orgmode/spec.org](docs/orgmode/spec.md)). That payload is why
+saddle, dimer, and NEB codes already work on CON; the library exists so the
+rest of the atomistic stack adopts the same file.
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -41,51 +42,50 @@ and one ABI so Fortran optimizers and Python analysis share a file.
 <thead>
 <tr>
 <th scope="col" class="org-left">Layer</th>
-<th scope="col" class="org-left">What ships in this repo</th>
+<th scope="col" class="org-left">Role in spreading CON</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td class="org-left">Spec + hot path</td>
-<td class="org-left">Spec v3 parse/write, <code>validate</code>, units, <code>sections</code>, SoA storage, Cachegrind CI</td>
+<td class="org-left">Spec v3 parse/write, <code>validate</code>, units, <code>sections</code>, SoA, Cachegrind CI</td>
 </tr>
 
 <tr>
 <td class="org-left">Hourglass ABI</td>
-<td class="org-left">C (<code>cbindgen</code>), C++ RAII, Python (PyO3), Julia, Fortran (fpm); one <code>rkr_*</code> surface</td>
+<td class="org-left">C / C++ / Python / Julia / Fortran (<code>rkr_*</code>): link CON into any language</td>
 </tr>
 
 <tr>
 <td class="org-left">Device / ML hand-off</td>
-<td class="org-left">DLPack export (dlpk SoA; optional CUDA); optional metatensor <code>TensorBlock</code></td>
+<td class="org-left">DLPack (optional CUDA); optional metatensor <code>TensorBlock</code> without leaving CON authority</td>
 </tr>
 
 <tr>
 <td class="org-left">Ingress</td>
-<td class="org-left">Optional chemfiles import/selection into <code>ConFrame</code></td>
+<td class="org-left">Chemfiles import/selection: foreign structures <b>into</b> CON</td>
 </tr>
 
 <tr>
 <td class="org-left">Campaigns</td>
-<td class="org-left"><code>index_proj</code> screening for <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add readcon-db</code>, <code>pip install readcon-db</code>)</td>
+<td class="org-left"><code>index_proj</code> + <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add readcon-db</code>, <code>pip install readcon-db</code>): corpora still CON text</td>
 </tr>
 </tbody>
 </table>
 
-Consumers of that surface include rare-event clients (eOn lineage and other
-saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
-calculators (`to_ase` / `from_ase`), campaign stores, and ML pipelines that take
-DLPack or metatensor blocks.
+Already on that path: rare-event clients, rgpot, rgpycrumbs, ASE adapters,
+amsel, campaign stores, and anything that takes DLPack or metatensor blocks.
 
 Rust rewrite of [readCon](https://github.com/HaoZeke/readCon). Chemfiles owns
-format diversity at the edge; this crate owns CON fidelity.
+format diversity at the edge; this crate owns CON fidelity on the wire and in
+memory.
 
 Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 `benches/compare_readers.py`. See
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orge3cd48e"></a>
+<a id="org4244b82"></a>
 
 ## Features
 
@@ -101,7 +101,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org7b46c89"></a>
+<a id="orgff0a0bd"></a>
 
 ## Install
 
@@ -150,7 +150,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgaacb7fe"></a>
+<a id="orgb706010"></a>
 
 ## Tutorial
 
@@ -201,7 +201,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="org64af52a"></a>
+<a id="orgf1506d0"></a>
 
 ## Design Decisions
 
@@ -209,7 +209,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org057a19f"></a>
+<a id="org2b73fd7"></a>
 
 ### FFI Layer
 
@@ -223,14 +223,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org4cf5d3e"></a>
+<a id="org7854838"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org4dd0873"></a>
+<a id="orgb1cf2dc"></a>
 
 ### CON format
 
@@ -241,7 +241,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgd466ec6"></a>
+<a id="org047cabc"></a>
 
 ### convel format
 
@@ -251,7 +251,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org436dcbf"></a>
+<a id="orgb0cd649"></a>
 
 ## Capabilities
 
@@ -310,14 +310,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org406ce81"></a>
+<a id="orgf3e93d7"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="orgc7db735"></a>
+<a id="org42ba638"></a>
 
 # License
 

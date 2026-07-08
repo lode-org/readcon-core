@@ -7,18 +7,19 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel: multi-language checkpoints for rare-event and transition-state work.</p>
+     <p class="rc-hero-tagline">Put CON everywhere: multi-language checkpoints with constraints, forces, and atom identity.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-Reference implementation of versioned ``.con`` / ``.convel``: cell, type-grouped
-coordinates, per-direction constraints, ``atom_id``, optional velocities and
-forces, JSON metadata (spec v2–v3). Hourglass C ABI for Fortran, C, C++,
-Python, Julia, and Rust; optional chemfiles ingress; DLPack / metatensor
-export; campaign hooks for ``readcon-db``.
+Reference implementation of versioned ``.con`` / ``.convel``. Spec v2–v3 frames
+(cell, type-grouped coordinates, per-direction constraints, ``atom_id``,
+optional velocities and forces, JSON metadata). Hourglass ABI so Fortran, C,
+C++, Python, Julia, and Rust share one file; chemfiles to land foreign
+structures in CON; DLPack / metatensor for ML and device hand-off;
+``readcon-db`` for campaigns that still store CON text.
 
 Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 :doc:`getting-started`.
