@@ -383,6 +383,29 @@ indexes, dedup) without rewriting the optimizer or potential. Install
 ``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``);
 docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
 
+Where do large campaigns and many frames go?
+--------------------------------------------
+
+In this stack: **CON text** remains the structure contract; ``readcon-db`` is the
+campaign store on top of it (LMDB indexes for energy / formula / section
+presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
+(optionally gzip/zstd) and ``iter_con`` / ``forward`` cover trajectory-style loads
+in ``readcon-core`` itself. That is the product path for corpora and screening —
+not a recommendation to abandon CON for a different structure dialect.
+
+Install and docs: ``cargo add readcon-db`` / ``pip install readcon-db``;
+`lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+
+How do XYZ, PDB, GRO, and chemfiles fit in?
+-------------------------------------------
+
+They are **ingress**. Chemfiles (Cargo ``chemfiles``, PyPI ``readcon-chemfiles``)
+maps foreign structures into ``ConFrame`` / CON so the rest of the stack speaks
+one format. The durable interchange is CON (constraints, ``atom_id``, sections,
+JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
+keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
+How-to: `migrate.org <migrate.rst>`_, `chemfiles-tutorial <chemfiles-tutorial.rst>`_.
+
 Why an hourglass C ABI?
 -----------------------
 

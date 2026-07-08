@@ -69,6 +69,25 @@ fn assert_no_ai_tells(t: &str, file: &str) {
         "universal MD tape",
         "hand-rolled is fine",
         "single-code XYZ is fine",
+        // historical FAQ kill-list (never reintroduce)
+        "When should I use HDF5",
+        "Use HDF5 for",
+        "Use ~con~ for:",
+        "Use con for:",
+        "long-term archival and analysis",
+        "con-to-data pipeline",
+        "~con~-to-data pipeline",
+        "complement each other",
+        "When should I use CON vs XYZ",
+        "XYZ/extXYZ are suitable when",
+        "only positions (and optionally a lattice)",
+        "millions of frames, billions of atoms",
+        "< 10k frames",
+        "10-30x faster",
+        "10–30×",
+        "HDF5 handles long-term",
+        "XYZ remains appropriate for minimal",
+        "How does CON + readcon-db compare to XYZ",
     ];
     for b in banned {
         assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
@@ -114,10 +133,38 @@ fn faq_con_contract() {
         !t.contains("con_spec_version: 4") && !t.contains("con_spec_version\":4"),
         "FAQ must not require format v4 for optional sections"
     );
-    // no format bake-off section
+    // no format bake-off / anti-product "use X instead" sections
     assert!(!t.contains("How does CON relate to H5MD"));
     assert!(!t.contains("* CON and H5MD"));
+    assert!(!t.contains("When should I use HDF5"));
+    assert!(!t.contains("When should I use CON vs XYZ"));
+    assert!(
+        t.contains("readcon-db")
+            && (t.contains("Where do large campaigns") || t.contains("campaign store")),
+        "FAQ must route corpora to readcon-db, not invent HDF5 as product archival"
+    );
+    assert!(
+        t.contains("chemfiles")
+            && (t.contains("ingress") || t.contains("How do XYZ") || t.contains("foreign")),
+        "FAQ must describe chemfiles as ingress into CON"
+    );
     assert_no_ai_tells(&t, "faq.org");
+}
+
+#[test]
+fn product_docs_ban_anti_product_carveouts() {
+    // Entry surfaces that must never reintroduce origin/main kill-list copy.
+    for name in [
+        "faq.org",
+        "migrate.org",
+        "benchmarks.org",
+        "getting-started.org",
+        "index.org",
+        "chemfiles-explain.org",
+    ] {
+        assert_no_ai_tells(&read(name), name);
+    }
+    assert_no_ai_tells(&read_repo("readme_src.org"), "readme_src.org");
 }
 
 #[test]
