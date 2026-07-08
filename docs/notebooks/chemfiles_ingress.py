@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-# Papermill-style knobs (also overridden by scripts/run-chemfiles-notebook.sh
-# via env READCON_NB_WORK when executing through Emacs).
 import os
+from pathlib import Path
 
 work_dir = Path(os.environ.get("READCON_NB_WORK", "docs/notebooks/out/work"))
 work_dir.mkdir(parents=True, exist_ok=True)
@@ -50,7 +47,6 @@ frame.write_con(str(con_path))
 assert con_path.is_file()
 print("wrote", con_path.resolve())
 
-# Same ingress from an in-memory buffer (chemfiles format name)
 mem = readcon.read_chemfiles_memory(xyz_path.read_text(encoding="utf-8"), "XYZ")
 assert len(mem) == 1 and len(mem[0].atoms) == 3
 

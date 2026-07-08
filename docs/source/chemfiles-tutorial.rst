@@ -5,13 +5,14 @@ Convert other formats into CON
 
 .. note::
 
-   *Executable Org notebook* (run with Babel, not a committed ``.ipynb``):
-   :doc:`chemfiles-notebook` — ``scripts/run-chemfiles-notebook.sh``.
+   **Executable Org Babel source** for this path is :doc:`chemfiles-notebook`
+   (``docs/orgmode/chemfiles-notebook.org``). CI runs
+   ``scripts/run-chemfiles-notebook.sh``: Emacs tangles Python blocks into
+   ``docs/notebooks/chemfiles_ingress.py`` and executes the Org buffer.
+   Do not hand-edit the tangled ``.py``.
 
-   **CI:** GitHub Actions ``ci_python.yml`` (chemfiles matrix) runs the Python
-   learning path in ``tests/python/test_tutorial_chemfiles.py`` (XYZ → CON write,
-   memory read, bonded selection). Lean matrix skips those tests. Local Babel
-   notebook remains optional.
+   This page is the Diátaxis *learning* narrative (including Rust). The Babel
+   notebook is the CI-gated executable twin for the Python conversion steps.
 
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).

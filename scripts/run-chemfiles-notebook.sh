@@ -5,6 +5,32 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+resolve_emacs() {
+  if [[ -n "${EMACS:-}" && -x "$EMACS" ]]; then
+    echo "$EMACS"
+    return
+  fi
+  if command -v emacs >/dev/null 2>&1; then
+    command -v emacs
+    return
+  fi
+  for cand in \
+    "${ROOT}/.pixi/envs/docs/bin/emacs" \
+    "${HOME}/.pixi/envs/docs/bin/emacs"; do
+    if [[ -x "$cand" ]]; then
+      echo "$cand"
+      return
+    fi
+  done
+  return 1
+}
+
+EMACS_BIN="$(resolve_emacs)" || {
+  echo "emacs required for org-babel-tangle (install emacs-nox or pixi docs env)" >&2
+  exit 1
+}
+
+
 ORG="${ROOT}/docs/orgmode/chemfiles-notebook.org"
 OUT_DIR="${ROOT}/docs/notebooks/out"
 WORK="${OUT_DIR}/work"
@@ -28,20 +54,15 @@ ensure_chemfiles_python() {
 
 ensure_chemfiles_python
 
-if ! command -v emacs >/dev/null 2>&1; then
-  echo "emacs required to execute Org Babel (primary path)" >&2
-  exit 1
-fi
-
 # 1) Tangle named blocks from Org → docs/notebooks/chemfiles_ingress.py (generated)
-emacs --batch \
+"$EMACS_BIN" --batch \
   --eval "(require 'org)" \
   --eval "(setq org-confirm-babel-evaluate nil)" \
   --visit "$ORG" \
   --eval "(org-babel-tangle)" 
 
 # 2) Execute the Org buffer (Python session) — this is the authoritative run
-emacs --batch \
+"$EMACS_BIN" --batch \
   --eval "(require 'org)" \
   --eval "(require 'ob-python)" \
   --eval "(setq org-confirm-babel-evaluate nil)" \
