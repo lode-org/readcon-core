@@ -469,3 +469,6 @@ nohup.out
 
 # Papermill / jupytext outputs (source scripts stay tracked)
 docs/notebooks/out/
+
+# Airspeed Velocity
+.asv/
