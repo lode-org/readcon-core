@@ -109,7 +109,9 @@ Branching and workflow
 - Keep commits logical and atomic. Soft-reset and rebase as needed
   (never on ``main``).
 
-- The CI runs on every PR: tests, lint, coverage, and benchmark
+- The CI runs on every PR: Rust tests, lint, coverage, benchmarks, Fortran
+  fpm tests, and Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/``
+  for lean and chemfiles features)
   regression checks (via Criterion + critcmp + asv-perch).
 
 Testing

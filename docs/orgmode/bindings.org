@@ -10,7 +10,7 @@ task.
 
 | Feature | Rust | Python | Julia | Fortran | C | C++ |
 |---------+------+--------+-------+---------+---+-----|
-| Lazy frame iterator | yes | yes (streaming ~iter_con~) | yes | via C iter (planned) | yes | yes |
+| Lazy frame iterator | yes | yes (streaming ~iter_con~) | yes | ~open_iterator~ / ~iterator_t~ | yes | yes |
 | Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~rkr_read_all_frames~ | ~readcon::read_all_frames~ |
 | Count frames (skip walk) | ~iterators::count_frames~ | ~readcon.count_frames~ | n/a | n/a | n/a | n/a |
 | Coordinates on a loaded frame | SoA on ~ConFrame~ | ~ConFrame.coords_array()~ (after full-frame load) | via frame fields | via frame accessors | via frame accessors | via frame accessors |
