@@ -104,10 +104,12 @@ provides:
 
 * How fast is readcon-core?
 
-Optimized CON parse/write (fast-float2, zero-copy iteration, optional mmap,
-=forward= skip). CI tracks Cachegrind I-refs; PRs run Python ASV + spyglass
-compare. Peer scripts under =benches/= (ASE CON, ASE =.traj= / NetCDF, H5MD via
-MDAnalysis, chemfiles ingress). Numbers and how to re-run:
+CON parse uses fast-float2, zero-copy line views, header-sized vectors,
+optional mmap, and =forward= / =forward_fast= when you only need counts.
+CI: Cachegrind I-refs (=ci_cachegrind.yml=). PRs: Python ASV + spyglass
+(=ci_benchmark.yml=, suite in =benchmarks/=). Local peer scripts:
+=benches/compare_readers.py=, =multiformat_traj.py=, =ase_traj_vs_con.py=,
+=h5md_vs_con.py=. How to re-run and what each gate means:
 [[file:benchmarks.org][benchmarks.org]].
 
 
@@ -206,9 +208,9 @@ Writing through =ConFrameWriter::from_path_gzip= /
 =from_path_gzip_with_precision= or (with the =zstd= feature) the
 matching =from_path_zstd= constructors compresses output transparently.
 
-Force data roughly triples per-atom file size. Gzip compression
-typically recovers 60-80% of that overhead; zstd usually trims an
-additional 5-15% over gzip for the same content.
+Force data adds three floats per atom (roughly 3× the coordinate payload
+alone). Gzip and (with the =zstd= feature) zstd reduce on-disk size; measure
+on your trajectories rather than treating a single ratio as fixed.
 
 * How do I look up an atom by its =atom_id=?
 

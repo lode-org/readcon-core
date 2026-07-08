@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#org62b90ac)
-    1.  [Features](#orgfd5a67f)
-    2.  [Migrate onto CON](#orgafa78d7)
-    3.  [Install](#orga0ef08d)
-    4.  [Tutorial](#org6143d3f)
-    5.  [Design Decisions](#orgfd409e3)
-        1.  [FFI Layer](#org800eb41)
-    6.  [Specification](#org3601540)
-        1.  [CON format](#org7f35362)
-        2.  [convel format](#orgf992d18)
-    7.  [Capabilities](#orgaeec069)
-    8.  [Citation](#orgb88054a)
-2.  [License](#org700845d)
+1.  [About](#org2c296dd)
+    1.  [Features](#orgd07261e)
+    2.  [Migrate onto CON](#org30c5b67)
+    3.  [Install](#orgf1930ce)
+    4.  [Tutorial](#orgda49bed)
+    5.  [Design Decisions](#orgb5b00e2)
+        1.  [FFI Layer](#org4c4aa1b)
+    6.  [Specification](#org1c7fe66)
+        1.  [CON format](#org6d32c14)
+        2.  [convel format](#orgb34a9da)
+    7.  [Capabilities](#orgbf4b550)
+    8.  [Citation](#orgbb23266)
+2.  [License](#org31df208)
 
 
-<a id="org62b90ac"></a>
+<a id="org2c296dd"></a>
 
 # About
 
@@ -81,12 +81,13 @@ Rust rewrite of [readCon](https://github.com/HaoZeke/readCon). Chemfiles owns
 format diversity at the edge; this crate owns CON fidelity on the wire and in
 memory.
 
-Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
-`benches/compare_readers.py`. See
-[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
+Measurements: Cachegrind I-refs (`examples/cachegrind_harness.rs`);
+Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
+`benches/compare_readers.py` (and other scripts under `benches/`).
+See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orgfd5a67f"></a>
+<a id="orgd07261e"></a>
 
 ## Features
 
@@ -104,13 +105,12 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgafa78d7"></a>
+<a id="org30c5b67"></a>
 
 ## Migrate onto CON
 
 Why switch: use a real frame API and multi-language library instead of
-hand-rolling XYZ and a private atoms object — and a measured hot path, not
-a slow ASCII tax.
+hand-rolling XYZ and a private atoms object.
 
 -   **API:** parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 -   **Payload:** constraints, `atom_id`, optional sections, versioned JSON on one frame
@@ -118,7 +118,7 @@ a slow ASCII tax.
 -   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 -   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader)
 -   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
--   **Speed:** optimized CON hot path; PR ASV + Cachegrind I-refs; peer scripts in `benches/` — see [benchmarks.org](docs/orgmode/benchmarks.org)
+-   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/` — [benchmarks.org](docs/orgmode/benchmarks.org)
 
     # foreign → CON (needs --features chemfiles)
     cargo run --release --features chemfiles -- convert structure.xyz structure.con
@@ -131,7 +131,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orga0ef08d"></a>
+<a id="orgf1930ce"></a>
 
 ## Install
 
@@ -180,7 +180,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="org6143d3f"></a>
+<a id="orgda49bed"></a>
 
 ## Tutorial
 
@@ -211,7 +211,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="orgfd409e3"></a>
+<a id="orgb5b00e2"></a>
 
 ## Design Decisions
 
@@ -219,7 +219,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org800eb41"></a>
+<a id="org4c4aa1b"></a>
 
 ### FFI Layer
 
@@ -233,14 +233,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org3601540"></a>
+<a id="org1c7fe66"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org7f35362"></a>
+<a id="org6d32c14"></a>
 
 ### CON format
 
@@ -251,7 +251,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgf992d18"></a>
+<a id="orgb34a9da"></a>
 
 ### convel format
 
@@ -261,7 +261,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgaeec069"></a>
+<a id="orgbf4b550"></a>
 
 ## Capabilities
 
@@ -312,7 +312,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 <tr>
 <td class="org-left">Measurements</td>
-<td class="org-left">Cachegrind I-refs; CON peers (<code>ase.io.eon</code>, eOn-style C sscanf)</td>
+<td class="org-left">Cachegrind I-refs; PR ASV + spyglass; <code>benches/compare_readers.py</code></td>
 </tr>
 </tbody>
 </table>
@@ -320,14 +320,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orgb88054a"></a>
+<a id="orgbb23266"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org700845d"></a>
+<a id="org31df208"></a>
 
 # License
 
