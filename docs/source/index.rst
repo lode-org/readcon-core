@@ -26,6 +26,8 @@ Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 
    *New here?* → :doc:`getting-started` then :doc:`tutorial`
 
+   *Migrate a stack onto CON?* → :doc:`migrate`
+
    *Import into CON?* → :doc:`chemfiles-tutorial`
    · Org notebook :doc:`chemfiles-notebook`
 
@@ -82,6 +84,7 @@ Site map
    :caption: How-to guides
 
    howto
+   migrate
    chemfiles-howto
 
 .. toctree::

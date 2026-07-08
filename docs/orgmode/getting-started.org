@@ -74,6 +74,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | Goal | Page | Kind |
 |------+------+------|
 | Learn CON I/O end-to-end | [[file:tutorial.org][tutorial]] | Tutorial |
+| Migrate foreign formats → CON | [[file:migrate.org][migrate]] | How-to |
 | Task recipes by language | [[file:howto.org][howto]] | How-to |
 | XYZ / PDB / GRO → CON | [[file:chemfiles-tutorial.org][chemfiles-tutorial]] | Tutorial |
 | Batch convert / C conversion API | [[file:chemfiles-howto.org][chemfiles-howto]] | How-to |
@@ -91,6 +92,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | Many trajectories, multi-reader | =readcon-db= (CON text authoritative) |
 | Foreign structure file → CON | Optional chemfiles build |
 | ASE calculator hand-off | Optional =to_ase= / =from_ase= |
+| Migrate foreign stack → CON | [[file:migrate.org][migrate]] (CLI =convert=, =convert_to_con=) |
 
 Library layout: [[file:architecture.org][architecture]]. Measurements:
 [[file:benchmarks.org][benchmarks]].

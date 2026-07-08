@@ -16,6 +16,9 @@ pub mod storage_dtype;
 pub mod units;
 pub mod writer;
 
+/// Foreign path / CON → CON write for stack migration (CLI + library).
+pub mod convert;
+
 #[cfg(feature = "metatensor")]
 pub mod metatensor_export;
 

@@ -1108,6 +1108,27 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     .map_err(PyIOError::new_err)
 }
 
+/// Convert a structure/trajectory path to CON (migration one-liner).
+///
+/// - ``.con`` / ``.convel`` (optional ``.gz`` / ``.zst``): native reader
+/// - other formats: chemfiles-linked build only (``readcon-chemfiles`` /
+///   ``maturin develop --features python,chemfiles``)
+///
+/// Returns a dict: ``n_frames``, ``n_atoms_last``, ``native_con``.
+#[pyfunction]
+fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResult<Py<PyAny>> {
+    use crate::convert::convert_path_to_con;
+    use std::path::Path;
+    let report = py
+        .detach(|| convert_path_to_con(Path::new(input_path), Path::new(output_path)))
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    let dict = PyDict::new(py);
+    dict.set_item("n_frames", report.n_frames)?;
+    dict.set_item("n_atoms_last", report.n_atoms_last)?;
+    dict.set_item("native_con", report.native_con)?;
+    Ok(dict.into())
+}
+
 /// Write frames to a .con or .convel file path.
 ///
 /// The `compression` argument controls output compression:
@@ -1545,6 +1566,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
+    m.add_function(wrap_pyfunction!(convert_to_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;

@@ -127,6 +127,10 @@ fn getting_started_scope() {
         "getting-started must point at the One Good Tutorial"
     );
     assert!(
+        t.contains("migrate") || t.contains("migrate.org"),
+        "getting-started must point at migration how-to"
+    );
+    assert!(
         t.contains("Diátaxis") || t.contains("Diataxis") || t.contains("How-to") || t.contains("howto"),
         "getting-started should map Diátaxis destinations"
     );
@@ -285,6 +289,16 @@ fn index_and_readme_src() {
     assert!(
         readme.contains("tutorial.org") || readme.contains("One Good Tutorial"),
         "readme must point at the One Good Tutorial"
+    );
+    assert!(
+        (readme.contains("convert") || readme.contains("Migrate"))
+            && (readme.contains("atom_id") || readme.contains("=atom_id="))
+            && (readme.contains("hourglass") || readme.contains("rkr_")),
+        "readme must state migration/adopt benefits tied to shipped surface"
+    );
+    assert!(
+        readme.contains("migrate.org") || readme.contains("convert structure"),
+        "readme must point at convert CLI or migrate how-to"
     );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));

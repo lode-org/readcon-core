@@ -46,6 +46,22 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 - *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]].
 - *RPC:* Cap'n Proto behind the ~rpc~ feature.
 
+** Migrate onto CON
+
+Why: one file carries constraints, =atom_id=, optional sections (forces /
+charges / …), versioned JSON, and links through the hourglass ABI into Fortran /
+C / C++ / Python / Julia — campaign stores keep CON text authoritative.
+
+#+begin_src shell
+# foreign → CON (needs --features chemfiles)
+cargo run --release --features chemfiles -- convert structure.xyz structure.con
+# Python (readcon-chemfiles or maturin --features python,chemfiles)
+# python -c "import readcon; readcon.convert_to_con('structure.xyz','structure.con')"
+#+end_src
+
+How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles learning path (CI-run):
+[[file:docs/orgmode/chemfiles-notebook.org][chemfiles-notebook]].
+
 ** Install
 
 | Language | Install command |

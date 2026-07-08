@@ -1,0 +1,120 @@
+#+title: How-to — migrate a stack onto CON
+#+options: toc:nil num:nil ^:nil
+#+description: Task guide: why CON, foreign → CON, ASE hand-off, multi-language link.
+
+#+begin_export rst
+.. note::
+
+   Diátaxis *how-to* (goal-oriented). Learning paths:
+   :doc:`tutorial` (native CON I/O) and :doc:`chemfiles-tutorial` (foreign formats).
+   Executable conversion (CI): :doc:`chemfiles-notebook` /
+   ``scripts/run-chemfiles-notebook.sh``.
+#+end_export
+
+* Why adopt CON (what you gain)
+
+CON is a human-readable checkpoint for *one structure or image* with the fields
+multi-tool pipelines actually share:
+
+| Payload | Why it matters |
+|---------+----------------|
+| Per-direction fixed mask (column 4) | Constraints for optimizers / NEB without a sidecar |
+| =atom_id= (column 5) | Stable identity after type-grouping; dimer / band matching |
+| Optional sections | Velocities, forces, energies, charges, spins, magmoms on the same file |
+| Line-2 JSON | Spec version, energy, units (v3), provenance — round-trips unknown keys |
+| UTF-8 text | Diffable, greppable, campaign-storeable (=readcon-db= indexes CON text) |
+| Hourglass =rkr_*= ABI | One semantics in Fortran / C / C++ / Python / Julia / Rust |
+
+You migrate so every tool in the stack reads and writes the *same* file instead
+of private dumps. This page is the task path; format rules live in
+[[file:spec.org][spec.org]].
+
+* One-command convert (CLI)
+
+Build with chemfiles when the input is not already CON:
+
+#+begin_src shell
+cargo build --release --features chemfiles
+./target/release/readcon-core convert structure.xyz structure.con
+./target/release/readcon-core convert structure.pdb structure.con
+# native CON inspect / rewrite (no chemfiles required):
+./target/release/readcon-core convert input.con out.con
+./target/release/readcon-core input.con   # summary only
+#+end_src
+
+Library entry (same logic as the CLI):
+
+#+begin_src rust
+use readcon_core::convert::convert_path_to_con;
+use std::path::Path;
+
+let report = convert_path_to_con(Path::new("in.xyz"), Path::new("out.con"))?;
+assert!(report.n_atoms_last > 0);
+#+end_src
+
+* Python one-liner
+
+Chemfiles-linked install for foreign formats:
+
+#+begin_src shell
+pip install 'readcon-chemfiles==0.14.0'   # or: maturin develop --features python,chemfiles
+#+end_src
+
+#+begin_src python
+import readcon
+
+# Foreign or CON → CON
+report = readcon.convert_to_con("structure.xyz", "structure.con")
+print(report)  # n_frames, n_atoms_last, native_con
+
+# Same via frame API (tutorial / notebook path; CI-run)
+frame = readcon.read_chemfiles_first("structure.xyz")
+frame.write_con("structure.con")
+#+end_src
+
+Executable Org Babel for the XYZ path: =scripts/run-chemfiles-notebook.sh=
+(wired in =ci_python.yml= chemfiles matrix).
+
+* ASE hand-off (keep CON as authority)
+
+#+begin_src python
+import readcon
+
+frame = readcon.read_first_frame("structure.con")
+atoms = frame.to_ase()          # atom_id array + constraints when present
+# ... calculator / MD step ...
+frame2 = readcon.ConFrame.from_ase(atoms)
+frame2.write_con("after.con")   # interchange stays CON text
+#+end_src
+
+ASE adapters are optional; multi-reader campaigns and language-native codes
+should keep CON text authoritative (=readcon-db=, hourglass consumers).
+
+* Batch: many foreign files → CON
+
+#+begin_src shell
+for f in structures/*.{xyz,pdb,gro}; do
+  ./target/release/readcon-core convert "$f" "con/${f##*/}.con"
+done
+#+end_src
+
+Python:
+
+#+begin_src python
+from pathlib import Path
+import readcon
+
+for path in Path("structures").glob("*.xyz"):
+    readcon.convert_to_con(str(path), str(Path("con") / f"{path.stem}.con"))
+#+end_src
+
+More chemfiles recipes: [[file:chemfiles-howto.org][chemfiles-howto.org]].
+
+* After conversion
+
+| Goal | Page |
+|------+------|
+| Learn native CON I/O | [[file:tutorial.org][tutorial]] |
+| Declared sections / validate | [[file:faq.org][faq]], [[file:spec.org][spec]] |
+| Link C / Fortran / Julia | [[file:bindings.org][bindings]], [[file:howto.org][howto]] |
+| Campaign store | [[https://github.com/lode-org/readcon-db][readcon-db]] |
