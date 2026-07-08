@@ -1,26 +1,25 @@
 * About
 
-~readcon-core~ reads and writes versioned =.con= / =.convel= for eOn, LODE, and
-multi-language saddle / NEB pipelines. Constraints, forces, velocities,
-=atom_id=, and JSON metadata round-trip. One hourglass C ABI covers Rust, C,
-C++, Python, Julia, and Fortran. Optional chemfiles maps XYZ / PDB / GRO into
-CON. Campaign corpora live in [[https://github.com/lode-org/readcon-db][readcon-db]] with CON text as the durable identity
-(=cargo add readcon-db=, =pip install readcon-db=,
-https://lode-org.github.io/readcon-db/).
+~readcon-core~ is the CON / convel library for eOn and LODE saddle, dimer, and
+NEB work. Checkpoints keep per-direction constraints, forces, velocities,
+=atom_id=, cell, and JSON metadata through repeated read→write across Rust, C,
+C++, Python, Julia, and Fortran (one =rkr_*= hourglass ABI). Campaign corpora
+use [[https://github.com/lode-org/readcon-db][readcon-db]] with CON text as durable identity (=cargo add readcon-db=,
+=pip install readcon-db=, https://lode-org.github.io/readcon-db/).
 
 Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]].
 
 | Layer | Crate | Responsibility |
 |-------+-------+----------------|
-| Interchange | =readcon-core= / Python =readcon= | CON / convel parse and write, spec v2–v3 metadata, chemfiles ingress, hourglass FFI |
+| Checkpoint I/O | =readcon-core= / Python =readcon= | CON / convel parse and write, spec v2–v3, hourglass FFI, optional chemfiles import |
 | Corpus | [[https://github.com/lode-org/readcon-db][readcon-db]] / =readcon_db= | Heed/LMDB store, secondary indexes, exact-match dedup, CLI + C/Python/Fortran |
 
-Foreign formats enter through chemfiles (=read_chemfiles*=). ASE adapters
-(=to_ase= / =from_ase=) support calculator hand-off only.
+Foreign structure files import through chemfiles (=read_chemfiles*=) into CON.
+ASE adapters (=to_ase= / =from_ase=) are calculator hand-off only.
 
 Parse speed: CI Cachegrind I-refs on =examples/cachegrind_harness.rs=; peer
-ordering via =benches/multiformat_traj.py= and =benches/compare_readers.py=
-(artifacts under =benches/results/=). Methodology:
+ordering via =benches/compare_readers.py= (ASE CON, C sscanf) and
+=benches/multiformat_traj.py= (artifacts under =benches/results/=). Methodology:
 [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 
 ** Features
@@ -150,21 +149,20 @@ See [[file:docs/orgmode/spec.org][docs/orgmode/spec.org]] (or the [[https://lode
 Same as CON, with an additional velocity section after each frame's coordinates:
 - A blank separator line
 - Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
-** Why use this over [[https://github.com/HaoZeke/readCon][readCon]], ASE CON, or format-only tools?
+** Why this over [[https://github.com/HaoZeke/readCon][readCon]] or ASE =ase.io.eon=?
 
 | Capability | readcon-core |
 |------------+--------------|
-| Round-trip | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON metadata across every binding |
-| Languages | One =rkr_*= C surface for Fortran / C / C++ / Python / Julia (no Python on the optimizer I/O path) |
-| Parse checks | Equal-geometry peer runs vs ASE CON and C sscanf; CI Cachegrind I-refs |
-| Validation | =validate=true= rejects non-finite numbers, bad geometry, mismatched section identity |
-| Ingress | XYZ / PDB / GRO → =ConFrame= / CON via optional chemfiles |
+| Checkpoint payload | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON metadata across every binding |
+| Languages | One =rkr_*= C surface for Fortran / C / C++ / Python / Julia (no Python required on the optimizer I/O path) |
+| Spec | v2–v3 validation (=validate=true=), declared sections, typed metadata helpers |
+| Parse checks | CI Cachegrind I-refs; peer runs vs ASE CON and eOn-style C sscanf |
 | Campaigns | [[https://github.com/lode-org/readcon-db][readcon-db]] indexes multi-trajectory corpora; CON text stays the durable identity |
+| Edge import | Optional chemfiles → CON when a structure arrives as another file type |
 
-Compared with legacy readCon: multi-language bindings, spec-v2 validation,
-chemfiles ingress, and Cachegrind regression tracking. Compared with ASE
-=ase.io.eon=: shared CON contract for optimizers outside Python. Compared with
-XYZ or chemfiles alone: CON section fidelity on the wire.
+Legacy readCon lacks the current bindings matrix, spec-v2 validation, and
+Cachegrind regression tracking. ASE =ase.io.eon= is Python CON I/O for ASE
+workflows; it is not the multi-language hourglass contract.
 
 ** Citation
 If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. The Zenodo DOI tracks the latest release.

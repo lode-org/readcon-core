@@ -4,34 +4,38 @@ Frequently Asked Questions
 
 
 
-Why another atomic structure format?
-------------------------------------
+Why CON (and what problem it solves)?
+-------------------------------------
 
-The ``con`` format addresses a specific gap: lossless round-tripping of
-atomic configurations through saddle-point search, NEB, and dimer
-calculations. Existing formats lose information during read-write
-cycles:
+Saddle-point search, dimer, and NEB pipelines need a **checkpoint** that
+survives many read→write cycles across languages: frozen axes, original
+atom identity after type-grouping, forces and velocities, cell, and
+machine-readable run metadata (energy, potential, NEB bead, units). That
+is the CON contract used by eOn and LODE.
 
-- **XYZ**: no cell data, no fixed-atom flags, no atom identity
-  tracking. A 218-atom slab written to XYZ and read back has lost
-  the original atom ordering, constraint information, and periodicity.
+CON carries, in a fixed layout:
 
-- **POSCAR/CONTCAR**: VASP-specific. No velocity or force sections.
-  Selective dynamics is all-or-nothing per direction. No metadata
-  for potential parameters or convergence state.
+.. table::
 
-- **extxyz**: extensible but underspecified. Every tool invents its own
-  key names. No formal specification means round-trip fidelity depends
-  on implementation details. Parsing performance suffers from
-  per-atom key-value overhead.
+    +----------------------------------------------------------------------------+---------------------------------------------------+
+    | On disk                                                                    | Role in the optimizer                             |
+    +============================================================================+===================================================+
+    | Cell + angles                                                              | Periodic box for the slab or bulk                 |
+    +----------------------------------------------------------------------------+---------------------------------------------------+
+    | Per-direction fixed mask (column 4)                                        | Constrained degrees of freedom                    |
+    +----------------------------------------------------------------------------+---------------------------------------------------+
+    | ``atom_id`` (column 5)                                                     | Stable identity when atoms are grouped by element |
+    +----------------------------------------------------------------------------+---------------------------------------------------+
+    | Optional velocity / force / energy sections                                | Restart and analysis payload                      |
+    +----------------------------------------------------------------------------+---------------------------------------------------+
+    | Line-2 JSON (``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …) | Provenance without a second sidecar               |
+    +----------------------------------------------------------------------------+---------------------------------------------------+
 
-- **CIF**: designed for crystallography, not molecular dynamics. Verbose.
-  No velocity or force representation. Overkill for transient
-  simulation snapshots.
-
-The ``con`` format is deliberately minimal: a fixed 9-line header, typed
-atom blocks, and optional velocity/force sections. The v2 JSON
-metadata line adds extensibility without breaking the core simplicity.
+Without those fields, an NEB band reorders atoms, a dimer mode points at the
+wrong indices, or a Fortran driver and a Python analyzer disagree on the
+same structure. The format is a 9-line header, type blocks, and declared
+sections: small enough to ``head``, strict enough to validate
+(``validate=true``). Spec: :doc:`spec`.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -145,21 +149,14 @@ The two formats complement each other. readcon-core handles the
 How fast is readcon-core?
 -------------------------
 
-Three in-repo measurements:
-
 1. **CI Cachegrind** (``examples/cachegrind_harness.rs`` →
    ``docs/source/_generated/cachegrind_results.*``). Instruction-reference
-   counts for fixed parse / skip / write / float-parse scenarios. Commit-stable
-   regression metric when wall-clock on shared runners is noisy.
+   counts for fixed CON parse / skip / write / float-parse scenarios.
 
-2. **Equal-geometry multi-frame** (``benches/multiformat_traj.py``, artifact
-   ``benches/results/multiformat_traj_terra.json``). Same geometry, full parse of
-   all frames, median of repeats vs ASE CON / XYZ and chemfiles XYZ. On the
-   committed 218-atom × 100-frame run, readcon CON is about 12× ASE CON and
-   about 1.5× chemfiles XYZ on that host; re-run the script for your machine.
-
-3. **CON vs C sscanf** (``benches/compare_readers.py``). Ordering against an
-   eOn-style C reader on the same text; see :doc:`benchmarks`.
+2. **CON peers** (``benches/compare_readers.py``). Same CON text vs ASE
+   ``ase.io.eon`` and eOn-style C sscanf. Historical host snapshot on a 218×100
+   trajectory: readcon about 8× ASE CON and about 2× C sscanf; re-run for your
+   machine. See :doc:`benchmarks`.
 
 Hot path: **fast-float2** on atom lines, **mmap** for large trajectories,
 ``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /
@@ -341,20 +338,27 @@ gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C al
 always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
 lists include/lib paths for ``libmetatensor``.
 
-When should I use CON vs XYZ / extXYZ / chemfiles?
---------------------------------------------------
+What sits on disk in an eOn / LODE pipeline?
+--------------------------------------------
 
-Use CON when structures must retain optimizer-relevant fields (three-axis
-constraints, forces/velocities sections, versioned metadata) and move between
-languages via the hourglass ABI (Fortran/C/C++/Python/Julia).
+.. table::
 
-XYZ/extXYZ are suitable when only positions (and optionally a lattice) are
-required and fidelity loss is acceptable. Prefer CON as the durable form in
-multi-code pipelines; convert at the edge if needed.
+    +--------------------------------------------------+----------------------------------------------------+
+    | Role                                             | Thing                                              |
+    +==================================================+====================================================+
+    | Optimizer checkpoint and multi-language hand-off | CON / convel via ``readcon-core``                  |
+    +--------------------------------------------------+----------------------------------------------------+
+    | Campaign index (many trajectories, multi-reader) | ``readcon-db`` (CON blobs, UTF-8 text as identity) |
+    +--------------------------------------------------+----------------------------------------------------+
+    | Calculator inside ASE                            | Optional ``to_ase`` / ``from_ase`` only            |
+    +--------------------------------------------------+----------------------------------------------------+
+    | Structure that arrived as another file type      | Chemfiles ingress → CON, then stay on CON          |
+    +--------------------------------------------------+----------------------------------------------------+
+    | Long continuous MD trajectory inside one engine  | That engine’s native binary (XTC/TRR/DCD, …)       |
+    +--------------------------------------------------+----------------------------------------------------+
 
-Chemfiles ingress maps XYZ/PDB/GRO and similar formats into ``ConFrame`` / CON
-when inputs originate elsewhere. See :doc:`benchmarks`
-for equal-geometry parse comparisons.
+``readcon-core`` owns the CON parse/write path and the ``rkr_*`` hourglass ABI.
+Chemfiles is optional edge import into CON.
 
 Are ASE adapters the primary API?
 ---------------------------------
@@ -382,15 +386,4 @@ Why an hourglass C ABI?
 
 Optimizers and drivers are often Fortran or C++. A single ``rkr_*`` surface
 gives those codes the same CON semantics as Python and Julia without embedding
-a Python interpreter on the I/O path, and without maintaining separate text
-dialects (minimal XYZ or package-private logs) per language.
-
-How does CON + readcon-db compare to XYZ and ASE I/O?
------------------------------------------------------
-
-CON + hourglass ABI + ``readcon-db`` preserves CON sections and multi-reader
-campaign indexes with CON text as on-disk authority. Equal-geometry parse
-comparisons against ASE CON / XYZ live in :doc:`benchmarks`.
-ASE adapters still suit calculators and interactive analysis. XYZ suits
-position-only dumps. Engine binary trajectories (XTC/TRR/DCD) suit continuous
-MD density.
+a Python interpreter on the I/O path.
