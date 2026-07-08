@@ -128,14 +128,18 @@ How fast is readcon-core?
 
 1. **CI Cachegrind** (``examples/cachegrind_harness.rs`` →
    ``docs/source/_generated/cachegrind_results.*``). Instruction-reference
-   counts for fixed CON parse / skip / write / float-parse scenarios.
+   counts for fixed CON parse / skip / write / float-parse scenarios
+   (regression authority).
 
 2. **CON peers** (``benches/compare_readers.py``). Same CON text vs ASE
-   ``ase.io.eon`` and eOn-style C sscanf. Historical host snapshot on a 218×100
-   trajectory: readcon about 8× ASE CON and about 2× C sscanf; re-run for your
-   machine. See `benchmarks <benchmarks.rst>`_.
+   ``ase.io.eon`` and eOn-style C sscanf.
 
-Hot path: **fast-float2** on atom lines, **mmap** for large trajectories,
+Measured on ``rgam5terra`` 2026-07-08 UTC (readcon 0.14.0, ASE 3.29.0, median of
+5, 100×218 CON): ASE 30.6 ms, C sscanf 7.3 ms, readcon file path **3.3 ms**
+(9.2× ASE, 2.2× C). Full table and re-run recipe:
+`benchmarks <benchmarks.rst>`_ · `migrate <migrate.rst>`_.
+
+Hot path: **fast-float2** on atom lines, **mmap** / bulk read for trajectories,
 ``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /
 ``forward_fast`` skip without materializing atoms.
 

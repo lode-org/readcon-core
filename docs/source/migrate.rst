@@ -44,9 +44,45 @@ selectors, or energy fields yourself.
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
     | Ingress                   | Chemfiles: XYZ/PDB/GRO/… → CON with one convert path                                                                          |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Speed (CON peers)         | Measured hot path: fast-float2, zero-copy lines, pre-sized vectors (see below)                                                |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
 Migrate so the structure object, selector, campaign store, and plots all speak
 CON. Format rules: `spec.org <spec.rst>`_.
+
+Measured: parse speed vs CON peers
+----------------------------------
+
+Same CON text, same host. Command:
+
+.. code:: shell
+
+    maturin develop --features python --release
+    python benches/compare_readers.py
+
+Snapshot on ``rgam5terra`` (2026-07-08 UTC), readcon 0.14.0, ASE 3.29.0,
+median of 5 runs, 100 frames × 218 atoms (~1.6 MiB):
+
+.. table::
+
+    +----------------------------+-----------+-------------------+
+    | Reader                     | Time (ms) | vs ASE (that run) |
+    +============================+===========+===================+
+    | ASE (``ase.io.eon``)       |      30.6 | 1.0×              |
+    +----------------------------+-----------+-------------------+
+    | C sscanf (eOn-style)       |       7.3 | 4.2×              |
+    +----------------------------+-----------+-------------------+
+    | readcon-core (from string) |       5.6 | 5.4×              |
+    +----------------------------+-----------+-------------------+
+    | readcon-core (file path)   |       3.3 | 9.2×              |
+    +----------------------------+-----------+-------------------+
+
+On that run, file-path readcon is **9.2×** ASE CON and **2.2×** the eOn-style C
+sscanf reader. CI tracks instruction counts (Cachegrind) for parse/skip/write
+and float kernels; see `benchmarks.org <benchmarks.rst>`_ and
+``docs/source/_generated/cachegrind_results.rst`` (e.g. ``float_fast_float2``
+fewer I-refs than ``float_std_parse`` on the same harness). Re-run the commands
+above before citing a new host.
 
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------

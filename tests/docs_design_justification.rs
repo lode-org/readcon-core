@@ -59,6 +59,16 @@ fn assert_no_ai_tells(t: &str, file: &str) {
         "How does CON relate to H5MD",
         "CON and H5MD",
         "Related work (H5MD",
+        // anti-product carve-outs (do not invent reasons not to adopt)
+        "just another text",
+        "upside is smaller",
+        "never join a campaign",
+        "when not to use",
+        "not worth migrating",
+        "MD tape replacement",
+        "universal MD tape",
+        "hand-rolled is fine",
+        "single-code XYZ is fine",
     ];
     for b in banned {
         assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
@@ -299,6 +309,10 @@ fn index_and_readme_src() {
     assert!(
         readme.contains("migrate.org") || readme.contains("convert structure"),
         "readme must point at convert CLI or migrate how-to"
+    );
+    assert!(
+        readme.contains("compare_readers") || readme.contains("3.3 ms") || readme.contains("9.2"),
+        "readme must cite measured peer speed (compare_readers or snapshot numbers)"
     );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));

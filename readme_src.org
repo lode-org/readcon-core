@@ -49,7 +49,8 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 ** Migrate onto CON
 
 Why switch: use a real frame API and multi-language library instead of
-hand-rolling XYZ and a private atoms object.
+hand-rolling XYZ and a private atoms object — and a measured hot path, not
+a slow ASCII tax.
 
 - *API:* parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 - *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
@@ -57,6 +58,7 @@ hand-rolling XYZ and a private atoms object.
 - *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 - *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader)
 - *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
+- *Speed:* on =rgam5terra= 2026-07-08, =benches/compare_readers.py= 100×218 CON: readcon file path 3.3 ms vs ASE =ase.io.eon= 30.6 ms (9.2×) and eOn-style C sscanf 7.3 ms (2.2×); CI Cachegrind tracks I-refs (see [[file:docs/orgmode/benchmarks.org][benchmarks]])
 
 #+begin_src shell
 # foreign → CON (needs --features chemfiles)
