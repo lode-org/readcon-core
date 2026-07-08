@@ -8,6 +8,11 @@ Convert other formats into CON
    *Executable Org notebook* (run with Babel, not a committed ``.ipynb``):
    :doc:`chemfiles-notebook` — ``scripts/run-chemfiles-notebook.sh``.
 
+   **CI:** GitHub Actions ``ci_python.yml`` (chemfiles matrix) runs the Python
+   learning path in ``tests/python/test_tutorial_chemfiles.py`` (XYZ → CON write,
+   memory read, bonded selection). Lean matrix skips those tests. Local Babel
+   notebook remains optional.
+
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).
 
@@ -225,7 +230,7 @@ Python selection on bonded CON
 Multi-format conversion habit
 -----------------------------
 
-Treat chemfiles as the **format router**; CON as the **canonical LODE store**.
+Treat chemfiles as the **format router**; CON as the on-disk checkpoint store.
 
 .. code:: rust
 
