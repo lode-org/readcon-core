@@ -48,13 +48,15 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 
 ** Migrate onto CON
 
-Why switch:
+Why switch: use a real frame API and multi-language library instead of
+hand-rolling XYZ and a private atoms object.
 
+- *API:* parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 - *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
-- *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust
-- *Selection:* =select_atoms= / =rkr_frame_select= on CON (=name H=, bonds/angles when topology is present)
-- *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] indexes CON text (energy / formula / sections, dedup, multi-reader)
-- *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on CON checkpoints / paths — not a per-code export
+- *Selection:* =select_atoms= / =rkr_frame_select= (=name H=, bonds/angles when topology is present)
+- *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
+- *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader)
+- *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
 
 #+begin_src shell
 # foreign → CON (needs --features chemfiles)

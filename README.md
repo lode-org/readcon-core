@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#orgbb292cb)
-    1.  [Features](#org5f6d579)
-    2.  [Migrate onto CON](#org0592f29)
-    3.  [Install](#org02c1b03)
-    4.  [Tutorial](#orgb356555)
-    5.  [Design Decisions](#orgf115142)
-        1.  [FFI Layer](#orgf901853)
-    6.  [Specification](#org99c62f5)
-        1.  [CON format](#orge4c909f)
-        2.  [convel format](#org6d70547)
-    7.  [Capabilities](#org200c27b)
-    8.  [Citation](#orga644828)
-2.  [License](#org06f9b3b)
+1.  [About](#org9c1b4d2)
+    1.  [Features](#org328f813)
+    2.  [Migrate onto CON](#org4da7c80)
+    3.  [Install](#orgb5f869f)
+    4.  [Tutorial](#org3d0a528)
+    5.  [Design Decisions](#orgaa4b34a)
+        1.  [FFI Layer](#orgd47b022)
+    6.  [Specification](#org91fe318)
+        1.  [CON format](#org655059d)
+        2.  [convel format](#orgb2b77d3)
+    7.  [Capabilities](#org76e4b32)
+    8.  [Citation](#orgfde6b47)
+2.  [License](#orga4501fe)
 
 
-<a id="orgbb292cb"></a>
+<a id="org9c1b4d2"></a>
 
 # About
 
@@ -86,7 +86,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org5f6d579"></a>
+<a id="org328f813"></a>
 
 ## Features
 
@@ -104,17 +104,19 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org0592f29"></a>
+<a id="org4da7c80"></a>
 
 ## Migrate onto CON
 
-Why switch:
+Why switch: use a real frame API and multi-language library instead of
+hand-rolling XYZ and a private atoms object.
 
+-   **API:** parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 -   **Payload:** constraints, `atom_id`, optional sections, versioned JSON on one frame
--   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust
--   **Selection:** `select_atoms` / `rkr_frame_select` on CON (`name H`, bonds/angles when topology is present)
--   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) indexes CON text (energy / formula / sections, dedup, multi-reader)
--   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on CON checkpoints / paths — not a per-code export
+-   **Selection:** `select_atoms` / `rkr_frame_select` (`name H`, bonds/angles when topology is present)
+-   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
+-   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader)
+-   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
 
     # foreign → CON (needs --features chemfiles)
     cargo run --release --features chemfiles -- convert structure.xyz structure.con
@@ -127,7 +129,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="org02c1b03"></a>
+<a id="orgb5f869f"></a>
 
 ## Install
 
@@ -176,7 +178,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgb356555"></a>
+<a id="org3d0a528"></a>
 
 ## Tutorial
 
@@ -207,7 +209,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="orgf115142"></a>
+<a id="orgaa4b34a"></a>
 
 ## Design Decisions
 
@@ -215,7 +217,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="orgf901853"></a>
+<a id="orgd47b022"></a>
 
 ### FFI Layer
 
@@ -229,14 +231,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org99c62f5"></a>
+<a id="org91fe318"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orge4c909f"></a>
+<a id="org655059d"></a>
 
 ### CON format
 
@@ -247,7 +249,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org6d70547"></a>
+<a id="orgb2b77d3"></a>
 
 ### convel format
 
@@ -257,7 +259,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org200c27b"></a>
+<a id="org76e4b32"></a>
 
 ## Capabilities
 
@@ -316,14 +318,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orga644828"></a>
+<a id="orgfde6b47"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org06f9b3b"></a>
+<a id="orga4501fe"></a>
 
 # License
 

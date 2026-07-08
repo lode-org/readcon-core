@@ -13,35 +13,40 @@ How-to — migrate a stack onto CON
 Why adopt CON (what you gain)
 -----------------------------
 
-CON is a human-readable checkpoint for **one structure or image** with the fields
-multi-tool pipelines actually share:
+Reach for a maintained library with a real frame API, not a hand-rolled XYZ
+parser and a home-grown ``Atoms`` struct. ``readcon-core`` already gives you
+parse/write, typed metadata, optional sections, validation, compression,
+lazy multi-frame iteration, selection, hourglass bindings in every major
+language, campaign storage via ``readcon-db``, and plotting via chemparseplot —
+one interchange file and one API surface.
+
+CON on disk is the checkpoint (cell, type-grouped coordinates, constraints,
+``atom_id``, optional sections, JSON). The library is the reason to use it even
+from a single code in a single language: you do not re-marshall atoms, masks,
+selectors, or energy fields yourself.
 
 .. table::
 
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Payload / stack                     | Why it matters                                                                                                                                                |
-    +=====================================+===============================================================================================================================================================+
-    | Per-direction fixed mask (column 4) | Constraints for optimizers / NEB without a sidecar                                                                                                            |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``atom_id`` (column 5)              | Stable identity after type-grouping; dimer / band matching                                                                                                    |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Optional sections                   | Velocities, forces, energies, charges, spins, magmoms on the same file                                                                                        |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Line-2 JSON                         | Spec version, energy, units (v3), provenance — round-trips unknown keys                                                                                       |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Selection on CON                    | ``name H``, ``type Cu``, ``bonds: all`` → ``atom_data`` indices (same grammar in every language; chemfiles-linked build)                                      |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Hourglass ``rkr_*`` ABI             | One semantics in Fortran / C / C++ / Python / Julia / Rust                                                                                                    |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-db`` campaigns            | LMDB corpora over CON text: energy / formula / section indexes, dedup, multi-reader                                                                           |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Plotting / analysis                 | `chemparseplot <https://chemparseplot.rgoswami.me>`_ (and `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_) consume CON-shaped checkpoints and campaign outputs |
-    +-------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Layer                     | What you get                                                                                                                  |
+    +===========================+===============================================================================================================================+
+    | Frame API                 | Read/write, builders, ``energy`` / sections / fixed masks / ``atom_id`` without inventing types                               |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Multi-frame + compression | Lazy iterators, gzip/zstd, hot-path parse; trajectories stay usable as CON sequences                                          |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Selection                 | ``select_atoms`` / ``rkr_frame_select`` (``name H``, bonds/angles when topology is present)                                   |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Hourglass ``rkr_*``       | Same semantics in Fortran / C / C++ / Python / Julia / Rust when the stack grows                                              |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | ``readcon-db``            | LMDB corpora on CON text: energy / formula / section indexes, dedup, multi-reader                                             |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Plotting                  | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ on the same checkpoints |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
+    | Ingress                   | Chemfiles: XYZ/PDB/GRO/… → CON with one convert path                                                                          |
+    +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
-You migrate so every tool in the stack reads and writes the **same** file instead
-of private dumps — and so campaign query, selection, and plotting open without
-a second structure format. This page is the task path; format rules live in
-`spec.org <spec.rst>`_.
+Migrate so the structure object, selector, campaign store, and plots all speak
+CON. Format rules: `spec.org <spec.rst>`_.
 
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------
@@ -64,29 +69,36 @@ layer that **assumes CON text is authoritative**:
     +------------------------+------------------------------------------------------------------------------------+
 
 Install (separate package): ``cargo add readcon-db`` / ``pip install readcon-db``.
-Docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_. Private dumps and per-code binary
-caches do not get this layer for free; CON on disk does.
+Docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_. Multi-frame CON (with optional compression)
+plus selection and ``index_proj`` feed the same campaign path; you do not need a
+second structure dialect for "real" trajectories or screening corpora.
 
-Benefit: selection API on CON frames
-------------------------------------
+Benefit: the API (stop owning your own atoms object)
+----------------------------------------------------
 
-After a structure is CON (native or converted), the same selection surface runs
-in every binding (needs chemfiles-linked build for topology selectors):
+Use the library types and helpers instead of marshaling coordinates, masks, and
+metadata by hand in every tool:
+
+- Frames: ``read_con`` / ``iter_con`` / ``write_con`` / ``convert_to_con`` / builders
+
+- Per-atom: symbols, positions, fixed masks, ``atom_id``, optional force/velocity/charge fields
+
+- Frame-level: ``energy``, units, reserved JSON keys, ``validate``
+
+- Selection: ``frame.select_atoms("name H")`` (topology selectors when bonds exist)
+
+- C ABI: ``rkr_frame_*`` so Fortran and C++ do not reimplement the table
 
 .. code:: python
 
     import readcon
 
     frame = readcon.read_first_frame("structure.con")
-    # geometry-only selectors work on symbols alone
     h_idx = frame.select_atoms("name H")
-    # topology selectors need metadata bonds (import from PDB/GRO or hand-set)
-    # oxy = frame.select_atoms("name O")
-    # angles = frame.select("angles: all")
+    # topology: frame.select("angles: all") when metadata bonds are present
 
-C / hourglass: ``rkr_frame_select`` / ``select_on_frame``. Recipes:
-`chemfiles-howto <chemfiles-howto.rst>`_, grammar notes:
-`chemfiles-explain <chemfiles-explain.rst>`_.
+Recipes: `chemfiles-howto <chemfiles-howto.rst>`_, `howto <howto.rst>`_,
+`bindings <bindings.rst>`_.
 
 Benefit: plotting stack (chemparseplot)
 ---------------------------------------

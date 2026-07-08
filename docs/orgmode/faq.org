@@ -285,21 +285,22 @@ lists include/lib paths for =libmetatensor=.
 
 * What is the stack for?
 
-Putting CON into every language and tool path that touches atomic structures.
-Migration task guide: [[file:migrate.org][migrate.org]] (=readcon-core convert=,
+Putting CON into every language and tool path that touches atomic structures —
+including a single code that would otherwise hand-roll XYZ and its own atoms
+type. Migration guide: [[file:migrate.org][migrate.org]] (=readcon-core convert=,
 =readcon.convert_to_con=).
 
 | Component | Job |
 |-----------+-----|
-| CON on disk | The format |
-| =readcon-core= | Spec + hourglass ABI + chemfiles in + selection + DLPack/metatensor out |
+| CON on disk | The checkpoint format (text, optional gzip/zstd) |
+| =readcon-core= | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor |
 | =readcon-db= | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader |
 | Chemfiles | Land foreign structures *as* CON |
 | ASE adapters | Calculators without abandoning CON interchange |
 | [[https://chemparseplot.rgoswami.me][chemparseplot]] / [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] | Plotting and analysis on CON checkpoints |
 | rgpot / eOn / amsel / … | Optimizers and potentials on the same file |
 
-One on-disk format. Every language. Campaigns, selection, and plotting share it.
+One on-disk format. One library API. Campaigns, selection, and plotting share it.
 
 * Are ASE adapters the primary API?
 
