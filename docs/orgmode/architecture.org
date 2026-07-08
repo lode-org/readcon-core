@@ -21,7 +21,7 @@ thin FFI and language-specific wrapper layers.
 - =FrameHeader= :: 9-line header metadata (cell, angles, atom counts,
   masses, spec_version, metadata). The =spec_version= field (=u32=)
   records the CON spec version from the JSON metadata line. The
-  =metadata= field (=BTreeMap<String, serde_json::Value>=) holds
+  =metadata= field (=BTreeMap<String, serde_json::Value>=) stores
   additional key-value pairs from the JSON, preserving unrecognized
   keys through round-trips.
 - =AtomDatum= :: Single atom data (symbol, coordinates, fixed flag,
@@ -189,31 +189,20 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 :CUSTOM_ID: design-rationale
 :END:
 
-=readcon-core= is the *definitive CON / convel interchange layer* for eOn and
-LODE multi-language pipelines: a versioned on-disk contract behind an hourglass
+=readcon-core= implements a versioned CON/convel contract behind an hourglass
 C ABI so optimizers and drivers in Fortran, C, C++, Julia, and Python share
-one semantics surface without requiring a Python runtime on the I/O path.
-Lossless round-trip covers three-axis constraints, forces / velocities,
-=atom_id=, and JSON metadata. Optional chemfiles ingress maps foreign formats
-into =ConFrame=; optional metatensor/DLPack exports provide tensor hand-off
-without a second authoritative on-disk representation. Lean builds expose
-optional features as stubs (=RKR_STATUS_FEATURE_DISABLED=).
+one semantics surface without a Python runtime on the I/O path. Round-trip
+covers per-direction constraints, forces / velocities, =atom_id=, and JSON
+metadata. Chemfiles maps foreign formats into =ConFrame=; metatensor/DLPack
+exports give tensor hand-off while UTF-8 CON stays the on-disk authority.
+Lean builds expose optional features as stubs (=RKR_STATUS_FEATURE_DISABLED=).
 
-=readcon-db= provides multi-reader campaign indexes while retaining UTF-8 CON
-as durable identity (hash, dedup, reindex). ASE remains effective for
-calculators and interactive analysis; optional =to_ase= is calculator
-hand-off—not campaign storage—when CON sections must be preserved under
-multi-reader screening.
+=readcon-db= provides multi-reader campaign indexes with UTF-8 CON as durable
+identity (hash, dedup, reindex). Optional =to_ase= supports calculator hand-off
+when structures move into ASE.
 
-*State-of-the-art* here means domain-scoped excellence (CON interchange +
-hourglass ABI + measured parse discipline), not generic MD-format supremacy.
-Speed claims map to Cachegrind I-refs and equal-geometry harnesses only
-([[file:benchmarks.org][benchmarks.org]]).
-
-Format evolution and layout alternatives: [[file:evolution.org][evolution.org]].
-Q&A: [[file:faq.org][faq.org]]. Spec: [[file:spec.org][spec.org]].
-Measured interchange comparisons: [[file:benchmarks.org][benchmarks.org]].
-Engine-native binary trajectories remain appropriate high-density encodings
-inside continuous MD; they are complementary to a multi-language CON
-checkpoint and campaign layer.
+Parse measurements: Cachegrind I-refs and equal-geometry peer runs
+([[file:benchmarks.org][benchmarks.org]]). Format evolution:
+[[file:evolution.org][evolution.org]]. Q&A: [[file:faq.org][faq.org]]. Spec:
+[[file:spec.org][spec.org]].
 

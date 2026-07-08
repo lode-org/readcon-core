@@ -1,47 +1,38 @@
 * About
 
-~readcon-core~ is the *definitive CON / convel interchange layer* for eOn,
-LODE, and multi-language saddle / NEB pipelines: versioned on-disk fidelity
-(constraints, forces, velocities, =atom_id=, JSON metadata), an hourglass
-C ABI shared by Rust / C / C++ / Python / Julia / Fortran, optional chemfiles
-ingress for XYZ/PDB/GRO → CON, and a companion campaign store that keeps CON
-text authoritative.
+~readcon-core~ reads and writes versioned =.con= / =.convel= for eOn, LODE, and
+multi-language saddle / NEB pipelines. Constraints, forces, velocities,
+=atom_id=, and JSON metadata round-trip. One hourglass C ABI covers Rust, C,
+C++, Python, Julia, and Fortran. Optional chemfiles maps XYZ / PDB / GRO into
+CON. Campaign corpora live in [[https://github.com/lode-org/readcon-db][readcon-db]] with CON text as the durable identity
+(=cargo add readcon-db=, =pip install readcon-db=,
+https://lode-org.github.io/readcon-db/).
 
-It is a full Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]] (not a thin wrap). Scope is CON
-interchange -- not "fastest I/O in all of computational chemistry," and not a
-replacement for engine-native binary MD trajectories (XTC/TRR/DCD).
-
-Ecosystem: this crate is the interchange and multi-language ABI. For
-campaign-scale corpora (mmap LMDB, indexes on natoms / symbols / energy /
-forces / velocities, xxHash3 dedup, multi-reader), use
-[[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add readcon-db=, =pip install readcon-db=, docs at
-https://lode-org.github.io/readcon-db/). Corpus blobs stay CON text and are
-always decoded with =readcon-core= -- semantics never fork. Foreign formats enter
-via the optional chemfiles feature (=read_chemfiles*=), not ASE. ASE
-adapters are optional calculator hand-off only.
+Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]].
 
 | Layer | Crate | Responsibility |
 |-------+-------+----------------|
-| Interchange | =readcon-core= / Python =readcon= | Parse/write CON & convel, spec v2–v3 metadata, chemfiles ingress, hourglass C/Python/Julia/Fortran FFI |
+| Interchange | =readcon-core= / Python =readcon= | CON / convel parse and write, spec v2–v3 metadata, chemfiles ingress, hourglass FFI |
 | Corpus | [[https://github.com/lode-org/readcon-db][readcon-db]] / =readcon_db= | Heed/LMDB store, secondary indexes, exact-match dedup, CLI + C/Python/Fortran |
 
-Speed (honest): product claims use in-repo harnesses only -- CI Cachegrind
-I-refs on =examples/cachegrind_harness.rs= (commit-stable instruction counts)
-and equal-geometry multi-frame runs from =benches/multiformat_traj.py= /
-=benches/compare_readers.py= (committed under =benches/results/=). See
-[[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]]. We do not headline toy 4-atom atoms/s tables or
-unmeasured us rankings.
+Foreign formats enter through chemfiles (=read_chemfiles*=). ASE adapters
+(=to_ase= / =from_ase=) support calculator hand-off only.
+
+Parse speed: CI Cachegrind I-refs on =examples/cachegrind_harness.rs=; peer
+ordering via =benches/multiformat_traj.py= and =benches/compare_readers.py=
+(artifacts under =benches/results/=). Methodology:
+[[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 
 ** Features
 
 - *CON and convel support:* Parses both coordinate-only and velocity-augmented files. Velocity sections are auto-detected without relying on file extensions.
 - *Lazy iteration:* ~ConFrameIterator~ parses one frame at a time for memory-efficient trajectory processing; =next_with_raw_span= preserves the on-disk blob for corpus ingest without re-serialization.
-- *Performance:* [[https://github.com/aldanor/fast-float-rust][fast-float2]] on the f64 hot path, [[https://docs.rs/memmap2][memmap2]] for large files, Cachegrind-tracked parse paths; equal-geometry harnesses vs ASE CON and C sscanf (see benchmarks).
-- *Parallel parsing:* Optional rayon-based parallel frame parsing behind the ~parallel~ feature gate.
-- *Language bindings:* Python (PyO3), Julia (ccall), C (cbindgen FFI), C++ (RAII header-only), and Fortran (fpm), following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+- *Performance:* [[https://github.com/aldanor/fast-float-rust][fast-float2]] on the f64 hot path, [[https://docs.rs/memmap2][memmap2]] for large files, Cachegrind I-refs in CI; equal-geometry peer runs vs ASE CON and C sscanf (see benchmarks).
+- *Parallel parsing:* Optional rayon-based parallel frame parsing behind the ~parallel~ Cargo feature.
+- *Language bindings:* Python (PyO3), Julia (ccall), C (cbindgen FFI), C++ (RAII header-only), and Fortran (fpm), using the hourglass ABI pattern from [[https://github.com/metatensor/metatensor][metatensor]].
 - *Spec-v2 metadata helpers:* Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, and =neb_band=, while still allowing raw JSON metadata when needed.
 - *Spec-v2 validation:* =validate=true= enforces finite numeric values, reserved metadata schema, physical header geometry, exact component labels, valid symbols, declared section presence, and matching per-atom identity columns.
-- *Force and constraint fidelity:* Writers preserve velocities, forces, original atom ids, and per-axis fixed masks across Rust, Python, Julia, C, and C++.
+- *Force and constraint fidelity:* Writers preserve velocities, forces, original atom ids, and per-direction fixed masks across Rust, Python, Julia, C, and C++.
 - *Campaign corpora:* pair with [[https://github.com/lode-org/readcon-db][readcon-db]] for indexed multi-trajectory stores (CON text authoritative).
 - *RPC serving:* Optional Cap'n Proto RPC interface (~rpc~ feature) for network-accessible parsing.
 
@@ -120,18 +111,17 @@ The library is designed with the following principles in mind:
 
 - *Lazy Parsing:* The ~ConFrameIterator~ allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
 
-- *Interoperability:* The FFI layer makes the core parsing logic accessible from other programming languages, increasing the library's utility. Currently, a ~C~ header is auto-generated along with a hand-crafted ~C++~ interface, following the hourglass design from [[https://github.com/metatensor/metatensor][Metatensor]].
+- *Interoperability:* The FFI layer exposes the core parser to other languages. A ~C~ header is auto-generated with a hand-crafted ~C++~ interface, using the hourglass ABI pattern from [[https://github.com/metatensor/metatensor][metatensor]].
 *** FFI Layer
-A key challenge in designing an FFI is deciding how data is exposed to the C-compatible world. This library uses a hybrid approach to offer both safety and convenience:
+FFI data exposure uses a hybrid of safety and convenience:
 
 1.  *Opaque Pointers (The Handle Pattern):* The primary way to interact with
    frame data is through an opaque pointer, represented as ~RKRConFrame*~ in C.
-   The C/C++ client holds this "handle" but cannot inspect its contents
+   The C/C++ client keeps this "handle" but cannot inspect its contents
    directly. Instead, it must call Rust functions to interact with the data
-   (e.g., ~rkr_frame_get_header_line(frame_handle, ...)~). This is the safest
-   and most flexible pattern, as it completely hides Rust's internal data
-   structures and memory layout, preventing ABI breakage if the Rust code is
-   updated.
+   (e.g., ~rkr_frame_get_header_line(frame_handle, ...)~). This pattern hides
+   Rust's internal data structures and memory layout, preventing ABI breakage
+   if the Rust code is updated.
 
 2.  *Transparent ~#[repr(C)]~ Structs (The Data Extraction Pattern):* For
    convenience and performance in cases where only the core atomic data is
@@ -162,20 +152,19 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 - Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 ** Why use this over [[https://github.com/HaoZeke/readCon][readCon]], ASE CON, or format-only tools?
 
-| Differentiator | What you get |
-|----------------+--------------|
-| Lossless CON round-trip | Velocities, forces, per-axis constraints, =atom_id=, and versioned JSON metadata survive read→write across every supported language |
-| Hourglass multi-language ABI | One =rkr_*= C surface; Fortran / C / C++ / Python / Julia share semantics without embedding a Python interpreter on the I/O path |
-| Measured parse path | Equal-geometry harnesses vs ASE CON and C sscanf; CI Cachegrind I-refs for regression—not marketing-only Criterion tables |
-| Spec validation | =validate=true= rejects non-finite numbers, bad geometry, and mismatched section identity columns |
-| Optional chemfiles ingress | XYZ / PDB / GRO → =ConFrame= / CON without inventing a second CON dialect |
-| Campaign companion | [[https://github.com/lode-org/readcon-db][readcon-db]] indexes multi-trajectory corpora while CON text remains the durable identity |
+| Capability | readcon-core |
+|------------+--------------|
+| Round-trip | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON metadata across every binding |
+| Languages | One =rkr_*= C surface for Fortran / C / C++ / Python / Julia (no Python on the optimizer I/O path) |
+| Parse checks | Equal-geometry peer runs vs ASE CON and C sscanf; CI Cachegrind I-refs |
+| Validation | =validate=true= rejects non-finite numbers, bad geometry, mismatched section identity |
+| Ingress | XYZ / PDB / GRO → =ConFrame= / CON via optional chemfiles |
+| Campaigns | [[https://github.com/lode-org/readcon-db][readcon-db]] indexes multi-trajectory corpora; CON text stays the durable identity |
 
-Legacy readCon lacks the modern bindings matrix, spec-v2 validation, chemfiles
-ingress, and Cachegrind discipline. ASE =ase.io.eon= is fine for calculator
-hand-off but is not the multi-language interchange contract. Format-only tools
-(generic XYZ / chemfiles alone) do not own CON section fidelity or the
-hourglass ABI.
+Compared with legacy readCon: multi-language bindings, spec-v2 validation,
+chemfiles ingress, and Cachegrind regression tracking. Compared with ASE
+=ase.io.eon=: shared CON contract for optimizers outside Python. Compared with
+XYZ or chemfiles alone: CON section fidelity on the wire.
 
 ** Citation
 If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. The Zenodo DOI tracks the latest release.
