@@ -35,9 +35,11 @@ Overview
 --------
 
 CON stores atomic configurations for transition-state search and related
-simulations. It originated in the `eOn code <https://eondocs.org>`_ and is
-used by LODE tooling and `ASE <https://wiki.fysik.dtu.dk/ase/>`_ among others.
-The reference implementation is ``readcon-core``.
+simulations. It originated in the `eOn code <https://eondocs.org>`_ and is a
+general checkpoint layout for any tool that needs constraints, forces, atom
+identity, and versioned metadata on disk. Consumers include eOn, LODE
+tooling, `ASE <https://wiki.fysik.dtu.dk/ase/>`_, amsel, and others. The
+reference implementation is ``readcon-core``.
 
 A CON file contains one or more *frames*. Each frame encodes a simulation
 cell, per-type metadata (masses, atom counts), and per-atom data
