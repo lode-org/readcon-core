@@ -30,39 +30,11 @@ forces, and atom identity on the same file.
     | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
     +--------------------------+--------------------------------------------------------------+
 
-The de facto layout came from the eOn rare-event stack
-:cite:t:`chillEONSoftwareLong2014`.
 ``readcon-core`` is the formalized spec (v2–v3) and the multi-language
 implementation: hourglass ``rkr_*`` C ABI, Python / Julia / Fortran wrappers,
 chemfiles ingress, DLPack / metatensor tensor export, and ``index_proj``
 contracts for campaign stores (``readcon-db``). Spec:
 :doc:`spec`. Design history: :doc:`evolution`.
-
-How does CON relate to H5MD, engine binaries, and ASE?
-------------------------------------------------------
-
-.. table::
-
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-    | Format / tool                                                  | Role                                                                        |
-    +================================================================+=============================================================================+
-    | CON + ``readcon-core``                                         | Text checkpoint: constraints, ``atom_id``, forces, JSON; multi-language ABI |
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-    | H5MD (:cite:t:`deBuylH5MDStructuredEfficient2014`)             | HDF5 layout for continuous MD trajectories and observables                  |
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-    | XTC / TRR / DCD / engine dumps                                 | High-density I/O **inside** one MD engine                                   |
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-    | ASE                                                            | Calculators and analysis; optional CON I/O via ``ase.io.eon`` or ``to_ase`` |
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-    | metatensor (:cite:t:`bigiMetatensorMetatomicFoundational2026`) | ML tensor graphs; ``readcon-core`` can export ``TensorBlock`` / DLPack      |
-    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
-
-CON carries constraints, ``atom_id``, and a shared multi-language ABI on text
-frames. H5MD carries hierarchical binary particle series and observables
-under HDF5.
-
-.. bibliography::
-   :filter: docname in docnames
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -145,17 +117,6 @@ provides:
 - **Backward compatibility**: pre-v2 files have non-JSON on line 2.
   The parser detects this (line 2 does not start with ``{``) and falls
   back to legacy mode (``spec_version = 1``).
-
-CON and H5MD / HDF5
--------------------
-
-CON: configuration checkpoints (constraints, ``atom_id``, forces, JSON metadata)
-with a multi-language text ABI.
-
-H5MD: particle trajectories and observables as HDF5 groups and datasets
-(:cite:t:`deBuylH5MDStructuredEfficient2014`).
-
-HDF5 alone is a container. H5MD is the portable MD schema on top of it.
 
 How fast is readcon-core?
 -------------------------

@@ -215,17 +215,10 @@ v3 =units= when required by the library's write policy.
 | v3 with =units= | Preferred interchange for new tools |
 | Unknown future version | Strict mode errors; permissive mode may warn and best-effort parse |
 
-CON is a human-readable multi-language checkpoint format for transition-state
-workflows. GROMACS/LAMMPS and similar engines keep their own binary trajectory
-streams for continuous MD.
-
 * Toward version 4 (candidate scope)
 
-Gap analysis against the strongest neighboring formats: extXYZ (arbitrary
-per-atom columns), H5MD (binary trajectory store), mmCIF/PDBx (registered
-vocabulary and dictionaries), OPTIMADE and QCSchema (machine-validated
-metadata). Candidates below preserve the nine-line header and type-grouped
-coordinates; each entry names the interoperability failure it removes.
+Candidates below preserve the nine-line header and type-grouped coordinates.
+Each entry names a capability gap in the current reserved surface.
 
 ** Reserved per-atom sections for charge, spin, and magnetic moments
 

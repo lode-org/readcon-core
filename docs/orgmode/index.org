@@ -20,8 +20,8 @@ forces, JSON metadata (spec v2–v3). Hourglass C ABI for Fortran, C, C++,
 Python, Julia, and Rust; optional chemfiles ingress; DLPack / metatensor
 export; campaign hooks for ``readcon-db``.
 
-Related work (H5MD, engines, ASE): :doc:`faq`. Spec: :doc:`spec`. Numbers:
-:doc:`benchmarks`. Start: :doc:`getting-started`.
+Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
+:doc:`getting-started`.
 
 .. important::
 

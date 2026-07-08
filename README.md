@@ -1,21 +1,21 @@
 
 # Table of Contents
 
-1.  [About](#orgba827f6)
-    1.  [Features](#orga4baac9)
-    2.  [Install](#org2e27297)
-    3.  [Tutorial](#orgb30d2eb)
-    4.  [Design Decisions](#org26ff20e)
-        1.  [FFI Layer](#org9b17387)
-    5.  [Specification](#org31c8220)
-        1.  [CON format](#orgea8e49e)
-        2.  [convel format](#orgf0cf828)
-    6.  [Capabilities](#org9ad34e2)
-    7.  [Citation](#org42516e1)
-2.  [License](#orgefeb354)
+1.  [About](#orgd736c59)
+    1.  [Features](#orge3cd48e)
+    2.  [Install](#org7b46c89)
+    3.  [Tutorial](#orgaacb7fe)
+    4.  [Design Decisions](#org64af52a)
+        1.  [FFI Layer](#org057a19f)
+    5.  [Specification](#org4cf5d3e)
+        1.  [CON format](#org4dd0873)
+        2.  [convel format](#orgd466ec6)
+    6.  [Capabilities](#org436dcbf)
+    7.  [Citation](#org406ce81)
+2.  [License](#orgc7db735)
 
 
-<a id="orgba827f6"></a>
+<a id="orgd736c59"></a>
 
 # About
 
@@ -25,15 +25,10 @@ coordinates, per-direction constraints, stable `atom_id`, optional velocity /
 force / energy sections, and JSON metadata (spec v2–v3, see
 [docs/orgmode/spec.org](docs/orgmode/spec.md)).
 
-Rare-event and transition-state tools need checkpoints that survive many
-codes: frozen axes for constrained searches, identity through type-grouping
-for NEB and dimer modes, forces and energies on the same frame, and a single
-ABI so Fortran optimizers and Python analysis share one file. That is what
-CON is for. H5MD [de Buyl et al., 2014] stores continuous MD trajectories and
-observables on HDF5; engine formats (XTC/TRR/DCD) store dense dynamics inside
-one MD package.
-
-The library is the multi-language stack for that format:
+What CON carries is what multi-code rare-event and transition-state pipelines
+need on disk: frozen axes for constrained searches, identity through
+type-grouping for NEB and dimer modes, forces and energies on the same frame,
+and one ABI so Fortran optimizers and Python analysis share a file.
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -67,31 +62,30 @@ The library is the multi-language stack for that format:
 
 <tr>
 <td class="org-left">Ingress</td>
-<td class="org-left">Optional chemfiles import/selection (XYZ/PDB/GRO/…) into <code>ConFrame</code></td>
+<td class="org-left">Optional chemfiles import/selection into <code>ConFrame</code></td>
 </tr>
 
 <tr>
 <td class="org-left">Campaigns</td>
-<td class="org-left"><code>index_proj</code> screening contracts for <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add readcon-db</code>, <code>pip install readcon-db</code>)</td>
+<td class="org-left"><code>index_proj</code> screening for <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add readcon-db</code>, <code>pip install readcon-db</code>)</td>
 </tr>
 </tbody>
 </table>
 
-Downstream of that surface: rare-event clients (eOn [Chill et al., 2014] and
-related saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
-calculators (`to_ase` / `from_ase`), ML pipelines via DLPack / metatensor, and
-any other CON-native tool. GROMACS-class and ML runtimes consume the tensor
-exports without re-parsing text.
+Consumers of that surface include rare-event clients (eOn lineage and other
+saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
+calculators (`to_ase` / `from_ase`), campaign stores, and ML pipelines that take
+DLPack or metatensor blocks.
 
 Rust rewrite of [readCon](https://github.com/HaoZeke/readCon). Chemfiles owns
 format diversity at the edge; this crate owns CON fidelity.
 
-Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`); CON peers
-(`benches/compare_readers.py` vs ASE `ase.io.eon` and eOn-style C). See
+Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
+`benches/compare_readers.py`. See
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orga4baac9"></a>
+<a id="orge3cd48e"></a>
 
 ## Features
 
@@ -107,7 +101,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`); CON peers
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org2e27297"></a>
+<a id="org7b46c89"></a>
 
 ## Install
 
@@ -156,7 +150,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`); CON peers
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgb30d2eb"></a>
+<a id="orgaacb7fe"></a>
 
 ## Tutorial
 
@@ -207,7 +201,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="org26ff20e"></a>
+<a id="org64af52a"></a>
 
 ## Design Decisions
 
@@ -215,7 +209,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org9b17387"></a>
+<a id="org057a19f"></a>
 
 ### FFI Layer
 
@@ -229,14 +223,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org31c8220"></a>
+<a id="org4cf5d3e"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orgea8e49e"></a>
+<a id="org4dd0873"></a>
 
 ### CON format
 
@@ -247,7 +241,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgf0cf828"></a>
+<a id="orgd466ec6"></a>
 
 ### convel format
 
@@ -257,7 +251,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org9ad34e2"></a>
+<a id="org436dcbf"></a>
 
 ## Capabilities
 
@@ -316,14 +310,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org42516e1"></a>
+<a id="org406ce81"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="orgefeb354"></a>
+<a id="orgc7db735"></a>
 
 # License
 
