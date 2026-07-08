@@ -49,29 +49,34 @@ Conversion cost appears as ``chemfiles_*`` Cachegrind scenarios when the
 CON peer timing (``compare_readers.py``)
 ----------------------------------------
 
-Ordering against ASE ``ase.io.eon`` and an eOn-style C reader on the **same CON text**. Historical single-host snapshot; re-run to refresh:
+Ordering against ASE ``ase.io.eon`` and an eOn-style C reader on the **same CON text**. Latest measured snapshot (``rgam5terra``, 2026-07-08 UTC, readcon 0.14.0,
+ASE 3.29.0, median of 5, 100×218 atoms ~1.6 MiB):
 
 .. table::
 
     +----------------------------+-----------+-------------------+
     | Reader                     | Time (ms) | vs ASE (that run) |
     +============================+===========+===================+
-    | ASE (``ase.io.eon``)       |      36.1 | 1.0×              |
+    | ASE (``ase.io.eon``)       |      30.6 | 1.0×              |
     +----------------------------+-----------+-------------------+
-    | C sscanf (eOn-style)       |      10.6 | 3.4×              |
+    | C sscanf (eOn-style)       |       7.3 | 4.2×              |
     +----------------------------+-----------+-------------------+
-    | readcon-core (file path)   |       4.4 | 8.2×              |
+    | readcon-core (from string) |       5.6 | 5.4×              |
     +----------------------------+-----------+-------------------+
-    | readcon-core (from string) |       4.1 | 8.7×              |
+    | readcon-core (file path)   |       3.3 | 9.2×              |
     +----------------------------+-----------+-------------------+
+
+That run: file-path readcon is 9.2× ASE CON and 2.2× C sscanf. Re-run
+``python benches/compare_readers.py`` after hot-path changes.
 
 .. figure:: img/parsing_throughput.svg
 
     Parsing throughput across trajectory sizes (log scale; illustrative)
 
-Structural reasons the C/Rust path can beat ASE/=sscanf= **in principle**:
+Why the peer table looks like that (implementation, not marketing):
 
-- **fast-float2**: tuned decimal kernel vs typical ``sscanf`` dispatch
+- **fast-float2**: tuned decimal kernel vs typical ``sscanf`` dispatch (Cachegrind
+  ``float_fast_float2`` vs ``float_std_parse`` I-refs)
 
 - **Zero-copy iteration**: borrows lines from the input ``&str``, no ``fgets`` buffer copies
 
@@ -87,9 +92,9 @@ Equal-geometry multi-frame (``multiformat_traj.py``)
 
 Secondary wall-clock check on one geometry against other ASCII structure
 readers (ASE CON among them). Artifact:
-``benches/results/multiformat_traj_terra.json``. On that recorded 218×100 run,
-readcon CON full-parse median is about 12× ASE CON on that host. Prefer the
-CON peer table above for CON-reader comparisons.
+``benches/results/multiformat_traj_terra.json``. Prefer the CON peer table above
+(``compare_readers.py``) for CON-reader comparisons; re-run multiformat for
+cross-format wall times.
 
 .. code:: shell
 
@@ -221,24 +226,22 @@ Compressed files (``.con.gz``) always decompress to an in-memory buffer.
 Historical scaling tables
 -------------------------
 
-Single-host snapshots from earlier ``compare_readers`` work. Re-run before citing.
+Primary peer row re-measured 2026-07-08 on ``rgam5terra`` (see table above).
+Older multi-size snapshots (re-run ``compare_readers.py`` before citing as current):
 
 .. table::
 
-    +------------+-----------+----------+--------+---------+--------+------+
-    | Dataset    | File size | C sscanf | ASE    | readcon | vs ASE | vs C |
-    +============+===========+==========+========+=========+========+======+
-    | 218 × 100  | 1.6 MiB   | 10.6 ms  | 36 ms  | 4.4 ms  | 8.2×   | 2.4× |
-    +------------+-----------+----------+--------+---------+--------+------+
-    | 218 × 1000 | 9.7 MiB   | 73 ms    | 286 ms | 55 ms   | 5.2×   | 1.3× |
-    +------------+-----------+----------+--------+---------+--------+------+
-    | 10k × 100  | 46.9 MiB  | 361 ms   | 956 ms | 185 ms  | 5.2×   | 2.0× |
-    +------------+-----------+----------+--------+---------+--------+------+
-    | 10k × 10   | 4.7 MiB   | 36 ms    | 94 ms  | 13 ms   | 7.2×   | 2.8× |
-    +------------+-----------+----------+--------+---------+--------+------+
-
-On large files the advantage over C narrows as I/O grows; prefer re-running
-``compare_readers.py`` and the equal-geometry peer script after hot-path changes.
+    +------------------------+-----------+----------+---------+---------+--------+------+
+    | Dataset                | File size | C sscanf | ASE     | readcon | vs ASE | vs C |
+    +========================+===========+==========+=========+=========+========+======+
+    | 218 × 100 (2026-07-08) | ~1.6 MiB  | 7.3 ms   | 30.6 ms | 3.3 ms  | 9.2×   | 2.2× |
+    +------------------------+-----------+----------+---------+---------+--------+------+
+    | 218 × 1000 (older)     | 9.7 MiB   | 73 ms    | 286 ms  | 55 ms   | 5.2×   | 1.3× |
+    +------------------------+-----------+----------+---------+---------+--------+------+
+    | 10k × 100 (older)      | 46.9 MiB  | 361 ms   | 956 ms  | 185 ms  | 5.2×   | 2.0× |
+    +------------------------+-----------+----------+---------+---------+--------+------+
+    | 10k × 10 (older)       | 4.7 MiB   | 36 ms    | 94 ms   | 13 ms   | 7.2×   | 2.8× |
+    +------------------------+-----------+----------+---------+---------+--------+------+
 
 Memory usage
 ------------
