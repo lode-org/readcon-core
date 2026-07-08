@@ -166,6 +166,9 @@ impl read_con_service::Server for ReadConServiceImpl {
                     },
                     force: None,
                     energy: None,
+                    charge: None,
+                    spin: None,
+                    magmom: None,
                 });
             }
             if current_count > 0 {

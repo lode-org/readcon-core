@@ -215,21 +215,15 @@ v3 =units= when required by the library's write policy.
 | v3 with =units= | Preferred interchange for new tools |
 | Unknown future version | Strict mode errors; permissive mode may warn and best-effort parse |
 
-* Toward version 4 (candidate scope)
+* Optional sections beyond velocities / forces / energies
 
-Candidates below preserve the nine-line header and type-grouped coordinates.
-Each entry names a capability gap in the current reserved surface.
+The declared-section mechanism already supports new optional section names
+without a format major. =charges= / =spins= (scalar, like =energies=) and
+=magmoms= (3-vector, like =velocities=) are reserved on the *current* v2/v3
+surface. Files use =con_spec_version= 2 or 3; omit the sections when unused.
+Do not invent =con_spec_version: 4= solely for optional physics blocks.
 
-** Reserved per-atom sections for charge, spin, and magnetic moments
-
-CON's section mechanism already generalizes (=sections= array plus labeled
-per-type blocks); v3 reserves only =velocities=, =forces=, and =energies=.
-Charged-defect and spin-polarized workflows (eOn with DFT drivers, NEB on
-magnetic systems) currently smuggle charges through free-form metadata,
-which no other reader interprets. v4 reserves =charges=, =spins=, and
-=magmoms= (3-vector) section names with the same column contract as
-=energies= / =velocities=, so the existing declared-section parser and
-validation mode cover them without grammar changes.
+* Follow-ups (not format majors)
 
 ** Conformance corpus keyed to spec clauses
 
@@ -238,15 +232,12 @@ line 2; whole-file conformance still rests on the reference test suite.
 A published corpus of minimal valid and invalid files, each annotated with
 the normative clause it exercises and the required outcome
 (parse / specific =ParseError= variant), lets an independent implementation
-claim conformance without reading readcon-core source. OPTIMADE and
-JSON Schema both ship this shape of suite; it is the difference between
-"compatible with the reference parser" and "conforms to the specification".
+claim conformance without reading readcon-core source.
 
 ** Vocabulary registry over ad hoc keys
 
-Reserved metadata keys currently live in one table in the spec. A v4
-registry (one file, one key per row: name, type, since-version,
-producer semantics) with a stated extension-key convention (=x_= prefix
-namespacing, mirroring mmCIF local dictionaries) keeps third-party
-producers from colliding on bare names while unrecognized-key
-preservation stays mandatory.
+Reserved metadata keys currently live in one table in the spec. A registry
+(one file, one key per row: name, type, since-version, producer semantics)
+with an extension-key convention (=x_= prefix) keeps third-party producers
+from colliding on bare names while unrecognized-key preservation stays
+mandatory.

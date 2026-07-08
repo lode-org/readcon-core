@@ -13,6 +13,8 @@ pub enum ParseError {
     InvalidMetadataJson(String),
     IncompleteForceSection,
     IncompleteEnergySection,
+    /// Declared optional section was incomplete or mislabeled.
+    IncompleteSection(String),
     UnknownSection(String),
     ValidationError(String),
     /// An in-place builder mutation
@@ -59,6 +61,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::IncompleteEnergySection => {
                 write!(f, "file ended unexpectedly while reading energy section")
+            }
+            ParseError::IncompleteSection(name) => {
+                write!(f, "file ended unexpectedly while reading {name} section")
             }
             ParseError::UnknownSection(name) => {
                 write!(f, "unknown section type in metadata: {name}")

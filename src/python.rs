@@ -49,12 +49,22 @@ pub struct PyAtomDatum {
     /// per-frame total energy (`metadata['energy']`) is meaningful.
     #[pyo3(get, set)]
     pub energy: Option<f64>,
+    #[pyo3(get, set)]
+    pub charge: Option<f64>,
+    #[pyo3(get, set)]
+    pub spin: Option<f64>,
+    #[pyo3(get, set)]
+    pub mx: Option<f64>,
+    #[pyo3(get, set)]
+    pub my: Option<f64>,
+    #[pyo3(get, set)]
+    pub mz: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None, charge=None, spin=None, mx=None, my=None, mz=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
@@ -71,6 +81,11 @@ impl PyAtomDatum {
         fy: Option<f64>,
         fz: Option<f64>,
         energy: Option<f64>,
+        charge: Option<f64>,
+        spin: Option<f64>,
+        mx: Option<f64>,
+        my: Option<f64>,
+        mz: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -87,6 +102,11 @@ impl PyAtomDatum {
             fy,
             fz,
             energy,
+            charge,
+            spin,
+            mx,
+            my,
+            mz,
         }
     }
 
@@ -129,6 +149,10 @@ impl PyAtomDatum {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
+        let (mx, my, mz) = match atom.magmom {
+            Some([x, y, z]) => (Some(x), Some(y), Some(z)),
+            None => (None, None, None),
+        };
         PyAtomDatum {
             symbol: atom.symbol.to_string(),
             x: atom.x,
@@ -144,6 +168,11 @@ impl PyAtomDatum {
             fy,
             fz,
             energy: atom.energy,
+            charge: atom.charge,
+            spin: atom.spin,
+            mx,
+            my,
+            mz,
         }
     }
 }
@@ -1479,6 +1508,11 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 fy,
                 fz,
                 energy: None,
+                charge: None,
+                spin: None,
+                mx: None,
+                my: None,
+                mz: None,
             }
         })
         .collect();
