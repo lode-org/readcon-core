@@ -39,31 +39,31 @@ selectors, or energy fields yourself.
 Migrate so the structure object, selector, campaign store, and plots all speak
 CON. Format rules: [[file:spec.org][spec.org]].
 
-* Measured: parse speed vs CON peers
+* Measured: faster than hand-rolled / ASE ASCII — including plain XYZ
 
-Same CON text, same host. Command:
+Equal geometry (same atoms, same frame count). ASE reads XYZ/extXYZ/CON;
+readcon reads CON. This is not a “CON vs CON only” trick.
 
 #+begin_src shell
-maturin develop --features python --release
-python benches/compare_readers.py
+python benches/multiformat_traj.py --fixtures cuh2 --ladder 100 --repeats 5 \
+  --out benches/results/multiformat_traj_terra_live.json
 #+end_src
 
-Snapshot on =rgam5terra= (2026-07-08 UTC), readcon 0.14.0, ASE 3.29.0,
-median of 5 runs, 100 frames × 218 atoms (~1.6 MiB):
+Snapshot on =rgam5terra= (2026-07-08), readcon 0.14.0, ASE 3.29.0, median of 5,
+100 frames × 218 atoms (geometry from =cuh2.con=):
 
-| Reader | Time (ms) | vs ASE (that run) |
-|----------------------------+-----------+-------------------|
-| ASE (=ase.io.eon=) | 30.6 | 1.0× |
-| C sscanf (eOn-style) | 7.3 | 4.2× |
-| readcon-core (from string) | 5.6 | 5.4× |
-| readcon-core (file path) | 3.3 | 9.2× |
+| Reader | Time (ms) | vs readcon |
+|----------------------------+-----------+------------|
+| *readcon CON* | *2.55* | 1.0× |
+| ASE plain XYZ | 26.7 | 10.5× slower |
+| ASE extXYZ | 26.8 | 10.5× slower |
+| ASE CON (=ase.io.eon=) | 30.5 | 12.0× slower |
 
-On that run, file-path readcon is *9.2×* ASE CON and *2.2×* the eOn-style C
-sscanf reader. CI tracks instruction counts (Cachegrind) for parse/skip/write
-and float kernels; see [[file:benchmarks.org][benchmarks.org]] and
-=docs/source/_generated/cachegrind_results.rst= (e.g. =float_fast_float2=
-fewer I-refs than =float_std_parse= on the same harness). Re-run the commands
-above before citing a new host.
+Same host, CON-peer harness (=benches/compare_readers.py=, 100×218 generated
+trajectory): ASE CON 30.6 ms, C sscanf 7.3 ms, readcon file path *3.3 ms*
+(9.2× ASE, 2.2× C). CI Cachegrind tracks I-refs
+(=docs/source/_generated/cachegrind_results.rst=). Re-run before citing a new
+host. Details: [[file:benchmarks.org][benchmarks.org]].
 
 * Benefit: campaign store (=readcon-db=)
 
