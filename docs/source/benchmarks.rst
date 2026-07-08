@@ -154,9 +154,10 @@ the code, not a promise about every host):
 
 - Skip without atoms: ``forward`` / ``forward_fast`` (Cachegrind ``forward_*``)
 
-h5py ``position/value`` alone is a coordinate array, not CON fidelity (no cell /
-constraints / ``atom_id`` / JSON sections). MDAnalysis H5MD is the fair H5MD **API**
-peer for full-frame style loads.
+h5py ``position/value`` alone loads a coordinate array (not cell / constraints /
+``atom_id`` / JSON). ``benches/h5md_vs_con.py`` times MDAnalysis H5MD and h5py as
+**peer load paths** on equal geometry — a local wall-clock recipe, not product
+advice to store campaigns as H5MD instead of CON + ``readcon-db``.
 
 Plots under ``docs/orgmode/img/`` are produced by ``benches/make_plots.py`` from
 JSON you generate; regenerate after peer runs if you need them current.
