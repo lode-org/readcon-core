@@ -337,7 +337,9 @@ lists include/lib paths for ``libmetatensor``.
 What is the stack for?
 ----------------------
 
-Putting CON into every language and tool path that touches atomic structures:
+Putting CON into every language and tool path that touches atomic structures.
+Migration task guide: `migrate.org <migrate.rst>`_ (``readcon-core convert``,
+``readcon.convert_to_con``).
 
 .. table::
 

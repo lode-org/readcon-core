@@ -1,21 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#org970b103)
-    1.  [Features](#org6406dbc)
-    2.  [Install](#orgb283c29)
-    3.  [Tutorial](#org31f6a7d)
-    4.  [Design Decisions](#org7840a30)
-        1.  [FFI Layer](#orge941092)
-    5.  [Specification](#orga7e68b4)
-        1.  [CON format](#org4454293)
-        2.  [convel format](#orgd248aa2)
-    6.  [Capabilities](#org2aa0078)
-    7.  [Citation](#org316f1d8)
-2.  [License](#org1019d9a)
+1.  [About](#orga89a0f9)
+    1.  [Features](#orgb25e6fe)
+    2.  [Migrate onto CON](#orgb2f0458)
+    3.  [Install](#orgb704aef)
+    4.  [Tutorial](#orgf77ee0d)
+    5.  [Design Decisions](#orga0e439e)
+        1.  [FFI Layer](#org5da18e5)
+    6.  [Specification](#org6b15516)
+        1.  [CON format](#org6747297)
+        2.  [convel format](#orgb884438)
+    7.  [Capabilities](#org35e8e2e)
+    8.  [Citation](#org741c7b2)
+2.  [License](#orgd7e9abb)
 
 
-<a id="org970b103"></a>
+<a id="orga89a0f9"></a>
 
 # About
 
@@ -85,7 +86,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org6406dbc"></a>
+<a id="orgb25e6fe"></a>
 
 ## Features
 
@@ -103,7 +104,24 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgb283c29"></a>
+<a id="orgb2f0458"></a>
+
+## Migrate onto CON
+
+Why: one file carries constraints, `atom_id`, optional sections (forces /
+charges / …), versioned JSON, and links through the hourglass ABI into Fortran /
+C / C++ / Python / Julia — campaign stores keep CON text authoritative.
+
+    # foreign → CON (needs --features chemfiles)
+    cargo run --release --features chemfiles -- convert structure.xyz structure.con
+    # Python (readcon-chemfiles or maturin --features python,chemfiles)
+    # python -c "import readcon; readcon.convert_to_con('structure.xyz','structure.con')"
+
+How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles learning path (CI-run):
+[chemfiles-notebook](docs/orgmode/chemfiles-notebook.org).
+
+
+<a id="orgb704aef"></a>
 
 ## Install
 
@@ -152,7 +170,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="org31f6a7d"></a>
+<a id="orgf77ee0d"></a>
 
 ## Tutorial
 
@@ -183,7 +201,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org7840a30"></a>
+<a id="orga0e439e"></a>
 
 ## Design Decisions
 
@@ -191,7 +209,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="orge941092"></a>
+<a id="org5da18e5"></a>
 
 ### FFI Layer
 
@@ -205,14 +223,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="orga7e68b4"></a>
+<a id="org6b15516"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org4454293"></a>
+<a id="org6747297"></a>
 
 ### CON format
 
@@ -223,7 +241,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgd248aa2"></a>
+<a id="orgb884438"></a>
 
 ### convel format
 
@@ -233,7 +251,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org2aa0078"></a>
+<a id="org35e8e2e"></a>
 
 ## Capabilities
 
@@ -292,14 +310,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org316f1d8"></a>
+<a id="org741c7b2"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org1019d9a"></a>
+<a id="orgd7e9abb"></a>
 
 # License
 
