@@ -84,33 +84,41 @@ trajectory): ASE CON 30.6 ms, C sscanf 7.3 ms, readcon file path **3.3 ms**
 (``docs/source/_generated/cachegrind_results.rst``). Re-run before citing a new
 host. Details: `benchmarks.org <benchmarks.rst>`_.
 
-ASE trajectory XYZ vs chemfiles → CON
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ASE trajectory formats vs chemfiles → CON vs CON
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Same geometry written as multi-frame XYZ, then timed as a full trajectory read:
+Not multi-frame XYZ as the only peer. Equal geometry, full load of 100 frames,
+ASE native ``.traj``, NetCDFTrajectory, and multi-frame XYZ vs
+``readcon.read_chemfiles`` and native ``read_con`` (H5MD was not registered in this
+ASE build; NetCDF is the ASE binary-ish trajectory peer available).
 
 .. code:: shell
 
     maturin develop --features python,chemfiles --release
-    python benches/ase_xyz_vs_chemfiles_con.py --frames 100 --repeats 5
+    python benches/ase_traj_vs_con.py --frames 100 --repeats 5
 
 ``rgam5terra`` 2026-07-08, 100×218 atoms, median of 5:
 
 .. table::
 
-    +------------------------------------------------------+-----------+------------------+
-    | Path                                                 | Time (ms) | vs ASE XYZ       |
-    +======================================================+===========+==================+
-    | ASE ``read(…, index``":")= plain XYZ                 |      26.8 | 1.0×             |
-    +------------------------------------------------------+-----------+------------------+
-    | ``readcon.read_chemfiles`` (XYZ → ``ConFrame`` list) |      13.3 | **2.0×** faster  |
-    +------------------------------------------------------+-----------+------------------+
-    | ``readcon.read_con`` (native CON ladder)             |       2.5 | **10.6×** faster |
-    +------------------------------------------------------+-----------+------------------+
+    +-----------------------------------------------+-----------+----------------+
+    | Path                                          | Time (ms) | vs readcon CON |
+    +===============================================+===========+================+
+    | ASE NetCDFTrajectory                          |      30.1 | 13.3× slower   |
+    +-----------------------------------------------+-----------+----------------+
+    | ASE multi-frame XYZ                           |      27.2 | 12.0× slower   |
+    +-----------------------------------------------+-----------+----------------+
+    | ``readcon.read_chemfiles`` (XYZ → CON frames) |      14.1 | 6.2× slower    |
+    +-----------------------------------------------+-----------+----------------+
+    | ASE ``.traj`` (binary Trajectory)             |      11.4 | 5.0× slower    |
+    +-----------------------------------------------+-----------+----------------+
+    | **``readcon.read_con``**                      |  **2.27** | **1.0×**       |
+    +-----------------------------------------------+-----------+----------------+
 
-So even the **ingress** path (foreign XYZ → CON frames) beats ASE's own XYZ
-trajectory read on this host; staying on CON after convert is another ~5× on
-top of that. Artifact: ``benches/results/ase_xyz_vs_chemfiles_con.json``.
+Native CON still beats ASE ``.traj`` and NetCDF on this full-frame load. Chemfiles
+ingress is slower than ASE ``.traj`` (honest) but **faster than ASE NetCDF and multi-frame XYZ**, and once converted, CON is the fast path for selection,
+``readcon-db``, and multi-language use. Artifact:
+``benches/results/ase_traj_vs_con.json``.
 
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------

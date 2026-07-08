@@ -1,0 +1,25 @@
+{
+  "host": "rgam5terra",
+  "date_utc": "2026-07-08",
+  "protocol": "equal geometry multi-frame full load; ASE Trajectory (.traj), NetCDFTrajectory, multi-frame XYZ vs readcon.read_chemfiles and readcon.read_con",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "fixture": "resources/test/cuh2.con",
+  "file_sizes_bytes": {
+    "traj.xyz": 1570100,
+    "traj.traj": 1017737,
+    "traj.nc": 356892,
+    "traj.con": 1677100
+  },
+  "ase_xyz_median_ms": 27.16,
+  "ase_traj_median_ms": 11.391,
+  "ase_netcdf_median_ms": 30.133,
+  "readcon_chemfiles_xyz_to_con_median_ms": 14.121,
+  "readcon_con_median_ms": 2.271,
+  "ratio_ase_xyz_over_con": 12.0,
+  "ratio_ase_traj_over_con": 5.0,
+  "ratio_ase_netcdf_over_con": 13.3,
+  "ratio_chemfiles_to_con_over_con": 6.2,
+  "note_h5md": "ASE format h5md not registered in this ASE build (UnknownFileTypeError); NetCDFTrajectory used as ASE trajectory peer"
+}
