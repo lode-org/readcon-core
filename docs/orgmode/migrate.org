@@ -65,6 +65,28 @@ trajectory): ASE CON 30.6 ms, C sscanf 7.3 ms, readcon file path *3.3 ms*
 (=docs/source/_generated/cachegrind_results.rst=). Re-run before citing a new
 host. Details: [[file:benchmarks.org][benchmarks.org]].
 
+** ASE trajectory XYZ vs chemfiles → CON
+
+Same geometry written as multi-frame XYZ, then timed as a full trajectory read:
+
+#+begin_src shell
+maturin develop --features python,chemfiles --release
+python benches/ase_xyz_vs_chemfiles_con.py --frames 100 --repeats 5
+#+end_src
+
+=rgam5terra= 2026-07-08, 100×218 atoms, median of 5:
+
+| Path | Time (ms) | vs ASE XYZ |
+|--------------------------------------------------+-----------+------------|
+| ASE =read(…, index=":")= plain XYZ | 26.8 | 1.0× |
+| =readcon.read_chemfiles= (XYZ → =ConFrame= list) | 13.3 | *2.0×* faster |
+| =readcon.read_con= (native CON ladder) | 2.5 | *10.6×* faster |
+
+So even the *ingress* path (foreign XYZ → CON frames) beats ASE's own XYZ
+trajectory read on this host; staying on CON after convert is another ~5× on
+top of that. Artifact: =benches/results/ase_xyz_vs_chemfiles_con.json=.
+
+
 * Benefit: campaign store (=readcon-db=)
 
 =readcon-core= is the decoder/writer. [[https://github.com/lode-org/readcon-db][readcon-db]] is the campaign

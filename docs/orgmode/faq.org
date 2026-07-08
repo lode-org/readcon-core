@@ -111,12 +111,17 @@ provides:
 2. *CON peers* (=benches/compare_readers.py=). Same CON text vs ASE
    =ase.io.eon= and eOn-style C sscanf.
 
-Equal-geometry (=benches/multiformat_traj.py=, =rgam5terra= 2026-07-08, 100×218
-atoms, median of 5): *readcon CON 2.55 ms* vs ASE plain XYZ *26.7 ms* (10.5×),
-ASE extXYZ 26.8 ms (10.5×), ASE CON 30.5 ms (12×). Same host CON-peer run
-(=compare_readers.py=): ASE CON 30.6 ms, C sscanf 7.3 ms, readcon file *3.3 ms*
-(9.2× ASE, 2.2× C). Tables and re-run recipes: [[file:benchmarks.org][benchmarks]] ·
-[[file:migrate.org][migrate]].
+Equal-geometry trajectory (=rgam5terra= 2026-07-08, 100×218, median of 5):
+
+- ASE multi-frame *plain XYZ* =read=: *26.8 ms*
+- =readcon.read_chemfiles= (XYZ → CON frames): *13.3 ms* (*2.0×* ASE XYZ)
+- =readcon.read_con= (native CON): *2.5 ms* (*10.6×* ASE XYZ)
+
+Also: ASE XYZ/extXYZ/CON full parse still ~10–12× slower than native CON
+(=multiformat_traj.py=); CON peers (=compare_readers.py=): readcon 3.3 ms vs ASE
+CON 30.6 ms (9.2×) and C sscanf 7.3 ms (2.2×). Recipes:
+[[file:benchmarks.org][benchmarks]] · [[file:migrate.org][migrate]] ·
+=benches/ase_xyz_vs_chemfiles_con.py=.
 
 Hot path: *fast-float2* on atom lines, *mmap* / bulk read for trajectories,
 =Arc<str>= symbols per type, zero-copy line views, and =forward()= /
