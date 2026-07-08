@@ -76,6 +76,38 @@ program test_read_con
     end if
   end block
 
+  ! Lazy multi-frame iterator (C ABI: read_con_file_iterator / next)
+  block
+    character(len=1024) :: multi
+    type(iterator_t) :: it
+    type(frame_t) :: fiter
+    integer :: nframes
+    multi = trim(root) // "/resources/test/tiny_multi_cuh2.con"
+    inquire(file=trim(multi), exist=ok)
+    if (.not. ok) then
+      print *, "missing ", trim(multi)
+      nfail = nfail + 1
+    else
+      it = open_iterator(trim(multi))
+      if (.not. it%valid()) then
+        nfail = nfail + 1
+        print *, "open_iterator failed"
+      else
+        nframes = 0
+        do
+          fiter = it%next()
+          if (.not. fiter%valid()) exit
+          nframes = nframes + 1
+          if (int(fiter%atom_count()) < 1) nfail = nfail + 1
+          call fiter%free()
+        end do
+        call it%free()
+        print *, "iterator frames=", nframes
+        if (nframes /= 2) nfail = nfail + 1
+      end if
+    end if
+  end block
+
   cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)
   st = bd%add_atom("O", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 15.999_real64, .false., .false., .false.)

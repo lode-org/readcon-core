@@ -36,10 +36,12 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | =readcon-core-uu0a= | Frame velocities/forces/energies DLPack | Done | =rkr_frame_*_dlpack= + FFI test + C++ wrappers |
 | =readcon-core-c6ox= | C optional APIs always declared | Done | =include/readcon-core.h= metatensor/zstd decls unconditional; lean =-11=/NULL |
 | =readcon-core-box4= | Cachegrind main-only commit | Done | =ci_cachegrind.yml= commit step =if: github.ref == main=; PRs artifacts only |
-| =readcon-core-eqht= | Perf only via Cachegrind + equal-geometry (no vanity metrics) | TODO | Positioning docs gate product claims; hot-path work needs harness deltas |
+| =readcon-core-eqht= | Perf only via Cachegrind + equal-geometry (no vanity metrics) | TODO | Hot-path work needs harness deltas |
 | =readcon-core-a6od= | Refresh compare_readers historical tables on remote builder | TODO | =benchmarks.org= tables labeled illustrative until re-run |
 | =readcon-core-bg2u= | Chemfiles ingress vs native CON equal-geometry wall profile | TODO | Cachegrind =chemfiles_*= exists; wall peer table incomplete |
-| =readcon-core-nov2= | Keep Sphinx RST export in sync after org positioning rewrites | Done | =emacs docs/export.el= + fix_doc_links in this change |
+| =readcon-core-nov2= | Keep Sphinx RST export in sync after org positioning rewrites | Done | =emacs docs/export.el= + fix_doc_links |
+| =readcon-core-3owo= | Wire =tests/python= pytest into CI | Done | =.github/workflows/ci_python.yml= (lean + chemfiles maturin/pytest) |
+| =readcon-core-bctw= | Fortran lazy frame iterator over C ABI | Done | =iterator_t= / =open_iterator=; fpm test walks =tiny_multi_cuh2.con=; bindings matrix |
 
 External packaging gates (leave open): =readcon-core-conda-32605=, =readcon-core-3xku=, =readcon-core-aoqu=.
 
