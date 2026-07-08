@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#orgee344bc)
-    1.  [Features](#org0dbe0f3)
-    2.  [Migrate onto CON](#org3ce8a3b)
-    3.  [Install](#org63402b3)
-    4.  [Tutorial](#org9e3b900)
-    5.  [Design Decisions](#org4902c2d)
-        1.  [FFI Layer](#org786eafa)
-    6.  [Specification](#orgb4cb717)
-        1.  [CON format](#org22df559)
-        2.  [convel format](#orgb483faf)
-    7.  [Capabilities](#orgaf29e78)
-    8.  [Citation](#org7d71a89)
-2.  [License](#org11eee0c)
+1.  [About](#orgbb292cb)
+    1.  [Features](#org5f6d579)
+    2.  [Migrate onto CON](#org0592f29)
+    3.  [Install](#org02c1b03)
+    4.  [Tutorial](#orgb356555)
+    5.  [Design Decisions](#orgf115142)
+        1.  [FFI Layer](#orgf901853)
+    6.  [Specification](#org99c62f5)
+        1.  [CON format](#orge4c909f)
+        2.  [convel format](#org6d70547)
+    7.  [Capabilities](#org200c27b)
+    8.  [Citation](#orga644828)
+2.  [License](#org06f9b3b)
 
 
-<a id="orgee344bc"></a>
+<a id="orgbb292cb"></a>
 
 # About
 
@@ -86,7 +86,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org0dbe0f3"></a>
+<a id="org5f6d579"></a>
 
 ## Features
 
@@ -100,11 +100,11 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 -   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
--   **Campaigns:** Pair with [readcon-db](https://github.com/lode-org/readcon-db).
+-   **Campaigns:** Pair with [readcon-db](https://github.com/lode-org/readcon-db) (CON-text indexes, dedup, multi-reader).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org3ce8a3b"></a>
+<a id="org0592f29"></a>
 
 ## Migrate onto CON
 
@@ -127,7 +127,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="org63402b3"></a>
+<a id="org02c1b03"></a>
 
 ## Install
 
@@ -176,7 +176,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="org9e3b900"></a>
+<a id="orgb356555"></a>
 
 ## Tutorial
 
@@ -207,7 +207,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org4902c2d"></a>
+<a id="orgf115142"></a>
 
 ## Design Decisions
 
@@ -215,7 +215,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org786eafa"></a>
+<a id="orgf901853"></a>
 
 ### FFI Layer
 
@@ -229,14 +229,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="orgb4cb717"></a>
+<a id="org99c62f5"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org22df559"></a>
+<a id="orge4c909f"></a>
 
 ### CON format
 
@@ -247,7 +247,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgb483faf"></a>
+<a id="org6d70547"></a>
 
 ### convel format
 
@@ -257,7 +257,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgaf29e78"></a>
+<a id="org200c27b"></a>
 
 ## Capabilities
 
@@ -316,14 +316,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org7d71a89"></a>
+<a id="orga644828"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org11eee0c"></a>
+<a id="org06f9b3b"></a>
 
 # License
 

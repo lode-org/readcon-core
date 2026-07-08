@@ -43,7 +43,7 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 - *Fidelity:* =atom_id=, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
-- *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]].
+- *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]] (CON-text indexes, dedup, multi-reader).
 - *RPC:* Cap'n Proto behind the ~rpc~ feature.
 
 ** Migrate onto CON
