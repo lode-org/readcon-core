@@ -49,10 +49,10 @@ file everywhere.
     | ASE calculator                  | Optional ``to_ase`` / ``from_ase``      |
     +---------------------------------+-----------------------------------------+
 
-Why CON looks this way: :doc:`faq`, :doc:`evolution`.
-Rules: :doc:`spec`. Layout of the library:
-:doc:`architecture`. Numbers:
-:doc:`benchmarks`.
+Why CON looks this way: `faq.org <faq.rst>`_, `evolution.org <evolution.rst>`_.
+Rules: `spec.org <spec.rst>`_. Layout of the library:
+`architecture.org <architecture.rst>`_. Numbers:
+`benchmarks.org <benchmarks.rst>`_.
 
 Install
 -------

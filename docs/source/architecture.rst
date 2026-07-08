@@ -34,10 +34,11 @@ Core types (types.rs)
 ``AtomDatum``
     Single atom data (symbol, coordinates, fixed flag,
     atom\_id (original atom index before type-based reordering),
-    optional velocities, optional forces).
+    optional velocity / force / charge / spin / magmom fields).
 
 ``ConFrame``
-    Complete frame (header + atom data vector).
+    Complete frame (header + atom data / SoA columns for
+    declared sections).
 
 ``ConFrameBuilder``
     Builder pattern for constructing frames
@@ -78,15 +79,15 @@ Parser (parser.rs)
     cell geometry, atom counts, and masses are checked before the frame
     is accepted.
 
-``parse_velocity_section`` / ``parse_force_section``
-    Optional
-    velocity and force blocks after coordinates. Spec-v2 files declare
-    sections in JSON metadata; files without a ``sections`` key can still
-    auto-detect velocities by blank separator. Declared sections must be
-    present at their declared position. If JSON metadata sets ``validate``
-    to ``true``, section parser paths verify component symbols, exact
-    labels, fixed masks, and atom ids against the coordinate blocks
-    before attaching velocities or forces.
+- Section parsers (``parse_velocity_section``, ``parse_force_section``, and
+  the scalar / 3-vector paths for ``energies`` / ``charges`` / ``spins`` /
+  ``magmoms``) \:\: Optional blocks after coordinates. Spec-v2+ files declare
+  sections in JSON metadata; files without a ``sections`` key can still
+  auto-detect velocities by blank separator. Declared sections must be
+  present at their declared position. If JSON metadata sets ``validate``
+  to ``true``, section parser paths verify component symbols, exact
+  labels, fixed masks, and atom ids against the coordinate blocks
+  before attaching section data.
 
 Writer (writer.rs)
 ------------------
@@ -101,9 +102,10 @@ Writer (writer.rs)
   when ``validate=true``, the writer emits an empty ``sections`` array for
   coordinate-only frames.
 
-- Writes header, coordinate blocks, velocity blocks (if
-  ``frame.has_velocities()``), and force blocks (if
-  ``frame.has_forces()``).
+- Writes header, coordinate blocks, then any declared optional
+  sections present on the frame (``has_velocities``, ``has_forces``,
+  ``has_energies``, ``has_charges``, ``has_spins``, ``has_magmoms``) in
+  ``sections`` order.
 
 Iterators (iterators.rs)
 ------------------------
@@ -269,7 +271,7 @@ Design rationale
 
 readcon-core is the hourglass library that puts CON into every language path:
 Rust core, ``rkr_*`` C ABI, wrappers for C++, Python, Julia, and Fortran. Full
-CON payload (constraints, forces / velocities, ``atom_id``, JSON) without a
+CON payload (constraints, optional section data, ``atom_id``, JSON) without a
 Python interpreter on the I/O path.
 
 Also in-tree: chemfiles import/selection (land structures **as** CON), SoA +
@@ -278,6 +280,6 @@ for campaign screening (``readcon-db``), Cap'n Proto RPC. Lean builds return
 ``RKR_STATUS_FEATURE_DISABLED`` for missing features. UTF-8 CON remains
 authoritative on disk and in corpora.
 
-Related work and roles: :doc:`faq`. Spec:
-:doc:`spec`. Evolution: :doc:`evolution`.
-Measurements: :doc:`benchmarks`.
+Related work and roles: `faq.org <faq.rst>`_. Spec:
+`spec.org <spec.rst>`_. Evolution: `evolution.org <evolution.rst>`_.
+Measurements: `benchmarks.org <benchmarks.rst>`_.

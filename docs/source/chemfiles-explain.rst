@@ -19,7 +19,7 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-:doc:`chemfiles-tutorial` and :doc:`chemfiles-howto`.
+`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_.
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
@@ -27,8 +27,8 @@ Why drive conversion from other formats at all?
    Chemfiles owns format diversity; readcon-core owns CON fidelity.
 
 
-CON is a complete checkpoint format (typed blocks, fixed flags, velocities /
-forces / energies, JSON line-2 metadata). Structures still often arrive from
+CON is a complete checkpoint format (typed blocks, fixed flags, optional
+per-atom sections, JSON line-2 metadata). Structures still often arrive from
 elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other chemfiles-readable layouts.
 
 Rather than reimplement every reader in readcon-core, v0.13 uses **chemfiles as the ingress router**: chemfiles owns format diversity; readcon-core owns
@@ -83,7 +83,8 @@ Why bonds live in frame JSON, not sections
 
 
 ``sections`` is the channel for **per-atom** optional blocks (velocities,
-forces, energies) with fixed column layouts and one row per atom. Bonds are
+forces, energies, charges, spins, magmoms) with fixed column layouts and one
+row per atom. Bonds are
 **frame-scoped edges** (variable count, not N-aligned). Putting them in JSON
 metadata matches ``energy`` / ``pbc`` / ``lattice_vectors``: optional, preservable
 by ignorant readers, validated when ``validate=true``.
@@ -163,8 +164,8 @@ particular:
   suites) are not part of the CON regression surface. A string may still parse;
   that is not a promise of behaviour from another toolkit.
 
-APIs and install matrices: :doc:`bindings`,
-:doc:`chemfiles-reference` (feature-gated conversion stack).
+APIs and install matrices: `bindings <bindings.rst>`_,
+`reference <chemfiles-reference.rst>`_ (feature-gated conversion stack).
 
 Place in the broader stack
 --------------------------

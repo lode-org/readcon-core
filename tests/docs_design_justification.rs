@@ -95,6 +95,15 @@ fn faq_con_contract() {
             || t.contains("chemfiles"),
         "FAQ must describe the multi-tool stack"
     );
+    // optional physics sections ship on v2/v3 declared surface (not a format major)
+    assert!(
+        t.contains("charges") && t.contains("spins") && t.contains("magmoms"),
+        "FAQ must list charges/spins/magmoms with other optional sections"
+    );
+    assert!(
+        !t.contains("con_spec_version: 4") && !t.contains("con_spec_version\":4"),
+        "FAQ must not require format v4 for optional sections"
+    );
     // no format bake-off section
     assert!(!t.contains("How does CON relate to H5MD"));
     assert!(!t.contains("* CON and H5MD"));
@@ -162,6 +171,10 @@ fn index_and_readme_src() {
             || readme.contains("spreading CON")
             || readme.contains("Role in spreading"),
         "readme must state CON expansion ambition"
+    );
+    assert!(
+        readme.contains("charges") && readme.contains("spins") && readme.contains("magmoms"),
+        "readme must list optional charges/spins/magmoms sections"
     );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));
