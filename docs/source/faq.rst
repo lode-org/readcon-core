@@ -7,8 +7,9 @@ Frequently Asked Questions
 What CON is for
 ---------------
 
-CON is a **deliberately small** LODE-centric format for eOn transition-state
-workflows (saddle, dimer, NEB). One frame carries:
+CON is a versioned atomic-configuration format for transition-state search
+(saddle, dimer, NEB) as used in eOn and LODE. One frame is a complete
+checkpoint:
 
 .. table::
 
@@ -17,7 +18,7 @@ workflows (saddle, dimer, NEB). One frame carries:
     +==========================+==============================================================+
     | Cell + angles            | Periodic box                                                 |
     +--------------------------+--------------------------------------------------------------+
-    | Type-grouped coordinates | Stable ``head``-able layout                                  |
+    | Type-grouped coordinates | Human-readable, stable layout                                |
     +--------------------------+--------------------------------------------------------------+
     | Column 4 fixed mask      | Per-direction constraints (bitmask 0–7)                      |
     +--------------------------+--------------------------------------------------------------+
@@ -28,10 +29,11 @@ workflows (saddle, dimer, NEB). One frame carries:
     | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
     +--------------------------+--------------------------------------------------------------+
 
-Writers type-group atoms by element; ``atom_id`` recovers the original index.
-The hourglass ABI in ``readcon-core`` gives Fortran, C, C++, Python, Julia, and
-Rust the same semantics on that file. Spec: :doc:`spec`.
-Design history: :doc:`evolution`.
+Writers type-group atoms by element; ``atom_id`` recovers the original index
+through every round-trip. ``readcon-core`` implements the format behind one
+``rkr_*`` hourglass ABI so Fortran, C, C++, Python, Julia, and Rust share the
+same file. Spec: :doc:`spec`. Design history:
+:doc:`evolution`.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------

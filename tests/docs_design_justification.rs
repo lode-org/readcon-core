@@ -47,6 +47,9 @@ fn assert_no_ai_tells(t: &str, file: &str) {
         "Is readcon-core",
         "definitive CON",
         "Definitive CON",
+        "deliberately small",
+        "LODE-centric",
+        "LODE centric",
     ];
     for b in banned {
         assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
@@ -137,7 +140,7 @@ fn index_and_readme_src() {
     assert!(readme.contains("hourglass") || readme.contains("rkr_"));
     assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
     assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
-    assert!(readme.contains("deliberately small") || readme.contains("eOn"));
+    assert!(readme.contains("eOn") || readme.contains("NEB") || readme.contains("checkpoint"));
     assert!(readme.contains("Chemfiles owns") || readme.contains("chemfiles"));
     assert_no_ai_tells(&readme, "readme_src.org");
 }

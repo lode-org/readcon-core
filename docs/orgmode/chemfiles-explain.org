@@ -30,16 +30,16 @@
 #+end_export
 
 
-CON is a *deliberately small* LODE-centric format (typed blocks, fixed flags,
-optional velocities/forces/energies, JSON line-2 metadata). Most of the
-ecosystem does not speak CON: structures arrive as XYZ, PDB, GRO, LAMMPS
-dumps, chemfiles-only formats, etc.
+CON is a complete checkpoint format for eOn / LODE (typed blocks, fixed
+flags, velocities / forces / energies, JSON line-2 metadata). Structures
+still often arrive from elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other
+chemfiles-readable layouts.
 
 Rather than reimplement every reader in readcon-core, v0.13 uses *chemfiles
 as the ingress router*: chemfiles owns format diversity; readcon-core owns
 *CON fidelity* (atom_id, sections, writer, FFI, NEB-friendly builders). The
-product story is not "replace chemfiles" but *land foreign trajectories in
-CON* for eOn, amsel, and CON-native tools.
+job is to *land foreign trajectories in CON* for eOn, amsel, and CON-native
+tools.
 
 * Why is chemfiles optional (Cargo feature + two PyPI names)?
 
@@ -139,8 +139,8 @@ indices.
 
 * What selection cannot see on CON
 
-The ~con~ format is deliberately small. Selection only sees what is on the
-frame (plus a few import sidecars). In particular:
+Selection only sees what the frame stores (plus a few import sidecars). In
+particular:
 
 - *No residues*: there is no residue table, so =resname= and residue-centric
   filters have nothing to attach to. Import does not invent residues.
