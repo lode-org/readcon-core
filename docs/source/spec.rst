@@ -34,12 +34,13 @@ MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ se
 Overview
 --------
 
-CON stores atomic configurations for transition-state search and related
-simulations. It originated in the `eOn code <https://eondocs.org>`_ and is a
-general checkpoint layout for any tool that needs constraints, forces, atom
-identity, and versioned metadata on disk. Consumers include eOn, LODE
-tooling, `ASE <https://wiki.fysik.dtu.dk/ase/>`_, amsel, and others. The
-reference implementation is ``readcon-core``.
+CON stores atomic configurations for rare-event and transition-state
+checkpoints: cell, type-grouped coordinates, per-direction constraints, atom
+identity, optional velocities/forces, and versioned JSON metadata. The layout
+originated in the `eOn <https://eondocs.org>`_ rare-event stack
+:cite:t:`chillEONSoftwareLong2014`; this document is the formal
+specification. The reference implementation is ``readcon-core`` (multi-language
+hourglass ABI).
 
 A CON file contains one or more *frames*. Each frame encodes a simulation
 cell, per-type metadata (masses, atom counts), and per-atom data

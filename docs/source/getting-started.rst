@@ -27,10 +27,12 @@ Getting started
 Scope
 -----
 
-readcon-core implements CON / convel: cell, type-grouped atoms, per-direction
-fixed masks, ``atom_id``, velocity / force sections, JSON line-2 metadata. One
-``rkr_*`` hourglass ABI for Fortran, C, C++, Python, Julia, and Rust. That stack
-is the point: many languages and tools, one on-disk contract.
+readcon-core implements CON / convel (spec v2–v3): cell, type-grouped atoms,
+per-direction fixed masks, ``atom_id``, velocity / force sections, JSON
+metadata. Hourglass ``rkr_*`` ABI for Fortran, C, C++, Python, Julia, and Rust;
+optional chemfiles import; DLPack / metatensor export; ``index_proj`` for
+campaign stores. One on-disk contract for optimizers, drivers, analysis, and
+ML hand-off.
 
 .. table::
 

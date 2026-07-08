@@ -7,10 +7,10 @@ Frequently Asked Questions
 What CON is for
 ---------------
 
-CON is a versioned atomic-configuration format for transition-state search
-(saddle, dimer, NEB) and any multi-code pipeline that needs a complete
-checkpoint on disk: constraints, forces, stable atom identity, and machine
-metadata in one file.
+CON is a versioned, human-readable atomic configuration format for
+**checkpoints** in rare-event and transition-state work: saddle search, dimer
+modes, NEB bands, and any multi-code pipeline that must keep constraints,
+forces, and atom identity on the same file.
 
 .. table::
 
@@ -19,24 +19,50 @@ metadata in one file.
     +==========================+==============================================================+
     | Cell + angles            | Periodic box                                                 |
     +--------------------------+--------------------------------------------------------------+
-    | Type-grouped coordinates | Human-readable, stable layout                                |
+    | Type-grouped coordinates | Stable ``head``-able layout                                  |
     +--------------------------+--------------------------------------------------------------+
     | Column 4 fixed mask      | Per-direction constraints (bitmask 0–7)                      |
     +--------------------------+--------------------------------------------------------------+
-    | Column 5 ``atom_id``     | Pre-group atom index for NEB / dimer / comparisons           |
+    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching         |
     +--------------------------+--------------------------------------------------------------+
     | Optional sections        | Velocities, forces, per-atom energies                        |
     +--------------------------+--------------------------------------------------------------+
     | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
     +--------------------------+--------------------------------------------------------------+
 
-Writers type-group atoms by element; ``atom_id`` recovers the original index
-through every round-trip. ``readcon-core`` is the multi-language implementation
-of that contract (hourglass ``rkr_*`` ABI: Fortran, C, C++, Python, Julia, Rust)
-so optimizers, drivers, campaign stores, and analysis codes share one format.
-eOn, LODE, amsel, and ASE are consumers; the stack exists for any CON-native
-workflow. Spec: :doc:`spec`. Design history:
-:doc:`evolution`.
+The de facto layout came from the eOn rare-event stack
+:cite:t:`chillEONSoftwareLong2014`.
+``readcon-core`` is the formalized spec (v2–v3) and the multi-language
+implementation: hourglass ``rkr_*`` C ABI, Python / Julia / Fortran wrappers,
+chemfiles ingress, DLPack / metatensor tensor export, and ``index_proj``
+contracts for campaign stores (``readcon-db``). Spec:
+:doc:`spec`. Design history: :doc:`evolution`.
+
+How does CON relate to H5MD, engine binaries, and ASE?
+------------------------------------------------------
+
+.. table::
+
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+    | Format / tool                                                  | Role                                                                        |
+    +================================================================+=============================================================================+
+    | CON + ``readcon-core``                                         | Text checkpoint: constraints, ``atom_id``, forces, JSON; multi-language ABI |
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+    | H5MD (:cite:t:`deBuylH5MDStructuredEfficient2014`)             | HDF5 layout for continuous MD trajectories and observables                  |
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+    | XTC / TRR / DCD / engine dumps                                 | High-density I/O **inside** one MD engine                                   |
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+    | ASE                                                            | Calculators and analysis; optional CON I/O via ``ase.io.eon`` or ``to_ase`` |
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+    | metatensor (:cite:t:`bigiMetatensorMetatomicFoundational2026`) | ML tensor graphs; ``readcon-core`` can export ``TensorBlock`` / DLPack      |
+    +----------------------------------------------------------------+-----------------------------------------------------------------------------+
+
+CON carries constraints, ``atom_id``, and a shared multi-language ABI on text
+frames. H5MD carries hierarchical binary particle series and observables
+under HDF5.
+
+.. bibliography::
+   :filter: docname in docnames
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -120,32 +146,16 @@ provides:
   The parser detects this (line 2 does not start with ``{``) and falls
   back to legacy mode (``spec_version = 1``).
 
-When should I use HDF5 instead?
--------------------------------
+CON and H5MD / HDF5
+-------------------
 
-Use ``con`` for:
+CON: configuration checkpoints (constraints, ``atom_id``, forces, JSON metadata)
+with a multi-language text ABI.
 
-- Single structures and short trajectories (< 10k frames)
+H5MD: particle trajectories and observables as HDF5 groups and datasets
+(:cite:t:`deBuylH5MDStructuredEfficient2014`).
 
-- Interoperability with eOn, readcon-core, and ASE
-
-- Human-readable files that can be inspected with ``head``
-
-- Situations where simplicity and round-trip fidelity matter
-
-Use HDF5 for:
-
-- Large-scale MD trajectories (millions of frames, billions of atoms)
-
-- Random access by frame index without scanning
-
-- Binary data with native-endian floats (no parsing overhead)
-
-- Complex hierarchical data (multiple properties per frame, metadata
-  trees, datasets with different shapes)
-
-The two formats complement each other. readcon-core handles the
-``con``-to-data pipeline; HDF5 handles long-term archival and analysis.
+HDF5 alone is a container. H5MD is the portable MD schema on top of it.
 
 How fast is readcon-core?
 -------------------------
@@ -339,28 +349,29 @@ gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C al
 always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
 lists include/lib paths for ``libmetatensor``.
 
-Pipeline roles
---------------
+What is the stack for?
+----------------------
 
 .. table::
 
-    +----------------------------------------+----------------------------------------+
-    | Role                                   | Thing                                  |
-    +========================================+========================================+
-    | Checkpoint and multi-language hand-off | CON / convel via ``readcon-core``      |
-    +----------------------------------------+----------------------------------------+
-    | Campaign index (multi-reader)          | ``readcon-db`` (CON blobs)             |
-    +----------------------------------------+----------------------------------------+
-    | ASE calculator                         | Optional ``to_ase`` / ``from_ase``     |
-    +----------------------------------------+----------------------------------------+
-    | Foreign structure file                 | Chemfiles → CON, then stay on CON      |
-    +----------------------------------------+----------------------------------------+
-    | Continuous MD inside one engine        | That engine’s native trajectory format |
-    +----------------------------------------+----------------------------------------+
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | Component                            | Job                                                                          |
+    +======================================+==============================================================================+
+    | CON on disk                          | Checkpoint contract (this format)                                            |
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | ``readcon-core``                     | Spec implementation + hourglass ABI + optional chemfiles + DLPack/metatensor |
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | ``readcon-db``                       | Multi-reader campaign index over CON blobs                                   |
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | Chemfiles                            | Foreign structure → ``ConFrame``                                             |
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | ASE adapters                         | Calculator hand-off                                                          |
+    +--------------------------------------+------------------------------------------------------------------------------+
+    | rgpot / eOn / rgpycrumbs / amsel / … | Domain consumers of the same file                                            |
+    +--------------------------------------+------------------------------------------------------------------------------+
 
-The hourglass ABI, chemfiles ingress, campaign store, and language bindings
-exist so many codes share CON without forking the on-disk dialect. Chemfiles
-owns format diversity; readcon-core owns CON fidelity.
+The complexity is intentional: one on-disk format, many languages and tools,
+no private dialects.
 
 Are ASE adapters the primary API?
 ---------------------------------
@@ -379,9 +390,8 @@ extract and device hand-off and are discardable or ephemeral.
 Why is the campaign store a separate package?
 ---------------------------------------------
 
-Parse/write embeddability and multi-reader indexing are separate concerns with
-one shared decoder (``readcon-core``). ``readcon-db`` owns LMDB indexes and SWMR
-campaign access.
+``readcon-core`` is the shared decoder/writer. ``readcon-db`` owns LMDB indexes and
+SWMR campaign access.
 
 Why an hourglass C ABI?
 -----------------------

@@ -166,8 +166,10 @@ particular:
 APIs and install matrices: :doc:`bindings`,
 :doc:`chemfiles-reference` (feature-gated conversion stack).
 
-Place in the LODE / eOn ecosystem
----------------------------------
+Place in the broader stack
+--------------------------
 
-   Interchange hub: potentials (rgpot), saddles (eOn), analysis (rgpycrumbs),
-   multi-format ingress (chemfiles), multi-language consumers.
+   Interchange hub: CON on disk; potentials (rgpot); rare-event clients
+   (eOn and others); analysis (rgpycrumbs); multi-format ingress (chemfiles);
+   campaigns (readcon-db); multi-language and ML consumers (hourglass ABI,
+   DLPack, metatensor).
