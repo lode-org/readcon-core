@@ -44,7 +44,7 @@ selectors, or energy fields yourself.
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
     | Ingress                   | Chemfiles: XYZ/PDB/GRO/… → CON with one convert path                                                                          |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
-    | Speed (CON peers)         | Measured hot path: fast-float2, zero-copy lines, pre-sized vectors (see below)                                                |
+    | Performance gates         | Cachegrind I-refs (main); Python ASV + spyglass (PRs); peer scripts under ``benches/``                                        |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
 Migrate so the structure object, selector, campaign store, and plots all speak
@@ -53,10 +53,11 @@ CON. Format rules: `spec.org <spec.rst>`_.
 Performance
 -----------
 
-The hot path is optimized (fast-float2, zero-copy lines, pre-sized vectors,
-mmap). Peer scripts and PR continuous benchmarks live under ``benches/`` and
-``benchmarks/`` (ASV); see `benchmarks.org <benchmarks.rst>`_. Re-run those
-on your machine — do not treat a single host diary as product doctrine.
+What the library actually does on the CON path: fast-float2 on atom floats,
+zero-copy line views, header-sized atom vectors, ``read_to_string`` vs mmap at
+64 KiB, optional Rayon multi-frame parse at ≥ 48 KiB with ``parallel``. How CI
+and local scripts measure that (Cachegrind, ASV, peers):
+`benchmarks.org <benchmarks.rst>`_.
 
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------

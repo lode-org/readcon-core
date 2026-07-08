@@ -27,9 +27,10 @@ Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]]. Chemfiles owns
 format diversity at the edge; this crate owns CON fidelity on the wire and in
 memory.
 
-Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
-=benches/compare_readers.py=. See
-[[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
+Measurements: Cachegrind I-refs (=examples/cachegrind_harness.rs=);
+Python ASV + spyglass on PRs (=benchmarks/=); CON peers via
+=benches/compare_readers.py= (and other scripts under =benches/=).
+See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 
 ** Features
 
@@ -49,8 +50,7 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 ** Migrate onto CON
 
 Why switch: use a real frame API and multi-language library instead of
-hand-rolling XYZ and a private atoms object — and a measured hot path, not
-a slow ASCII tax.
+hand-rolling XYZ and a private atoms object.
 
 - *API:* parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 - *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
@@ -58,7 +58,7 @@ a slow ASCII tax.
 - *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 - *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader)
 - *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
-- *Speed:* optimized CON hot path; PR ASV + Cachegrind I-refs; peer scripts in =benches/= — see [[file:docs/orgmode/benchmarks.org][benchmarks.org]]
+- *Measurements:* Cachegrind I-refs; PR ASV + spyglass; peer scripts in =benches/= — [[file:docs/orgmode/benchmarks.org][benchmarks.org]]
 
 #+begin_src shell
 # foreign → CON (needs --features chemfiles)
@@ -158,7 +158,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 | Tensors | DLPack; optional metatensor =TensorBlock= |
 | Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (energy/formula/sections indexes, dedup) |
 | Import | Optional chemfiles → CON |
-| Measurements | Cachegrind I-refs; CON peers (=ase.io.eon=, eOn-style C sscanf) |
+| Measurements | Cachegrind I-refs; PR ASV + spyglass; =benches/compare_readers.py= |
 
 Predecessor: [[https://github.com/HaoZeke/readCon][readCon]].
 

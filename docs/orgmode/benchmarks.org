@@ -6,81 +6,92 @@
 | Rank | Command / artifact | Answers |
 |------+--------------------+---------|
 | 1 (CI) | =examples/cachegrind_harness.rs= via =scripts/run_cachegrind_bench.sh= | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-| 2 (PR) | =benchmarks/= + =asv.conf.json= (ASV) → =asv-spyglass compare= | Python surface regressions on PR vs base |
+| 2 (PR) | =benchmarks/= + =asv.conf.json= (ASV) → =asv-spyglass compare= | Python surface wall-time on PR vs base |
 | 3 | =benches/compare_readers.py= | Same CON text vs ASE =ase.io.eon= and eOn-style C sscanf |
 | 4 | =benches/multiformat_traj.py= | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON |
 | 5 | =benches/ase_traj_vs_con.py= | ASE =.traj= / NetCDF / XYZ vs =readcon.read_chemfiles= vs native CON |
 | 6 | =benches/h5md_vs_con.py= | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ |
-| local | =cargo bench= (Criterion) | Rust microbench latency; optional PR =critcmp= |
+| local | =cargo bench= (Criterion) | Rust microbench latency; optional PR job saves baselines |
 
-Public regression authority is Cachegrind I-refs (main) and Python ASV +
-spyglass (PRs). Peer scripts under =benches/= are for local re-runs; JSON
-artifacts live in =benches/results/= when you generate them. Do not paste
-host diaries into this page — re-run the script and cite the artifact.
+Regression gates in CI:
 
-* CI Cachegrind (instruction-count authority)
+- *Cachegrind I-refs* — path-filtered + weekly job (=ci_cachegrind.yml=); commits
+  =docs/source/_generated/cachegrind_results.*= on =main= when counts change.
+- *Python ASV + spyglass* — every PR (=ci_benchmark.yml=); comment via asv-perch.
 
-On every =main= push, CI runs Valgrind *Cachegrind* on
-=examples/cachegrind_harness.rs= and commits instruction counts into the docs.
+Peer scripts under =benches/= are for local re-runs. JSON under
+=benches/results/= is what you produce when you run them — this page does not
+embed host wall-clock tables.
+
+* CI Cachegrind (instruction-count gate)
+
+Workflow =ci_cachegrind.yml= runs Valgrind *Cachegrind* on
+=examples/cachegrind_harness.rs= when CON-path sources (or this doc) change on
+=main=, on a weekly schedule, or on manual dispatch. With
+=CACHEGRIND_FEATURES=chemfiles= it also records conversion scenarios.
+
+Current committed include (refreshed by that job):
 
 #+begin_export rst
 .. include:: _generated/cachegrind_results.rst
 #+end_export
 
-Reproduce (needs Valgrind; minutes on a quiet machine):
+Reproduce (needs Valgrind):
 
 #+begin_src shell
 scripts/run_cachegrind_bench.sh
-# outputs docs/source/_generated/cachegrind_results.{json,rst}
+# writes docs/source/_generated/cachegrind_results.{json,rst}
 #+end_src
 
-*Why Cachegrind instead of wall-clock on CI?* Shared GitHub runners move with
-neighbours and CPU migration. Cachegrind counts *instruction references* for a
-fixed binary, which diffs cleanly across commits.
+I-refs for a fixed binary are stable across noisy shared runners; wall-clock
+medians on GHA are not. That is why Cachegrind is the commit-stable gate and
+ASV is the PR Python surface compare.
 
-Conversion cost appears as =chemfiles_*= Cachegrind scenarios when the
-=chemfiles= feature is linked. CON I/O remains the core library cost.
+* Python ASV (PR surface)
 
-* Python ASV (PR surface — eOn-style)
+Workflow =Benchmark PR= (=ci_benchmark.yml=):
 
-PR workflow =Benchmark PR= (=.github/workflows/ci_benchmark.yml=):
-
-1. Matrix builds *base* and *PR* commits with
+1. Matrix builds *base* and *PR* with
    =maturin develop --features python,chemfiles --release=.
-2. Runs [[https://asv.readthedocs.io/][ASV]] against the suite in =benchmarks/= (existing interpreter; no
-   re-install of the wheel mid-bench).
-3. =asv-spyglass compare= produces =results/comparison.txt=.
-4. =ci_bench_commenter.yml= posts that table via [[https://github.com/HaoZeke/asv-perch][asv-perch]].
+2. Runs [[https://asv.readthedocs.io/][ASV]] on =benchmarks/= with
+   =-E existing:$(which python)= (no re-install mid-bench).
+3. =asv-spyglass compare= writes =results/comparison.txt= (job fails if empty).
+4. =ci_bench_commenter.yml= posts that file via [[https://github.com/HaoZeke/asv-perch][asv-perch]].
 
-Suite coverage (shipped =readcon= API, not a reimplementation):
+A separate =criterion-benchmark= job may save Criterion baselines; it uses
+=continue-on-error: true= so a Rust microbench miss does not fail the workflow
+conclusion that asv-perch requires.
 
-| Class | What it times |
+Suite (calls shipped =readcon= only):
+
+| Class | API timed |
 |---------------------------------+-----------------------------------------------|
-| =TimeReadConTiny= | multi-frame tiny CON: string / path / =iter_con= |
-| =TimeReadConCuh2= | multi-frame 218-atom CON (=cuh2.con=) |
-| =TimeChemfilesXyz= | =read_chemfiles= multi-frame XYZ → =ConFrame= |
-| =TimeSelectAtoms= | =frame.select_atoms("name Cu")= |
+| =TimeReadConTiny= | =read_con_string= / =read_con= / =iter_con= on multi-frame tiny CON |
+| =TimeReadConCuh2= | =read_con= on multi-frame =cuh2.con= (218 atoms/frame) |
+| =TimeChemfilesXyz= | =read_chemfiles= multi-frame XYZ → =ConFrame= (skipped if lean) |
+| =TimeSelectAtoms= | =frame.select_atoms("name Cu")= (skipped if lean) |
 
-Local reproduce (chemfiles-linked wheel already installed in the active env):
+Local:
 
 #+begin_src shell
 maturin develop --features python,chemfiles --release
-# deps: asv numpy ase (e.g. uv pip install asv numpy ase)
+# uv pip install asv numpy ase
 asv machine --yes
 asv run -E "existing:$(which python)" --set-commit-hash "$(git rev-parse HEAD)" \
   --record-samples --quick
-# Compare two result JSONs (base vs PR, or two local hashes):
 uvx --from "git+https://github.com/airspeed-velocity/asv_spyglass.git" \
   asv-spyglass compare .asv/results/*/<base>*.json .asv/results/*/<pr>*.json \
   .asv/results/benchmarks.json \
   --label-before main --label-after pr
 #+end_src
 
-Config: =asv.conf.json=. Results go under =.asv/= (gitignored).
+Config: =asv.conf.json=. Results: =.asv/= (gitignored).
 
-* Peer scripts (local; write JSON under =benches/results/=)
+* Peer scripts (local)
 
-Order of interest for “is CON faster than peers on this machine?”:
+Run on your machine; write JSON under =benches/results/= if you want a citeable
+artifact. Ordering vs ASE / C sscanf / MDA is a property of *that run*, not a
+global ranking.
 
 #+begin_src shell
 # Same CON text vs ASE ase.io.eon and eOn-style C sscanf
@@ -99,110 +110,87 @@ uv pip install MDAnalysis h5py ase numpy
 python benches/h5md_vs_con.py --frames 100 --repeats 5
 #+end_src
 
-Why peer tables usually favour the CON hot path (implementation, not marketing):
+Implementation details that show up in Cachegrind and peer scripts (facts about
+the code, not a promise about every host):
 
-- *fast-float2*: tuned decimal kernel vs typical =sscanf= dispatch (Cachegrind
-  =float_fast_float2= vs =float_std_parse= I-refs)
-- *Zero-copy iteration*: borrows lines from the input =&str=
-- *Pre-allocated vectors*: atom count known from header before parsing
-- *No per-line stdio*: entire file in memory (mmap or =read_to_string=)
+- Atom floats: [[https://github.com/aldanor/fast-float-rust][fast-float2]]
+  (=float_fast_float2= vs =float_std_parse= Cachegrind scenarios)
+- Line views: zero-copy over the input buffer (=MemchrLines=)
+- Atom vectors: sized from the CON header before filling
+- File load: =read_to_string= below 64 KiB, mmap at/above (=MMAP_THRESHOLD= in
+  =src/compression.rs=)
+- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and =parallel= is on
+  (=PARALLEL_BYTES_THRESHOLD= in =src/iterators.rs=)
+- Skip without atoms: =forward= / =forward_fast= (Cachegrind =forward_*=)
 
-Skip path: =forward()= / =forward_fast= avoid materializing atoms when only
-counts or selected frames are needed (see Cachegrind =forward_*= scenarios).
-
-#+CAPTION: Parsing throughput across trajectory sizes (log scale; regenerate from measured JSON)
-[[file:img/parsing_throughput.svg]]
-
-h5py =position/value= alone is a coords array, not CON fidelity (no cell /
+h5py =position/value= alone is a coordinate array, not CON fidelity (no cell /
 constraints / =atom_id= / JSON sections). MDAnalysis H5MD is the fair H5MD *API*
 peer for full-frame style loads.
 
-#+CAPTION: Feature coverage vs parse speed (measured points; see JSON under =benches/results/=)
+Plots under =docs/orgmode/img/= are produced by =benches/make_plots.py= from
+JSON you generate; regenerate after peer runs if you need them current.
+
+#+CAPTION: Parsing throughput (from peer JSON via =make_plots.py=)
+[[file:img/parsing_throughput.svg]]
+
+#+CAPTION: Feature coverage vs parse speed (from peer JSON via =make_plots.py=)
 [[file:img/pareto_features_vs_speed.svg]]
 
 * Public API model and hot path
 
-**Public API (full frames only)**
+**Load (full frames)**
 
-- Load: =read_all_frames= / =ConFrameIterator= / Python =iter_con= /
-  =read_first_frame= (always full =ConFrame= fidelity).
-- Skip payload: =count_frames= / =forward_fast= when you do not need atoms.
-- Coordinates on a *loaded* frame: SoA on =ConFrame= / Python =coords_array()=.
-- No separate public “coords-only” trajectory load.
+- =read_all_frames= / =ConFrameIterator= / Python =iter_con= / =read_first_frame=
+- Skip payload: =count_frames= / =forward_fast= when atoms are not needed
+- Coordinates on a *loaded* frame: SoA / Python =coords_array()=
+- No separate public “coords-only” trajectory load
 
-**Fast cut**
+**Python**
 
-1. *Full multi-frame load:* =read_all_frames= — mmap large files; **Rayon
-   multi-frame parse** when the buffer is ≥ 48 KiB (~parallel~ / Python wheels).
-2. *Skip when you only need a count:* =count_frames= / =forward_fast= (=memchr=
-   newline walk, no atom materialize).
-3. *Python:* =Python::detach= around Rust multi-frame parse; =iter_con= streams
-   full frames; coordinates via =coords_array()= on a loaded frame.
+Multi-frame parse paths release the GIL via =py.detach= (=src/python.rs=) around
+the Rust work; =iter_con= yields full frames.
 
-**Internal parse (users do not see these)**
+* Criterion (local Rust latency)
 
-- Shared =MemchrLines= cursor for full parse and skip.
-- Atom lines: single-pass byte scan + =fast_float2::parse_partial=.
-- Default f64 positions: flat =Vec= then one Arc wrap; section SoA only when
-  sections are present.
-
-* Criterion microbenches (local Rust latency)
-
-[[https://bheisler.github.io/criterion.rs/book/][Criterion.rs]] tables from =benches/iterator_bench.rs= (single core). Useful for
-local latency intuition. Prefer Cachegrind I-refs and ASV for regressions; peer
-scripts for ASE/format comparisons.
-
-#+begin_src shell
-cargo bench
-# or: pixi r bench
-#+end_src
-
-Optional PR job in =ci_benchmark.yml= still saves Criterion baselines for
-=critcmp=; the *posted* PR comment is ASV/spyglass.
-
-readcon-core uses [[https://github.com/aldanor/fast-float-rust][fast-float2]] for coordinate, velocity, and force lines.
-Cachegrind scenarios =float_fast_float2= vs =float_std_parse= are the
-commit-stable float comparison. I/O switches =read_to_string= vs mmap near
-64 KiB; compressed =.con.gz= always decompresses to an in-memory buffer.
+=cargo bench= runs =benches/iterator_bench.rs=. Prefer Cachegrind for I-ref
+regressions and ASV for the Python PR surface. The PR Criterion job is optional
+artifact collection only; the posted comment is ASV/spyglass.
 
 * Memory
 
-Peak RSS depends on host and whether you materialize all frames. Prefer the
-iterator APIs for constant-memory processing:
+Peak RSS depends on host and whether all frames are materialised. Streaming:
 
 #+begin_src rust
 let iter = ConFrameIterator::new(&contents);
 for result in iter {
     let frame = result?;
-    // process frame, then drop
+    // process, then drop
 }
 #+end_src
 
-readcon-core allocates:
+Per frame the library keeps type symbols as shared =Arc<str>= (per type, not
+per atom), pre-sized atom storage from headers, and parses floats from borrowed
+line slices (no intermediate atom-line =String=).
 
-- One =Arc<str>= per atom type (not per atom) for symbols
-- One =Vec<AtomDatum>= (or SoA =FloatArray=) per frame, pre-sized from headers
-- No intermediate string allocations on atom lines (fast-float2 on borrowed slices)
-
-#+CAPTION: Peak memory usage with all frames loaded (historical plot; re-measure to cite)
+#+CAPTION: Peak RSS plot (from historical peer JSON; re-run =make_plots.py= to refresh)
 [[file:img/memory_usage.svg]]
 
-* Feature coverage vs other formats
+* Feature matrix plot
 
-#+CAPTION: Feature matrix: CON v2 vs common atomic structure formats
+#+CAPTION: CON v2 feature matrix vs common formats (=make_plots.py=)
 [[file:img/feature_comparison.svg]]
 
-CON v2 covers positions, velocities, forces, unit cell, per-direction
-constraints, atom identity (round-trip), structured metadata, compression,
-multi-frame support, and streaming iteration.
+CON v2 on the wire can carry positions, velocities, forces, unit cell,
+per-direction constraints, =atom_id=, structured JSON, compression, multi-frame
+concatenation, and streaming iteration — see [[file:spec.org][spec.org]].
 
-* Statistical analysis
+* Statistical analysis (optional)
 
-For credible intervals, [[https://github.com/HaoZeke/bayescomp][bayescomp]] fits Gamma-family models with random
-intercepts per test system from Criterion JSON and =compare_readers.py=
-timing data.
+[[https://github.com/HaoZeke/bayescomp][bayescomp]] can fit Gamma-family models
+to Criterion JSON and =compare_readers.py= timings when you want credible
+intervals; it is not part of the PR gate.
 
-* Reproducing these benchmarks
+* Reproduce (one place)
 
 #+begin_src shell
 # Python ASV (PR surface)
@@ -211,18 +199,14 @@ asv machine --yes
 asv run -E "existing:$(which python)" --set-commit-hash "$(git rev-parse HEAD)" \
   --record-samples --quick
 
-# Equal-geometry multi-frame (ASE, chemfiles, MDA peers)
-uv run --with ase --with numpy python benches/multiformat_traj.py
+# CON peers / multi-format / traj / H5MD — see Peer scripts above
 
-# Cross-implementation CON (ASE, C sscanf, readcon)
-uv run --with matplotlib --with numpy --with ase python benches/compare_readers.py
-
-# Generate plots from measured artifacts
+# Plots from your JSON
 uv run --with matplotlib --with numpy python benches/make_plots.py
 
-# CI-style Cachegrind I-refs (needs Valgrind)
+# Cachegrind I-refs (needs Valgrind)
 scripts/run_cachegrind_bench.sh
 
-# Rust microbenchmarks (Criterion)
+# Rust Criterion
 cargo bench
 #+end_src

@@ -246,7 +246,19 @@ fn benchmarks_what_we_measure() {
     let t = read("benchmarks.org");
     assert!(t.contains("What we measure") || t.contains("Cachegrind"));
     assert!(t.contains("compare_readers") || t.contains("ase.io.eon"));
+    assert!(
+        t.contains("ASV") && (t.contains("spyglass") || t.contains("asv-spyglass")),
+        "benchmarks must document Python ASV + spyglass PR path"
+    );
+    assert!(
+        t.contains("asv.conf.json") && t.contains("benchmarks/"),
+        "benchmarks must name ASV config and suite path"
+    );
     assert!(!t.contains("2.7M atoms/s"));
+    assert!(
+        !t.contains("rgam5terra") && !t.contains("9.2×") && !t.contains("3.3 ms"),
+        "benchmarks must not paste host wall-clock snapshot tables as doctrine"
+    );
     assert_no_ai_tells(&t, "benchmarks.org");
 }
 
@@ -311,8 +323,13 @@ fn index_and_readme_src() {
         "readme must point at convert CLI or migrate how-to"
     );
     assert!(
-        readme.contains("compare_readers") || readme.contains("3.3 ms") || readme.contains("9.2"),
-        "readme must cite measured peer speed (compare_readers or snapshot numbers)"
+        readme.contains("compare_readers")
+            && (readme.contains("ASV") || readme.contains("asv") || readme.contains("Cachegrind")),
+        "readme must point at peer script compare_readers and CI measurement gates (ASV/Cachegrind), not host-diary wall-clock snapshots"
+    );
+    assert!(
+        !readme.contains("3.3 ms") && !readme.contains("9.2×") && !readme.contains("rgam5terra"),
+        "readme must not embed host wall-clock snapshot numbers as product doctrine"
     );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));

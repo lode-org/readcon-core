@@ -199,22 +199,21 @@ Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with
    ``maturin develop --features python,chemfiles --release``, then
    ``asv run -E existing:… --set-commit-hash $sha --quick``. Results upload as
-   artifacts. A Criterion job still records ``iterator_bench`` baselines for
-   local ``critcmp`` with ``continue-on-error: true`` so a Rust microbench miss
-   cannot block the ASV/spyglass comment path.
+   artifacts. A Criterion job may save ``iterator_bench`` baselines
+   (``continue-on-error: true``) so a Rust microbench miss does not fail the
+   workflow conclusion that the commenter requires.
 
 2. The ``asv-combine`` job runs
    `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs →
-   ``results/comparison.txt``.
+   ``results/comparison.txt`` (fails if that file is empty).
 
-3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion, downloads
-   ``benchmark-results``, and posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
+3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion when the
+   Benchmark PR conclusion is ``success``, downloads ``benchmark-results``, and
+   posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
 
 The ``workflow_run`` split is required for fork PRs to have write access for
-posting comments (GitHub security model).
-
-Regressions above the asv-perch threshold can auto-draft the PR. Suite and
-local reproduce: `benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
+posting comments (GitHub security model). Suite and local reproduce:
+`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
 
 Release process
 ---------------
