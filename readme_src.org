@@ -48,9 +48,13 @@ Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
 
 ** Migrate onto CON
 
-Why: one file carries constraints, =atom_id=, optional sections (forces /
-charges / …), versioned JSON, and links through the hourglass ABI into Fortran /
-C / C++ / Python / Julia — campaign stores keep CON text authoritative.
+Why switch:
+
+- *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
+- *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust
+- *Selection:* =select_atoms= / =rkr_frame_select= on CON (=name H=, bonds/angles when topology is present)
+- *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] indexes CON text (energy / formula / sections, dedup, multi-reader)
+- *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on CON checkpoints / paths — not a per-code export
 
 #+begin_src shell
 # foreign → CON (needs --features chemfiles)
@@ -59,8 +63,10 @@ cargo run --release --features chemfiles -- convert structure.xyz structure.con
 # python -c "import readcon; readcon.convert_to_con('structure.xyz','structure.con')"
 #+end_src
 
-How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles learning path (CI-run):
-[[file:docs/orgmode/chemfiles-notebook.org][chemfiles-notebook]].
+How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles path (CI-run):
+[[file:docs/orgmode/chemfiles-notebook.org][chemfiles-notebook]]. Campaigns:
+[[https://lode-org.github.io/readcon-db/][readcon-db docs]]. Plotting:
+[[https://chemparseplot.rgoswami.me][chemparseplot]].
 
 ** Install
 
@@ -146,7 +152,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 | Languages | One =rkr_*= surface for Fortran / C / C++ / Python / Julia |
 | Spec | v2–v3, =validate=true=, declared sections (including optional physics blocks above), units (v3) |
 | Tensors | DLPack; optional metatensor =TensorBlock= |
-| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] |
+| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (energy/formula/sections indexes, dedup) |
 | Import | Optional chemfiles → CON |
 | Measurements | Cachegrind I-refs; CON peers (=ase.io.eon=, eOn-style C sscanf) |
 
