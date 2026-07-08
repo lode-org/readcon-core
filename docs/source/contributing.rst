@@ -199,8 +199,9 @@ Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with
    ``maturin develop --features python,chemfiles --release``, then
    ``asv run -E existing:… --set-commit-hash $sha --quick``. Results upload as
-   artifacts. An optional Criterion job still records ``iterator_bench``
-   baselines for local ``critcmp``.
+   artifacts. A Criterion job still records ``iterator_bench`` baselines for
+   local ``critcmp`` with ``continue-on-error: true`` so a Rust microbench miss
+   cannot block the ASV/spyglass comment path.
 
 2. The ``asv-combine`` job runs
    `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs →
