@@ -1,4 +1,4 @@
-//! Structural check: docs match the codebase role and related-work framing.
+//! Structural check: docs describe CON and the code stack, not format bake-offs.
 
 use std::fs;
 use std::path::PathBuf;
@@ -56,6 +56,9 @@ fn assert_no_ai_tells(t: &str, file: &str) {
         "they complement CON",
         "complement CON",
         "Neither replaces",
+        "How does CON relate to H5MD",
+        "CON and H5MD",
+        "Related work (H5MD",
     ];
     for b in banned {
         assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
@@ -68,7 +71,6 @@ fn architecture_matches_code_surface() {
     assert!(t.contains("hourglass") || t.contains("rkr_"));
     assert!(t.contains("readcon-db") || t.contains("index_proj") || t.contains("chemfiles"));
     assert!(t.contains("DLPack") || t.contains("metatensor") || t.contains("dlpk"));
-    assert!(t.contains("benchmarks") || t.contains("Cachegrind") || t.contains("faq"));
     assert_no_ai_tells(&t, "architecture.org");
 }
 
@@ -80,25 +82,22 @@ fn evolution_covers_v2_v3() {
 }
 
 #[test]
-fn faq_con_and_related_work() {
+fn faq_con_contract() {
     let t = read("faq.org");
     assert!(t.contains("hourglass") || t.contains("rkr_"));
     assert!(t.contains("atom_id") || t.contains("=atom_id="));
     assert!(t.contains("saddle") || t.contains("NEB") || t.contains("dimer"));
     assert!(t.contains("What CON is for"));
-    // literature-backed related work
     assert!(
-        t.contains("H5MD")
-            && (t.contains("chillEON") || t.contains("chillEONSoftwareLong2014") || t.contains("Chill")),
-        "FAQ must place CON vs H5MD with literature anchors"
-    );
-    assert!(
-        t.contains("multi-language")
-            || t.contains("multi-code")
+        t.contains("What is the stack for")
             || t.contains("campaign")
-            || t.contains("What is the stack for"),
+            || t.contains("multi-language")
+            || t.contains("chemfiles"),
         "FAQ must describe the multi-tool stack"
     );
+    // no format bake-off section
+    assert!(!t.contains("How does CON relate to H5MD"));
+    assert!(!t.contains("* CON and H5MD"));
     assert_no_ai_tells(&t, "faq.org");
 }
 
@@ -142,10 +141,7 @@ fn index_and_readme_src() {
     let index = read("index.org");
     assert!(index.contains("CON") || index.contains(".con"));
     assert!(index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language"));
-    assert!(
-        index.contains("H5MD") || index.contains("rare-event") || index.contains("transition-state"),
-        "index should state problem domain and related formats"
-    );
+    assert!(!index.contains("Related work (H5MD"));
     assert_no_ai_tells(&index, "index.org");
 
     let readme = read_repo("readme_src.org");
@@ -153,26 +149,18 @@ fn index_and_readme_src() {
     assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
     assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
     assert!(
-        readme.contains("H5MD") || readme.contains("de Buyl") || readme.contains("rare-event"),
-        "readme must place CON against literature-backed neighbors"
-    );
-    assert!(
         readme.contains("DLPack") || readme.contains("metatensor") || readme.contains("chemfiles"),
         "readme must reflect code features beyond bare parse"
     );
     assert!(
         readme.contains("rgpot")
-            || readme.contains("GROMACS")
-            || readme.contains("ML")
-            || readme.contains("campaign"),
+            || readme.contains("campaign")
+            || readme.contains("Consumers")
+            || readme.contains("saddle"),
         "readme must name multi-consumer stack"
     );
+    // do not orbit H5MD/XTC on the front page
+    assert!(!readme.contains("H5MD"));
+    assert!(!readme.contains("XTC"));
     assert_no_ai_tells(&readme, "readme_src.org");
-}
-
-#[test]
-fn references_bib_has_eon_and_h5md() {
-    let bib = read_repo("docs/source/references.bib");
-    assert!(bib.contains("chillEONSoftwareLong2014") || bib.contains("10.1088/0965-0393/22/5/055002"));
-    assert!(bib.contains("deBuylH5MDStructuredEfficient2014") || bib.contains("10.1016/j.cpc.2014.01.018"));
 }

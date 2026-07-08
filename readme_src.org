@@ -6,35 +6,29 @@ coordinates, per-direction constraints, stable =atom_id=, optional velocity /
 force / energy sections, and JSON metadata (spec v2–v3, see
 [[file:docs/orgmode/spec.org][docs/orgmode/spec.org]]).
 
-Rare-event and transition-state tools need checkpoints that survive many
-codes: frozen axes for constrained searches, identity through type-grouping
-for NEB and dimer modes, forces and energies on the same frame, and a single
-ABI so Fortran optimizers and Python analysis share one file. That is what
-CON is for. H5MD [de Buyl et al., 2014] stores continuous MD trajectories and
-observables on HDF5; engine formats (XTC/TRR/DCD) store dense dynamics inside
-one MD package.
-
-The library is the multi-language stack for that format:
+What CON carries is what multi-code rare-event and transition-state pipelines
+need on disk: frozen axes for constrained searches, identity through
+type-grouping for NEB and dimer modes, forces and energies on the same frame,
+and one ABI so Fortran optimizers and Python analysis share a file.
 
 | Layer | What ships in this repo |
 |-------+-------------------------|
 | Spec + hot path | Spec v3 parse/write, =validate=, units, =sections=, SoA storage, Cachegrind CI |
 | Hourglass ABI | C (=cbindgen=), C++ RAII, Python (PyO3), Julia, Fortran (fpm); one =rkr_*= surface |
 | Device / ML hand-off | DLPack export (dlpk SoA; optional CUDA); optional metatensor =TensorBlock= |
-| Ingress | Optional chemfiles import/selection (XYZ/PDB/GRO/…) into =ConFrame= |
-| Campaigns | =index_proj= screening contracts for [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add readcon-db=, =pip install readcon-db=) |
+| Ingress | Optional chemfiles import/selection into =ConFrame= |
+| Campaigns | =index_proj= screening for [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add readcon-db=, =pip install readcon-db=) |
 
-Downstream of that surface: rare-event clients (eOn [Chill et al., 2014] and
-related saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
-calculators (=to_ase= / =from_ase=), ML pipelines via DLPack / metatensor, and
-any other CON-native tool. GROMACS-class and ML runtimes consume the tensor
-exports without re-parsing text.
+Consumers of that surface include rare-event clients (eOn lineage and other
+saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
+calculators (=to_ase= / =from_ase=), campaign stores, and ML pipelines that take
+DLPack or metatensor blocks.
 
 Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]]. Chemfiles owns
 format diversity at the edge; this crate owns CON fidelity.
 
-Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=); CON peers
-(=benches/compare_readers.py= vs ASE =ase.io.eon= and eOn-style C). See
+Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=);
+=benches/compare_readers.py=. See
 [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 
 ** Features
