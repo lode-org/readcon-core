@@ -74,9 +74,10 @@ surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 probe with ``rkr_has_chemfiles_support()`` / ``has_chemfiles_support()`` (Julia) /
 feature at build time (Rust/Python).
 
-**Chemfiles documentation (Diátaxis):** ``chemfiles-tutorial.org`` (learn conversion),
-``chemfiles-howto.org``, ``chemfiles-explain.org``, ``chemfiles-reference.org`` (this
-matrix is the bindings slice of reference). Release cutting: ``contributing.org``
+**Documentation map (Diátaxis):** core tutorial ``tutorial.org``; multi-language
+how-to ``howto.org``; chemfiles track ``chemfiles-tutorial.org`` /
+``chemfiles-howto.org`` / ``chemfiles-explain.org`` / ``chemfiles-reference.org``.
+This page is reference. Release cutting: ``contributing.org``
 **Release process**.
 
 Multi-language: read first frame + metadata

@@ -3,6 +3,10 @@ Frequently Asked Questions
 ==========================
 
 
+.. note::
+
+   Diátaxis *explanation* (understanding-oriented Q&A). Learning path:
+   :doc:`tutorial`. Task recipes: :doc:`howto`.
 
 What CON is for
 ---------------

@@ -1,21 +1,21 @@
 
 # Table of Contents
 
-1.  [About](#org0b1bce9)
-    1.  [Features](#org9a284f3)
-    2.  [Install](#orgec48de9)
-    3.  [Tutorial](#org4c6617f)
-    4.  [Design Decisions](#org20c69dc)
-        1.  [FFI Layer](#orge1a193c)
-    5.  [Specification](#orgf4efa41)
-        1.  [CON format](#orge38f0c5)
-        2.  [convel format](#org9f39f1a)
-    6.  [Capabilities](#orgf486b02)
-    7.  [Citation](#orgf8ad37d)
-2.  [License](#orge4673b8)
+1.  [About](#org970b103)
+    1.  [Features](#org6406dbc)
+    2.  [Install](#orgb283c29)
+    3.  [Tutorial](#org31f6a7d)
+    4.  [Design Decisions](#org7840a30)
+        1.  [FFI Layer](#orge941092)
+    5.  [Specification](#orga7e68b4)
+        1.  [CON format](#org4454293)
+        2.  [convel format](#orgd248aa2)
+    6.  [Capabilities](#org2aa0078)
+    7.  [Citation](#org316f1d8)
+2.  [License](#org1019d9a)
 
 
-<a id="org0b1bce9"></a>
+<a id="org970b103"></a>
 
 # About
 
@@ -85,7 +85,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org9a284f3"></a>
+<a id="org6406dbc"></a>
 
 ## Features
 
@@ -103,7 +103,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgec48de9"></a>
+<a id="orgb283c29"></a>
 
 ## Install
 
@@ -152,58 +152,38 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="org4c6617f"></a>
+<a id="org31f6a7d"></a>
 
 ## Tutorial
 
-A copy-pasteable walkthrough that parses a multi-frame trajectory, inspects metadata, builds a new frame, and writes it back. Run it as-is.
+One Good Tutorial (Diátaxis): install, read a multi-frame fixture, inspect
+`atom_id`, write a round-trip, build a frame with energy. Full steps:
+[docs/orgmode/tutorial.org](docs/orgmode/tutorial.org) (or the published HTML `tutorial` page).
 
-    cargo run --example rust_usage -- resources/test/tiny_multi_cuh2.con
-
-The example above iterates lazily over every frame, prints atom counts plus the per-frame energy if present, and exits. Equivalent flows in the other bindings:
+Short Python path from the repository root:
 
     import readcon
     
-    # Read every frame; the iterator yields PyConFrame objects
-    for frame in readcon.iter_frames("resources/test/tiny_multi_cuh2.con"):
-        print(frame.natms_per_type, frame.energy())  # energy() is None when absent
+    for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
+        print(frame.cell, len(frame), frame.energy)
     
-    # Build and write a new frame
-    b = readcon.ConFrameBuilder(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0])
-    b.set_energy(-42.5).add_atom("Cu", 0.0, 0.0, 0.0, 1, 63.546)
-    b.write("out.con")
-
-    using ReadCon
-    for frame in iter_frames("resources/test/tiny_multi_cuh2.con")
-        println(frame.natms_per_type, " ", energy(frame))
-    end
-
-    #include <readcon-core.hpp>
-    #include <iostream>
+    frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
+    readcon.write_con("out.con", frames)
     
-    int main() {
-        readcon::ConFrameIterator it("resources/test/tiny_multi_cuh2.con");
-        for (const auto &frame : it) {
-            std::cout << frame.atoms().size() << " atoms";
-            if (auto e = frame.energy_opt()) std::cout << " E=" << *e;
-            std::cout << "\n";
-        }
-    }
+    atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
+    frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
+    frame.set_energy(-42.5)
+    frame.write_con("built.con")
 
-    #include <readcon-core.h>
-    #include <stdio.h>
-    
-    int main(void) {
-        uintptr_t n = 0;
-        RKRConFrame **frames = rkr_read_all_frames("resources/test/tiny_multi_cuh2.con", &n);
-        for (uintptr_t i = 0; i < n; ++i) {
-            printf("frame %zu energy=%f\n", i, rkr_frame_energy(frames[i]));
-        }
-        free_rkr_frame_array(frames, n);
-    }
+Rust smoke (same fixture):
+
+    cargo run --example rust_usage -- resources/test/tiny_multi_cuh2.con
+
+Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.org).
+Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org20c69dc"></a>
+<a id="org7840a30"></a>
 
 ## Design Decisions
 
@@ -211,7 +191,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="orge1a193c"></a>
+<a id="orge941092"></a>
 
 ### FFI Layer
 
@@ -225,14 +205,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="orgf4efa41"></a>
+<a id="orga7e68b4"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orge38f0c5"></a>
+<a id="org4454293"></a>
 
 ### CON format
 
@@ -243,7 +223,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org9f39f1a"></a>
+<a id="orgd248aa2"></a>
 
 ### convel format
 
@@ -253,7 +233,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgf486b02"></a>
+<a id="org2aa0078"></a>
 
 ## Capabilities
 
@@ -312,14 +292,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orgf8ad37d"></a>
+<a id="org316f1d8"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="orge4673b8"></a>
+<a id="org1019d9a"></a>
 
 # License
 

@@ -121,13 +121,53 @@ fn faq_speed_cites_con_peers() {
 #[test]
 fn getting_started_scope() {
     let t = read("getting-started.org");
-    assert!(t.contains("Scope") || t.contains("readcon-core"));
-    assert!(t.contains("hourglass") || t.contains("rkr_"));
+    assert!(t.contains("Install") || t.contains("readcon"));
     assert!(
-        t.contains("chemfiles") || t.contains("DLPack") || t.contains("index_proj") || t.contains("metatensor"),
+        t.contains("tutorial") || t.contains(":doc:`tutorial`") || t.contains("tutorial.org"),
+        "getting-started must point at the One Good Tutorial"
+    );
+    assert!(
+        t.contains("Diátaxis") || t.contains("Diataxis") || t.contains("How-to") || t.contains("howto"),
+        "getting-started should map Diátaxis destinations"
+    );
+    assert!(
+        t.contains("chemfiles") || t.contains("hourglass") || t.contains("rkr_") || t.contains("readcon-db"),
         "getting-started should mention more of the stack than bare I/O"
     );
     assert_no_ai_tells(&t, "getting-started.org");
+}
+
+#[test]
+fn one_good_tutorial_is_learning_oriented() {
+    let t = read("tutorial.org");
+    assert!(
+        t.contains("learning-oriented") || t.contains("Diátaxis *tutorial*") || t.contains("One Good"),
+        "tutorial.org must declare tutorial role"
+    );
+    assert!(
+        t.contains("iter_con") || t.contains("read_first_frame"),
+        "tutorial must use real Python CON I/O APIs"
+    );
+    assert!(
+        t.contains("tiny_multi_cuh2.con") || t.contains("resources/test/"),
+        "tutorial must use in-repo fixtures"
+    );
+    assert!(!t.contains("iter_frames"), "Python API is iter_con, not iter_frames");
+    assert_no_ai_tells(&t, "tutorial.org");
+}
+
+#[test]
+fn howto_is_task_oriented() {
+    let t = read("howto.org");
+    assert!(
+        t.contains("how-to") || t.contains("How-to") || t.contains("Diátaxis *how-to*"),
+        "howto.org must declare how-to role"
+    );
+    assert!(
+        t.contains("Python") && (t.contains("Rust") || t.contains("C++")),
+        "howto should cover multiple languages"
+    );
+    assert_no_ai_tells(&t, "howto.org");
 }
 
 #[test]
@@ -154,6 +194,17 @@ fn index_and_readme_src() {
         index.contains("Put CON") || index.contains("put CON") || index.contains("everywhere"),
         "index must state CON-everywhere ambition"
     );
+    assert!(
+        index.contains(":caption: Tutorials")
+            && (index.contains(":caption: How-to guides") || index.contains(":caption: How-to"))
+            && index.contains(":caption: Explanation")
+            && index.contains(":caption: Reference"),
+        "index toctree must follow Diátaxis quadrants"
+    );
+    assert!(
+        index.contains("tutorial\n") || index.contains("   tutorial"),
+        "index must list the core tutorial page"
+    );
     assert!(!index.contains("Related work (H5MD"));
     assert_no_ai_tells(&index, "index.org");
 
@@ -176,6 +227,14 @@ fn index_and_readme_src() {
         readme.contains("charges") && readme.contains("spins") && readme.contains("magmoms"),
         "readme must list optional charges/spins/magmoms sections"
     );
+    assert!(
+        readme.contains("iter_con") && !readme.contains("iter_frames"),
+        "readme must use real Python API iter_con"
+    );
+    assert!(
+        readme.contains("tutorial.org") || readme.contains("One Good Tutorial"),
+        "readme must point at the One Good Tutorial"
+    );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));
     assert_no_ai_tells(&readme, "readme_src.org");
@@ -189,6 +248,7 @@ fn index_and_readme_src() {
     for needle in [
         "docs/orgmode/spec.org",
         "docs/orgmode/benchmarks.org",
+        "docs/orgmode/tutorial.org",
     ] {
         assert!(
             readme_md.contains(needle),

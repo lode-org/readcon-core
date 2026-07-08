@@ -3,35 +3,105 @@ Getting started
 ===============
 
 
-.. figure:: /_static/figures/conversion-pipeline.svg
-   :alt: XYZ, PDB, or GRO converted into a CON frame
-   :align: center
-   :width: 100%
-
-   *Format conversion* — common structure files become a CON frame for any
-   language binding. Needs the *with conversions* install below.
-
-.. figure:: /_static/figures/lean-vs-conversion.svg
-   :alt: Default CON-only install versus install that also converts other formats
-   :align: center
-   :width: 100%
-
-   *Two installs* — default package is CON I/O only; the conversion package
-   adds XYZ / PDB / GRO (and similar) → CON. Same CON APIs either way.
-
 .. tip::
 
-   Start here for install and the shortest paths. Top nav *Convert* is the
-   conversion tutorial and recipes.
+   Install here, then take the :doc:`tutorial` (One Good Tutorial). Conversion
+   from XYZ/PDB/GRO is a separate path: :doc:`chemfiles-tutorial`.
 
-Scope
------
+Install
+-------
 
-readcon-core is how you put CON into a codebase: implement CON / convel (spec
-v2–v3), link the hourglass ``rkr_*`` ABI from Fortran / C / C++ / Python / Julia
-/ Rust, pull foreign structures in via chemfiles, hand tensors out via DLPack
-/ metatensor, index campaigns with ``index_proj`` + ``readcon-db``. Same on-disk
-file everywhere.
+Pick **one** language. Version pins match this tree (``0.14.0``).
+
+Python — CON I/O
+~~~~~~~~~~~~~~~~
+
+.. code:: shell
+
+    pip install 'readcon==0.14.0'
+
+Python — CON I/O plus format conversion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: shell
+
+    pip install 'readcon-chemfiles==0.14.0'
+    # do not also install lean readcon in the same venv
+
+Rust — CON I/O
+~~~~~~~~~~~~~~
+
+.. code:: shell
+
+    cargo add readcon-core
+
+Rust — with conversion
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: shell
+
+    cargo add readcon-core --features chemfiles
+
+Fortran / C / C++
+~~~~~~~~~~~~~~~~~
+
+Build the shared library from this repository, then link as in
+`bindings <bindings.rst>`_. Headers: ``include/readcon-core.h`` /
+``include/readcon-core.hpp``.
+
+.. code:: shell
+
+    cargo build --release
+    # Fortran smoke (example):
+    # cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
+    #   --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+Smoke test
+----------
+
+From the repository root (fixtures live under ``resources/test/``):
+
+.. code:: python
+
+    import readcon
+    frame = readcon.read_first_frame("resources/test/tiny_cuh2.con")
+    print(frame.cell, len(frame))
+
+.. code:: rust
+
+    use readcon_core::iterators::read_first_frame;
+    let frame = read_first_frame(std::path::Path::new("resources/test/tiny_cuh2.con"))?;
+    println!("{:?} {}", frame.header.boxl, frame.atom_data.len());
+
+Where to go next
+----------------
+
+Documentation follows `Diátaxis <https://diataxis.fr/>`_. Use one quadrant at a time.
+
+.. table::
+
+    +-----------------------------------+------------------------------------------------+-------------+
+    | Goal                              | Page                                           | Kind        |
+    +===================================+================================================+=============+
+    | Learn CON I/O end-to-end          | `tutorial <tutorial.rst>`_                     | Tutorial    |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | Task recipes by language          | `howto <howto.rst>`_                           | How-to      |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | XYZ / PDB / GRO → CON             | `chemfiles-tutorial <chemfiles-tutorial.rst>`_ | Tutorial    |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | Batch convert / C conversion API  | `chemfiles-howto <chemfiles-howto.rst>`_       | How-to      |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | Why conversion is optional; bonds | `chemfiles-explain <chemfiles-explain.rst>`_   | Explanation |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | Why CON / sections / stack        | `faq <faq.rst>`_, `evolution <evolution.rst>`_ | Explanation |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | On-disk format                    | `spec <spec.rst>`_                             | Reference   |
+    +-----------------------------------+------------------------------------------------+-------------+
+    | API tables                        | `bindings <bindings.rst>`_                     | Reference   |
+    +-----------------------------------+------------------------------------------------+-------------+
+
+Scope (map of the stack)
+------------------------
 
 .. table::
 
@@ -40,139 +110,14 @@ file everywhere.
     +=================================+=========================================+
     | Read / write CON                | ``readcon`` / ``readcon-core``          |
     +---------------------------------+-----------------------------------------+
-    | Link from Fortran / C / C++     | Hourglass ABI; lean features by default |
+    | Link from Fortran / C / C++     | Hourglass ``rkr_*`` ABI                 |
     +---------------------------------+-----------------------------------------+
     | Many trajectories, multi-reader | ``readcon-db`` (CON text authoritative) |
     +---------------------------------+-----------------------------------------+
     | Foreign structure file → CON    | Optional chemfiles build                |
     +---------------------------------+-----------------------------------------+
-    | ASE calculator                  | Optional ``to_ase`` / ``from_ase``      |
+    | ASE calculator hand-off         | Optional ``to_ase`` / ``from_ase``      |
     +---------------------------------+-----------------------------------------+
 
-Why CON looks this way: `faq.org <faq.rst>`_, `evolution.org <evolution.rst>`_.
-Rules: `spec.org <spec.rst>`_. Layout of the library:
-`architecture.org <architecture.rst>`_. Numbers:
-`benchmarks.org <benchmarks.rst>`_.
-
-Install
--------
-
-.. tab-set::
-
-   .. tab-item:: Rust
-
-      .. code-block:: shell
-
-         cargo add readcon-core
-
-   .. tab-item:: Python
-
-      .. code-block:: shell
-
-         pip install 'readcon==0.13.1'
-         # conversions: pip install 'readcon-chemfiles==0.13.1'
-
-   .. tab-item:: Fortran
-
-      .. code-block:: shell
-
-         cargo build --release
-         cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
-           --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
-
-   .. tab-item:: C / C++
-
-      .. code-block:: shell
-
-         # Meson or CMake (Corrosion) — see bindings page
-         # Header: include/readcon-core.h
-
-Rust — CON I/O only
-~~~~~~~~~~~~~~~~~~~
-
-.. code:: shell
-
-    cargo add readcon-core
-
-Python — CON I/O only
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code:: shell
-
-    pip install 'readcon==0.13.1'
-
-Python — CON I/O plus format conversion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code:: shell
-
-    pip install 'readcon-chemfiles==0.13.1'
-    # do not also install lean readcon in the same venv
-
-The PyPI name ``readcon-chemfiles`` is historical (multi-format read is linked
-in that wheel). You do not need a separate chemfiles tutorial to convert a
-file—call the helpers on ``readcon`` as below.
-
-Rust — CON I/O plus format conversion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code:: shell
-
-    cargo add readcon-core --features chemfiles
-    # or in this repo: cargo build --features chemfiles
-
-Read a CON file
----------------
-
-.. code:: python
-
-    import readcon
-    frame = readcon.read_first_frame("structure.con")
-    print(frame.cell, len(frame.atoms))
-
-.. code:: rust
-
-    use readcon_core::iterators::read_first_frame;
-    let frame = read_first_frame(std::path::Path::new("structure.con"))?;
-
-Convert XYZ (or PDB / GRO) into CON
------------------------------------
-
-Needs the **with conversions** install.
-
-.. code:: python
-
-    import readcon
-    assert readcon.has_chemfiles_support()  # False on the CON-only wheel
-    frame = readcon.read_chemfiles_first("water.xyz")
-    frame.write_con("water.con")
-
-Full walkthrough: :doc:`chemfiles-tutorial`. Executable notebook:
-:doc:`chemfiles-notebook` via ``scripts/run-chemfiles-notebook.sh``.
-
-Where to go next
-----------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 45 55
-   :class: next-steps
-
-   * - Goal
-     - Page
-   * - Learn CON I/O patterns
-     - :doc:`tutorials`
-   * - Convert XYZ / PDB / GRO → CON
-     - :doc:`chemfiles-tutorial`
-   * - Run the executable conversion notebook
-     - :doc:`chemfiles-notebook`
-   * - Task recipes (batch convert, C API)
-     - :doc:`chemfiles-howto`
-   * - Why conversion is optional; bonds & indices
-     - :doc:`chemfiles-explain`
-   * - API tables
-     - :doc:`chemfiles-reference`, :doc:`bindings`
-   * - On-disk format
-     - :doc:`spec`
-   * - Release / contribute
-     - :doc:`contributing`
+Library layout: `architecture <architecture.rst>`_. Measurements:
+`benchmarks <benchmarks.rst>`_.
