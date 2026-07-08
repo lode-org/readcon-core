@@ -21,7 +21,7 @@ capnproto = "*"
 
 [feature.python]
 dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*", pip = "*", numpy = ">=1.22" }
-tasks = { python-build = "maturin develop --features python", python-build-chemfiles = "maturin develop --features python,chemfiles", python-test = { cmd = "pytest tests/python/", depends-on = ["python-build"] }, chemfiles-notebook = { cmd = "scripts/run-chemfiles-notebook.sh", depends-on = ["python-build-chemfiles"], description = "Org Babel executable chemfiles→CON tutorial" } }
+tasks = { python-build = "maturin develop --features python", python-build-chemfiles = "maturin develop --features python,chemfiles", python-test = { cmd = "pytest tests/python/", depends-on = ["python-build"] }, chemfiles-notebook = { cmd = "scripts/run-chemfiles-notebook.sh", depends-on = ["python-build-chemfiles"], description = "Org Babel executable chemfiles→CON tutorial" }, tutorial-core = { cmd = "scripts/run-tutorial-core.sh", depends-on = ["python-build"], description = "Org Babel One Good Tutorial (CON checkpoint)" } }
 
 [feature.julia]
 platforms = ["linux-64"]

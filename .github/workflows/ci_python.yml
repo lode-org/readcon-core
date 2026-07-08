@@ -7,6 +7,11 @@ on:
       - 'src/**'
       - 'tests/python/**'
       - 'resources/test/**'
+      - 'docs/orgmode/tutorial.org'
+      - 'docs/orgmode/chemfiles-notebook.org'
+      - 'docs/notebooks/**'
+      - 'scripts/run-tutorial-core.sh'
+      - 'scripts/run-chemfiles-notebook.sh'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'pyproject.toml'
@@ -17,6 +22,11 @@ on:
       - 'src/**'
       - 'tests/python/**'
       - 'resources/test/**'
+      - 'docs/orgmode/tutorial.org'
+      - 'docs/orgmode/chemfiles-notebook.org'
+      - 'docs/notebooks/**'
+      - 'scripts/run-tutorial-core.sh'
+      - 'scripts/run-chemfiles-notebook.sh'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'pyproject.toml'
@@ -48,10 +58,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install maturin and pytest
+      - name: Install maturin, pytest, emacs (org-babel)
         run: |
           python -m pip install -U pip
           python -m pip install maturin pytest numpy
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends emacs-nox
 
       - name: maturin develop
         env:
@@ -60,9 +72,17 @@ jobs:
         run: |
           maturin develop --features '${{ matrix.features }}'
 
-      # Includes Diátaxis tutorial runners:
-      #   tests/python/test_tutorial_core.py      (lean + chemfiles)
-      #   tests/python/test_tutorial_chemfiles.py (chemfiles matrix only)
+      # Org Babel: tangle tutorial.org → docs/notebooks/tutorial_core.py and run
+      - name: Org Babel One Good Tutorial
+        run: |
+          scripts/run-tutorial-core.sh
+
+      # Org Babel: tangle chemfiles-notebook.org → chemfiles_ingress.py and run
+      - name: Org Babel chemfiles notebook
+        if: matrix.name == 'chemfiles'
+        run: |
+          scripts/run-chemfiles-notebook.sh
+
       - name: pytest tests/python
         run: |
           python -m pytest tests/python/ -q --tb=short

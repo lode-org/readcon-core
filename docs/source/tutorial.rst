@@ -5,60 +5,73 @@ Tutorial — your first CON checkpoint
 
 .. note::
 
-   Diátaxis *tutorial* (learning-oriented). One successful path under guidance.
+   Diátaxis *tutorial* (learning-oriented). **Source of truth is this Org file.**
+
+   CI (``.github/workflows/ci_python.yml``, lean matrix) runs
+   ``scripts/run-tutorial-core.sh``: Emacs tangles the Python blocks into
+   ``docs/notebooks/tutorial_core.py``, then executes that script against
+   ``resources/test`` fixtures. Do not hand-edit the tangled ``.py``.
+
    Multi-language recipes: :doc:`howto`. Format conversion: :doc:`chemfiles-tutorial`.
    API tables: :doc:`bindings`. Format rules: :doc:`spec`.
-
-   **CI:** GitHub Actions ``ci_python.yml`` (lean matrix) runs the same steps as
-   ``tests/python/test_tutorial_core.py`` under ``pytest tests/python/``. A broken
-   tutorial path fails that job.
 
 In this tutorial we open a real CON trajectory from the repository fixtures,
 inspect cell and ``atom_id`` data, write a round-trip file, then build a small
 checkpoint with total energy.
 
-We use **Python** and the package ``readcon`` only (no chemfiles, no ASE). Run
-commands from the repository root so fixture paths match the tree. If you work
-from another directory, adjust the paths.
-
-The assertions below match ``tests/python/test_tutorial_core.py`` (iter multi-frame
-count 2, round-trip length, forces fixture, built energy ``-1.25``).
+We use **Python** and the package ``readcon`` only (no chemfiles, no ASE). Blocks
+below are executable via Org Babel (session ``readcon-core-tut``) or the CI
+script. Paths are relative to the repository root.
 
 What we will do
 ---------------
 
-1. Install ``readcon``.
+1. Import ``readcon`` and locate fixtures under ``resources/test/``.
 
-2. Iterate every frame of ``resources/test/tiny_multi_cuh2.con``.
+2. Iterate every frame of ``tiny_multi_cuh2.con``.
 
-3. Print cell size, atom count, and the first atom's ``atom_id``.
+3. Inspect ``atom_id`` and fixed flags on the first frame.
 
-4. Write the frames back to a new file and confirm the frame count.
+4. Write a round-trip and confirm the frame count.
 
-5. Build a two-atom frame with total energy, then write it.
+5. Build a two-atom frame with total energy and write it.
 
-When you finish, you will have two output files and a working CON I/O habit you
-can repeat in any language (see `howto <howto.rst>`_).
+Parameters
+----------
 
-Install once
-------------
+.. code:: python
+    :name: params
 
-.. code:: shell
+    from __future__ import annotations
 
-    python -m venv .venv && source .venv/bin/activate
-    pip install -U 'readcon==0.14.0'
-    python -c "import readcon; print(readcon.__version__, readcon.CON_SPEC_VERSION)"
+    import os
+    import sys
+    from pathlib import Path
 
-You should see a version string and a library spec version (integer ``2`` or
-higher). If ``import readcon`` fails, the venv is inactive or the install did not
-land.
+    # Repo root: CI and local runs cwd to repository root.
+    REPO = Path(os.environ.get("READCON_TUT_ROOT", Path.cwd())).resolve()
+    FIXTURES = REPO / "resources" / "test"
+    MULTI = FIXTURES / "tiny_multi_cuh2.con"
+    FORCES = FIXTURES / "tiny_cuh2_forces.con"
+    work_dir = Path(os.environ.get("READCON_TUT_WORK", REPO / "docs" / "notebooks" / "out" / "tutorial_core"))
+    work_dir.mkdir(parents=True, exist_ok=True)
+    roundtrip_path = work_dir / "tutorial_roundtrip.con"
+    built_path = work_dir / "tutorial_built.con"
+    print("REPO =", REPO)
+    print("work_dir =", work_dir.resolve())
 
-From a clone of this repository you can instead run:
+Setup
+-----
 
-.. code:: shell
+.. code:: python
+    :name: setup
 
-    pixi r -e python python-build
-    # or: maturin develop --features python
+    import readcon
+
+    print("readcon", getattr(readcon, "__version__", "?"))
+    print("CON_SPEC_VERSION", readcon.CON_SPEC_VERSION)
+    assert MULTI.is_file(), f"missing fixture {MULTI}"
+    assert FORCES.is_file(), f"missing fixture {FORCES}"
 
 Step 1 — open a multi-frame CON
 -------------------------------
@@ -66,43 +79,29 @@ Step 1 — open a multi-frame CON
 The fixture ``resources/test/tiny_multi_cuh2.con`` holds two small Cu/H frames.
 
 .. code:: python
+    :name: step1_iter
 
-    import readcon
-
-    path = "resources/test/tiny_multi_cuh2.con"
     n = 0
-    for frame in readcon.iter_con(path):
+    for frame in readcon.iter_con(str(MULTI)):
         n += 1
-        print(n, frame.cell, len(frame))
+        print(n, list(frame.cell), len(frame))
 
     print("frames:", n)
+    assert n == 2, n
 
-Expected shape of the output (numbers match this fixture):
-
-::
-
-    1 [15.3456, 21.702, 100.0] 4
-    2 [15.3456, 21.702, 100.0] 4
-    frames: 2
-
-Each frame reports a cell and an atom count. The iterator yields one parsed
-frame at a time.
-
-If the path is wrong you get a file error immediately: fix the working
-directory and run the block again.
+You should see two frames with four atoms each and cell roughly
+``[15.3456, 21.702, 100.0]``.
 
 Step 2 — inspect identity columns
 ---------------------------------
 
-Still on the first frame of the same file:
-
 .. code:: python
+    :name: step2_inspect
 
-    import readcon
-
-    frame = readcon.read_first_frame("resources/test/tiny_multi_cuh2.con")
+    frame = readcon.read_first_frame(str(MULTI))
     print("spec_version:", frame.spec_version)
-    print("energy:", frame.energy)  # None when the JSON omits energy
+    # energy is a property (None when JSON omits it), not a method
+    print("energy:", frame.energy)
     for atom in list(frame.atoms)[:2]:
         print(
             atom.symbol,
@@ -114,44 +113,43 @@ Still on the first frame of the same file:
             "atom_id=",
             atom.atom_id,
         )
+    assert frame.spec_version >= 2
+    assert frame.energy is None
+    assert list(frame.atoms)[0].symbol == "Cu"
+    assert list(frame.atoms)[0].atom_id == 0
+    assert list(frame.atoms)[0].is_fixed is True
 
-Look at ``atom_id``: it is column 5 of the coordinate block, the pre-grouping
-index used by NEB and dimer tools. Fixed flags come from column 4.
+Look at ``atom_id``: column 5 of the coordinate block, the pre-grouping index
+used by NEB and dimer tools. Fixed flags come from column 4.
 
 Step 3 — write a round-trip
 ---------------------------
 
 .. code:: python
+    :name: step3_roundtrip
 
-    import readcon
-
-    frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
-    readcon.write_con("tutorial_roundtrip.con", frames)
-    again = list(readcon.iter_con("tutorial_roundtrip.con"))
+    frames = readcon.read_con(str(MULTI))
+    readcon.write_con(str(roundtrip_path), frames)
+    again = list(readcon.iter_con(str(roundtrip_path)))
     print("wrote", len(frames), "frames; reread", len(again))
-    assert len(again) == len(frames)
+    assert len(again) == len(frames) == 2
+    assert len(again[0]) == 4
 
-Expected:
-
-::
-
-    wrote 2 frames; reread 2
-
-Open ``tutorial_roundtrip.con`` in an editor if you like: line 2 is JSON metadata
-and coordinate blocks follow the same layout as the fixture.
+Open the written file under ``docs/notebooks/out/tutorial_core/`` if you like:
+line 2 is JSON metadata.
 
 Step 4 — build a checkpoint with energy
 ---------------------------------------
 
-Read a forces-bearing fixture so you see optional sections on disk, then build a
-tiny frame of your own:
+Read a forces-bearing fixture, then build a tiny frame of your own:
 
 .. code:: python
+    :name: step4_build
 
-    import readcon
-
-    ref = readcon.read_first_frame("resources/test/tiny_cuh2_forces.con")
+    ref = readcon.read_first_frame(str(FORCES))
     print("has_forces:", ref.has_forces, "energy:", ref.energy)
+    assert ref.has_forces is True
+    assert ref.energy == -42.5
 
     atoms = [
         readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546),
@@ -163,16 +161,33 @@ tiny frame of your own:
         atoms=atoms,
     )
     frame.set_energy(-1.25)
-    frame.write_con("tutorial_built.con")
+    frame.write_con(str(built_path))
 
-    check = readcon.read_first_frame("tutorial_built.con")
+    check = readcon.read_first_frame(str(built_path))
     print("built atoms:", len(check), "energy:", check.energy)
-
-You should see ``has_forces: True`` and a numeric energy for the fixture, then
-``built atoms: 2`` with energy ``-1.25`` for your file.
+    assert len(check) == 2
+    assert check.energy == -1.25
 
 Checkpoint
 ----------
+
+.. code:: python
+    :name: checkpoint
+
+    import json
+
+    summary = {
+        "multi_frames": 2,
+        "roundtrip": str(roundtrip_path.resolve()),
+        "built": str(built_path.resolve()),
+        "built_energy": check.energy,
+        "has_forces_fixture": bool(ref.has_forces),
+    }
+    (work_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(summary, indent=2))
+    print("OK — org-mode CON checkpoint tutorial finished", file=sys.stderr)
 
 You now:
 
@@ -186,20 +201,31 @@ You now:
 
 - construct a frame with metadata energy
 
-Next steps (pick by need, not in order):
+Run from the shell
+------------------
+
+.. code-block:: shell
+
+   # after: maturin develop --features python  (or pip install readcon)
+   scripts/run-tutorial-core.sh
+
+Emacs: open this file and ``C-c C-c`` each Python block (session
+``readcon-core-tut``). CI tangles to ``docs/notebooks/tutorial_core.py`` then runs
+that file — do not hand-edit the tangled ``.py``.
+
+Next steps
+----------
 
 .. table::
 
-    +------------------------------------------------+------------------------------------------------------------------+
-    | Need                                           | Page                                                             |
-    +================================================+==================================================================+
-    | Same tasks in Rust / C / C++ / Julia / Fortran | `howto <howto.rst>`_                                             |
-    +------------------------------------------------+------------------------------------------------------------------+
-    | XYZ / PDB / GRO → CON                          | `chemfiles-tutorial <chemfiles-tutorial.rst>`_                   |
-    +------------------------------------------------+------------------------------------------------------------------+
-    | Declared sections (``forces``, ``charges``, …) | `faq <faq.rst>`_, `spec <spec.rst>`_                             |
-    +------------------------------------------------+------------------------------------------------------------------+
-    | Full API tables                                | `bindings <bindings.rst>`_                                       |
-    +------------------------------------------------+------------------------------------------------------------------+
-    | Why CON looks this way                         | `evolution <evolution.rst>`_, `architecture <architecture.rst>`_ |
-    +------------------------------------------------+------------------------------------------------------------------+
+    +------------------------------------------------+-------------------------------------------------------------------------------------------------+
+    | Need                                           | Page                                                                                            |
+    +================================================+=================================================================================================+
+    | Same tasks in Rust / C / C++ / Julia / Fortran | `howto <howto.rst>`_                                                                            |
+    +------------------------------------------------+-------------------------------------------------------------------------------------------------+
+    | XYZ / PDB / GRO → CON (Babel + CI)             | `chemfiles-tutorial <chemfiles-tutorial.rst>`_ / `chemfiles-notebook <chemfiles-notebook.rst>`_ |
+    +------------------------------------------------+-------------------------------------------------------------------------------------------------+
+    | Declared sections (``forces``, ``charges``, …) | `faq <faq.rst>`_, `spec <spec.rst>`_                                                            |
+    +------------------------------------------------+-------------------------------------------------------------------------------------------------+
+    | Full API tables                                | `bindings <bindings.rst>`_                                                                      |
+    +------------------------------------------------+-------------------------------------------------------------------------------------------------+

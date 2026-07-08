@@ -154,8 +154,8 @@ fn one_good_tutorial_is_learning_oriented() {
     );
     assert!(!t.contains("iter_frames"), "Python API is iter_con, not iter_frames");
     assert!(
-        t.contains("test_tutorial_core") || t.contains("ci_python"),
-        "tutorial.org must point at the CI pytest runner"
+        t.contains("run-tutorial-core") || t.contains("tutorial_core.py") || t.contains("org-babel"),
+        "tutorial.org must point at the Org Babel CI runner"
     );
     assert_no_ai_tells(&t, "tutorial.org");
 }
@@ -164,22 +164,32 @@ fn one_good_tutorial_is_learning_oriented() {
 fn tutorial_runners_exist_in_repo() {
     let root = repo_root();
     assert!(
-        root.join("tests/python/test_tutorial_core.py").is_file(),
-        "missing One Good Tutorial CI runner"
+        root.join("scripts/run-tutorial-core.sh").is_file(),
+        "missing Org Babel tutorial script"
     );
     assert!(
-        root.join("tests/python/test_tutorial_chemfiles.py").is_file(),
-        "missing chemfiles tutorial CI runner"
+        root.join("scripts/run-chemfiles-notebook.sh").is_file(),
+        "missing Org Babel chemfiles notebook script"
     );
-    let core = fs::read_to_string(root.join("tests/python/test_tutorial_core.py")).unwrap();
-    assert!(core.contains("iter_con") && core.contains("tiny_multi_cuh2"));
-    assert!(core.contains("set_energy") && core.contains("write_con"));
-    let cf = fs::read_to_string(root.join("tests/python/test_tutorial_chemfiles.py")).unwrap();
-    assert!(cf.contains("read_chemfiles_first") && cf.contains("has_chemfiles_support"));
+    let org = fs::read_to_string(root.join("docs/orgmode/tutorial.org")).unwrap();
+    assert!(
+        org.contains(":tangle ../notebooks/tutorial_core.py"),
+        "tutorial.org must tangle Python blocks"
+    );
+    assert!(
+        org.contains("run-tutorial-core.sh") || org.contains("org-babel"),
+        "tutorial.org must document Babel CI path"
+    );
+    let nb = fs::read_to_string(root.join("docs/orgmode/chemfiles-notebook.org")).unwrap();
+    assert!(nb.contains(":tangle ../notebooks/chemfiles_ingress.py"));
     let wf = fs::read_to_string(root.join(".github/workflows/ci_python.yml")).unwrap();
     assert!(
-        wf.contains("tests/python") && wf.contains("test_tutorial"),
-        "ci_python.yml must mention tutorial runners"
+        wf.contains("run-tutorial-core.sh") && wf.contains("run-chemfiles-notebook.sh"),
+        "ci_python.yml must invoke Org Babel tutorial scripts"
+    );
+    assert!(
+        wf.contains("emacs-nox") || wf.contains("emacs"),
+        "ci_python.yml must install emacs for org-babel-tangle"
     );
 }
 

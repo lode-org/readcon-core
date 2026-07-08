@@ -5,10 +5,11 @@ Executable Chemfiles notebook
 
 .. note::
 
-   This page is the *Org-mode source* executed by
-   ``scripts/run-chemfiles-notebook.sh`` (Emacs Babel). In the HTML site the
-   blocks are shown as documentation; run them locally with that script or
-   ``C-c C-c`` in Emacs. Same conversion-first story as :doc:`chemfiles-tutorial`.
+   This page is the *Org-mode Babel source* for the chemfiles conversion
+   tutorial. ``scripts/run-chemfiles-notebook.sh`` tangles then executes it.
+   GitHub Actions ``ci_python.yml`` (chemfiles matrix) runs that script after
+   ``maturin develop --features python,chemfiles``. Learning narrative:
+   :doc:`chemfiles-tutorial`.
 
 Literate, plain-text notebook (not a committed ``.ipynb``). Requires
 ``readcon-chemfiles`` or ``maturin develop --features python,chemfiles``.
