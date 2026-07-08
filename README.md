@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#org2c296dd)
-    1.  [Features](#orgd07261e)
-    2.  [Migrate onto CON](#org30c5b67)
-    3.  [Install](#orgf1930ce)
-    4.  [Tutorial](#orgda49bed)
-    5.  [Design Decisions](#orgb5b00e2)
-        1.  [FFI Layer](#org4c4aa1b)
-    6.  [Specification](#org1c7fe66)
-        1.  [CON format](#org6d32c14)
-        2.  [convel format](#orgb34a9da)
-    7.  [Capabilities](#orgbf4b550)
-    8.  [Citation](#orgbb23266)
-2.  [License](#org31df208)
+1.  [About](#org0063067)
+    1.  [Features](#orgd0ee3a0)
+    2.  [Migrate onto CON](#org4f29608)
+    3.  [Install](#orgfae0f3b)
+    4.  [Tutorial](#org9685b11)
+    5.  [Design Decisions](#org9a73af2)
+        1.  [FFI Layer](#orge411fe9)
+    6.  [Specification](#org4a87daa)
+        1.  [CON format](#orgb9cf74c)
+        2.  [convel format](#org9ce74c5)
+    7.  [Capabilities](#orgc5ff345)
+    8.  [Citation](#org77aab1c)
+2.  [License](#orgbb73632)
 
 
-<a id="org2c296dd"></a>
+<a id="org0063067"></a>
 
 # About
 
@@ -87,7 +87,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orgd07261e"></a>
+<a id="orgd0ee3a0"></a>
 
 ## Features
 
@@ -105,7 +105,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org30c5b67"></a>
+<a id="org4f29608"></a>
 
 ## Migrate onto CON
 
@@ -131,7 +131,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orgf1930ce"></a>
+<a id="orgfae0f3b"></a>
 
 ## Install
 
@@ -180,7 +180,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgda49bed"></a>
+<a id="org9685b11"></a>
 
 ## Tutorial
 
@@ -211,7 +211,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="orgb5b00e2"></a>
+<a id="org9a73af2"></a>
 
 ## Design Decisions
 
@@ -219,7 +219,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org4c4aa1b"></a>
+<a id="orge411fe9"></a>
 
 ### FFI Layer
 
@@ -233,14 +233,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org1c7fe66"></a>
+<a id="org4a87daa"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org6d32c14"></a>
+<a id="orgb9cf74c"></a>
 
 ### CON format
 
@@ -251,7 +251,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgb34a9da"></a>
+<a id="org9ce74c5"></a>
 
 ### convel format
 
@@ -261,7 +261,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgbf4b550"></a>
+<a id="orgc5ff345"></a>
 
 ## Capabilities
 
@@ -320,14 +320,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orgbb23266"></a>
+<a id="org77aab1c"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org31df208"></a>
+<a id="orgbb73632"></a>
 
 # License
 
