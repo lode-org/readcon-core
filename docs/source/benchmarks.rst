@@ -9,18 +9,19 @@ Measurement hierarchy
 
 .. table::
 
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |   Rank | Command / artifact                                                                | Answers                                                                  |
-    +========+===================================================================================+==========================================================================+
-    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh``        | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      2 | ``benches/multiformat_traj.py`` → ``benches/results/multiformat_traj_terra.json`` | Equal-geometry multi-frame parse vs ASE CON / XYZ, chemfiles XYZ, MDA    |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      3 | ``benches/compare_readers.py``                                                    | CON parse order vs eOn-style C sscanf on equal text                      |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    +--------+-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
+    |   Rank | Command / artifact                                                                | Answers                                                                               |
+    +========+===================================================================================+=======================================================================================+
+    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh``        | Instruction-count deltas on fixed CON parse / skip / write / float paths              |
+    +--------+-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
+    |      2 | ``benches/compare_readers.py``                                                    | CON parse order vs ASE ``ase.io.eon`` and eOn-style C sscanf on equal CON text        |
+    +--------+-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
+    |      3 | ``benches/multiformat_traj.py`` → ``benches/results/multiformat_traj_terra.json`` | Equal-geometry multi-frame wall times vs other ASCII readers (measurement peers only) |
+    +--------+-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
 
-Criterion microbenches and older scaling tables are local latency history;
-re-run before citing. Public numbers use ranks 1–3 only.
+Product speed claims use ranks 1–2 first (CON path and CON peers). Rank 3
+records additional ASCII peers on the same geometry; it does not define the
+CON contract. Criterion microbenches are local latency history.
 
 CI Cachegrind (regression authority)
 ------------------------------------
@@ -46,45 +47,10 @@ compares Criterion baselines with ``critcmp``.
 Conversion cost appears as ``chemfiles_*`` Cachegrind scenarios when the
 ``chemfiles`` feature is linked. CON I/O remains the core library cost.
 
-Equal-geometry multi-frame (peer ordering)
-------------------------------------------
-
-``benches/multiformat_traj.py`` writes equal-geometry multi-frame artifacts and
-times full parse of all frames (median of repeats) against ASE CON / XYZ,
-chemfiles XYZ, and MDAnalysis XYZ. Binary MD formats stay out of scope. CON
-carries richer sections than lean XYZ; chemfiles is typically the closest
-ASCII peer.
-
-Committed artifact: ``benches/results/multiformat_traj_terra.json``. On that
-recorded run (218 atoms × 100 frames), readcon CON full-parse median is about
-12× ASE CON and about 1.5× chemfiles XYZ on that host. Four-atom ladders in
-the same JSON exercise the minimum-ratio check; prefer the 218-atom rows for
-comparisons. Re-run on your host:
-
-.. code:: shell
-
-    uv run --with ase --with numpy python benches/multiformat_traj.py
-
-Pareto / throughput SVGs use **measured** points only: ``readcon`` / ASE CON /
-ASE extXYZ from that JSON plus C sscanf from ``compare_readers.py``; ASE CON is
-labeled CON, not extXYZ.
-
-Multi-format notes
-~~~~~~~~~~~~~~~~~~
-
-- Protocol: equal geometry; full parse all frames; median of repeats.
-
-- The script enforces a minimum ratio vs peers (JSON keys ``min_ratio_gate`` /
-  ``min_ratio_chemfiles_gate``).
-
-- Wall-clock moves with host load, CPU frequency, and ASE/chemfiles versions;
-  re-run rather than treating a single median as fixed.
-
-CON vs C sscanf (``compare_readers.py``)
+CON peer timing (``compare_readers.py``)
 ----------------------------------------
 
-Engineering ordering against an eOn-style C reader on the same CON text.
-Historical single-host snapshot; re-run to refresh:
+Ordering against ASE ``ase.io.eon`` and an eOn-style C reader on the **same CON text**. Historical single-host snapshot; re-run to refresh:
 
 .. table::
 
@@ -116,6 +82,22 @@ Structural reasons the C/Rust path can beat ASE/=sscanf= **in principle**:
 
 Skip path: ``forward()`` / ``forward_fast`` avoid materializing atoms when only
 counts or selected frames are needed (see Cachegrind ``forward_*`` scenarios).
+
+Equal-geometry multi-frame (``multiformat_traj.py``)
+----------------------------------------------------
+
+Secondary wall-clock check on one geometry against other ASCII structure
+readers (ASE CON among them). Artifact:
+``benches/results/multiformat_traj_terra.json``. On that recorded 218×100 run,
+readcon CON full-parse median is about 12× ASE CON on that host. Prefer the
+CON peer table above for CON-reader comparisons.
+
+.. code:: shell
+
+    uv run --with ase --with numpy python benches/multiformat_traj.py
+
+Pareto / throughput SVGs use measured points from that JSON plus
+``compare_readers.py``; ASE CON is labeled CON.
 
 Public API model and hot path (what the code does)
 --------------------------------------------------
@@ -157,8 +139,7 @@ Criterion microbenches (local latency)
 
 Historical `Criterion.rs <https://bheisler.github.io/criterion.rs/book/>`_ tables from ``benches/iterator_bench.rs`` (single core,
 default settings). Useful for local latency intuition and PR ``critcmp``. Prefer
-Cachegrind I-refs and equal-geometry JSON for library comparisons and hot-path
-changes.
+Cachegrind I-refs and ``compare_readers`` for CON-path comparisons.
 
 Run locally:
 
@@ -181,7 +162,7 @@ Frame parsing (microbench sizes)
     +------------------------+-------------+---------------------+----------------------------------+
     | 2-frame skip (forward) | 2×4 atoms   | ~0.6 µs             | Prefer Cachegrind ``forward_*``  |
     +------------------------+-------------+---------------------+----------------------------------+
-    | 100-frame sequential   | 100×4 atoms | ~212 µs             | Prefer equal-geometry JSON       |
+    | 100-frame sequential   | 100×4 atoms | ~212 µs             | Prefer CON peer benches          |
     +------------------------+-------------+---------------------+----------------------------------+
     | 100-frame forward skip | 100×4 atoms | ~29 µs              | Prefer Cachegrind                |
     +------------------------+-------------+---------------------+----------------------------------+
