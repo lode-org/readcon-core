@@ -1,8 +1,16 @@
-=========
-Tutorials
-=========
+============================
+How-to — CON I/O by language
+============================
 
 
+.. note::
+
+   Diátaxis *how-to* (goal-oriented recipes). Learning path first:
+   :doc:`tutorial`. Conversion tasks: :doc:`chemfiles-howto`.
+
+These pages answer **how do I …** once you already know the shape of a CON file
+from the :doc:\`tutorial\`. Pick a language section and copy the block that matches
+your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
 
 Querying the spec version
 -------------------------
@@ -862,16 +870,12 @@ Multi-frame trajectory processing
 Chemfiles — convert other formats into CON
 ------------------------------------------
 
-/v0.13.0. Documentation for chemfiles ingress is organized in the
-`Diátaxis <https://diataxis.fr/>`_ style (do not use this page as the primary guide):
+Foreign formats are a separate how-to track:
 
-- **Tutorial** (learning, end-to-end XYZ→CON→selection): `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
+- Tutorial: `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
 
-- **How-to** (task recipes, batch convert, C API): `chemfiles-howto.org <chemfiles-howto.rst>`_
+- How-to: `chemfiles-howto.org <chemfiles-howto.rst>`_
 
-- **Explanation** (why optional chemfiles, bonds in JSON, index remap): `chemfiles-explain.org <chemfiles-explain.rst>`_
+- Explanation: `chemfiles-explain.org <chemfiles-explain.rst>`_
 
-- **Reference** (API tables, grammar subset, install matrix): `chemfiles-reference.org <chemfiles-reference.rst>`_
-
-Start with the tutorial if you need to **drive conversion from XYZ/PDB/GRO/…**
-into CON for LODE tools.
+- Reference: `chemfiles-reference.org <chemfiles-reference.rst>`_

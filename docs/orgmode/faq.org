@@ -1,6 +1,13 @@
 #+title: Frequently Asked Questions
 #+options: toc:nil num:nil ^:nil
 
+#+begin_export rst
+.. note::
+
+   Diátaxis *explanation* (understanding-oriented Q&A). Learning path:
+   :doc:`tutorial`. Task recipes: :doc:`howto`.
+#+end_export
+
 * What CON is for
 
 CON is the atomic configuration format this stack is pushing into everything

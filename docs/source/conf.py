@@ -95,6 +95,26 @@ html_theme_options = {
     "nav_links": [
         {"title": "Start", "url": "getting-started"},
         {
+            "title": "Learn",
+            "children": [
+                {
+                    "title": "Tutorial — first CON checkpoint",
+                    "url": "tutorial",
+                    "summary": "One Good Tutorial: read, inspect, write, build",
+                },
+                {
+                    "title": "How-to — CON I/O by language",
+                    "url": "howto",
+                    "summary": "Task recipes for every binding",
+                },
+                {
+                    "title": "Tutorial — XYZ/PDB/GRO → CON",
+                    "url": "chemfiles-tutorial",
+                    "summary": "Convert foreign formats into CON",
+                },
+            ],
+        },
+        {
             "title": "Convert",
             "children": [
                 {

@@ -36,8 +36,8 @@ Convert other formats into CON
 
 
 This tutorial is **learning-oriented**: one successful path from a **non-CON** file
-into CON for LODE tools. Prefer ``pip install readcon-chemfiles`` (or Rust
-``--features chemfiles``).
+into CON. Prefer ``pip install readcon-chemfiles`` (or Rust ``--features chemfiles``).
+For native CON files without conversion, start with `tutorial <tutorial.rst>`_ instead.
 
 What you will build
 -------------------
@@ -71,7 +71,7 @@ Path A — Python full wheel (recommended)
 .. code:: shell
 
     python -m venv .venv && source .venv/bin/activate
-    pip install -U 'readcon-chemfiles==0.13.1'
+    pip install -U 'readcon-chemfiles==0.14.0'
     python -c "import readcon; print(readcon.has_chemfiles_support())"  # True
 
 Path B — Rust with chemfiles

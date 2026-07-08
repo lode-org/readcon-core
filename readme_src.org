@@ -60,61 +60,35 @@ The C/C++ headers require a C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=,
 
 ** Tutorial
 
-A copy-pasteable walkthrough that parses a multi-frame trajectory, inspects metadata, builds a new frame, and writes it back. Run it as-is.
+One Good Tutorial (Diátaxis): install, read a multi-frame fixture, inspect
+=atom_id=, write a round-trip, build a frame with energy. Full steps:
+[[file:docs/orgmode/tutorial.org][docs/orgmode/tutorial.org]] (or the published HTML =tutorial= page).
+
+Short Python path from the repository root:
+
+#+begin_src python :exports code
+import readcon
+
+for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
+    print(frame.cell, len(frame), frame.energy)
+
+frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
+readcon.write_con("out.con", frames)
+
+atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
+frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
+frame.set_energy(-42.5)
+frame.write_con("built.con")
+#+end_src
+
+Rust smoke (same fixture):
 
 #+begin_src shell
 cargo run --example rust_usage -- resources/test/tiny_multi_cuh2.con
 #+end_src
 
-The example above iterates lazily over every frame, prints atom counts plus the per-frame energy if present, and exits. Equivalent flows in the other bindings:
-
-#+begin_src python :exports code
-import readcon
-
-# Read every frame; the iterator yields PyConFrame objects
-for frame in readcon.iter_frames("resources/test/tiny_multi_cuh2.con"):
-    print(frame.natms_per_type, frame.energy())  # energy() is None when absent
-
-# Build and write a new frame
-b = readcon.ConFrameBuilder(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0])
-b.set_energy(-42.5).add_atom("Cu", 0.0, 0.0, 0.0, 1, 63.546)
-b.write("out.con")
-#+end_src
-
-#+begin_src julia :exports code
-using ReadCon
-for frame in iter_frames("resources/test/tiny_multi_cuh2.con")
-    println(frame.natms_per_type, " ", energy(frame))
-end
-#+end_src
-
-#+begin_src cpp :exports code
-#include <readcon-core.hpp>
-#include <iostream>
-
-int main() {
-    readcon::ConFrameIterator it("resources/test/tiny_multi_cuh2.con");
-    for (const auto &frame : it) {
-        std::cout << frame.atoms().size() << " atoms";
-        if (auto e = frame.energy_opt()) std::cout << " E=" << *e;
-        std::cout << "\n";
-    }
-}
-#+end_src
-
-#+begin_src c :exports code
-#include <readcon-core.h>
-#include <stdio.h>
-
-int main(void) {
-    uintptr_t n = 0;
-    RKRConFrame **frames = rkr_read_all_frames("resources/test/tiny_multi_cuh2.con", &n);
-    for (uintptr_t i = 0; i < n; ++i) {
-        printf("frame %zu energy=%f\n", i, rkr_frame_energy(frames[i]));
-    }
-    free_rkr_frame_array(frames, n);
-}
-#+end_src
+Other languages and task recipes: [[file:docs/orgmode/howto.org][docs/orgmode/howto.org]].
+Conversion from XYZ/PDB/GRO: [[file:docs/orgmode/chemfiles-tutorial.org][chemfiles-tutorial]].
 
 ** Design Decisions
 

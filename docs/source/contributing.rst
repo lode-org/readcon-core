@@ -533,7 +533,7 @@ Adding a new binding
 
 3. Add tests under ``tests/`` or the binding's own test directory.
 
-4. Document in ``docs/orgmode/bindings.org`` and ``docs/orgmode/tutorials.org``.
+4. Document in ``docs/orgmode/bindings.org`` and ``docs/orgmode/howto.org``.
 
 5. Add a pixi environment and tasks if applicable.
 

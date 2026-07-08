@@ -24,14 +24,12 @@ Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 
 .. important::
 
-   *New here?* → :doc:`getting-started`
+   *New here?* → :doc:`getting-started` then :doc:`tutorial`
 
    *Import into CON?* → :doc:`chemfiles-tutorial`
    · Org notebook :doc:`chemfiles-notebook`
-   (``scripts/run-chemfiles-notebook.sh``)
 
-   *Format rules?* → :doc:`spec` · *APIs?* → :doc:`bindings` ·
-   :doc:`chemfiles-reference`
+   *Format rules?* → :doc:`spec` · *APIs?* → :doc:`bindings`
 
 .. figure:: /_static/figures/conversion-pipeline.svg
    :alt: Convert XYZ PDB or GRO into a CON frame
@@ -43,11 +41,17 @@ Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 .. grid:: 1 1 2 2
    :gutter: 2
 
-   .. grid-item-card:: Get started
-      :link: getting-started
+   .. grid-item-card:: Tutorial — first CON checkpoint
+      :link: tutorial
       :link-type: doc
 
-      Install, read a CON file, convert XYZ/PDB/GRO when you need it.
+      One Good Tutorial: read, inspect, write, build a frame (Python).
+
+   .. grid-item-card:: How-to by language
+      :link: howto
+      :link-type: doc
+
+      Task recipes for Rust, Python, C, C++, Julia, Fortran.
 
    .. grid-item-card:: Convert formats
       :link: chemfiles-tutorial
@@ -55,53 +59,48 @@ Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 
       XYZ, PDB, GRO → CON without writing a reader per format.
 
-   .. grid-item-card:: Why conversion is optional
-      :link: chemfiles-explain
-      :link-type: doc
-
-      Background on optional conversion, bonds, and atom indices.
-
    .. grid-item-card:: Spec & bindings
       :link: spec
       :link-type: doc
 
-      On-disk CON/convel rules, C/Python/Julia/Rust APIs.
+      On-disk CON/convel rules and multi-language APIs.
 
 Site map
 --------
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials & start
+   :caption: Tutorials
 
    getting-started
-   tutorials
-   faq
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Convert other formats
-
+   tutorial
    chemfiles-tutorial
    chemfiles-notebook
-   chemfiles-howto
-   chemfiles-explain
-   chemfiles-reference
 
 .. toctree::
    :maxdepth: 1
-   :caption: Explanation & design
+   :caption: How-to guides
 
-   spec
+   howto
+   chemfiles-howto
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Explanation
+
+   faq
    evolution
    architecture
    benchmarks
+   chemfiles-explain
 
 .. toctree::
    :maxdepth: 1
-   :caption: Reference (API)
+   :caption: Reference
 
+   spec
    bindings
+   chemfiles-reference
    rpc
    Rust API (docs.rs) <https://docs.rs/readcon-core>
 
