@@ -1,34 +1,41 @@
 * About
 
-~readcon-core~ is the reference library for versioned =.con= / =.convel=: a
-full atomic-configuration checkpoint for saddle, dimer, and NEB work and any
-pipeline that needs the same fields on disk.
+~readcon-core~ is the reference implementation of versioned =.con= / =.convel=:
+a human-readable atomic configuration format with cell, type-grouped
+coordinates, per-direction constraints, stable =atom_id=, optional velocity /
+force / energy sections, and JSON metadata (spec v2–v3, see
+[[file:docs/orgmode/spec.org][docs/orgmode/spec.org]]).
 
-CON carries cell and angles, type-grouped coordinates, per-direction fixed
-masks, column-5 =atom_id= (pre-group index), optional velocity / force /
-energy sections, and versioned JSON on line 2. One hourglass C ABI (=rkr_*=)
-gives Rust, C, C++, Python, Julia, and Fortran identical semantics so an
-optimizer in Fortran and analysis in Python share one file. Multi-trajectory
-campaigns use [[https://github.com/lode-org/readcon-db][readcon-db]]
-(=cargo add readcon-db=, =pip install readcon-db=,
-https://lode-org.github.io/readcon-db/); blobs stay CON text and always decode
-through this crate. eOn, LODE, amsel, ASE adapters, and other CON-native tools
-are consumers of that contract.
+Rare-event and transition-state tools need checkpoints that survive many
+codes: frozen axes for constrained searches, identity through type-grouping
+for NEB and dimer modes, forces and energies on the same frame, and a single
+ABI so Fortran optimizers and Python analysis share one file. That is what
+CON is for. H5MD [de Buyl et al., 2014] stores continuous MD trajectories and
+observables on HDF5; engine formats (XTC/TRR/DCD) store dense dynamics inside
+one MD package.
 
-Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]].
+The library is the multi-language stack for that format:
 
-| Layer | Crate | Owns |
-|-------+-------+------|
-| Format I/O | =readcon-core= / Python =readcon= | CON parse/write, spec v2–v3, hourglass FFI, optional chemfiles import |
-| Corpus | [[https://github.com/lode-org/readcon-db][readcon-db]] | LMDB indexes, dedup, multi-reader campaigns |
+| Layer | What ships in this repo |
+|-------+-------------------------|
+| Spec + hot path | Spec v3 parse/write, =validate=, units, =sections=, SoA storage, Cachegrind CI |
+| Hourglass ABI | C (=cbindgen=), C++ RAII, Python (PyO3), Julia, Fortran (fpm); one =rkr_*= surface |
+| Device / ML hand-off | DLPack export (dlpk SoA; optional CUDA); optional metatensor =TensorBlock= |
+| Ingress | Optional chemfiles import/selection (XYZ/PDB/GRO/…) into =ConFrame= |
+| Campaigns | =index_proj= screening contracts for [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add readcon-db=, =pip install readcon-db=) |
 
-Chemfiles owns format diversity at the edge; readcon-core owns CON fidelity
-(=read_chemfiles*=). ASE =to_ase= / =from_ase= is calculator hand-off only.
+Downstream of that surface: rare-event clients (eOn [Chill et al., 2014] and
+related saddle stacks), potential drivers (rgpot), analysis (rgpycrumbs), ASE
+calculators (=to_ase= / =from_ase=), ML pipelines via DLPack / metatensor, and
+any other CON-native tool. GROMACS-class and ML runtimes consume the tensor
+exports without re-parsing text.
 
-Parse path: CI Cachegrind I-refs (=examples/cachegrind_harness.rs=); CON peers
-via =benches/compare_readers.py=. Methodology:
-[[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]]. Spec:
-[[file:docs/orgmode/spec.org][docs/orgmode/spec.org]].
+Rust rewrite of [[https://github.com/HaoZeke/readCon][readCon]]. Chemfiles owns
+format diversity at the edge; this crate owns CON fidelity.
+
+Measurements: CI Cachegrind (=examples/cachegrind_harness.rs=); CON peers
+(=benches/compare_readers.py= vs ASE =ase.io.eon= and eOn-style C). See
+[[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 
 ** Features
 
@@ -149,14 +156,15 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 | Area | What ships |
 |------+------------|
-| Payload | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON on every binding |
+| Payload | Velocities, forces, per-direction constraints, =atom_id=, versioned JSON |
 | Languages | One =rkr_*= surface for Fortran / C / C++ / Python / Julia |
-| Spec | v2–v3, =validate=true=, declared sections, typed metadata helpers |
-| Measurements | Cachegrind I-refs; CON peers (=ase.io.eon=, eOn-style C sscanf) |
-| Campaigns | [[https://github.com/lode-org/readcon-db][readcon-db]] with CON text as durable identity |
+| Spec | v2–v3, =validate=true=, declared sections, units (v3) |
+| Tensors | DLPack; optional metatensor =TensorBlock= |
+| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] |
 | Import | Optional chemfiles → CON |
+| Measurements | Cachegrind I-refs; CON peers (=ase.io.eon=, eOn-style C sscanf) |
 
-Predecessor: [[https://github.com/HaoZeke/readCon][readCon]]. ASE may use =ase.io.eon= or the optional adapters.
+Predecessor: [[https://github.com/HaoZeke/readCon][readCon]].
 
 ** Citation
 If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. The Zenodo DOI tracks the latest release.

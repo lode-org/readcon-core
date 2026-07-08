@@ -292,10 +292,9 @@ Compatibility expectations
     | Unknown future version    | Strict mode errors; permissive mode may warn and best-effort parse |
     +---------------------------+--------------------------------------------------------------------+
 
-CON targets human-readable checkpoints and multi-language interchange for
-transition-state workflows. Engine-native binary trajectories (for example
-GROMACS/LAMMPS continuous-MD streams) address a different density and access
-pattern; they complement CON rather than substitute for it.
+CON is a human-readable multi-language checkpoint format for transition-state
+workflows. GROMACS/LAMMPS and similar engines keep their own binary trajectory
+streams for continuous MD.
 
 Toward version 4 (candidate scope)
 ----------------------------------

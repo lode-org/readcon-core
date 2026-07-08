@@ -1,4 +1,4 @@
-//! Structural check: CON / readcon-core docs keep design substance, no AI tells.
+//! Structural check: docs match the codebase role and related-work framing.
 
 use std::fs;
 use std::path::PathBuf;
@@ -24,9 +24,7 @@ fn read_repo(rel: &str) -> String {
 fn assert_no_ai_tells(t: &str, file: &str) {
     let banned = [
         "not \"fastest",
-        "not 'fastest",
         "not a claim of fastest",
-        "not a replacement for",
         "all of computational chemistry",
         "generic MD-format supremacy",
         "within domain",
@@ -50,6 +48,14 @@ fn assert_no_ai_tells(t: &str, file: &str) {
         "deliberately small",
         "LODE-centric",
         "LODE centric",
+        "only eOn",
+        "only LODE",
+        "only for eOn",
+        "separate concern",
+        "separate concerns",
+        "they complement CON",
+        "complement CON",
+        "Neither replaces",
     ];
     for b in banned {
         assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
@@ -57,19 +63,12 @@ fn assert_no_ai_tells(t: &str, file: &str) {
 }
 
 #[test]
-fn architecture_design_rationale() {
+fn architecture_matches_code_surface() {
     let t = read("architecture.org");
     assert!(t.contains("hourglass") || t.contains("rkr_"));
-    assert!(t.contains("readcon-db"));
-    assert!(t.contains("authoritative") || t.contains("CON text") || t.contains("UTF-8 CON"));
-    assert!(t.contains("benchmarks") || t.contains("Cachegrind"));
-    assert!(
-        t.contains("optimizer")
-            || t.contains("multi-language")
-            || t.contains("hourglass")
-            || t.contains("rkr_"),
-        "architecture must frame multi-code use, not a single package"
-    );
+    assert!(t.contains("readcon-db") || t.contains("index_proj") || t.contains("chemfiles"));
+    assert!(t.contains("DLPack") || t.contains("metatensor") || t.contains("dlpk"));
+    assert!(t.contains("benchmarks") || t.contains("Cachegrind") || t.contains("faq"));
     assert_no_ai_tells(&t, "architecture.org");
 }
 
@@ -81,27 +80,25 @@ fn evolution_covers_v2_v3() {
 }
 
 #[test]
-fn faq_con_contract() {
+fn faq_con_and_related_work() {
     let t = read("faq.org");
     assert!(t.contains("hourglass") || t.contains("rkr_"));
     assert!(t.contains("atom_id") || t.contains("=atom_id="));
-    assert!(t.contains("fixed") || t.contains("constraint") || t.contains("mask"));
     assert!(t.contains("saddle") || t.contains("NEB") || t.contains("dimer"));
+    assert!(t.contains("What CON is for"));
+    // literature-backed related work
     assert!(
-        t.contains("What CON is for") || t.contains("complete checkpoint"),
-        "FAQ must state what CON is for in plain language"
+        t.contains("H5MD")
+            && (t.contains("chillEON") || t.contains("chillEONSoftwareLong2014") || t.contains("Chill")),
+        "FAQ must place CON vs H5MD with literature anchors"
     );
     assert!(
-        t.contains("multi-code")
-            || t.contains("multi-language")
-            || t.contains("any CON-native")
-            || t.contains("Consumers include")
-            || t.contains("any multi-code"),
-        "FAQ must present multi-consumer stack, not a single package"
+        t.contains("multi-language")
+            || t.contains("multi-code")
+            || t.contains("campaign")
+            || t.contains("What is the stack for"),
+        "FAQ must describe the multi-tool stack"
     );
-    assert!(t.contains("authoritative") || t.contains("UTF-8 CON") || t.contains("CON text"));
-    assert!(!t.contains("When should I use CON vs XYZ"));
-    assert!(!t.contains("compare to XYZ and ASE I/O"));
     assert_no_ai_tells(&t, "faq.org");
 }
 
@@ -118,18 +115,17 @@ fn getting_started_scope() {
     let t = read("getting-started.org");
     assert!(t.contains("Scope") || t.contains("readcon-core"));
     assert!(t.contains("hourglass") || t.contains("rkr_"));
-    assert!(t.contains("atom_id") || t.contains("=atom_id=") || t.contains("NEB") || t.contains("eOn"));
-    assert!(t.contains("benchmarks") || t.contains("Cachegrind") || t.contains("spec"));
+    assert!(
+        t.contains("chemfiles") || t.contains("DLPack") || t.contains("index_proj") || t.contains("metatensor"),
+        "getting-started should mention more of the stack than bare I/O"
+    );
     assert_no_ai_tells(&t, "getting-started.org");
 }
 
 #[test]
 fn faq_purpose_heading() {
     let t = read("faq.org");
-    assert!(
-        t.contains("What CON is for") || t.contains("Why another atomic structure format"),
-        "FAQ must keep a purpose heading"
-    );
+    assert!(t.contains("What CON is for"));
 }
 
 #[test]
@@ -138,7 +134,6 @@ fn benchmarks_what_we_measure() {
     assert!(t.contains("What we measure") || t.contains("Cachegrind"));
     assert!(t.contains("compare_readers") || t.contains("ase.io.eon"));
     assert!(!t.contains("2.7M atoms/s"));
-    assert!(!t.contains("richer sections than lean XYZ"));
     assert_no_ai_tells(&t, "benchmarks.org");
 }
 
@@ -146,27 +141,38 @@ fn benchmarks_what_we_measure() {
 fn index_and_readme_src() {
     let index = read("index.org");
     assert!(index.contains("CON") || index.contains(".con"));
+    assert!(index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language"));
     assert!(
-        index.contains("hourglass")
-            || index.contains("multi-language")
-            || index.contains("Consumers include"),
-        "index must present multi-consumer / multi-language stack"
+        index.contains("H5MD") || index.contains("rare-event") || index.contains("transition-state"),
+        "index should state problem domain and related formats"
     );
-    assert!(index.contains("spec") || index.contains("Spec") || index.contains(":doc:`spec`"));
     assert_no_ai_tells(&index, "index.org");
 
     let readme = read_repo("readme_src.org");
     assert!(readme.contains("hourglass") || readme.contains("rkr_"));
     assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
     assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
-    assert!(readme.contains("NEB") || readme.contains("checkpoint") || readme.contains("saddle"));
     assert!(
-        readme.contains("Consumers")
-            || readme.contains("any pipeline")
-            || readme.contains("multi-language")
-            || readme.contains("identical semantics"),
-        "readme must not frame the stack as only eOn/LODE"
+        readme.contains("H5MD") || readme.contains("de Buyl") || readme.contains("rare-event"),
+        "readme must place CON against literature-backed neighbors"
     );
-    assert!(readme.contains("Chemfiles owns") || readme.contains("chemfiles"));
+    assert!(
+        readme.contains("DLPack") || readme.contains("metatensor") || readme.contains("chemfiles"),
+        "readme must reflect code features beyond bare parse"
+    );
+    assert!(
+        readme.contains("rgpot")
+            || readme.contains("GROMACS")
+            || readme.contains("ML")
+            || readme.contains("campaign"),
+        "readme must name multi-consumer stack"
+    );
     assert_no_ai_tells(&readme, "readme_src.org");
+}
+
+#[test]
+fn references_bib_has_eon_and_h5md() {
+    let bib = read_repo("docs/source/references.bib");
+    assert!(bib.contains("chillEONSoftwareLong2014") || bib.contains("10.1088/0965-0393/22/5/055002"));
+    assert!(bib.contains("deBuylH5MDStructuredEfficient2014") || bib.contains("10.1016/j.cpc.2014.01.018"));
 }

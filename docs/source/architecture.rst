@@ -268,14 +268,17 @@ Design rationale
 ----------------
 
 readcon-core is the hourglass library for CON / convel: Rust core, ``rkr_*`` C
-ABI, thin wrappers for C++, Python, Julia, and Fortran. Optimizers, drivers,
-and analysis codes share per-direction constraints, forces / velocities,
-``atom_id``, and JSON metadata without putting a Python interpreter on the I/O
+ABI, wrappers for C++, Python, Julia, and Fortran. The surface matches what
+the format requires for multi-code rare-event work: constraints, forces /
+velocities, ``atom_id``, JSON metadata, without a Python interpreter on the I/O
 path.
 
-Chemfiles is optional import into ``ConFrame``. Metatensor/DLPack are optional
-tensor exports; UTF-8 CON stays authoritative on disk and in ``readcon-db``.
-Lean builds return ``RKR_STATUS_FEATURE_DISABLED`` for missing features.
+Also in-tree: chemfiles import/selection (optional feature), SoA + DLPack
+export (dlpk; optional CUDA), metatensor ``TensorBlock`` export (optional),
+``index_proj`` for campaign screening (``readcon-db``), Cap'n Proto RPC
+(optional). Lean builds return ``RKR_STATUS_FEATURE_DISABLED`` for missing
+features. UTF-8 CON remains authoritative on disk.
 
-See :doc:`faq`, :doc:`spec`,
-:doc:`evolution`, :doc:`benchmarks`.
+Related work and roles: :doc:`faq`. Spec:
+:doc:`spec`. Evolution: :doc:`evolution`.
+Measurements: :doc:`benchmarks`.

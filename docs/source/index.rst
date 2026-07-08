@@ -4,21 +4,21 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel checkpoints: constraints, forces, atom identity, multi-language hourglass ABI.</p>
+     <p class="rc-hero-tagline">CON / convel: multi-language checkpoints for rare-event and transition-state work.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-Reference library for ``.con`` / ``.convel``: versioned frames with cell,
-type-grouped coordinates, per-direction constraints, ``atom_id``, optional
-velocities and forces, and JSON metadata. One hourglass C ABI for Fortran, C,
-C++, Python, Julia, and Rust so optimizers, drivers, and analysis share one
-file. Optional chemfiles import; ``readcon-db`` for multi-reader campaigns.
-Consumers include eOn, LODE, amsel, ASE adapters, and any CON-native tool.
+Reference implementation of versioned ``.con`` / ``.convel``: cell, type-grouped
+coordinates, per-direction constraints, ``atom_id``, optional velocities and
+forces, JSON metadata (spec v2–v3). Hourglass C ABI for Fortran, C, C++,
+Python, Julia, and Rust; optional chemfiles ingress; DLPack / metatensor
+export; campaign hooks for ``readcon-db``.
 
-Spec: :doc:`spec`. Measurements: :doc:`benchmarks`. Start: :doc:`getting-started`.
+Related work (H5MD, engines, ASE): :doc:`faq`. Spec: :doc:`spec`. Numbers:
+:doc:`benchmarks`. Start: :doc:`getting-started`.
 
 .. important::
 

@@ -190,15 +190,18 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 :END:
 
 readcon-core is the hourglass library for CON / convel: Rust core, =rkr_*= C
-ABI, thin wrappers for C++, Python, Julia, and Fortran. Optimizers, drivers,
-and analysis codes share per-direction constraints, forces / velocities,
-=atom_id=, and JSON metadata without putting a Python interpreter on the I/O
+ABI, wrappers for C++, Python, Julia, and Fortran. The surface matches what
+the format requires for multi-code rare-event work: constraints, forces /
+velocities, =atom_id=, JSON metadata, without a Python interpreter on the I/O
 path.
 
-Chemfiles is optional import into =ConFrame=. Metatensor/DLPack are optional
-tensor exports; UTF-8 CON stays authoritative on disk and in =readcon-db=.
-Lean builds return =RKR_STATUS_FEATURE_DISABLED= for missing features.
+Also in-tree: chemfiles import/selection (optional feature), SoA + DLPack
+export (dlpk; optional CUDA), metatensor =TensorBlock= export (optional),
+=index_proj= for campaign screening (=readcon-db=), Cap'n Proto RPC
+(optional). Lean builds return =RKR_STATUS_FEATURE_DISABLED= for missing
+features. UTF-8 CON remains authoritative on disk.
 
-See [[file:faq.org][faq.org]], [[file:spec.org][spec.org]],
-[[file:evolution.org][evolution.org]], [[file:benchmarks.org][benchmarks.org]].
+Related work and roles: [[file:faq.org][faq.org]]. Spec:
+[[file:spec.org][spec.org]]. Evolution: [[file:evolution.org][evolution.org]].
+Measurements: [[file:benchmarks.org][benchmarks.org]].
 
