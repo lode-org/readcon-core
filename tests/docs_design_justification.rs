@@ -153,7 +153,34 @@ fn one_good_tutorial_is_learning_oriented() {
         "tutorial must use in-repo fixtures"
     );
     assert!(!t.contains("iter_frames"), "Python API is iter_con, not iter_frames");
+    assert!(
+        t.contains("test_tutorial_core") || t.contains("ci_python"),
+        "tutorial.org must point at the CI pytest runner"
+    );
     assert_no_ai_tells(&t, "tutorial.org");
+}
+
+#[test]
+fn tutorial_runners_exist_in_repo() {
+    let root = repo_root();
+    assert!(
+        root.join("tests/python/test_tutorial_core.py").is_file(),
+        "missing One Good Tutorial CI runner"
+    );
+    assert!(
+        root.join("tests/python/test_tutorial_chemfiles.py").is_file(),
+        "missing chemfiles tutorial CI runner"
+    );
+    let core = fs::read_to_string(root.join("tests/python/test_tutorial_core.py")).unwrap();
+    assert!(core.contains("iter_con") && core.contains("tiny_multi_cuh2"));
+    assert!(core.contains("set_energy") && core.contains("write_con"));
+    let cf = fs::read_to_string(root.join("tests/python/test_tutorial_chemfiles.py")).unwrap();
+    assert!(cf.contains("read_chemfiles_first") && cf.contains("has_chemfiles_support"));
+    let wf = fs::read_to_string(root.join(".github/workflows/ci_python.yml")).unwrap();
+    assert!(
+        wf.contains("tests/python") && wf.contains("test_tutorial"),
+        "ci_python.yml must mention tutorial runners"
+    );
 }
 
 #[test]

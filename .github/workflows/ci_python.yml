@@ -60,6 +60,9 @@ jobs:
         run: |
           maturin develop --features '${{ matrix.features }}'
 
+      # Includes Diátaxis tutorial runners:
+      #   tests/python/test_tutorial_core.py      (lean + chemfiles)
+      #   tests/python/test_tutorial_chemfiles.py (chemfiles matrix only)
       - name: pytest tests/python
         run: |
           python -m pytest tests/python/ -q --tb=short

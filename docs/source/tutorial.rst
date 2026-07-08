@@ -9,6 +9,10 @@ Tutorial — your first CON checkpoint
    Multi-language recipes: :doc:`howto`. Format conversion: :doc:`chemfiles-tutorial`.
    API tables: :doc:`bindings`. Format rules: :doc:`spec`.
 
+   **CI:** GitHub Actions ``ci_python.yml`` (lean matrix) runs the same steps as
+   ``tests/python/test_tutorial_core.py`` under ``pytest tests/python/``. A broken
+   tutorial path fails that job.
+
 In this tutorial we open a real CON trajectory from the repository fixtures,
 inspect cell and ``atom_id`` data, write a round-trip file, then build a small
 checkpoint with total energy.
@@ -16,6 +20,9 @@ checkpoint with total energy.
 We use **Python** and the package ``readcon`` only (no chemfiles, no ASE). Run
 commands from the repository root so fixture paths match the tree. If you work
 from another directory, adjust the paths.
+
+The assertions below match ``tests/python/test_tutorial_core.py`` (iter multi-frame
+count 2, round-trip length, forces fixture, built energy ``-1.25``).
 
 What we will do
 ---------------
