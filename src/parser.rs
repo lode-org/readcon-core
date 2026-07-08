@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
-    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_ENERGIES, SECTION_FORCES,
-    SECTION_VELOCITIES,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_ENERGIES,
+    SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES,
     decode_fixed_bitmask, meta,
 };
 use serde_json::Value;
@@ -691,6 +691,9 @@ pub fn parse_single_frame<'a>(
                 velocity: None,
                 force: None,
                 energy: None,
+                charge: None,
+                spin: None,
+                magmom: None,
             });
             global_atom_idx += 1;
             atom_i += 1;
@@ -1110,12 +1113,192 @@ pub fn parse_declared_sections<'a>(
                     }
                     applied += 1;
                 }
+                SECTION_CHARGES => {
+                    let found = parse_charge_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteSection(SECTION_CHARGES.into()));
+                    }
+                    applied += 1;
+                }
+                SECTION_SPINS => {
+                    let found = parse_spin_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteSection(SECTION_SPINS.into()));
+                    }
+                    applied += 1;
+                }
+                SECTION_MAGMOMS => {
+                    let found = parse_magmom_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteSection(SECTION_MAGMOMS.into()));
+                    }
+                    applied += 1;
+                }
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
         header.sections = sections;
     }
     Ok(applied)
+}
+
+/// Scalar per-atom section: blank separator + per-type blocks
+/// (`symbol`, `"X of Component N"`, lines `value fixed atom_id`).
+fn parse_scalar_atom_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+    section_name: &str,
+    component_label: &str,
+    mut set_value: impl FnMut(&mut AtomDatum, f64),
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    match lines.peek_line() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next_line();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
+            .trim();
+
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
+        if !comp_line.contains(component_label) {
+            return Err(ParseError::IncompleteSection(section_name.into()));
+        }
+        if validate {
+            validate_section_component(
+                component_label.trim_end_matches(" of Component").trim(),
+                type_idx,
+                atom_idx,
+                symbol,
+                comp_line,
+                header,
+                atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let data_line = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
+            let defaults = [0.0, 0.0, atom_idx as f64];
+            let vals = parse_line_of_range_f64(data_line, 1, 3, &defaults)?;
+            if validate {
+                let (fixed, atom_id) =
+                    parse_identity_columns(data_line, section_name, 1, 2, 3)?;
+                validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
+            }
+            if atom_idx < atom_data.len() {
+                set_value(&mut atom_data[atom_idx], vals[0]);
+            }
+            atom_idx += 1;
+        }
+    }
+    Ok(true)
+}
+
+pub fn parse_charge_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError> {
+    parse_scalar_atom_section(
+        lines,
+        header,
+        atom_data,
+        SECTION_CHARGES,
+        "Charges of Component",
+        |a, v| a.charge = Some(v),
+    )
+}
+
+pub fn parse_spin_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError> {
+    parse_scalar_atom_section(
+        lines,
+        header,
+        atom_data,
+        SECTION_SPINS,
+        "Spins of Component",
+        |a, v| a.spin = Some(v),
+    )
+}
+
+/// Magmoms: 3-vector per atom, same layout as velocities/forces.
+pub fn parse_magmom_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    match lines.peek_line() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next_line();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?
+            .trim();
+
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?;
+        if !comp_line.contains("Magmoms of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_MAGMOMS.into()));
+        }
+        if validate {
+            validate_section_component(
+                "Magmoms",
+                type_idx,
+                atom_idx,
+                symbol,
+                comp_line,
+                header,
+                atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let mm_line = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?;
+            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(mm_line, 4, 5, &defaults, &mut vals)?;
+            if validate {
+                let (fixed, atom_id) =
+                    parse_identity_columns(mm_line, SECTION_MAGMOMS, 3, 4, 5)?;
+                validate_section_atom_identity(
+                    SECTION_MAGMOMS,
+                    atom_idx,
+                    fixed,
+                    atom_id,
+                    atom_data,
+                )?;
+            }
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].magmom = Some([vals[0], vals[1], vals[2]]);
+            }
+            atom_idx += 1;
+        }
+    }
+    Ok(true)
 }
 
 #[cfg(test)]

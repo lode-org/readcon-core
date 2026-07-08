@@ -127,6 +127,12 @@ impl Bond {
 pub const SECTION_VELOCITIES: &str = "velocities";
 pub const SECTION_FORCES: &str = "forces";
 pub const SECTION_ENERGIES: &str = "energies";
+/// Per-atom charge (scalar); same block shape as [`SECTION_ENERGIES`].
+pub const SECTION_CHARGES: &str = "charges";
+/// Per-atom spin (scalar); same block shape as [`SECTION_ENERGIES`].
+pub const SECTION_SPINS: &str = "spins";
+/// Per-atom magnetic moment (3-vector); same block shape as [`SECTION_VELOCITIES`].
+pub const SECTION_MAGMOMS: &str = "magmoms";
 
 /// The two-line block preceding the box dimensions.
 ///
@@ -542,6 +548,12 @@ pub struct AtomDatum {
     /// contributions; the per-frame total still lives in
     /// `FrameHeader.metadata` under the `energy` key.
     pub energy: Option<f64>,
+    /// Partial charge (present when `"charges"` section declared).
+    pub charge: Option<f64>,
+    /// Spin / magnetic quantum number scalar (present when `"spins"` declared).
+    pub spin: Option<f64>,
+    /// Magnetic moment `[mx, my, mz]` (present when `"magmoms"` declared).
+    pub magmom: Option<[f64; 3]>,
 }
 
 impl AtomDatum {
@@ -568,6 +580,18 @@ impl AtomDatum {
     /// Returns `true` if this atom carries a per-atom energy contribution.
     pub fn has_energy(&self) -> bool {
         self.energy.is_some()
+    }
+
+    pub fn has_charge(&self) -> bool {
+        self.charge.is_some()
+    }
+
+    pub fn has_spin(&self) -> bool {
+        self.spin.is_some()
+    }
+
+    pub fn has_magmom(&self) -> bool {
+        self.magmom.is_some()
     }
 }
 
@@ -622,6 +646,12 @@ pub struct ConFrame {
     pub forces: crate::storage_dtype::FloatArray2,
     /// Per-atom energies `(N,)` when present; else `(0,)`.
     pub atom_energies: crate::storage_dtype::FloatArray1,
+    /// Per-atom charges `(N,)` when present; else `(0,)`.
+    pub charges: crate::storage_dtype::FloatArray1,
+    /// Per-atom spins `(N,)` when present; else `(0,)`.
+    pub spins: crate::storage_dtype::FloatArray1,
+    /// Magnetic moments `(N, 3)` when present; else `(0, 3)`.
+    pub magmoms: crate::storage_dtype::FloatArray2,
     /// Per-atom masses `(N,)`.
     pub masses: crate::storage_dtype::FloatArray1,
     /// Per-atom ids `(N,)` u64 (always).
@@ -641,6 +671,15 @@ impl ConFrame {
         if self.atom_energies.len() > 0 {
             self.atom_energies.project_to(dtypes.energies);
         }
+        if self.charges.len() > 0 {
+            self.charges.project_to(dtypes.energies);
+        }
+        if self.spins.len() > 0 {
+            self.spins.project_to(dtypes.energies);
+        }
+        if self.magmoms.nrows() > 0 {
+            self.magmoms.project_to(dtypes.forces);
+        }
         if self.masses.len() > 0 {
             self.masses.project_to(dtypes.masses);
         }
@@ -657,6 +696,9 @@ impl ConFrame {
         let has_vel = self.velocities.nrows() == n;
         let has_frc = self.forces.nrows() == n;
         let has_eng = self.atom_energies.len() == n;
+        let has_chg = self.charges.len() == n;
+        let has_spn = self.spins.len() == n;
+        let has_mm = self.magmoms.nrows() == n;
         for i in 0..n {
             let a = &mut self.atom_data[i];
             let p = self.positions.as_f64_row(i);
@@ -671,6 +713,15 @@ impl ConFrame {
             }
             if has_eng {
                 a.energy = Some(self.atom_energies.get_f64(i));
+            }
+            if has_chg {
+                a.charge = Some(self.charges.get_f64(i));
+            }
+            if has_spn {
+                a.spin = Some(self.spins.get_f64(i));
+            }
+            if has_mm {
+                a.magmom = Some(self.magmoms.as_f64_row(i));
             }
             if i < self.atom_ids.len() {
                 a.atom_id = self.atom_ids[i];
@@ -693,6 +744,9 @@ impl ConFrame {
         let has_vel = self.atom_data.iter().any(|a| a.has_velocity());
         let has_frc = self.atom_data.iter().any(|a| a.has_forces());
         let has_eng = self.atom_data.iter().any(|a| a.has_energy());
+        let has_chg = self.atom_data.iter().any(|a| a.has_charge());
+        let has_spn = self.atom_data.iter().any(|a| a.has_spin());
+        let has_mm = self.atom_data.iter().any(|a| a.has_magmom());
         // Only allocate positions if missing (should not happen on parse-primary path).
         let need_pos_fill = self.positions.nrows() != n;
         if need_pos_fill {
@@ -719,6 +773,27 @@ impl ConFrame {
         } else if self.atom_energies.len() != 0 {
             self.atom_energies = FloatArray1::zeros(dt.energies, 0);
         }
+        if has_chg {
+            if self.charges.len() != n {
+                self.charges = FloatArray1::zeros(dt.energies, n);
+            }
+        } else if self.charges.len() != 0 {
+            self.charges = FloatArray1::zeros(dt.energies, 0);
+        }
+        if has_spn {
+            if self.spins.len() != n {
+                self.spins = FloatArray1::zeros(dt.energies, n);
+            }
+        } else if self.spins.len() != 0 {
+            self.spins = FloatArray1::zeros(dt.energies, 0);
+        }
+        if has_mm {
+            if self.magmoms.nrows() != n {
+                self.magmoms = FloatArray2::zeros(dt.forces, n, 3);
+            }
+        } else if self.magmoms.nrows() != 0 {
+            self.magmoms = FloatArray2::zeros(dt.forces, 0, 3);
+        }
         if self.atom_ids.len() != n {
             self.atom_ids = ndarray::ArcArray1::<u64>::zeros(n);
         }
@@ -740,6 +815,17 @@ impl ConFrame {
             if has_eng {
                 self.atom_energies
                     .set_f64(i, a.energy.unwrap_or(0.0));
+            }
+            if has_chg {
+                self.charges.set_f64(i, a.charge.unwrap_or(0.0));
+            }
+            if has_spn {
+                self.spins.set_f64(i, a.spin.unwrap_or(0.0));
+            }
+            if has_mm {
+                if let Some(m) = a.magmom {
+                    self.magmoms.set_f64_row(i, m);
+                }
             }
         }
     }
@@ -795,6 +881,21 @@ impl ConFrame {
     }
 
     /// Returns `true` if any atom in this frame carries a per-atom energy.
+    pub fn has_charges(&self) -> bool {
+        self.charges.len() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_charge())
+    }
+
+    pub fn has_spins(&self) -> bool {
+        self.spins.len() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_spin())
+    }
+
+    pub fn has_magmoms(&self) -> bool {
+        self.magmoms.nrows() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_magmom())
+    }
+
     pub fn has_energies(&self) -> bool {
         self.atom_energies.len() == self.positions.nrows() && self.positions.nrows() > 0
             || self.atom_data.first().is_some_and(|a| a.has_energy())
@@ -1981,6 +2082,9 @@ impl ConFrameBuilder {
                     velocity,
                     force,
                     energy,
+                    charge: None,
+                    spin: None,
+                    magmom: None,
                 });
             }
         }
@@ -2068,6 +2172,9 @@ impl ConFrameBuilder {
             velocities: vel,
             forces: frc,
             atom_energies: eng,
+            charges: FloatArray1::zeros(dt.energies, 0),
+            spins: FloatArray1::zeros(dt.energies, 0),
+            magmoms: FloatArray2::zeros(dt.forces, 0, 3),
             masses: masses_arr,
             atom_ids: ids_arr,
         }
@@ -2141,13 +2248,16 @@ pub fn con_frame_coords_only(
         velocities: FloatArray2::zeros(dt.velocities, 0, 3),
         forces: FloatArray2::zeros(dt.forces, 0, 3),
         atom_energies: FloatArray1::zeros(dt.energies, 0),
+        charges: FloatArray1::zeros(dt.energies, 0),
+        spins: FloatArray1::zeros(dt.energies, 0),
+        magmoms: FloatArray2::zeros(dt.forces, 0, 3),
         masses: masses_arr,
         atom_ids: ids_arr,
     }
 }
 
 /// Like [`con_frame_from_atom_data`], but **reuses** prefilled `positions` SoA
-/// (no second O(N) position write). Velocities/forces/energies still filled from AoS
+/// (no second O(N) position write). Optional sections still filled from AoS
 /// when present; the common coords-only case delegates to [`con_frame_coords_only`].
 pub fn con_frame_from_atom_data_with_positions(
     header: FrameHeader,
@@ -2157,7 +2267,10 @@ pub fn con_frame_from_atom_data_with_positions(
     let has_vel = atom_data.first().is_some_and(|a| a.has_velocity());
     let has_frc = atom_data.first().is_some_and(|a| a.has_forces());
     let has_eng = atom_data.first().is_some_and(|a| a.has_energy());
-    if !has_vel && !has_frc && !has_eng {
+    let has_chg = atom_data.first().is_some_and(|a| a.has_charge());
+    let has_spn = atom_data.first().is_some_and(|a| a.has_spin());
+    let has_mm = atom_data.first().is_some_and(|a| a.has_magmom());
+    if !has_vel && !has_frc && !has_eng && !has_chg && !has_spn && !has_mm {
         return con_frame_coords_only(header, atom_data, positions);
     }
     let n = atom_data.len();
@@ -2168,6 +2281,9 @@ pub fn con_frame_from_atom_data_with_positions(
     let mut vel = FloatArray2::zeros(dt.velocities, if has_vel { n } else { 0 }, 3);
     let mut frc = FloatArray2::zeros(dt.forces, if has_frc { n } else { 0 }, 3);
     let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
+    let mut chg = FloatArray1::zeros(dt.energies, if has_chg { n } else { 0 });
+    let mut spn = FloatArray1::zeros(dt.energies, if has_spn { n } else { 0 });
+    let mut mm = FloatArray2::zeros(dt.forces, if has_mm { n } else { 0 }, 3);
     let mut masses_arr = FloatArray1::zeros(dt.masses, n);
     let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
     let mut off = 0usize;
@@ -2181,7 +2297,6 @@ pub fn con_frame_from_atom_data_with_positions(
         }
     }
     for (i, a) in atom_data.iter().enumerate() {
-        // Positions already in SoA; only ids + optional sections.
         ids_arr[i] = a.atom_id;
         if has_vel {
             if let Some(v) = a.velocity {
@@ -2196,13 +2311,22 @@ pub fn con_frame_from_atom_data_with_positions(
         if has_eng {
             eng.set_f64(i, a.energy.unwrap_or(0.0));
         }
+        if has_chg {
+            chg.set_f64(i, a.charge.unwrap_or(0.0));
+        }
+        if has_spn {
+            spn.set_f64(i, a.spin.unwrap_or(0.0));
+        }
+        if has_mm {
+            if let Some(m) = a.magmom {
+                mm.set_f64_row(i, m);
+            }
+        }
     }
     let mut header = header;
-    // Only persist storage_dtypes when non-default (avoid metadata churn on hot parse).
     if dt != crate::storage_dtype::StorageDtypes::all_f64() {
         dt.insert_into(&mut header.metadata);
     }
-    // AoS and SoA agree on positions (written during parse); sections mirrored above.
     ConFrame {
         header,
         atom_data,
@@ -2210,6 +2334,9 @@ pub fn con_frame_from_atom_data_with_positions(
         velocities: vel,
         forces: frc,
         atom_energies: eng,
+        charges: chg,
+        spins: spn,
+        magmoms: mm,
         masses: masses_arr,
         atom_ids: ids_arr,
     }

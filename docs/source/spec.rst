@@ -321,10 +321,22 @@ present, complete, and parseable at its declared position. An empty
     +----------------+---------------------------------+---------+-------------------------------+
     | ``energies``   | ``Energies of Component /i/``   |       3 | energy fixed\_flag atom\_id   |
     +----------------+---------------------------------+---------+-------------------------------+
+    | ``charges``    | ``Charges of Component /i/``    |       3 | charge fixed\_flag atom\_id   |
+    +----------------+---------------------------------+---------+-------------------------------+
+    | ``spins``      | ``Spins of Component /i/``      |       3 | spin fixed\_flag atom\_id     |
+    +----------------+---------------------------------+---------+-------------------------------+
+    | ``magmoms``    | ``Magmoms of Component /i/``    |       5 | mx my mz fixed\_flag atom\_id |
+    +----------------+---------------------------------+---------+-------------------------------+
 
 The ``energies`` section carries one scalar per atom, useful for ML
 potentials that decompose total energy into local contributions.
 Writers MAY emit it alongside ``forces``, alone, or omit it entirely.
+
+``charges`` and ``spins`` are optional scalar sections (same column layout as
+``energies``). ``magmoms`` is an optional 3-vector section (same layout as
+``velocities``). They are reserved names on the existing v2/v3 declared
+``sections`` surface: files MAY use ``con_spec_version`` 2 or 3; a format major
+bump is not required for these optional blocks.
 
 When the ``energies`` section is present:
 

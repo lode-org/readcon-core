@@ -1,5 +1,6 @@
 use crate::types::{
-    ConFrame, SECTION_ENERGIES, SECTION_FORCES, SECTION_VELOCITIES, encode_fixed_bitmask, meta,
+    ConFrame, SECTION_CHARGES, SECTION_ENERGIES, SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS,
+    SECTION_VELOCITIES, encode_fixed_bitmask, meta,
 };
 use serde_json::json;
 use std::fs::File;
@@ -49,6 +50,9 @@ struct MetadataCacheEntry {
     has_velocities: bool,
     has_forces: bool,
     has_energies: bool,
+    has_charges: bool,
+    has_spins: bool,
+    has_magmoms: bool,
     metadata: std::collections::BTreeMap<String, serde_json::Value>,
     /// Cached serialised metadata line (without trailing newline).
     serialized: String,
@@ -61,12 +65,18 @@ impl MetadataCacheEntry {
         has_velocities: bool,
         has_forces: bool,
         has_energies: bool,
+        has_charges: bool,
+        has_spins: bool,
+        has_magmoms: bool,
         metadata: &std::collections::BTreeMap<String, serde_json::Value>,
     ) -> bool {
         self.spec_version == spec_version
             && self.has_velocities == has_velocities
             && self.has_forces == has_forces
             && self.has_energies == has_energies
+            && self.has_charges == has_charges
+            && self.has_spins == has_spins
+            && self.has_magmoms == has_magmoms
             && &self.metadata == metadata
     }
 }
@@ -142,12 +152,23 @@ impl<W: Write> ConFrameWriter<W> {
         let has_vel = frame.has_velocities();
         let has_frc = frame.has_forces();
         let has_eng = frame.has_energies();
+        let has_chg = frame.has_charges();
+        let has_spn = frame.has_spins();
+        let has_mm = frame.has_magmoms();
 
         let cache_hit = !self.canonical
-            && self
-                .metadata_cache
-                .as_ref()
-                .is_some_and(|c| c.matches(spec_version, has_vel, has_frc, has_eng, &frame.header.metadata));
+            && self.metadata_cache.as_ref().is_some_and(|c| {
+                c.matches(
+                    spec_version,
+                    has_vel,
+                    has_frc,
+                    has_eng,
+                    has_chg,
+                    has_spn,
+                    has_mm,
+                    &frame.header.metadata,
+                )
+            });
 
         if !cache_hit {
             let mut meta_obj = serde_json::Map::new();
@@ -164,6 +185,15 @@ impl<W: Write> ConFrameWriter<W> {
             }
             if has_eng {
                 sections.push(json!(SECTION_ENERGIES));
+            }
+            if has_chg {
+                sections.push(json!(SECTION_CHARGES));
+            }
+            if has_spn {
+                sections.push(json!(SECTION_SPINS));
+            }
+            if has_mm {
+                sections.push(json!(SECTION_MAGMOMS));
             }
             let validate = frame
                 .header
@@ -201,6 +231,9 @@ impl<W: Write> ConFrameWriter<W> {
                 has_velocities: has_vel,
                 has_forces: has_frc,
                 has_energies: has_eng,
+                has_charges: has_chg,
+                has_spins: has_spn,
+                has_magmoms: has_mm,
                 metadata: frame.header.metadata.clone(),
                 serialized,
             });
@@ -338,6 +371,72 @@ impl<W: Write> ConFrameWriter<W> {
                     )?;
                 }
                 energy_idx_offset += num_atoms_in_type;
+            }
+        }
+
+        if frame.has_charges() {
+            writeln!(self.writer)?;
+            let mut off = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[off].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Charges of Component {}", type_idx + 1)?;
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[off + i];
+                    let q = atom.charge.unwrap_or(0.0);
+                    writeln!(
+                        self.writer,
+                        "{q:.prec$} {fixed_flag} {atom_id}",
+                        prec = prec,
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                off += num_atoms_in_type;
+            }
+        }
+
+        if frame.has_spins() {
+            writeln!(self.writer)?;
+            let mut off = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[off].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Spins of Component {}", type_idx + 1)?;
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[off + i];
+                    let s = atom.spin.unwrap_or(0.0);
+                    writeln!(
+                        self.writer,
+                        "{s:.prec$} {fixed_flag} {atom_id}",
+                        prec = prec,
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                off += num_atoms_in_type;
+            }
+        }
+
+        if frame.has_magmoms() {
+            writeln!(self.writer)?;
+            let mut off = 0;
+            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
+                let symbol = &frame.atom_data[off].symbol;
+                writeln!(self.writer, "{}", symbol)?;
+                writeln!(self.writer, "Magmoms of Component {}", type_idx + 1)?;
+                for i in 0..num_atoms_in_type {
+                    let atom = &frame.atom_data[off + i];
+                    let [mx, my, mz] = atom.magmom.unwrap_or([0.0; 3]);
+                    writeln!(
+                        self.writer,
+                        "{mx:.prec$} {my:.prec$} {mz:.prec$} {fixed_flag} {atom_id}",
+                        prec = prec,
+                        fixed_flag = encode_fixed_bitmask(atom.fixed),
+                        atom_id = atom.atom_id
+                    )?;
+                }
+                off += num_atoms_in_type;
             }
         }
 
