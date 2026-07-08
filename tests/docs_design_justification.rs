@@ -82,7 +82,7 @@ fn faq_con_contract() {
     assert!(t.contains("fixed") || t.contains("constraint") || t.contains("mask"));
     assert!(t.contains("saddle") || t.contains("NEB") || t.contains("dimer"));
     assert!(
-        t.contains("What CON is for") || t.contains("deliberately small"),
+        t.contains("What CON is for") || t.contains("complete checkpoint"),
         "FAQ must state what CON is for in plain language"
     );
     assert!(t.contains("authoritative") || t.contains("UTF-8 CON") || t.contains("CON text"));
