@@ -9,15 +9,17 @@ What we measure
 
 .. table::
 
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |   Rank | Command / artifact                                                                | Answers                                                                  |
-    +========+===================================================================================+==========================================================================+
-    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh``        | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      2 | ``benches/compare_readers.py``                                                    | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      3 | ``benches/multiformat_traj.py`` → ``benches/results/multiformat_traj_terra.json`` | Equal-geometry wall times against other ASCII readers                    |
-    +--------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
+    |   Rank | Command / artifact                                                         | Answers                                                                            |
+    +========+============================================================================+====================================================================================+
+    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths           |
+    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
+    |      2 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                         |
+    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
+    |      3 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                       |
+    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
+    |      4 | ``benches/ase_xyz_vs_chemfiles_con.py``                                    | ASE multi-frame XYZ ``read`` vs ``readcon.read_chemfiles`` (XYZ→CON) vs native CON |
+    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
 
 Public numbers prefer ranks 1–2. Criterion tables further down are local
 latency history; re-run before citing.
@@ -118,6 +120,34 @@ Live snapshot (``rgam5terra`` 2026-07-08, readcon 0.14.0, ASE 3.29.0, median of 
 Artifact: ``benches/results/multiformat_traj_terra_live.json`` (and older
 ``multiformat_traj_terra.json``). CON-reader ordering vs C sscanf:
 ``compare_readers.py`` table above.
+
+ASE multi-frame XYZ vs chemfiles → CON
+--------------------------------------
+
+Foreign trajectory path people actually use: ASE ``read(traj.xyz, index``\\":\\")=
+versus ``readcon.read_chemfiles`` (chemfiles → list of ``ConFrame``) versus
+staying on CON after convert.
+
+.. code:: shell
+
+    maturin develop --features python,chemfiles --release
+    python benches/ase_xyz_vs_chemfiles_con.py --frames 100 --repeats 5
+
+``rgam5terra`` 2026-07-08, 100×218 atoms, median of 5:
+
+.. table::
+
+    +-----------------------------------------------+-----------+------------------+
+    | Path                                          | Time (ms) | vs ASE XYZ       |
+    +===============================================+===========+==================+
+    | ASE multi-frame plain XYZ                     |      26.8 | 1.0×             |
+    +-----------------------------------------------+-----------+------------------+
+    | ``readcon.read_chemfiles`` (XYZ → CON frames) |      13.3 | **2.0×** faster  |
+    +-----------------------------------------------+-----------+------------------+
+    | ``readcon.read_con`` (native CON)             |       2.5 | **10.6×** faster |
+    +-----------------------------------------------+-----------+------------------+
+
+Artifact: ``benches/results/ase_xyz_vs_chemfiles_con.json``.
 
 .. figure:: img/pareto_features_vs_speed.svg
 

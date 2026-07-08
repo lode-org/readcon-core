@@ -1,0 +1,14 @@
+{
+  "host": "rgam5terra",
+  "date_utc": "2026-07-08",
+  "protocol": "equal geometry multi-frame; ASE XYZ traj vs readcon.read_chemfiles vs readcon.read_con",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "fixture": "resources/test/cuh2.con",
+  "ase_xyz_median_ms": 26.775,
+  "readcon_chemfiles_xyz_to_con_median_ms": 13.309,
+  "readcon_con_median_ms": 2.515,
+  "ratio_ase_xyz_over_chemfiles_to_con": 2.01,
+  "ratio_ase_xyz_over_native_con": 10.65
+}
