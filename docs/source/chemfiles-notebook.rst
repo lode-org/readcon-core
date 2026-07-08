@@ -6,10 +6,13 @@ Executable Chemfiles notebook
 .. note::
 
    This page is the *Org-mode Babel source* for the chemfiles conversion
-   tutorial. ``scripts/run-chemfiles-notebook.sh`` tangles then executes it.
-   GitHub Actions ``ci_python.yml`` (chemfiles matrix) runs that script after
-   ``maturin develop --features python,chemfiles``. Learning narrative:
-   :doc:`chemfiles-tutorial`.
+   path. ``scripts/run-chemfiles-notebook.sh`` runs
+   ``org-babel-tangle`` → ``docs/notebooks/chemfiles_ingress.py``, **fails on
+   tangle drift**, then ``python3`` that file (not a silent Babel-session
+   fallback). CI (``ci_python.yml`` chemfiles matrix) runs that script after
+   ``maturin develop --features python,chemfiles``. Learning narrative
+   (including Rust prose): :doc:`chemfiles-tutorial` — only this notebook's
+   Python blocks are CI-executed.
 
 Literate, plain-text notebook (not a committed ``.ipynb``). Requires
 ``readcon-chemfiles`` or ``maturin develop --features python,chemfiles``.
@@ -157,6 +160,6 @@ Run from the shell
 
    scripts/run-chemfiles-notebook.sh
 
-Emacs: open this file and use ``C-c C-c`` on each Python source block (session
-``readcon-cf``). The script tangles to ``docs/notebooks/chemfiles_ingress.py``
-then executes this Org buffer via Babel — do not hand-edit the tangled ``.py``.
+Emacs: ``C-c C-c`` on blocks is fine interactively. CI and
+``scripts/run-chemfiles-notebook.sh`` re-tangle, refuse drift, and run
+``docs/notebooks/chemfiles_ingress.py`` only — do not hand-edit the tangled ``.py``.

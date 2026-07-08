@@ -5,14 +5,13 @@
 #+begin_export rst
 .. note::
 
-   **Executable Org Babel source** for this path is :doc:`chemfiles-notebook`
-   (``docs/orgmode/chemfiles-notebook.org``). CI runs
-   ``scripts/run-chemfiles-notebook.sh``: Emacs tangles Python blocks into
-   ``docs/notebooks/chemfiles_ingress.py`` and executes the Org buffer.
-   Do not hand-edit the tangled ``.py``.
+   **Executable Org Babel source** (Python only) is :doc:`chemfiles-notebook`.
+   CI runs ``scripts/run-chemfiles-notebook.sh`` (tangle + drift check +
+   ``python3 docs/notebooks/chemfiles_ingress.py``). Rust and other language
+   snippets on *this* page are prose only — they are **not** Babel-run in CI.
 
-   This page is the Diátaxis *learning* narrative (including Rust). The Babel
-   notebook is the CI-gated executable twin for the Python conversion steps.
+   Do not hand-edit the tangled ``.py``; update the notebook Org source and
+   re-tangle with ``READCON_TANGLE_UPDATE=1``.
 
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).
