@@ -31,25 +31,19 @@ New implementations SHOULD target version 3 and MUST accept version 2.
 The keywords MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT,
 MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ semantics.
 
-Objective
----------
-
-CON stores molecular configurations for transition-state search and related
-workflows (eOn, LODE, and tools that adopt the same layout). A file holds one
-or more *frames*. Each frame records a simulation cell, per-type metadata
-(masses, atom counts), and per-atom data (coordinates, constraints, identity).
-Optional sections add velocities, forces, or other per-atom vector or scalar
-fields. Line 2 carries versioned JSON metadata.
-
-The primary goal is portable, self-describing checkpoints among simulation and
-analysis programs. The reference implementation is ``readcon-core``.
-
 Overview
 --------
 
-CON originated in the `eOn code <https://eondocs.org>`_ and is also used from
-`ASE <https://wiki.fysik.dtu.dk/ase/>`_ and other packages that speak the same
-on-disk layout.
+CON stores atomic configurations for transition-state search and related
+simulations. It originated in the `eOn code <https://eondocs.org>`_ and is
+used by LODE tooling and `ASE <https://wiki.fysik.dtu.dk/ase/>`_ among others.
+The reference implementation is ``readcon-core``.
+
+A CON file contains one or more *frames*. Each frame encodes a simulation
+cell, per-type metadata (masses, atom counts), and per-atom data
+(coordinates, constraints, identity). Optional sections add velocities,
+forces, or other per-atom vector/scalar data. Line 2 carries versioned JSON
+metadata.
 
 File extensions
 ---------------

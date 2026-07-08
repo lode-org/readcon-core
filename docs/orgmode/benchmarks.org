@@ -1,17 +1,16 @@
 #+title: Performance Benchmarks
 #+options: toc:nil num:nil ^:nil
 
-* Measurement hierarchy
+* What we measure
 
 | Rank | Command / artifact | Answers |
 |------+--------------------+---------|
 | 1 (CI) | =examples/cachegrind_harness.rs= via =scripts/run_cachegrind_bench.sh= | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-| 2 | =benches/compare_readers.py= | CON parse order vs ASE =ase.io.eon= and eOn-style C sscanf on equal CON text |
-| 3 | =benches/multiformat_traj.py= → =benches/results/multiformat_traj_terra.json= | Equal-geometry multi-frame wall times vs other ASCII readers (measurement peers only) |
+| 2 | =benches/compare_readers.py= | Same CON text vs ASE =ase.io.eon= and eOn-style C sscanf |
+| 3 | =benches/multiformat_traj.py= → =benches/results/multiformat_traj_terra.json= | Equal-geometry wall times against other ASCII readers |
 
-Product speed claims use ranks 1–2 first (CON path and CON peers). Rank 3
-records additional ASCII peers on the same geometry; it does not define the
-CON contract. Criterion microbenches are local latency history.
+Public numbers prefer ranks 1–2. Criterion tables further down are local
+latency history; re-run before citing.
 
 * CI Cachegrind (regression authority)
 

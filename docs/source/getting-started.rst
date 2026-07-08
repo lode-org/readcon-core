@@ -25,33 +25,34 @@ Getting started
    Start here for install and the shortest paths. Top nav *Convert* is the
    conversion tutorial and recipes.
 
-Objective
----------
+Scope
+-----
 
-``readcon-core`` implements the CON / convel specification for eOn and LODE:
-read and write frames with cell, constraints, ``atom_id``, optional velocities
-and forces, and versioned JSON metadata, through one hourglass C ABI
-(``rkr_*``) used from Fortran, C, C++, Python, Julia, and Rust.
+readcon-core implements CON / convel for eOn and LODE: cell, type-grouped
+atoms, per-direction fixed masks, ``atom_id``, optional velocity / force
+sections, JSON line-2 metadata. One ``rkr_*`` hourglass ABI for Fortran, C,
+C++, Python, Julia, and Rust.
 
 .. table::
 
     +---------------------------------+-----------------------------------------+
     | Task                            | Path                                    |
     +=================================+=========================================+
-    | Read or write a CON checkpoint  | ``readcon`` / ``readcon-core``          |
+    | Read / write CON                | ``readcon`` / ``readcon-core``          |
     +---------------------------------+-----------------------------------------+
-    | Link from Fortran / C / C++     | Hourglass ABI; default lean features    |
+    | Link from Fortran / C / C++     | Hourglass ABI; lean features by default |
     +---------------------------------+-----------------------------------------+
-    | Index many trajectories         | ``readcon-db`` (CON text authoritative) |
+    | Many trajectories, multi-reader | ``readcon-db`` (CON text authoritative) |
     +---------------------------------+-----------------------------------------+
-    | Import a foreign structure file | Optional chemfiles build → CON          |
+    | Foreign structure file → CON    | Optional chemfiles build                |
     +---------------------------------+-----------------------------------------+
-    | Hand off to an ASE calculator   | Optional ``to_ase`` / ``from_ase``      |
+    | ASE calculator                  | Optional ``to_ase`` / ``from_ase``      |
     +---------------------------------+-----------------------------------------+
 
-Design goals and layout: :doc:`faq` (**Objective**). Spec:
-:doc:`spec`. Architecture: :doc:`architecture`.
-Measurements: :doc:`benchmarks`.
+Why CON looks this way: :doc:`faq`, :doc:`evolution`.
+Rules: :doc:`spec`. Layout of the library:
+:doc:`architecture`. Numbers:
+:doc:`benchmarks`.
 
 Install
 -------

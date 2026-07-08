@@ -267,20 +267,14 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 Design rationale
 ----------------
 
-**Objective.** Implement the CON / convel specification so transition-state
-codes share one on-disk contract and one ``rkr_*`` hourglass C ABI across
-Fortran, C, C++, Julia, Python, and Rust: per-direction constraints, forces /
-velocities, ``atom_id``, and JSON metadata, without embedding a Python runtime
-on the I/O path.
+readcon-core is the hourglass library for CON / convel (eOn / LODE): Rust core,
+``rkr_*`` C ABI, thin wrappers for C++, Python, Julia, and Fortran. Optimizers
+share per-direction constraints, forces / velocities, ``atom_id``, and JSON
+metadata without putting a Python interpreter on the I/O path.
 
-Optional chemfiles import fills ``ConFrame`` from foreign structure files.
-Metatensor/DLPack exports provide tensor hand-off; UTF-8 CON remains the
-on-disk authority. Lean builds expose gated features as stubs
-(``RKR_STATUS_FEATURE_DISABLED``).
+Chemfiles is optional import into ``ConFrame``. Metatensor/DLPack are optional
+tensor exports; UTF-8 CON stays authoritative on disk and in ``readcon-db``.
+Lean builds return ``RKR_STATUS_FEATURE_DISABLED`` for missing features.
 
-``readcon-db`` indexes multi-reader campaigns (hash, dedup, reindex) on CON
-blobs. Optional ``to_ase`` supports ASE calculator hand-off.
-
-Design goals: :doc:`faq` (**Objective**). Spec:
-:doc:`spec`. Evolution: :doc:`evolution`.
-Measurements: :doc:`benchmarks`.
+See :doc:`faq`, :doc:`spec`,
+:doc:`evolution`, :doc:`benchmarks`.

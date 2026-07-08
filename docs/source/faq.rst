@@ -4,57 +4,34 @@ Frequently Asked Questions
 
 
 
-Objective
----------
+What CON is for
+---------------
 
-CON stores atomic configurations for transition-state search and related
-workflows used by eOn and LODE: cell geometry, type-grouped coordinates,
-per-direction constraints, stable atom identity, optional velocity and force
-sections, and versioned JSON metadata. A CON file is UTF-8 text with a fixed
-nine-line header per frame so tools can inspect it with ``head`` and parse it
-with one shared contract.
-
-The primary goal is portable checkpoints among optimizers and analysis codes
-written in different languages (Fortran, C, C++, Python, Julia, Rust), without
-a second on-disk dialect per language.
-
-Design goals
-~~~~~~~~~~~~
+CON is a **deliberately small** LODE-centric format for eOn transition-state
+workflows (saddle, dimer, NEB). One frame carries:
 
 .. table::
 
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Goal                         | In CON                                                                              |
-    +==============================+=====================================================================================+
-    | Completeness for TS search   | Constraints, forces, velocities, ``atom_id``, energy and NEB keys on the same frame |
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Human inspectability         | Fixed header, type blocks, ASCII decimals                                           |
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Versioned extensibility      | Line-2 JSON with ``con_spec_version``; unknown keys preserved                       |
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Strict validation when asked | ``validate=true`` enforces schema, geometry, and section identity                   |
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Multi-language identity      | One ``rkr_*`` hourglass ABI in ``readcon-core``; same semantics everywhere          |
-    +------------------------------+-------------------------------------------------------------------------------------+
-    | Campaign storage             | UTF-8 CON text remains authoritative in ``readcon-db``                              |
-    +------------------------------+-------------------------------------------------------------------------------------+
+    +--------------------------+--------------------------------------------------------------+
+    | On disk                  | Role                                                         |
+    +==========================+==============================================================+
+    | Cell + angles            | Periodic box                                                 |
+    +--------------------------+--------------------------------------------------------------+
+    | Type-grouped coordinates | Stable ``head``-able layout                                  |
+    +--------------------------+--------------------------------------------------------------+
+    | Column 4 fixed mask      | Per-direction constraints (bitmask 0–7)                      |
+    +--------------------------+--------------------------------------------------------------+
+    | Column 5 ``atom_id``     | Pre-group atom index for NEB / dimer / comparisons           |
+    +--------------------------+--------------------------------------------------------------+
+    | Optional sections        | Velocities, forces, per-atom energies                        |
+    +--------------------------+--------------------------------------------------------------+
+    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, … |
+    +--------------------------+--------------------------------------------------------------+
 
-Layout (summary)
-~~~~~~~~~~~~~~~~
-
-.. table::
-
-    +-------------------+---------------------------------------------------------------------+
-    | On disk           | Content                                                             |
-    +===================+=====================================================================+
-    | Lines 1–9         | Generator comment, JSON metadata, cell, angles, type counts, masses |
-    +-------------------+---------------------------------------------------------------------+
-    | Type blocks       | Symbol, label, atom lines: ``x y z fixed_mask atom_id``             |
-    +-------------------+---------------------------------------------------------------------+
-    | Optional sections | Declared in JSON (``velocities``, ``forces``, ``energies``, …)      |
-    +-------------------+---------------------------------------------------------------------+
-
-Full rules: :doc:`spec`.
+Writers type-group atoms by element; ``atom_id`` recovers the original index.
+The hourglass ABI in ``readcon-core`` gives Fortran, C, C++, Python, Julia, and
+Rust the same semantics on that file. Spec: :doc:`spec`.
+Design history: :doc:`evolution`.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -357,27 +334,26 @@ gzip writers and DLPack (``ArcArray`` share via dlpk; no fake ``_borrowed`` C al
 always present. After a metatensor-enabled build, ``target/<profile>/readcon-metatensor.env``
 lists include/lib paths for ``libmetatensor``.
 
-What sits on disk in an eOn / LODE pipeline?
---------------------------------------------
+Pipeline roles
+--------------
 
 .. table::
 
-    +--------------------------------------------------+----------------------------------------------------+
-    | Role                                             | Thing                                              |
-    +==================================================+====================================================+
-    | Optimizer checkpoint and multi-language hand-off | CON / convel via ``readcon-core``                  |
-    +--------------------------------------------------+----------------------------------------------------+
-    | Campaign index (many trajectories, multi-reader) | ``readcon-db`` (CON blobs, UTF-8 text as identity) |
-    +--------------------------------------------------+----------------------------------------------------+
-    | Calculator inside ASE                            | Optional ``to_ase`` / ``from_ase`` only            |
-    +--------------------------------------------------+----------------------------------------------------+
-    | Structure that arrived as another file type      | Chemfiles ingress → CON, then stay on CON          |
-    +--------------------------------------------------+----------------------------------------------------+
-    | Long continuous MD trajectory inside one engine  | That engine’s native binary (XTC/TRR/DCD, …)       |
-    +--------------------------------------------------+----------------------------------------------------+
+    +----------------------------------------+----------------------------------------+
+    | Role                                   | Thing                                  |
+    +========================================+========================================+
+    | Checkpoint and multi-language hand-off | CON / convel via ``readcon-core``      |
+    +----------------------------------------+----------------------------------------+
+    | Campaign index (multi-reader)          | ``readcon-db`` (CON blobs)             |
+    +----------------------------------------+----------------------------------------+
+    | ASE calculator                         | Optional ``to_ase`` / ``from_ase``     |
+    +----------------------------------------+----------------------------------------+
+    | Foreign structure file                 | Chemfiles → CON, then stay on CON      |
+    +----------------------------------------+----------------------------------------+
+    | Continuous MD inside one engine        | That engine’s native trajectory format |
+    +----------------------------------------+----------------------------------------+
 
-``readcon-core`` owns the CON parse/write path and the ``rkr_*`` hourglass ABI.
-Chemfiles is optional edge import into CON.
+Chemfiles owns format diversity; readcon-core owns CON fidelity.
 
 Are ASE adapters the primary API?
 ---------------------------------

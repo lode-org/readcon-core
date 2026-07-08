@@ -1,34 +1,36 @@
 
 # Table of Contents
 
-1.  [About](#orgd935146)
-    1.  [Features](#org1341491)
-    2.  [Install](#org9bffaf3)
-    3.  [Tutorial](#orgaa7149c)
-    4.  [Design Decisions](#org2c6442a)
-        1.  [FFI Layer](#org784fa07)
-    5.  [Specification](#org6534b9f)
-        1.  [CON format](#org3c5d062)
-        2.  [convel format](#orgfcf92c6)
-    6.  [Capabilities](#orgd589d6d)
-    7.  [Citation](#orgffa1c60)
-2.  [License](#org91aac2f)
+1.  [About](#org1d84067)
+    1.  [Features](#org82e6ff9)
+    2.  [Install](#org758eda2)
+    3.  [Tutorial](#org6daba2e)
+    4.  [Design Decisions](#org67c682a)
+        1.  [FFI Layer](#org40539b9)
+    5.  [Specification](#org4e3b93a)
+        1.  [CON format](#org938d4ea)
+        2.  [convel format](#org9b22eb9)
+    6.  [Capabilities](#orgbe2a1dd)
+    7.  [Citation](#orgef72b2e)
+2.  [License](#org9e09ec3)
 
 
-<a id="orgd935146"></a>
+<a id="org1d84067"></a>
 
 # About
 
-`readcon-core` is the reference implementation of the CON / convel file format
-for eOn and LODE molecular configurations: particle positions with
-per-direction constraints, optional velocities and forces, stable `atom_id`,
-cell geometry, and versioned JSON metadata.
+`readcon-core` reads and writes versioned `.con` / `.convel` for eOn and LODE.
 
-**Objective.** Portable checkpoints among transition-state optimizers and
-analysis tools, with one `rkr_*` hourglass C ABI shared by Rust, C, C++,
-Python, Julia, and Fortran. Campaign corpora use
-[readcon-db](https://github.com/lode-org/readcon-db) (`cargo add readcon-db`, `pip install readcon-db`,
-<https://lode-org.github.io/readcon-db/>); blobs remain CON text.
+CON is a **deliberately small** LODE-centric format: type-grouped atom blocks,
+per-direction fixed masks, column-5 `atom_id` (pre-group index), optional
+velocity / force / energy sections, and JSON on line 2. One hourglass C ABI
+(`rkr_*`) exposes that contract to Rust, C, C++, Python, Julia, and Fortran.
+Campaign corpora live in [readcon-db](https://github.com/lode-org/readcon-db)
+(`cargo add readcon-db`, `pip install readcon-db`,
+<https://lode-org.github.io/readcon-db/>); blobs stay CON text and always decode
+through this crate.
+
+Rust rewrite of [readCon](https://github.com/HaoZeke/readCon).
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -44,49 +46,50 @@ Python, Julia, and Fortran. Campaign corpora use
 <tr>
 <th scope="col" class="org-left">Layer</th>
 <th scope="col" class="org-left">Crate</th>
-<th scope="col" class="org-left">Responsibility</th>
+<th scope="col" class="org-left">Owns</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td class="org-left">Format I/O</td>
 <td class="org-left"><code>readcon-core</code> / Python <code>readcon</code></td>
-<td class="org-left">Spec v2–v3 parse/write, hourglass FFI, optional chemfiles import</td>
+<td class="org-left">CON parse/write, spec v2–v3, hourglass FFI, optional chemfiles import</td>
 </tr>
 
 <tr>
 <td class="org-left">Corpus</td>
-<td class="org-left"><a href="https://github.com/lode-org/readcon-db">readcon-db</a> / <code>readcon_db</code></td>
-<td class="org-left">Heed/LMDB store, secondary indexes, exact-match dedup, multi-language CLI</td>
+<td class="org-left"><a href="https://github.com/lode-org/readcon-db">readcon-db</a></td>
+<td class="org-left">LMDB indexes, dedup, multi-reader campaigns</td>
 </tr>
 </tbody>
 </table>
 
-Rust rewrite of [readCon](https://github.com/HaoZeke/readCon). Optional chemfiles import maps foreign structure
-files into CON. ASE `to_ase` / `from_ase` supports calculator hand-off.
+Chemfiles owns format diversity at the edge; readcon-core owns CON fidelity
+(`read_chemfiles*`). ASE `to_ase` / `from_ase` is calculator hand-off only.
 
-Measurements: CI Cachegrind I-refs (`examples/cachegrind_harness.rs`);
-CON peer timing (`benches/compare_readers.py`). See
-[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org) and [docs/orgmode/faq.org](docs/orgmode/faq.md) (**Objective**).
+Parse path: CI Cachegrind I-refs (`examples/cachegrind_harness.rs`); CON peers
+via `benches/compare_readers.py`. Methodology:
+[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org). Spec:
+[docs/orgmode/spec.org](docs/orgmode/spec.md).
 
 
-<a id="org1341491"></a>
+<a id="org82e6ff9"></a>
 
 ## Features
 
--   **CON and convel support:** Parses both coordinate-only and velocity-augmented files. Velocity sections are auto-detected without relying on file extensions.
--   **Lazy iteration:** `ConFrameIterator` parses one frame at a time for memory-efficient trajectory processing; `next_with_raw_span` preserves the on-disk blob for corpus ingest without re-serialization.
--   **Performance:** [fast-float2](https://github.com/aldanor/fast-float-rust) on the f64 hot path, [memmap2](https://docs.rs/memmap2) for large files, Cachegrind I-refs in CI; equal-geometry peer runs vs ASE CON and C sscanf (see benchmarks).
--   **Parallel parsing:** Optional rayon-based parallel frame parsing behind the `parallel` Cargo feature.
--   **Language bindings:** Python (PyO3), Julia (ccall), C (cbindgen FFI), C++ (RAII header-only), and Fortran (fpm), using the hourglass ABI pattern from [metatensor](https://github.com/metatensor/metatensor).
--   **Spec-v2 metadata helpers:** Rust, Python, Julia, C, and C++ bindings all expose typed helpers for common JSON metadata keys like `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, and `neb_band`, while still allowing raw JSON metadata when needed.
--   **Spec-v2 validation:** `validate=true` enforces finite numeric values, reserved metadata schema, physical header geometry, exact component labels, valid symbols, declared section presence, and matching per-atom identity columns.
--   **Force and constraint fidelity:** Writers preserve velocities, forces, original atom ids, and per-direction fixed masks across Rust, Python, Julia, C, and C++.
--   **Campaign corpora:** pair with [readcon-db](https://github.com/lode-org/readcon-db) for indexed multi-trajectory stores (CON text authoritative).
--   **RPC serving:** Optional Cap'n Proto RPC interface (`rpc` feature) for network-accessible parsing.
+-   **CON and convel:** Coordinates; velocities auto-detected or declared in `sections`.
+-   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
+-   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
+-   **Parallel frames:** Rayon behind the `parallel` Cargo feature.
+-   **Bindings:** Python (PyO3), Julia (ccall), C (cbindgen), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [metatensor](https://github.com/metatensor/metatensor).
+-   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
+-   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
+-   **Fidelity:** Velocities, forces, `atom_id`, per-direction fixed masks round-trip on every binding.
+-   **Campaigns:** Pair with [readcon-db](https://github.com/lode-org/readcon-db).
+-   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org9bffaf3"></a>
+<a id="org758eda2"></a>
 
 ## Install
 
@@ -135,7 +138,7 @@ CON peer timing (`benches/compare_readers.py`). See
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orgaa7149c"></a>
+<a id="org6daba2e"></a>
 
 ## Tutorial
 
@@ -186,52 +189,36 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="org2c6442a"></a>
+<a id="org67c682a"></a>
 
 ## Design Decisions
 
-The library is designed with the following principles in mind:
-
--   **Lazy Parsing:** The `ConFrameIterator` allows for lazy parsing of frames, which can be more memory-efficient when dealing with large trajectory files.
-
--   **Interoperability:** The FFI layer exposes the core parser to other languages. A `C` header is auto-generated with a hand-crafted `C++` interface, using the hourglass ABI pattern from [metatensor](https://github.com/metatensor/metatensor).
+-   **Lazy parsing:** `ConFrameIterator` parses one frame at a time for large trajectories.
+-   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org784fa07"></a>
+<a id="org40539b9"></a>
 
 ### FFI Layer
 
-FFI data exposure uses a hybrid of safety and convenience:
+Two exposure modes:
 
-1.  **Opaque Pointers (The Handle Pattern):** The primary way to interact with
-    frame data is through an opaque pointer, represented as `RKRConFrame*` in C.
-    The C/C++ client keeps this "handle" but cannot inspect its contents
-    directly. Instead, it must call Rust functions to interact with the data
-    (e.g., `rkr_frame_get_header_line(frame_handle, ...)`). This pattern hides
-    Rust's internal data structures and memory layout, preventing ABI breakage
-    if the Rust code is updated.
-
-2.  **Transparent `#[repr(C)]` Structs (The Data Extraction Pattern):** For
-    convenience and performance in cases where only the core atomic data is
-    needed, the library provides a function (`rkr_frame_to_c_frame`) to extract a
-    "lossy" but transparent `CFrame` struct from an opaque handle. The C/C++
-    client can directly read the fields of this struct (e.g.,
-    `my_c_frame->num_atoms`). The client takes ownership of this extracted struct
-    and is responsible for freeing its memory.
-
-This hybrid model provides the best of both worlds: the safety and
-forward-compatibility of opaque handles for general use, and the performance of
-direct data access for the most common computational tasks.
+1.  **Opaque handles** (`RKRConFrame*`): client calls Rust accessors
+    (`rkr_frame_get_header_line`, …). Hides layout; ABI can evolve behind the
+    handle.
+2.  **Transparent `#[repr(C)]` extract** (`rkr_frame_to_c_frame` → `CFrame`):
+    client owns a flat atom table for hot loops and frees it with
+    `free_c_frame`.
 
 
-<a id="org6534b9f"></a>
+<a id="org4e3b93a"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org3c5d062"></a>
+<a id="org938d4ea"></a>
 
 ### CON format
 
@@ -242,7 +229,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgfcf92c6"></a>
+<a id="org9b22eb9"></a>
 
 ### convel format
 
@@ -252,7 +239,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgd589d6d"></a>
+<a id="orgbe2a1dd"></a>
 
 ## Capabilities
 
@@ -267,18 +254,18 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 <thead>
 <tr>
 <th scope="col" class="org-left">Area</th>
-<th scope="col" class="org-left">readcon-core</th>
+<th scope="col" class="org-left">What ships</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td class="org-left">Payload</td>
-<td class="org-left">Velocities, forces, per-direction constraints, <code>atom_id</code>, versioned JSON metadata on every binding</td>
+<td class="org-left">Velocities, forces, per-direction constraints, <code>atom_id</code>, versioned JSON on every binding</td>
 </tr>
 
 <tr>
 <td class="org-left">Languages</td>
-<td class="org-left">One <code>rkr_*</code> C surface for Fortran / C / C++ / Python / Julia</td>
+<td class="org-left">One <code>rkr_*</code> surface for Fortran / C / C++ / Python / Julia</td>
 </tr>
 
 <tr>
@@ -288,7 +275,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 <tr>
 <td class="org-left">Measurements</td>
-<td class="org-left">CI Cachegrind I-refs; CON peer timing vs ASE <code>ase.io.eon</code> and eOn-style C sscanf</td>
+<td class="org-left">Cachegrind I-refs; CON peers (<code>ase.io.eon</code>, eOn-style C sscanf)</td>
 </tr>
 
 <tr>
@@ -303,18 +290,17 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 </tbody>
 </table>
 
-Predecessor: [readCon](https://github.com/HaoZeke/readCon). ASE workflows may use `ase.io.eon` or the optional
-`to_ase` / `from_ase` adapters.
+Predecessor: [readCon](https://github.com/HaoZeke/readCon). ASE may use `ase.io.eon` or the optional adapters.
 
 
-<a id="orgffa1c60"></a>
+<a id="orgef72b2e"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org91aac2f"></a>
+<a id="org9e09ec3"></a>
 
 # License
 

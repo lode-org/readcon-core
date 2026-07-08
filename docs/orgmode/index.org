@@ -7,24 +7,19 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel: portable molecular checkpoints for eOn and LODE, with a multi-language reference library.</p>
+     <p class="rc-hero-tagline">CON / convel I/O for eOn and LODE: type-grouped frames, constraints, forces, hourglass multi-language ABI.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-**Objective.** Portable storage and I/O for CON / convel molecular
-configurations used in eOn and LODE transition-state workflows: particle
-coordinates with per-direction constraints, optional velocities and forces,
-stable ``atom_id``, and versioned JSON metadata.
+Rust library for reading and writing ``.con`` / ``.convel`` used by eOn and
+LODE. Lazy iterators, JSON line-2 metadata, C / C++ / Python / Julia / Fortran
+bindings. Chemfiles (optional) lands foreign structures in CON; this crate
+keeps CON fidelity (``atom_id``, sections, writers, FFI).
 
-**Implementation.** ``readcon-core`` is the reference library: one parse/write
-path and one ``rkr_*`` C ABI shared by Fortran, C, C++, Python, Julia, and
-Rust. Companion ``readcon-db`` indexes campaign corpora; on-disk identity is
-always UTF-8 CON text. Optional chemfiles import maps foreign structure files
-into CON. Spec: :doc:`spec`. Design goals and layout: :doc:`faq`. Measurements:
-:doc:`benchmarks`.
+Spec: :doc:`spec`. Measurements: :doc:`benchmarks`. Start: :doc:`getting-started`.
 
 .. important::
 
@@ -37,7 +32,6 @@ into CON. Spec: :doc:`spec`. Design goals and layout: :doc:`faq`. Measurements:
    *Format rules?* → :doc:`spec` · *APIs?* → :doc:`bindings` ·
    :doc:`chemfiles-reference`
 #+end_export
-
 
 #+begin_export rst
 .. figure:: /_static/figures/conversion-pipeline.svg
