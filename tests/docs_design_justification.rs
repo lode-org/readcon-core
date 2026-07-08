@@ -179,4 +179,35 @@ fn index_and_readme_src() {
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));
     assert_no_ai_tells(&readme, "readme_src.org");
+
+    // GitHub README must link on-disk org sources (ox-md rewrites file:…org → .md)
+    let readme_md = read_repo("README.md");
+    assert!(
+        !readme_md.contains("docs/orgmode/") || !has_orgmode_md_href(&readme_md),
+        "README.md must not link docs/orgmode/*.md (only .org files exist on disk)"
+    );
+    for needle in [
+        "docs/orgmode/spec.org",
+        "docs/orgmode/benchmarks.org",
+    ] {
+        assert!(
+            readme_md.contains(needle),
+            "README.md must link existing {needle}"
+        );
+    }
+}
+
+fn has_orgmode_md_href(t: &str) -> bool {
+    // Match markdown (docs/orgmode/foo.md) or bare docs/orgmode/foo.md paths.
+    t.contains("docs/orgmode/")
+        && t.lines().any(|line| {
+            line.contains("docs/orgmode/")
+                && line.contains(".md")
+                && line
+                    .split("docs/orgmode/")
+                    .skip(1)
+                    .any(|rest| rest.split(|c: char| c == ')' || c == '"' || c.is_whitespace())
+                        .next()
+                        .is_some_and(|p| p.ends_with(".md")))
+        })
 }

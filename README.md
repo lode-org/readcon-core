@@ -1,21 +1,21 @@
 
 # Table of Contents
 
-1.  [About](#orgb2f4773)
-    1.  [Features](#orgbdedcad)
-    2.  [Install](#orgc709ba8)
-    3.  [Tutorial](#orga81d341)
-    4.  [Design Decisions](#org4cd74c9)
-        1.  [FFI Layer](#org06cfdd3)
-    5.  [Specification](#org0a92def)
-        1.  [CON format](#org500121e)
-        2.  [convel format](#org533d96c)
-    6.  [Capabilities](#orga1264fd)
-    7.  [Citation](#org6a688da)
-2.  [License](#org444deed)
+1.  [About](#org0b1bce9)
+    1.  [Features](#org9a284f3)
+    2.  [Install](#orgec48de9)
+    3.  [Tutorial](#org4c6617f)
+    4.  [Design Decisions](#org20c69dc)
+        1.  [FFI Layer](#orge1a193c)
+    5.  [Specification](#orgf4efa41)
+        1.  [CON format](#orge38f0c5)
+        2.  [convel format](#org9f39f1a)
+    6.  [Capabilities](#orgf486b02)
+    7.  [Citation](#orgf8ad37d)
+2.  [License](#orge4673b8)
 
 
-<a id="orgb2f4773"></a>
+<a id="org0b1bce9"></a>
 
 # About
 
@@ -27,7 +27,7 @@ with constraints, forces, and identity.
 CON is human-readable and complete on one frame: cell, type-grouped
 coordinates, per-direction fixed masks, column-5 `atom_id`, optional per-atom
 sections (velocities, forces, energies, charges, spins, magmoms), and JSON
-metadata (spec v2–v3, [docs/orgmode/spec.org](docs/orgmode/spec.md)).
+metadata (spec v2–v3, [docs/orgmode/spec.org](docs/orgmode/spec.org)).
 That payload is why saddle, dimer, and NEB codes already work on CON; the
 library exists so the rest of the atomistic stack adopts the same file.
 
@@ -82,10 +82,10 @@ memory.
 
 Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 `benches/compare_readers.py`. See
-[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.md).
+[docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orgbdedcad"></a>
+<a id="org9a284f3"></a>
 
 ## Features
 
@@ -103,7 +103,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgc709ba8"></a>
+<a id="orgec48de9"></a>
 
 ## Install
 
@@ -152,7 +152,7 @@ Measurements: CI Cachegrind (`examples/cachegrind_harness.rs`);
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="orga81d341"></a>
+<a id="org4c6617f"></a>
 
 ## Tutorial
 
@@ -203,7 +203,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="org4cd74c9"></a>
+<a id="org20c69dc"></a>
 
 ## Design Decisions
 
@@ -211,7 +211,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org06cfdd3"></a>
+<a id="orge1a193c"></a>
 
 ### FFI Layer
 
@@ -225,14 +225,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org0a92def"></a>
+<a id="orgf4efa41"></a>
 
 ## Specification
 
-See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
+See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org500121e"></a>
+<a id="orge38f0c5"></a>
 
 ### CON format
 
@@ -243,7 +243,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org533d96c"></a>
+<a id="org9f39f1a"></a>
 
 ### convel format
 
@@ -253,7 +253,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orga1264fd"></a>
+<a id="orgf486b02"></a>
 
 ## Capabilities
 
@@ -312,14 +312,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org6a688da"></a>
+<a id="orgf8ad37d"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org444deed"></a>
+<a id="orge4673b8"></a>
 
 # License
 

@@ -397,14 +397,13 @@ Manual equivalent of the script:
 3. Regenerate ``Cargo.lock`` after the version bump (``cargo test --locked``).
 
 4. Regenerate the README from ``readme_src.org`` when the user-facing docs changed
-   (optional for patch releases that only touch the crate version):
+   (optional for patch releases that only touch the crate version). Use the
+   project script so ``docs/orgmode/*.org`` links stay ``.org`` (plain ``ox-md``
+   rewrites them to missing ``.md`` paths):
 
    .. code:: shell
 
-       emacs --batch \
-         --eval "(progn (require 'package) (package-initialize) (require 'ox-md) \
-                         (find-file \"readme_src.org\") \
-                         (org-export-to-file 'md \"README.md\"))"
+       ./scripts/export-readme.sh
 
 5. Regenerate ``CHANGELOG.md`` with ``cog``.
    Do not hand-edit the generated release section (extend ``cog.toml``
