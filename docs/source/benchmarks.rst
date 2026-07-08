@@ -9,17 +9,17 @@ What we measure
 
 .. table::
 
-    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
-    |   Rank | Command / artifact                                                         | Answers                                                                            |
-    +========+============================================================================+====================================================================================+
-    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths           |
-    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
-    |      2 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                         |
-    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
-    |      3 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                       |
-    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
-    |      4 | ``benches/ase_xyz_vs_chemfiles_con.py``                                    | ASE multi-frame XYZ ``read`` vs ``readcon.read_chemfiles`` (XYZ→CON) vs native CON |
-    +--------+----------------------------------------------------------------------------+------------------------------------------------------------------------------------+
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |   Rank | Command / artifact                                                         | Answers                                                                  |
+    +========+============================================================================+==========================================================================+
+    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |      2 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |      3 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON             |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |      4 | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
 
 Public numbers prefer ranks 1–2. Criterion tables further down are local
 latency history; re-run before citing.
@@ -121,33 +121,38 @@ Artifact: ``benches/results/multiformat_traj_terra_live.json`` (and older
 ``multiformat_traj_terra.json``). CON-reader ordering vs C sscanf:
 ``compare_readers.py`` table above.
 
-ASE multi-frame XYZ vs chemfiles → CON
---------------------------------------
+ASE trajectory formats vs chemfiles → CON vs CON
+------------------------------------------------
 
-Foreign trajectory path people actually use: ASE ``read(traj.xyz, index``\\":\\")=
-versus ``readcon.read_chemfiles`` (chemfiles → list of ``ConFrame``) versus
-staying on CON after convert.
+ASE native ``.traj``, NetCDFTrajectory, and multi-frame XYZ versus
+``readcon.read_chemfiles`` and native CON (equal geometry, full load). H5MD was
+not available in this ASE build (``UnknownFileTypeError``); NetCDF is the
+trajectory peer ASE can write/read here.
 
 .. code:: shell
 
     maturin develop --features python,chemfiles --release
-    python benches/ase_xyz_vs_chemfiles_con.py --frames 100 --repeats 5
+    python benches/ase_traj_vs_con.py --frames 100 --repeats 5
 
 ``rgam5terra`` 2026-07-08, 100×218 atoms, median of 5:
 
 .. table::
 
-    +-----------------------------------------------+-----------+------------------+
-    | Path                                          | Time (ms) | vs ASE XYZ       |
-    +===============================================+===========+==================+
-    | ASE multi-frame plain XYZ                     |      26.8 | 1.0×             |
-    +-----------------------------------------------+-----------+------------------+
-    | ``readcon.read_chemfiles`` (XYZ → CON frames) |      13.3 | **2.0×** faster  |
-    +-----------------------------------------------+-----------+------------------+
-    | ``readcon.read_con`` (native CON)             |       2.5 | **10.6×** faster |
-    +-----------------------------------------------+-----------+------------------+
+    +----------------------------------------+-----------+----------------+
+    | Path                                   | Time (ms) | vs readcon CON |
+    +========================================+===========+================+
+    | ASE NetCDFTrajectory                   |      30.1 | 13.3× slower   |
+    +----------------------------------------+-----------+----------------+
+    | ASE multi-frame XYZ                    |      27.2 | 12.0× slower   |
+    +----------------------------------------+-----------+----------------+
+    | ``readcon.read_chemfiles`` (XYZ → CON) |      14.1 | 6.2× slower    |
+    +----------------------------------------+-----------+----------------+
+    | ASE binary ``.traj``                   |      11.4 | 5.0× slower    |
+    +----------------------------------------+-----------+----------------+
+    | **``readcon.read_con``**               |  **2.27** | **1.0×**       |
+    +----------------------------------------+-----------+----------------+
 
-Artifact: ``benches/results/ase_xyz_vs_chemfiles_con.json``.
+Artifact: ``benches/results/ase_traj_vs_con.json``.
 
 .. figure:: img/pareto_features_vs_speed.svg
 
