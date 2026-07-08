@@ -20,7 +20,9 @@ optional sections such as velocities, forces, energies, charges, spins, and
 magmoms, plus JSON metadata). Hourglass ABI so Fortran, C, C++, Python, Julia,
 and Rust share one file; chemfiles to land foreign structures in CON; DLPack /
 metatensor for ML and device hand-off; ``readcon-db`` for campaigns that still
-store CON text.
+store CON text (package docs:
+`lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_,
+Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_).
 
 Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
 :doc:`getting-started`.

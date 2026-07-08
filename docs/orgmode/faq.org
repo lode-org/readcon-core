@@ -317,8 +317,10 @@ extract and device hand-off and are discardable or ephemeral.
 SWMR campaign access. That split is a *migration benefit*: once structures are
 CON text, the same files plug into campaign query (energy / formula / section
 indexes, dedup) without rewriting the optimizer or potential. Install
-=readcon-db= separately (=cargo add readcon-db=, =pip install readcon-db=);
-docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
+=readcon-db= separately (=cargo add readcon-db=, =pip install readcon-db=).
+Package docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
+Rust API: [[https://docs.rs/readcon-db][docs.rs/readcon-db]].
+Source: [[https://github.com/lode-org/readcon-db][github.com/lode-org/readcon-db]].
 
 * Where do large campaigns and many frames go?
 
@@ -329,8 +331,9 @@ presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 in =readcon-core= itself. That is the product path for corpora and screening —
 not a recommendation to abandon CON for a different structure dialect.
 
-Install and docs: =cargo add readcon-db= / =pip install readcon-db=;
-[[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
+Install: =cargo add readcon-db= / =pip install readcon-db=.
+Package docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
+Rust API: [[https://docs.rs/readcon-db][docs.rs/readcon-db]].
 
 * How do XYZ, PDB, GRO, and chemfiles fit in?
 

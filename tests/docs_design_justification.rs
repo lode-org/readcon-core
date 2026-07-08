@@ -168,6 +168,40 @@ fn product_docs_ban_anti_product_carveouts() {
 }
 
 #[test]
+fn readcon_db_surface_has_docs_and_api_destinations() {
+    // Campaign entry points must name hosted package docs + docs.rs API, not
+    // install-only with no API destination.
+    let pages = "https://lode-org.github.io/readcon-db/";
+    let docsrs = "https://docs.rs/readcon-db";
+    for (label, text) in [
+        ("faq.org", read("faq.org")),
+        ("migrate.org", read("migrate.org")),
+        ("getting-started.org", read("getting-started.org")),
+        ("index.org", read("index.org")),
+        ("readme_src.org", read_repo("readme_src.org")),
+        ("docs/source/conf.py", read_repo("docs/source/conf.py")),
+    ] {
+        assert!(
+            text.contains("readcon-db") || text.contains("readcon_db"),
+            "{label} must mention the campaign package"
+        );
+        assert!(
+            text.contains(pages) || text.contains("lode-org.github.io/readcon-db"),
+            "{label} must link hosted readcon-db docs"
+        );
+        assert!(
+            text.contains(docsrs) || text.contains("docs.rs/readcon-db"),
+            "{label} must link docs.rs readcon-db API"
+        );
+    }
+    let conf = read_repo("docs/source/conf.py");
+    assert!(
+        conf.contains("readcon-db Rust API") || conf.contains("docs.rs/readcon-db"),
+        "Sphinx nav must surface readcon-db Rust API"
+    );
+}
+
+#[test]
 fn faq_speed_cites_con_peers() {
     let t = read("faq.org");
     assert!(t.contains("Cachegrind") && t.contains("compare_readers"));
