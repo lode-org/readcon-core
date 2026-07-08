@@ -26,24 +26,25 @@
 #+end_export
 
 
-* Objective
+* Scope
 
-~readcon-core~ implements the CON / convel specification for eOn and LODE:
-read and write frames with cell, constraints, =atom_id=, optional velocities
-and forces, and versioned JSON metadata, through one hourglass C ABI
-(=rkr_*=) used from Fortran, C, C++, Python, Julia, and Rust.
+readcon-core implements CON / convel for eOn and LODE: cell, type-grouped
+atoms, per-direction fixed masks, =atom_id=, optional velocity / force
+sections, JSON line-2 metadata. One =rkr_*= hourglass ABI for Fortran, C,
+C++, Python, Julia, and Rust.
 
 | Task | Path |
 |------+------|
-| Read or write a CON checkpoint | =readcon= / =readcon-core= |
-| Link from Fortran / C / C++ | Hourglass ABI; default lean features |
-| Index many trajectories | =readcon-db= (CON text authoritative) |
-| Import a foreign structure file | Optional chemfiles build → CON |
-| Hand off to an ASE calculator | Optional =to_ase= / =from_ase= |
+| Read / write CON | =readcon= / =readcon-core= |
+| Link from Fortran / C / C++ | Hourglass ABI; lean features by default |
+| Many trajectories, multi-reader | =readcon-db= (CON text authoritative) |
+| Foreign structure file → CON | Optional chemfiles build |
+| ASE calculator | Optional =to_ase= / =from_ase= |
 
-Design goals and layout: [[file:faq.org][faq.org]] (*Objective*). Spec:
-[[file:spec.org][spec.org]]. Architecture: [[file:architecture.org][architecture.org]].
-Measurements: [[file:benchmarks.org][benchmarks.org]].
+Why CON looks this way: [[file:faq.org][faq.org]], [[file:evolution.org][evolution.org]].
+Rules: [[file:spec.org][spec.org]]. Layout of the library:
+[[file:architecture.org][architecture.org]]. Numbers:
+[[file:benchmarks.org][benchmarks.org]].
 
 * Install
 
