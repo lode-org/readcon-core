@@ -141,6 +141,10 @@ fn index_and_readme_src() {
     let index = read("index.org");
     assert!(index.contains("CON") || index.contains(".con"));
     assert!(index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language"));
+    assert!(
+        index.contains("Put CON") || index.contains("put CON") || index.contains("everywhere"),
+        "index must state CON-everywhere ambition"
+    );
     assert!(!index.contains("Related work (H5MD"));
     assert_no_ai_tells(&index, "index.org");
 
@@ -153,13 +157,12 @@ fn index_and_readme_src() {
         "readme must reflect code features beyond bare parse"
     );
     assert!(
-        readme.contains("rgpot")
-            || readme.contains("campaign")
-            || readme.contains("Consumers")
-            || readme.contains("saddle"),
-        "readme must name multi-consumer stack"
+        readme.contains("everywhere")
+            || readme.contains("put CON")
+            || readme.contains("spreading CON")
+            || readme.contains("Role in spreading"),
+        "readme must state CON expansion ambition"
     );
-    // do not orbit H5MD/XTC on the front page
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));
     assert_no_ai_tells(&readme, "readme_src.org");

@@ -27,12 +27,11 @@ Getting started
 Scope
 -----
 
-readcon-core implements CON / convel (spec v2–v3): cell, type-grouped atoms,
-per-direction fixed masks, ``atom_id``, velocity / force sections, JSON
-metadata. Hourglass ``rkr_*`` ABI for Fortran, C, C++, Python, Julia, and Rust;
-optional chemfiles import; DLPack / metatensor export; ``index_proj`` for
-campaign stores. One on-disk contract for optimizers, drivers, analysis, and
-ML hand-off.
+readcon-core is how you put CON into a codebase: implement CON / convel (spec
+v2–v3), link the hourglass ``rkr_*`` ABI from Fortran / C / C++ / Python / Julia
+/ Rust, pull foreign structures in via chemfiles, hand tensors out via DLPack
+/ metatensor, index campaigns with ``index_proj`` + ``readcon-db``. Same on-disk
+file everywhere.
 
 .. table::
 
