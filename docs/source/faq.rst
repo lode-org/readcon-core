@@ -145,38 +145,25 @@ The two formats complement each other. readcon-core handles the
 How fast is readcon-core?
 -------------------------
 
-Speed is a product claim only when tied to **in-repo harnesses**:
+Three in-repo measurements:
 
 1. **CI Cachegrind** (``examples/cachegrind_harness.rs`` →
-   ``docs/source/_generated/cachegrind_results.*``) — instruction-reference
-   counts for fixed parse / skip / write / float-parse scenarios. Stable
-   enough to diff commits; this is the regression authority, not wall-clock
-   on shared runners.
+   ``docs/source/_generated/cachegrind_results.*``). Instruction-reference
+   counts for fixed parse / skip / write / float-parse scenarios. Commit-stable
+   regression metric when wall-clock on shared runners is noisy.
 
 2. **Equal-geometry multi-frame** (``benches/multiformat_traj.py``, artifact
-   ``benches/results/multiformat_traj_terra.json``) — same geometry, full parse
-   of all frames, median of repeats vs ASE CON / XYZ peers and chemfiles XYZ.
-   On the committed 218-atom × 100-frame run, readcon CON is about an order of
-   magnitude faster than ASE CON and ~1.5× vs chemfiles XYZ **on that host**.
-   Re-run the harness on your machine rather than quoting µs as universal.
+   ``benches/results/multiformat_traj_terra.json``). Same geometry, full parse of
+   all frames, median of repeats vs ASE CON / XYZ and chemfiles XYZ. On the
+   committed 218-atom × 100-frame run, readcon CON is about 12× ASE CON and
+   about 1.5× chemfiles XYZ on that host; re-run the script for your machine.
 
-3. **CON vs C sscanf** (``benches/compare_readers.py``) — engineering ordering
-   against an eOn-style C reader on the same text; see benchmarks for the
-   labeled illustrative table and methodology caveats.
+3. **CON vs C sscanf** (``benches/compare_readers.py``). Ordering against an
+   eOn-style C reader on the same text; see :doc:`benchmarks`.
 
-Implementation reasons the hot path is competitive (not substitute metrics):
-
-- **fast-float2** on coordinate / velocity / force lines
-
-- **mmap** for large trajectories; ``read_to_string`` under a size threshold
-
-- **Arc<str>** symbols (one allocation per type, not per atom)
-
-- **Zero-copy line views** and ``forward()`` / ``forward_fast`` skip without
-  materializing atoms
-
-We do **not** promote toy 4-atom atoms/s tables or unmeasured Criterion µs
-rankings as library headlines. Full methodology: :doc:`benchmarks`.
+Hot path: **fast-float2** on atom lines, **mmap** for large trajectories,
+``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /
+``forward_fast`` skip without materializing atoms.
 
 What is the sections mechanism?
 -------------------------------
@@ -193,12 +180,12 @@ and their order:
 
     {"con_spec_version":2,"sections":["velocities","forces"]}
 
-This is more robust than the legacy approach (detecting velocities by
-peeking for a blank separator) because:
+Compared with the legacy approach (detecting velocities by peeking for a blank
+separator):
 
-- The parser knows exactly what to expect
+- Declared sections fix what the reader must consume
 
-- New section types can be added without ambiguity
+- New section types need no positional guesswork
 
 - Section order is explicit
 
@@ -401,20 +388,9 @@ dialects (minimal XYZ or package-private logs) per language.
 How does CON + readcon-db compare to XYZ and ASE I/O?
 -----------------------------------------------------
 
-For interchange that must preserve CON sections and for multi-reader campaign
-screening with CON as on-disk authority, versioned CON with the hourglass
-implementation and ``readcon-db`` is the **state-of-the-art stack this project implements** and measures against ASE XYZ/CON under equal-geometry protocols
-(:doc:`benchmarks`). ASE remains appropriate for
-calculators and analysis; XYZ remains appropriate for minimal position dumps.
-Continuous-MD internal binary formats inside a given engine serve a different
-role (high-density dynamics I/O). Legacy readCon is superseded for multi-language
-fidelity, validation, and measured parse discipline.
-
-Is readcon-core "SOTA"?
------------------------
-
-Yes **within domain**: definitive CON / convel interchange for eOn / LODE-style
-multi-language pipelines—fidelity + hourglass ABI + optional chemfiles ingress +
-campaign store with CON authoritative. It is not a claim of fastest structure
-I/O across all of computational chemistry, nor a replacement for GROMACS/LAMMPS
-binary trajectories.
+CON + hourglass ABI + ``readcon-db`` preserves CON sections and multi-reader
+campaign indexes with CON text as on-disk authority. Equal-geometry parse
+comparisons against ASE CON / XYZ live in :doc:`benchmarks`.
+ASE adapters still suit calculators and interactive analysis. XYZ suits
+position-only dumps. Engine binary trajectories (XTC/TRR/DCD) suit continuous
+MD density.

@@ -4,26 +4,22 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">Definitive CON / convel interchange for eOn and LODE — lossless fidelity, hourglass multi-language ABI, measured parse path, optional chemfiles ingress.</p>
+     <p class="rc-hero-tagline">Versioned CON / convel for eOn and LODE: multi-language hourglass ABI, full section fidelity, optional chemfiles ingress.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-State-of-the-art *within CON interchange*: the library owns versioned
-``.con`` / ``.convel`` read and write for eOn / LODE pipelines so optimizers
+Reads and writes versioned ``.con`` / ``.convel`` for eOn / LODE so optimizers
 and drivers in Rust, C, C++, Python, Julia, and Fortran share one semantics
 surface. Spec-v2 JSON metadata, three-axis constraints, forces / velocities,
-and ``atom_id`` round-trip without fidelity loss. Optional chemfiles ingress
-turns XYZ / PDB / GRO into CON without a second dialect. Campaign corpora use
-companion ``readcon-db`` with UTF-8 CON text authoritative.
+and ``atom_id`` round-trip. Chemfiles maps XYZ / PDB / GRO into CON.
+Campaign corpora use companion ``readcon-db`` with UTF-8 CON text as authority.
 
-*Speed is first-class*, but only with reproducible harnesses: CI Cachegrind
-I-refs and equal-geometry multi-frame comparisons (ASE CON, C sscanf peers)—
-not toy atoms/s headlines. Scope stops at CON / text interchange; engine-native
-binary MD formats remain complementary. Detail: :doc:`benchmarks`,
-:doc:`architecture`, :doc:`faq`.
+Parse path: CI Cachegrind I-refs and equal-geometry multi-frame comparisons
+(ASE CON, C sscanf peers). See :doc:`benchmarks`, :doc:`architecture`,
+:doc:`faq`.
 
 .. important::
 

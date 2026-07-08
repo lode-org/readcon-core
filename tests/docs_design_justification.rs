@@ -1,7 +1,4 @@
-//! Structural check: design rationale present in user docs (CPC-aligned substance).
-//!
-//! Guards positioning + honest speed language: definitive CON interchange,
-//! hourglass ABI, Cachegrind / equal-geometry harnesses only for product claims.
+//! Structural check: design rationale and positioning substance in user docs.
 
 use std::fs;
 use std::path::PathBuf;
@@ -24,22 +21,41 @@ fn read_repo(rel: &str) -> String {
     fs::read_to_string(&p).unwrap_or_else(|e| panic!("missing {}: {e}", p.display()))
 }
 
+/// AI-style defensive scope disclaimers that belong nowhere in product docs.
+fn assert_no_defensive_tells(t: &str, file: &str) {
+    let banned = [
+        "not \"fastest",
+        "not 'fastest",
+        "not a claim of fastest",
+        "not a replacement for",
+        "Not “fastest",
+        "Not \"fastest",
+        "all of computational chemistry",
+        "generic MD-format supremacy",
+        "within domain",
+        "domain-scoped",
+        "Speed (honest)",
+        "Forbidden as",
+        "past mistake",
+        "No universal ranking is intended",
+        "sit politely",
+    ];
+    for b in banned {
+        assert!(
+            !t.contains(b),
+            "{file} still contains defensive/AI tell: {b:?}"
+        );
+    }
+}
+
 #[test]
 fn architecture_design_rationale() {
     let t = read("architecture.org");
     assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("rkr_"));
     assert!(t.contains("readcon-db"));
     assert!(t.contains("authoritative") || t.contains("authority") || t.contains("CON text"));
-    assert!(
-        t.contains("definitive CON") || t.contains("interchange layer"),
-        "architecture must state CON interchange positioning"
-    );
-    assert!(
-        t.contains("Cachegrind") || t.contains("equal-geometry"),
-        "architecture must point speed claims at real harnesses"
-    );
-    assert!(!t.contains("No universal ranking is intended"));
-    assert!(!t.contains("sit politely"));
+    assert!(t.contains("Cachegrind") || t.contains("equal-geometry"));
+    assert_no_defensive_tells(&t, "architecture.org");
 }
 
 #[test]
@@ -55,11 +71,11 @@ fn faq_hourglass_and_con_vs_xyz() {
     assert!(t.contains("hourglass") || t.contains("Hourglass") || t.contains("rkr_"));
     assert!(t.contains("CON vs XYZ") || t.contains("XYZ / extXYZ"));
     assert!(t.contains("authoritative") || t.contains("Authoritative") || t.contains("UTF-8 CON"));
-    assert!(!t.contains("No universal ranking is intended"));
+    assert_no_defensive_tells(&t, "faq.org");
 }
 
 #[test]
-fn faq_speed_cites_harnesses_not_vanity() {
+fn faq_speed_cites_harnesses() {
     let t = read("faq.org");
     assert!(
         t.contains("Cachegrind") && t.contains("equal-geometry"),
@@ -74,9 +90,10 @@ fn faq_speed_cites_harnesses_not_vanity() {
         "FAQ must not headline unmeasured pure-Python 10–30× claims"
     );
     assert!(
-        t.contains("SOTA") || t.contains("state-of-the-art") || t.contains("state of the art"),
-        "FAQ must state domain-scoped SOTA / definitive interchange role"
+        !t.contains("Is readcon-core \"SOTA\"") && !t.contains("Is readcon-core “SOTA”"),
+        "FAQ must not carry a self-congratulatory SOTA Q&A"
     );
+    assert_no_defensive_tells(&t, "faq.org");
 }
 
 #[test]
@@ -84,13 +101,14 @@ fn getting_started_maps_when_to_use() {
     let t = read("getting-started.org");
     assert!(t.contains("When to use what") || t.contains("CON via"));
     assert!(
-        t.contains("definitive CON") || t.contains("interchange layer"),
-        "getting-started must position CON interchange"
+        t.contains("hourglass") || t.contains("rkr_") || t.contains("interchange"),
+        "getting-started must position CON interchange / hourglass ABI"
     );
     assert!(
         t.contains("Cachegrind") || t.contains("equal-geometry") || t.contains("benchmarks"),
         "getting-started must point at measured speed evidence"
     );
+    assert_no_defensive_tells(&t, "getting-started.org");
 }
 
 #[test]
@@ -100,54 +118,49 @@ fn faq_why_another_format_still_present() {
 }
 
 #[test]
-fn benchmarks_product_claim_hierarchy() {
+fn benchmarks_measurement_hierarchy() {
     let t = read("benchmarks.org");
     assert!(
-        t.contains("What counts as a product claim") || t.contains("product claim"),
-        "benchmarks must define product-claim hierarchy"
+        t.contains("Measurement hierarchy") || t.contains("Cachegrind"),
+        "benchmarks must lead with measurement hierarchy"
     );
-    assert!(t.contains("Cachegrind"));
     assert!(t.contains("equal-geometry") || t.contains("multiformat_traj"));
     assert!(
-        t.contains("not headlines")
-            || t.contains("not headline")
-            || t.contains("Illustrative Criterion")
-            || t.contains("illustrative / historical"),
-        "Criterion / toy tables must be demoted from headlines"
+        t.contains("Criterion microbenches") || t.contains("local latency"),
+        "Criterion tables must sit under local-latency framing"
     );
     assert!(
         !t.contains("2.7M atoms/s"),
         "must not promote toy 4-atom atoms/s as a bare product number"
     );
+    assert_no_defensive_tells(&t, "benchmarks.org");
 }
 
 #[test]
 fn index_and_readme_src_positioning() {
     let index = read("index.org");
     assert!(
-        index.contains("Definitive CON") || index.contains("definitive CON"),
-        "index hero/intro must state definitive CON interchange"
+        index.contains("hourglass") || index.contains("CON / convel") || index.contains(".con"),
+        "index must state CON / multi-language role"
     );
     assert!(
         index.contains("Cachegrind") || index.contains("equal-geometry"),
-        "index must mention honest speed harnesses"
+        "index must mention measurement harnesses"
     );
+    assert_no_defensive_tells(&index, "index.org");
 
     let readme = read_repo("readme_src.org");
-    assert!(
-        readme.contains("definitive CON") || readme.contains("interchange layer"),
-        "readme_src must state definitive CON interchange positioning"
-    );
-    assert!(
-        readme.contains("Cachegrind") && readme.contains("equal-geometry"),
-        "readme_src speed section must cite Cachegrind and equal-geometry"
-    );
-    assert!(
-        readme.contains("Lossless CON") || readme.contains("lossless"),
-        "readme_src must list lossless round-trip differentiator"
-    );
     assert!(
         readme.contains("hourglass") || readme.contains("Hourglass") || readme.contains("rkr_"),
         "readme_src must mention hourglass multi-language ABI"
     );
+    assert!(
+        readme.contains("Cachegrind") && (readme.contains("equal-geometry") || readme.contains("multiformat_traj") || readme.contains("compare_readers")),
+        "readme_src speed section must cite Cachegrind and a peer harness"
+    );
+    assert!(
+        readme.contains("Round-trip") || readme.contains("round-trip") || readme.contains("atom_id"),
+        "readme_src must state round-trip / atom_id fidelity"
+    );
+    assert_no_defensive_tells(&readme, "readme_src.org");
 }
