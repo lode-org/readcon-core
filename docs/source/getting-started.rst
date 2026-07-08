@@ -28,8 +28,8 @@ Getting started
 Scope
 -----
 
-readcon-core implements CON / convel for eOn and LODE: cell, type-grouped
-atoms, per-direction fixed masks, ``atom_id``, optional velocity / force
+readcon-core implements the CON / convel format used by eOn and LODE: cell,
+type-grouped atoms, per-direction fixed masks, ``atom_id``, velocity / force
 sections, JSON line-2 metadata. One ``rkr_*`` hourglass ABI for Fortran, C,
 C++, Python, Julia, and Rust.
 

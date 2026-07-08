@@ -1,12 +1,15 @@
 * About
 
-~readcon-core~ reads and writes versioned =.con= / =.convel= for eOn and LODE.
+~readcon-core~ is the reference library for versioned =.con= / =.convel=: the
+format eOn and LODE use for atomic configurations in saddle, dimer, and NEB
+work.
 
-CON is a *deliberately small* LODE-centric format: type-grouped atom blocks,
-per-direction fixed masks, column-5 =atom_id= (pre-group index), optional
-velocity / force / energy sections, and JSON on line 2. One hourglass C ABI
-(=rkr_*=) exposes that contract to Rust, C, C++, Python, Julia, and Fortran.
-Campaign corpora live in [[https://github.com/lode-org/readcon-db][readcon-db]]
+CON puts a full checkpoint in one text file: cell and angles, type-grouped
+coordinates, per-direction fixed masks, column-5 =atom_id= (pre-group index),
+optional velocity / force / energy sections, and versioned JSON on line 2.
+One hourglass C ABI (=rkr_*=) gives Rust, C, C++, Python, Julia, and Fortran
+identical semantics. Campaign corpora use
+[[https://github.com/lode-org/readcon-db][readcon-db]]
 (=cargo add readcon-db=, =pip install readcon-db=,
 https://lode-org.github.io/readcon-db/); blobs stay CON text and always decode
 through this crate.

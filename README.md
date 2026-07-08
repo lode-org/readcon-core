@@ -1,31 +1,34 @@
 
 # Table of Contents
 
-1.  [About](#org1d84067)
-    1.  [Features](#org82e6ff9)
-    2.  [Install](#org758eda2)
-    3.  [Tutorial](#org6daba2e)
-    4.  [Design Decisions](#org67c682a)
-        1.  [FFI Layer](#org40539b9)
-    5.  [Specification](#org4e3b93a)
-        1.  [CON format](#org938d4ea)
-        2.  [convel format](#org9b22eb9)
-    6.  [Capabilities](#orgbe2a1dd)
-    7.  [Citation](#orgef72b2e)
-2.  [License](#org9e09ec3)
+1.  [About](#orgb91671e)
+    1.  [Features](#orgd81e84d)
+    2.  [Install](#org32c0272)
+    3.  [Tutorial](#orgc571c7a)
+    4.  [Design Decisions](#orgdb03f3e)
+        1.  [FFI Layer](#orgdc0d5f8)
+    5.  [Specification](#orgac33ca3)
+        1.  [CON format](#orge6c52ea)
+        2.  [convel format](#orgf0a2721)
+    6.  [Capabilities](#org2df9eb3)
+    7.  [Citation](#org9948f8e)
+2.  [License](#orge4dcba1)
 
 
-<a id="org1d84067"></a>
+<a id="orgb91671e"></a>
 
 # About
 
-`readcon-core` reads and writes versioned `.con` / `.convel` for eOn and LODE.
+`readcon-core` is the reference library for versioned `.con` / `.convel`: the
+format eOn and LODE use for atomic configurations in saddle, dimer, and NEB
+work.
 
-CON is a **deliberately small** LODE-centric format: type-grouped atom blocks,
-per-direction fixed masks, column-5 `atom_id` (pre-group index), optional
-velocity / force / energy sections, and JSON on line 2. One hourglass C ABI
-(`rkr_*`) exposes that contract to Rust, C, C++, Python, Julia, and Fortran.
-Campaign corpora live in [readcon-db](https://github.com/lode-org/readcon-db)
+CON puts a full checkpoint in one text file: cell and angles, type-grouped
+coordinates, per-direction fixed masks, column-5 `atom_id` (pre-group index),
+optional velocity / force / energy sections, and versioned JSON on line 2.
+One hourglass C ABI (`rkr_*`) gives Rust, C, C++, Python, Julia, and Fortran
+identical semantics. Campaign corpora use
+[readcon-db](https://github.com/lode-org/readcon-db)
 (`cargo add readcon-db`, `pip install readcon-db`,
 <https://lode-org.github.io/readcon-db/>); blobs stay CON text and always decode
 through this crate.
@@ -73,7 +76,7 @@ via `benches/compare_readers.py`. Methodology:
 [docs/orgmode/spec.org](docs/orgmode/spec.md).
 
 
-<a id="org82e6ff9"></a>
+<a id="orgd81e84d"></a>
 
 ## Features
 
@@ -89,7 +92,7 @@ via `benches/compare_readers.py`. Methodology:
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org758eda2"></a>
+<a id="org32c0272"></a>
 
 ## Install
 
@@ -138,7 +141,7 @@ via `benches/compare_readers.py`. Methodology:
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
 
 
-<a id="org6daba2e"></a>
+<a id="orgc571c7a"></a>
 
 ## Tutorial
 
@@ -189,7 +192,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
     }
 
 
-<a id="org67c682a"></a>
+<a id="orgdb03f3e"></a>
 
 ## Design Decisions
 
@@ -197,7 +200,7 @@ The example above iterates lazily over every frame, prints atom counts plus the 
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org40539b9"></a>
+<a id="orgdc0d5f8"></a>
 
 ### FFI Layer
 
@@ -211,14 +214,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org4e3b93a"></a>
+<a id="orgac33ca3"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org938d4ea"></a>
+<a id="orge6c52ea"></a>
 
 ### CON format
 
@@ -229,7 +232,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.md) (or the [published HTML build]
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org9b22eb9"></a>
+<a id="orgf0a2721"></a>
 
 ### convel format
 
@@ -239,7 +242,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="orgbe2a1dd"></a>
+<a id="org2df9eb3"></a>
 
 ## Capabilities
 
@@ -293,14 +296,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon). ASE may use `ase.io.eon` or the optional adapters.
 
 
-<a id="orgef72b2e"></a>
+<a id="org9948f8e"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org9e09ec3"></a>
+<a id="orge4dcba1"></a>
 
 # License
 

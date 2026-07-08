@@ -4,17 +4,18 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel I/O for eOn and LODE: type-grouped frames, constraints, forces, hourglass multi-language ABI.</p>
+     <p class="rc-hero-tagline">CON / convel: full checkpoints for eOn and LODE. Constraints, forces, atom identity, multi-language ABI.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-Rust library for reading and writing ``.con`` / ``.convel`` used by eOn and
-LODE. Lazy iterators, JSON line-2 metadata, C / C++ / Python / Julia / Fortran
-bindings. Chemfiles (optional) lands foreign structures in CON; this crate
-keeps CON fidelity (``atom_id``, sections, writers, FFI).
+Reference library for ``.con`` / ``.convel``: versioned frames with cell,
+type-grouped coordinates, per-direction constraints, ``atom_id``, optional
+velocities and forces, and JSON metadata. Lazy iterators; C / C++ / Python /
+Julia / Fortran via one hourglass ABI. Optional chemfiles import lands foreign
+structures in CON without weakening the on-disk contract.
 
 Spec: :doc:`spec`. Measurements: :doc:`benchmarks`. Start: :doc:`getting-started`.
 
