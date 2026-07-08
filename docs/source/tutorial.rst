@@ -7,10 +7,12 @@ Tutorial — your first CON checkpoint
 
    Diátaxis *tutorial* (learning-oriented). **Source of truth is this Org file.**
 
-   CI (``.github/workflows/ci_python.yml``, lean matrix) runs
-   ``scripts/run-tutorial-core.sh``: Emacs tangles the Python blocks into
-   ``docs/notebooks/tutorial_core.py``, then executes that script against
-   ``resources/test`` fixtures. Do not hand-edit the tangled ``.py``.
+   CI (``.github/workflows/ci_python.yml``, lean + chemfiles matrices) runs
+   ``scripts/run-tutorial-core.sh``: Emacs ``org-babel-tangle`` into
+   ``docs/notebooks/tutorial_core.py``, **fails if the committed tangle drifts**,
+   then runs that file with ``python3`` against ``resources/test`` fixtures.
+   Do not hand-edit the tangled ``.py``; re-tangle with
+   ``READCON_TANGLE_UPDATE=1 scripts/run-tutorial-core.sh`` and commit.
 
    Multi-language recipes: :doc:`howto`. Format conversion: :doc:`chemfiles-tutorial`.
    API tables: :doc:`bindings`. Format rules: :doc:`spec`.
@@ -19,9 +21,10 @@ In this tutorial we open a real CON trajectory from the repository fixtures,
 inspect cell and ``atom_id`` data, write a round-trip file, then build a small
 checkpoint with total energy.
 
-We use **Python** and the package ``readcon`` only (no chemfiles, no ASE). Blocks
-below are executable via Org Babel (session ``readcon-core-tut``) or the CI
-script. Paths are relative to the repository root.
+We use **Python** and the package ``readcon`` only (no chemfiles, no ASE).
+Paths are relative to the repository root. Locally you may ``C-c C-c`` blocks in
+Emacs; ****CI does not use session execute as a second path**** — it only runs the
+tangled ``.py`` after a drift check so session vs tangle cannot disagree silently.
 
 What we will do
 ---------------
@@ -209,9 +212,9 @@ Run from the shell
    # after: maturin develop --features python  (or pip install readcon)
    scripts/run-tutorial-core.sh
 
-Emacs: open this file and ``C-c C-c`` each Python block (session
-``readcon-core-tut``). CI tangles to ``docs/notebooks/tutorial_core.py`` then runs
-that file — do not hand-edit the tangled ``.py``.
+Emacs: open this file and ``C-c C-c`` each Python block for interactive use.
+CI and ``scripts/run-tutorial-core.sh`` re-tangle, refuse drift, and run
+``docs/notebooks/tutorial_core.py`` only — do not hand-edit the tangled ``.py``.
 
 Next steps
 ----------

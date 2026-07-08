@@ -191,6 +191,20 @@ fn tutorial_runners_exist_in_repo() {
         wf.contains("emacs-nox") || wf.contains("emacs"),
         "ci_python.yml must install emacs for org-babel-tangle"
     );
+    let core_sh = fs::read_to_string(root.join("scripts/run-tutorial-core.sh")).unwrap();
+    assert!(
+        core_sh.contains("tangle drift") && !core_sh.contains("falling back"),
+        "run-tutorial-core.sh must drift-check and must not soft-fallback"
+    );
+    let cf_sh = fs::read_to_string(root.join("scripts/run-chemfiles-notebook.sh")).unwrap();
+    assert!(
+        cf_sh.contains("tangle drift") && !cf_sh.contains("falling back"),
+        "run-chemfiles-notebook.sh must drift-check and must not soft-fallback"
+    );
+    assert!(
+        !cf_sh.contains("trying tangled script as fallback"),
+        "run-chemfiles-notebook.sh must not silently re-run tangled script after Babel miss"
+    );
 }
 
 #[test]
