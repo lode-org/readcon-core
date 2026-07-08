@@ -74,7 +74,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | Goal | Page | Kind |
 |------+------+------|
 | Learn CON I/O end-to-end | [[file:tutorial.org][tutorial]] | Tutorial |
-| Migrate foreign formats → CON | [[file:migrate.org][migrate]] | How-to |
+| Migrate foreign formats → CON (+ db, selection) | [[file:migrate.org][migrate]] | How-to |
 | Task recipes by language | [[file:howto.org][howto]] | How-to |
 | XYZ / PDB / GRO → CON | [[file:chemfiles-tutorial.org][chemfiles-tutorial]] | Tutorial |
 | Batch convert / C conversion API | [[file:chemfiles-howto.org][chemfiles-howto]] | How-to |

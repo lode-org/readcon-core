@@ -343,23 +343,25 @@ Migration task guide: `migrate.org <migrate.rst>`_ (``readcon-core convert``,
 
 .. table::
 
-    +--------------------------------------+-------------------------------------------------------------+
-    | Component                            | Job                                                         |
-    +======================================+=============================================================+
-    | CON on disk                          | The format                                                  |
-    +--------------------------------------+-------------------------------------------------------------+
-    | ``readcon-core``                     | Spec + hourglass ABI + chemfiles in + DLPack/metatensor out |
-    +--------------------------------------+-------------------------------------------------------------+
-    | ``readcon-db``                       | Campaigns still indexed as CON blobs                        |
-    +--------------------------------------+-------------------------------------------------------------+
-    | Chemfiles                            | Land foreign structures **as** CON                          |
-    +--------------------------------------+-------------------------------------------------------------+
-    | ASE adapters                         | Calculators without abandoning CON interchange              |
-    +--------------------------------------+-------------------------------------------------------------+
-    | rgpot / eOn / rgpycrumbs / amsel / … | Consumers of the same file                                  |
-    +--------------------------------------+-------------------------------------------------------------+
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | Component                                                                                             | Job                                                                     |
+    +=======================================================================================================+=========================================================================+
+    | CON on disk                                                                                           | The format                                                              |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | ``readcon-core``                                                                                      | Spec + hourglass ABI + chemfiles in + selection + DLPack/metatensor out |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | ``readcon-db``                                                                                        | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader  |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | Chemfiles                                                                                             | Land foreign structures **as** CON                                      |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | ASE adapters                                                                                          | Calculators without abandoning CON interchange                          |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ | Plotting and analysis on CON checkpoints                                |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
+    | rgpot / eOn / amsel / …                                                                               | Optimizers and potentials on the same file                              |
+    +-------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------+
 
-One on-disk format. Every language. No private dialects.
+One on-disk format. Every language. Campaigns, selection, and plotting share it.
 
 Are ASE adapters the primary API?
 ---------------------------------
@@ -379,7 +381,11 @@ Why is the campaign store a separate package?
 ---------------------------------------------
 
 ``readcon-core`` is the shared decoder/writer. ``readcon-db`` owns LMDB indexes and
-SWMR campaign access.
+SWMR campaign access. That split is a **migration benefit**: once structures are
+CON text, the same files plug into campaign query (energy / formula / section
+indexes, dedup) without rewriting the optimizer or potential. Install
+``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``);
+docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
 
 Why an hourglass C ABI?
 -----------------------

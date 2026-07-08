@@ -292,13 +292,14 @@ Migration task guide: [[file:migrate.org][migrate.org]] (=readcon-core convert=,
 | Component | Job |
 |-----------+-----|
 | CON on disk | The format |
-| =readcon-core= | Spec + hourglass ABI + chemfiles in + DLPack/metatensor out |
-| =readcon-db= | Campaigns still indexed as CON blobs |
+| =readcon-core= | Spec + hourglass ABI + chemfiles in + selection + DLPack/metatensor out |
+| =readcon-db= | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader |
 | Chemfiles | Land foreign structures *as* CON |
 | ASE adapters | Calculators without abandoning CON interchange |
-| rgpot / eOn / rgpycrumbs / amsel / … | Consumers of the same file |
+| [[https://chemparseplot.rgoswami.me][chemparseplot]] / [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] | Plotting and analysis on CON checkpoints |
+| rgpot / eOn / amsel / … | Optimizers and potentials on the same file |
 
-One on-disk format. Every language. No private dialects.
+One on-disk format. Every language. Campaigns, selection, and plotting share it.
 
 * Are ASE adapters the primary API?
 
@@ -315,7 +316,11 @@ extract and device hand-off and are discardable or ephemeral.
 * Why is the campaign store a separate package?
 
 =readcon-core= is the shared decoder/writer. =readcon-db= owns LMDB indexes and
-SWMR campaign access.
+SWMR campaign access. That split is a *migration benefit*: once structures are
+CON text, the same files plug into campaign query (energy / formula / section
+indexes, dedup) without rewriting the optimizer or potential. Install
+=readcon-db= separately (=cargo add readcon-db=, =pip install readcon-db=);
+docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
 
 * Why an hourglass C ABI?
 
