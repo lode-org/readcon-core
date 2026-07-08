@@ -68,18 +68,31 @@ counts or selected frames are needed (see Cachegrind =forward_*= scenarios).
 
 * Equal-geometry multi-frame (=multiformat_traj.py=)
 
-Secondary wall-clock check on one geometry against other ASCII structure
-readers (ASE CON among them). Artifact:
-=benches/results/multiformat_traj_terra.json=. Prefer the CON peer table above
-(=compare_readers.py=) for CON-reader comparisons; re-run multiformat for
-cross-format wall times.
+Same atoms and frame count; peers read XYZ / extXYZ / CON as written from the
+geometry. Proves the hot path is not a CON-only parlor trick: *ASE plain XYZ is
+slower than readcon CON* on the same host.
 
 #+begin_src shell
-uv run --with ase --with numpy python benches/multiformat_traj.py
+python benches/multiformat_traj.py --fixtures cuh2 --ladder 100 --repeats 5 \
+  --out benches/results/multiformat_traj_terra_live.json
 #+end_src
 
-Pareto / throughput SVGs use measured points from that JSON plus
-=compare_readers.py=; ASE CON is labeled CON.
+Live snapshot (=rgam5terra= 2026-07-08, readcon 0.14.0, ASE 3.29.0, median of 5,
+100×218 atoms from =cuh2.con=):
+
+| Reader | Time (ms) | vs readcon |
+|--------------------+-----------+------------|
+| *readcon CON* | *2.55* | 1.0× |
+| ASE plain XYZ | 26.7 | 10.5× slower |
+| ASE extXYZ | 26.8 | 10.5× slower |
+| ASE CON | 30.5 | 12.0× slower |
+
+Artifact: =benches/results/multiformat_traj_terra_live.json= (and older
+=multiformat_traj_terra.json=). CON-reader ordering vs C sscanf:
+=compare_readers.py= table above.
+
+#+CAPTION: Feature coverage vs parse speed (measured points; see JSON)
+[[file:img/pareto_features_vs_speed.svg]]
 
 * Public API model and hot path (what the code does)
 

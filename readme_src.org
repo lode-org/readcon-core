@@ -58,7 +58,7 @@ a slow ASCII tax.
 - *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 - *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader)
 - *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
-- *Speed:* on =rgam5terra= 2026-07-08, =benches/compare_readers.py= 100×218 CON: readcon file path 3.3 ms vs ASE =ase.io.eon= 30.6 ms (9.2×) and eOn-style C sscanf 7.3 ms (2.2×); CI Cachegrind tracks I-refs (see [[file:docs/orgmode/benchmarks.org][benchmarks]])
+- *Speed:* equal-geometry on =rgam5terra= 2026-07-08 (=multiformat_traj.py=, 100×218): readcon CON *2.55 ms* vs ASE plain XYZ *26.7 ms* (10.5×) and ASE CON 30.5 ms (12×); CON peers (=compare_readers.py=): 3.3 ms vs ASE CON 30.6 ms (9.2×) and C sscanf 7.3 ms (2.2×). CI Cachegrind: [[file:docs/orgmode/benchmarks.org][benchmarks]]
 
 #+begin_src shell
 # foreign → CON (needs --features chemfiles)
