@@ -30,16 +30,15 @@
 #+end_export
 
 
-CON is a complete checkpoint format for eOn / LODE (typed blocks, fixed
-flags, velocities / forces / energies, JSON line-2 metadata). Structures
-still often arrive from elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other
-chemfiles-readable layouts.
+CON is a complete checkpoint format (typed blocks, fixed flags, velocities /
+forces / energies, JSON line-2 metadata). Structures still often arrive from
+elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other chemfiles-readable layouts.
 
 Rather than reimplement every reader in readcon-core, v0.13 uses *chemfiles
 as the ingress router*: chemfiles owns format diversity; readcon-core owns
-*CON fidelity* (atom_id, sections, writer, FFI, NEB-friendly builders). The
-job is to *land foreign trajectories in CON* for eOn, amsel, and CON-native
-tools.
+*CON fidelity* (atom_id, sections, writer, FFI, multi-language builders). The
+job is to *land foreign trajectories in CON* for every CON-native consumer
+(eOn, amsel, LODE tooling, campaign stores, and the rest).
 
 * Why is chemfiles optional (Cargo feature + two PyPI names)?
 

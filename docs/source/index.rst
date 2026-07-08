@@ -4,7 +4,7 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel: full checkpoints for eOn and LODE. Constraints, forces, atom identity, multi-language ABI.</p>
+     <p class="rc-hero-tagline">CON / convel checkpoints: constraints, forces, atom identity, multi-language hourglass ABI.</p>
    </div>
 
 ================
@@ -13,9 +13,10 @@
 
 Reference library for ``.con`` / ``.convel``: versioned frames with cell,
 type-grouped coordinates, per-direction constraints, ``atom_id``, optional
-velocities and forces, and JSON metadata. Lazy iterators; C / C++ / Python /
-Julia / Fortran via one hourglass ABI. Optional chemfiles import lands foreign
-structures in CON without weakening the on-disk contract.
+velocities and forces, and JSON metadata. One hourglass C ABI for Fortran, C,
+C++, Python, Julia, and Rust so optimizers, drivers, and analysis share one
+file. Optional chemfiles import; ``readcon-db`` for multi-reader campaigns.
+Consumers include eOn, LODE, amsel, ASE adapters, and any CON-native tool.
 
 Spec: :doc:`spec`. Measurements: :doc:`benchmarks`. Start: :doc:`getting-started`.
 
@@ -31,11 +32,11 @@ Spec: :doc:`spec`. Measurements: :doc:`benchmarks`. Start: :doc:`getting-started
    :doc:`chemfiles-reference`
 
 .. figure:: /_static/figures/conversion-pipeline.svg
-   :alt: Convert XYZ PDB or GRO into CON for eOn and LODE
+   :alt: Convert XYZ PDB or GRO into a CON frame
    :align: center
    :width: 92%
 
-   *Conversion path* — common structure formats into CON for eOn / LODE.
+   *Conversion path* — common structure formats into CON.
 
 .. grid:: 1 1 2 2
    :gutter: 2

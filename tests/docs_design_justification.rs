@@ -63,7 +63,13 @@ fn architecture_design_rationale() {
     assert!(t.contains("readcon-db"));
     assert!(t.contains("authoritative") || t.contains("CON text") || t.contains("UTF-8 CON"));
     assert!(t.contains("benchmarks") || t.contains("Cachegrind"));
-    assert!(t.contains("eOn") || t.contains("transition-state") || t.contains("LODE"));
+    assert!(
+        t.contains("optimizer")
+            || t.contains("multi-language")
+            || t.contains("hourglass")
+            || t.contains("rkr_"),
+        "architecture must frame multi-code use, not a single package"
+    );
     assert_no_ai_tells(&t, "architecture.org");
 }
 
@@ -84,6 +90,14 @@ fn faq_con_contract() {
     assert!(
         t.contains("What CON is for") || t.contains("complete checkpoint"),
         "FAQ must state what CON is for in plain language"
+    );
+    assert!(
+        t.contains("multi-code")
+            || t.contains("multi-language")
+            || t.contains("any CON-native")
+            || t.contains("Consumers include")
+            || t.contains("any multi-code"),
+        "FAQ must present multi-consumer stack, not a single package"
     );
     assert!(t.contains("authoritative") || t.contains("UTF-8 CON") || t.contains("CON text"));
     assert!(!t.contains("When should I use CON vs XYZ"));
@@ -132,7 +146,12 @@ fn benchmarks_what_we_measure() {
 fn index_and_readme_src() {
     let index = read("index.org");
     assert!(index.contains("CON") || index.contains(".con"));
-    assert!(index.contains("hourglass") || index.contains("eOn") || index.contains("LODE"));
+    assert!(
+        index.contains("hourglass")
+            || index.contains("multi-language")
+            || index.contains("Consumers include"),
+        "index must present multi-consumer / multi-language stack"
+    );
     assert!(index.contains("spec") || index.contains("Spec") || index.contains(":doc:`spec`"));
     assert_no_ai_tells(&index, "index.org");
 
@@ -140,7 +159,14 @@ fn index_and_readme_src() {
     assert!(readme.contains("hourglass") || readme.contains("rkr_"));
     assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
     assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
-    assert!(readme.contains("eOn") || readme.contains("NEB") || readme.contains("checkpoint"));
+    assert!(readme.contains("NEB") || readme.contains("checkpoint") || readme.contains("saddle"));
+    assert!(
+        readme.contains("Consumers")
+            || readme.contains("any pipeline")
+            || readme.contains("multi-language")
+            || readme.contains("identical semantics"),
+        "readme must not frame the stack as only eOn/LODE"
+    );
     assert!(readme.contains("Chemfiles owns") || readme.contains("chemfiles"));
     assert_no_ai_tells(&readme, "readme_src.org");
 }

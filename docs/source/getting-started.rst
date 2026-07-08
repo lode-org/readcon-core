@@ -4,13 +4,12 @@ Getting started
 
 
 .. figure:: /_static/figures/conversion-pipeline.svg
-   :alt: XYZ, PDB, or GRO converted into a CON frame and written for eOn or LODE
+   :alt: XYZ, PDB, or GRO converted into a CON frame
    :align: center
    :width: 100%
 
-   *Format conversion* — common structure files become a CON frame, then a
-   ``.con`` for eOn / LODE (or any language binding). Needs the *with
-   conversions* install below.
+   *Format conversion* — common structure files become a CON frame for any
+   language binding. Needs the *with conversions* install below.
 
 .. figure:: /_static/figures/lean-vs-conversion.svg
    :alt: Default CON-only install versus install that also converts other formats
@@ -28,10 +27,10 @@ Getting started
 Scope
 -----
 
-readcon-core implements the CON / convel format used by eOn and LODE: cell,
-type-grouped atoms, per-direction fixed masks, ``atom_id``, velocity / force
-sections, JSON line-2 metadata. One ``rkr_*`` hourglass ABI for Fortran, C,
-C++, Python, Julia, and Rust.
+readcon-core implements CON / convel: cell, type-grouped atoms, per-direction
+fixed masks, ``atom_id``, velocity / force sections, JSON line-2 metadata. One
+``rkr_*`` hourglass ABI for Fortran, C, C++, Python, Julia, and Rust. That stack
+is the point: many languages and tools, one on-disk contract.
 
 .. table::
 

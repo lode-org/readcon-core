@@ -8,8 +8,9 @@ What CON is for
 ---------------
 
 CON is a versioned atomic-configuration format for transition-state search
-(saddle, dimer, NEB) as used in eOn and LODE. One frame is a complete
-checkpoint:
+(saddle, dimer, NEB) and any multi-code pipeline that needs a complete
+checkpoint on disk: constraints, forces, stable atom identity, and machine
+metadata in one file.
 
 .. table::
 
@@ -30,9 +31,11 @@ checkpoint:
     +--------------------------+--------------------------------------------------------------+
 
 Writers type-group atoms by element; ``atom_id`` recovers the original index
-through every round-trip. ``readcon-core`` implements the format behind one
-``rkr_*`` hourglass ABI so Fortran, C, C++, Python, Julia, and Rust share the
-same file. Spec: :doc:`spec`. Design history:
+through every round-trip. ``readcon-core`` is the multi-language implementation
+of that contract (hourglass ``rkr_*`` ABI: Fortran, C, C++, Python, Julia, Rust)
+so optimizers, drivers, campaign stores, and analysis codes share one format.
+eOn, LODE, amsel, and ASE are consumers; the stack exists for any CON-native
+workflow. Spec: :doc:`spec`. Design history:
 :doc:`evolution`.
 
 Is frame topology (``bonds``) required?
@@ -355,7 +358,9 @@ Pipeline roles
     | Continuous MD inside one engine        | That engine’s native trajectory format |
     +----------------------------------------+----------------------------------------+
 
-Chemfiles owns format diversity; readcon-core owns CON fidelity.
+The hourglass ABI, chemfiles ingress, campaign store, and language bindings
+exist so many codes share CON without forking the on-disk dialect. Chemfiles
+owns format diversity; readcon-core owns CON fidelity.
 
 Are ASE adapters the primary API?
 ---------------------------------

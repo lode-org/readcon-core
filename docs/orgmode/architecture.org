@@ -189,10 +189,11 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 :CUSTOM_ID: design-rationale
 :END:
 
-readcon-core is the hourglass library for CON / convel (eOn / LODE): Rust core,
-=rkr_*= C ABI, thin wrappers for C++, Python, Julia, and Fortran. Optimizers
-share per-direction constraints, forces / velocities, =atom_id=, and JSON
-metadata without putting a Python interpreter on the I/O path.
+readcon-core is the hourglass library for CON / convel: Rust core, =rkr_*= C
+ABI, thin wrappers for C++, Python, Julia, and Fortran. Optimizers, drivers,
+and analysis codes share per-direction constraints, forces / velocities,
+=atom_id=, and JSON metadata without putting a Python interpreter on the I/O
+path.
 
 Chemfiles is optional import into =ConFrame=. Metatensor/DLPack are optional
 tensor exports; UTF-8 CON stays authoritative on disk and in =readcon-db=.
