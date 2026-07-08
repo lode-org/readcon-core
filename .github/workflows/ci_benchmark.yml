@@ -143,8 +143,11 @@ jobs:
           path: results/
           retention-days: 7
 
-  # Rust Criterion remains available for local/microbench; optional PR job
+  # Rust Criterion: local/microbench artifact only. Must not fail the
+  # workflow conclusion — asv-perch only runs when "Benchmark PR" succeeds,
+  # and the posted comment is ASV/spyglass (benchmark-results).
   criterion-benchmark:
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
