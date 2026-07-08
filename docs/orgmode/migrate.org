@@ -39,64 +39,12 @@ selectors, or energy fields yourself.
 Migrate so the structure object, selector, campaign store, and plots all speak
 CON. Format rules: [[file:spec.org][spec.org]].
 
-* Measured: faster than hand-rolled / ASE ASCII — including plain XYZ
+* Performance
 
-Equal geometry (same atoms, same frame count). ASE reads XYZ/extXYZ/CON;
-readcon reads CON. This is not a “CON vs CON only” trick.
-
-#+begin_src shell
-python benches/multiformat_traj.py --fixtures cuh2 --ladder 100 --repeats 5 \
-  --out benches/results/multiformat_traj_terra_live.json
-#+end_src
-
-Snapshot on =rgam5terra= (2026-07-08), readcon 0.14.0, ASE 3.29.0, median of 5,
-100 frames × 218 atoms (geometry from =cuh2.con=):
-
-| Reader | Time (ms) | vs readcon |
-|----------------------------+-----------+------------|
-| *readcon CON* | *2.55* | 1.0× |
-| ASE plain XYZ | 26.7 | 10.5× slower |
-| ASE extXYZ | 26.8 | 10.5× slower |
-| ASE CON (=ase.io.eon=) | 30.5 | 12.0× slower |
-
-Same host, CON-peer harness (=benches/compare_readers.py=, 100×218 generated
-trajectory): ASE CON 30.6 ms, C sscanf 7.3 ms, readcon file path *3.3 ms*
-(9.2× ASE, 2.2× C). CI Cachegrind tracks I-refs
-(=docs/source/_generated/cachegrind_results.rst=). Re-run before citing a new
-host. Details: [[file:benchmarks.org][benchmarks.org]].
-
-** ASE trajectory formats vs chemfiles → CON vs CON
-
-Not multi-frame XYZ as the only peer. Equal geometry, full load of 100 frames,
-ASE native =.traj=, NetCDFTrajectory, and multi-frame XYZ vs
-=readcon.read_chemfiles= and native =read_con= (H5MD was not registered in this
-ASE build; NetCDF is the ASE binary-ish trajectory peer available).
-
-#+begin_src shell
-maturin develop --features python,chemfiles --release
-python benches/ase_traj_vs_con.py --frames 100 --repeats 5
-#+end_src
-
-=rgam5terra= 2026-07-08, 100×218 atoms, median of 5:
-
-| Path | Time (ms) | vs readcon CON |
-|--------------------------------------------------+-----------+----------------|
-| ASE NetCDFTrajectory | 30.1 | 13.3× slower |
-| ASE multi-frame XYZ | 27.2 | 12.0× slower |
-| =readcon.read_chemfiles= (XYZ → CON frames) | 14.1 | 6.2× slower |
-| ASE =.traj= (binary Trajectory) | 11.4 | 5.0× slower |
-| *=readcon.read_con=* | *2.27* | *1.0×* |
-
-Native CON still beats ASE =.traj= and NetCDF on this full-frame load. Chemfiles
-ingress is slower than ASE =.traj= (honest) but *faster than ASE NetCDF and
-multi-frame XYZ*, and once converted, CON is the fast path for selection,
-=readcon-db=, and multi-language use. Artifact:
-=benches/results/ase_traj_vs_con.json=.
-
-** H5MD (MDAnalysis) vs CON
-
-H5MD is readable in Python via MDAnalysis / h5py (=uv pip install MDAnalysis h5py=), not via ASE on every install. On =rgam5terra= 2026-07-08 (100×218): MDAnalysis H5MD full traj *28.4 ms*, native CON *3.54 ms* (*8.0×*); raw h5py positions-only is 0.28 ms but is *not* a frame API. Harness: =benches/h5md_vs_con.py=.
-
+The hot path is optimized (fast-float2, zero-copy lines, pre-sized vectors,
+mmap). Peer scripts and PR continuous benchmarks live under =benches/= and
+=benchmarks/= (ASV); see [[file:benchmarks.org][benchmarks.org]]. Re-run those
+on your machine — do not treat a single host diary as product doctrine.
 
 * Benefit: campaign store (=readcon-db=)
 

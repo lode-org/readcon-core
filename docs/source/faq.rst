@@ -126,42 +126,11 @@ provides:
 How fast is readcon-core?
 -------------------------
 
-1. **CI Cachegrind** (``examples/cachegrind_harness.rs`` →
-   ``docs/source/_generated/cachegrind_results.*``). Instruction-reference
-   counts for fixed CON parse / skip / write / float-parse scenarios
-   (regression authority).
-
-2. **CON peers** (``benches/compare_readers.py``). Same CON text vs ASE
-   ``ase.io.eon`` and eOn-style C sscanf.
-
-Equal-geometry **trajectory** load (``rgam5terra`` 2026-07-08, 100×218, median of
-
-1) — ASE ``.traj`` / NetCDF / multi-frame XYZ vs chemfiles→CON vs native CON:
-
-.. table::
-
-    +--------------------------------------+-----------+
-    | Path                                 | Time (ms) |
-    +======================================+===========+
-    | ASE NetCDFTrajectory                 |      30.1 |
-    +--------------------------------------+-----------+
-    | ASE multi-frame XYZ                  |      27.2 |
-    +--------------------------------------+-----------+
-    | ``readcon.read_chemfiles`` (XYZ→CON) |      14.1 |
-    +--------------------------------------+-----------+
-    | ASE binary ``.traj``                 |      11.4 |
-    +--------------------------------------+-----------+
-    | **``readcon.read_con``**             |  **2.27** |
-    +--------------------------------------+-----------+
-
-CON is **5×** ASE ``.traj`` and **13×** ASE NetCDF on that full-frame load. CON peers
-(``compare_readers.py``): 3.3 ms vs ASE CON 30.6 ms (9.2×) and C sscanf 7.3 ms
-(2.2×). Recipes: `benchmarks <benchmarks.rst>`_ · `migrate <migrate.rst>`_ ·
-``benches/ase_traj_vs_con.py``. H5MD via MDAnalysis: **28.4 ms** vs CON **3.54 ms** (8×) on the same load (``benches/h5md_vs_con.py``; h5py coords-only is faster but is not CON fidelity).
-
-Hot path: **fast-float2** on atom lines, **mmap** / bulk read for trajectories,
-``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /
-``forward_fast`` skip without materializing atoms.
+Optimized CON parse/write (fast-float2, zero-copy iteration, optional mmap,
+``forward`` skip). CI tracks Cachegrind I-refs; PRs run Python ASV + spyglass
+compare. Peer scripts under ``benches/`` (ASE CON, ASE ``.traj`` / NetCDF, H5MD via
+MDAnalysis, chemfiles ingress). Numbers and how to re-run:
+`benchmarks.org <benchmarks.rst>`_.
 
 What is the sections mechanism?
 -------------------------------

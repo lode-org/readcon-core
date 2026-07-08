@@ -10,7 +10,141 @@ env:
   SCCACHE_GHA_ENABLED: "true"
 
 jobs:
-  benchmark:
+  # Python ASV + spyglass (primary PR surface — eOn-style)
+  asv-benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: main
+            sha: ${{ github.event.pull_request.base.sha }}
+          - label: pr
+            sha: ${{ github.event.pull_request.head.sha }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout target commit (preserve ASV suite)
+        run: |
+          mkdir -p /tmp/_bench_preserve
+          cp -r benchmarks/ /tmp/_bench_preserve/
+          cp asv.conf.json /tmp/_bench_preserve/
+          git checkout -f ${{ matrix.sha }}
+          git clean -fd
+          rm -rf benchmarks
+          cp -r /tmp/_bench_preserve/benchmarks/ benchmarks/
+          cp /tmp/_bench_preserve/asv.conf.json asv.conf.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: Setup sccache environment
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Python deps + maturin
+        run: |
+          uv pip install --system maturin asv numpy ase
+          # chemfiles-sys needs cmake for build-from-sources
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake g++
+
+      - name: Build chemfiles-linked readcon
+        env:
+          RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
+        run: |
+          maturin develop --features python,chemfiles --release
+          python -c "import readcon; assert readcon.has_chemfiles_support(); print(readcon.__version__)"
+
+      - name: Run ASV
+        run: |
+          asv machine --yes
+          asv run -E "existing:$(which python)" \
+            --set-commit-hash ${{ matrix.sha }} \
+            --record-samples --quick
+
+      - name: Upload ASV results
+        uses: actions/upload-artifact@v4
+        with:
+          name: asv-${{ matrix.label }}
+          path: .asv/results/
+          retention-days: 7
+
+  asv-combine:
+    needs: asv-benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Download main results
+        uses: actions/download-artifact@v4
+        with:
+          name: asv-main
+          path: results/
+
+      - name: Download PR results
+        uses: actions/download-artifact@v4
+        with:
+          name: asv-pr
+          path: results/
+
+      - name: asv-spyglass compare
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          PR_SHA="${{ github.event.pull_request.head.sha }}"
+          BASE_PREFIX="${BASE_SHA:0:8}"
+          PR_PREFIX="${PR_SHA:0:8}"
+          BASE_FILE=$(find results -name "${BASE_PREFIX}*.json" ! -name 'benchmarks.json' | head -1)
+          PR_FILE=$(find results -name "${PR_PREFIX}*.json" ! -name 'benchmarks.json' | head -1)
+          BCONF=$(find results -name "benchmarks.json" | head -1)
+          echo "Base file: $BASE_FILE"
+          echo "PR file: $PR_FILE"
+          echo "Benchmarks: $BCONF"
+          if [ -z "$BASE_FILE" ] || [ -z "$PR_FILE" ]; then
+            echo "::error::missing ASV result JSON for base or PR"
+            find results -type f
+            exit 1
+          fi
+          BCONF_ARG=""
+          if [ -n "$BCONF" ]; then
+            BCONF_ARG="$BCONF"
+          fi
+          # Exit code 1 = regressions detected (expected, not a hard error)
+          uvx --from "git+https://github.com/airspeed-velocity/asv_spyglass.git" \
+            asv-spyglass compare "$BASE_FILE" "$PR_FILE" $BCONF_ARG \
+            --label-before main --label-after pr \
+            > results/comparison.txt || true
+          if [ ! -s results/comparison.txt ]; then
+            echo "::error::asv-spyglass compare produced no output"
+            exit 1
+          fi
+          cat results/comparison.txt
+
+      - name: Write metadata
+        run: |
+          echo "main_sha=${{ github.event.pull_request.base.sha }}" > results/metadata.txt
+          echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> results/metadata.txt
+
+      - name: Upload combined results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
+          retention-days: 7
+
+  # Rust Criterion remains available for local/microbench; optional PR job
+  criterion-benchmark:
     strategy:
       fail-fast: false
       matrix:
@@ -28,78 +162,28 @@ jobs:
       - name: Checkout target commit
         run: |
           mkdir -p /tmp/_bench_preserve
-          cp -r benches/ /tmp/_bench_preserve/
+          cp -r benches/ /tmp/_bench_preserve/ 2>/dev/null || true
           git checkout -f ${{ matrix.sha }}
           git clean -fd
-          cp -r /tmp/_bench_preserve/benches/ benches/
+          if [ -d /tmp/_bench_preserve/benches ]; then
+            cp -r /tmp/_bench_preserve/benches/ benches/
+          fi
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
         with:
           version: "v0.10.0"
+      - name: Setup sccache
+        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
-      - name: Setup sccache environment
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-
-      - name: Run benchmarks
-        run: |
-          cargo bench --bench iterator_bench -- --save-baseline ${{ matrix.label }}
+      - name: Criterion iterator_bench
+        run: cargo bench --bench iterator_bench -- --save-baseline ${{ matrix.label }}
 
       - name: Export Criterion results
-        run: |
-          tar czf criterion-${{ matrix.label }}.tar.gz -C target criterion/
+        run: tar czf criterion-${{ matrix.label }}.tar.gz -C target criterion/
 
       - uses: actions/upload-artifact@v4
         with:
           name: criterion-${{ matrix.label }}
           path: criterion-${{ matrix.label }}.tar.gz
-          retention-days: 7
-
-  compare:
-    needs: benchmark
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install critcmp
-        run: cargo install critcmp
-
-      - name: Download main results
-        uses: actions/download-artifact@v4
-        with:
-          name: criterion-main
-          path: .
-
-      - name: Download PR results
-        uses: actions/download-artifact@v4
-        with:
-          name: criterion-pr
-          path: .
-
-      - name: Extract and compare
-        run: |
-          mkdir -p target
-          tar xzf criterion-main.tar.gz -C target/
-          tar xzf criterion-pr.tar.gz -C target/
-          mkdir -p results
-          critcmp main pr --threshold 5 > results/comparison.txt || true
-          if [ ! -s results/comparison.txt ]; then
-            echo "No benchmark comparison output" > results/comparison.txt
-          fi
-          cat results/comparison.txt
-
-      - name: Write metadata
-        run: |
-          echo "main_sha=${{ github.event.pull_request.base.sha }}" > results/metadata.txt
-          echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> results/metadata.txt
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: results/
           retention-days: 7

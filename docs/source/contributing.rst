@@ -109,10 +109,10 @@ Branching and workflow
 - Keep commits logical and atomic. Soft-reset and rebase as needed
   (never on ``main``).
 
-- The CI runs on every PR: Rust tests, lint, coverage, benchmarks, Fortran
-  fpm tests, and Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/``
-  for lean and chemfiles features)
-  regression checks (via Criterion + critcmp + asv-perch).
+- The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
+  Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean
+  and chemfiles features), and benchmark regression (Python ASV +
+  ``asv-spyglass`` + asv-perch; optional Criterion baselines).
 
 Testing
 -------
@@ -182,9 +182,9 @@ Workflows
     +===========================+============================+====================+===============================================+
     | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR     | Build wheels for 5 platforms, publish to PyPI |
     +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main         | Run Criterion benchmarks on base and PR       |
+    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main         | ASV on base+PR (Python); optional Criterion   |
     +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete | Post comparison table as PR comment           |
+    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete | Post ASV/spyglass table as PR comment         |
     +---------------------------+----------------------------+--------------------+-----------------------------------------------+
     | Coverage                  | ``coverage.yml``           | push, PR           | Code coverage via tarpaulin                   |
     +---------------------------+----------------------------+--------------------+-----------------------------------------------+
@@ -194,20 +194,26 @@ Workflows
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The project uses a two-workflow pattern for safe benchmark PR comments:
+Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 
-1. ``ci_benchmark.yml`` runs ``cargo bench`` on both the base commit and the
-   PR head in parallel (matrix strategy). It saves Criterion baselines as
-   artifacts.
+1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with
+   ``maturin develop --features python,chemfiles --release``, then
+   ``asv run -E existing:… --set-commit-hash $sha --quick``. Results upload as
+   artifacts. An optional Criterion job still records ``iterator_bench``
+   baselines for local ``critcmp``.
 
-2. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion. It
-   downloads the Criterion results, compares them with ``critcmp``, and
-   posts the comparison table as a PR comment using `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
+2. The ``asv-combine`` job runs
+   `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs →
+   ``results/comparison.txt``.
 
-The ``workflow_run`` split is required for fork PRs to have write access
-for posting comments (GitHub security model).
+3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion, downloads
+   ``benchmark-results``, and posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
 
-Regressions above 10x trigger automatic conversion to draft PR.
+The ``workflow_run`` split is required for fork PRs to have write access for
+posting comments (GitHub security model).
+
+Regressions above the asv-perch threshold can auto-draft the PR. Suite and
+local reproduce: `benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
 
 Release process
 ---------------
