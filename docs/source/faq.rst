@@ -157,7 +157,7 @@ Equal-geometry **trajectory** load (``rgam5terra`` 2026-07-08, 100×218, median 
 CON is **5×** ASE ``.traj`` and **13×** ASE NetCDF on that full-frame load. CON peers
 (``compare_readers.py``): 3.3 ms vs ASE CON 30.6 ms (9.2×) and C sscanf 7.3 ms
 (2.2×). Recipes: `benchmarks <benchmarks.rst>`_ · `migrate <migrate.rst>`_ ·
-``benches/ase_traj_vs_con.py``.
+``benches/ase_traj_vs_con.py``. H5MD via MDAnalysis: **28.4 ms** vs CON **3.54 ms** (8×) on the same load (``benches/h5md_vs_con.py``; h5py coords-only is faster but is not CON fidelity).
 
 Hot path: **fast-float2** on atom lines, **mmap** / bulk read for trajectories,
 ``Arc<str>`` symbols per type, zero-copy line views, and ``forward()`` /

@@ -1,0 +1,27 @@
+{
+  "protocol": "equal geometry; MDAnalysis H5MD full traj (positions each frame) vs h5py load of position/value only vs readcon CON full frames vs readcon.read_chemfiles multi-frame XYZ",
+  "host_note": "run records wall times; fill host/date in commit message",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "fixture": "/home/rgoswami/Git/Github/LODE/readcon-core/resources/test/cuh2.con",
+  "h5md_size_bytes": 20192,
+  "con_size_bytes": 1677100,
+  "xyz_size_bytes": 1570100,
+  "mda_h5md_full_traj_ms": 28.382075019180775,
+  "h5py_h5md_positions_only_ms": 0.281059998087585,
+  "readcon_con_ms": 3.5392550053074956,
+  "readcon_chemfiles_xyz_ms": 15.710046980530024,
+  "apples_notes": {
+    "mda_h5md": "Universe + iterate all frames + .positions (MDA Python API)",
+    "h5py_positions": "raw HDF5 dataset load only \u2014 not symbols/cell/constraints/atom_id/JSON",
+    "readcon_con": "full ConFrame parse (payload richer than coords array)",
+    "chemfiles_xyz": "foreign XYZ \u2192 list[ConFrame]"
+  },
+  "ratio_mda_h5md_over_con": 8.019222965459901,
+  "ratio_h5py_positions_over_con": 0.07941219201953663,
+  "ratio_chemfiles_xyz_over_con": 4.438800526373802,
+  "host": "rgam5terra",
+  "date_utc": "2026-07-08T19:54Z",
+  "deps": "uv pip install MDAnalysis h5py ase numpy; maturin develop --features python,chemfiles"
+}

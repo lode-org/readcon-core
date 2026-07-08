@@ -120,6 +120,11 @@ ingress is slower than ASE ``.traj`` (honest) but **faster than ASE NetCDF and m
 ``readcon-db``, and multi-language use. Artifact:
 ``benches/results/ase_traj_vs_con.json``.
 
+H5MD (MDAnalysis) vs CON
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+H5MD is readable in Python via MDAnalysis / h5py (``uv pip install MDAnalysis h5py``), not via ASE on every install. On ``rgam5terra`` 2026-07-08 (100×218): MDAnalysis H5MD full traj **28.4 ms**, native CON **3.54 ms** (**8.0×**); raw h5py positions-only is 0.28 ms but is **not** a frame API. Harness: ``benches/h5md_vs_con.py``.
+
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------
 

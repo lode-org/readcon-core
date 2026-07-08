@@ -20,6 +20,8 @@ What we measure
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
     |      4 | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |      5 | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                  |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
 
 Public numbers prefer ranks 1–2. Criterion tables further down are local
 latency history; re-run before citing.
@@ -153,6 +155,39 @@ trajectory peer ASE can write/read here.
     +----------------------------------------+-----------+----------------+
 
 Artifact: ``benches/results/ase_traj_vs_con.json``.
+
+H5MD (MDAnalysis / h5py) vs CON
+-------------------------------
+
+H5MD **does** have Python paths: write/read via ****MDAnalysis**** (``format``"H5MD"``) and raw datasets via **h5py**. ASE on this host still has no registered =h5md``
+IOFormat. Deps via ``uv``:
+
+.. code:: shell
+
+    uv pip install MDAnalysis h5py ase numpy   # into the env that has readcon
+    maturin develop --features python,chemfiles --release
+    python benches/h5md_vs_con.py --frames 100 --repeats 5
+
+``rgam5terra`` 2026-07-08, 100×218 equal geometry, median of 5:
+
+.. table::
+
+    +-------------------------------------------------+-----------+----------+--------------------------------------------------------------+
+    | Path                                            | Time (ms) | vs CON   | What you get                                                 |
+    +=================================================+===========+==========+==============================================================+
+    | MDAnalysis H5MD full traj (iterate +.positions) |      28.4 | 8.0×     | MDA API over H5MD                                            |
+    +-------------------------------------------------+-----------+----------+--------------------------------------------------------------+
+    | ``readcon.read_chemfiles`` multi-frame XYZ      |      15.7 | 4.4×     | list of ``ConFrame``                                         |
+    +-------------------------------------------------+-----------+----------+--------------------------------------------------------------+
+    | **``readcon.read_con``**                        |  **3.54** | **1.0×** | full CON frames                                              |
+    +-------------------------------------------------+-----------+----------+--------------------------------------------------------------+
+    | h5py ``position/value`` only                    |      0.28 | 0.08×    | **coords array only** — not cell/constraints/=atom\_id=/JSON |
+    +-------------------------------------------------+-----------+----------+--------------------------------------------------------------+
+
+Honest: raw h5py position dump is not a CON substitute (no frame API). The
+Python H5MD **API path** (MDAnalysis) is slower than native CON full parse on
+this load. Artifact: ``benches/results/h5md_vs_con.json``.
+
 
 .. figure:: img/pareto_features_vs_speed.svg
 
