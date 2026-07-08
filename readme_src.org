@@ -18,7 +18,7 @@ library exists so the rest of the atomistic stack adopts the same file.
 | Hourglass ABI | C / C++ / Python / Julia / Fortran (=rkr_*=): link CON into any language |
 | Device / ML hand-off | DLPack (optional CUDA); optional metatensor =TensorBlock= without leaving CON authority |
 | Ingress | Chemfiles import/selection: foreign structures *into* CON |
-| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add readcon-db=, =pip install readcon-db=): corpora still CON text |
+| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add= / =pip install=; [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]]) |
 
 Already on that path: rare-event clients, rgpot, rgpycrumbs, ASE adapters,
 amsel, campaign stores, and anything that takes DLPack or metatensor blocks.
@@ -44,7 +44,7 @@ See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 - *Fidelity:* =atom_id=, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
-- *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]] (CON-text indexes, dedup, multi-reader).
+- *Campaigns:* Pair with [[https://github.com/lode-org/readcon-db][readcon-db]] (CON-text indexes, dedup, multi-reader; [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]]).
 - *RPC:* Cap'n Proto behind the ~rpc~ feature.
 
 ** Migrate onto CON
@@ -56,7 +56,7 @@ hand-rolling XYZ and a private atoms object.
 - *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
 - *Selection:* =select_atoms= / =rkr_frame_select= (=name H=, bonds/angles when topology is present)
 - *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
-- *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader)
+- *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader; [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]])
 - *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
 - *Measurements:* Cachegrind I-refs; PR ASV + spyglass; peer scripts in =benches/= — [[file:docs/orgmode/benchmarks.org][benchmarks.org]]
 
@@ -69,7 +69,8 @@ cargo run --release --features chemfiles -- convert structure.xyz structure.con
 
 How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles path (CI-run):
 [[file:docs/orgmode/chemfiles-notebook.org][chemfiles-notebook]]. Campaigns:
-[[https://lode-org.github.io/readcon-db/][readcon-db docs]]. Plotting:
+[[https://lode-org.github.io/readcon-db/][readcon-db docs]] ·
+[[https://docs.rs/readcon-db][docs.rs/readcon-db]]. Plotting:
 [[https://chemparseplot.rgoswami.me][chemparseplot]].
 
 ** Install
@@ -156,7 +157,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 | Languages | One =rkr_*= surface for Fortran / C / C++ / Python / Julia |
 | Spec | v2–v3, =validate=true=, declared sections (including optional physics blocks above), units (v3) |
 | Tensors | DLPack; optional metatensor =TensorBlock= |
-| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (energy/formula/sections indexes, dedup) |
+| Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] ([[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]]) |
 | Import | Optional chemfiles → CON |
 | Measurements | Cachegrind I-refs; PR ASV + spyglass; =benches/compare_readers.py= |
 

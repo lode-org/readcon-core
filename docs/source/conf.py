@@ -155,7 +155,12 @@ html_theme_options = {
                 {
                     "title": "readcon-db docs",
                     "url": "https://lode-org.github.io/readcon-db/",
-                    "summary": "Corpus architecture, Select predicates, C/Python/Fortran APIs",
+                    "summary": "Hosted package docs: corpus architecture, Select, C/Python/Fortran",
+                },
+                {
+                    "title": "readcon-db Rust API",
+                    "url": "https://docs.rs/readcon-db",
+                    "summary": "docs.rs crate API for the campaign store",
                 },
                 {
                     "title": "eOn",

@@ -380,8 +380,10 @@ Why is the campaign store a separate package?
 SWMR campaign access. That split is a **migration benefit**: once structures are
 CON text, the same files plug into campaign query (energy / formula / section
 indexes, dedup) without rewriting the optimizer or potential. Install
-``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``);
-docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``).
+Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+Source: `github.com/lode-org/readcon-db <https://github.com/lode-org/readcon-db>`_.
 
 Where do large campaigns and many frames go?
 --------------------------------------------
@@ -393,8 +395,9 @@ presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 in ``readcon-core`` itself. That is the product path for corpora and screening —
 not a recommendation to abandon CON for a different structure dialect.
 
-Install and docs: ``cargo add readcon-db`` / ``pip install readcon-db``;
-`lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+Install: ``cargo add readcon-db`` / ``pip install readcon-db``.
+Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
 
 How do XYZ, PDB, GRO, and chemfiles fit in?
 -------------------------------------------

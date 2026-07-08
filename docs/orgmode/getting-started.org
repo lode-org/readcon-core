@@ -89,7 +89,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 |------+------|
 | Read / write CON | =readcon= / =readcon-core= |
 | Link from Fortran / C / C++ | Hourglass =rkr_*= ABI |
-| Many trajectories, multi-reader | =readcon-db= (CON text authoritative) |
+| Many trajectories, multi-reader | [[https://lode-org.github.io/readcon-db/][readcon-db docs]] · [[https://docs.rs/readcon-db][docs.rs API]] (CON text authoritative) |
 | Foreign structure file → CON | Optional chemfiles build |
 | ASE calculator hand-off | Optional =to_ase= / =from_ase= |
 | Migrate foreign stack → CON | [[file:migrate.org][migrate]] (CLI =convert=, =convert_to_con=) |

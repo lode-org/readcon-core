@@ -80,9 +80,12 @@ layer that **assumes CON text is authoritative**:
     +------------------------+------------------------------------------------------------------------------------+
 
 Install (separate package): ``cargo add readcon-db`` / ``pip install readcon-db``.
-Docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_. Multi-frame CON (with optional compression)
-plus selection and ``index_proj`` feed the same campaign path; you do not need a
-second structure dialect for "real" trajectories or screening corpora.
+Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
+Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+Source: `github.com/lode-org/readcon-db <https://github.com/lode-org/readcon-db>`_.
+Multi-frame CON (with optional compression) plus selection and ``index_proj``
+feed the same campaign path; you do not need a second structure dialect for
+"real" trajectories or screening corpora.
 
 Benefit: the API (stop owning your own atoms object)
 ----------------------------------------------------
@@ -230,18 +233,18 @@ After conversion
 
 .. table::
 
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Goal                         | Page                                                                                                      |
-    +==============================+===========================================================================================================+
-    | Learn native CON I/O         | `tutorial <tutorial.rst>`_                                                                                |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Selection / bonds on CON     | `chemfiles-howto <chemfiles-howto.rst>`_, `faq <faq.rst>`_                                                |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Declared sections / validate | `faq <faq.rst>`_, `spec <spec.rst>`_                                                                      |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Link C / Fortran / Julia     | `bindings <bindings.rst>`_, `howto <howto.rst>`_                                                          |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Campaign store               | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/>`_ |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
-    | Plotting                     | `chemparseplot <https://chemparseplot.rgoswami.me>`_ · `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_     |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------+
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Goal                         | Page                                                                                                                                                |
+    +==============================+=====================================================================================================================================================+
+    | Learn native CON I/O         | `tutorial <tutorial.rst>`_                                                                                                                          |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Selection / bonds on CON     | `chemfiles-howto <chemfiles-howto.rst>`_, `faq <faq.rst>`_                                                                                          |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Declared sections / validate | `faq <faq.rst>`_, `spec <spec.rst>`_                                                                                                                |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Link C / Fortran / Julia     | `bindings <bindings.rst>`_, `howto <howto.rst>`_                                                                                                    |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Campaign store               | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Plotting                     | `chemparseplot <https://chemparseplot.rgoswami.me>`_ · `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_                                               |
+    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
