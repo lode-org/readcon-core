@@ -1,29 +1,39 @@
 #+title: Frequently Asked Questions
 #+options: toc:nil num:nil ^:nil
 
-* Why CON (and what problem it solves)?
+* Objective
 
-Saddle-point search, dimer, and NEB pipelines need a *checkpoint* that
-survives many read→write cycles across languages: frozen axes, original
-atom identity after type-grouping, forces and velocities, cell, and
-machine-readable run metadata (energy, potential, NEB bead, units). That
-is the CON contract used by eOn and LODE.
+CON stores atomic configurations for transition-state search and related
+workflows used by eOn and LODE: cell geometry, type-grouped coordinates,
+per-direction constraints, stable atom identity, optional velocity and force
+sections, and versioned JSON metadata. A CON file is UTF-8 text with a fixed
+nine-line header per frame so tools can inspect it with =head= and parse it
+with one shared contract.
 
-CON carries, in a fixed layout:
+The primary goal is portable checkpoints among optimizers and analysis codes
+written in different languages (Fortran, C, C++, Python, Julia, Rust), without
+a second on-disk dialect per language.
 
-| On disk | Role in the optimizer |
-|---------+------------------------|
-| Cell + angles | Periodic box for the slab or bulk |
-| Per-direction fixed mask (column 4) | Constrained degrees of freedom |
-| =atom_id= (column 5) | Stable identity when atoms are grouped by element |
-| Optional velocity / force / energy sections | Restart and analysis payload |
-| Line-2 JSON (=con_spec_version=, =energy=, =neb_bead=, =units=, …) | Provenance without a second sidecar |
+** Design goals
 
-Without those fields, an NEB band reorders atoms, a dimer mode points at the
-wrong indices, or a Fortran driver and a Python analyzer disagree on the
-same structure. The format is a 9-line header, type blocks, and declared
-sections: small enough to =head=, strict enough to validate
-(=validate=true=). Spec: [[file:spec.org][spec.org]].
+| Goal | In CON |
+|------+--------|
+| Completeness for TS search | Constraints, forces, velocities, =atom_id=, energy and NEB keys on the same frame |
+| Human inspectability | Fixed header, type blocks, ASCII decimals |
+| Versioned extensibility | Line-2 JSON with =con_spec_version=; unknown keys preserved |
+| Strict validation when asked | =validate=true= enforces schema, geometry, and section identity |
+| Multi-language identity | One =rkr_*= hourglass ABI in =readcon-core=; same semantics everywhere |
+| Campaign storage | UTF-8 CON text remains authoritative in =readcon-db= |
+
+** Layout (summary)
+
+| On disk | Content |
+|---------+---------|
+| Lines 1–9 | Generator comment, JSON metadata, cell, angles, type counts, masses |
+| Type blocks | Symbol, label, atom lines: =x y z fixed_mask atom_id= |
+| Optional sections | Declared in JSON (=velocities=, =forces=, =energies=, …) |
+
+Full rules: [[file:spec.org][spec.org]].
 
 * Is frame topology (=bonds=) required?
 

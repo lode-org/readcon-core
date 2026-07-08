@@ -292,8 +292,10 @@ Compatibility expectations
     | Unknown future version    | Strict mode errors; permissive mode may warn and best-effort parse |
     +---------------------------+--------------------------------------------------------------------+
 
-Out of scope for interchange CON: replacing GROMACS/LAMMPS binary trajectory
-I/O, claiming multi-node FS dominance, or requiring GPU parsing of ASCII CON.
+CON targets human-readable checkpoints and multi-language interchange for
+transition-state workflows. Engine-native binary trajectories (for example
+GROMACS/LAMMPS continuous-MD streams) address a different density and access
+pattern; they complement CON rather than substitute for it.
 
 Toward version 4 (candidate scope)
 ----------------------------------

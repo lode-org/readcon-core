@@ -267,18 +267,20 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 Design rationale
 ----------------
 
-``readcon-core`` implements the eOn / LODE CON/convel checkpoint contract behind
-an hourglass C ABI. Fortran, C, C++, Julia, and Python optimizers share
-per-direction constraints, forces / velocities, ``atom_id``, and JSON metadata
-without a Python runtime on the I/O path. Chemfiles is optional edge import
-into ``ConFrame``; metatensor/DLPack exports give tensor hand-off while UTF-8
-CON stays the on-disk authority. Lean builds expose optional features as
-stubs (``RKR_STATUS_FEATURE_DISABLED``).
+**Objective.** Implement the CON / convel specification so transition-state
+codes share one on-disk contract and one ``rkr_*`` hourglass C ABI across
+Fortran, C, C++, Julia, Python, and Rust: per-direction constraints, forces /
+velocities, ``atom_id``, and JSON metadata, without embedding a Python runtime
+on the I/O path.
 
-``readcon-db`` indexes multi-reader campaigns with UTF-8 CON as durable identity
-(hash, dedup, reindex). Optional ``to_ase`` is calculator hand-off into ASE.
+Optional chemfiles import fills ``ConFrame`` from foreign structure files.
+Metatensor/DLPack exports provide tensor hand-off; UTF-8 CON remains the
+on-disk authority. Lean builds expose gated features as stubs
+(``RKR_STATUS_FEATURE_DISABLED``).
 
-Parse measurements: Cachegrind I-refs; peer runs vs ASE CON and C sscanf
-(:doc:`benchmarks`). Format evolution:
-:doc:`evolution`. Q&A: :doc:`faq`. Spec:
-:doc:`spec`.
+``readcon-db`` indexes multi-reader campaigns (hash, dedup, reindex) on CON
+blobs. Optional ``to_ase`` supports ASE calculator hand-off.
+
+Design goals: :doc:`faq` (**Objective**). Spec:
+:doc:`spec`. Evolution: :doc:`evolution`.
+Measurements: :doc:`benchmarks`.

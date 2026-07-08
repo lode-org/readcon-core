@@ -4,28 +4,30 @@
    <div class="rc-hero">
      <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
      <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
-     <p class="rc-hero-tagline">CON / convel checkpoints for eOn and LODE: constraints, forces, atom identity, hourglass multi-language ABI.</p>
+     <p class="rc-hero-tagline">CON / convel: portable molecular checkpoints for eOn and LODE, with a multi-language reference library.</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-Library for versioned ``.con`` / ``.convel`` used by eOn and LODE saddle,
-dimer, and NEB work. One parse/write path and one ``rkr_*`` C ABI so Fortran,
-C, C++, Python, Julia, and Rust share constraints, forces / velocities,
-``atom_id``, and JSON metadata. Companion ``readcon-db`` indexes campaign
-corpora; blobs stay CON text. Optional chemfiles import folds foreign files
-into CON at the edge.
+**Objective.** Portable storage and I/O for CON / convel molecular
+configurations used in eOn and LODE transition-state workflows: particle
+coordinates with per-direction constraints, optional velocities and forces,
+stable ``atom_id``, and versioned JSON metadata.
 
-Parse path: CI Cachegrind I-refs; peer runs vs ASE CON and eOn-style C
-sscanf. See :doc:`benchmarks`, :doc:`architecture`, :doc:`faq`.
+**Implementation.** ``readcon-core`` is the reference library: one parse/write
+path and one ``rkr_*`` C ABI shared by Fortran, C, C++, Python, Julia, and
+Rust. Companion ``readcon-db`` indexes campaign corpora; on-disk identity is
+always UTF-8 CON text. Optional chemfiles import maps foreign structure files
+into CON. Spec: :doc:`spec`. Design goals and layout: :doc:`faq`. Measurements:
+:doc:`benchmarks`.
 
 .. important::
 
    *New here?* → :doc:`getting-started`
 
-   *Import another structure file into CON?* → :doc:`chemfiles-tutorial`
+   *Import into CON?* → :doc:`chemfiles-tutorial`
    · Org notebook :doc:`chemfiles-notebook`
    (``scripts/run-chemfiles-notebook.sh``)
 
