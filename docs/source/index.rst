@@ -2,24 +2,36 @@
 .. raw:: html
 
    <div class="rc-hero">
-     <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="340" height="86" alt="readcon-core" />
-     <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="340" height="86" alt="readcon-core" />
+     <div class="rc-hero-brand">
+       <img class="rc-hero-mark" src="_static/mark.svg" width="56" height="56" alt="" />
+       <div>
+         <p class="rc-hero-name">readcon</p>
+         <p class="rc-hero-sub">core · CON I/O</p>
+       </div>
+     </div>
      <p class="rc-hero-tagline">Put CON everywhere: multi-language checkpoints with constraints, forces, and atom identity.</p>
+     <div class="rc-hero-pills">
+       <span>Spec v2–v3</span>
+       <span>Hourglass ABI</span>
+       <span>chemfiles → CON</span>
+       <span>readcon-db</span>
+       <span>ASV + Cachegrind</span>
+     </div>
+     <p class="rc-hero-flow">foreign file → ConFrame → .con · campaigns · optimizers</p>
    </div>
 
 ================
 ``readcon-core``
 ================
 
-Versioned ``.con`` / ``.convel`` — cell, constraints, ``atom_id``, optional
-sections, JSON metadata — with a shared hourglass API (Fortran, C, C++,
+Versioned ``.con`` / ``.convel`` with a shared hourglass API (Fortran, C, C++,
 Python, Julia, Rust). Chemfiles lands foreign structures as CON; DLPack /
 metatensor hand off to ML; `readcon-db
 <https://lode-org.github.io/readcon-db/>`_ stores campaign corpora as CON text
 (`docs.rs <https://docs.rs/readcon-db>`_).
 
-:doc:`getting-started` · :doc:`tutorial` · :doc:`spec` · :doc:`faq` ·
-:doc:`benchmarks`
+:doc:`getting-started` · :doc:`tutorial` · :doc:`migrate` · :doc:`spec` ·
+:doc:`faq` · :doc:`benchmarks`
 
 .. important::
 

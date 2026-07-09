@@ -90,9 +90,9 @@ html_theme_options = {
     "accent_color": "indigo",
     "dark_code": True,
     "globaltoc_expand_depth": 1,
-    # Icon-only marks for the nav bar (full wordmark is for the hero, not 28px height).
-    "light_logo": "_static/logo-icon-light.svg",
-    "dark_logo": "_static/logo-icon-dark.svg",
+    # Compact mark + wordmark for the nav (hero uses HTML brand row + mark.svg).
+    "light_logo": "_static/logo-nav-light.svg",
+    "dark_logo": "_static/logo-nav-dark.svg",
     "nav_links": [
         {"title": "Start", "url": "getting-started"},
         {
