@@ -75,15 +75,18 @@ How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles p
 
 ** Install
 
-| Language | Install command |
-|----------+-----------------|
-| Rust | =cargo add readcon-core= |
-| Python | =pip install readcon= |
-| Julia | =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= |
-| C / C++ system | =cargo cinstall --release --prefix /usr/local= (installs =libreadcon_core.{so,a}=, =readcon-core.h=, =readcon-core.hpp=, and a pkg-config file) |
-| C / C++ via meson subproject | drop the repository under =subprojects/readcon-core/= and link against the =readcon_core_dep= dependency |
+| Language | Install | Destination |
+|----------+---------+-------------|
+| Rust | =cargo add readcon-core= | [[https://docs.rs/readcon-core][docs.rs]] |
+| Python | =pip install readcon= | [[https://pypi.org/project/readcon/][PyPI]] |
+| Python + chemfiles | =pip install readcon-chemfiles= | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] |
+| Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] |
+| Julia | =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:docs/orgmode/bindings.org][bindings]] |
+| C / C++ system | =cargo cinstall --release --prefix /usr/local= | headers + =libreadcon_core= (see bindings) |
+| C / C++ via meson | =subprojects/readcon-core/= → =readcon_core_dep= | same |
 
 The C/C++ headers require a C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=, for =std::optional= and =std::filesystem=) compiler.
+Full matrix: [[file:docs/orgmode/getting-started.org][getting-started]].
 
 ** Tutorial
 
