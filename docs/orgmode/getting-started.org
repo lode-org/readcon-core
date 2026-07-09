@@ -13,6 +13,16 @@
 
 Pick *one* language. Version pins match this tree (=0.14.0=).
 
+| Package | Install | Destination |
+|---------+---------+-------------|
+| Python CON I/O | =pip install 'readcon==0.14.0'= | [[https://pypi.org/project/readcon/][PyPI]] |
+| Python + chemfiles | =pip install 'readcon-chemfiles==0.14.0'= | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] (do not mix with lean =readcon= in the same venv) |
+| Rust CON I/O | =cargo add readcon-core= | [[https://docs.rs/readcon-core][docs.rs]] |
+| Rust + chemfiles | =cargo add readcon-core --features chemfiles= | same crate |
+| Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
+| Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
+| C / C++ / Fortran | build =libreadcon_core= then link | [[file:bindings.org][bindings]] |
+
 ** Python — CON I/O
 
 #+begin_src shell
@@ -37,6 +47,25 @@ cargo add readcon-core
 #+begin_src shell
 cargo add readcon-core --features chemfiles
 #+end_src
+
+** Campaign store (=readcon-db=)
+
+Separate package; CON text stays authoritative.
+
+#+begin_src shell
+cargo add readcon-db
+# or: pip install readcon-db
+#+end_src
+
+** Julia
+
+From a checkout of this repository:
+
+#+begin_src shell
+julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
+#+end_src
+
+Language API notes: [[file:bindings.org][bindings]].
 
 ** Fortran / C / C++
 
