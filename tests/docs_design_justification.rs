@@ -479,6 +479,13 @@ fn docs_custom_css_single_frame_chrome() {
         css.contains("div[class*=\"highlight-\"]") && css.contains("border: none !important"),
         "custom.css must clear nested highlight borders"
     );
+    // admonition: kill theme disc pseudo + negative title margin double frame
+    assert!(
+        css.contains("div.admonition::before")
+            && css.contains("display: none !important")
+            && css.contains("p.admonition-title"),
+        "custom.css must flatten Shibuya admonition double-line chrome"
+    );
 }
 
 #[test]

@@ -690,8 +690,9 @@ article.yue section#readcon-core > div.important {
 }
 
 /* ---- Admonitions ---------------------------------------------------------
-   Shibuya already paints border-left + title chrome. Do NOT add a second
-   border-left (that was the “double line” on notes/important). */
+   Shibuya stacks: 4px border-left + :before/:after disc on the bar + title
+   strip with margin-left:-19px. That reads as “double lines” on Important.
+   Flatten to one card frame + one left accent. */
 .sy-page div.admonition,
 .sy-page div.important,
 .sy-page div.note,
@@ -699,11 +700,65 @@ article.yue section#readcon-core > div.important {
 .sy-page div.warning,
 .sy-page div.caution,
 .sy-page div.attention {
-  border-radius: var(--rc-radius);
+  position: relative;
+  border-radius: 12px !important;
   margin: 1.35rem 0;
   max-width: calc(var(--rc-measure) + 2rem);
-  /* leave border-left to the theme’s single rule */
-  box-shadow: none;
+  padding: 0.85rem 1.1rem 0.95rem !important;
+  border: 1px solid color-mix(in srgb, var(--rc-indigo) 22%, transparent) !important;
+  border-left: 3px solid var(--rc-indigo) !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--rc-indigo) 5%, var(--sy-c-background, #fff)) !important;
+  overflow: hidden;
+}
+html.dark .sy-page div.admonition,
+html[data-theme="dark"] .sy-page div.admonition {
+  background: color-mix(in srgb, var(--rc-indigo) 14%, #0f172a) !important;
+  border-color: color-mix(in srgb, #a5b4fc 28%, transparent) !important;
+  border-left-color: #818cf8 !important;
+}
+/* Kill theme disc/icon on the left bar (second vertical stroke). */
+.sy-page div.admonition::before,
+.sy-page div.admonition::after {
+  display: none !important;
+  content: none !important;
+}
+/* Title strip: no negative margin (that was the second frame edge). */
+.sy-page div.admonition > p.admonition-title,
+.sy-page div.admonition p.admonition-title {
+  margin: 0 0 0.55rem 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.3 !important;
+  color: var(--rc-indigo-deep) !important;
+}
+html.dark .sy-page div.admonition > p.admonition-title,
+html[data-theme="dark"] .sy-page div.admonition > p.admonition-title {
+  color: #c7d2fe !important;
+}
+.sy-page div.admonition.warning,
+.sy-page div.admonition.caution,
+.sy-page div.admonition.important {
+  border-left-color: var(--rc-amber) !important;
+}
+.sy-page div.admonition.warning > p.admonition-title,
+.sy-page div.admonition.caution > p.admonition-title,
+.sy-page div.admonition.important > p.admonition-title {
+  color: #92400e !important;
+}
+html.dark .sy-page div.admonition.important > p.admonition-title,
+html[data-theme="dark"] .sy-page div.admonition.important > p.admonition-title,
+html.dark .sy-page div.admonition.warning > p.admonition-title,
+html[data-theme="dark"] .sy-page div.admonition.warning > p.admonition-title {
+  color: #fcd34d !important;
+}
+.sy-page div.admonition > :last-child {
+  margin-bottom: 0 !important;
 }
 
 /* ---- Tables --------------------------------------------------------------
