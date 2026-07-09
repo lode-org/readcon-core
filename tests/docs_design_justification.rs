@@ -448,3 +448,35 @@ fn has_orgmode_md_href(t: &str) -> bool {
                         .is_some_and(|p| p.ends_with(".md")))
         })
 }
+
+#[test]
+fn docs_custom_css_single_frame_chrome() {
+    let css = read_repo("docs/source/_static/custom.css");
+    // registered
+    let conf = read_repo("docs/source/conf.py");
+    assert!(
+        conf.contains("custom.css"),
+        "conf.py must load custom.css"
+    );
+    // no second admonition left-bar (theme already paints one)
+    assert!(
+        !css.contains("border-left: 4px solid var(--rc-indigo)"),
+        "custom.css must not stack a second border-left on admonitions"
+    );
+    // cards: kill sd-shadow double chrome
+    assert!(
+        css.contains("sd-shadow-sm") && css.contains("box-shadow: none"),
+        "custom.css must neutralize sd-shadow-sm double chrome"
+    );
+    // code outer frame: single border, not border+shadow stack
+    assert!(
+        css.contains("single border, no box-shadow")
+            || css.contains("no box-shadow (shadow reads as a 2nd line)"),
+        "custom.css must document single-frame code chrome"
+    );
+    // nested highlight stripped
+    assert!(
+        css.contains("div[class*=\"highlight-\"]") && css.contains("border: none !important"),
+        "custom.css must clear nested highlight borders"
+    );
+}
