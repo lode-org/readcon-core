@@ -82,6 +82,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | Why CON / sections / stack | [[file:faq.org][faq]], [[file:evolution.org][evolution]] | Explanation |
 | On-disk format | [[file:spec.org][spec]] | Reference |
 | API tables | [[file:bindings.org][bindings]] | Reference |
+| Measurements (ASV / Cachegrind / peers) | [[file:benchmarks.org][benchmarks]] | Explanation |
 
 * Scope (map of the stack)
 
@@ -89,10 +90,12 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 |------+------|
 | Read / write CON | =readcon= / =readcon-core= |
 | Link from Fortran / C / C++ | Hourglass =rkr_*= ABI |
+| Campaign store (install) | =cargo add readcon-db= / =pip install readcon-db= |
 | Many trajectories, multi-reader | [[https://lode-org.github.io/readcon-db/][readcon-db docs]] · [[https://docs.rs/readcon-db][docs.rs API]] (CON text authoritative) |
+| Campaign field projection | [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]] (same meanings as db indexes) |
 | Foreign structure file → CON | Optional chemfiles build |
 | ASE calculator hand-off | Optional =to_ase= / =from_ase= |
 | Migrate foreign stack → CON | [[file:migrate.org][migrate]] (CLI =convert=, =convert_to_con=) |
+| PR / CI speed gates | [[file:benchmarks.org][benchmarks]] (ASV + Cachegrind) |
 
-Library layout: [[file:architecture.org][architecture]]. Measurements:
-[[file:benchmarks.org][benchmarks]].
+Library layout: [[file:architecture.org][architecture]].

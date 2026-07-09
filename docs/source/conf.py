@@ -104,6 +104,11 @@ html_theme_options = {
                     "summary": "One Good Tutorial: read, inspect, write, build",
                 },
                 {
+                    "title": "How-to — migrate onto CON",
+                    "url": "migrate",
+                    "summary": "API, convert CLI, readcon-db, plotting path",
+                },
+                {
                     "title": "How-to — CON I/O by language",
                     "url": "howto",
                     "summary": "Task recipes for every binding",
@@ -197,6 +202,11 @@ html_theme_options = {
         },
         {"title": "Spec", "url": "spec"},
         {"title": "Benchmarks", "url": "benchmarks"},
+        {
+            "title": "Rust API",
+            "url": "https://docs.rs/readcon-core",
+            "summary": "docs.rs crate reference (includes index_proj)",
+        },
         {"title": "GitHub", "url": "https://github.com/lode-org/readcon-core"},
     ],
 }
