@@ -566,6 +566,33 @@ html[data-theme="dark"] .sy-head .dark-logo,
 html.dark .sy-head .dark-logo {
   display: block !important;
 }
+
+/* Nav brand: icon-only SVGs — fixed square, never squash the full wordmark. */
+.sy-head-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none !important;
+}
+.sy-head-brand img.light-logo,
+.sy-head-brand img.dark-logo {
+  height: 32px !important;
+  width: 32px !important;
+  max-height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+/* Optional text next to icon if theme emits brand strong */
+.sy-head-brand strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--sy-c-bold, #0f172a);
+}
+html[data-theme="dark"] .sy-head-brand strong,
+html.dark .sy-head-brand strong {
+  color: #f1f5f9;
+}
 /* Generic dual-logo helpers elsewhere in content */
 html[data-theme="dark"] .light-only:not(.rc-hero-logo):not(.light-logo),
 html.dark .light-only:not(.rc-hero-logo):not(.light-logo) {

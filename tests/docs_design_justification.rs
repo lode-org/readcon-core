@@ -480,3 +480,23 @@ fn docs_custom_css_single_frame_chrome() {
         "custom.css must clear nested highlight borders"
     );
 }
+
+#[test]
+fn docs_nav_uses_icon_logos_not_wordmark() {
+    let conf = read_repo("docs/source/conf.py");
+    assert!(
+        conf.contains("logo-icon-light.svg") && conf.contains("logo-icon-dark.svg"),
+        "Shibuya light_logo/dark_logo must be icon-only SVGs for the 28–32px nav bar"
+    );
+    // Full wordmarks remain for the hero only
+    assert!(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("docs/source/_static/logo-light.svg")
+            .is_file()
+    );
+    let icon = read_repo("docs/source/_static/logo-icon-light.svg");
+    assert!(
+        !icon.contains("CORE") && icon.contains("viewBox=\"8 12 76 88\""),
+        "nav icon must be the cropped document mark without wordmark text"
+    );
+}
