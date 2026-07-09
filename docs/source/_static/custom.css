@@ -501,21 +501,23 @@ html[data-theme="dark"] .highlight pre,
 /* ---- Hero ---------------------------------------------------------------- */
 .rc-hero {
   text-align: center;
-  margin: 0.25rem auto 1.25rem;
-  max-width: 42rem;
+  margin: 0.15rem auto 1.5rem;
+  max-width: 40rem;
+  padding: 0.25rem 0 0.5rem;
 }
 .rc-hero-logo {
   display: block;
-  margin: 0 auto 0.85rem;
-  max-width: min(400px, 92vw);
+  margin: 0 auto 0.75rem;
+  max-width: min(340px, 88vw);
   height: auto;
 }
 .rc-hero-tagline {
-  font-size: 1.2rem;
-  line-height: 1.55;
-  color: var(--sy-f-text-mute, #475569);
+  font-size: clamp(1.1rem, 2.2vw, 1.28rem);
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--sy-f-text, #334155);
   margin: 0 auto;
-  max-width: 36rem;
+  max-width: 34rem;
 }
 
 /* Logo already carries the product name — hide the duplicate page H1 that
@@ -534,27 +536,74 @@ article.yue .rc-hero ~ section:first-of-type > h1:first-child {
 }
 html[data-theme="dark"] .rc-hero-tagline,
 html.dark .rc-hero-tagline {
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 
-html[data-theme="dark"] .light-only,
-html.dark .light-only { display: none !important; }
-html:not([data-theme="dark"]):not(.dark) .dark-only { display: none !important; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .light-only { display: none !important; }
-  html:not([data-theme="light"]) .dark-only { display: inline-block !important; }
-  html:not([data-theme="light"]) .rc-hero .dark-only { display: block !important; }
+/*
+  Dual logos (.light-only / .dark-only on the hero; .light-logo / .dark-logo
+  in the nav): follow the *page* theme only.
+
+  Do NOT key hero swap on prefers-color-scheme alone. OS-dark + site-light
+  was showing logo-dark.svg (#F8FAFC wordmark) on a white article → ghost text.
+*/
+.rc-hero .light-only,
+.sy-head .light-logo {
+  display: block !important;
+}
+.rc-hero .dark-only,
+.sy-head .dark-logo {
+  display: none !important;
+}
+html[data-theme="dark"] .rc-hero .light-only,
+html.dark .rc-hero .light-only,
+html[data-theme="dark"] .sy-head .light-logo,
+html.dark .sy-head .light-logo {
+  display: none !important;
+}
+html[data-theme="dark"] .rc-hero .dark-only,
+html.dark .rc-hero .dark-only,
+html[data-theme="dark"] .sy-head .dark-logo,
+html.dark .sy-head .dark-logo {
+  display: block !important;
+}
+/* Generic dual-logo helpers elsewhere in content */
+html[data-theme="dark"] .light-only:not(.rc-hero-logo):not(.light-logo),
+html.dark .light-only:not(.rc-hero-logo):not(.light-logo) {
+  display: none !important;
+}
+html:not([data-theme="dark"]):not(.dark) .dark-only:not(.rc-hero-logo):not(.dark-logo) {
+  display: none !important;
 }
 
-/* Navbar brand logos (Shibuya .light-logo/.dark-logo): the light logo's
-   #1E1B4B/#4338CA wordmark is unreadable on the dark head bar, so the swap
-   must also hold in system-dark with no explicit data-theme. */
-html[data-theme="dark"] .light-logo,
-html.dark .light-logo { display: none !important; }
-html:not([data-theme="dark"]):not(.dark) .dark-logo { display: none; }
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .light-logo { display: none !important; }
-  html:not([data-theme="light"]) .dark-logo { display: inline-block !important; }
+/* Lead prose under the hero: stop the wall of chips */
+article.yue .rc-hero + section > p:first-of-type,
+article.yue section#readcon-core > p:first-of-type {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  max-width: 58ch;
+  margin-inline: auto;
+  text-align: center;
+  color: var(--sy-f-text, #1e293b);
+}
+html[data-theme="dark"] article.yue section#readcon-core > p:first-of-type,
+html.dark article.yue section#readcon-core > p:first-of-type {
+  color: #e2e8f0;
+}
+
+/* Secondary meta line (Spec / FAQ / …) stays compact and centered */
+article.yue section#readcon-core > p:nth-of-type(2) {
+  text-align: center;
+  font-size: 0.98rem;
+  margin-top: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Important callout: full measure under hero, not a squeezed pill */
+article.yue section#readcon-core > div.admonition.important,
+article.yue section#readcon-core > div.important {
+  max-width: min(40rem, 100%);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ---- Admonitions ---------------------------------------------------------

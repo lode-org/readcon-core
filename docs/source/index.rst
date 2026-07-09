@@ -2,8 +2,8 @@
 .. raw:: html
 
    <div class="rc-hero">
-     <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="400" height="102" alt="readcon-core" />
-     <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="400" height="102" alt="readcon-core" />
+     <img class="light-only rc-hero-logo" src="_static/logo-light.svg" width="340" height="86" alt="readcon-core" />
+     <img class="dark-only rc-hero-logo" src="_static/logo-dark.svg" width="340" height="86" alt="readcon-core" />
      <p class="rc-hero-tagline">Put CON everywhere: multi-language checkpoints with constraints, forces, and atom identity.</p>
    </div>
 
@@ -11,18 +11,15 @@
 ``readcon-core``
 ================
 
-Reference implementation of versioned ``.con`` / ``.convel``. Spec v2–v3 frames
-(cell, type-grouped coordinates, per-direction constraints, ``atom_id``,
-optional sections such as velocities, forces, energies, charges, spins, and
-magmoms, plus JSON metadata). Hourglass ABI so Fortran, C, C++, Python, Julia,
-and Rust share one file; chemfiles to land foreign structures in CON; DLPack /
-metatensor for ML and device hand-off; ``readcon-db`` for campaigns that still
-store CON text (package docs:
-`lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_,
-Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_).
+Versioned ``.con`` / ``.convel`` — cell, constraints, ``atom_id``, optional
+sections, JSON metadata — with a shared hourglass API (Fortran, C, C++,
+Python, Julia, Rust). Chemfiles lands foreign structures as CON; DLPack /
+metatensor hand off to ML; `readcon-db
+<https://lode-org.github.io/readcon-db/>`_ stores campaign corpora as CON text
+(`docs.rs <https://docs.rs/readcon-db>`_).
 
-Spec: :doc:`spec`. FAQ: :doc:`faq`. Numbers: :doc:`benchmarks`. Start:
-:doc:`getting-started`.
+:doc:`getting-started` · :doc:`tutorial` · :doc:`spec` · :doc:`faq` ·
+:doc:`benchmarks`
 
 .. important::
 
