@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#org79296c0)
-    1.  [Features](#org3401af6)
-    2.  [Migrate onto CON](#orgb42eb80)
-    3.  [Install](#orgeee9428)
-    4.  [Tutorial](#org63e54f6)
-    5.  [Design Decisions](#org1056c83)
-        1.  [FFI Layer](#org77a6306)
-    6.  [Specification](#org707b11a)
-        1.  [CON format](#orgc23c18d)
-        2.  [convel format](#org550ee3d)
-    7.  [Capabilities](#org886de17)
-    8.  [Citation](#org4c326f3)
-2.  [License](#org38e8906)
+1.  [About](#orgd62d569)
+    1.  [Features](#org94d5d00)
+    2.  [Migrate onto CON](#org6e734a5)
+    3.  [Install](#orga527e8a)
+    4.  [Tutorial](#org13ae662)
+    5.  [Design Decisions](#org3987432)
+        1.  [FFI Layer](#org6fdb1ef)
+    6.  [Specification](#org8502074)
+        1.  [CON format](#org12d2dcd)
+        2.  [convel format](#org6bfe360)
+    7.  [Capabilities](#org3d2b917)
+    8.  [Citation](#orgdc30941)
+2.  [License](#orge9c6ac3)
 
 
-<a id="org79296c0"></a>
+<a id="orgd62d569"></a>
 
 # About
 
@@ -87,7 +87,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org3401af6"></a>
+<a id="org94d5d00"></a>
 
 ## Features
 
@@ -105,7 +105,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgb42eb80"></a>
+<a id="org6e734a5"></a>
 
 ## Migrate onto CON
 
@@ -132,7 +132,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orgeee9428"></a>
+<a id="orga527e8a"></a>
 
 ## Install
 
@@ -143,45 +143,66 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 <col  class="org-left" />
 
 <col  class="org-left" />
+
+<col  class="org-left" />
 </colgroup>
 <thead>
 <tr>
 <th scope="col" class="org-left">Language</th>
-<th scope="col" class="org-left">Install command</th>
+<th scope="col" class="org-left">Install</th>
+<th scope="col" class="org-left">Destination</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td class="org-left">Rust</td>
 <td class="org-left"><code>cargo add readcon-core</code></td>
+<td class="org-left"><a href="https://docs.rs/readcon-core">docs.rs</a></td>
 </tr>
 
 <tr>
 <td class="org-left">Python</td>
 <td class="org-left"><code>pip install readcon</code></td>
+<td class="org-left"><a href="https://pypi.org/project/readcon/">PyPI</a></td>
+</tr>
+
+<tr>
+<td class="org-left">Python + chemfiles</td>
+<td class="org-left"><code>pip install readcon-chemfiles</code></td>
+<td class="org-left"><a href="https://pypi.org/project/readcon-chemfiles/">PyPI</a></td>
+</tr>
+
+<tr>
+<td class="org-left">Campaign store</td>
+<td class="org-left"><code>cargo add readcon-db</code> / <code>pip install readcon-db</code></td>
+<td class="org-left"><a href="https://lode-org.github.io/readcon-db/">docs</a> · <a href="https://docs.rs/readcon-db">docs.rs</a></td>
 </tr>
 
 <tr>
 <td class="org-left">Julia</td>
 <td class="org-left"><code>julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'</code></td>
+<td class="org-left"><a href="docs/orgmode/bindings.html">bindings</a></td>
 </tr>
 
 <tr>
 <td class="org-left">C / C++ system</td>
-<td class="org-left"><code>cargo cinstall --release --prefix /usr/local</code> (installs <code>libreadcon_core.{so,a}</code>, <code>readcon-core.h</code>, <code>readcon-core.hpp</code>, and a pkg-config file)</td>
+<td class="org-left"><code>cargo cinstall --release --prefix /usr/local</code></td>
+<td class="org-left">headers + <code>libreadcon_core</code> (see bindings)</td>
 </tr>
 
 <tr>
-<td class="org-left">C / C++ via meson subproject</td>
-<td class="org-left">drop the repository under <code>subprojects/readcon-core/</code> and link against the <code>readcon_core_dep</code> dependency</td>
+<td class="org-left">C / C++ via meson</td>
+<td class="org-left"><code>subprojects/readcon-core/</code> → <code>readcon_core_dep</code></td>
+<td class="org-left">same</td>
 </tr>
 </tbody>
 </table>
 
 The C/C++ headers require a C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`, for `std::optional` and `std::filesystem`) compiler.
+Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
-<a id="org63e54f6"></a>
+<a id="org13ae662"></a>
 
 ## Tutorial
 
@@ -212,7 +233,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org1056c83"></a>
+<a id="org3987432"></a>
 
 ## Design Decisions
 
@@ -220,7 +241,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor).
 
 
-<a id="org77a6306"></a>
+<a id="org6fdb1ef"></a>
 
 ### FFI Layer
 
@@ -234,14 +255,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org707b11a"></a>
+<a id="org8502074"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orgc23c18d"></a>
+<a id="org12d2dcd"></a>
 
 ### CON format
 
@@ -252,7 +273,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org550ee3d"></a>
+<a id="org6bfe360"></a>
 
 ### convel format
 
@@ -262,7 +283,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org886de17"></a>
+<a id="org3d2b917"></a>
 
 ## Capabilities
 
@@ -321,14 +342,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org4c326f3"></a>
+<a id="orgdc30941"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="org38e8906"></a>
+<a id="orge9c6ac3"></a>
 
 # License
 

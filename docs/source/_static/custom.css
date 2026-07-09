@@ -881,6 +881,24 @@ aside.sy-rside {
   margin: 1.5rem auto 1.75rem;
   text-align: center;
   max-width: 52rem;
+  padding: 1rem 1rem 0.75rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--rc-indigo) 4%, var(--sy-c-background, #fff));
+  border: 1px solid color-mix(in srgb, var(--rc-indigo) 12%, transparent);
+  box-shadow: none;
+}
+html.dark .sy-page .figure,
+html[data-theme="dark"] .sy-page .figure,
+html.dark .sy-page figure,
+html[data-theme="dark"] .sy-page figure {
+  background: color-mix(in srgb, #312e81 22%, #0f172a);
+  border-color: color-mix(in srgb, #a5b4fc 18%, transparent);
+}
+/* Avoid double frame: img inside the plate has no extra border */
+.sy-page .figure img,
+.sy-page figure img {
+  border: none !important;
+  box-shadow: none !important;
 }
 .sy-page .figure .caption,
 .sy-page figcaption,
