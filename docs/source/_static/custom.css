@@ -651,12 +651,17 @@ html.dark .sy-head .dark-logo {
 }
 .sy-head-brand img.light-logo,
 .sy-head-brand img.dark-logo {
-  height: 32px !important;
+  height: 30px !important;
   width: auto !important;
-  max-height: 32px;
+  max-height: 30px;
   object-fit: contain;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 7px;
+}
+
+/* Install snippet right under the hero links */
+article.yue section#readcon-core > div[class*="highlight-"] {
+  max-width: 40rem;
 }
 
 html[data-theme="dark"] .light-only,

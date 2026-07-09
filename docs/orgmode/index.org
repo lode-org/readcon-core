@@ -36,6 +36,15 @@ metatensor hand off to ML; `readcon-db
 :doc:`getting-started` · :doc:`tutorial` · :doc:`migrate` · :doc:`spec` ·
 :doc:`faq` · :doc:`benchmarks`
 
+.. code-block:: shell
+
+   pip install 'readcon==0.14.0'          # Python CON I/O
+   # pip install 'readcon-chemfiles==0.14.0'  # + foreign → CON
+   cargo add readcon-core                 # Rust
+   # cargo add readcon-db / pip install readcon-db  # campaigns
+
+Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
+
 .. important::
 
    *New here?* → :doc:`getting-started` then :doc:`tutorial`
