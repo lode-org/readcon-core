@@ -67,17 +67,17 @@ layer that **assumes CON text is authoritative**:
 
 .. table::
 
-    +------------------------+------------------------------------------------------------------------------------+
-    | Capability             | What you get after switching to CON                                                |
-    +========================+====================================================================================+
-    | Indexed corpora        | Energy, formula, section-presence flags from the same projection as ``index_proj`` |
-    +------------------------+------------------------------------------------------------------------------------+
-    | Dedup                  | Content hash on frame blobs so re-ingested images do not explode the store         |
-    +------------------------+------------------------------------------------------------------------------------+
-    | Multi-reader           | SWMR LMDB access for screening jobs without serializing on one process             |
-    +------------------------+------------------------------------------------------------------------------------+
-    | Join / split / reindex | Corpus ops stay on UTF-8 CON; no opaque binary fork of the structure               |
-    +------------------------+------------------------------------------------------------------------------------+
+    +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Capability             | What you get after switching to CON                                                                                                                  |
+    +========================+======================================================================================================================================================+
+    | Indexed corpora        | Energy, formula, section-presence flags from the same projection as ```index_proj`` <https://docs.rs/readcon-core/latest/readcon_core/index_proj/>`_ |
+    +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Dedup                  | Content hash on frame blobs so re-ingested images do not explode the store                                                                           |
+    +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Multi-reader           | SWMR LMDB access for screening jobs without serializing on one process                                                                               |
+    +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Join / split / reindex | Corpus ops stay on UTF-8 CON; no opaque binary fork of the structure                                                                                 |
+    +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 Install (separate package): ``cargo add readcon-db`` / ``pip install readcon-db``.
 Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.

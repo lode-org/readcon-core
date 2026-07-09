@@ -28,7 +28,8 @@ private dumps.
 Saddle, dimer, and NEB pipelines already depend on that payload. =readcon-core=
 is how CON spreads: formalized spec v2–v3, hourglass =rkr_*= ABI in every
 major language, chemfiles *into* CON, DLPack / metatensor *out* of CON,
-=index_proj= + =readcon-db= for corpora that stay CON text. Spec:
+[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
++ =readcon-db= for corpora that stay CON text. Spec:
 [[file:spec.org][spec.org]]. Design history: [[file:evolution.org][evolution.org]].
 
 * Is frame topology (=bonds=) required?
@@ -290,14 +291,17 @@ type. Migration guide: [[file:migrate.org][migrate.org]] (=readcon-core convert=
 | Component | Job |
 |-----------+-----|
 | CON on disk | The checkpoint format (text, optional gzip/zstd) |
-| =readcon-core= | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor |
-| =readcon-db= | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader |
+| =readcon-core= | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor ([[https://docs.rs/readcon-core][docs.rs]]) |
+| =readcon-db= | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader ([[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]]) |
 | Chemfiles | Land foreign structures *as* CON |
 | ASE adapters | Calculators without abandoning CON interchange |
 | [[https://chemparseplot.rgoswami.me][chemparseplot]] / [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] | Plotting and analysis on CON checkpoints |
-| rgpot / eOn / amsel / … | Optimizers and potentials on the same file |
+| [[https://omnipotentrpc.github.io/rgpot/][rgpot]] / [[https://eondocs.org][eOn]] | Optimizers and potentials on the same CON files |
 
 One on-disk format. One library API. Campaigns, selection, and plotting share it.
+Campaign field projection helpers live in
+[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
+(same meanings =readcon-db= indexes).
 
 * Are ASE adapters the primary API?
 
