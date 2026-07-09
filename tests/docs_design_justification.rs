@@ -482,21 +482,28 @@ fn docs_custom_css_single_frame_chrome() {
 }
 
 #[test]
-fn docs_nav_uses_icon_logos_not_wordmark() {
+fn docs_nav_uses_compact_nav_logos() {
     let conf = read_repo("docs/source/conf.py");
     assert!(
-        conf.contains("logo-icon-light.svg") && conf.contains("logo-icon-dark.svg"),
-        "Shibuya light_logo/dark_logo must be icon-only SVGs for the 28–32px nav bar"
+        conf.contains("logo-nav-light.svg") && conf.contains("logo-nav-dark.svg"),
+        "Shibuya light_logo/dark_logo must be compact nav SVGs (mark + wordmark)"
     );
-    // Full wordmarks remain for the hero only
     assert!(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("docs/source/_static/logo-light.svg")
-            .is_file()
+            .join("docs/source/_static/mark.svg")
+            .is_file(),
+        "hero brand mark.svg must exist"
     );
-    let icon = read_repo("docs/source/_static/logo-icon-light.svg");
+    let nav = read_repo("docs/source/_static/logo-nav-light.svg");
     assert!(
-        !icon.contains("CORE") && icon.contains("viewBox=\"8 12 76 88\""),
-        "nav icon must be the cropped document mark without wordmark text"
+        nav.contains("readcon") && nav.contains("height=\"36\""),
+        "nav logo must include readable wordmark at fixed strip height"
+    );
+    let index = read("index.org");
+    assert!(
+        index.contains("rc-hero-brand")
+            && index.contains("rc-hero-pills")
+            && index.contains("mark.svg"),
+        "index hero must use rtrash-style brand card (mark + pills)"
     );
 }

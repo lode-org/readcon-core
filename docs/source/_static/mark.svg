@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="readcon mark">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- document face -->
+  <rect x="16" y="12" width="32" height="40" rx="5" fill="#EEF2FF"/>
+  <rect x="16" y="12" width="32" height="9" rx="5" fill="#C7D2FE"/>
+  <rect x="16" y="17" width="32" height="4" fill="#C7D2FE"/>
+  <!-- type columns -->
+  <rect x="20" y="26" width="6" height="20" rx="1.5" fill="#4F46E5"/>
+  <rect x="29" y="29" width="6" height="17" rx="1.5" fill="#6366F1"/>
+  <rect x="38" y="32" width="6" height="14" rx="1.5" fill="#818CF8"/>
+  <!-- atom_id dots -->
+  <circle cx="23" cy="28" r="1.4" fill="#FBBF24"/>
+  <circle cx="32" cy="31" r="1.4" fill="#FBBF24"/>
+  <circle cx="41" cy="34" r="1.4" fill="#FBBF24"/>
+</svg>
