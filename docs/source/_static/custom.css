@@ -202,21 +202,20 @@ article.yue {
   font-family: var(--rc-font-mono) !important;
 }
 
-/* Outer frame only */
+/* Outer frame only — single border, no box-shadow (shadow reads as a 2nd line). */
 .sy-page div[class*="highlight-"],
-.sy-page > div.highlight,
-.sy-page article div.highlight:not(div[class*="highlight-"] div.highlight),
-.sy-page pre.literal-block {
+.sy-page pre.literal-block,
+.sy-page article > div.highlight {
   border-radius: 0.55rem;
   margin: 1.15rem 0 1.35rem;
   max-width: 100%;
   border: 1px solid color-mix(in srgb, #64748b 35%, transparent);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  box-shadow: none;
   overflow: hidden;
   background: var(--rc-pre-bg);
 }
 
-/* Nested inner .highlight must not add a second border/margin/background */
+/* Inner Pygments wrapper: no chrome (outer highlight-* owns the frame). */
 .sy-page div[class*="highlight-"] > div.highlight,
 .sy-page div[class*="highlight-"] div.highlight {
   border: none !important;
@@ -228,10 +227,9 @@ article.yue {
   overflow: visible;
 }
 
-.sy-page pre,
+/* Inner <pre> inside a framed fence — no second border/radius. */
 .sy-page .highlight pre,
-.sy-page div[class*="highlight"] pre,
-.sy-page pre.literal-block {
+.sy-page div[class*="highlight-"] pre {
   font-family: var(--rc-font-mono) !important;
   font-size: var(--rc-code-size-block) !important;
   line-height: var(--rc-code-lh) !important;
@@ -247,11 +245,25 @@ article.yue {
   -webkit-overflow-scrolling: touch;
   background: var(--rc-pre-bg) !important;
   color: var(--rc-pre-fg) !important;
-  /* no second radius/border on <pre> — outer wrapper owns the chrome */
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   outline: none;
+}
+
+/* Standalone literal-block: this element IS the outer frame (keep border). */
+.sy-page pre.literal-block {
+  font-family: var(--rc-font-mono) !important;
+  font-size: var(--rc-code-size-block) !important;
+  line-height: var(--rc-code-lh) !important;
+  font-weight: 400;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  tab-size: 4;
+  padding: 1.05rem 1.2rem !important;
+  overflow-x: auto;
+  background: var(--rc-pre-bg) !important;
+  color: var(--rc-pre-fg) !important;
 }
 
 /* Code fences: Pygments token <span>s must be inline (colour via class, not box).
@@ -489,12 +501,12 @@ html[data-theme="dark"] .highlight pre,
 /* ---- Hero ---------------------------------------------------------------- */
 .rc-hero {
   text-align: center;
-  margin: 0.5rem auto 1.75rem;
+  margin: 0.25rem auto 1.25rem;
   max-width: 42rem;
 }
 .rc-hero-logo {
   display: block;
-  margin: 0 auto 1rem;
+  margin: 0 auto 0.85rem;
   max-width: min(400px, 92vw);
   height: auto;
 }
@@ -504,6 +516,21 @@ html[data-theme="dark"] .highlight pre,
   color: var(--sy-f-text-mute, #475569);
   margin: 0 auto;
   max-width: 36rem;
+}
+
+/* Logo already carries the product name — hide the duplicate page H1 that
+   Sphinx emits for the section title (keep it for outline/a11y via clip). */
+article.yue .rc-hero + section > h1:first-child,
+article.yue .rc-hero ~ section:first-of-type > h1:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 html[data-theme="dark"] .rc-hero-tagline,
 html.dark .rc-hero-tagline {
@@ -530,7 +557,10 @@ html:not([data-theme="dark"]):not(.dark) .dark-logo { display: none; }
   html:not([data-theme="light"]) .dark-logo { display: inline-block !important; }
 }
 
-/* ---- Admonitions --------------------------------------------------------- */
+/* ---- Admonitions ---------------------------------------------------------
+   Shibuya already paints border-left + title chrome. Do NOT add a second
+   border-left (that was the “double line” on notes/important). */
+.sy-page div.admonition,
 .sy-page div.important,
 .sy-page div.note,
 .sy-page div.tip,
@@ -539,17 +569,27 @@ html:not([data-theme="dark"]):not(.dark) .dark-logo { display: none; }
 .sy-page div.attention {
   border-radius: var(--rc-radius);
   margin: 1.35rem 0;
-  padding: 0.95rem 1.15rem;
-  border-left: 4px solid var(--rc-indigo);
   max-width: calc(var(--rc-measure) + 2rem);
-}
-.sy-page div.important,
-.sy-page div.warning,
-.sy-page div.caution {
-  border-left-color: var(--rc-amber);
+  /* leave border-left to the theme’s single rule */
+  box-shadow: none;
 }
 
-/* ---- Tables -------------------------------------------------------------- */
+/* ---- Tables --------------------------------------------------------------
+   Shibuya frames `.table-wrapper`; the inner table must not add another
+   outer border (double rectangle). */
+.sy-page .table-wrapper {
+  box-shadow: none;
+}
+.sy-page .table-wrapper > table,
+.sy-page .table-wrapper table.docutils {
+  border: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  font-size: 1.05rem;
+}
 .sy-page table.next-steps,
 .sy-page table.docutils {
   width: 100%;
@@ -687,9 +727,17 @@ aside.sy-rside {
   .sy-page p code {
     border-width: 2px;
   }
+  /* Outer fence only — never re-border the inner <pre> (double frame). */
+  .sy-page div[class*="highlight-"],
+  .sy-page pre.literal-block,
+  .sy-page article > div.highlight {
+    border-width: 2px;
+    border-color: #94a3b8;
+  }
   .sy-page pre,
-  .sy-page .highlight pre {
-    border: 2px solid #94a3b8;
+  .sy-page .highlight pre,
+  .sy-page div[class*="highlight-"] pre {
+    border: none !important;
   }
   :focus-visible {
     outline-width: 4px;
@@ -698,21 +746,29 @@ aside.sy-rside {
 
 /* Forced colors (Windows high contrast) */
 @media (forced-colors: active) {
-  .sy-page pre,
-  .sy-page .highlight pre,
+  .sy-page div[class*="highlight-"],
+  .sy-page pre.literal-block,
   .sy-page :not(pre) > code {
     border: 1px solid CanvasText;
     forced-color-adjust: none;
+  }
+  .sy-page pre,
+  .sy-page .highlight pre {
+    border: none !important;
   }
   .rc-skip-link {
     border: 2px solid CanvasText;
   }
 }
 
-/* ---- Cards --------------------------------------------------------------- */
-.sy-page .sd-card {
+/* ---- Cards ---------------------------------------------------------------
+   sphinx-design already sets border; `sd-shadow-sm` adds a second edge.
+   One frame only: keep border, kill the soft double from box-shadow. */
+.sy-page .sd-card,
+.sy-page .sd-card.sd-shadow-sm {
   border-radius: 0.55rem;
   border: 1px solid color-mix(in srgb, var(--rc-indigo) 18%, transparent);
+  box-shadow: none !important;
   height: 100%;
 }
 .sy-page .sd-card-title {
@@ -723,6 +779,11 @@ aside.sy-rside {
 .sy-page .sd-card:focus-within {
   outline: 3px solid var(--rc-focus);
   outline-offset: 2px;
+}
+
+/* Toctree captions: single hairline (theme already has border-bottom). */
+.sy-page .toctree-wrapper p.caption {
+  box-shadow: none;
 }
 
 /* Mermaid sits on its own light plate (like the static figures) so node and
