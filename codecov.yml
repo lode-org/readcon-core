@@ -1,0 +1,74 @@
+# Codecov config for readcon-core multi-language coverage.
+# Uploads land under https://app.codecov.io/gh/lode-org/readcon-core when
+# GitHub secret CODECOV_TOKEN is set (mint at https://app.codecov.io/github/HaoZeke
+# or the lode-org/readcon-core repo page). CI soft-fails if the token is missing.
+
+codecov:
+  require_ci_to_pass: false
+  notify:
+    wait_for_ci: false
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+        target: auto
+        threshold: 2%
+    patch:
+      default:
+        informational: true
+        target: auto
+        threshold: 2%
+
+# Carryforward-friendly multi-flag setup so binding jobs can land separately
+# without zeroing other languages on a partial matrix run.
+flag_management:
+  default_rules:
+    carryforward: true
+    statuses:
+      - type: project
+        target: auto
+        threshold: 2%
+        informational: true
+      - type: patch
+        target: auto
+        threshold: 2%
+        informational: true
+  individual_flags:
+    - name: rust
+      paths:
+        - src/**
+      carryforward: true
+    - name: python
+      paths:
+        - src/python.rs
+      carryforward: true
+    - name: julia
+      paths:
+        - julia/ReadCon/src/**
+      carryforward: true
+    - name: fortran
+      paths:
+        - fortran/ReadCon/src/**
+      carryforward: true
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+  show_carryforward_flags: true
+
+ignore:
+  - "tests/**"
+  - "benches/**"
+  - "benchmarks/**"
+  - "examples/**"
+  - "docs/**"
+  - "addl/**"
+  - "resources/**"
+  - "target/**"
+  - "fortran/ReadCon/test/**"
+  - "fortran/ReadCon/example/**"
+  - "julia/ReadCon/test/**"
+  - "scripts/**"
