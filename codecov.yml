@@ -71,3 +71,10 @@ ignore:
   - "fortran/ReadCon/example/**"
   - "julia/ReadCon/test/**"
   - "scripts/**"
+  # Binary CLI entry (not library surface); exercised outside unit coverage.
+  - "src/main.rs"
+  # Real CUDA device paths need a GPU runner; keep CPU stubs measurable via ffi.
+  - "src/cuda_array.rs"
+  # Cap'n Proto RPC client uses spawn_local without LocalSet (broken under
+  # multi-thread runtime); exclude until a proper LocalSet client lands.
+  - "src/rpc/**"
