@@ -3,9 +3,12 @@
 # HaoZeke/capnp-fortran coverage soft-fail pattern.
 #
 # Live dashboard: https://app.codecov.io/gh/lode-org/readcon-core
-# Requires GitHub Actions secret CODECOV_TOKEN from
-# https://app.codecov.io/github/HaoZeke (or the lode-org/readcon-core page).
-# Upload steps use fail_ci_if_error: false so a missing token never reds CI.
+#
+# Auth: Codecov GitHub App is installed on lode-org (all repos). Uploads use
+# OIDC (use_oidc: true) so a HaoZeke-scoped CODECOV_TOKEN is not required and
+# will not 404 "Repository not found" for the org slug. Optional CODECOV_TOKEN
+# remains unused when OIDC is enabled. fail_ci_if_error: false soft-fails
+# upload issues so coverage generation still greens the job.
 
 name: Coverage
 
@@ -18,6 +21,11 @@ on:
 concurrency:
   group: coverage-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# OIDC for codecov-action (required when use_oidc: true)
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   coverage-rust:
@@ -84,15 +92,13 @@ jobs:
           path: rust_codecov.json
           if-no-files-found: error
 
-      # Do not gate with `if: secrets.*` — that can fail workflow load.
-      # Empty token → soft failure (fail_ci_if_error: false).
       - name: Upload rust coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: rust_codecov.json
           flags: rust
           name: readcon-core-rust
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           fail_ci_if_error: false
           verbose: true
 
@@ -108,22 +114,30 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install maturin, pytest-cov
+      - name: Create venv and install maturin, pytest-cov
         run: |
+          python -m venv .venv
+          # shellcheck disable=SC1091
+          source .venv/bin/activate
           python -m pip install -U pip
           python -m pip install maturin pytest pytest-cov numpy coverage
+          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
 
       - name: maturin develop (python feature)
         env:
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
-        run: maturin develop --features python
+        run: |
+          # shellcheck disable=SC1091
+          source .venv/bin/activate
+          maturin develop --features python
 
       - name: pytest with coverage XML
         run: |
+          # shellcheck disable=SC1091
+          source .venv/bin/activate
           # Exercise the shipped Python binding surface via the real tests/python
-          # entry points. readcon is a PyO3 extension, so line hits are mostly in
-          # the import path; the rust job already covers src/python.rs via llvm-cov.
-          # Codecov flag `python` still records that the binding suite ran.
+          # entry points. readcon is a PyO3 extension; rust job covers src/python.rs.
           python -m pytest tests/python/ -q --tb=short \
             --cov=readcon \
             --cov-report=xml:python_coverage.xml \
@@ -145,7 +159,7 @@ jobs:
           files: python_coverage.xml
           flags: python
           name: readcon-core-python
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           fail_ci_if_error: false
           verbose: true
 
@@ -181,7 +195,6 @@ jobs:
             println("Julia coverage files: ", length(cov))
           '
           test -s lcov.info
-          # Ensure at least one DA: line or SF: header for a real LCOV file
           grep -E '^(SF:|DA:|TN:)' lcov.info | head -5
 
       - name: Upload julia coverage artifact
@@ -197,7 +210,7 @@ jobs:
           files: julia/ReadCon/lcov.info
           flags: julia
           name: readcon-core-julia
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           fail_ci_if_error: false
           verbose: true
 
@@ -239,19 +252,15 @@ jobs:
           FFLAGS="-cpp -ffpe-summary=none --coverage"
           EXTRA="-lstdc++ --coverage"
           cd "$ROOT/fortran/ReadCon"
-          # Clean prior build so gcov sees fresh .gcda from this run
           rm -rf build
           fpm test --flag "-L$ROOT/target/release $FFLAGS" \
             --link-flag "-L$ROOT/target/release -lreadcon_core -ldl -lpthread -lm $EXTRA"
-          # Collect gcov data from fpm build tree (src only)
           find build -name '*.gcda' | head -20
           lcov --directory build --capture --output-file "$ROOT/fortran_coverage.info" \
             --rc lcov_branch_coverage=1 || \
             lcov --directory build --capture --output-file "$ROOT/fortran_coverage.info"
-          # Keep only package sources
           lcov --extract "$ROOT/fortran_coverage.info" '*/fortran/ReadCon/src/*' \
             --output-file "$ROOT/fortran_coverage.info" || true
-          # If extract emptied the file, fall back to full capture minus system paths
           if ! grep -q '^SF:' "$ROOT/fortran_coverage.info" 2>/dev/null; then
             lcov --directory build --capture --output-file "$ROOT/fortran_coverage.info"
             lcov --remove "$ROOT/fortran_coverage.info" '/usr/*' '*/fpm/*' \
@@ -273,6 +282,6 @@ jobs:
           files: fortran_coverage.info
           flags: fortran
           name: readcon-core-fortran
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           fail_ci_if_error: false
           verbose: true
