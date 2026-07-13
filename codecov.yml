@@ -78,3 +78,6 @@ ignore:
   # Cap'n Proto RPC client uses spawn_local without LocalSet (broken under
   # multi-thread runtime); exclude until a proper LocalSet client lands.
   - "src/rpc/**"
+  # PyO3 module: exercised via pytest flag, not cargo llvm-cov
+  - "src/python.rs"
+  - "src/chemfiles_selection.rs"
