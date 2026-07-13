@@ -472,3 +472,6 @@ docs/notebooks/out/
 
 # Airspeed Velocity
 .asv/
+
+# coverage instrumentation local venv
+.venv-coverage/

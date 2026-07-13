@@ -61,8 +61,15 @@ fn coverage_workflow_uploads_each_flag_soft_fail() {
     assert!(wf.contains("fail_ci_if_error: false"));
     assert!(wf.contains("use_oidc: true"));
     assert!(wf.contains("id-token: write"));
-    assert!(wf.contains("cargo llvm-cov"));
+    assert!(
+        wf.contains("cargo llvm-cov") || wf.contains("run_coverage_rust.sh"),
+        "coverage workflow must invoke cargo llvm-cov (directly or via script)"
+    );
     assert!(wf.contains("pytest"));
     assert!(wf.contains("Coverage")); // Julia Coverage.jl
     assert!(wf.contains("lcov"));
+    assert!(
+        wf.contains("chemfiles") || wf.contains("run_coverage_rust"),
+        "coverage should exercise chemfiles / expanded feature set"
+    );
 }

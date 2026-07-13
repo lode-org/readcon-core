@@ -46,10 +46,12 @@ grep -q 'id-token: write' "$WF" || die "coverage.yml missing id-token: write for
 grep -q 'app.codecov.io' "$WF" || die "coverage.yml missing app.codecov.io note"
 ok "coverage.yml OIDC soft-fail + docs"
 
-grep -q 'cargo llvm-cov' "$WF" || die "missing cargo llvm-cov"
+grep -qE 'cargo llvm-cov|run_coverage_rust\.sh' "$WF" || die "missing cargo llvm-cov / run_coverage_rust.sh"
 grep -q 'pytest' "$WF" || die "missing pytest coverage step"
 grep -q 'Coverage' "$WF" || die "missing Julia Coverage.jl"
 grep -q 'lcov' "$WF" || die "missing fortran lcov/gcov"
+# Expanded feature set so chemfiles/python/rpc are not false-zero
+grep -qE 'chemfiles|run_coverage_rust' "$WF" || die "coverage should exercise chemfiles bindings"
 ok "real coverage generators referenced"
 
 if [[ "$fail" -ne 0 ]]; then
