@@ -1,7 +1,6 @@
 # Codecov config for readcon-core multi-language coverage.
-# Uploads land under https://app.codecov.io/gh/lode-org/readcon-core when
-# GitHub secret CODECOV_TOKEN is set (mint at https://app.codecov.io/github/HaoZeke
-# or the lode-org/readcon-core repo page). CI soft-fails if the token is missing.
+# Uploads land under https://app.codecov.io/gh/lode-org/readcon-core via the
+# Codecov GitHub App on lode-org + OIDC (see .github/workflows/coverage.yml).
 
 codecov:
   require_ci_to_pass: false

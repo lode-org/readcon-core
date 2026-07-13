@@ -59,7 +59,8 @@ fn coverage_workflow_uploads_each_flag_soft_fail() {
     }
     assert!(wf.contains("codecov/codecov-action"));
     assert!(wf.contains("fail_ci_if_error: false"));
-    assert!(wf.contains("secrets.CODECOV_TOKEN"));
+    assert!(wf.contains("use_oidc: true"));
+    assert!(wf.contains("id-token: write"));
     assert!(wf.contains("cargo llvm-cov"));
     assert!(wf.contains("pytest"));
     assert!(wf.contains("Coverage")); // Julia Coverage.jl
