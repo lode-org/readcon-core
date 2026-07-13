@@ -1,25 +1,19 @@
 #!/usr/bin/env bash
-# Produce a Codecov JSON report for the Rust library surface.
+# Produce Codecov-compatible coverage for the Rust library surface.
 #
-# Default CI used only rpc,python → chemfiles/metatensor/zstd/grammar impls never
-# compiled (false zeros) and python.rs sat at 0% (PyO3 only hit from pytest).
+# Emits:
+#   - lcov.info (line coverage; Codecov's primary metric from DA records)
+#   - rust_codecov.json (optional second artifact)
 #
-# This script:
-# - Enables the full non-CUDA, non-rpc feature set for cargo tests
-# - Uses Clang (required for -fcoverage-mapping on zstd-sys / chemfiles)
-# - Emits codecov JSON with ignore-filename-regex for CLI/CUDA/PyO3/RPC glue
-#   that is not exercised by cargo tests (pytest covers the Python surface
-#   separately under the `python` Codecov flag).
-#
-# Usage: scripts/run_coverage_rust.sh [output_path]
+# Features: full non-CUDA set. Ignores CLI/CUDA/PyO3/RPC glue and the thin
+# chemfiles_selection facade (real code is *_imp.rs).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-OUT="${1:-rust_codecov.json}"
-# No python: PyO3 module is not called from cargo tests (see ignore-filename-regex).
-# No rpc: client uses spawn_local without LocalSet (broken multi-thread).
-# No cuda: needs a GPU runner.
+OUT_JSON="${1:-rust_codecov.json}"
+OUT_LCOV="${2:-lcov.info}"
 FEATURES="${READCON_COV_FEATURES:-parallel,chemfiles,zstd,grammar,metatensor}"
+IGNORE='(/src/main\.rs|/src/cuda_array\.rs|/src/python\.rs|/src/rpc/|/src/chemfiles_selection\.rs$)'
 
 unset RUSTC_WRAPPER SCCACHE_GHA_ENABLED || true
 export RUSTC_WRAPPER=""
@@ -31,57 +25,34 @@ if [[ -z "${CC:-}" ]]; then
   fi
 fi
 
-if [[ -z "${PYO3_PYTHON:-}" ]] && command -v python3 >/dev/null 2>&1; then
-  # metatensor/chemfiles builds may still probe for a python; optional
-  export PYO3_PYTHON="$(command -v python3)"
-fi
-
 echo "==> cargo llvm-cov (features=${FEATURES}, CC=${CC:-default})"
 # shellcheck disable=SC2086
 cargo llvm-cov --features ${FEATURES} --workspace \
-  --no-fail-fast --include-ffi --codecov \
-  --output-path "$OUT" \
-  --ignore-filename-regex='(/src/main\.rs|/src/cuda_array\.rs|/src/python\.rs|/src/rpc/)'
+  --no-fail-fast --include-ffi \
+  --ignore-filename-regex="${IGNORE}" \
+  --lcov --output-path "${OUT_LCOV}"
 
-test -s "$OUT"
+# Also emit codecov JSON from the same profraws (no re-run)
+cargo llvm-cov report --codecov --output-path "${OUT_JSON}" \
+  --ignore-filename-regex="${IGNORE}"
 
-python3 - "$OUT" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p))
-cov = d.get("coverage", {})
-hits = total = 0
-worst = []
-for f, lines in cov.items():
-    h = t = 0
-    for v in lines.values():
-        if isinstance(v, str) and "/" in v:
-            a, b = v.split("/")
-            h += int(a); t += int(b)
-        else:
-            t += 1
-            try:
-                h += 1 if float(v) > 0 else 0
-            except Exception:
-                pass
-    if t:
-        rel = f
-        for pref in (
-            "/home/runner/work/readcon-core/readcon-core/",
-            "/home/rgoswami/Git/Github/LODE/readcon-core/",
-        ):
-            if rel.startswith(pref):
-                rel = rel[len(pref):]
-        worst.append((h / t, h, t, rel))
-        hits += h
-        total += t
-worst.sort()
-print(f"overall {100 * hits / total:.1f}%  {hits}/{total}  files={len(worst)}")
-print("worst 12:")
-for r in worst[:12]:
-    print(f"  {100 * r[0]:5.1f}% {r[1]:5d}/{r[2]:5d}  {r[3]}")
-print("best 5:")
-for r in worst[-5:]:
-    print(f"  {100 * r[0]:5.1f}% {r[1]:5d}/{r[2]:5d}  {r[3]}")
+test -s "$OUT_LCOV"
+test -s "$OUT_JSON"
+
+python3 - "$OUT_LCOV" <<'PY'
+import sys
+path = sys.argv[1]
+hits = tot = 0
+for line in open(path):
+    if line.startswith("DA:"):
+        h = int(line.strip().split(":")[1].split(",")[1])
+        tot += 1
+        if h > 0:
+            hits += 1
+print(f"lcov line coverage {100 * hits / tot:.2f}%  {hits}/{tot}  ({path})")
+if hits / tot < 0.90:
+    print("WARNING: under 90% line coverage", file=sys.stderr)
+    sys.exit(1)
+print("OK >= 90% line coverage")
 PY
-echo "OK wrote $OUT"
+echo "OK wrote $OUT_LCOV and $OUT_JSON"

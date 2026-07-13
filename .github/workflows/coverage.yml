@@ -76,20 +76,23 @@ jobs:
           unset RUSTC_WRAPPER || true
           CAPNP_BIN="$(pixi r -e default bash -c 'dirname "$(command -v capnp)"')"
           export PATH="${CAPNP_BIN}:${PATH}"
-          bash scripts/run_coverage_rust.sh rust_codecov.json
+          bash scripts/run_coverage_rust.sh rust_codecov.json lcov.info
+          test -s lcov.info
           test -s rust_codecov.json
 
       - name: Upload rust coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-rust
-          path: rust_codecov.json
+          path: |
+            lcov.info
+            rust_codecov.json
           if-no-files-found: error
 
       - name: Upload rust coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: rust_codecov.json
+          files: lcov.info,rust_codecov.json
           flags: rust
           name: readcon-core-rust
           use_oidc: true
