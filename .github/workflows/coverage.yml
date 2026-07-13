@@ -114,7 +114,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create venv and install maturin, pytest-cov
+      - name: Create venv and install maturin, pytest-cov, emacs
         run: |
           python -m venv .venv
           # shellcheck disable=SC1091
@@ -123,6 +123,9 @@ jobs:
           python -m pip install maturin pytest pytest-cov numpy coverage
           echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
           echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
+          # Org Babel tutorial tests fail hard without emacs (see ci_python.yml)
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends emacs-nox
 
       - name: maturin develop (python feature)
         env:
