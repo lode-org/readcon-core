@@ -65,7 +65,14 @@ fn coverage_workflow_uploads_each_flag_soft_fail() {
         wf.contains("cargo llvm-cov") || wf.contains("run_coverage_rust.sh"),
         "coverage workflow must invoke cargo llvm-cov (directly or via script)"
     );
-    assert!(wf.contains("pytest"));
+    assert!(
+        wf.contains("pytest") || wf.contains("run_coverage_python.sh"),
+        "coverage workflow must drive Python tests (pytest or run_coverage_python.sh)"
+    );
+    assert!(
+        wf.contains("run_coverage_python.sh") || wf.contains("python_lcov.info"),
+        "python flag must upload instrumented src/python.rs LCOV"
+    );
     assert!(wf.contains("Coverage")); // Julia Coverage.jl
     assert!(wf.contains("lcov"));
     assert!(

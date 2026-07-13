@@ -156,7 +156,7 @@ end
 
         mktemp() do path, io
             close(io)
-            write_con(path, [frame])
+            write_con(path, [frame]; precision=8)
             reread = read_con(path)
 
             @test length(reread) == 1
@@ -168,7 +168,6 @@ end
             @test reread[1].atoms[1].fx ≈ -0.1
         end
     end
-end
 
     @testset "Campaign index projection" begin
         frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
@@ -191,3 +190,57 @@ end
         ie = index_energy(ff)
         @test ie === nothing || ie isa Float64
     end
+
+    @testset "Helpers and matrices" begin
+        frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
+        frame = frames[1]
+        @test has_chemfiles_support() isa Bool
+        @test atom_index_by_id(frame, frame.atoms[1].atom_id) isa Union{Int, Nothing}
+        @test atom_index_by_id(frame, typemax(UInt64)) === nothing
+        idx = build_atom_id_index(frame)
+        @test idx isa Dict
+        @test !isempty(idx)
+        P = ReadCon.positions_matrix(frame)
+        @test size(P, 1) == 3 || size(P, 2) == 3
+        M = ReadCon.masses_vector(frame)
+        @test length(M) == length(frame.atoms)
+        # forces / velocities section matrices
+        ff = read_con(joinpath(TEST_DIR, "tiny_cuh2_forces.con"))[1]
+        F = ReadCon.forces_matrix(ff)
+        @test size(F, 1) == 3 || size(F, 2) == 3
+        @test frame_bond_count(ff) isa Integer
+        vf = read_con(joinpath(TEST_DIR, "tiny_cuh2.convel"))[1]
+        V = ReadCon.velocities_matrix(vf)
+        @test size(V, 1) == 3 || size(V, 2) == 3
+        allf = ReadCon.read_all_frames(joinpath(TEST_DIR, "tiny_multi_cuh2.con"))
+        @test length(allf) == 2
+    end
+
+    @testset "Chemfiles selection when enabled" begin
+        if has_chemfiles_support()
+            frame = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))[1]
+            sel = select_on_frame(frame, "all")
+            @test haskey(sel, :matches) || haskey(sel, :context_size) || sel isa NamedTuple
+            idxs = select_atom_indices(frame, "all")
+            @test idxs isa AbstractVector
+            @test !isempty(idxs)
+        else
+            @test_skip "chemfiles not linked"
+        end
+    end
+
+    @testset "Atom constructors" begin
+        a1 = Atom(UInt64(8), 0.0, 0.0, 0.0, UInt64(0), 15.999, false, 0.0, 0.0, 0.0, false)
+        @test a1.atomic_number == 8
+        a2 = Atom(
+            UInt64(1), 1.0, 0.0, 0.0, UInt64(1), 1.008, true, (true, false, false),
+            0.1, 0.0, 0.0, true, 0.0, 0.1, 0.0, true,
+        )
+        @test a2.has_velocity && a2.has_forces
+        a3 = Atom(
+            UInt64(1), 1.0, 0.0, 0.0, UInt64(1), 1.008, false, (false, false, false),
+            0.0, 0.0, 0.0, false, 0.0, 0.0, 0.0, false, -0.5, true,
+        )
+        @test a3.has_energy
+    end
+end
