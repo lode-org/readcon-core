@@ -102,62 +102,61 @@ jobs:
   coverage-python:
     runs-on: ubuntu-22.04
     name: python coverage
+    strategy:
+      matrix:
+        llvm-version: [20]
+    env:
+      CMAKE_C_COMPILER: clang-${{ matrix.llvm-version }}
+      CMAKE_CXX_COMPILER: clang++-${{ matrix.llvm-version }}
+      CC: clang-${{ matrix.llvm-version }}
+      CXX: clang++-${{ matrix.llvm-version }}
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup LLVM
+        run: |
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh ${{ matrix.llvm-version }}
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y \
+              clang-${{ matrix.llvm-version }} emacs-nox
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Create venv and install maturin, pytest-cov, emacs
-        run: |
-          python -m venv .venv
-          # shellcheck disable=SC1091
-          source .venv/bin/activate
-          python -m pip install -U pip
-          python -m pip install maturin pytest pytest-cov numpy coverage
-          echo "$VIRTUAL_ENV/bin" >> "$GITHUB_PATH"
-          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> "$GITHUB_ENV"
-          # Org Babel tutorial tests fail hard without emacs (see ci_python.yml)
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends emacs-nox
-
-      - name: maturin develop (python + chemfiles)
+      - name: Generate python binding coverage (src/python.rs LCOV)
+        id: coverage
         env:
+          READCON_PY_FEATURES: python,chemfiles
+          READCON_PY_VENV: ${{ github.workspace }}/.venv-coverage-python
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
-          # shellcheck disable=SC1091
-          source .venv/bin/activate
-          # Chemfiles exercises import/selection Python APIs; lean-only left 0% of those.
-          maturin develop --features python,chemfiles
-
-      - name: pytest with coverage XML
-        run: |
-          # shellcheck disable=SC1091
-          source .venv/bin/activate
-          # Exercise the shipped Python binding surface via the real tests/python
-          # entry points. readcon is a PyO3 extension; rust job covers src/python.rs.
-          python -m pytest tests/python/ -q --tb=short \
-            --cov=readcon \
-            --cov-report=xml:python_coverage.xml \
-            --cov-report=term-missing \
-            --cov-branch
-          test -s python_coverage.xml
-          head -c 400 python_coverage.xml; echo
+          unset RUSTC_WRAPPER || true
+          bash scripts/run_coverage_python.sh python_lcov.info
+          test -s python_lcov.info
+          grep -E '^(SF:|DA:)' python_lcov.info | head -20
 
       - name: Upload python coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-python
-          path: python_coverage.xml
+          path: python_lcov.info
           if-no-files-found: error
 
       - name: Upload python coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: python_coverage.xml
+          files: python_lcov.info
           flags: python
           name: readcon-core-python
           use_oidc: true
@@ -182,9 +181,12 @@ jobs:
       - name: Julia tests with Coverage.jl
         env:
           READCON_CORE_LIB: ${{ github.workspace }}/target/release/libreadcon_core.so
+          READCON_LIB_PATH: ${{ github.workspace }}/target/release/libreadcon_core.so
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
         run: |
-          cd julia/ReadCon
+          set -euo pipefail
+          ROOT="${{ github.workspace }}"
+          cd "$ROOT/julia/ReadCon"
           julia --project=. -e '
             using Pkg
             Pkg.instantiate()
@@ -196,19 +198,24 @@ jobs:
             println("Julia coverage files: ", length(cov))
           '
           test -s lcov.info
-          grep -E '^(SF:|DA:|TN:)' lcov.info | head -5
+          # Rewrite SF: paths so Codecov maps under julia/ReadCon/src/**
+          python3 "$ROOT/scripts/rewrite_julia_lcov.py" \
+            lcov.info "$ROOT/julia_lcov.info" \
+            --package-root "$ROOT/julia/ReadCon"
+          test -s "$ROOT/julia_lcov.info"
+          grep -E '^(SF:|DA:)' "$ROOT/julia_lcov.info" | head -10
 
       - name: Upload julia coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-julia
-          path: julia/ReadCon/lcov.info
+          path: julia_lcov.info
           if-no-files-found: error
 
       - name: Upload julia coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: julia/ReadCon/lcov.info
+          files: julia_lcov.info
           flags: julia
           name: readcon-core-julia
           use_oidc: true

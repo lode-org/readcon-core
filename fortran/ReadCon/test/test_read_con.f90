@@ -202,6 +202,110 @@ program test_read_con
     print *, "open_writer_zstd null (lean stub or error)"
   end if
 
+
+  ! Extra frame helpers for coverage (previously zero-hit procedures)
+  block
+    character(len=256) :: s
+    real(real64) :: cell3(3), ang3(3), vol, mass, fm, en, e0
+    integer(int64) :: bead, band, fidx, iat
+    integer :: st4, i0, j0, ord, nbo, nidx
+    integer(c_int8_t) :: nmask
+    logical :: has_o
+    type(catom_t) :: at
+    s = status_message(0)
+    print *, "status_message=", trim(s)
+    print *, "con_spec=", con_spec_version()
+    print *, "z_to_symbol(8)=", trim(z_to_symbol(8_int64))
+    print *, "symbol_to_z(O)=", symbol_to_z("O")
+    if (fr%valid()) then
+      en = fr%index_energy()
+      e0 = fr%energy()
+      mass = fr%total_mass()
+      vol = fr%cell_volume()
+      fm = fr%fmax()
+      nmask = fr%sections_mask()
+      nidx = int(fr%index_natoms())
+      call fr%cell_lengths(cell3)
+      call fr%cell_angles(ang3)
+      at = fr%atom(1)
+      print *, "helpers en=", en, " e0=", e0, " mass=", mass, " vol=", vol, " fmax=", fm
+      print *, "natoms=", int(fr%natoms()), " atom_count=", int(fr%atom_count())
+      print *, "has_vel=", fr%has_velocities(), " has_frc=", fr%has_forces()
+      print *, "meta=", trim(fr%metadata_json())
+      print *, "comp=", trim(fr%composition_formula())
+      print *, "proj=", trim(fr%index_projection_json())
+      print *, "pot=", trim(fr%potential_type())
+      print *, "spec=", int(fr%spec_version())
+      fidx = fr%frame_index()
+      bead = fr%neb_bead()
+      band = fr%neb_band()
+      print *, "fidx=", fidx, " time=", fr%sim_time(), " dt=", fr%timestep()
+      print *, "nmask=", int(nmask), " nidx=", nidx, " atom1_z=", at%atomic_number
+      nbo = fr%bond_count()
+      print *, "nbonds=", nbo
+      if (nbo > 0) then
+        ! bond_at(idx0, i, j, order, has_order) — idx0 is 0-based integer
+        st4 = fr%bond_at(0, i0, j0, ord, has_o)
+        print *, "bond0 st=", st4, i0, j0, ord, has_o
+      end if
+      iat = fr%atom_index_by_id(0_int64)
+      print *, "id_index0=", iat
+      ! single-frame write helper
+      st4 = fr%write_path(trim(root) // "/target/tmp_fortran_fr_write.con")
+      print *, "fr_write_path st=", st4
+    end if
+  end block
+
+  ! Builder metadata / free / valid + plain/precision writers
+  block
+    type(builder_t) :: bd2
+    type(writer_t) :: wr
+    type(frame_t) :: frb
+    integer :: st5
+    character(len=128) :: meta
+    cell = 5.0_real64; ang = 90.0_real64
+    bd2 = new_builder(cell, ang)
+    if (.not. bd2%valid()) nfail = nfail + 1
+    st5 = bd2%add_atom("C", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 12.0_real64, .false., .false., .false.)
+    st5 = bd2%set_frame_index(3_int64)
+    meta = '{"con_spec_version":2}'
+    st5 = bd2%set_metadata_json(trim(meta))
+    print *, "builder meta/fidx st=", st5
+    frb = bd2%build()
+    if (frb%valid()) then
+      print *, "bd2 build atoms=", int(frb%atom_count())
+      call frb%free()
+    else
+      nfail = nfail + 1
+    end if
+    call bd2%free()
+    ! open_writer + canonical + extend_one
+    wr = open_writer(trim(root) // "/target/tmp_fortran_plain_write.con")
+    if (wr%valid()) then
+      st5 = wr%set_canonical(.true.)
+      print *, "wr_set_canonical st=", st5, " is_can=", wr%is_canonical()
+      if (fr%valid()) then
+        st5 = wr%extend_one(fr)
+        print *, "wr_extend_one st=", st5
+      end if
+      call wr%free()
+    else
+      nfail = nfail + 1
+    end if
+    wr = open_writer_gzip_with_precision(trim(root) // "/target/tmp_fortran_gz_p.con.gz", 8)
+    if (wr%valid()) then
+      print *, "open_writer_gzip_with_precision ok"
+      call wr%free()
+    end if
+    wr = open_writer_zstd_with_precision(trim(root) // "/target/tmp_fortran_zst_p.con.zst", 8)
+    if (wr%valid()) then
+      print *, "open_writer_zstd_with_precision ok"
+      call wr%free()
+    else
+      print *, "open_writer_zstd_with_precision null (lean)"
+    end if
+  end block
+
   call fr%free()
   if (nfail /= 0) then
     print *, "FAIL", nfail

@@ -47,11 +47,13 @@ grep -q 'app.codecov.io' "$WF" || die "coverage.yml missing app.codecov.io note"
 ok "coverage.yml OIDC soft-fail + docs"
 
 grep -qE 'cargo llvm-cov|run_coverage_rust\.sh' "$WF" || die "missing cargo llvm-cov / run_coverage_rust.sh"
-grep -q 'pytest' "$WF" || die "missing pytest coverage step"
+grep -qE 'pytest|run_coverage_python\.sh' "$WF" || die "missing python coverage (pytest / run_coverage_python.sh)"
 grep -q 'Coverage' "$WF" || die "missing Julia Coverage.jl"
 grep -q 'lcov' "$WF" || die "missing fortran lcov/gcov"
 # Expanded feature set so chemfiles/python/rpc are not false-zero
 grep -qE 'chemfiles|run_coverage_rust' "$WF" || die "coverage should exercise chemfiles bindings"
+# PyO3 surface must land under the python flag via instrumented LCOV
+grep -qE 'run_coverage_python\.sh|python_lcov\.info' "$WF" || die "missing python.rs llvm-cov path"
 ok "real coverage generators referenced"
 
 if [[ "$fail" -ne 0 ]]; then
