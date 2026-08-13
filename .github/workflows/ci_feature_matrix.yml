@@ -18,6 +18,8 @@ jobs:
           - chemfiles,zstd
           - chemfiles,metatensor
           - chemfiles,zstd,metatensor
+          - grammar
+          - chemfiles,grammar
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
