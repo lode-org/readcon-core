@@ -9,6 +9,10 @@
 // Hot-path I/O does not depend on Pest; this file is the formal grammar
 // artifact shipped with the repo, validated in tests via the optional
 // `grammar` feature / dev-dependencies.
+//
+// Section row arities (spec §sections):
+//   vector: velocities, forces, magmoms  →  v0 v1 v2 fixed [atom_id]
+//   scalar: energies, charges, spins     →  value fixed [atom_id]
 
 /// One or more frames, no inter-frame marker (frames are concatenated).
 file = { SOI ~ frame+ ~ EOI }
@@ -45,7 +49,7 @@ float_list_line = { ws* ~ float ~ (ws+ ~ float)* ~ ws* ~ NL }
 type_block = {
     symbol_line ~ NL
     ~ coord_label ~ NL
-    ~ atom_line ~ (NL ~ atom_line)*
+    ~ vector_atom_line ~ (NL ~ vector_atom_line)*
     ~ NL?
 }
 
@@ -54,39 +58,65 @@ symbol_line = { ws* ~ symbol ~ ws* }
 /// Element / type symbol (letters, optional trailing digits/underscore).
 symbol = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
+/// Wire labels may use legacy "component" casing (e.g. eOn sulfolene fixtures).
+/// Pest ^string is case-insensitive ASCII.
 coord_label = {
-    ws* ~ "Coordinates of Component" ~ ws+ ~ integer ~ ws*
+    ws* ~ ^"Coordinates of Component" ~ ws+ ~ integer ~ ws*
 }
 
-/// x y z fixed_mask [atom_id]
-atom_line = {
+/// Coordinate / 3-vector section row: v0 v1 v2 fixed_mask [atom_id]
+vector_atom_line = {
     ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
     ~ ws+ ~ integer
     ~ (ws+ ~ integer)?
     ~ ws*
 }
 
-/// Optional velocity / force / energy section: blank separator + type blocks.
-/// After a type_block's trailing newline, one more newline is the blank line
-/// (empty / whitespace-only) required by the specification before a section.
-section = {
-    ws* ~ NL
-    ~ section_type_block+
+/// Scalar section row: value fixed_mask [atom_id]
+scalar_atom_line = {
+    ws* ~ float
+    ~ ws+ ~ integer
+    ~ (ws+ ~ integer)?
+    ~ ws*
 }
 
-section_type_block = {
+/// Backward-compatible alias used by tests and older notes.
+atom_line = { vector_atom_line }
+
+/// Optional section: blank separator + homogeneous type blocks (vector or scalar).
+/// After a type_block's trailing newline, one more newline is the blank line
+/// required by the specification before a section.
+section = {
+    ws* ~ NL
+    ~ (section_type_block_vector+ | section_type_block_scalar+)
+}
+
+section_type_block_vector = {
     symbol_line ~ NL
-    ~ section_label ~ NL
-    ~ atom_line ~ (NL ~ atom_line)*
+    ~ section_label_vector ~ NL
+    ~ vector_atom_line ~ (NL ~ vector_atom_line)*
     ~ NL?
 }
 
-section_label = {
-    ws* ~ section_kind ~ ws+ ~ "of Component" ~ ws+ ~ integer ~ ws*
+section_type_block_scalar = {
+    symbol_line ~ NL
+    ~ section_label_scalar ~ NL
+    ~ scalar_atom_line ~ (NL ~ scalar_atom_line)*
+    ~ NL?
 }
 
-section_kind = {
-    "Velocities" | "Forces" | "Energies"
+section_kind_vector = { ^"Velocities" | ^"Forces" | ^"Magmoms" }
+section_kind_scalar = { ^"Energies" | ^"Charges" | ^"Spins" }
+
+/// Union of all section kinds (docs / tests).
+section_kind = { section_kind_vector | section_kind_scalar }
+
+section_label_vector = {
+    ws* ~ section_kind_vector ~ ws+ ~ ^"of Component" ~ ws+ ~ integer ~ ws*
+}
+
+section_label_scalar = {
+    ws* ~ section_kind_scalar ~ ws+ ~ ^"of Component" ~ ws+ ~ integer ~ ws*
 }
 
 /// ASCII decimal float (optional sign, fraction, scientific exponent).

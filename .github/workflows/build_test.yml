@@ -43,6 +43,10 @@ jobs:
       - name: Run Rust tests
         run: cargo test
 
+      - name: Surface grammar (PEG companion)
+        # grammar is optional (not on hot path); still gate PR lockstep with prose/spec.
+        run: cargo test --features grammar --lib grammar
+
       - name: Build and test FFI bindings
         id: btest_rust
         run: |
