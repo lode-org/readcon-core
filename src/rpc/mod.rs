@@ -4,4 +4,5 @@ pub mod read_con_capnp {
 }
 
 pub mod client;
+pub mod convert;
 pub mod server;

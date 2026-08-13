@@ -75,8 +75,8 @@ ignore:
   - "src/main.rs"
   # Real CUDA device paths need a GPU runner; keep CPU stubs measurable via ffi.
   - "src/cuda_array.rs"
-  # Cap'n Proto RPC client uses spawn_local without LocalSet (broken under
-  # multi-thread runtime); exclude until a proper LocalSet client lands.
+  # Cap'n Proto RPC needs capnp binary + network fixtures; convert unit tests
+  # cover schema parity under --features rpc. Keep rpc out of default coverage.
   - "src/rpc/**"
   # PyO3 module is covered by the python flag (llvm-cov + maturin + pytest).
   # Do not ignore it project-wide: rust llvm-cov already filters it out of the
