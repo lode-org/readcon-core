@@ -25,10 +25,18 @@ The schema defines a ``ReadConService`` interface with two methods:
 
 The schema file is at ``schema/ReadCon.capnp``.
 
-Each ``ConFrameData`` message includes a ``specVersion`` field (default 2)
-indicating the CON format spec version. Clients that do not set this
-field receive the default (spec version 2). Older clients that do not
-know this field will silently ignore it (standard Cap'n Proto evolution).
+**CON v3 field parity** (wire shape of a parsed ``ConFrame``, not an on-disk
+bcon file):
+
+- ``ConAtom.fixedMask`` (u8, 0–7) — per-axis constraints
+- optional velocity / force / energy / charge / spin / magmom on ``ConAtom``
+- ``ConFrameData``: ``specVersion``, section presence flags, ``massesPerType``,
+  ``natmsPerType``, ``sections``, ``metadataJson``, ``strictValidation``,
+  ``sectionsDeclared``
+
+Round-trip helpers: ``src/rpc/convert.rs``. Text ``.con`` remains the on-disk
+interchange authority. Pre-v3 wire (``isFixed: Bool``, velocity-only atoms) is
+not compatible; regenerate clients from the current schema (0.x RPC).
 
 Building
 --------

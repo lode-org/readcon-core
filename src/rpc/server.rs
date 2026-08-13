@@ -1,10 +1,11 @@
 use capnp::capability::Promise;
-use capnp_rpc::{RpcSystem, pry, rpc_twoparty_capnp, twoparty};
+use capnp_rpc::{pry, rpc_twoparty_capnp, twoparty, RpcSystem};
 use futures::AsyncReadExt;
 
 use crate::iterators::ConFrameIterator;
 use crate::writer::ConFrameWriter;
 
+use super::convert::{fill_frame_builder, frame_from_reader};
 use super::read_con_capnp::read_con_service;
 
 struct ReadConServiceImpl;
@@ -22,54 +23,19 @@ impl read_con_service::Server for ReadConServiceImpl {
             Err(e) => return Promise::err(capnp::Error::failed(e.to_string())),
         };
 
-        let iter = ConFrameIterator::new(file_str);
-        let frames: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        let frames: Result<Vec<_>, _> = ConFrameIterator::new(file_str).collect();
+        let frames = match frames {
+            Ok(f) => f,
+            Err(e) => return Promise::err(capnp::Error::failed(e.to_string())),
+        };
 
         let mut result_builder = results.get().init_result();
         let mut frames_builder = result_builder.reborrow().init_frames(frames.len() as u32);
 
         for (i, frame) in frames.iter().enumerate() {
-            let mut fb = frames_builder.reborrow().get(i as u32);
-
-            // Cell
-            let mut cell = fb.reborrow().init_cell(3);
-            for (j, &v) in frame.header.boxl.iter().enumerate() {
-                cell.set(j as u32, v);
-            }
-
-            // Angles
-            let mut angles = fb.reborrow().init_angles(3);
-            for (j, &v) in frame.header.angles.iter().enumerate() {
-                angles.set(j as u32, v);
-            }
-
-            // Headers
-            let mut prebox = fb.reborrow().init_prebox_header(2);
-            prebox.set(0, frame.header.prebox_header.user.as_str());
-            prebox.set(1, frame.header.prebox_header.metadata_line());
-
-            let mut postbox = fb.reborrow().init_postbox_header(2);
-            postbox.set(0, &*frame.header.postbox_header[0]);
-            postbox.set(1, &*frame.header.postbox_header[1]);
-
-            fb.set_has_velocities(frame.has_velocities());
-            fb.set_spec_version(frame.header.spec_version);
-
-            // Atoms
-            let mut atoms_builder = fb.reborrow().init_atoms(frame.atom_data.len() as u32);
-            for (k, atom) in frame.atom_data.iter().enumerate() {
-                let mut ab = atoms_builder.reborrow().get(k as u32);
-                let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
-                ab.set_symbol(&*atom.symbol);
-                ab.set_x(atom.x);
-                ab.set_y(atom.y);
-                ab.set_z(atom.z);
-                ab.set_is_fixed(atom.is_fixed());
-                ab.set_atom_id(atom.atom_id);
-                ab.set_vx(vx);
-                ab.set_vy(vy);
-                ab.set_vz(vz);
-                ab.set_has_velocity(atom.has_velocity());
+            let fb = frames_builder.reborrow().get(i as u32);
+            if let Err(e) = fill_frame_builder(fb, frame) {
+                return Promise::err(capnp::Error::failed(e));
             }
         }
 
@@ -81,116 +47,16 @@ impl read_con_service::Server for ReadConServiceImpl {
         params: read_con_service::WriteFramesParams,
         mut results: read_con_service::WriteFramesResults,
     ) -> Promise<(), capnp::Error> {
-        use crate::types::{AtomDatum, ConFrame, FrameHeader};
-        use std::sync::Arc;
-
         let req = pry!(params.get());
         let frame_data_list = pry!(pry!(req.get_req()).get_frames());
 
-        let mut frames = Vec::new();
+        let mut frames = Vec::with_capacity(frame_data_list.len() as usize);
         for i in 0..frame_data_list.len() {
             let fd = frame_data_list.get(i);
-
-            let cell_list = pry!(fd.get_cell());
-            let angles_list = pry!(fd.get_angles());
-            let prebox_list = pry!(fd.get_prebox_header());
-            let postbox_list = pry!(fd.get_postbox_header());
-            let atoms_list = pry!(fd.get_atoms());
-
-            let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
-            let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
-
-            let prebox_user = pry!(prebox_list.get(0))
-                .to_str()
-                .unwrap_or_default()
-                .to_string();
-            let prebox_metadata_line = pry!(prebox_list.get(1))
-                .to_str()
-                .unwrap_or_default()
-                .to_string();
-            let prebox_header = crate::types::PreboxHeader {
-                user: prebox_user,
-                metadata_line: prebox_metadata_line,
-            };
-            let postbox_header = [
-                pry!(postbox_list.get(0))
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                pry!(postbox_list.get(1))
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string(),
-            ];
-
-            // Reconstruct atom data
-            let mut atom_data = Vec::with_capacity(atoms_list.len() as usize);
-            let mut natms_per_type: Vec<usize> = Vec::new();
-            let mut masses_per_type: Vec<f64> = Vec::new();
-            let mut current_symbol = String::new();
-            let mut current_count: usize = 0;
-
-            for j in 0..atoms_list.len() {
-                let a = atoms_list.get(j);
-                let sym = pry!(a.get_symbol())
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_string();
-
-                if sym != current_symbol {
-                    if current_count > 0 {
-                        natms_per_type.push(current_count);
-                    }
-                    current_symbol = sym.clone();
-                    current_count = 0;
-                    masses_per_type.push(0.0); // mass not in schema atoms
-                }
-                current_count += 1;
-
-                let has_vel = a.get_has_velocity();
-                atom_data.push(AtomDatum {
-                    symbol: Arc::from(sym),
-                    x: a.get_x(),
-                    y: a.get_y(),
-                    z: a.get_z(),
-                    fixed: if a.get_is_fixed() {
-                        [true, true, true]
-                    } else {
-                        [false, false, false]
-                    },
-                    atom_id: a.get_atom_id(),
-                    velocity: if has_vel {
-                        Some([a.get_vx(), a.get_vy(), a.get_vz()])
-                    } else {
-                        None
-                    },
-                    force: None,
-                    energy: None,
-                    charge: None,
-                    spin: None,
-                    magmom: None,
-                });
+            match frame_from_reader(fd) {
+                Ok(f) => frames.push(f),
+                Err(e) => return Promise::err(capnp::Error::failed(e)),
             }
-            if current_count > 0 {
-                natms_per_type.push(current_count);
-            }
-
-            let header = FrameHeader {
-                prebox_header,
-                boxl,
-                angles,
-                postbox_header,
-                natm_types: natms_per_type.len(),
-                natms_per_type,
-                masses_per_type,
-                spec_version: crate::CON_SPEC_VERSION,
-                metadata: std::collections::BTreeMap::new(),
-                sections: Vec::new(),
-                strict_validation: false,
-                sections_declared: false,
-            };
-
-            frames.push(crate::types::con_frame_from_atom_data(header, atom_data));
         }
 
         let mut buffer: Vec<u8> = Vec::new();
