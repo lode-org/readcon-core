@@ -132,7 +132,7 @@ global ranking.
     maturin develop --features python,chemfiles --release
     python benches/ase_traj_vs_con.py --frames 100 --repeats 5
 
-    # H5MD via MDAnalysis / h5py vs CON
+    # H5MD via MDAnalysis / h5py vs CON (uncompressed + gzip + optional zstd)
     uv pip install MDAnalysis h5py ase numpy
     python benches/h5md_vs_con.py --frames 100 --repeats 5
 
@@ -156,8 +156,10 @@ the code, not a promise about every host):
 
 h5py ``position/value`` alone loads a coordinate array (not cell / constraints /
 ``atom_id`` / JSON). ``benches/h5md_vs_con.py`` times MDAnalysis H5MD and h5py as
-**peer load paths** on equal geometry — a local wall-clock recipe, not product
-advice to store campaigns as H5MD instead of CON + ``readcon-db``.
+**peer load paths** on equal geometry, and reports **CON.gz / optional CON.zst**
+sizes and load times next to uncompressed CON. Gzip of multi-frame CON is often
+the same order as positions-only H5MD for near-repeated rare-event frames.
+Compressed CON always fully decompresses before parse (no mmap).
 
 Plots under ``docs/orgmode/img/`` are produced by ``benches/make_plots.py`` from
 JSON you generate; regenerate after peer runs if you need them current.

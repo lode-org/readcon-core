@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Equal-geometry: MDAnalysis H5MD + h5py positions vs readcon CON / chemfiles XYZ.
+"""Equal-geometry: MDAnalysis H5MD + h5py positions vs readcon CON / gzip / zstd / chemfiles XYZ.
 
 Use uv for deps (do not rely on a random venv):
 
@@ -7,12 +7,17 @@ Use uv for deps (do not rely on a random venv):
     python benches/h5md_vs_con.py
 
 Requires a chemfiles-linked ``readcon`` on PYTHONPATH (e.g. maturin develop
---features python,chemfiles).
+--features python,chemfiles). Optional zstd path needs a build with
+``--features python,chemfiles,zstd`` and a working ``write_con`` zstd surface;
+when unavailable the script records null timings and still reports gzip.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
+import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -82,8 +87,26 @@ def main() -> None:
             u.atoms.positions = positions[i]
             W.write(u.atoms)
 
+    # Multi-frame CON: identical text concat is the rare-event checkpoint pattern
+    # (repeated / near-repeated frames). Size rows also report gzip/zstd of that blob.
     con = work / "traj.con"
-    con.write_text(args.fixture.read_text() * args.frames)
+    con_text = args.fixture.read_text() * args.frames
+    con.write_text(con_text)
+
+    con_gz = work / "traj.con.gz"
+    with gzip.open(con_gz, "wb", compresslevel=6) as f:
+        f.write(con_text.encode())
+
+    con_zst = work / "traj.con.zst"
+    zstd_size = None
+    zstd_ok = False
+    if shutil.which("zstd"):
+        subprocess.check_call(
+            ["zstd", "-q", "-3", "-f", "-o", str(con_zst), str(con)],
+        )
+        zstd_size = con_zst.stat().st_size
+        zstd_ok = True
+
     xyz = work / "traj.xyz"
     atoms_list = [atoms0.copy() for _ in range(args.frames)]
     for i, a in enumerate(atoms_list):
@@ -117,17 +140,29 @@ def main() -> None:
     def native_con() -> int:
         return len(readcon.read_con(str(con)))
 
+    def native_con_gz() -> int:
+        return len(readcon.read_con(str(con_gz)))
+
+    def native_con_zst() -> int:
+        return len(readcon.read_con(str(con_zst)))
+
     def cf_xyz() -> int:
         return len(readcon.read_chemfiles(str(xyz)))
 
-    for fn in (mda_h5md, h5py_positions, native_con, cf_xyz):
+    warm = [mda_h5md, h5py_positions, native_con, native_con_gz, cf_xyz]
+    for fn in warm:
         fn()
+    if zstd_ok:
+        try:
+            native_con_zst()
+        except Exception:
+            zstd_ok = False
 
     res = {
         "protocol": (
             "equal geometry; MDAnalysis H5MD full traj (positions each frame) "
             "vs h5py load of position/value only vs readcon CON full frames "
-            "vs readcon.read_chemfiles multi-frame XYZ"
+            "(uncompressed + gzip + optional zstd) vs readcon.read_chemfiles multi-frame XYZ"
         ),
         "host_note": "run records wall times; fill host/date in commit message",
         "n_frames": args.frames,
@@ -136,10 +171,16 @@ def main() -> None:
         "fixture": str(args.fixture),
         "h5md_size_bytes": h5path.stat().st_size,
         "con_size_bytes": con.stat().st_size,
+        "con_gz_size_bytes": con_gz.stat().st_size,
+        "con_zst_size_bytes": zstd_size,
         "xyz_size_bytes": xyz.stat().st_size,
         "mda_h5md_full_traj_ms": median_ms(mda_h5md, args.repeats),
         "h5py_h5md_positions_only_ms": median_ms(h5py_positions, args.repeats),
         "readcon_con_ms": median_ms(native_con, args.repeats),
+        "readcon_con_gz_ms": median_ms(native_con_gz, args.repeats),
+        "readcon_con_zst_ms": (
+            median_ms(native_con_zst, args.repeats) if zstd_ok else None
+        ),
         "readcon_chemfiles_xyz_ms": median_ms(cf_xyz, args.repeats),
         "apples_notes": {
             "mda_h5md": "Universe + iterate all frames + .positions (MDA Python API)",
@@ -147,13 +188,34 @@ def main() -> None:
                 "raw HDF5 dataset load only — not symbols/cell/constraints/atom_id/JSON"
             ),
             "readcon_con": "full ConFrame parse (payload richer than coords array)",
+            "readcon_con_gz": (
+                "transparent gzip decompress + full ConFrame parse "
+                "(always-on surface; not mmap)"
+            ),
+            "readcon_con_zst": (
+                "transparent zstd decompress + full ConFrame parse "
+                "(optional --features zstd); null if unavailable"
+            ),
             "chemfiles_xyz": "foreign XYZ → list[ConFrame]",
+            "size_note": (
+                "CON text multi-frame concat compresses strongly when frames are "
+                "identical/near-identical (rare-event checkpoint pattern). "
+                "H5MD here is positions-only; CON carries full header/constraints/ids."
+            ),
         },
     }
     con_ms = res["readcon_con_ms"]
     res["ratio_mda_h5md_over_con"] = res["mda_h5md_full_traj_ms"] / con_ms
     res["ratio_h5py_positions_over_con"] = res["h5py_h5md_positions_only_ms"] / con_ms
     res["ratio_chemfiles_xyz_over_con"] = res["readcon_chemfiles_xyz_ms"] / con_ms
+    res["ratio_con_gz_over_con"] = res["readcon_con_gz_ms"] / con_ms
+    if res["readcon_con_zst_ms"] is not None:
+        res["ratio_con_zst_over_con"] = res["readcon_con_zst_ms"] / con_ms
+    res["ratio_con_gz_size_over_h5md"] = (
+        res["con_gz_size_bytes"] / res["h5md_size_bytes"]
+    )
+    if zstd_size is not None:
+        res["ratio_con_zst_size_over_h5md"] = zstd_size / res["h5md_size_bytes"]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(res, indent=2) + "\n")
     print(json.dumps(res, indent=2))
