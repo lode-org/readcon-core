@@ -21,7 +21,7 @@ Reference implementation
     `readcon-core <https://github.com/lode-org/readcon-core>`_
 
 Surface grammar (PEG)
-    ``grammar/con.pest`` (Pest); validate with ``cargo test --features grammar``
+    ``grammar/readcon.pest`` (Pest); validate with ``cargo test --features grammar``
 
 This document defines versions 2 and 3 of the CON file format; version 3
 is the current version and adds required ``units`` metadata on top of the
@@ -73,7 +73,7 @@ Surface grammar (PEG)
 ---------------------
 
 The machine-readable surface syntax for CON/convel lives in the repository at
-``grammar/con.pest`` (a `Pest <https://pest.rs>`_ PEG). It is the formal companion to this
+``grammar/readcon.pest`` (a `Pest <https://pest.rs>`_ PEG). It is the formal companion to this
 prose specification for **syntactic** structure (header layout, type blocks,
 optional section blocks, multi-frame concatenation).
 

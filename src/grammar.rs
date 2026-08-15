@@ -3,10 +3,10 @@
 //! Enable with `--features grammar`. The production parser in [`crate::parser`]
 //! remains the hot path; this module exists so the repo ships a machine-checkable
 //! PEG next to the prose specification (`docs/orgmode/spec.org`, source file
-//! `grammar/con.pest`).
+//! `grammar/readcon.pest`).
 //!
 //! Semantic constraints (per-type atom counts, component indices, JSON metadata)
-//! are **not** fully encoded in the PEG — see comments in `grammar/con.pest`.
+//! are **not** fully encoded in the PEG — see comments in `grammar/readcon.pest`.
 
 #![cfg(feature = "grammar")]
 
@@ -15,7 +15,7 @@ use pest_derive::Parser;
 
 /// Pest-generated parser for [`Rule`].
 #[derive(Parser)]
-#[grammar = "../grammar/con.pest"]
+#[grammar = "../grammar/readcon.pest"]
 pub struct ConGrammar;
 
 /// Parse `input` as a full CON/convel multi-frame buffer under the surface PEG.
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn grammar_file_ships_six_section_kinds_and_scalar_rows() {
-        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("grammar/con.pest");
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("grammar/readcon.pest");
         assert!(p.is_file(), "expected shipped grammar at {}", p.display());
         let body = fs::read_to_string(&p).unwrap();
         assert!(body.contains("file = {"), "grammar should define file rule");
