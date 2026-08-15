@@ -606,7 +606,7 @@ pub fn decode_fixed_bitmask(val: u8) -> [bool; 3] {
 /// Spec 1 (legacy, no JSON on line 2) treats 1 as all-fixed. Spec 2
 /// and later treat 1 as x-only, which is what
 /// [`encode_fixed_bitmask`] writes for `[true, false, false]`.
-pub fn decode_fixed_bitmask_for_spec(val: u8, spec_version: u32) -> [bool; 3] {
+pub(crate) fn decode_fixed_bitmask_for_spec(val: u8, spec_version: u32) -> [bool; 3] {
     match val {
         0 => [false, false, false],
         1 if spec_version < 2 => [true, true, true],
