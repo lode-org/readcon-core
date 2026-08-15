@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.14.6 - 2026-08-15
+#### Bug Fixes
+- build ``readcon-chemfiles`` wheels on windows-2022 with the official prebuilt libchemfiles
+
 ## v0.14.5 - 2026-08-15
 #### Bug Fixes
 - macOS ``readcon-chemfiles`` wheels link the official prebuilt libchemfiles (Linux stays ``chemfiles-from-sources``)
