@@ -3,6 +3,7 @@
 
 Used by meson.build. Headers are shipped; this script never invokes cbindgen.
 """
+
 from __future__ import annotations
 
 import os

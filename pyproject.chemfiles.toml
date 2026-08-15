@@ -11,12 +11,12 @@ license = "MIT"
 readme = "README.md"
 keywords = ["parser", "comp-chem", "file-format", "con", "eon", "chemfiles"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering :: Chemistry",
-    "Topic :: Scientific/Engineering :: Physics",
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Chemistry",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
 ]
 
 [project.urls]

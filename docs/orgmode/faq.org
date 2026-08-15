@@ -353,4 +353,3 @@ How-to: [[file:migrate.org][migrate.org]], [[file:chemfiles-tutorial.org][chemfi
 Optimizers and drivers are often Fortran or C++. A single =rkr_*= surface
 gives those codes the same CON semantics as Python and Julia without embedding
 a Python interpreter on the I/O path.
-
