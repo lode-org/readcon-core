@@ -55,7 +55,12 @@ jobs:
 
       - name: Install Python deps + maturin
         run: |
-          uv pip install --system maturin asv numpy ase
+          uv venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          # shellcheck disable=SC1091
+          source .venv/bin/activate
+          uv pip install maturin asv numpy ase
           # chemfiles-sys needs cmake for build-from-sources
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake g++

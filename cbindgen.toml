@@ -84,6 +84,7 @@ line_endings = "LF"
 # keeps the declarations out of reach.
 "feature = zstd" = "READCON_CORE_HAS_ZSTD"
 "feature = metatensor" = "READCON_CORE_HAS_METATENSOR"
+"feature = parallel" = "READCON_CORE_HAS_PARALLEL"
 # Chemfiles selection symbols are always declared (stubbed in Rust when the
 # `chemfiles` feature is off) so C++ wrappers compile without -DREADCON_CORE_HAS_CHEMFILES.
 
@@ -93,4 +94,4 @@ line_endings = "LF"
 # through `rkr_frame_atom_index_by_id` instead; the hash map type
 # never crosses the FFI boundary, so cbindgen does not need to
 # generate a mangling for it.
-exclude = ["FxHashMap"]
+exclude = ["FxHashMap", "PARALLEL_BYTES_THRESHOLD"]

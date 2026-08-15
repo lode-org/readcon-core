@@ -110,11 +110,7 @@ pub struct Bond {
 impl Bond {
     /// Creates an unordered pair with `i <= j` for stable storage (optional).
     pub fn new(i: u32, j: u32) -> Self {
-        Self {
-            i,
-            j,
-            order: None,
-        }
+        Self { i, j, order: None }
     }
 
     pub fn with_order(mut self, order: i32) -> Self {
@@ -366,8 +362,10 @@ impl FrameHeader {
 
     /// Sets the periodic boundary conditions.
     pub fn set_pbc(&mut self, pbc: [bool; 3]) {
-        self.metadata
-            .insert(meta::PBC.into(), serde_json::json!([pbc[0], pbc[1], pbc[2]]));
+        self.metadata.insert(
+            meta::PBC.into(),
+            serde_json::json!([pbc[0], pbc[1], pbc[2]]),
+        );
     }
 
     /// Exact 3x3 lattice vector matrix (row-major, angstroms).
@@ -523,10 +521,9 @@ pub struct AtomDatum {
     /// Per-direction constraint flags: [fixed_x, fixed_y, fixed_z].
     ///
     /// Encoded as a bitmask in column 4 of the file format:
-    /// - 0 = free (all false)
-    /// - 1 = all-fixed (legacy, treated as [true, true, true])
-    /// - 2-6 = per-direction combinations (bit 0=y, bit 1=x+y, bit 2=z, ...)
-    /// - 7 = all-fixed (canonical)
+    /// bit 0 = x, bit 1 = y, bit 2 = z.
+    /// Spec 1 (no JSON line 2) treats value 1 as all-fixed.
+    /// Spec 2 treats 1 as x-only. All-fixed is 7.
     pub fixed: [bool; 3],
     /// The original atom index (column 5 in .con format).
     ///
@@ -595,15 +592,24 @@ impl AtomDatum {
     }
 }
 
-/// Decode a column-4 bitmask value to per-direction fixed flags.
+/// Decode a column-4 bitmask as a spec-2 value.
 ///
-/// - 0 = free
-/// - 1 = all-fixed (legacy, treated as [true, true, true])
-/// - 2-7 = bitmask (bit 0 = x, bit 1 = y, bit 2 = z)
+/// Spec-2 files use a pure bitmask (bit 0 = x, bit 1 = y, bit 2 = z),
+/// so 1 is x-only. Spec-1 files that wrote 1 meaning fully fixed must
+/// call [`decode_fixed_bitmask_for_spec`] with `spec_version = 1`.
 pub fn decode_fixed_bitmask(val: u8) -> [bool; 3] {
+    decode_fixed_bitmask_for_spec(val, crate::CON_SPEC_VERSION)
+}
+
+/// Decode a column-4 value under a specific CON spec version.
+///
+/// Spec 1 (legacy, no JSON on line 2) treats 1 as all-fixed. Spec 2
+/// and later treat 1 as x-only, which is what
+/// [`encode_fixed_bitmask`] writes for `[true, false, false]`.
+pub(crate) fn decode_fixed_bitmask_for_spec(val: u8, spec_version: u32) -> [bool; 3] {
     match val {
         0 => [false, false, false],
-        1 => [true, true, true], // legacy: treat as fully fixed
+        1 if spec_version < 2 => [true, true, true],
         v => [v & 1 != 0, v & 2 != 0, v & 4 != 0],
     }
 }
@@ -909,10 +915,7 @@ impl ConFrame {
     /// call; callers that perform many lookups should cache the
     /// returned map.
     pub fn build_atom_id_index(&self) -> FxHashMap<u64, usize> {
-        let mut idx = FxHashMap::with_capacity_and_hasher(
-            self.atom_data.len(),
-            Default::default(),
-        );
+        let mut idx = FxHashMap::with_capacity_and_hasher(self.atom_data.len(), Default::default());
         for (i, atom) in self.atom_data.iter().enumerate() {
             idx.insert(atom.atom_id, i);
         }
@@ -1497,10 +1500,7 @@ impl ConFrameBuilder {
     /// If every atom subsequently lacks a meaningful velocity (the section
     /// can be cleared via `clear_velocities_section`) the next `build()`
     /// will not declare a `"velocities"` section.
-    pub fn clear_atom_velocity(
-        &mut self,
-        i: usize,
-    ) -> Result<&mut Self, crate::error::ParseError> {
+    pub fn clear_atom_velocity(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -1515,10 +1515,7 @@ impl ConFrameBuilder {
     }
 
     /// Removes force data from an existing atom by zeroing the slot.
-    pub fn clear_atom_force(
-        &mut self,
-        i: usize,
-    ) -> Result<&mut Self, crate::error::ParseError> {
+    pub fn clear_atom_force(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -1533,10 +1530,7 @@ impl ConFrameBuilder {
     }
 
     /// Removes per-atom energy data from an existing atom by zeroing the slot.
-    pub fn clear_atom_energy(
-        &mut self,
-        i: usize,
-    ) -> Result<&mut Self, crate::error::ParseError> {
+    pub fn clear_atom_energy(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -1645,10 +1639,7 @@ impl ConFrameBuilder {
     }
 
     /// Read-only accessor: position of atom `i` as `(x, y, z)`.
-    pub fn get_atom_position(
-        &self,
-        i: usize,
-    ) -> Result<(f64, f64, f64), crate::error::ParseError> {
+    pub fn get_atom_position(&self, i: usize) -> Result<(f64, f64, f64), crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -1674,10 +1665,7 @@ impl ConFrameBuilder {
     }
 
     /// Read-only accessor: force on atom `i`, if any.
-    pub fn get_atom_force(
-        &self,
-        i: usize,
-    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+    pub fn get_atom_force(&self, i: usize) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -1690,10 +1678,7 @@ impl ConFrameBuilder {
     }
 
     /// Read-only accessor: per-atom energy of atom `i`, if any.
-    pub fn get_atom_energy(
-        &self,
-        i: usize,
-    ) -> Result<Option<f64>, crate::error::ParseError> {
+    pub fn get_atom_energy(&self, i: usize) -> Result<Option<f64>, crate::error::ParseError> {
         let len = self.symbols.len();
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
@@ -2375,6 +2360,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_x_only_is_one_under_spec_2() {
+        assert_eq!(encode_fixed_bitmask([true, false, false]), 1);
+        assert_eq!(decode_fixed_bitmask_for_spec(1, 2), [true, false, false]);
+        assert_eq!(decode_fixed_bitmask(1), [true, false, false]);
+        assert_eq!(decode_fixed_bitmask_for_spec(1, 1), [true, true, true]);
+        assert_eq!(decode_fixed_bitmask_for_spec(7, 1), [true, true, true]);
+        assert_eq!(encode_fixed_bitmask([true, true, true]), 7);
+    }
+
+    #[test]
     fn test_atom_id_index_handles_non_sequential_ids() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 100, 63.546);
@@ -2897,9 +2892,7 @@ mod tests {
     #[test]
     fn builder_bulk_set_positions_from_flat() {
         let mut b = three_atom_builder();
-        let new_pos = [
-            10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0,
-        ];
+        let new_pos = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0];
         b.set_positions_from_flat(&new_pos).unwrap();
         assert_eq!(b.get_atom_position(0).unwrap(), (10.0, 20.0, 30.0));
         assert_eq!(b.get_atom_position(1).unwrap(), (40.0, 50.0, 60.0));
@@ -2974,11 +2967,10 @@ mod tests {
         let b = three_atom_builder();
         assert!(b.velocities_dlpack().expect("velocities_dlpack").is_none());
         assert!(b.forces_dlpack().expect("forces_dlpack").is_none());
-        assert!(
-            b.atom_energies_dlpack()
-                .expect("atom_energies_dlpack")
-                .is_none()
-        );
+        assert!(b
+            .atom_energies_dlpack()
+            .expect("atom_energies_dlpack")
+            .is_none());
     }
 
     #[test]

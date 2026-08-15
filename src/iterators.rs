@@ -372,7 +372,7 @@ mod aos_soa_agreement_tests {
 /// choose parallel. Below this size, sequential parse wins on small multi-frame
 /// files (pool scheduling overhead).
 #[cfg(feature = "parallel")]
-pub const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
+pub(crate) const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
 
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
