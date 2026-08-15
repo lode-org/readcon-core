@@ -122,6 +122,13 @@ jobs:
             target: aarch64
             pyproject: pyproject.chemfiles.toml
             features: python,chemfiles
+          # Official prebuilt libchemfiles for x86_64-pc-windows-msvc.
+          # Do not use chemfiles-from-sources here (vendored zlib/CMake).
+          - variant: chemfiles
+            os: windows-2022
+            target: x86_64
+            pyproject: pyproject.chemfiles.toml
+            features: python,chemfiles
     steps:
       - uses: actions/checkout@v6
 
