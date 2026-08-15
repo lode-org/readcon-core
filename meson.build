@@ -1,105 +1,34 @@
 project(
     'readcon-core',
-    ['rust', 'c'],
+    'c',
     version: '0.14.0',
-    meson_version: '>=1.8.0',
+    meson_version: '>=1.3.0',
     default_options: [
         'buildtype=debugoptimized',
         'warning_level=3',
         'c_std=c99',
-        'cpp_std=c++17',
-        'rust_std=2024',
         'b_ndebug=if-release',
     ],
+    license: 'MIT',
 )
 
-# Sanity checks
-cc = meson.get_compiler('c')
-rc = meson.get_compiler('rust')
-if rc.version().version_compare('< 1.88.0')
-    error('readcon-core requires Rust 1.88.0')
-endif
-
-cbindgen_prog = find_program('cbindgen', version: '>=0.29.0', required: true)
-
-# Auxiliary variables
-_mbproot = meson.project_build_root()
+# Shipped C/C++ headers. cbindgen is maintainer-only
+# (scripts/regen-capi-headers.sh); wrap and FetchContent consumers never run it.
+fs = import('fs')
 _msproot = meson.project_source_root()
+_mbproot = meson.project_build_root()
+_incdir = include_directories('include')
 
-# C Header
-# This is done twice, once for installing things and once to generate the
-# "in-tree" copy
-readcon_header_build = custom_target(
-    'cbindgen_clone',
-    input: [files('cbindgen.toml'), files('src/lib.rs')],
-    output: ['readcon-core.h'],
-    command: [
-        cbindgen_prog,
-        '-q',
-        '--config',
-        '@INPUT0@',
-        '--crate',
-        'readcon',
-        '--output',
-        '@OUTPUT@',
-        '--',
-        '@INPUT1@',
-    ],
-    install: true,
-    install_dir: 'include',
-    build_by_default: true,
-)
-
-readcon_header_intree = custom_target(
-    'cbindgen-readcon',
-    input: [files('cbindgen.toml'), files('src/lib.rs')],
-    output: ['readcon-intree'],
-    command: [
-        cbindgen_prog,
-        '-q',
-        '--config',
-        '@INPUT0@',
-        '--crate',
-        'readcon',
-        '@INPUT1@',
-        '--output',
-        f'@_msproot@/include/readcon-core.h',
-    ],
-    install: false,
-    build_by_default: true,
-)
-
-cargo_prog = find_program('cargo', required: true)
-
-# Build the Rust library via cargo to ensure all dependencies
-# (memmap2, fast_float2, etc.) are properly resolved and linked.
-# Meson's native library(rust_abi: 'c') bypasses Cargo, making
-# external crates unavailable.
-#
-# On Windows cargo produces .lib; elsewhere .a.
-if host_machine.system() == 'windows'
-    _cargo_lib_name = 'readcon_core.lib'
-else
-    _cargo_lib_name = 'libreadcon_core.a'
+if not fs.is_file(_msproot / 'include' / 'readcon-core.h')
+    error(
+        'missing shipped header include/readcon-core.h; maintainers run scripts/regen-capi-headers.sh',
+    )
 endif
 
+cc = meson.get_compiler('c')
+cargo_prog = find_program('cargo', required: true)
 _py = find_program('python3', 'python')
 
-readcon_cargo = custom_target(
-    'readcon-cargo',
-    input: files('Cargo.toml', 'Cargo.lock', 'src/lib.rs'),
-    output: _cargo_lib_name,
-    command: [
-        _py, '-c',
-        'import subprocess, shutil, sys; ' +
-        'subprocess.check_call([sys.argv[1], "build", "--release", "--manifest-path", sys.argv[2], "--target-dir", sys.argv[3] + "/cargo-target"]); ' +
-        'shutil.copy2(sys.argv[3] + "/cargo-target/release/" + sys.argv[4], sys.argv[5])',
-        cargo_prog, '@INPUT0@', '@PRIVATE_DIR@', _cargo_lib_name, '@OUTPUT0@',
-    ],
-    build_by_default: true,
-)
-
-# System dependencies required when statically linking a Rust library
 _rust_sys_deps = []
 if host_machine.system() == 'linux'
     _rust_sys_deps += [
@@ -118,40 +47,74 @@ elif host_machine.system() == 'windows'
     ]
 endif
 
+if host_machine.system() == 'windows'
+    _cargo_shared = 'readcon_core.dll'
+    _cargo_static = 'readcon_core.lib'
+else
+    _so = host_machine.system() == 'darwin' ? '.dylib' : '.so'
+    _cargo_shared = 'libreadcon_core' + _so
+    _cargo_static = 'libreadcon_core.a'
+endif
+
+_profile = get_option('buildtype') == 'debug' ? 'debug' : 'release'
+
+readcon_cargo = custom_target(
+    'readcon-cargo',
+    input: files('Cargo.toml', 'src/lib.rs'),
+    output: [_cargo_shared, _cargo_static],
+    command: [
+        _py,
+        files('scripts/meson_cargo_build.py'),
+        cargo_prog.full_path(),
+        _msproot,
+        _mbproot / 'cargo-target',
+        _profile,
+        _cargo_shared,
+        _cargo_static,
+        '@OUTPUT0@',
+        '@OUTPUT1@',
+    ],
+    build_by_default: true,
+    install: true,
+    install_dir: [get_option('libdir'), get_option('libdir')],
+)
+
+install_headers(
+    'include/readcon-core.h',
+    'include/readcon-core.hpp',
+    'include/readcon-metatensor.h',
+)
+
+# link_args + sources: Meson must not promote an installed static consumer
+# to link_whole (custom_target is not a library target).
+readcon_dep = declare_dependency(
+    link_args: [readcon_cargo[0].full_path()],
+    sources: readcon_cargo,
+    dependencies: _rust_sys_deps,
+    include_directories: _incdir,
+    version: meson.project_version(),
+)
+meson.override_dependency('readcon-core', readcon_dep)
+
 if get_option('with_tests')
-    test('cargo-tests', cargo_prog,
-        args: ['test', '--manifest-path', _msproot / 'Cargo.toml'],
+    test(
+        'cargo-tests',
+        cargo_prog,
+        args: ['test', '--manifest-path', _msproot / 'Cargo.toml', '--locked'],
         timeout: 300,
     )
 endif
 
-# Use link_args rather than link_with so that Meson never attempts to
-# promote the link to link_whole for installed static library consumers.
-# link_whole does not support custom_targets. Passing the archive path
-# via link_args sidesteps this entirely while working for both shared
-# and static consumers. The custom_target in sources ensures build
-# ordering (cargo runs before any consumer links).
-readcon_dep = declare_dependency(
-    link_args: [readcon_cargo.full_path()],
-    sources: readcon_cargo,
-    dependencies: _rust_sys_deps,
-    include_directories: include_directories('include'),
-)
-
-# Examples
 if get_option('with_examples')
     subdir('examples')
 endif
 
-# Pkgconf generation
-
 pkg = import('pkgconfig')
-pkg_ver = meson.project_version()
-pkg_install_dir = join_paths(get_option('datadir'), 'pkgconfig')
 pkg.generate(
     name: 'readcon-core',
-    filebase: 'meson-readcon-core',
-    description: 'CON file-reader in Rust',
-    version: f'@pkg_ver@_meson',
-    install_dir: pkg_install_dir,
+    filebase: 'readcon-core',
+    description: 'CON/convel file reader and writer with C/C++ FFI',
+    version: meson.project_version(),
+    libraries: ['-lreadcon_core'],
+    url: 'https://github.com/lode-org/readcon-core',
 )
