@@ -22,7 +22,14 @@ crate-type = ["lib", "cdylib", "staticlib"]
 default = []
 capi = []
 parallel = ["rayon"]
-rpc = ["dep:capnp", "dep:capnp-rpc", "dep:capnpc", "dep:tokio", "dep:tokio-util", "dep:futures"]
+rpc = [
+  "dep:capnp",
+  "dep:capnp-rpc",
+  "dep:capnpc",
+  "dep:tokio",
+  "dep:tokio-util",
+  "dep:futures",
+]
 # NB: dlpk/pyo3 is intentionally NOT activated -- dlpk v0.1.5 pins
 # pyo3 = "0.26" but readcon-core's python.rs is on pyo3 0.28, and
 # pyo3-ffi is `links = "python"` so the two cannot coexist in the
@@ -73,7 +80,13 @@ rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros", "time"], optional = true }
+tokio = { version = "1", features = [
+  "rt",
+  "rt-multi-thread",
+  "net",
+  "macros",
+  "time",
+], optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
@@ -82,7 +95,10 @@ metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 chemfiles = { version = "0.10", optional = true }
 # Driver API for cudaMalloc/cudaMemcpy; versions track CUDA major loosely.
-cudarc = { version = "0.13", optional = true, default-features = false, features = ["cuda-12040", "driver"] }
+cudarc = { version = "0.13", optional = true, default-features = false, features = [
+  "cuda-12040",
+  "driver",
+] }
 pest = { version = "2.8", optional = true }
 pest_derive = { version = "2.8", optional = true }
 
@@ -119,9 +135,9 @@ description = "CON/convel file reader and writer with FFI, Python, Julia binding
 
 [package.metadata.capi.install.include]
 asset = [
-    { from = "include/readcon-core.h" },
-    { from = "include/readcon-core.hpp" },
-    { from = "include/readcon-metatensor.h" },
+  { from = "include/readcon-core.h" },
+  { from = "include/readcon-core.hpp" },
+  { from = "include/readcon-metatensor.h" },
 ]
 
 [profile.release]

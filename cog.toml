@@ -42,8 +42,6 @@ feat = { changelog_title = "Features" }
 
 [changelog]
 path = "CHANGELOG.md"
-authors = [
-        { username = "HaoZeke", signature = "Rohit Goswami" }
-]
+authors = [{ username = "HaoZeke", signature = "Rohit Goswami" }]
 
 [bump_profiles]

@@ -144,9 +144,33 @@ class TestAtomConstructor:
 class TestConFrameConstructor:
     def test_build_frame(self):
         atoms = [
-            readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0, fixed=[True, True, True], atom_id=0, mass=63.546),
-            readcon.Atom(symbol="Cu", x=1.0, y=1.0, z=1.0, fixed=[True, True, True], atom_id=1, mass=63.546),
-            readcon.Atom(symbol="H", x=2.0, y=2.0, z=2.0, fixed=[False, False, False], atom_id=2, mass=1.008),
+            readcon.Atom(
+                symbol="Cu",
+                x=0.0,
+                y=0.0,
+                z=0.0,
+                fixed=[True, True, True],
+                atom_id=0,
+                mass=63.546,
+            ),
+            readcon.Atom(
+                symbol="Cu",
+                x=1.0,
+                y=1.0,
+                z=1.0,
+                fixed=[True, True, True],
+                atom_id=1,
+                mass=63.546,
+            ),
+            readcon.Atom(
+                symbol="H",
+                x=2.0,
+                y=2.0,
+                z=2.0,
+                fixed=[False, False, False],
+                atom_id=2,
+                mass=1.008,
+            ),
         ]
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],
@@ -161,10 +185,24 @@ class TestConFrameConstructor:
 
     def test_roundtrip(self):
         atoms = [
-            readcon.Atom(symbol="Cu", x=0.123456789012345, y=0.0, z=0.0,
-                         fixed=[True, True, True], atom_id=0, mass=63.546),
-            readcon.Atom(symbol="H", x=1.0, y=2.0, z=3.0,
-                         fixed=[False, False, False], atom_id=1, mass=1.008),
+            readcon.Atom(
+                symbol="Cu",
+                x=0.123456789012345,
+                y=0.0,
+                z=0.0,
+                fixed=[True, True, True],
+                atom_id=0,
+                mass=63.546,
+            ),
+            readcon.Atom(
+                symbol="H",
+                x=1.0,
+                y=2.0,
+                z=3.0,
+                fixed=[False, False, False],
+                atom_id=1,
+                mass=1.008,
+            ),
         ]
         frame = readcon.ConFrame(
             cell=[15.0, 15.0, 100.0],
@@ -298,12 +336,18 @@ class TestConFrameConstructor:
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],
             angles=[90.0, 90.0, 90.0],
-            atoms=[readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, atom_id=0, mass=1.008)],
+            atoms=[
+                readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, atom_id=0, mass=1.008)
+            ],
         )
 
         atoms = frame.atoms
-        atoms.append(readcon.Atom(symbol="Cu", x=1.0, y=1.0, z=1.0, atom_id=1, mass=63.546))
-        atoms[0] = readcon.Atom(symbol="He", x=2.0, y=2.0, z=2.0, atom_id=0, mass=4.0026)
+        atoms.append(
+            readcon.Atom(symbol="Cu", x=1.0, y=1.0, z=1.0, atom_id=1, mass=63.546)
+        )
+        atoms[0] = readcon.Atom(
+            symbol="He", x=2.0, y=2.0, z=2.0, atom_id=0, mass=4.0026
+        )
         atoms[1].x = 4.5
 
         reread = readcon.read_con_string(readcon.write_con_string([frame]))[0]
@@ -428,7 +472,7 @@ class TestNumpyArrays:
         assert frame.velocities_array() is None
 
     def test_forces_array_round_trips(self):
-        np = pytest.importorskip("numpy")
+        pytest.importorskip("numpy")
         frame = readcon.read_con(_resource("tiny_cuh2_forces.con"))[0]
         forces = frame.forces_array()
         assert forces is not None
@@ -465,6 +509,7 @@ class TestErrorHandling:
 def test_read_all_frames_matches_read_con():
     """Batch ergonomics alias must match read_con on a real fixture."""
     from pathlib import Path
+
     tiny = Path(__file__).resolve().parents[2] / "resources" / "test" / "tiny_cuh2.con"
     a = readcon.read_con(str(tiny))
     b = readcon.read_all_frames(str(tiny))

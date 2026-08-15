@@ -130,6 +130,8 @@ pkg.generate(
     filebase: 'readcon-core',
     description: 'CON/convel file reader and writer with FFI, Python, Julia bindings',
     version: meson.project_version(),
-    libraries: ['-lreadcon_core'],
+    # Raw `-lfoo` strings do not get `-L${libdir}`; wrap consumers then
+    # fail at link with "cannot find -lreadcon_core".
+    libraries: ['-L${libdir}', '-lreadcon_core'],
     url: 'https://github.com/lode-org/readcon-core',
 )

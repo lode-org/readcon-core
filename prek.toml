@@ -1,0 +1,61 @@
+# Git hooks via `prek` (https://prek.j178.dev).
+# Install: `prek install`  (or `pixi r prek-install`)
+# Run all: `prek run -a`   (or `pixi r prek`)
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.3.0"
+
+exclude = """(?x)(
+    ^\\.pixi/|
+    ^docs/build/|
+    ^docs/_build/|
+    ^docs/source/crates/|
+    ^docs/notebooks/|
+    ^fortran/.*/build/|
+    ^benches/|
+    ^resources/test/|
+    ^.*\\.svg$|
+    ^.*\\.lock$
+)"""
+
+# Fast native implementations (no clone / no Python env).
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files", args = ["--maxkb=1000"] },
+  { id = "check-case-conflict" },
+  { id = "detect-private-key" },
+  { id = "mixed-line-ending", args = ["--fix=lf"] },
+]
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  { id = "check-ast" },
+  { id = "debug-statements" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.2"
+hooks = [
+  { id = "ruff", args = ["--fix"], types_or = ["python"] },
+  { id = "ruff-format", types_or = ["python"] },
+]
+
+[[repos]]
+repo = "https://github.com/ComPWA/taplo-pre-commit"
+rev = "v0.9.3"
+# prek.toml uses multiline inline tables; taplo 0.9 rejects those as invalid.
+hooks = [{ id = "taplo-format", exclude = "^prek\\.toml$" }]
+
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.1"
+hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor"] }]

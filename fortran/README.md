@@ -88,5 +88,5 @@ st = fr%select("name O", nmatch)
 st = fr%select_primary("name H", indices, nwritten)
 ```
 
-C API: `rkr_read_chemfiles_first`, `rkr_read_chemfiles_memory`, `rkr_has_chemfiles_support`.  
+C API: `rkr_read_chemfiles_first`, `rkr_read_chemfiles_memory`, `rkr_has_chemfiles_support`.
 Note: the Fortran **test suite** does not call into chemfiles C++ on CI (SIGFPE traps under gfortran on some runners); chemfiles is covered by Rust CI and the API above remains available for applications.

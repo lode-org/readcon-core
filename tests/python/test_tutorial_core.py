@@ -47,7 +47,7 @@ def test_org_source_declares_tangle_and_ci_script():
     script = SCRIPT.read_text(encoding="utf-8")
     assert "tangle drift" in script
     assert "falling back" not in script
-    assert "python3 \"$TANGLE_PY\"" in script or 'python3 "$TANGLE_PY"' in script
+    assert 'python3 "$TANGLE_PY"' in script or 'python3 "$TANGLE_PY"' in script
 
 
 def test_org_babel_tutorial_core_script():

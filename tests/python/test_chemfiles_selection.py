@@ -28,9 +28,33 @@ _TINY_MULTI = _REPO / "resources" / "test" / "tiny_multi_cuh2.con"
 def _ho_frame():
     """CON atom_data order: species are contiguous (H then O), not interleaved."""
     atoms = [
-        readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=0, mass=1.0),
-        readcon.Atom(symbol="H", x=2.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=1, mass=1.0),
-        readcon.Atom(symbol="O", x=1.0, y=0.0, z=0.0, fixed=[False, False, False], atom_id=2, mass=16.0),
+        readcon.Atom(
+            symbol="H",
+            x=0.0,
+            y=0.0,
+            z=0.0,
+            fixed=[False, False, False],
+            atom_id=0,
+            mass=1.0,
+        ),
+        readcon.Atom(
+            symbol="H",
+            x=2.0,
+            y=0.0,
+            z=0.0,
+            fixed=[False, False, False],
+            atom_id=1,
+            mass=1.0,
+        ),
+        readcon.Atom(
+            symbol="O",
+            x=1.0,
+            y=0.0,
+            z=0.0,
+            fixed=[False, False, False],
+            atom_id=2,
+            mass=16.0,
+        ),
     ]
     return readcon.ConFrame(
         cell=[10.0, 10.0, 10.0],

@@ -53,7 +53,10 @@ def test_chemfiles_notebook_org_declares_tangle():
     assert "tangle drift" in script
     assert "falling back" not in script
     # no soft-success paths (git-diff may use ``|| true`` only to print under set -e)
-    assert "papermill" not in script or "|| true" not in script.split("papermill")[-1][:200]
+    assert (
+        "papermill" not in script
+        or "|| true" not in script.split("papermill")[-1][:200]
+    )
     assert "missing after babel; trying tangled" not in script
 
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Render docs/source/_generated/cachegrind_results.rst from JSON."""
+
 from __future__ import annotations
 
 import json
@@ -46,7 +47,9 @@ def main() -> int:
     for name, irefs in scenarios.items():
         note = NOTES.get(name, "")
         lines.append(f"   * - ``{name}``")
-        lines.append(f"     - {irefs:,}" if isinstance(irefs, int) else f"     - {irefs}")
+        lines.append(
+            f"     - {irefs:,}" if isinstance(irefs, int) else f"     - {irefs}"
+        )
         lines.append(f"     - {note}")
     feat = data.get("features", "")
     lines += [

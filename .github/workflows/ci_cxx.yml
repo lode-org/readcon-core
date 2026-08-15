@@ -90,8 +90,8 @@ jobs:
           bash scripts/package-cxx.sh /tmp/cxx-out
           TAR=$(ls /tmp/cxx-out/readcon-core-cxx-*.tar.gz | grep -v vendor | head -1)
           tar -tzf "$TAR" | grep -E 'include/readcon-core\.h$'
-          if tar -tzf "$TAR" | grep -E 'cbindgen'; then
-            echo "cxx tarball must not require cbindgen" >&2
+          if tar -tzf "$TAR" | grep -E '(^|/)cbindgen(\.toml)?$'; then
+            echo "cxx tarball must not ship cbindgen.toml or a cbindgen binary" >&2
             exit 1
           fi
           SHA=$(sha256sum "$TAR" | awk '{print $1}')
