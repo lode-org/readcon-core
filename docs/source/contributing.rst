@@ -16,6 +16,10 @@ Prerequisites
 
 - `cocogitto <https://github.com/cocogitto/cocogitto>`_ (``cog``) for conventional commits and changelog
 
+- `prek <https://prek.j178.dev>`_ for git hooks (``prek.toml``)
+
+- `lychee <https://github.com/lycheeverse/lychee>`_ for docs link checks (via ``pixi r -e docs linkcheck``)
+
 Getting started
 ~~~~~~~~~~~~~~~
 
@@ -30,6 +34,11 @@ Getting started
 
     # Run with all features (needs capnproto)
     pixi r test-all
+
+    # Hooks (prek) and docs
+    pixi r prek
+    pixi r -e docs docbld
+    pixi r -e docs linkcheck
 
     # Build release
     pixi r build
@@ -54,7 +63,10 @@ Commit conventions
 ------------------
 
 The project uses `conventional commits <https://www.conventionalcommits.org/>`_ enforced by cocogitto.
-The CI lint check rejects non-conforming commit messages.
+The CI lint check rejects non-conforming commit messages on the PR
+range. Some historical commits use ``docs+bench:`` or untyped merges;
+``cog check --from-latest-tag`` is the local equivalent of the PR gate.
+``scripts/release-prep.sh`` runs ``cog changelog`` from the previous tag.
 
 Recognized commit types (from ``cog.toml``):
 
@@ -177,19 +189,31 @@ Workflows
 
 .. table::
 
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Workflow                  | File                       | Trigger            | Purpose                                       |
-    +===========================+============================+====================+===============================================+
-    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR     | Build wheels for 5 platforms, publish to PyPI |
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main         | ASV on base+PR (Python); optional Criterion   |
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete | Post ASV/spyglass table as PR comment         |
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Coverage                  | ``coverage.yml``           | push, PR           | Code coverage via tarpaulin                   |
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
-    | Lint                      | ``lint.yml``               | push, PR           | Conventional commit check + large file audit  |
-    +---------------------------+----------------------------+--------------------+-----------------------------------------------+
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Workflow                  | File                       | Trigger             | Purpose                                              |
+    +===========================+============================+=====================+======================================================+
+    | Prek                      | ``ci_prek.yml``            | push, PR            | ``prek run -a`` (whitespace, ruff, taplo, codespell) |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Documentation             | ``ci_docs.yml``            | push, PR            | ``pixi r -e docs docbld`` then lychee on HTML        |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | C/C++ dist                | ``ci_cxx.yml``             | push, PR            | CMake/Meson/pkg-config without cbindgen              |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR      | Build wheels for 5 platforms, publish to PyPI        |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main          | ASV on base+PR (Python); optional Criterion          |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete  | Post ASV/spyglass table as PR comment                |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Coverage                  | ``coverage.yml``           | push, PR            | Code coverage via tarpaulin                          |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Lint                      | ``lint.yml``               | PR                  | Conventional commit check + large file audit         |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | Release                   | ``release.yml``            | PR plan, ``v*`` tag | cargo-dist plan on PRs; GitHub Release on tag        |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | crates.io                 | ``crates_publish.yml``     | ``v*`` tag          | ``cargo publish --locked``                           |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release      | Attach slim + vendor C/C++ source tarballs           |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -229,26 +253,28 @@ Mental model (new contributor)
 ::
 
     scripts/release-prep.sh X.Y.Z
-          │  bumps version files, cog CHANGELOG, cxx-dist gate; cbindgen optional
+          │  prek, pixi docbld + lychee, version bump, cog CHANGELOG,
+          │  cxx-dist gate; cbindgen optional
           ▼
     commit: maint: bump to vX.Y.Z   ──►  open Pull Request to main
           │                                    │
           │                         cargo-dist workflow "Release"
           │                         runs `dist plan` on the PR (validate)
           ▼                                    ▼
-    merge PR to main  ──►  git tag -s vX.Y.Z && git push --tags
+    merge PR to main  ──►  git tag -s vX.Y.Z && git push origin vX.Y.Z
           │
           ├─► workflow "Release" (cargo-dist): CLI archives + GitHub Release
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
-          └─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
+          ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
+          └─► workflow "cxx source tarball": after the GitHub Release exists
 
 .. table::
 
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Layer       | What                                   | Workflow / tool                                                                                     |
     +=============+========================================+=====================================================================================================+
-    | Prep        | Versions + changelog                   | ``scripts/release-prep.sh``, ``cog``                                                                |
+    | Prep        | Hooks + docs + versions + changelog    | ``prek``, ``pixi r -e docs docbld``, ``lychee``, ``scripts/release-prep.sh``, ``cog``               |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Release PR  | Validate dist plan before a tag exists | ``.github/workflows/release.yml`` (cargo-dist; ``pr-run-mode = "plan"`` in ``dist-workspace.toml``) |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
@@ -257,6 +283,8 @@ Mental model (new contributor)
     | Tag publish | PyPI wheels                            | ``.github/workflows/python_wheels.yml``                                                             |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
+    +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
+    | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 cargo-dist release-PR path
@@ -281,7 +309,7 @@ cargo-dist release-PR path
 
        git checkout main && git pull origin main
        git tag -s vX.Y.Z -m "vX.Y.Z"
-       git push origin main --tags
+       git push origin vX.Y.Z
 
 5. On the tag push, the **same** ``Release`` workflow switches to publishing mode:
    builds platform archives for the ``readcon-core`` CLI binary and creates (or
@@ -378,6 +406,9 @@ Fast path (preferred):
 
 .. code:: shell
 
+    prek run -a
+    pixi r -e docs docbld
+    pixi r -e docs linkcheck
     scripts/release-prep.sh X.Y.Z
     # review staged files, then:
     git commit -m "maint: bump to vX.Y.Z"
@@ -385,8 +416,8 @@ Fast path (preferred):
     # merge PR to main, then:
     git checkout main && git pull
     git tag -s vX.Y.Z -m "vX.Y.Z"
-    git push origin main --tags
-    # wait for Release + Publish to crates.io + Python wheels
+    git push origin vX.Y.Z
+    # wait for Release + Publish to crates.io + Python wheels + cxx tarball
 
 Manual equivalent of the script:
 
@@ -397,6 +428,9 @@ Manual equivalent of the script:
        cargo test --locked
        cargo test --locked --features chemfiles   # optional; needs libchemfiles/cmake policy
        pixi r -e python python-test
+       prek run -a
+       pixi r -e docs docbld
+       pixi r -e docs linkcheck
 
 2. Bump the version in all six files listed above.
 
@@ -432,7 +466,7 @@ Manual equivalent of the script:
    .. code:: shell
 
        git tag -s vX.Y.Z -m "vX.Y.Z"
-       git push origin main --tags
+       git push origin vX.Y.Z
 
 8. Do **not** rely on a local ``cargo publish`` unless CI is red; prefer
    ``crates_publish.yml`` with ``CARGO_REGISTRY_TOKEN`` set. Local fallback:
