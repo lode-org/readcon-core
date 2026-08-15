@@ -43,15 +43,20 @@ fi
 } > /tmp/CHANGELOG.md
 mv /tmp/CHANGELOG.md CHANGELOG.md
 
-echo "==> cbindgen header check"
+echo "==> C/C++ distribution gate (no cbindgen required)"
+scripts/check-cxx-dist.sh
+
+echo "==> cbindgen header check (maintainer tool; optional)"
 if command -v cbindgen >/dev/null 2>&1; then
   scripts/regen-capi-headers.sh
+else
+  echo "cbindgen not on PATH; leaving shipped include/readcon-core.h unchanged"
 fi
 
 echo "==> stage release files"
 git add Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemfiles.toml \
   pixi.toml docs/source/conf.py src/lib.rs CHANGELOG.md \
-  include/readcon-core.h 2>/dev/null || true
+  include/readcon-core.h CMakeLists.txt cmake/ 2>/dev/null || true
 
 echo "Ready. Review, then:"
 echo "  git commit -m \"maint: bump to v${VER}\""
@@ -59,4 +64,6 @@ echo "  # open PR so .github/workflows/release.yml runs dist plan"
 echo "  # after merge:"
 echo "  git tag -s v${VER} -m \"v${VER}\""
 echo "  git push origin main --tags"
-echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release run on the tag"
+echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release + cxx_tarball.yml"
+echo "  # After the tag: scripts/package-cxx.sh dist/ --vendor"
+echo "  # Attach readcon-core-cxx-${VER}.tar.gz to the GitHub Release (cxx_tarball.yml)"

@@ -12,8 +12,10 @@ bench = "cargo bench"
 cachegrind-bench = { cmd = "scripts/run_cachegrind_bench.sh", description = "Valgrind Cachegrind I-refs for docs (slow)" }
 build = "cargo build --release"
 build-rpc = "cargo build --release --features rpc"
-regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen" }
+regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen (maintainers)" }
 check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Verify shipped C header matches what cbindgen would produce" }
+check-cxx-dist = { cmd = "scripts/check-cxx-dist.sh", description = "Gate: CMake/Meson/pkg-config never require cbindgen" }
+package-cxx = { cmd = "scripts/package-cxx.sh dist-cxx", description = "Assemble readcon-core-cxx-$VERSION.tar.gz" }
 
 [dependencies]
 rust = ">=1.88"
