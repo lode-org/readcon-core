@@ -10,8 +10,8 @@ authors:
 license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
-version: 0.13.1
-date-released: "2026-06-26"
+version: 0.14.0
+date-released: "2026-08-15"
 keywords:
   - parser
   - computational chemistry

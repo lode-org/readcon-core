@@ -254,7 +254,9 @@ CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. None of them run cbindgen. The cxx source tarball
 (``scripts/package-cxx.sh`` → ``readcon-core-cxx-$VERSION.tar.gz`` on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
+GitHub Release) is the FetchContent / wrapdb URL. A process that also
+links readcon-db must use the **shared** objects; do not static-link
+both ``libreadcon_core.a`` and ``libreadcon_db.a``. Maintainers only:
 
 ``scripts/regen-capi-headers.sh``.
 

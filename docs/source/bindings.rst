@@ -627,23 +627,27 @@ Builder metadata helpers:
 Build system integration
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Meson subproject
-^^^^^^^^^^^^^^^^
+Meson wrap
+^^^^^^^^^^
 
 .. code:: meson
 
-    readcon = subproject('readcon-core')
-    readcon_dep = readcon.get_variable('readcon_dep')
+    readcon_dep = dependency('readcon-core')
+    executable('my_app', 'main.c', dependencies: readcon_dep)
 
-    executable('my_app', 'main.cpp', dependencies: readcon_dep)
-
-CMake subproject
-^^^^^^^^^^^^^^^^
+CMake FetchContent
+^^^^^^^^^^^^^^^^^^
 
 .. code:: cmake
 
-    add_subdirectory(readcon-core)
-    target_link_libraries(my_app PRIVATE readcon-core::readcon-core)
+    include(FetchContent)
+    FetchContent_Declare(
+      readcon-core
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.0/readcon-core-cxx-0.14.0.tar.gz
+      URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
+    )
+    FetchContent_MakeAvailable(readcon-core)
+    target_link_libraries(my_app PRIVATE readcon-core::shared)
 
 metatensor TensorBlock export (v0.10.0+; C/Fortran ABI v0.13.1+)
 ----------------------------------------------------------------
@@ -824,7 +828,7 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
-(issue #6). Link ``libreadcon_core`` (Meson, CMake+Corrosion, or ``cargo build --release``).
+(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
 
 .. code:: bash
 

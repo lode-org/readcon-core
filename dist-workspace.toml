@@ -13,8 +13,10 @@ ci = "github"
 # before the tag is cut.
 pr-run-mode = "plan"
 installers = []
-# CLI binary archives (main.rs). C/C++ static/shared libs are not packaged by
-# dist; ship headers via the repo / cargo-c install path.
+# CLI binary archives (main.rs). C/C++ source tarballs
+# (readcon-core-cxx-$VERSION.tar.gz) are attached by cxx_tarball.yml
+# after the GitHub Release is published. cargo-c remains a third
+# install path; cbindgen is not required.
 targets = [
     "aarch64-apple-darwin",
     "aarch64-unknown-linux-gnu",
