@@ -40,6 +40,9 @@ jobs:
       - name: Verify shipped C header matches cbindgen output
         run: scripts/regen-capi-headers.sh --check
 
+      - name: C/C++ distribution gate
+        run: bash scripts/check-cxx-dist.sh
+
       - name: Run Rust tests
         run: cargo test
 
