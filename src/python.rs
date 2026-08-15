@@ -1762,4 +1762,3 @@ fn select_atom_positions_on_frames(
     let multi = rust_sel(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
     multi_frame_selection_to_py(py, multi)
 }
-

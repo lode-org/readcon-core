@@ -40,23 +40,26 @@ class TestAseAtomId:
         assert roundtrip_ids == original_ids
 
     def test_from_ase_falls_back_to_tags(self):
-        atoms = ase.Atoms("CuH", positions=[[0, 0, 0], [1, 1, 1]],
-                          cell=[10, 10, 10], pbc=True)
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
         atoms.set_tags([42, 7])
         frame = readcon.ConFrame.from_ase(atoms)
         assert frame.atoms[0].atom_id == 42
         assert frame.atoms[1].atom_id == 7
 
     def test_from_ase_falls_back_to_sequential(self):
-        atoms = ase.Atoms("CuH", positions=[[0, 0, 0], [1, 1, 1]],
-                          cell=[10, 10, 10], pbc=True)
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
         frame = readcon.ConFrame.from_ase(atoms)
         assert frame.atoms[0].atom_id == 0
         assert frame.atoms[1].atom_id == 1
 
     def test_from_ase_prefers_atom_id_over_tags(self):
-        atoms = ase.Atoms("CuH", positions=[[0, 0, 0], [1, 1, 1]],
-                          cell=[10, 10, 10], pbc=True)
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
         atoms.set_tags([99, 99])
         atoms.set_array("atom_id", np.array([10, 20]))
         frame = readcon.ConFrame.from_ase(atoms)
@@ -65,10 +68,24 @@ class TestAseAtomId:
 
     def test_nonsequential_atom_id_roundtrip(self):
         atoms_list = [
-            readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                         fixed=[True, True, True], atom_id=3, mass=63.546),
-            readcon.Atom(symbol="H", x=1.0, y=2.0, z=3.0,
-                         fixed=[False, False, False], atom_id=1, mass=1.008),
+            readcon.Atom(
+                symbol="Cu",
+                x=0.0,
+                y=0.0,
+                z=0.0,
+                fixed=[True, True, True],
+                atom_id=3,
+                mass=63.546,
+            ),
+            readcon.Atom(
+                symbol="H",
+                x=1.0,
+                y=2.0,
+                z=3.0,
+                fixed=[False, False, False],
+                atom_id=1,
+                mass=1.008,
+            ),
         ]
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],
@@ -115,8 +132,9 @@ class TestAseVelocities:
             assert back.vz == pytest.approx(orig.vz, abs=1e-8)
 
     def test_from_ase_with_velocities(self):
-        atoms = ase.Atoms("CuH", positions=[[0, 0, 0], [1, 1, 1]],
-                          cell=[10, 10, 10], pbc=True)
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
         atoms.set_velocities([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         frame = readcon.ConFrame.from_ase(atoms)
         assert frame.has_velocities
@@ -124,8 +142,9 @@ class TestAseVelocities:
         assert frame.atoms[1].vz == pytest.approx(0.6)
 
     def test_from_ase_no_velocities(self):
-        atoms = ase.Atoms("CuH", positions=[[0, 0, 0], [1, 1, 1]],
-                          cell=[10, 10, 10], pbc=True)
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
         frame = readcon.ConFrame.from_ase(atoms)
         assert not frame.has_velocities
         assert frame.atoms[0].vx is None
@@ -143,8 +162,7 @@ class TestAseMasses:
 
     def test_mass_roundtrip_via_ase(self):
         atoms_list = [
-            readcon.Atom(symbol="Pt", x=0.0, y=0.0, z=0.0,
-                         mass=195.08, atom_id=0),
+            readcon.Atom(symbol="Pt", x=0.0, y=0.0, z=0.0, mass=195.08, atom_id=0),
         ]
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],
@@ -184,20 +202,29 @@ class TestAseConstraints:
             cell=[10.0, 10.0, 10.0],
             angles=[90.0, 90.0, 90.0],
             atoms=[
-                readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                             fixed=[True, False, True], atom_id=0),
-                readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0,
-                             fixed=[True, True, True], atom_id=1),
+                readcon.Atom(
+                    symbol="Cu",
+                    x=0.0,
+                    y=0.0,
+                    z=0.0,
+                    fixed=[True, False, True],
+                    atom_id=0,
+                ),
+                readcon.Atom(
+                    symbol="H", x=1.0, y=1.0, z=1.0, fixed=[True, True, True], atom_id=1
+                ),
             ],
         )
 
         ase_atoms = frame.to_ase()
         fix_cartesian = [
-            constraint for constraint in ase_atoms.constraints
+            constraint
+            for constraint in ase_atoms.constraints
             if constraint.__class__.__name__ == "FixCartesian"
         ]
         fix_atoms = [
-            constraint for constraint in ase_atoms.constraints
+            constraint
+            for constraint in ase_atoms.constraints
             if constraint.__class__.__name__ == "FixAtoms"
         ]
 
@@ -212,12 +239,25 @@ class TestAseConstraints:
             cell=[10.0, 10.0, 10.0],
             angles=[90.0, 90.0, 90.0],
             atoms=[
-                readcon.Atom(symbol="Cu", x=0.0, y=0.0, z=0.0,
-                             fixed=[True, False, True], atom_id=0),
-                readcon.Atom(symbol="H", x=1.0, y=1.0, z=1.0,
-                             fixed=[False, True, False], atom_id=1),
-                readcon.Atom(symbol="H", x=2.0, y=2.0, z=2.0,
-                             fixed=[True, True, True], atom_id=2),
+                readcon.Atom(
+                    symbol="Cu",
+                    x=0.0,
+                    y=0.0,
+                    z=0.0,
+                    fixed=[True, False, True],
+                    atom_id=0,
+                ),
+                readcon.Atom(
+                    symbol="H",
+                    x=1.0,
+                    y=1.0,
+                    z=1.0,
+                    fixed=[False, True, False],
+                    atom_id=1,
+                ),
+                readcon.Atom(
+                    symbol="H", x=2.0, y=2.0, z=2.0, fixed=[True, True, True], atom_id=2
+                ),
             ],
         )
 

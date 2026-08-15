@@ -1,5 +1,3 @@
-import os
-
 project = "readcon-core"
 copyright = "2025--present, LODE developers"
 author = "LODE developers"

@@ -34,7 +34,4 @@ exclude = [
 
 
 # Do not require network for scheme-less / data
-exclude_path = [
-  "docs/build/_static/.*",
-  "docs/build/searchindex.js",
-]
+exclude_path = ["docs/build/_static/.*", "docs/build/searchindex.js"]

@@ -1,4 +1,5 @@
 """Drive shipped PyO3 entry points for campaign index_proj + canonical writer."""
+
 import os
 import tempfile
 
