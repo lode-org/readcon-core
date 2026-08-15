@@ -50,4 +50,3 @@ Lower is better for the same scenario. Comparable across commits on the same CI 
 
 Wall-clock Criterion tables elsewhere on this page are **illustrative** unless re-run for a release.
 PR workflow **Benchmark PR** still uses Criterion + ``critcmp`` for latency deltas.
-
