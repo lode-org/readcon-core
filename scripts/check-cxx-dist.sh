@@ -19,6 +19,11 @@ if grep -nE 'find_program[[:space:]]*\([[:space:]]*CBINDGEN|cbindgen[[:space:]]+
 fi
 grep -q 'readcon-core.h' CMakeLists.txt || die "CMakeLists.txt does not reference the shipped C header"
 grep -q 'Name: readcon-core' cmake/readcon-core.pc.in || die "missing pkg-config template name"
+if ! grep -q 'CON/convel file reader and writer with FFI, Python, Julia bindings' cmake/readcon-core.pc.in \
+    || ! grep -q "description: 'CON/convel file reader and writer with FFI, Python, Julia bindings'" meson.build \
+    || ! grep -q 'CON/convel file reader and writer with FFI, Python, Julia bindings' Cargo.toml; then
+    die "pkg-config Description must match cargo-c / CMake / Meson"
+fi
 grep -q 'readcon-core::shared' CMakeLists.txt || die "CMakeLists.txt missing readcon-core::shared"
 grep -q 'FetchContent' cmake/readcon-core-config.in.cmake && die "installed cmake config must not FetchContent"
 

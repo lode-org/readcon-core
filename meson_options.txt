@@ -10,3 +10,7 @@ option('with_tests', type : 'boolean',
        value : false,
        description: 'Builds and runs tests',
       )
+option('rust_features', type : 'string',
+       value : '',
+       description: 'Comma-separated cargo features forwarded to cargo rustc',
+      )

@@ -44,7 +44,7 @@ endif()
 string(REGEX REPLACE "([0-9]*)\\.([0-9]*)\\.([0-9]*).*" "\\1.\\2.\\3" READCON_CORE_CMAKE_VERSION ${READCON_CORE_VERSION})
 project(readcon-core
     VERSION ${READCON_CORE_CMAKE_VERSION}
-    LANGUAGES C CXX
+    LANGUAGES C
 )
 set(PROJECT_VERSION ${READCON_CORE_VERSION})
 
@@ -321,6 +321,18 @@ else()
     add_library(readcon-core ALIAS readcon-core::static)
     add_library(readcon-core::readcon-core ALIAS readcon-core::static)
 endif()
+
+string(REPLACE "," ";" _readcon_feat_list "${READCON_CORE_CARGO_FEATURES}")
+string(REPLACE " " ";" _readcon_feat_list "${_readcon_feat_list}")
+foreach(_feat ${_readcon_feat_list})
+    if (_feat STREQUAL "zstd")
+        target_compile_definitions(readcon-core::shared INTERFACE READCON_CORE_HAS_ZSTD)
+        target_compile_definitions(readcon-core::static INTERFACE READCON_CORE_HAS_ZSTD)
+    elseif (_feat STREQUAL "metatensor")
+        target_compile_definitions(readcon-core::shared INTERFACE READCON_CORE_HAS_METATENSOR)
+        target_compile_definitions(readcon-core::static INTERFACE READCON_CORE_HAS_METATENSOR)
+    endif()
+endforeach()
 
 #------------------------------------------------------------------------------#
 # Installation: headers, libs, cmake package, pkg-config

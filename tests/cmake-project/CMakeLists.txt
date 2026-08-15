@@ -6,7 +6,19 @@ project(readcon-core-cmake-test C)
 #   - otherwise: find_package of an installed prefix
 option(READCON_CORE_USE_FETCHCONTENT "Exercise FetchContent_Declare(SOURCE_DIR=...)" ON)
 
-if(DEFINED READCON_CORE_SOURCE_DIR)
+if(DEFINED READCON_CORE_FETCH_URL)
+    include(FetchContent)
+    if(DEFINED READCON_CORE_FETCH_HASH)
+        FetchContent_Declare(
+            readcon-core
+            URL "${READCON_CORE_FETCH_URL}"
+            URL_HASH "${READCON_CORE_FETCH_HASH}"
+        )
+    else()
+        FetchContent_Declare(readcon-core URL "${READCON_CORE_FETCH_URL}")
+    endif()
+    FetchContent_MakeAvailable(readcon-core)
+elseif(DEFINED READCON_CORE_SOURCE_DIR)
     if(READCON_CORE_USE_FETCHCONTENT)
         include(FetchContent)
         FetchContent_Declare(readcon-core SOURCE_DIR "${READCON_CORE_SOURCE_DIR}")
