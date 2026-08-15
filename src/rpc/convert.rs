@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use super::read_con_capnp::con_frame_data;
 use crate::types::{
-    con_frame_from_atom_data, decode_fixed_bitmask, encode_fixed_bitmask, AtomDatum, ConFrame,
+    con_frame_from_atom_data, decode_fixed_bitmask_for_spec, encode_fixed_bitmask, AtomDatum, ConFrame,
     FrameHeader, PreboxHeader,
 };
 
@@ -220,6 +220,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
         BTreeMap::new()
     };
 
+    let spec_version = fd.get_spec_version();
     let atoms_list = fd.get_atoms().map_err(|e| e.to_string())?;
     if natms_per_type.is_empty() {
         let mut current_symbol = String::new();
@@ -266,7 +267,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
             x: a.get_x(),
             y: a.get_y(),
             z: a.get_z(),
-            fixed: decode_fixed_bitmask(a.get_fixed_mask()),
+            fixed: decode_fixed_bitmask_for_spec(a.get_fixed_mask(), spec_version),
             atom_id: a.get_atom_id(),
             velocity: if a.get_has_velocity() {
                 Some([a.get_vx(), a.get_vy(), a.get_vz()])
