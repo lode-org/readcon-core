@@ -30,7 +30,7 @@ Pick **one** language. Version pins match this tree (``0.14.0``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | `bindings <bindings.rst>`_                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | build ``libreadcon_core`` then link                                                 | `bindings <bindings.rst>`_                                                                                                                  |
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                       | `bindings <bindings.rst>`_                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python — CON I/O
@@ -86,16 +86,34 @@ Language API notes: `bindings <bindings.rst>`_.
 Fortran / C / C++
 ~~~~~~~~~~~~~~~~~
 
-Build the shared library from this repository, then link as in
-`bindings <bindings.rst>`_. Headers: ``include/readcon-core.h`` /
-``include/readcon-core.hpp``.
+Headers in ``include/`` are shipped. cbindgen is **not** required.
+CMake FetchContent / ``find_package(readcon-core)``, Meson
+``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
+after a prefix install. The cxx tarball on the GitHub Release is
+``readcon-core-cxx-$VERSION.tar.gz``.
+
+.. code:: cmake
+
+    include(FetchContent)
+    FetchContent_Declare(
+      readcon-core
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.0/readcon-core-cxx-0.14.0.tar.gz
+    )
+    FetchContent_MakeAvailable(readcon-core)
+    target_link_libraries(app PRIVATE readcon-core::shared)
+
+.. code:: meson
+
+    readcon_dep = dependency('readcon-core')
+
+From a git checkout:
 
 .. code:: shell
 
-    cargo build --release
-    # Fortran smoke (example):
-    # cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
-    #   --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+    cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$PWD/prefix
+    cmake --build build && cmake --install build
+    export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
+    pkg-config --cflags --libs readcon-core
 
 Smoke test
 ----------

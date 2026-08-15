@@ -40,7 +40,7 @@ See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 - *Lazy iteration:* ~ConFrameIterator~; =next_with_raw_span= keeps the on-disk blob for corpus ingest.
 - *Hot path:* [[https://github.com/aldanor/fast-float-rust][fast-float2]], [[https://docs.rs/memmap2][memmap2]], Cachegrind-tracked scenarios.
 - *Parallel frames:* Rayon behind the ~parallel~ Cargo feature.
-- *Bindings:* Python (PyO3), Julia (ccall), C (cbindgen), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [[https://github.com/metatensor/metatensor][metatensor]].
+- *Bindings:* Python (PyO3), Julia (ccall), C (shipped header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [[https://github.com/metatensor/metatensor][metatensor]].
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 - *Fidelity:* =atom_id=, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
@@ -82,10 +82,11 @@ How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles p
 | Python + chemfiles | =pip install readcon-chemfiles= | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] |
 | Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] |
 | Julia | =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:docs/orgmode/bindings.org][bindings]] |
-| C / C++ system | =cargo cinstall --release --prefix /usr/local= | headers + =libreadcon_core= (see bindings) |
-| C / C++ via meson | =subprojects/readcon-core/= → =readcon_core_dep= | same |
+| C / C++ CMake | =FetchContent= / =find_package(readcon-core)= (cxx tarball) | headers + =libreadcon_core= + =readcon-core.pc= |
+| C / C++ Meson | =dependency('readcon-core')= (wrapdb / wrap-file) | same |
+| C / C++ cargo-c | =cargo cinstall --release --prefix /usr/local= | same |
 
-The C/C++ headers require a C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=, for =std::optional= and =std::filesystem=) compiler.
+The C/C++ headers are *shipped* (=include/readcon-core.h=). cbindgen is a maintainer tool, not a consumer dependency. C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=) compiler. FetchContent URL: =readcon-core-cxx-$VERSION.tar.gz= on the GitHub Release.
 Full matrix: [[file:docs/orgmode/getting-started.org][getting-started]].
 
 ** Tutorial
@@ -123,7 +124,7 @@ Conversion from XYZ/PDB/GRO: [[file:docs/orgmode/chemfiles-tutorial.org][chemfil
 ** Design Decisions
 
 - *Lazy parsing:* ~ConFrameIterator~ parses one frame at a time for large trajectories.
-- *Hourglass FFI:* C header from cbindgen plus a hand-written C++ RAII wrapper, same pattern as [[https://github.com/metatensor/metatensor][metatensor]].
+- *Hourglass FFI:* shipped C header plus a hand-written C++ RAII wrapper, same pattern as [[https://github.com/metatensor/metatensor][metatensor]]. CMake FetchContent, Meson wrap, and =readcon-core.pc= do not run cbindgen.
 
 *** FFI Layer
 
