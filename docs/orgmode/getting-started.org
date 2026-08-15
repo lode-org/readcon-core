@@ -21,7 +21,7 @@ Pick *one* language. Version pins match this tree (=0.14.0=).
 | Rust + chemfiles | =cargo add readcon-core --features chemfiles= | same crate |
 | Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
 | Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
-| C / C++ / Fortran | build =libreadcon_core= then link | [[file:bindings.org][bindings]] |
+| C / C++ / Fortran | CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
 
 ** Python — CON I/O
 
@@ -69,12 +69,34 @@ Language API notes: [[file:bindings.org][bindings]].
 
 ** Fortran / C / C++
 
-Build the shared library from this repository, then link as in
-[[file:bindings.org][bindings]]. Headers: =include/readcon-core.h= /
-=include/readcon-core.hpp=.
+Headers in =include/= are shipped. cbindgen is *not* required.
+CMake FetchContent / =find_package(readcon-core)=, Meson
+=dependency('readcon-core')=, or =pkg-config --libs readcon-core=
+after a prefix install. The cxx tarball on the GitHub Release is
+=readcon-core-cxx-$VERSION.tar.gz=.
+
+#+begin_src cmake
+include(FetchContent)
+FetchContent_Declare(
+  readcon-core
+  URL https://github.com/lode-org/readcon-core/releases/download/v0.14.0/readcon-core-cxx-0.14.0.tar.gz
+)
+FetchContent_MakeAvailable(readcon-core)
+target_link_libraries(app PRIVATE readcon-core::shared)
+#+end_src
+
+#+begin_src meson
+readcon_dep = dependency('readcon-core')
+#+end_src
+
+From a git checkout:
 
 #+begin_src shell
-cargo build --release
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$PWD/prefix
+cmake --build build && cmake --install build
+export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
+pkg-config --cflags --libs readcon-core
+#+end_src
 # Fortran smoke (example):
 # cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
 #   --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
