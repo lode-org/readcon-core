@@ -20,7 +20,7 @@
      - 29,022,983
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
-     - 6,891,152
+     - 6,891,169
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
      - 12,621,810
@@ -35,7 +35,7 @@
      - 35,126,058
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
-     - 8,760,309
+     - 8,760,326
      - XYZ path → ConFrame (50×)
    * - ``chemfiles_xyz_memory``
      - 8,535,384
@@ -44,9 +44,10 @@
      - 6,044,903
      - selection ``name O`` (50×)
 
-Generated **2026-08-15T18:12:47Z** from commit ``7eb76f7``
+Generated **2026-08-15T19:13:00Z** from commit ``8ea6710``
 (Cargo features: ``chemfiles``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
 Wall-clock Criterion tables elsewhere on this page are **illustrative** unless re-run for a release.
 PR workflow **Benchmark PR** still uses Criterion + ``critcmp`` for latency deltas.
+
