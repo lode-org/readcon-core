@@ -123,16 +123,18 @@ jobs:
             pyproject: pyproject.chemfiles.toml
             features: python,chemfiles
     steps:
-      - name: Allow reserved DOS names (grammar/con.pest)
-        if: runner.os == 'Windows'
-        run: git config --global core.protectNTFS false
-
       - uses: actions/checkout@v6
 
       # BFD is the stable manylinux linker. Apple clang rejects -fuse-ld=bfd.
       - name: Linux BFD linker
         if: runner.os == 'Linux'
         run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      # Vendored zlib in chemfiles-sys 0.10.41 fails on the current MacOSX SDK.
+      # chemfiles CMake option CHFL_SYSTEM_ZLIB uses Apple zlib instead.
+      - name: macOS chemfiles uses system zlib
+        if: runner.os == 'macOS' && matrix.variant == 'chemfiles'
+        run: echo "CMAKE_ARGS=-DCHFL_SYSTEM_ZLIB=ON" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
@@ -152,6 +154,7 @@ jobs:
         continue-on-error: true
         env:
           RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
+          CMAKE_ARGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DCHFL_SYSTEM_ZLIB=ON' || '' }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -167,6 +170,7 @@ jobs:
         if: steps.build1.outcome == 'failure'
         env:
           RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
+          CMAKE_ARGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DCHFL_SYSTEM_ZLIB=ON' || '' }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
