@@ -47,7 +47,7 @@ jobs:
         include:
           - features: python
             name: lean
-          - features: python,chemfiles
+          - features: python,chemfiles-from-sources
             name: chemfiles
     steps:
       - uses: actions/checkout@v6

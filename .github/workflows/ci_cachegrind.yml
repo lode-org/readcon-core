@@ -46,7 +46,7 @@ jobs:
         run: scripts/run_cachegrind_bench.sh
         env:
           CARGO_TERM_COLOR: always
-          CACHEGRIND_FEATURES: chemfiles
+          CACHEGRIND_FEATURES: chemfiles-from-sources
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

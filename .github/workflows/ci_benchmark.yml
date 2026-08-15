@@ -69,7 +69,7 @@ jobs:
         env:
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
-          maturin develop --features python,chemfiles --release
+          maturin develop --features python,chemfiles-from-sources --release
           python -c "import readcon; assert readcon.has_chemfiles_support(); print(readcon.__version__)"
 
       - name: Run ASV

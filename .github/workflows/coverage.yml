@@ -71,7 +71,7 @@ jobs:
         env:
           # Full non-CUDA feature set (chemfiles/metatensor/zstd/grammar/parallel).
           # PyO3/RPC/CUDA excluded from this report (see codecov.yml ignore + script).
-          READCON_COV_FEATURES: parallel,chemfiles,zstd,grammar,metatensor
+          READCON_COV_FEATURES: parallel,chemfiles-from-sources,zstd,grammar,metatensor
         run: |
           unset RUSTC_WRAPPER || true
           CAPNP_BIN="$(pixi r -e default bash -c 'dirname "$(command -v capnp)"')"
@@ -137,7 +137,7 @@ jobs:
       - name: Generate python binding coverage (src/python.rs LCOV)
         id: coverage
         env:
-          READCON_PY_FEATURES: python,chemfiles
+          READCON_PY_FEATURES: python,chemfiles-from-sources
           READCON_PY_VENV: ${{ github.workspace }}/.venv-coverage-python
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
@@ -176,7 +176,7 @@ jobs:
           version: '1.10'
 
       - name: Build libreadcon_core
-        run: cargo build --release --features chemfiles
+        run: cargo build --release --features chemfiles-from-sources
 
       - name: Julia tests with Coverage.jl
         env:
@@ -240,7 +240,7 @@ jobs:
       - name: Build libreadcon_core (chemfiles)
         run: |
           for attempt in 1 2 3; do
-            if cargo build --release --features chemfiles; then
+            if cargo build --release --features chemfiles-from-sources; then
               break
             fi
             if [[ "$attempt" -eq 3 ]]; then
