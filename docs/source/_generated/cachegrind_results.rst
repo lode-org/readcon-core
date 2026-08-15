@@ -8,45 +8,46 @@
      - I refs
      - Notes
    * - ``parse_multi_2x4``
-     - 6,442,248
+     - 6,442,260
      - 2-frame multi CON (50×)
    * - ``forward_multi_2x4``
-     - 4,919,704
+     - 4,919,716
      - forward() skip (50×)
    * - ``convel_multi``
-     - 7,270,072
+     - 7,270,084
      - coords + velocities (50×)
    * - ``parse_100_frames``
-     - 29,049,983
+     - 29,049,995
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
-     - 6,891,169
+     - 6,891,164
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
-     - 12,677,990
+     - 12,678,002
      - 218-atom frame (20×)
    * - ``float_fast_float2``
-     - 20,002,468
+     - 20,002,480
      - 5-col fast-float2 (10k)
    * - ``float_std_parse``
-     - 32,902,958
+     - 32,902,970
      - 5-col str::parse (10k)
    * - ``write_100_frames``
-     - 35,128,758
+     - 35,128,770
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
-     - 8,760,150
+     - 8,758,445
      - XYZ path → ConFrame (50×)
    * - ``chemfiles_xyz_memory``
-     - 8,535,167
+     - 8,535,762
      - XYZ memory → ConFrame (50×)
    * - ``chemfiles_select_name_O``
-     - 6,044,896
+     - 6,044,440
      - selection ``name O`` (50×)
 
-Generated **2026-08-15T20:43:23Z** from commit ``edaa479``
-(Cargo features: ``chemfiles``). Metric: Valgrind Cachegrind **I refs**.
+Generated **2026-08-15T20:57:20Z** from commit ``2bd9cda``
+(Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
 Wall-clock Criterion tables elsewhere on this page are **illustrative** unless re-run for a release.
 PR workflow **Benchmark PR** still uses Criterion + ``critcmp`` for latency deltas.
+
