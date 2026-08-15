@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.14.5 - 2026-08-15
+#### Bug Fixes
+- macOS ``readcon-chemfiles`` wheels link the official prebuilt libchemfiles (Linux stays ``chemfiles-from-sources``)
+
 ## v0.14.4 - 2026-08-15
 #### Bug Fixes
 - pass ``HAVE_UNISTD_H`` so macOS chemfiles wheels compile vendored zlib against the current SDK
