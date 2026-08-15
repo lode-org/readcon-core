@@ -34,6 +34,7 @@ def main(argv: list[str]) -> int:
     cmd = [
         cargo,
         "rustc",
+        "--lib",
         "--manifest-path",
         str(src_root_p / "Cargo.toml"),
         "--target-dir",
