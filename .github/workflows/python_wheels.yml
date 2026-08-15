@@ -147,6 +147,13 @@ jobs:
           echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
           echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
 
+      # Official prebuilt libchemfiles.obj calls GetUserNameA (advapi32).
+      # cmake-rs does not add that import lib for the prebuilt path.
+      - name: Windows chemfiles link advapi32
+        if: runner.os == 'Windows' && matrix.variant == 'chemfiles'
+        shell: bash
+        run: echo "RUSTFLAGS=-C link-arg=advapi32.lib" >> "$GITHUB_ENV"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -164,7 +171,7 @@ jobs:
         id: build1
         continue-on-error: true
         env:
-          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
+          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || (runner.os == 'Windows' && matrix.variant == 'chemfiles' && '-C link-arg=advapi32.lib' || '') }}
           CFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
           CXXFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
         uses: PyO3/maturin-action@v1
@@ -181,7 +188,7 @@ jobs:
       - name: Build wheels (retry)
         if: steps.build1.outcome == 'failure'
         env:
-          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
+          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || (runner.os == 'Windows' && matrix.variant == 'chemfiles' && '-C link-arg=advapi32.lib' || '') }}
           CFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
           CXXFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
         uses: PyO3/maturin-action@v1
