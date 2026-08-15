@@ -51,9 +51,15 @@ def test_read_chemfiles_all_and_memory(water_xyz: Path):
 
 def test_select_methods_on_frame_with_bonds():
     atoms = [
-        readcon.Atom("O", 0.0, 0.0, 0.0, fixed=[False, False, False], atom_id=0, mass=16.0),
-        readcon.Atom("H", 1.0, 0.0, 0.0, fixed=[False, False, False], atom_id=1, mass=1.0),
-        readcon.Atom("H", 0.0, 1.0, 0.0, fixed=[False, False, False], atom_id=2, mass=1.0),
+        readcon.Atom(
+            "O", 0.0, 0.0, 0.0, fixed=[False, False, False], atom_id=0, mass=16.0
+        ),
+        readcon.Atom(
+            "H", 1.0, 0.0, 0.0, fixed=[False, False, False], atom_id=1, mass=1.0
+        ),
+        readcon.Atom(
+            "H", 0.0, 1.0, 0.0, fixed=[False, False, False], atom_id=2, mass=1.0
+        ),
     ]
     frame = readcon.ConFrame(
         cell=[10.0, 10.0, 10.0],

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Rewrite accidental `label <page.rst>`_ links to :doc:`page` in Sphinx RST."""
+
 from __future__ import annotations
 
 import re
@@ -15,7 +16,9 @@ def fix_text(t: str) -> str:
         return f":doc:`{stem}`"
 
     # Relative targets only: absolute URLs (https://.../foo.org) are real links
-    t = re.sub(r"`([^\`<>]+)\s+<((?![a-z][a-z0-9+.-]*:)[^>]+?\.(?:rst|org))>`_", repl, t)
+    t = re.sub(
+        r"`([^\`<>]+)\s+<((?![a-z][a-z0-9+.-]*:)[^>]+?\.(?:rst|org))>`_", repl, t
+    )
     t = re.sub(r"(\S)\./(\s|$)", r"\1.\2", t)
     return t
 

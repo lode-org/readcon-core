@@ -4,6 +4,7 @@
 Coverage.jl emits package-relative paths (src/wrapper.jl). Codecov flag
 paths are julia/ReadCon/src/**, so map SF records to absolute workspace paths.
 """
+
 from __future__ import annotations
 
 import argparse

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Prepare a release commit per docs/orgmode/contributing.org (items 1–6).
+# Prepare a release commit per docs/orgmode/contributing.org.
 # Usage: scripts/release-prep.sh X.Y.Z
+# Requires: cog, prek, pixi (docs env), lychee. cargo test unless
+# READCON_RELEASE_PREP_SKIP_TESTS=1 (run tests on the remote builder).
 # Then open a PR (cargo-dist Release workflow runs plan on PRs), merge,
-# and: git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin main --tags
+# and: git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -13,8 +15,19 @@ if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
   exit 1
 fi
 
-echo "==> tests (default features)"
-cargo test --locked
+for cmd in cog prek pixi lychee; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "$cmd required on PATH" >&2
+    exit 1
+  fi
+done
+
+if [[ "${READCON_RELEASE_PREP_SKIP_TESTS:-}" == 1 ]]; then
+  echo "==> tests skipped (READCON_RELEASE_PREP_SKIP_TESTS=1)"
+else
+  echo "==> tests (default features)"
+  cargo test --locked
+fi
 
 echo "==> version bump -> $VER"
 # Cargo.toml package version (first occurrence)
@@ -32,18 +45,31 @@ sed -i "s/^version = \".*\"/version = \"${VER}\"/" fortran/ReadCon/fpm.toml
 sed -i "s/^version: .*/version: ${VER}/" CITATION.cff
 
 echo "==> Cargo.lock refresh"
-cargo test --locked -q
+if [[ "${READCON_RELEASE_PREP_SKIP_TESTS:-}" == 1 ]]; then
+  echo "skipping cargo test --locked; refresh Cargo.lock on the builder"
+else
+  cargo test --locked -q
+fi
 
 echo "==> CHANGELOG via cog"
-if ! command -v cog >/dev/null 2>&1; then
-  echo "cog (cocogitto) required on PATH" >&2
-  exit 1
-fi
+# Full-history `cog changelog` fails on pre-v0.14 commits whose types
+# are not conventional (`docs+bench:`, untyped merges). Generate the
+# new section from the previous tag and keep existing ## v* sections.
+prev="$(git describe --tags --abbrev=0)"
 {
   sed -n '1,3p' CHANGELOG.md
-  cog changelog
+  cog changelog "${prev}.."
+  echo
+  awk '/^## v/{found=1} found' CHANGELOG.md
 } > /tmp/CHANGELOG.md
 mv /tmp/CHANGELOG.md CHANGELOG.md
+
+echo "==> prek"
+prek run -a
+
+echo "==> docs (orgbld + sphinx) and lychee"
+pixi r -e docs docbld
+pixi r -e docs linkcheck
 
 echo "==> C/C++ distribution gate (no cbindgen required)"
 scripts/check-cxx-dist.sh
@@ -65,7 +91,7 @@ echo "  git commit -m \"maint: bump to v${VER}\""
 echo "  # open PR so .github/workflows/release.yml runs dist plan"
 echo "  # after merge:"
 echo "  git tag -s v${VER} -m \"v${VER}\""
-echo "  git push origin main --tags"
+echo "  git push origin v${VER}"
 echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release + cxx_tarball.yml"
 echo "  # After the tag: scripts/package-cxx.sh dist/ --vendor"
 echo "  # Attach readcon-core-cxx-${VER}.tar.gz to the GitHub Release (cxx_tarball.yml)"

@@ -11,12 +11,12 @@ license = "MIT"
 readme = "README.md"
 keywords = ["parser", "comp-chem", "file-format", "con", "eon"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering :: Chemistry",
-    "Topic :: Scientific/Engineering :: Physics",
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Chemistry",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
 ]
 
 [project.urls]
@@ -41,3 +41,7 @@ chemfiles = ["readcon-chemfiles==0.14.1"]
 # `python` pulls `parallel` (Rayon multi-frame parse) via Cargo.toml.
 features = ["python"]
 module-name = "readcon"
+
+[tool.ruff.lint]
+# pytest.importorskip must run before the imported name is used.
+per-file-ignores = { "tests/**/*.py" = ["E402"] }
