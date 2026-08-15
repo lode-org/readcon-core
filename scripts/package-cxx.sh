@@ -33,7 +33,11 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -1)"
-ARCHIVE_NAME="readcon-core-cxx-${VERSION}"
+if [[ "$VENDOR" -eq 1 ]]; then
+    ARCHIVE_NAME="readcon-core-cxx-${VERSION}-vendor"
+else
+    ARCHIVE_NAME="readcon-core-cxx-${VERSION}"
+fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -140,8 +144,12 @@ directory = "vendor"
 EOF
 fi
 
-# Drop crate-only tests that pull extra fixtures the cxx consumer does not need.
-rm -rf "$DEST/tests" "$DEST/benches" "$DEST/julia" "$DEST/fortran" "$DEST/docs" || true
+# Drop crate-only trees. Keep CMake/Meson consume tests.
+rm -rf "$DEST/tests" "$DEST/benches" "$DEST/benchmarks" "$DEST/julia" \
+    "$DEST/fortran" "$DEST/docs" "$DEST/addl" || true
+mkdir -p "$DEST/tests"
+cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
+cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
 
 tar -C "$TMP_DIR" -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
 gzip -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"

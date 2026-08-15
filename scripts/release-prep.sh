@@ -28,6 +28,8 @@ sed -i "0,/^version = /{s/^version = \".*\"/version = \"${VER}\"/}" pixi.toml
 sed -i "s/^release = \".*\"/release = \"${VER}\"/" docs/source/conf.py
 # lib.rs version assertion
 sed -i "s/assert_eq!(VERSION, \"[^\"]*\")/assert_eq!(VERSION, \"${VER}\")/" src/lib.rs
+sed -i "s/^version = \".*\"/version = \"${VER}\"/" fortran/ReadCon/fpm.toml
+sed -i "s/^version: .*/version: ${VER}/" CITATION.cff
 
 echo "==> Cargo.lock refresh"
 cargo test --locked -q
@@ -56,7 +58,7 @@ fi
 echo "==> stage release files"
 git add Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemfiles.toml \
   pixi.toml docs/source/conf.py src/lib.rs CHANGELOG.md \
-  include/readcon-core.h CMakeLists.txt cmake/ 2>/dev/null || true
+  include/readcon-core.h cmake/ fortran/ReadCon/fpm.toml CITATION.cff 2>/dev/null || true
 
 echo "Ready. Review, then:"
 echo "  git commit -m \"maint: bump to v${VER}\""

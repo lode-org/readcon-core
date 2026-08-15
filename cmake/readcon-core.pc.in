@@ -4,7 +4,7 @@ libdir=${prefix}/@LIB_INSTALL_DIR@
 includedir=${prefix}/@INCLUDE_INSTALL_DIR@
 
 Name: readcon-core
-Description: CON/convel file reader and writer with C/C++ FFI
+Description: CON/convel file reader and writer with FFI, Python, Julia bindings
 Version: @PROJECT_VERSION@
 URL: https://github.com/lode-org/readcon-core
 Libs: -L${libdir} -lreadcon_core

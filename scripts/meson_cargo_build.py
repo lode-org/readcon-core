@@ -13,10 +13,10 @@ from pathlib import Path
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 9:
+    if len(argv) not in (9, 10):
         print(
             "usage: meson_cargo_build.py CARGO SRC_ROOT TARGET_DIR PROFILE "
-            "SHARED_NAME STATIC_NAME OUT_SHARED OUT_STATIC",
+            "SHARED_NAME STATIC_NAME OUT_SHARED OUT_STATIC [FEATURES]",
             file=sys.stderr,
         )
         return 2
@@ -29,7 +29,8 @@ def main(argv: list[str]) -> int:
         static_name,
         out_shared,
         out_static,
-    ) = argv[1:]
+    ) = argv[1:9]
+    features = argv[9] if len(argv) == 10 else ""
     src_root_p = Path(src_root)
     cmd = [
         cargo,
@@ -46,6 +47,8 @@ def main(argv: list[str]) -> int:
         cmd.append("--offline")
     if profile == "release":
         cmd.append("--release")
+    if features.strip():
+        cmd.extend(["--features", features.strip()])
     rustc_args = ["--crate-type=cdylib", "--crate-type=staticlib"]
     if sys.platform.startswith("linux"):
         rustc_args.append(f"-Clink-arg=-Wl,-soname,{shared_name}")

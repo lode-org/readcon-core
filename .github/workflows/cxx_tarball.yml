@@ -1,12 +1,11 @@
 name: cxx source tarball
 
-# Attaches readcon-core-cxx-$VERSION.tar.gz to the GitHub Release created
-# by cargo-dist on a version tag. Consumers FetchContent / wrap this URL.
+# Attaches slim + vendor cxx tarballs after cargo-dist publishes the
+# GitHub Release. Slim URL is the FetchContent / wrapdb default.
 # cbindgen is not installed and not invoked.
 on:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -21,14 +20,15 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Assemble cxx tarball
+      - name: Assemble slim and vendor cxx tarballs
         run: |
           mkdir -p dist-cxx
+          bash scripts/package-cxx.sh dist-cxx
           bash scripts/package-cxx.sh dist-cxx --vendor
           ls -lh dist-cxx
 
-      - name: Upload tarball to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload tarballs to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -37,4 +37,4 @@ jobs:
           fail_on_unmatched_files: true
           append_body: true
           body: |
-            C/C++ source tarball (`readcon-core-cxx-*.tar.gz`) for CMake FetchContent and Meson wrap. Headers are pre-generated; cbindgen is not required.
+            C/C++ source tarballs: `readcon-core-cxx-$VERSION.tar.gz` (FetchContent / wrap default) and `readcon-core-cxx-$VERSION-vendor.tar.gz` (offline crates). Headers are pre-generated; cbindgen is not required.
