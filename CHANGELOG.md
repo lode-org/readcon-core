@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.14.4 - 2026-08-15
+#### Bug Fixes
+- pass ``HAVE_UNISTD_H`` so macOS chemfiles wheels compile vendored zlib against the current SDK
+
 ## v0.14.3 - 2026-08-15
 #### Bug Fixes
 - rename `grammar/con.pest` to `grammar/readcon.pest` so Windows checkout works
