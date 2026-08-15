@@ -86,7 +86,7 @@ readcon_cargo = custom_target(
         _cargo_static,
         '@OUTPUT0@',
         '@OUTPUT1@',
-        get_option('rust_features'),
+        get_option('cargo_features'),
     ],
     build_by_default: true,
     install: true,
