@@ -699,7 +699,10 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
 fn ffi_read_first_chemfiles_and_data_ptrs() {
     use std::ptr;
     unsafe {
+        #[cfg(feature = "chemfiles")]
         assert_eq!(rkr_has_chemfiles_support(), 1);
+        #[cfg(not(feature = "chemfiles"))]
+        assert_eq!(rkr_has_chemfiles_support(), 0);
         let path = CString::new("resources/test/tiny_cuh2.con").unwrap();
         let first = rkr_read_first_frame(path.as_ptr());
         assert!(!first.is_null());
