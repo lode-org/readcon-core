@@ -22,8 +22,10 @@ foreach exmpl : examples_array
             sources: [exmpl.get(1)],
             dependencies: readcon_dep,
             include_directories: include_directories('../include'),
+            build_rpath: meson.project_build_root(),
         ),
         args: exmpl.get(2),
+        env: {'LD_LIBRARY_PATH': meson.project_build_root()},
         workdir: _msproot + '/resources/test/',
     )
 endforeach
