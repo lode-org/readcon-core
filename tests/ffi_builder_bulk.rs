@@ -127,10 +127,9 @@ fn builder_bulk_setters_getters_and_metrics() {
         let mut has_f = false;
         let _ = rkr_frame_builder_get_atom_force(b, 0, xyz.as_mut_ptr(), &mut has_f);
 
-        let meta = CString::new(
-            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}"#,
-        )
-        .unwrap();
+        let meta =
+            CString::new(r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}"#)
+                .unwrap();
         let _ = rkr_frame_builder_set_metadata_json(b, meta.as_ptr());
         let _ = rkr_frame_builder_set_energy(b, -12.5);
         let _ = rkr_frame_builder_set_frame_index(b, 3);
@@ -468,15 +467,7 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         // as_dlpack with explicit device args
         {
             let mut tensor: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
-            let st = rkr_frame_positions_as_dlpack(
-                frame,
-                1,
-                0,
-                0,
-                1,
-                0,
-                &mut tensor,
-            );
+            let st = rkr_frame_positions_as_dlpack(frame, 1, 0, 0, 1, 0, &mut tensor);
             if st == RKRStatus::RKR_STATUS_SUCCESS && !tensor.is_null() {
                 rkr_dlpack_delete(tensor);
             }
@@ -512,12 +503,8 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
                 if mc > 0 {
                     let mut atoms = vec![0u64; (cs as usize).max(8)];
                     let mut out_size = 0u32;
-                    let _ = rkr_selection_result_match_at(
-                        result,
-                        0,
-                        atoms.as_mut_ptr(),
-                        &mut out_size,
-                    );
+                    let _ =
+                        rkr_selection_result_match_at(result, 0, atoms.as_mut_ptr(), &mut out_size);
                     let mut prim = vec![0u64; mc as usize];
                     let mut written = 0u64;
                     let _ = rkr_selection_result_primary_indices(

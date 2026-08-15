@@ -213,7 +213,7 @@ Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 
 The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
-`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
+:doc:`benchmarks` (``benchmarks/``, ``asv.conf.json``).
 
 Release process
 ---------------

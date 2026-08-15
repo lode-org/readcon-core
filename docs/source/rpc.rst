@@ -25,18 +25,36 @@ The schema defines a ``ReadConService`` interface with two methods:
 
 The schema file is at ``schema/ReadCon.capnp``.
 
-**CON v3 field parity** (wire shape of a parsed ``ConFrame``, not an on-disk
+****CON v3 field parity**** (wire shape of a parsed ``ConFrame``, not an on-disk
 bcon file):
 
-- ``ConAtom.fixedMask`` (u8, 0–7) — per-axis constraints
-- optional velocity / force / energy / charge / spin / magmom on ``ConAtom``
-- ``ConFrameData``: ``specVersion``, section presence flags, ``massesPerType``,
-  ``natmsPerType``, ``sections``, ``metadataJson``, ``strictValidation``,
-  ``sectionsDeclared``
+.. table::
 
-Round-trip helpers: ``src/rpc/convert.rs``. Text ``.con`` remains the on-disk
-interchange authority. Pre-v3 wire (``isFixed: Bool``, velocity-only atoms) is
-not compatible; regenerate clients from the current schema (0.x RPC).
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | Cap'n Proto                                                                      | Maps to                                                    |
+    +==================================================================================+============================================================+
+    | ``ConAtom.fixedMask`` (u8, 0–7)                                                  | per-axis constraints (``encode_fixed_bitmask``)            |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``ConAtom`` velocity / force / energy / charge / spin / magmom                   | ``AtomDatum`` optional sections                            |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``ConFrameData.specVersion``                                                     | ``FrameHeader.spec_version`` (default 2)                   |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``hasForces`` / ``hasEnergies`` / ``hasCharges`` / ``hasSpins`` / ``hasMagmoms`` | section presence                                           |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``massesPerType`` / ``natmsPerType``                                             | type table                                                 |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``sections``                                                                     | declared section names                                     |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``metadataJson``                                                                 | free-form + reserved JSON keys (``units``, energy, NEB, …) |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``strictValidation`` / ``sectionsDeclared``                                      | parse policy flags                                         |
+    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+
+Round-trip helpers live in ``src/rpc/convert.rs`` (``fill_frame_builder`` /
+``frame_from_reader``). Text ``.con`` remains the on-disk interchange authority.
+
+**Breaking note:** pre-v3 wire used a single ``isFixed: Bool`` and velocity-only
+atoms. Clients must regenerate from the current schema (0.x RPC surface).
 
 Building
 --------

@@ -42,7 +42,7 @@ major language, chemfiles **into** CON, DLPack / metatensor **out** of CON,
 
 - ``readcon-db`` for corpora that stay CON text. Spec:
 
-`spec.org <spec.rst>`_. Design history: `evolution.org <evolution.rst>`_.
+:doc:`spec`. Design history: :doc:`evolution`.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -135,7 +135,7 @@ CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV + spyglass
 (``ci_benchmark.yml``, suite in ``benchmarks/``). Local peer scripts:
 ``benches/compare_readers.py``, ``multiformat_traj.py``, ``ase_traj_vs_con.py``,
 ``h5md_vs_con.py``. How to re-run and what each gate means:
-`benchmarks.org <benchmarks.rst>`_.
+:doc:`benchmarks`.
 
 What is the sections mechanism?
 -------------------------------
@@ -224,7 +224,7 @@ contributions, declare ``energies`` alongside ``forces``:
     {"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
 
 Charges, spins, and magmoms use the same wire format: list them in
-``sections`` and emit the matching component blocks (see `spec.org <spec.rst>`_).
+``sections`` and emit the matching component blocks (see :doc:`spec`).
 Example fixture: ``resources/test/tiny_cuh2_charges_spins_magmoms.con``.
 
 The per-frame ``energy`` metadata key SHOULD equal the sum of the
@@ -337,7 +337,7 @@ What is the stack for?
 
 Putting CON into every language and tool path that touches atomic structures —
 including a single code that would otherwise hand-roll XYZ and its own atoms
-type. Migration guide: `migrate.org <migrate.rst>`_ (``readcon-core convert``,
+type. Migration guide: :doc:`migrate` (``readcon-core convert``,
 ``readcon.convert_to_con``).
 
 .. table::
@@ -413,7 +413,7 @@ maps foreign structures into ``ConFrame`` / CON so the rest of the stack speaks
 one format. The durable interchange is CON (constraints, ``atom_id``, sections,
 JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
 keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
-How-to: `migrate.org <migrate.rst>`_, `chemfiles-tutorial <chemfiles-tutorial.rst>`_.
+How-to: :doc:`migrate`, :doc:`chemfiles-tutorial`.
 
 Why an hourglass C ABI?
 -----------------------

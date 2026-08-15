@@ -48,7 +48,7 @@ selectors, or energy fields yourself.
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
 Migrate so the structure object, selector, campaign store, and plots all speak
-CON. Format rules: `spec.org <spec.rst>`_.
+CON. Format rules: :doc:`spec`.
 
 Performance
 -----------
@@ -57,7 +57,7 @@ What the library actually does on the CON path: fast-float2 on atom floats,
 zero-copy line views, header-sized atom vectors, ``read_to_string`` vs mmap at
 64 KiB, optional Rayon multi-frame parse at ≥ 48 KiB with ``parallel``. How CI
 and local scripts measure that (Cachegrind, ASV, peers):
-`benchmarks.org <benchmarks.rst>`_.
+:doc:`benchmarks`.
 
 Benefit: campaign store (``readcon-db``)
 ----------------------------------------
@@ -111,8 +111,8 @@ metadata by hand in every tool:
     h_idx = frame.select_atoms("name H")
     # topology: frame.select("angles: all") when metadata bonds are present
 
-Recipes: `chemfiles-howto <chemfiles-howto.rst>`_, `howto <howto.rst>`_,
-`bindings <bindings.rst>`_.
+Recipes: :doc:`chemfiles-howto`, :doc:`howto`,
+:doc:`bindings`.
 
 Benefit: plotting stack (chemparseplot)
 ---------------------------------------
@@ -126,7 +126,7 @@ custom exporter per code. Companion CLIs and crumbs:
 Foreign XYZ/PDB still enter via chemfiles → CON first; viz then sits on CON
 (and on campaign selections from ``readcon-db``) rather than on each code's
 private dump. Ecosystem context: conf.py **Ecosystem** nav ·
-`chemfiles-explain <chemfiles-explain.rst>`_.
+:doc:`chemfiles-explain`.
 
 One-command convert (CLI)
 -------------------------
@@ -226,7 +226,7 @@ Python:
     for path in Path("structures").glob("*.xyz"):
         readcon.convert_to_con(str(path), str(Path("con") / f"{path.stem}.con"))
 
-More chemfiles recipes: `chemfiles-howto.org <chemfiles-howto.rst>`_.
+More chemfiles recipes: :doc:`chemfiles-howto`.
 
 After conversion
 ----------------
@@ -236,13 +236,13 @@ After conversion
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
     | Goal                         | Page                                                                                                                                                |
     +==============================+=====================================================================================================================================================+
-    | Learn native CON I/O         | `tutorial <tutorial.rst>`_                                                                                                                          |
+    | Learn native CON I/O         | :doc:`tutorial`                                                                                                                          |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Selection / bonds on CON     | `chemfiles-howto <chemfiles-howto.rst>`_, `faq <faq.rst>`_                                                                                          |
+    | Selection / bonds on CON     | :doc:`chemfiles-howto`, :doc:`faq`                                                                                          |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Declared sections / validate | `faq <faq.rst>`_, `spec <spec.rst>`_                                                                                                                |
+    | Declared sections / validate | :doc:`faq`, :doc:`spec`                                                                                                                |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Link C / Fortran / Julia     | `bindings <bindings.rst>`_, `howto <howto.rst>`_                                                                                                    |
+    | Link C / Fortran / Julia     | :doc:`bindings`, :doc:`howto`                                                                                                    |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
     | Campaign store               | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+

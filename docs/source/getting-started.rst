@@ -11,16 +11,16 @@ Getting started
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.14.0``).
+Pick **one** language. Version pins match this tree (``0.14.1``).
 
 .. table::
 
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Package            | Install                                                                             | Destination                                                                                                                                 |
     +====================+=====================================================================================+=============================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.14.0'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
+    | Python CON I/O     | ``pip install 'readcon==0.14.1'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.0'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.1'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Rust CON I/O       | ``cargo add readcon-core``                                                          | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -28,9 +28,9 @@ Pick **one** language. Version pins match this tree (``0.14.0``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Campaign store     | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_ |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | `bindings <bindings.rst>`_                                                                                                                  |
+    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                       | `bindings <bindings.rst>`_                                                                                                                  |
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python — CON I/O
@@ -38,14 +38,14 @@ Python — CON I/O
 
 .. code:: shell
 
-    pip install 'readcon==0.14.0'
+    pip install 'readcon==0.14.1'
 
 Python — CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.14.0'
+    pip install 'readcon-chemfiles==0.14.1'
     # do not also install lean readcon in the same venv
 
 Rust — CON I/O
@@ -81,7 +81,7 @@ From a checkout of this repository:
 
     julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
 
-Language API notes: `bindings <bindings.rst>`_.
+Language API notes: :doc:`bindings`.
 
 Fortran / C / C++
 ~~~~~~~~~~~~~~~~~
@@ -97,7 +97,7 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.0/readcon-core-cxx-0.14.0.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.1/readcon-core-cxx-0.14.1.tar.gz
       URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
     )
     FetchContent_MakeAvailable(readcon-core)
@@ -115,6 +115,8 @@ From a git checkout:
     cmake --build build && cmake --install build
     export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
     pkg-config --cflags --libs readcon-core
+
+#+end\_src
 
 Smoke test
 ----------
@@ -143,25 +145,25 @@ Documentation follows `Diátaxis <https://diataxis.fr/>`_. Use one quadrant at a
     +-------------------------------------------------+------------------------------------------------+-------------+
     | Goal                                            | Page                                           | Kind        |
     +=================================================+================================================+=============+
-    | Learn CON I/O end-to-end                        | `tutorial <tutorial.rst>`_                     | Tutorial    |
+    | Learn CON I/O end-to-end                        | :doc:`tutorial`                     | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Migrate foreign formats → CON (+ db, selection) | `migrate <migrate.rst>`_                       | How-to      |
+    | Migrate foreign formats → CON (+ db, selection) | :doc:`migrate`                       | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Task recipes by language                        | `howto <howto.rst>`_                           | How-to      |
+    | Task recipes by language                        | :doc:`howto`                           | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | XYZ / PDB / GRO → CON                           | `chemfiles-tutorial <chemfiles-tutorial.rst>`_ | Tutorial    |
+    | XYZ / PDB / GRO → CON                           | :doc:`chemfiles-tutorial` | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Batch convert / C conversion API                | `chemfiles-howto <chemfiles-howto.rst>`_       | How-to      |
+    | Batch convert / C conversion API                | :doc:`chemfiles-howto`       | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why conversion is optional; bonds               | `chemfiles-explain <chemfiles-explain.rst>`_   | Explanation |
+    | Why conversion is optional; bonds               | :doc:`chemfiles-explain`   | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why CON / sections / stack                      | `faq <faq.rst>`_, `evolution <evolution.rst>`_ | Explanation |
+    | Why CON / sections / stack                      | :doc:`faq`, :doc:`evolution` | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | On-disk format                                  | `spec <spec.rst>`_                             | Reference   |
+    | On-disk format                                  | :doc:`spec`                             | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | API tables                                      | `bindings <bindings.rst>`_                     | Reference   |
+    | API tables                                      | :doc:`bindings`                     | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Measurements (ASV / Cachegrind / peers)         | `benchmarks <benchmarks.rst>`_                 | Explanation |
+    | Measurements (ASV / Cachegrind / peers)         | :doc:`benchmarks`                 | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
 
 Scope (map of the stack)
@@ -186,9 +188,9 @@ Scope (map of the stack)
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
     | ASE calculator hand-off         | Optional ``to_ase`` / ``from_ase``                                                                                                 |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Migrate foreign stack → CON     | `migrate <migrate.rst>`_ (CLI ``convert``, ``convert_to_con``)                                                                     |
+    | Migrate foreign stack → CON     | :doc:`migrate` (CLI ``convert``, ``convert_to_con``)                                                                     |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | PR / CI speed gates             | `benchmarks <benchmarks.rst>`_ (ASV + Cachegrind)                                                                                  |
+    | PR / CI speed gates             | :doc:`benchmarks` (ASV + Cachegrind)                                                                                  |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
 
-Library layout: `architecture <architecture.rst>`_.
+Library layout: :doc:`architecture`.
