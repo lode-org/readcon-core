@@ -14,12 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - chemfiles
-          - chemfiles,zstd
-          - chemfiles,metatensor
-          - chemfiles,zstd,metatensor
+          - chemfiles-from-sources
+          - chemfiles-from-sources,zstd
+          - chemfiles-from-sources,metatensor
+          - chemfiles-from-sources,zstd,metatensor
           - grammar
-          - chemfiles,grammar
+          - chemfiles-from-sources,grammar
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable

@@ -106,12 +106,12 @@ jobs:
             os: ubuntu-24.04
             target: x86_64
             pyproject: pyproject.chemfiles.toml
-            features: python,chemfiles
+            features: python,chemfiles-from-sources
           - variant: chemfiles
             os: ubuntu-24.04-arm
             target: aarch64
             pyproject: pyproject.chemfiles.toml
-            features: python,chemfiles
+            features: python,chemfiles-from-sources
           - variant: chemfiles
             os: macos-15-intel
             target: x86_64
