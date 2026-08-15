@@ -131,6 +131,20 @@ namespace readcon {
 #define SECTIONS_MASK_ENERGIES (1 << 2)
 
 /**
+ * Reads all frames from a file.
+ *
+ * For files smaller than 64 KiB, uses a simple `read_to_string` to avoid
+ * the fixed overhead of mmap (VMA creation, page fault, munmap). For larger
+ * trajectory files, uses memory-mapped I/O to let the OS page cache handle
+ * the data.
+ * Byte-size gate for Rayon multi-frame parse. Avoids an extra O(n) frame-count
+ * scan: phase-1 of [`parse_frames_parallel`] already walks boundaries when we
+ * choose parallel. Below this size, sequential parse wins on small multi-frame
+ * files (pool scheduling overhead).
+ */
+#define PARALLEL_BYTES_THRESHOLD (48 * 1024)
+
+/**
  * Error codes for RKR functions.
  */
 typedef enum RKRStatus {
@@ -198,10 +212,10 @@ typedef enum RKRStatus {
  * An iterator that lazily parses simulation frames from a `.con` or `.convel`
  * file's contents.
  *
- * This struct wraps an iterator over the lines of a string and, upon each iteration,
- * attempts to parse a complete `ConFrame`. Velocity sections are detected
- * automatically: if a blank line follows the coordinate blocks, the velocity
- * data is parsed into the atoms.
+ * This struct wraps a memchr line cursor over the file buffer and, upon each
+ * iteration, attempts to parse a complete `ConFrame`. Velocity sections are
+ * detected automatically: if a blank line follows the coordinate blocks, the
+ * velocity data is parsed into the atoms.
  *
  * The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
  * robust error handling for each frame.
