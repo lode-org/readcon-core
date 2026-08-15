@@ -533,15 +533,24 @@ impl AtomDatum {
     }
 }
 
-/// Decode a column-4 bitmask value to per-direction fixed flags.
+/// Decode a column-4 bitmask as a spec-2 value.
 ///
-/// - 0 = free
-/// - 1 = all-fixed (legacy, treated as [true, true, true])
-/// - 2-7 = bitmask (bit 0 = x, bit 1 = y, bit 2 = z)
+/// Spec-2 files use a pure bitmask (bit 0 = x, bit 1 = y, bit 2 = z),
+/// so 1 is x-only. Spec-1 files that wrote 1 meaning fully fixed must
+/// call [`decode_fixed_bitmask_for_spec`] with `spec_version = 1`.
 pub fn decode_fixed_bitmask(val: u8) -> [bool; 3] {
+    decode_fixed_bitmask_for_spec(val, crate::CON_SPEC_VERSION)
+}
+
+/// Decode a column-4 value under a specific CON spec version.
+///
+/// Spec 1 (legacy, no JSON on line 2) treats 1 as all-fixed. Spec 2
+/// and later treat 1 as x-only, which is what
+/// [`encode_fixed_bitmask`] writes for `[true, false, false]`.
+pub fn decode_fixed_bitmask_for_spec(val: u8, spec_version: u32) -> [bool; 3] {
     match val {
         0 => [false, false, false],
-        1 => [true, true, true], // legacy: treat as fully fixed
+        1 if spec_version < 2 => [true, true, true],
         v => [v & 1 != 0, v & 2 != 0, v & 4 != 0],
     }
 }
@@ -1793,6 +1802,16 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn column_4_value_1_is_x_only_on_spec_2() {
+        assert_eq!(decode_fixed_bitmask_for_spec(1, 2), [true, false, false]);
+        assert_eq!(decode_fixed_bitmask(1), [true, false, false]);
+        assert_eq!(decode_fixed_bitmask_for_spec(1, 1), [true, true, true]);
+        assert_eq!(decode_fixed_bitmask_for_spec(7, 1), [true, true, true]);
+        assert_eq!(encode_fixed_bitmask([true, false, false]), 1);
+        assert_eq!(encode_fixed_bitmask([true, true, true]), 7);
+    }
 
     #[test]
     fn test_atom_id_index_handles_non_sequential_ids() {

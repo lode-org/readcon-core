@@ -3,7 +3,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
     AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_ENERGIES, SECTION_FORCES,
     SECTION_VELOCITIES,
-    decode_fixed_bitmask, meta,
+    decode_fixed_bitmask_for_spec, meta,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -522,9 +522,19 @@ pub fn parse_single_frame<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
             let vals = parse_line_of_range_f64(coord_line, 4, 5, &defaults)?;
             let (fixed, atom_id) = if validate {
-                parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
+                parse_identity_columns(
+                    coord_line,
+                    "coordinate",
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?
             } else {
-                (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
+                (
+                    decode_fixed_bitmask_for_spec(vals[3] as u8, header.spec_version),
+                    vals[4] as u64,
+                )
             };
             atom_data.push(AtomDatum {
                 // This is a cheap reference-count increment, not a full string clone.
@@ -619,6 +629,7 @@ fn parse_identity_columns(
     fixed_idx: usize,
     atom_id_idx: usize,
     n_cols: usize,
+    spec_version: u32,
 ) -> Result<([bool; 3], u64), ParseError> {
     let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
     if columns.len() != n_cols {
@@ -637,7 +648,7 @@ fn parse_identity_columns(
     let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
         ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
     })?;
-    Ok((decode_fixed_bitmask(fixed_flag), atom_id))
+    Ok((decode_fixed_bitmask_for_spec(fixed_flag, spec_version), atom_id))
 }
 
 
@@ -772,7 +783,14 @@ where
             let vals = parse_line_of_range_f64(vel_line, 4, 5, &defaults)?;
             if validate {
                 let (fixed, atom_id) =
-                    parse_identity_columns(vel_line, "velocities", 3, 4, 5)?;
+                    parse_identity_columns(
+                        vel_line,
+                        "velocities",
+                        3,
+                        4,
+                        5,
+                        header.spec_version,
+                    )?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -832,7 +850,14 @@ where
             let vals = parse_line_of_range_f64(force_line, 4, 5, &defaults)?;
             if validate {
                 let (fixed, atom_id) =
-                    parse_identity_columns(force_line, "forces", 3, 4, 5)?;
+                    parse_identity_columns(
+                        force_line,
+                        "forces",
+                        3,
+                        4,
+                        5,
+                        header.spec_version,
+                    )?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -898,7 +923,14 @@ where
             let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
             if validate {
                 let (fixed, atom_id) =
-                    parse_identity_columns(energy_line, "energies", 1, 2, 3)?;
+                    parse_identity_columns(
+                        energy_line,
+                        "energies",
+                        1,
+                        2,
+                        3,
+                        header.spec_version,
+                    )?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {

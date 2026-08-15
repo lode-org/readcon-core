@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.13.2 - 2026-08-15
+#### Fixes
+- Decode column 4 value 1 as x-only on spec 2. Spec 1 (no JSON) still
+  reads 1 as fully fixed. `encode_fixed_bitmask` already wrote 1 for
+  x-only, so a spec-2 write/read no longer freezes y and z.
+
+- - -
+
 ## v0.13.1 - 2026-06-26
 #### Features
 - (**python**) `read_chemfiles` / `read_chemfiles_first` / `read_chemfiles_memory` ingress APIs
