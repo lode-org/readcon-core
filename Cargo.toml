@@ -49,8 +49,9 @@ metatensor = ["dep:metatensor"]
 # Linux rust-lld (LLD >= 19) does not run .ctors in that archive, so the
 # first chfl_frame() SIGFPEs. Linux wheels/CI use chemfiles-from-sources,
 # which compiles chemfiles so constructors land in .init_array.
-# macOS wheels use the prebuilt (vendored zlib does not compile on the
-# current MacOSX SDK).
+# macOS and Windows wheels use the prebuilt (vendored zlib does not
+# compile on the current MacOSX SDK; Windows from-source is the same
+# CMake/zlib fight). rust-lld .ctors is Linux-only.
 chemfiles = ["dep:chemfiles"]
 chemfiles-from-sources = ["chemfiles", "chemfiles/build-from-sources"]
 # Real CUDA allocate/export for DLPack device buffers (cudarc links the driver
