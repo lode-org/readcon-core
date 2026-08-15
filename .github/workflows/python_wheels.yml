@@ -25,9 +25,6 @@ env:
   CARGO_HTTP_MULTIPLEXING: "false"
   CARGO_NET_RETRY: "10"
   CARGO_HTTP_TIMEOUT: "120"
-  # Avoid mold/lld linker breakage in manylinux maturin images (readcon-core-u08i).
-  # Prefer the system BFD linker for stable cdylib links.
-  RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
   CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: "cc"
 
 jobs:
@@ -129,6 +126,10 @@ jobs:
           # Windows wheels only. Linux/macOS cover full chemfiles matrices.
           # - variant: chemfiles / windows-latest — omitted on purpose
     steps:
+      - name: Allow reserved DOS names (grammar/con.pest)
+        if: runner.os == 'Windows'
+        run: git config --global core.protectNTFS false
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
@@ -147,6 +148,8 @@ jobs:
       - name: Build wheels
         id: build1
         continue-on-error: true
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -160,6 +163,8 @@ jobs:
 
       - name: Build wheels (retry)
         if: steps.build1.outcome == 'failure'
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -185,7 +190,7 @@ jobs:
     name: Publish to PyPI
     needs: [sdist, wheels]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.sdist.result == 'success' }}
     environment:
       name: pypi
       url: https://pypi.org/p/readcon
