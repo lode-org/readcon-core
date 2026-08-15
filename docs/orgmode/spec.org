@@ -188,15 +188,20 @@ Columns are whitespace-separated.
 Column 4 encodes per-direction constraint flags as a bitmask.
 Bit 0 = x, bit 1 = y, bit 2 = z.
 
-| Value | Meaning                          |
-|-------+----------------------------------|
-|     0 | Free (all directions)            |
-|     1 | All-fixed (legacy, treated as 7) |
-|   2-6 | Per-direction combinations       |
-|     7 | Fixed in all directions          |
+| Value | Spec 1 (no JSON line 2)          | Spec 2+                          |
+|-------+----------------------------------+----------------------------------|
+|     0 | Free                             | Free                             |
+|     1 | All-fixed (legacy boolean)       | x-only                           |
+|   2-6 | Unused / undefined               | Per-direction combinations       |
+|     7 | Unused / undefined               | Fixed in all directions          |
 
-Readers MUST treat value 1 as equivalent to 7. Writers MUST emit 7
-for all-fixed atoms, never 1.
+Spec-1 files used column 4 as a boolean (0 free, 1 fixed). Spec-2
+files use the 3-bit mask. Readers MUST therefore consult
+=con_spec_version= before decoding 1: spec 1 keeps the legacy
+all-fixed reading; spec 2 treats 1 as x-only.
+
+Writers MUST emit 7 for all-fixed atoms, never 1. Spec-2 writers
+MUST emit 1 for an atom fixed in x alone.
 
 ** Atom index (column 5)
 :PROPERTIES:

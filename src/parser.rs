@@ -3,7 +3,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
     AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_ENERGIES,
     SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES,
-    decode_fixed_bitmask, meta,
+    decode_fixed_bitmask_for_spec, meta,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -667,9 +667,19 @@ pub fn parse_single_frame<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(coord_line, 4, 5, &defaults, &mut vals)?;
             let (fixed, atom_id) = if validate {
-                parse_identity_columns(coord_line, "coordinate", 3, 4, 5)?
+                parse_identity_columns(
+                    coord_line,
+                    "coordinate",
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?
             } else {
-                (decode_fixed_bitmask(vals[3] as u8), vals[4] as u64)
+                (
+                    decode_fixed_bitmask_for_spec(vals[3] as u8, header.spec_version),
+                    vals[4] as u64,
+                )
             };
             let xyz = [vals[0], vals[1], vals[2]];
             if f64_positions {
@@ -785,6 +795,7 @@ fn parse_identity_columns(
     fixed_idx: usize,
     atom_id_idx: usize,
     n_cols: usize,
+    spec_version: u32,
 ) -> Result<([bool; 3], u64), ParseError> {
     let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
     if columns.len() != n_cols {
@@ -803,7 +814,7 @@ fn parse_identity_columns(
     let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
         ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
     })?;
-    Ok((decode_fixed_bitmask(fixed_flag), atom_id))
+    Ok((decode_fixed_bitmask_for_spec(fixed_flag, spec_version), atom_id))
 }
 
 
@@ -935,8 +946,14 @@ pub fn parse_velocity_section<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(vel_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(vel_line, "velocities", 3, 4, 5)?;
+                let (fixed, atom_id) = parse_identity_columns(
+                    vel_line,
+                    "velocities",
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -993,8 +1010,14 @@ pub fn parse_force_section<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(force_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(force_line, "forces", 3, 4, 5)?;
+                let (fixed, atom_id) = parse_identity_columns(
+                    force_line,
+                    "forces",
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1056,8 +1079,14 @@ pub fn parse_energy_section<'a>(
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(energy_line, "energies", 1, 2, 3)?;
+                let (fixed, atom_id) = parse_identity_columns(
+                    energy_line,
+                    "energies",
+                    1,
+                    2,
+                    3,
+                    header.spec_version,
+                )?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1192,8 +1221,14 @@ fn parse_scalar_atom_section<'a>(
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(data_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(data_line, section_name, 1, 2, 3)?;
+                let (fixed, atom_id) = parse_identity_columns(
+                    data_line,
+                    section_name,
+                    1,
+                    2,
+                    3,
+                    header.spec_version,
+                )?;
                 validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1282,8 +1317,14 @@ pub fn parse_magmom_section<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(mm_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(mm_line, SECTION_MAGMOMS, 3, 4, 5)?;
+                let (fixed, atom_id) = parse_identity_columns(
+                    mm_line,
+                    SECTION_MAGMOMS,
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?;
                 validate_section_atom_identity(
                     SECTION_MAGMOMS,
                     atom_idx,
@@ -1634,6 +1675,50 @@ mod tests {
         assert_eq!(frame.atom_data[0].atom_id, 1);
         assert_eq!(&*frame.atom_data[5].symbol, "2");
         assert_eq!(frame.atom_data[5].atom_id, 6);
+    }
+
+    #[test]
+    fn test_column_4_value_1_is_x_only_on_spec_2() {
+        let lines = vec![
+            "Generated by probe",
+            "{\"con_spec_version\":2}",
+            "20.0 20.0 20.0",
+            "90.0 90.0 90.0",
+            "",
+            "",
+            "1",
+            "1",
+            "63.5",
+            "Cu",
+            "Coordinates of component   1",
+            "1.0 2.0 3.0 1 1",
+        ];
+        let mut line_it = lines.iter().copied();
+        let frame = parse_single_frame(&mut line_it).unwrap();
+        assert_eq!(frame.header.spec_version, 2);
+        assert_eq!(frame.atom_data[0].fixed, [true, false, false]);
+    }
+
+    #[test]
+    fn test_column_4_value_1_is_all_fixed_on_spec_1() {
+        let lines = vec![
+            "Generated by probe",
+            "0.0000 TIME",
+            "20.0 20.0 20.0",
+            "90.0 90.0 90.0",
+            "",
+            "",
+            "1",
+            "1",
+            "63.5",
+            "Cu",
+            "Coordinates of component   1",
+            "1.0 2.0 3.0 1 1",
+        ];
+        let mut line_it = lines.iter().copied();
+        let frame = parse_single_frame(&mut line_it).unwrap();
+        assert_eq!(frame.header.spec_version, 1);
+        assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
     }
 
     #[test]
