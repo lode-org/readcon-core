@@ -14,6 +14,9 @@ jobs:
 
     - name: Conventional commits check
       uses: cocogitto/cocogitto-action@v3
+      with:
+        # Full-history check dies on pre-v0.14 `docs+bench:` / untyped merges.
+        check-latest-tag-only: true
 
     - name: Audit for large files
       uses: HaoZeke/large-file-auditor@v0.1.0
