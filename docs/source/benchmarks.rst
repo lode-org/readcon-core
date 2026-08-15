@@ -132,9 +132,11 @@ global ranking.
     maturin develop --features python,chemfiles --release
     python benches/ase_traj_vs_con.py --frames 100 --repeats 5
 
-    # H5MD via MDAnalysis / h5py vs CON (uncompressed + gzip + optional zstd)
+    # H5MD via MDAnalysis / h5py vs CON (uncompressed + gzip + optional zstd size/load)
     uv pip install MDAnalysis h5py ase numpy
     python benches/h5md_vs_con.py --frames 100 --repeats 5
+    # writes h5md_size_bytes, con_size_bytes, con_gz_size_bytes, con_zst_size_bytes,
+    # readcon_con_ms, readcon_con_gz_ms, readcon_con_zst_ms (null if zstd feature off)
 
 Implementation details that show up in Cachegrind and peer scripts (facts about
 the code, not a promise about every host):
@@ -156,10 +158,12 @@ the code, not a promise about every host):
 
 h5py ``position/value`` alone loads a coordinate array (not cell / constraints /
 ``atom_id`` / JSON). ``benches/h5md_vs_con.py`` times MDAnalysis H5MD and h5py as
-**peer load paths** on equal geometry, and reports **CON.gz / optional CON.zst**
+**peer load paths** on equal geometry, and reports ****CON.gz / optional CON.zst****
 sizes and load times next to uncompressed CON. Gzip of multi-frame CON is often
-the same order as positions-only H5MD for near-repeated rare-event frames.
-Compressed CON always fully decompresses before parse (no mmap).
+the same order as positions-only H5MD for near-repeated rare-event frames; that
+is a size fact, not advice to store campaigns as H5MD instead of CON +
+``readcon-db``. Compressed CON always fully decompresses before parse (no mmap);
+uncompressed ≥ 64 KiB uses ``memmap2``.
 
 Plots under ``docs/orgmode/img/`` are produced by ``benches/make_plots.py`` from
 JSON you generate; regenerate after peer runs if you need them current.
@@ -227,7 +231,7 @@ Feature matrix plot
 
 CON v2 on the wire can carry positions, velocities, forces, unit cell,
 per-direction constraints, ``atom_id``, structured JSON, compression, multi-frame
-concatenation, and streaming iteration — see `spec.org <spec.rst>`_.
+concatenation, and streaming iteration — see :doc:`spec`.
 
 Statistical analysis (optional)
 -------------------------------
