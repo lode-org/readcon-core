@@ -280,7 +280,7 @@ endif()
 add_custom_command(
     OUTPUT ${CARGO_OUTPUTS}
     COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
-            ${CARGO_EXE} rustc ${CARGO_BUILD_ARG} --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml -- ${CARGO_RUSTC_CRATE_TYPES} ${CARGO_RUSTC_ARGS}
+            ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml -- ${CARGO_RUSTC_CRATE_TYPES} ${CARGO_RUSTC_ARGS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS ${ALL_RUST_SOURCES}
     COMMENT "Building readcon-core C ABI with cargo"
