@@ -19,7 +19,7 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_.
+:doc:`chemfiles-tutorial` and :doc:`chemfiles-howto`.
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
@@ -164,8 +164,8 @@ particular:
   suites) are not part of the CON regression surface. A string may still parse;
   that is not a promise of behaviour from another toolkit.
 
-APIs and install matrices: `bindings <bindings.rst>`_,
-`reference <chemfiles-reference.rst>`_ (feature-gated conversion stack).
+APIs and install matrices: :doc:`bindings`,
+:doc:`chemfiles-reference` (feature-gated conversion stack).
 
 Place in the broader stack
 --------------------------

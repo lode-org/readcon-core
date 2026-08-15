@@ -172,7 +172,7 @@ sidecars ``chemfiles_atom_names`` / ``chemfiles_atom_types`` let ``name H1`` and
 
 **Format limits.** No residues, pair ``bonds`` only, thin property sidecars—so
 ``resname``, impropers, and most external property maps are not selectable.
-`What selection cannot see on CON <chemfiles-explain.rst>`_.
+:doc:`chemfiles-explain`.
 
 Python (PyO3)
 -------------
@@ -643,7 +643,7 @@ CMake FetchContent
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.0/readcon-core-cxx-0.14.0.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.1/readcon-core-cxx-0.14.1.tar.gz
       URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
     )
     FetchContent_MakeAvailable(readcon-core)
