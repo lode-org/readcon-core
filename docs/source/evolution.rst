@@ -95,8 +95,9 @@ Decision
 ~~~~~~~~
 
 A 3-bit bitmask in the existing column 4 preserves the 5-column line
-format. Legacy value 1 (meaning "fully fixed") maps to all-three-set
-([true, true, true]). The canonical all-fixed value for new files is 7.
+format. Spec-1 files used 1 for fully fixed; spec-2 files use 1 for
+x-only and 7 for all-fixed. The decoder takes ``spec_version`` so a
+legacy file and a spec-2 write of an x-only atom do not collide.
 Old readers that check ``!`` 0= for "is fixed" will treat any non-zero
 bitmask value as fixed, which is a safe degradation.
 

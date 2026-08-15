@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased (627b448..f623634)
+#### Bug Fixes
+- (**meson**) set build rpath so FFI example tests find the cdylib - (afb0d50) - *HaoZeke*
+- decode column 4 value 1 as x-only on spec 2 - (f623634) - *HaoZeke*
+- drop PARALLEL_BYTES_THRESHOLD from the shipped C header - (8f5a640) - *HaoZeke*
+- keep PARALLEL_BYTES_THRESHOLD off the C ABI - (e865512) - *HaoZeke*
+- keep decode_fixed_bitmask_for_spec off the C ABI - (cd7271d) - *HaoZeke*
+- decode column 4 value 1 as x-only on spec 2 - (627b448) - *HaoZeke*
+#### CI
+- keep fuse-ld=bfd on Linux wheels only - (ae96232) - *HaoZeke*
+- build Python extensions inside a venv - (4b146be) - *HaoZeke*
+
+
 
 ## v0.14.1 - 2026-08-15
 #### Benchmarks
