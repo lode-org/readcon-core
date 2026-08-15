@@ -55,6 +55,8 @@ tar -C "${TMP_DIR}/crate" -xf "$CRATE_TAR"
 CRATE_DIR="$(find "${TMP_DIR}/crate" -mindepth 1 -maxdepth 1 -type d | head -1)"
 
 cp -a "${CRATE_DIR}/." "$DEST/"
+# Maintainer-only; the tarball ships include/ and must not look cbindgen-gated.
+rm -f "$DEST/cbindgen.toml"
 
 # Overlay the C/C++ distribution files (always, even if cargo package omitted them).
 cp -a "$ROOT_DIR/CMakeLists.txt" "$DEST/"
