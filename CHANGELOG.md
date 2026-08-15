@@ -1,7 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## Unreleased (627b448..f623634)
+## v0.14.3 - 2026-08-15
+#### Bug Fixes
+- rename `grammar/con.pest` to `grammar/readcon.pest` so Windows checkout works
+- use system zlib (`CHFL_SYSTEM_ZLIB=ON`) for macOS chemfiles wheels
+
+## v0.14.2 - 2026-08-15
 #### Bug Fixes
 - (**meson**) set build rpath so FFI example tests find the cdylib - (afb0d50) - *HaoZeke*
 - decode column 4 value 1 as x-only on spec 2 - (f623634) - *HaoZeke*
