@@ -54,7 +54,7 @@ jobs:
           -Dwith_cpp=True \
           -Dwith_examples=True \
           --buildtype=release
-          meson test -C bbdir \
+          meson test -C bbdir --print-errorlogs \
           --wrap="valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all"
 
   header-check:

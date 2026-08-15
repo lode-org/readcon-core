@@ -129,6 +129,11 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      # BFD is the stable manylinux linker. Apple clang rejects -fuse-ld=bfd.
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
