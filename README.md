@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#orgd62d569)
-    1.  [Features](#org94d5d00)
-    2.  [Migrate onto CON](#org6e734a5)
-    3.  [Install](#orga527e8a)
-    4.  [Tutorial](#org13ae662)
-    5.  [Design Decisions](#org3987432)
-        1.  [FFI Layer](#org6fdb1ef)
-    6.  [Specification](#org8502074)
-        1.  [CON format](#org12d2dcd)
-        2.  [convel format](#org6bfe360)
-    7.  [Capabilities](#org3d2b917)
-    8.  [Citation](#orgdc30941)
-2.  [License](#orge9c6ac3)
+1.  [About](#orgd6d7168)
+    1.  [Features](#org6d404b0)
+    2.  [Migrate onto CON](#orgd595133)
+    3.  [Install](#org65e1283)
+    4.  [Tutorial](#orgdf221ce)
+    5.  [Design Decisions](#org297db41)
+        1.  [FFI Layer](#org5b8d30e)
+    6.  [Specification](#orgd94c691)
+        1.  [CON format](#org8295504)
+        2.  [convel format](#orgc9210ef)
+    7.  [Capabilities](#org82593f8)
+    8.  [Citation](#org7bc2aad)
+2.  [License](#orgd83f4c1)
 
 
-<a id="orgd62d569"></a>
+<a id="orgd6d7168"></a>
 
 # About
 
@@ -87,7 +87,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org94d5d00"></a>
+<a id="org6d404b0"></a>
 
 ## Features
 
@@ -105,7 +105,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org6e734a5"></a>
+<a id="orgd595133"></a>
 
 ## Migrate onto CON
 
@@ -132,7 +132,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orga527e8a"></a>
+<a id="org65e1283"></a>
 
 ## Install
 
@@ -204,11 +204,11 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 </tbody>
 </table>
 
-The C/C++ headers are shipped (`include/readcon-core.h`). cbindgen is a maintainer tool, not a consumer dependency. C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`) compiler. FetchContent URL: `readcon-core-cxx-$VERSION.tar.gz` on the GitHub Release.
+The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a maintainer tool, not a consumer dependency. C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`) compiler. FetchContent URL: `readcon-core-cxx-$VERSION.tar.gz` on the GitHub Release.
 Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
-<a id="org13ae662"></a>
+<a id="orgdf221ce"></a>
 
 ## Tutorial
 
@@ -239,7 +239,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org3987432"></a>
+<a id="org297db41"></a>
 
 ## Design Decisions
 
@@ -247,7 +247,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** shipped C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
 
 
-<a id="org6fdb1ef"></a>
+<a id="org5b8d30e"></a>
 
 ### FFI Layer
 
@@ -261,14 +261,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org8502074"></a>
+<a id="orgd94c691"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org12d2dcd"></a>
+<a id="org8295504"></a>
 
 ### CON format
 
@@ -279,7 +279,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="org6bfe360"></a>
+<a id="orgc9210ef"></a>
 
 ### convel format
 
@@ -289,7 +289,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org3d2b917"></a>
+<a id="org82593f8"></a>
 
 ## Capabilities
 
@@ -348,14 +348,14 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="orgdc30941"></a>
+<a id="org7bc2aad"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="orge9c6ac3"></a>
+<a id="orgd83f4c1"></a>
 
 # License
 

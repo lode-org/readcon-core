@@ -1,130 +1,171 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## Unreleased (611aa4a..815585c)
-#### Maintenance
-- bump to v0.14.0 - (cd7522e) - *HaoZeke*
+
+## v0.14.1 - 2026-08-15
 #### Benchmarks
-- chemfiles Cachegrind scenarios, measured-only Pareto, refresh I-refs - (ad70e47) - *HaoZeke*
+- ASV Python surface + spyglass PR compare - (4795333) - *HaoZeke*
+- terra release profile of efficiency APIs - (e5919ff) - *HaoZeke*
+- fair multi-format trajectory harness (CON vs ASE XYZ/CON) - (913ed36) - *HaoZeke*
 #### Features
-- (**bindings**) frame section buffers and multi-frame ergonomics - (09c4e8a) - *HaoZeke*
-- (**ffi**) complete index_proj wiring across languages - (d1141d4) - *HaoZeke*
-- (**ffi**) expose index_proj through C, C++, Python, Fortran - (1fb91b0) - *HaoZeke*
-- (**ffi**) DLPack export accepts full DLDataType/DLDevice space - (f3212a0) - *HaoZeke*
-- (**ffi**) DLPack export options use DLDataType and DLDevice layout - (f67a9da) - *HaoZeke*
-- (**ffi**) RKRDlpackExportOptions for float32/64 and device tags - (2527756) - *HaoZeke*
-- (**ffi**) assert DLPack shape/dtype; drop host-f64 consumer requirement - (620015d) - *HaoZeke*
-- (**ffi**) frame velocities/forces/energies DLPack (uu0a) - (30b2eee) - *HaoZeke*
-- (**ffi**) finalize open readcon vissues — iterators, sections, docs - (479aecc) - *HaoZeke*
-- (**ffi**) feature matrix CI, lean stubs, Arc DLPack borrowed aliases - (e821cf4) - *HaoZeke*
-- (**ffi**) full metatensor C API + DLPack Fortran parity - (4c4dbe7) - *HaoZeke*
-- (**ffi**) metatensor TensorBlock C ABI + full Fortran DLPack layout - (de6213b) - *HaoZeke*
-- (**ffi,fortran**) chemfiles read C API, DLPack delete, buffer/dlpack Fortran - (ecbb57c) - *HaoZeke*
-- (**fortran**) full C-ABI surface — iter/builder/writer/select + fpm CI - (a1e2c86) - *HaoZeke*
-- (**fortran**) fpm ReadCon package, frame_t metadata API, multi-lang panels - (5ec88c2) - *HaoZeke*
-- (**fortran**) ISO_C_BINDING module; document closed trackers - (ac56a3a) - *HaoZeke*
-- (**index_proj**) campaign screening projection and ingest contracts - (234cad3) - *HaoZeke*
-- (**iter**) next_with_raw_span for zero-copy corpus ingest - (1ec7650) - *HaoZeke*
-- (**python**) multi-frame chemfiles selection for trajectory H positions - (9c9ef96) - *HaoZeke*
-- (**python**) export read_all_frames alias for batch ergonomics - (9fe7d9d) - *HaoZeke*
-- (**selection**) multi-frame chemfiles select with per-frame H positions - (91002a6) - *HaoZeke*
-- (**selection**) multi-frame chemfiles select with per-frame H positions - (6abeed3) - *HaoZeke*
-- host all dlpk-owned DLPack element types in SoA storage - (fe5ea6c) - *HaoZeke*
-- allocate SoA in any supported storage dtype on build - (d9db3d0) - *HaoZeke*
-- v3 storage_dtypes + FloatArray SoA; standards DLPack/units prose - (6169854) - *HaoZeke*
-- CON v3 mandates units; metatensor-style as_dlpack/from_dlpack - (e72e60f) - *HaoZeke*
+- (**bench**) report CON.gz and CON.zst next to H5MD peers - (af1ec62) - *HaoZeke*
+- (**cmake**) ship FetchContent targets without cbindgen - (59ec316) - *HaoZeke*
+- (**cuda**) H2D frame/FFI DLPack export for kDLCUDA - (30611f9) - *HaoZeke*
+- (**cuda**) real device allocate and DLPack export via cudarc - (406160e) - *HaoZeke*
+- (**dist**) cxx source tarball, wrapdb wrap, and cbindgen-free CI - (3b3249a) - *HaoZeke*
+- (**grammar**) ship CON/convel surface PEG (Pest) with fixture tests - (e2d84f2) - *HaoZeke*
+- (**meson**) install lib and readcon-core.pc without cbindgen - (46690b2) - *HaoZeke*
+- (**rpc**) Cap'n Proto ConFrameData at CON v3 parity - (59b6355) - *HaoZeke*
+- (**spec**) machine-readable metadata JSON Schema with conformance tests - (1d4c06a) - *HaoZeke*
+- convert foreign structures to CON for stack migration - (e73dcf6) - *HaoZeke*
+- optional charges, spins, magmoms sections on v2/v3 surface - (d291fe8) - *HaoZeke*
+- CI pytest for Python bindings; Fortran iterator coverage - (82b0e11) - *HaoZeke*
+- strong-scaling parallel parse and device-tagged DLPack - (4140c63) - *HaoZeke*
 #### Bug Fixes
-- (**bindings**) complete ergonomics gaps from skeptic review - (6319843) - *HaoZeke*
-- (**c6ox**) always declare optional metatensor and zstd C APIs - (16dd0a3) - *HaoZeke*
-- (**ci**) drop Fortran chemfiles runtime; exclude lagging Pages URLs - (660a16d) - *HaoZeke*
-- (**ci**) repair pixi.lock conflicts; harden Fortran chemfiles FPE - (d3318cc) - *HaoZeke*
-- (**ci**) sync cbindgen headers; Fortran tests via script and ROOT env - (6ca0bdf) - *HaoZeke*
-- (**ci,docs**) refresh pixi.lock, shibuya logos, reliable Sphinx build - (483bfe9) - *HaoZeke*
-- (**docs**) do not treat Sphinx warnings as errors in CI docbld - (695a0d0) - *HaoZeke*
-- (**docs**) remove sphinxcontrib-rust from pixi docs env - (b56a9a1) - *HaoZeke*
-- (**docs**) drop sphinxcontrib_rust in Sphinx CI path - (9d5dfad) - *HaoZeke*
-- (**docs**) never run sphinx-rustdocgen in CI Sphinx builds - (41a52fd) - *HaoZeke*
-- (**ffi**) bool DLPack arm error type mismatch - (5ca5143) - *HaoZeke*
-- (**ffi**) ArcArray f32 cast for DLPack float_bits=32 - (a2cc6ec) - *HaoZeke*
-- (**ffi**) drop fake *_dlpack_borrowed; document dlpk ArcArray share - (3ad5613) - *HaoZeke*
-- (**ffi**) FEATURE_DISABLED (-11); Fortran gzip/zstd writers - (bf232ec) - *HaoZeke*
-- (**ffi**) gate metatensor C ABI; assert block shape and label counts - (adf52a3) - *HaoZeke*
-- (**ffi**) metatensor always-link stubs; complete Fortran DLPack+mts surface - (5a2e205) - *HaoZeke*
-- (**ffi**) always export metatensor symbols (stubs without feature) for Fortran link - (04e72e7) - *HaoZeke*
-- (**fortran**) no lean-link dependency on metatensor C symbols; cpp only in tests - (6fb9969) - *HaoZeke*
-- (**fortran**) PUBLIC only in specification part; fpm tests pass - (2d7f930) - *HaoZeke*
-- (**metatensor**) unique sample labels; catch_unwind on C exports - (af95200) - *HaoZeke*
-- (**parse**) sync SoA sections after declared section parse - (2852498) - *HaoZeke*
-- (**parser**) reject unsupported version before v3 units check - (6a587ea) - *HaoZeke*
-- defer float16 as_dlpack on half/dlpk version skew - (26b174e) - *HaoZeke*
-- StorageDtypes path in con_frame_from_atom_data - (a07c5b0) - *HaoZeke*
-- skeptic gaps — DLPack value RT, v3 units parse/write, typed units - (50d0009) - *HaoZeke*
+- (**chemfiles**) build C++ from source; prebuilt .ctors never run under rust-lld - (233f8c9) - *HaoZeke*
+- (**ci**) rerun build.rs when metatensor env file is missing on cold builds - (4c403b4) - *HaoZeke*
+- (**cmake**) pass --lib to cargo rustc for the C ABI - (bdfc1f5) - *HaoZeke*
+- (**cxx**) C-only CMake, slim/vendor tarballs, and matching .pc - (5d77be1) - *HaoZeke*
+- (**docs**) fail on Babel tangle drift; drop soft-fallback runners - (8a9527b) - *HaoZeke*
+- (**docs**) keep README docs/orgmode links as .org after ox-md export - (7a2375c) - *HaoZeke*
+- (**ffi**) declare set_canonical out-of-line and silence non-cuda device_id - (ff963d7) - *HaoZeke*
+- (**grammar**) scalar/vector section kinds and CI lockstep - (7c1742b) - *HaoZeke*
+- (**julia**) do-block order for _with_frame_handle - (2f52c63) - *HaoZeke*
+- (**julia**) matrix helpers use rebuilt frame handles - (29949d3) - *HaoZeke*
+- (**meson**) rename cargo_features; rust_features is reserved - (a40159a) - *HaoZeke*
+- (**python**) drop unsafe coords cache; keep GIL detach and bulk SoA - (c9a9a95) - *HaoZeke*
+- (**test**) lean FFI chemfiles probe is 0 without the feature - (41dd30b) - *HaoZeke*
 #### Performance
-- (**parse**) skip position SoA rewrite in section sync - (db86a1a) - *HaoZeke*
-- (**parser**) SoA-primary coords and stack line floats on hot path - (a17fd1e) - *HaoZeke*
-- skip default storage_dtypes metadata on hot build path - (a0e3c86) - *HaoZeke*
-- avoid redundant SoA sync and default storage_dtypes metadata - (4187934) - *HaoZeke*
+- (**iterators**) lean multi-frame positions path without AtomDatum - (edd148f) - *HaoZeke*
+- (**parser**) memchr line cursor, coords-only assemble, skip section sync - (33a0c68) - *HaoZeke*
+- (**parser**) profile-guided flat f64 SoA fill; add PGO harness - (17f2dfe) - *HaoZeke*
+- (**parser**) byte-scan atom lines with parse_partial + contiguous SoA - (1f3e66d) - *HaoZeke*
+- (**python**) prove detach+bulk SoA via same-session terra A/B - (0831da4) - *HaoZeke*
+- (**python**) detach GIL for parse; bulk SoA positions; cache coords - (df2a3c8) - *HaoZeke*
+- restore internal parse opts without extra public API - (7d76127) - *HaoZeke*
+- stream Python iter, positions-only load, size-only parallel gate - (5cf84c1) - *HaoZeke*
+- thresholded parallel multi-frame parse in read_all_frames - (250ed37) - *HaoZeke*
+#### Revert
+- drop speculative parse micro-opts; keep full-frame fast path - (62372b3) - *HaoZeke*
 #### Documentation
-- (**a11y**) darken logo-light CORE subtitle for WCAG AA on white - (815585c) - *HaoZeke*
-- (**architecture**) point at metatensor gate and env file - (c37d8c9) - *HaoZeke*
-- (**brand**) original CON-ingress logo and clearer site map - (9129fde) - *HaoZeke*
-- (**chemfiles**) Org-mode is sole executable notebook source - (611aa4a) - *HaoZeke*
-- (**css**) accessible token colours on dark code fences - (1cf08ca) - *HaoZeke*
-- (**css**) force inline spans in code fences (fix whitespace) - (8694c5d) - *HaoZeke*
-- (**css**) force inline data-line spans for correct fence whitespace - (3132cf0) - *HaoZeke*
-- (**css**) restore normal code whitespace (no block on data-line) - (8300cce) - *HaoZeke*
-- (**css**) keep code [data-line] as block (R/Python fences) - (568b367) - *HaoZeke*
-- (**css**) single frame on code blocks (no nested border lines) - (f965edc) - *HaoZeke*
-- (**readme**) link readcon-db as ecosystem corpus layer - (189c84d) - *HaoZeke*
-- (**site**) ecosystem nav, figures, shibuya features like rgpot - (36c3fe2) - *HaoZeke*
-- (**site**) fix Sphinx links, Atkinson Hyperlegible, clearer home - (b306ef4) - *HaoZeke*
-- (**sphinx**) ecosystem nav and intersphinx to readcon-db - (627846b) - *HaoZeke*
-- (**sphinx**) theme-align Org chemfiles pages with shibuya site - (a9d53cd) - *HaoZeke*
-- override theme pre{display:grid} for code fences - (c6f8f87) - *HaoZeke*
-- setProperty important for inline code token spans - (cf00fb8) - *HaoZeke*
-- force inline code token spans in page JS - (6958d72) - *HaoZeke*
-- fix code fence whitespace (unwrap data-line + inline tokens) - (e60c4a4) - *HaoZeke*
-- unwrap Sphinx data-line spans for correct code whitespace - (391f026) - *HaoZeke*
-- center CON selection; chemfiles is optional ingress only - (9d859b0) - *HaoZeke*
-- align chemfiles selection prose with in-repo FAQ voice - (27f7edc) - *HaoZeke*
-- drop leftover 'contract' wording in selection notes - (355c735) - *HaoZeke*
-- write selection limits in a human, NumPy-like voice - (27ca4c7) - *HaoZeke*
-- tighten selection-scope prose (vale E-Prime soft) - (22511b6) - *HaoZeke*
-- rewrite chemfiles selection scope (no vague gap list) - (66207ca) - *HaoZeke*
-- map lean/fat metatensor and option A moving parts - (10fff21) - *HaoZeke*
-- metatensor C/Fortran ABI and full DLPack parity in bindings - (b60d924) - *HaoZeke*
-- export issue-status RST for Sphinx - (a9cc066) - *HaoZeke*
-- larger code type, stronger a11y and contrast - (401fbbe) - *HaoZeke*
-- add fix_doc_links.py required by docbld - (d0357c4) - *HaoZeke*
-- fix broken in-page .rst links; keep Pages deploy unblocked - (4ab3685) - *HaoZeke*
-- remove leftover fake-viz claims from tutorial and nav - (7f5d285) - *HaoZeke*
-- delete fabricated figure assets entirely - (c3505c5) - *HaoZeke*
-- conversion-first getting started, drop fake molecule art - (d6c8cbc) - *HaoZeke*
-- lychee link gate, track RST, WCAG-oriented site chrome - (f990148) - *HaoZeke*
-- WBO-style figures, full Shibuya sidebars, ecosystem nav - (bdc7e30) - *HaoZeke*
+- (**a11y**) never invert mermaid SVGs; force the light plate - (25b64fe) - *HaoZeke*
+- (**a11y**) mermaid on light plate with AA node text in both themes - (ddd9747) - *HaoZeke*
+- (**api**) make coords-only a named product, not a second read_all - (7a49971) - *HaoZeke*
+- (**bench**) Pareto uses measured ASE CON and ASE extXYZ separately - (11b069b) - *HaoZeke*
+- (**benchmarks**) stop presenting wall-clock medians as results - (232f5c8) - *HaoZeke*
+- (**css**) accessible token colours on dark code fences - (5736ca7) - *HaoZeke*
+- (**css**) force inline spans in code fences (fix whitespace) - (e49490e) - *HaoZeke*
+- (**css**) force inline data-line spans for correct fence whitespace - (1f14753) - *HaoZeke*
+- (**css**) restore normal code whitespace (no block on data-line) - (b6968e0) - *HaoZeke*
+- (**css**) keep code [data-line] as block (R/Python fences) - (9664edd) - *HaoZeke*
+- (**css**) single frame on code blocks (no nested border lines) - (7afa141) - *HaoZeke*
+- (**spec**) schema pointer, media type guidance, v4 candidate scope - (7071183) - *HaoZeke*
+- (**spec**) front matter declares v3 current, v2 accepted - (ded6011) - *HaoZeke*
+- URL_HASH, dual-link ban, and cargo-dist cxx tarball pointer - (74674e2) - *HaoZeke*
+- CMake FetchContent, Meson wrap, and shipped C headers - (deb6d14) - *HaoZeke*
+- package destinations on README and bindings tip - (090ae06) - *HaoZeke*
+- install matrix with package destinations and homepage strip - (e498a4a) - *HaoZeke*
+- surface migrate nav, index_proj, and stack destinations - (e1d6c32) - *HaoZeke*
+- surface readcon-db package docs and docs.rs API - (05b136f) - *HaoZeke*
+- kill HDF5/XYZ carve-outs; route corpora to readcon-db - (e8e76c8) - *HaoZeke*
+- honest measurement prose without host-diary numbers - (a1f84da) - *HaoZeke*
+- equal-geometry proof — ASE XYZ slower than readcon CON - (118a96e) - *HaoZeke*
+- sync parsing_throughput.svg from compare_readers run - (a957983) - *HaoZeke*
+- cite measured CON peer speed; ban anti-product carve-outs - (520296d) - *HaoZeke*
+- center migration on the library API, not special-case stacks - (59b202d) - *HaoZeke*
+- note readcon-db campaign features in README features list - (b010f4d) - *HaoZeke*
+- sell readcon-db, selection, and chemparseplot as CON migration gains - (aba7112) - *HaoZeke*
+- Diátaxis layout with One Good Tutorial for CON checkpoints - (ff4fdeb) - *HaoZeke*
+- list optional charges/spins/magmoms on v2/v3 entry surfaces - (c774e00) - *HaoZeke*
+- state the goal as putting CON into every tool path - (d3bfd0e) - *HaoZeke*
+- drop H5MD/format bake-off from product entry surfaces - (f0acbcb) - *HaoZeke*
+- ground CON in code and literature without hedges - (d588bcf) - *HaoZeke*
+- frame CON for multi-code pipelines, not only eOn/LODE - (427971d) - *HaoZeke*
+- present CON as a full checkpoint format - (da6c617) - *HaoZeke*
+- rewrite entry prose in project voice - (4a201cf) - *HaoZeke*
+- write CON positioning in H5MD-style Objective form - (79d7b75) - *HaoZeke*
+- center CON as eOn/LODE saddle checkpoint contract - (bf35046) - *HaoZeke*
+- drop defensive AI-tell positioning prose - (045cbc1) - *HaoZeke*
+- position readcon-core as definitive CON interchange - (cf7960b) - *HaoZeke*
+- plain-text section titles (no literal backticks in sidebars) - (475ddae) - *HaoZeke*
+- serve metadata schema at its $id URL - (10c56cf) - *HaoZeke*
+- last markdown-bold leak in bindings ingest table - (89bdbc6) - *HaoZeke*
+- fix org export (subscripts, TOC dumps, bold leaks, parity table, crate API link) - (1bfd4e1) - *HaoZeke*
+- dedupe Ecosystem nav group and harden navbar logo theme swap - (5b7f8a0) - *HaoZeke*
+- align design rationale with formal paper tone - (0715560) - *HaoZeke*
+- field-wide best interchange thesis for CON and readcon-db - (0335d0a) - *HaoZeke*
+- assert CON+hourglass as default optimizer interchange - (b2b2738) - *HaoZeke*
+- ecosystem placement over checklist superiority claims - (44ad9e8) - *HaoZeke*
+- reviewer-facing design rationale in architecture, evolution, FAQ - (47873fe) - *HaoZeke*
+- optional cuda allocate/H2D in bindings and issue-status - (1f93fd3) - *HaoZeke*
+- link readcon-db install and Pages from ecosystem nav - (fec39f9) - *HaoZeke*
+- point ecosystem links at live readcon-db install - (fa40f17) - *HaoZeke*
+- override theme pre{display:grid} for code fences - (61925a9) - *HaoZeke*
+- setProperty important for inline code token spans - (e28a613) - *HaoZeke*
+- force inline code token spans in page JS - (ba2ada2) - *HaoZeke*
+- fix code fence whitespace (unwrap data-line + inline tokens) - (b7cba74) - *HaoZeke*
+- unwrap Sphinx data-line spans for correct code whitespace - (b7e9b3a) - *HaoZeke*
 #### Tests
-- (**core**) skeptic pass — chemfiles skip gate, projection equality, C sample - (fc8a967) - *HaoZeke*
-- (**core**) strengthen SoA/sync contracts and stack line parse checks - (626401f) - *HaoZeke*
-- (**ffi**) assert positions block shape via mts_array without mts_labels_count - (e340f0e) - *HaoZeke*
-- (**ffi,python**) drive full projection contract and canonical writes - (693d387) - *HaoZeke*
-- (**python**) restore single-frame chemfiles selection (atom context) - (4fddf86) - *HaoZeke*
-- (**python**) restore single-frame chemfiles selection regression suite - (868d34c) - *HaoZeke*
+- (**coverage**) push library line coverage to ≥90% - (cf6772e) - *HaoZeke*
+- (**cuda**) gate allocate_non_cpu on not(feature=cuda) - (9500223) - *HaoZeke*
+- (**docs**) run Org Babel tutorials in CI via tangle + execute - (45cfe3d) - *HaoZeke*
+- (**docs**) ban deliberately-small hedging phrases - (23e0104) - *HaoZeke*
+- (**python**) gate Diátaxis tutorials on CI pytest - (c8ced7b) - *HaoZeke*
 #### CI
-- (**bench**) Cachegrind I-refs on main for always-fresh docs numbers - (a5af9d4) - *HaoZeke*
+- (**bench**) criterion continue-on-error so ASV comment posts - (faa9a8e) - *HaoZeke*
+- (**bench**) rebase before pushing refreshed Cachegrind numbers - (3251721) - *HaoZeke*
+- (**coverage**) instrument Python/Julia/Fortran bindings for Codecov flags - (d84c739) - *HaoZeke*
+- (**coverage**) raise library coverage via full features and FFI bulk tests - (b4c32c3) - *HaoZeke*
+- (**coverage**) install emacs-nox for Python tutorial Babel tests - (8e51a8d) - *HaoZeke*
+- (**coverage**) OIDC Codecov uploads for lode-org + Python venv - (a37128d) - *HaoZeke*
+- (**coverage**) wire Codecov multi-flag uploads for rust/python/julia/fortran - (4cf1bb7) - *HaoZeke*
+- (**docs**) retry Pages deploy once on transient API failure - (bda3557) - *HaoZeke*
 #### Refactoring
-- (**ffi**) option A — metatensor-sys on the C boundary - (0abc86d) - *HaoZeke*
-- ConFrame SoA ArcArray is primary numeric store (DLPack-shaped) - (de4b276) - *HaoZeke*
+- (**api**) drop coords-only load path; full frames only - (08a387e) - *HaoZeke*
 #### Chores
-- (**bench**) refresh Cachegrind I-refs for docs - (386d1d1) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (6835f7e) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (4ce3288) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (851ca9b) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (538e1be) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (0af969e) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (22301d7) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (f266768) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (486831f) - github-actions[bot]
-- (**capi**) regenerate headers after index_proj FFI - (e8e9112) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (cda13ca) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (3879e4e) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (d924369) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (843b399) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (18dcbd6) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (905a310) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (9b779aa) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (25b30e8) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (dc52d66) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (fd84eb7) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (ced8ed1) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (cbe86e8) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (14df55d) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (9bffde8) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (2f3b47a) - github-actions[bot]
+- (**capi**) regenerate C header after DLPack device status additions - (22321bc) - *HaoZeke*
+- (**fortran**) lock fpm package version to 0.14.0 - (8258776) - *HaoZeke*
+- (**python**) drop unused frame_positions_pyarray helper - (b99522c) - *HaoZeke*
+- add cxx-dist-verify workflow for cbindgen-free packaging - (b22c999) - *HaoZeke*
+- remove median wall-clock measure from API tooling - (89abcea) - *HaoZeke*
+#### Style
+- (**docs**) flatten admonition double-line chrome - (2d3048a) - *HaoZeke*
+- (**docs**) rtrash-style hero card and nav brand strip - (5af94e2) - *HaoZeke*
+- (**docs**) use icon-only marks in the site nav bar - (5251a78) - *HaoZeke*
+- (**docs**) fix ghost hero logo and tighten homepage lead - (33864bd) - *HaoZeke*
+- (**docs**) kill double borders on admonitions, cards, code - (b9a6b3a) - *HaoZeke*
+- (**docs**) regenerate benchmark SVGs from make_plots.py - (fd8e346) - *HaoZeke*
+- (**readme**) re-export README.md anchors from readme_src.org - (5f58a7d) - *HaoZeke*
+
+- - -
+
+## v0.14.0 - 2026-06-28
+#### Features
+- (**core**) `index_proj` campaign screening projection (formula, finite scalars, sections mask) with C/Python/Fortran exposure
+- (**ffi**) projection and writer-canonical C ABI surfaces for corpus alignment
+#### Performance
+- (**parser**) SoA-primary coordinate write + stack line floats; section SoA sync without redundant position rewrite
+#### Bug Fixes
+- (**parse**) iterator fills SoA velocities/forces after declared sections (`sync_arrays_from_atom_data`)
+#### Tests
+- SoA/AoS agreement, projection equality, chemfiles pytest gated on `has_chemfiles_support()`, integration force SoA asserts
+
+- - -
 
 - - -
 
@@ -737,5 +778,3 @@ All notable changes to this project will be documented in this file. See [conven
 - Import lint and coverage - (36a3a54) - *HaoZeke*
 #### Chores
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
-
-

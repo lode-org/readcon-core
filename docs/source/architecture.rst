@@ -240,6 +240,7 @@ produces:
     | C++ header               | ``include/readcon-core.hpp``           | ``$PREFIX/include/readcon-core.hpp``             |
     +--------------------------+----------------------------------------+--------------------------------------------------+
     | pkg-config file          | cargo-c / CMake / Meson (same name)    | ``$PREFIX/lib/pkgconfig/readcon-core.pc``        |
+    +--------------------------+----------------------------------------+--------------------------------------------------+
     | cmake package            | ``cmake/readcon-core-config.in.cmake`` | ``$PREFIX/lib/cmake/readcon-core/``              |
     +--------------------------+----------------------------------------+--------------------------------------------------+
     | Linux shared object      | ``target/.../libreadcon_core.so``      | ``$PREFIX/lib/libreadcon_core.so{,.0.X,.0.X.Y}`` |
@@ -254,10 +255,7 @@ CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. None of them run cbindgen. The cxx source tarball
 (``scripts/package-cxx.sh`` → ``readcon-core-cxx-$VERSION.tar.gz`` on the
-GitHub Release) is the FetchContent / wrapdb URL. A process that also
-links readcon-db must use the **shared** objects; do not static-link
-both ``libreadcon_core.a`` and ``libreadcon_db.a``. Maintainers only:
-
+GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
 ``scripts/regen-capi-headers.sh``.
 
 The
@@ -292,6 +290,6 @@ for campaign screening (``readcon-db``), Cap'n Proto RPC. Lean builds return
 ``RKR_STATUS_FEATURE_DISABLED`` for missing features. UTF-8 CON remains
 authoritative on disk and in corpora.
 
-Related work and roles: `faq.org <faq.rst>`_. Spec:
-`spec.org <spec.rst>`_. Evolution: `evolution.org <evolution.rst>`_.
-Measurements: `benchmarks.org <benchmarks.rst>`_.
+Related work and roles: :doc:`faq`. Spec:
+:doc:`spec`. Evolution: :doc:`evolution`.
+Measurements: :doc:`benchmarks`.

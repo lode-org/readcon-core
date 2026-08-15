@@ -872,10 +872,10 @@ Chemfiles — convert other formats into CON
 
 Foreign formats are a separate how-to track:
 
-- Tutorial: `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
+- Tutorial: :doc:`chemfiles-tutorial`
 
-- How-to: `chemfiles-howto.org <chemfiles-howto.rst>`_
+- How-to: :doc:`chemfiles-howto`
 
-- Explanation: `chemfiles-explain.org <chemfiles-explain.rst>`_
+- Explanation: :doc:`chemfiles-explain`
 
-- Reference: `chemfiles-reference.org <chemfiles-reference.rst>`_
+- Reference: :doc:`chemfiles-reference`
