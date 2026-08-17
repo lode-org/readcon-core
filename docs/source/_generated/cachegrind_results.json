@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-15T21:20:47Z",
-  "git_sha": "f0be34e",
+  "generated_at": "2026-08-17T05:03:42Z",
+  "git_sha": "c4885e8",
   "features": "chemfiles-from-sources",
   "tool": "cachegrind",
   "metric": "I_refs",
@@ -8,12 +8,12 @@
     "parse_multi_2x4": 6442260,
     "forward_multi_2x4": 4919716,
     "convel_multi": 7269784,
-    "parse_100_frames": 29049995,
+    "parse_100_frames": 29049977,
     "forward_100_frames": 6891164,
     "parse_cuh2_218": 12678002,
     "float_fast_float2": 20002480,
     "float_std_parse": 32902970,
-    "write_100_frames": 35128770,
+    "write_100_frames": 35129974,
     "chemfiles_xyz_path": 8758621,
     "chemfiles_xyz_memory": 8535979,
     "chemfiles_select_name_O": 6044447
