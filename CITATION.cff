@@ -21,8 +21,8 @@ keywords:
   - convel
 abstract: >-
   readcon-core is a Rust library that parses and writes EON .con and
-  .convel trajectory files. It exposes a stable C API via cbindgen, an
-  ergonomic C++ header-only wrapper, and bindings for Python and Julia.
-  The library implements CON spec v3 (JSON metadata header, required
-  units, declared sections array, optional strict validation) while
-  remaining source-compatible with spec v2 and legacy v1 readers.
+  .convel trajectory files. It exposes a shipped C header (rkr_* ABI),
+  an ergonomic C++ header-only wrapper, and bindings for Python, Julia,
+  and Fortran. The library implements CON spec v3 (JSON metadata header,
+  required units, declared sections array, optional strict validation)
+  while remaining source-compatible with spec v2 and legacy v1 readers.
