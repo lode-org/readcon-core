@@ -383,13 +383,21 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Search order: ``READCON_CORE_LIB``, ``READCON_LIB_PATH`` (alias), a filled
+``Artifacts.toml`` ``readcon_core`` artifact from the clib tarball, then
+in-tree ``target/{release,debug}``.
 
 .. code:: shell
 
+    # Prebuilt C ABI (GitHub Release)
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
+    # alias:
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+
+Unpack ``readcon-core-clib-$VERSION-$target.tar.gz`` from the matching
+Release. Attach assets to an existing tag with
+``.github/workflows/c_lib_tarball.yml`` (``workflow_dispatch`` ``tag``).
+Windows + chemfiles is not a clib asset.
 
 Usage
 ~~~~~
@@ -843,7 +851,7 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
-(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, ``pkg-config --libs readcon-core``, or the prebuilt ``readcon-core-clib-$VERSION-$target.tar.gz`` Release asset). See ``fortran/README.md`` for the unpack + ``PKG_CONFIG_PATH`` path.
 
 .. code:: bash
 

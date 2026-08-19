@@ -43,7 +43,26 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
+[[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
+[[ -x scripts/check-clib-dist.sh ]] || die "scripts/check-clib-dist.sh must be executable"
+if ! bash scripts/check-clib-dist.sh --no-self-test; then
+    die "check-clib-dist.sh --no-self-test failed"
+fi
 [[ -f scripts/meson_cargo_build.py ]] || die "missing scripts/meson_cargo_build.py"
+[[ -f julia/ReadCon/Artifacts.toml.in ]] || die "missing julia/ReadCon/Artifacts.toml.in"
+if ! grep -q 'workflow_dispatch:' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'tag:' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'inputs.tag' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must accept workflow_dispatch inputs.tag (attach-to-tag)"
+fi
+if ! grep -q 'windows-chemfiles-skip' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'Windows + chemfiles is not a clib' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must skip Windows chemfiles explicitly"
+fi
+if ! grep -q 'READCON_CORE_LIB' julia/ReadCon/src/wrapper.jl \
+    || ! grep -q 'READCON_LIB_PATH' julia/ReadCon/src/wrapper.jl; then
+    die "Julia wrapper must honor READCON_CORE_LIB and READCON_LIB_PATH"
+fi
 
 # CMake version is not hardcoded to a stale release
 if grep -nE 'project\(readcon-core VERSION 0\.13' CMakeLists.txt; then
