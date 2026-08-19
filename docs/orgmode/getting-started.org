@@ -79,15 +79,17 @@ after a prefix install. The cxx tarball on the GitHub Release is
 include(FetchContent)
 FetchContent_Declare(
   readcon-core
-  URL https://github.com/lode-org/readcon-core/releases/download/v0.14.5/readcon-core-cxx-0.14.5.tar.gz
-  URL_HASH SHA256=f49d98c1a722caf434449ffddf603be07144816107c4664d63364ff2b85e5f9a
+  URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
+  URL_HASH SHA256=14710ec007b2131d2c0e13931bf3e7e443ce87627ace2fb21497a05ea0b5df43
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(app PRIVATE readcon-core::shared)
 #+end_src
 
-The last GitHub Release that attached =readcon-core-cxx-*.tar.gz= is
-=v0.14.5=. Python wheels on that page are =0.14.7=.
+The slim cxx tarball on the =v0.14.7= GitHub Release is the FetchContent
+URL. A vendor tarball (=readcon-core-cxx-0.14.7-vendor.tar.gz=) ships
+crates for offline builds. The Meson wrap file is
+=packaging/wrapdb/readcon-core.wrap= on that same release.
 
 #+begin_src meson
 readcon_dep = dependency('readcon-core')
