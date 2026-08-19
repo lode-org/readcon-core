@@ -43,6 +43,7 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | =readcon-core-3owo= | Wire =tests/python= pytest into CI | Done | =.github/workflows/ci_python.yml= (lean + chemfiles maturin/pytest) |
 | =readcon-core-bctw= | Fortran lazy frame iterator over C ABI | Done | =iterator_t= / =open_iterator=; fpm test walks =tiny_multi_cuh2.con=; bindings matrix |
 | =readcon-core-f58f= | LODE stack vs third-party scorecard | Done | section below |
+| =readcon-core-xr5f= | Prebuilt C ABI tarball (manylinux / Julia / Fortran) | STARTED | =scripts/package-clib.sh= + =c_lib_tarball.yml= (manylinux_2_28 + BFD); Julia accepts =READCON_LIB_PATH= and =READCON_CORE_LIB= |
 
 External packaging gates (leave open): =readcon-core-conda-32605=, =readcon-core-3xku=, =readcon-core-aoqu=.
 

@@ -216,6 +216,8 @@ Workflows
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
     | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release      | Attach slim + vendor C/C++ source tarballs           |
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | C lib tarball             | ``c_lib_tarball.yml``      | GitHub Release, PR  | Prebuilt manylinux_2_28 / macOS / Windows prefixes   |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -269,7 +271,8 @@ Mental model (new contributor)
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
           ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-          └─► workflow "cxx source tarball": after the GitHub Release exists
+          ├─► workflow "cxx source tarball": after the GitHub Release exists
+          └─► workflow "C library tarball": manylinux_2_28 / macOS prefixes
 
 .. table::
 
@@ -287,6 +290,8 @@ Mental model (new contributor)
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
+    +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
+    | Tag publish | Prebuilt C ABI prefixes                | ``.github/workflows/c_lib_tarball.yml`` (manylinux_2_28 + macOS)                                    |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 cargo-dist release-PR path
@@ -493,9 +498,14 @@ Manual equivalent of the script:
     - `GitHub Releases <https://github.com/lode-org/readcon-core/releases>`_ has cargo-dist archives
       (and any prior C ABI tarballs if still attached)
 
-Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or
-``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
+Tag CI also runs ``c_lib_tarball.yml``: Linux prefixes are built inside
+``manylinux_2_28`` with ``RUSTFLAGS=-C link-arg=-fuse-ld=bfd`` (same policy
+as ``python_wheels.yml``), plus native macOS and Windows-lean rows.
+Windows + chemfiles is skipped (prebuilt libchemfiles / vendored zlib
+is not a supported C-tarball path). Extract and set
+``PKG_CONFIG_PATH=$prefix/lib/pkgconfig``. Assemble locally with
+``scripts/package-clib.sh`` after a cargo/cmake build (the script does
+not compile).
 
 Initial PyPI setup (first release only)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

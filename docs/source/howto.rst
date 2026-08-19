@@ -786,8 +786,9 @@ Installation and setup
 
 .. code:: julia
 
-    # Point to the shared library
+    # Point to the shared library (READCON_CORE_LIB is an accepted alias)
     ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
+    # ENV["READCON_CORE_LIB"] = "/path/to/prefix/lib"
 
     # Or build from source (library auto-discovered)
     using Pkg

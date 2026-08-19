@@ -30,7 +30,7 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
+    | C / C++ / Fortran  | prebuilt prefix, CMake FetchContent, Meson, or ``pkg-config``                    | :doc:`bindings`                                                                                                                                |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
@@ -89,8 +89,26 @@ Fortran / C / C++
 Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
-after a prefix install. The cxx tarball on the GitHub Release is
-``readcon-core-cxx-$VERSION.tar.gz``.
+after a prefix install.
+
+For a one-command non-Python install, use the prebuilt C ABI tarball
+on the GitHub Release
+(``readcon-core-$VERSION-manylinux_2_28_{x86_64,aarch64}.tar.gz``, plus
+macOS). Linux prefixes are built in manylinux_2_28 with the same BFD
+linker policy as ``python_wheels.yml``. Extract and point pkg-config at
+the prefix:
+
+.. code:: shell
+
+    tar -xzf readcon-core-0.14.7-manylinux_2_28_x86_64.tar.gz
+    prefix=$PWD/readcon-core-0.14.7-manylinux_2_28_x86_64
+    export PKG_CONFIG_PATH=$prefix/lib/pkgconfig
+    export LD_LIBRARY_PATH=$prefix/lib
+    pkg-config --cflags --libs readcon-core
+
+``readcon-core.pc`` uses ``prefix=${pcfiledir}/../..`` so the tree is
+relocatable. The cxx **source** tarball on the same Release is
+``readcon-core-cxx-$VERSION.tar.gz`` (needs rustc).
 
 .. code:: cmake
 

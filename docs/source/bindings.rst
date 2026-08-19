@@ -383,13 +383,17 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Set ``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` to the shared library
+(file) or to a directory that contains it. A prebuilt prefix from
+GitHub Releases (``readcon-core-$VERSION-manylinux_2_28_*.tar.gz``)
+works after extract. Or build with ``cargo build --release`` and the
+Julia package finds ``target/release`` automatically.
 
 .. code:: shell
 
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    # alias accepted by the same loader:
+    export READCON_CORE_LIB=/path/to/prefix/lib
 
 Usage
 ~~~~~
@@ -484,6 +488,11 @@ C API
 ~~~~~
 
 Include ``readcon-core.h`` and link against ``libreadcon_core``.
+Prebuilt prefixes on GitHub Releases
+(``readcon-core-$VERSION-manylinux_2_28_{x86_64,aarch64}.tar.gz``)
+extract to a relocatable tree; set
+``PKG_CONFIG_PATH=$prefix/lib/pkgconfig`` and
+``LD_LIBRARY_PATH=$prefix/lib``. Linux builds are manylinux_2_28.
 
 .. code:: c
 
@@ -844,6 +853,8 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
 (issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+For a prebuilt prefix, extract the C ABI tarball and set
+``PKG_CONFIG_PATH=$prefix/lib/pkgconfig`` (see ``fortran/README.md``).
 
 .. code:: bash
 

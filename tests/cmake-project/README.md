@@ -18,4 +18,9 @@ cmake -S tests/cmake-project -B build/cmake-find \
   -DCMAKE_PREFIX_PATH=$PWD/prefix
 cmake --build build/cmake-find
 PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig pkg-config --exists --print-errors readcon-core
+
+# Prebuilt C ABI prefix from GitHub Releases (manylinux_2_28 / macOS)
+# tar -xzf readcon-core-$VERSION-manylinux_2_28_x86_64.tar.gz
+# PKG_CONFIG_PATH=$PWD/readcon-core-$VERSION-manylinux_2_28_x86_64/lib/pkgconfig \
+#   pkg-config --cflags --libs readcon-core
 ```

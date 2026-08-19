@@ -190,6 +190,12 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 </tr>
 
 <tr>
+<td class="org-left">C / C++ prebuilt</td>
+<td class="org-left">extract <code>readcon-core-$VERSION-manylinux_2_28_*.tar.gz</code></td>
+<td class="org-left">same; set <code>PKG_CONFIG_PATH</code></td>
+</tr>
+
+<tr>
 <td class="org-left">C / C++ Meson</td>
 <td class="org-left"><code>dependency('readcon-core')</code> (wrapdb / wrap-file)</td>
 <td class="org-left">same</td>
@@ -203,7 +209,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 </tbody>
 </table>
 
-The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a maintainer tool, not a consumer dependency. C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`) compiler. FetchContent URL: `readcon-core-cxx-$VERSION.tar.gz` on the GitHub Release.
+The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a maintainer tool, not a consumer dependency. C99 (`readcon-core.h`) or C++17 (`readcon-core.hpp`) compiler. FetchContent URL: `readcon-core-cxx-$VERSION.tar.gz` on the GitHub Release. Prebuilt C ABI prefixes (manylinux_2_28 / macOS) are `readcon-core-$VERSION-manylinux_2_28_*.tar.gz`; extract and set `PKG_CONFIG_PATH=$prefix/lib/pkgconfig`.
 Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
@@ -218,13 +224,13 @@ round-trip, build a frame with energy. Full steps:
 Short Python path from the repository root:
 
     import readcon
-    
+
     for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
         print(frame.cell, len(frame), frame.energy)
-    
+
     frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
     readcon.write_con("out.con", frames)
-    
+
     atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
     frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
     frame.set_energy(-42.5)
@@ -359,4 +365,3 @@ If you use `readcon-core` in academic work, please cite it via the metadata in [
 # License
 
 MIT.
-

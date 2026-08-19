@@ -25,6 +25,26 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## Prebuilt C library (`PKG_CONFIG_PATH`)
+
+Download `readcon-core-$VERSION-manylinux_2_28_{x86_64,aarch64}.tar.gz` (or
+the macOS prefix) from GitHub Releases, extract, then point pkg-config at
+the prefix. Linux tarballs are **manylinux_2_28**.
+
+```bash
+tar -xzf readcon-core-0.14.7-manylinux_2_28_x86_64.tar.gz
+prefix="$PWD/readcon-core-0.14.7-manylinux_2_28_x86_64"
+export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export LD_LIBRARY_PATH="$prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+pkg-config --cflags --libs readcon-core
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core)" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+`readcon-core.pc` uses `prefix=${pcfiledir}/../..`, so the extracted tree
+can move. cbindgen is not required.
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:
