@@ -10,11 +10,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+import socket
+import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+def _stamp(res: dict) -> dict:
+    res["host"] = socket.gethostname()
+    res["platform"] = platform.platform()
+    res["date_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    try:
+        res["commit"] = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
+            text=True,
+        ).strip()
+    except Exception:
+        res["commit"] = "unknown"
+    return res
 
 
 def median_ms(fn, repeats: int) -> float:
@@ -115,6 +133,7 @@ def main() -> None:
     res["ratio_ase_netcdf_over_chemfiles_to_con"] = (
         res["ase_netcdf_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
     )
+    _stamp(res)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(res, indent=2) + "\n")
     print(json.dumps(res, indent=2))

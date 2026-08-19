@@ -16,13 +16,30 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import platform
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+def _stamp(res: dict) -> dict:
+    res["host"] = socket.gethostname()
+    res["platform"] = platform.platform()
+    res["date_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    try:
+        res["commit"] = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
+            text=True,
+        ).strip()
+    except Exception:
+        res["commit"] = "unknown"
+    return res
 
 
 def median_ms(fn, repeats: int) -> float:
@@ -164,7 +181,7 @@ def main() -> None:
             "vs h5py load of position/value only vs readcon CON full frames "
             "(uncompressed + gzip + optional zstd) vs readcon.read_chemfiles multi-frame XYZ"
         ),
-        "host_note": "run records wall times; fill host/date in commit message",
+        "host_note": "host/date_utc/commit stamped by this script",
         "n_frames": args.frames,
         "n_atoms": n_atoms,
         "repeats": args.repeats,
@@ -216,6 +233,7 @@ def main() -> None:
     )
     if zstd_size is not None:
         res["ratio_con_zst_size_over_h5md"] = zstd_size / res["h5md_size_bytes"]
+    _stamp(res)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(res, indent=2) + "\n")
     print(json.dumps(res, indent=2))

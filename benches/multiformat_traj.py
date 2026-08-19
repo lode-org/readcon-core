@@ -16,9 +16,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+import socket
 import statistics
+import subprocess
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -336,6 +340,16 @@ def main():
     # Flat rows for simple consumers
     result["rows"] = [r for b in suite_rows for r in b["rows"]]
 
+    result["host"] = socket.gethostname()
+    result["platform"] = platform.platform()
+    result["date_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    try:
+        result["commit"] = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
+            text=True,
+        ).strip()
+    except Exception:
+        result["commit"] = "unknown"
     text = json.dumps(result, indent=2)
     print(text)
     if args.out:

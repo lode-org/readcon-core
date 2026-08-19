@@ -112,17 +112,34 @@ Local:
 
 Config: ``asv.conf.json``. Results: ``.asv/`` (gitignored).
 
-Peer scripts (local)
---------------------
+Peer scripts (named host)
+-------------------------
 
-Run on your machine; write JSON under ``benches/results/`` if you want a citeable
-artifact. Ordering vs ASE / C sscanf / MDA is a property of **that run**, not a
-global ranking.
+Cite only JSON that records host, UTC date, commit, and Cargo features.
+``benches/results/*_terra.json`` and the ``host`` / ``date_utc`` fields in
+``ase_traj_vs_con.json`` and ``h5md_vs_con.json`` are the paper-facing
+artifacts. A number without those fields is a local plot, not a table.
+
+Chemfiles ingress vs native CON is an equal-geometry wall comparison:
+same atoms and frame count, XYZ through ``readcon.read_chemfiles`` versus
+``readcon.read_con`` on the CON text. Cachegrind already has
+``chemfiles_xyz_path`` / ``chemfiles_xyz_memory`` I-refs. The wall ratios
+live in ``ase_traj_vs_con.json`` (``ratio_chemfiles_to_con_over_con``) and
+``h5md_vs_con.json`` (``ratio_chemfiles_xyz_over_con``). That answers the
+ingress cost. It is not a "conversion atoms/s" vanity metric: XYZ has
+no constraints, ``atom_id``, or JSON, so the chemfiles path is a different
+payload.
+
+H5MD framing for the same geometry: ``h5py`` ``position/value`` is a dense
+coordinate array and is faster than a full CON parse. MDAnalysis H5MD
+cost is the Python ``Universe`` API, not the format. CON carries cell,
+constraints, ``atom_id``, and JSON. Report all three; do not drop H5MD.
 
 .. code:: shell
 
     # Same CON text vs ASE ase.io.eon and eOn-style C sscanf
-    uv run --with matplotlib --with numpy --with ase python benches/compare_readers.py
+    uv run --with matplotlib --with numpy --with ase python benches/compare_readers.py \
+      --out benches/results/compare_readers.json
 
     # Equal-geometry multi-frame: ASE XYZ/extXYZ/CON vs readcon CON
     python benches/multiformat_traj.py --fixtures cuh2 --ladder 100 --repeats 5 \
