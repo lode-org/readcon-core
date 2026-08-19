@@ -275,6 +275,56 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the ``[lib]`` name (``readcon_core``), which downstream packagers (the
 conda-forge feedstock in particular) check for at the hyphenated name.
 
+.. _abi-stability:
+
+C ABI stability contract (``rkr_*``)
+------------------------------------
+
+The published C surface is the ``rkr_*`` API in the shipped
+``include/readcon-core.h``. Consumers compile against that header; they
+do not run cbindgen. The C++ wrapper (``include/readcon-core.hpp``) is a
+header-only RAII layer over the same symbols.
+
+What is frozen in 0.14.x
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Symbol prefix ``rkr_*`` and the opaque handle types (``RKRConFrame``,
+  ``RKRConFrameWriter``, ``RKRConFrameBuilder``, ``CConFrameIterator``).
+- Ownership rules in the header comment: caller-owned handles,
+  ``free_rkr_frame_array`` vs ``free_rkr_frame``, ``rkr_free_string`` for
+  heap ``char*``, process-static ``rkr_library_version``.
+- Sentinel policy: ``NaN`` for absent floats, ``UINT64_MAX`` for absent
+  unsigned integers, ``NULL`` for absent strings.
+- Error policy: functions that allocate or validate return ``NULL`` or a
+  negative ``RKRStatus``; they do not abort the process. Builder
+  ``rkr_frame_builder_build`` returns ``NULL`` on ``MassMismatch`` and other
+  ``ParseError`` cases.
+- Feature-gated symbols (``RKR_STATUS_FEATURE_DISABLED``) stay in the
+  header; a lean build returns that status instead of hiding the
+  symbol.
+- Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI does not
+  grow a Z=118 table.
+
+What is not a 1.0 freeze
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The crate, wheels, and Fortran package are 0.14.7. PyPI still reports
+``Development Status :: 4 - Beta``. A ``1.0.0`` cut is the production
+classifier and the SONAME/semver major bump. Until that tag:
+
+- Additive ``rkr_*`` symbols may appear in a 0.14.z patch.
+- Existing 0.14.x signatures, sentinels, and ownership do not change
+  in a patch.
+- A breaking C change requires a 0.15+ minor (0.x semver) and a
+  matching header/SONAME bump. conda-forge ``run_exports`` already pin
+  ``upper_bound='x.x'`` for that reason.
+
+Drift check
+~~~~~~~~~~~
+
+``scripts/regen-capi-headers.sh --check`` is the CI contract that the
+committed header matches ``src/ffi.rs``.
+
 .. _design-rationale:
 
 Design rationale

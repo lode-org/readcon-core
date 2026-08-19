@@ -420,4 +420,7 @@ Why an hourglass C ABI?
 
 Optimizers and drivers are often Fortran or C++. A single ``rkr_*`` surface
 gives those codes the same CON semantics as Python and Julia without embedding
-a Python interpreter on the I/O path.
+a Python interpreter on the I/O path. The 0.14.x stability contract
+(ownership, sentinels, no-abort errors, Z=1..92 helpers) is on the
+architecture page. A ``1.0.0`` cut is the production classifier, not a
+silent ABI rewrite.

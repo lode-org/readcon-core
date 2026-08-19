@@ -167,7 +167,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [[https://github.com/HaoZeke/readCon][readCon]].
 
 ** Citation
-If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. The Zenodo DOI tracks the latest release.
+If you use ~readcon-core~ in academic work, please cite it via the metadata in [[file:CITATION.cff][CITATION.cff]]. A Zenodo DOI is minted on a freeze tag and recorded in =CITATION.cff= identifiers; this tree does not invent one.
 
 * License
 MIT.

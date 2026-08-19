@@ -351,7 +351,7 @@ Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 ## Citation
 
-If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
+If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). A Zenodo DOI is minted on a freeze tag and recorded in `CITATION.cff` identifiers; this tree does not invent one.
 
 
 <a id="org8b8a84b"></a>

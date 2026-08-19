@@ -150,6 +150,44 @@ written through =ConFrameWriter::from_path_zstd= and the same
 zstd magic bytes and return a clear error pointing at the feature flag,
 so consumers never see a corrupt parse on a zstd file.
 
+* Why text CON stays the on-disk authority (not bcon, not RCSO)
+
+** Alternatives considered
+
+1. *bcon (Cap'n Proto on disk)*: serialize =ConFrame= with the existing
+   =schema/ReadCon.capnp= layout (or a packed sibling) so a campaign
+   can =mmap= a frame without a text parse. Attractive for random
+   access over millions of images.
+2. *gzip/zstd of the text*: already shipped. Decompresses to a
+   =String= then parses. Smaller files, same grammar, no new
+   authority.
+3. *readcon-db RCSO*: cooked SoA numerics inside LMDB. Fast screening
+   (energy, formula, section presence). Not a round-trippable
+   checkpoint: constraints, =atom_id=, JSON keys, and generator
+   comments are not the store's job.
+
+** Decision
+
+Text =.con= / =.convel= (optionally gzip or zstd) remains the
+authoritative interchange. Three reasons:
+
+- Independent implementers already read the 9-line header and the
+  5-column atom line. A binary schema would split the ecosystem into
+  "text CON" and "bcon" camps for no gain on typical rare-event file
+  sizes (KiB to low MiB).
+- =schema/ReadCon.capnp= is the *RPC wire* for =parseFrames= /
+  =writeFrames=. It is a parsed-frame transport, not an on-disk
+  format. Treating it as a file format would freeze an 0.x RPC
+  surface as a corpus authority.
+- =readcon-db= indexes CON text. RCSO is a derived cache. Rebuilding
+  the cache from text is always legal; the inverse is not.
+
+A packed bcon remains a possible *derived* layout for mmap-heavy
+campaigns (one segment per frame, identity/constraints/sections
+copied losslessly, pointer back to the source CON hash). It is not
+the interchange file and it is not a replacement for LMDB. The paper
+can discuss that layout; shipping it is a separate feature.
+
 * Migration guide for existing tools
 
 ** Reading v2 files in a v1 reader
