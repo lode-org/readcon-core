@@ -25,6 +25,28 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## Prebuilt C ABI (no local cargo)
+
+`fpm.toml` already has `link = ["readcon_core"]`. Point the linker at a
+Release tarball instead of `target/release`:
+
+```bash
+VER=0.14.7
+TARGET=x86_64-unknown-linux-gnu
+curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
+tar -xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"
+PREFIX="$PWD/readcon-core-clib-${VER}-${TARGET}"
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm -lstdc++"
+```
+
+Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` to attach
+those assets to an existing GitHub Release (same hook as `cxx_tarball.yml`).
+Windows + chemfiles is not a clib asset; use Linux/macOS tarballs.
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:

@@ -32,6 +32,8 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+    | Prebuilt C ABI     | ``readcon-core-clib-$VER-$target.tar.gz`` on the GitHub Release                     | :doc:`bindings` (Julia / Fortran / ``pkg-config``)                                                                               |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
 ~~~~~~~~~~~~~~~
@@ -127,6 +129,12 @@ Fortran smoke from a checkout (after a release build of the cdylib):
 
     cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
       --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+Prebuilt C ABI (no local cargo): unpack
+``readcon-core-clib-$VERSION-$target.tar.gz`` from the GitHub Release, then
+``export READCON_CORE_LIB`` / ``PKG_CONFIG_PATH``. Attach assets to an
+already-published tag with Actions → **C ABI library tarball** →
+``tag=vX.Y.Z``. Windows + chemfiles is not a clib asset.
 
 Smoke test
 ----------

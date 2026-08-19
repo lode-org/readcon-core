@@ -256,7 +256,12 @@ CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. None of them run cbindgen. The cxx source tarball
 (``scripts/package-cxx.sh`` → ``readcon-core-cxx-$VERSION.tar.gz`` on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
+GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
+tarball (``scripts/package-clib.sh`` →
+``readcon-core-clib-$VERSION-$target.tar.gz``) is the Julia / Fortran /
+``pkg-config`` consumer path; attach it to an existing tag with
+``.github/workflows/c_lib_tarball.yml`` (``workflow_dispatch`` ``tag``).
+Windows + chemfiles is not a clib asset. Maintainers only:
 ``scripts/regen-capi-headers.sh``.
 
 The

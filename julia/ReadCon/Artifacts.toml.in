@@ -1,0 +1,11 @@
+# Filled by scripts/package-clib.sh (version, rustc target, sha256).
+# Julia Pkg.Artifacts / BinaryBuilder consume the filled Artifacts.toml
+# written next to the Release tarball as Artifacts-<target>.toml.
+
+[readcon_core]
+git-tree-sha1 = "0000000000000000000000000000000000000000"
+lazy = true
+
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-@TARGET@.tar.gz"
+    sha256 = "@SHA256@"
