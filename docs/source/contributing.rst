@@ -66,7 +66,9 @@ The project uses `conventional commits <https://www.conventionalcommits.org/>`_ 
 The CI lint check rejects non-conforming commit messages on the PR
 range. Some historical commits use ``docs+bench:`` or untyped merges;
 ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
-``scripts/release-prep.sh`` runs ``cog changelog`` from the previous tag.
+``scripts/release-prep.sh`` runs ``cog changelog`` from the previous tag
+and retitles ``Unreleased`` to ``## vX.Y.Z`` so shipped tags have no
+Unreleased dump.
 
 Recognized commit types (from ``cog.toml``):
 
@@ -451,9 +453,13 @@ Manual equivalent of the script:
 
    .. code:: shell
 
+       prev="$(git describe --tags --abbrev=0)"
        {
          sed -n '1,3p' CHANGELOG.md
-         cog changelog
+         cog changelog "${prev}.." \
+           | sed "s/^## Unreleased.*/## vX.Y.Z - $(date +%F)/"
+         echo
+         awk '/^## v/{found=1} found' CHANGELOG.md
        } > /tmp/CHANGELOG.md
        mv /tmp/CHANGELOG.md CHANGELOG.md
 
