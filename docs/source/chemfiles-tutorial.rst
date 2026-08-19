@@ -60,9 +60,8 @@ What you will build
 
 You do **not** need a pre-existing ``.con`` file. The point is **ingress from the wider ecosystem into CON**.
 
-   Foreign trajectory → chemfiles → ``ConFrame`` (optional bonds) → ``.con``.
-
-   After ingress, geometries are first-class for chemparseplot / rgpycrumbs /
+   Foreign trajectory to chemfiles to ``ConFrame`` (optional bonds) to ``.con``.
+   chemparseplot and rgpycrumbs then plot that CON file.
 
 Choose one install path
 -----------------------

@@ -149,7 +149,7 @@ C++: =readcon::ConFrame::select= / =readcon::has_chemfiles_support()= in
 * How to install lean CON I/O only (no libchemfiles)
 
 #+begin_src shell
-pip install 'readcon==0.13.0'          # has_chemfiles_support() is False
+pip install 'readcon==0.14.7'          # has_chemfiles_support() is False
 cargo build                            # stubs; FeatureDisabled on import/select
 #+end_src
 
@@ -159,7 +159,7 @@ for CI that must not compile CMake/chemfiles.
 * How to install full chemfiles support
 
 #+begin_src shell
-pip install 'readcon-chemfiles==0.13.0'   # preferred PyPI
+pip install 'readcon-chemfiles==0.14.7'   # preferred PyPI
 # or: pip install 'readcon[chemfiles]'   # depends on readcon-chemfiles==X.Y.Z
 cargo build --features chemfiles
 maturin develop --features python,chemfiles

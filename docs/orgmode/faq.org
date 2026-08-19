@@ -29,7 +29,7 @@ Saddle, dimer, and NEB pipelines already depend on that payload.
 =readcon-core= is the spec v2-v3 reader/writer and the hourglass
 =rkr_*= ABI in each language. Chemfiles converts *into* CON; DLPack
 and metatensor export *out* of it.
-[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
+[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][index_proj]]
 and =readcon-db= index corpora that stay CON text. Spec:
 [[file:spec.org][spec.org]]. Design history: [[file:evolution.org][evolution.org]].
 

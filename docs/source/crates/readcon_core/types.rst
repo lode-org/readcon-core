@@ -32,11 +32,11 @@
       :vis: pub
       :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"decode_fixed_bitmask"},{"type":"punctuation","value":"("},{"type":"name","value":"val"},{"type":"punctuation","value":": "},{"type":"link","value":"u8","target":"u8"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"punctuation","value":"["},{"type":"link","value":"bool","target":"bool"},{"type":"punctuation","value":"; "},{"type":"literal","value":"3"},{"type":"punctuation","value":"]"}]
 
-      Decode a column-4 bitmask value to per-direction fixed flags.
+      Decode a column-4 bitmask as a spec-2 value.
       
-      - 0 = free
-      - 1 = all-fixed (legacy, treated as [true, true, true])
-      - 2-7 = bitmask (bit 0 = x, bit 1 = y, bit 2 = z)
+      Spec-2 files use a pure bitmask (bit 0 = x, bit 1 = y, bit 2 = z),
+      so 1 is x-only. Spec-1 files that wrote 1 meaning fully fixed must
+      call ``decode_fixed_bitmask_for_spec`` with ``spec_version = 1``.
 
    .. rust:function:: readcon_core::types::encode_fixed_bitmask
       :index: 0
@@ -100,10 +100,9 @@
          Per-direction constraint flags: [fixed_x, fixed_y, fixed_z].
          
          Encoded as a bitmask in column 4 of the file format:
-         - 0 = free (all false)
-         - 1 = all-fixed (legacy, treated as [true, true, true])
-         - 2-6 = per-direction combinations (bit 0=y, bit 1=x+y, bit 2=z, ...)
-         - 7 = all-fixed (canonical)
+         bit 0 = x, bit 1 = y, bit 2 = z.
+         Spec 1 (no JSON line 2) treats value 1 as all-fixed.
+         Spec 2 treats 1 as x-only. All-fixed is 7.
 
       .. rust:variable:: readcon_core::types::AtomDatum::atom_id
          :index: 2
