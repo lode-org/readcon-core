@@ -2,8 +2,8 @@
 """
 Cross-implementation benchmark: readcon-core vs ASE vs eOn Python reader.
 
-Generates a test trajectory, times each reader, and produces comparison
-bar charts saved to docs/orgmode/img/.
+Generates a test trajectory, times each reader, writes JSON with host
+provenance, and produces comparison bar charts saved to docs/orgmode/img/.
 
 Usage:
     uv run --with matplotlib --with numpy --with ase benches/compare_readers.py
@@ -14,10 +14,16 @@ Optional: readcon (Python bindings), ase (uv run --with ase).
 eOn Python reader: uses ~/Git/Github/TheochemUI/eOn if present.
 """
 
+import argparse
+import json
 import os
+import platform
+import socket
+import subprocess
 import sys
 import time
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -213,17 +219,39 @@ def make_bar_chart(results, title, filename):
 # Main
 # ---------------------------------------------------------------------------
 
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--short", "HEAD"],
+            text=True,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--frames", type=int, default=NUM_FRAMES)
+    ap.add_argument("--repeats", type=int, default=REPEAT)
+    ap.add_argument(
+        "--out",
+        type=Path,
+        default=REPO_ROOT / "benches" / "results" / "compare_readers.json",
+    )
+    args = ap.parse_args()
+    global REPEAT
+    REPEAT = args.repeats
+
     with tempfile.NamedTemporaryFile(suffix=".con", delete=False, mode="w") as f:
         traj_path = f.name
 
     try:
-        print(f"Generating {NUM_FRAMES}-frame trajectory (218 atoms/frame)...")
-        generate_trajectory(NUM_FRAMES, traj_path)
+        print(f"Generating {args.frames}-frame trajectory (218 atoms/frame)...")
+        generate_trajectory(args.frames, traj_path)
         file_size = os.path.getsize(traj_path)
         print(f"  File size: {file_size / 1024:.1f} KiB")
 
-        print(f"\nBenchmarking ({REPEAT} repetitions, median)...")
+        print(f"\nBenchmarking ({args.repeats} repetitions, median)...")
         results = {}
 
         t = bench_c_reader(traj_path)
@@ -255,7 +283,7 @@ def main():
             print("\nGenerating plots...")
             make_bar_chart(
                 results,
-                f"Parsing {NUM_FRAMES} frames x 218 atoms",
+                f"Parsing {args.frames} frames x 218 atoms",
                 "parsing_throughput.svg",
             )
         else:
@@ -266,10 +294,32 @@ def main():
         print(f"{'Reader':<25} {'Time (ms)':>10} {'Speedup':>10}")
         print("-" * 47)
         baseline = max(results.values()) if results else 1.0
+        keyed = {}
         for label, t in sorted(results.items(), key=lambda x: x[1], reverse=True):
             label_clean = label.replace("\n", " ")
             speedup = baseline / t
+            keyed[label_clean] = {"median_ms": t, "speedup_vs_slowest": speedup}
             print(f"{label_clean:<25} {t:>10.1f} {speedup:>9.1f}x")
+
+        payload = {
+            "host": socket.gethostname(),
+            "platform": platform.platform(),
+            "date_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+            "commit": _git_commit(),
+            "n_frames": args.frames,
+            "n_atoms": 218,
+            "repeats": args.repeats,
+            "file_size_bytes": file_size,
+            "protocol": (
+                "synthetic multi-frame CON (218 atoms/frame); "
+                "median wall of --repeats; C sscanf / eOn Python / ASE eon / "
+                "readcon path / readcon string"
+            ),
+            "readers": keyed,
+        }
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"  Wrote {args.out}")
 
     finally:
         os.unlink(traj_path)
