@@ -5,22 +5,22 @@ Getting started
 
 .. tip::
 
-   Install here, then take the :doc:`tutorial` (One Good Tutorial). Conversion
-   from XYZ/PDB/GRO is a separate path: :doc:`chemfiles-tutorial`.
+   Install one language, then run the :doc:`tutorial`. XYZ/PDB/GRO
+   conversion is a separate path: :doc:`chemfiles-tutorial`.
 
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.14.1``).
+Pick **one** language. Version pins match this tree (``0.14.7``).
 
 .. table::
 
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Package            | Install                                                                             | Destination                                                                                                                                 |
     +====================+=====================================================================================+=============================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.14.1'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
+    | Python CON I/O     | ``pip install 'readcon==0.14.7'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.1'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.7'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Rust CON I/O       | ``cargo add readcon-core``                                                          | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -33,30 +33,30 @@ Pick **one** language. Version pins match this tree (``0.14.1``).
     | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
-Python — CON I/O
-~~~~~~~~~~~~~~~~
+Python: CON I/O
+~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon==0.14.1'
+    pip install 'readcon==0.14.7'
 
-Python — CON I/O plus format conversion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Python: CON I/O plus format conversion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.14.1'
+    pip install 'readcon-chemfiles==0.14.7'
     # do not also install lean readcon in the same venv
 
-Rust — CON I/O
-~~~~~~~~~~~~~~
+Rust: CON I/O
+~~~~~~~~~~~~~
 
 .. code:: shell
 
     cargo add readcon-core
 
-Rust — with conversion
-~~~~~~~~~~~~~~~~~~~~~~
+Rust: with conversion
+~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
@@ -97,7 +97,7 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.1/readcon-core-cxx-0.14.1.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
       URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
     )
     FetchContent_MakeAvailable(readcon-core)
@@ -116,7 +116,12 @@ From a git checkout:
     export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
     pkg-config --cflags --libs readcon-core
 
-#+end\_src
+Fortran smoke from a checkout (after a release build of the cdylib):
+
+.. code:: shell
+
+    cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
+      --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
 
 Smoke test
 ----------

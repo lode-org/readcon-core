@@ -5,44 +5,44 @@
 #+begin_export rst
 .. tip::
 
-   Install here, then take the :doc:`tutorial` (One Good Tutorial). Conversion
-   from XYZ/PDB/GRO is a separate path: :doc:`chemfiles-tutorial`.
+   Install one language, then run the :doc:`tutorial`. XYZ/PDB/GRO
+   conversion is a separate path: :doc:`chemfiles-tutorial`.
 #+end_export
 
 * Install
 
-Pick *one* language. Version pins match this tree (=0.14.1=).
+Pick *one* language. Version pins match this tree (=0.14.7=).
 
 | Package | Install | Destination |
 |---------+---------+-------------|
-| Python CON I/O | =pip install 'readcon==0.14.1'= | [[https://pypi.org/project/readcon/][PyPI]] |
-| Python + chemfiles | =pip install 'readcon-chemfiles==0.14.1'= | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] (do not mix with lean =readcon= in the same venv) |
+| Python CON I/O | =pip install 'readcon==0.14.7'= | [[https://pypi.org/project/readcon/][PyPI]] |
+| Python + chemfiles | =pip install 'readcon-chemfiles==0.14.7'= | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] (do not mix with lean =readcon= in the same venv) |
 | Rust CON I/O | =cargo add readcon-core= | [[https://docs.rs/readcon-core][docs.rs]] |
 | Rust + chemfiles | =cargo add readcon-core --features chemfiles= | same crate |
 | Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
 | Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
 | C / C++ / Fortran | CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
 
-** Python — CON I/O
+** Python: CON I/O
 
 #+begin_src shell
-pip install 'readcon==0.14.1'
+pip install 'readcon==0.14.7'
 #+end_src
 
-** Python — CON I/O plus format conversion
+** Python: CON I/O plus format conversion
 
 #+begin_src shell
-pip install 'readcon-chemfiles==0.14.1'
+pip install 'readcon-chemfiles==0.14.7'
 # do not also install lean readcon in the same venv
 #+end_src
 
-** Rust — CON I/O
+** Rust: CON I/O
 
 #+begin_src shell
 cargo add readcon-core
 #+end_src
 
-** Rust — with conversion
+** Rust: with conversion
 
 #+begin_src shell
 cargo add readcon-core --features chemfiles
@@ -79,7 +79,7 @@ after a prefix install. The cxx tarball on the GitHub Release is
 include(FetchContent)
 FetchContent_Declare(
   readcon-core
-  URL https://github.com/lode-org/readcon-core/releases/download/v0.14.1/readcon-core-cxx-0.14.1.tar.gz
+  URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
   URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
 )
 FetchContent_MakeAvailable(readcon-core)
@@ -98,9 +98,12 @@ cmake --build build && cmake --install build
 export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
 pkg-config --cflags --libs readcon-core
 #+end_src
-# Fortran smoke (example):
-# cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
-#   --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+Fortran smoke from a checkout (after a release build of the cdylib):
+
+#+begin_src shell
+cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
+  --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
 #+end_src
 
 * Smoke test

@@ -7,8 +7,9 @@ Library architecture
 Overview
 --------
 
-readcon-core is structured as an hourglass API: a Rust core with
-thin FFI and language-specific wrapper layers.
+The library is an hourglass: a Rust core, a C ABI in ``ffi.rs``, and
+thin wrappers (PyO3, Julia ccall, C++ RAII). Every language talks
+to the same ``rkr_*`` surface; none reimplements the parser.
 
 ::
 
@@ -279,10 +280,10 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 Design rationale
 ----------------
 
-readcon-core is the hourglass library that puts CON into every language path:
-Rust core, ``rkr_*`` C ABI, wrappers for C++, Python, Julia, and Fortran. Full
-CON payload (constraints, optional section data, ``atom_id``, JSON) without a
-Python interpreter on the I/O path.
+The hourglass is the design: Rust core, ``rkr_*`` C ABI, wrappers for
+C++, Python, Julia, and Fortran. The full CON payload (constraints,
+optional section data, ``atom_id``, JSON) is available without a Python
+interpreter on the I/O path.
 
 Also in-tree: chemfiles import/selection (land structures **as** CON), SoA +
 DLPack export (optional CUDA), metatensor ``TensorBlock`` export, ``index_proj``

@@ -23,10 +23,10 @@ Reference implementation
 Surface grammar (PEG)
     ``grammar/readcon.pest`` (Pest); validate with ``cargo test --features grammar``
 
-This document defines versions 2 and 3 of the CON file format; version 3
-is the current version and adds required ``units`` metadata on top of the
-version 2 requirements. It supersedes all prior informal descriptions.
-New implementations SHOULD target version 3 and MUST accept version 2.
+This document is the formal CON specification. Version 3 is current
+and adds required ``units`` metadata on top of the version 2 layout.
+It supersedes informal eOn write-ups. New implementations SHOULD
+target version 3 and MUST accept version 2.
 
 The keywords MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT,
 MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ semantics.
@@ -34,19 +34,17 @@ MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ se
 Overview
 --------
 
-CON stores atomic configurations for rare-event and transition-state
-checkpoints: cell, type-grouped coordinates, per-direction constraints, atom
-identity, optional velocities/forces, and versioned JSON metadata. The layout
-originated in the `eOn <https://eondocs.org>`_ rare-event stack
-:cite:t:`chillEONSoftwareLong2014`; this document is the formal
-specification. The reference implementation is ``readcon-core`` (multi-language
-hourglass ABI).
+CON is a text checkpoint for rare-event and transition-state work: one
+frame holds the cell, type-grouped coordinates, a per-direction
+constraint mask, a pre-group ``atom_id``, optional per-atom sections, and
+versioned JSON on line 2. The layout comes from the `eOn <https://eondocs.org>`_
+rare-event stack :cite:t:`chillEONSoftwareLong2014`.
+``readcon-core`` is the reference implementation (hourglass ``rkr_*`` ABI).
 
-A CON file contains one or more *frames*. Each frame encodes a simulation
-cell, per-type metadata (masses, atom counts), and per-atom data
-(coordinates, constraints, identity). Optional sections add velocities,
-forces, or other per-atom vector/scalar data. Line 2 carries versioned JSON
-metadata.
+A file is a concatenation of *frames*. Each frame is a nine-line header,
+one coordinate block per atom type, then zero or more declared sections
+(velocities, forces, energies, charges, spins, magmoms). There is no
+inter-frame separator.
 
 File extensions
 ---------------
