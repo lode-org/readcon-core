@@ -24,6 +24,16 @@ pub enum ParseError {
     /// the current length. Surfaces as `IndexError` in PyO3 and as
     /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` over the C ABI.
     IndexOutOfBounds { index: usize, len: usize },
+    /// Two atoms share a CON type (symbol) but their masses differ
+    /// beyond [`crate::types::ConFrameBuilder::TYPE_MASS_ABS_TOL`].
+    /// CON line 9 stores one mass per type, so the builder cannot
+    /// represent per-atom mass variation inside a type.
+    MassMismatch {
+        symbol: String,
+        first_mass: f64,
+        found_mass: f64,
+        atom_index: usize,
+    },
 }
 
 impl fmt::Display for ParseError {
@@ -75,6 +85,17 @@ impl fmt::Display for ParseError {
                 write!(
                     f,
                     "atom index {index} is out of bounds (builder holds {len} atoms)"
+                )
+            }
+            ParseError::MassMismatch {
+                symbol,
+                first_mass,
+                found_mass,
+                atom_index,
+            } => {
+                write!(
+                    f,
+                    "atoms of type {symbol} have inconsistent masses: first {first_mass}, atom {atom_index} has {found_mass} (CON stores one mass per type)"
                 )
             }
         }

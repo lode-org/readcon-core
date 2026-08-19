@@ -43,6 +43,12 @@ fn parse_error_display_and_from_all_variants() {
         ParseError::UnknownSection("nope".into()),
         ParseError::ValidationError("v".into()),
         ParseError::IndexOutOfBounds { index: 9, len: 2 },
+        ParseError::MassMismatch {
+            symbol: "H".into(),
+            first_mass: 1.008,
+            found_mass: 2.014,
+            atom_index: 1,
+        },
     ];
     for e in &variants {
         let s = e.to_string();
