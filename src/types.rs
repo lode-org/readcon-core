@@ -944,8 +944,11 @@ impl ConFrame {
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
 ///
-/// Atoms are accumulated and grouped by symbol on `build()` to compute the
-/// header fields (`natm_types`, `natms_per_type`, `masses_per_type`).
+/// `build()` groups atoms by symbol because CON header lines 7 and 8 are a
+/// type count and per-type counts. The returned frame's atom order is
+/// therefore not the insertion order. Use
+/// [`ConFrameBuilder::build_with_permutation`] for the index map, or recover
+/// order from each atom's `atom_id` (column 5).
 ///
 /// # Example
 ///
@@ -1996,9 +1999,59 @@ impl ConFrameBuilder {
 
     /// Consumes the builder and produces a `ConFrame`.
     ///
-    /// Atoms are grouped by symbol (in encounter order) to compute
-    /// `natm_types`, `natms_per_type`, and `masses_per_type`.
+    /// Equivalent to [`Self::build_with_permutation`] and discarding the
+    /// index map.
+    ///
+    /// # Atom order
+    ///
+    /// Atoms are grouped by symbol in first-encounter order. CON header
+    /// lines 7 and 8 are a type count and per-type counts, so the format
+    /// cannot represent an interleaved layout. The returned frame's atom
+    /// order is therefore not the insertion order.
+    ///
+    /// Callers that hold a parallel array indexed the same way as
+    /// `add_atom` (an eigenmode, a displacement, a Hessian) should use
+    /// [`Self::build_with_permutation`] to remap that array, or recover
+    /// the mapping from each atom's `atom_id` (column 5).
+    ///
+    /// # Masses
+    ///
+    /// CON line 9 stores one mass per type. `add_atom` accepts a per-atom
+    /// mass, but `build` records only the first-encounter mass for each
+    /// symbol. Later atoms of the same symbol with a different mass do
+    /// not change `masses_per_type` and are not diagnosed. This is a
+    /// format limit: an isotope pair that shares a symbol (H and D both
+    /// written as `H`) is stored at the first atom's mass.
     pub fn build(self) -> ConFrame {
+        self.build_with_permutation().0
+    }
+
+    /// Consumes the builder and produces a `ConFrame` together with the
+    /// type-grouping permutation.
+    ///
+    /// `permutation[i]` is the insertion-order index of the atom now at
+    /// frame index `i`. A parallel array `xs` indexed the same way as
+    /// `add_atom` therefore maps as `xs[permutation[i]]` for frame atom
+    /// `i`.
+    ///
+    /// Grouping, first-encounter type order, and the CON line 9
+    /// one-mass-per-type limit are the same as [`Self::build`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use readcon_core::types::ConFrameBuilder;
+    ///
+    /// let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    /// builder.add_atom("H", 0.0, 0.0, 0.0, [false, false, false], 0, 1.008);
+    /// builder.add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 1, 63.546);
+    /// builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 2, 1.008);
+    /// let (frame, perm) = builder.build_with_permutation();
+    /// assert_eq!(perm, vec![0, 2, 1]);
+    /// assert_eq!(&*frame.atom_data[0].symbol, "H");
+    /// assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+    /// ```
+    pub fn build_with_permutation(self) -> (ConFrame, Vec<usize>) {
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -2035,10 +2088,12 @@ impl ConFrameBuilder {
         let has_frc = self.has_forces;
         let has_eng = self.has_energies;
 
+        let mut permutation = Vec::with_capacity(n);
         let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(n);
         for (type_idx, indices) in buckets.iter().enumerate() {
             let symbol = &type_symbols[type_idx];
             for &i in indices {
+                permutation.push(i);
                 let pos = self.positions.row(i);
                 let velocity = if has_vel {
                     let r = self.velocities.row(i);
@@ -2150,19 +2205,22 @@ impl ConFrameBuilder {
             sections_declared,
         };
 
-        ConFrame {
-            header,
-            atom_data,
-            positions: pos,
-            velocities: vel,
-            forces: frc,
-            atom_energies: eng,
-            charges: FloatArray1::zeros(dt.energies, 0),
-            spins: FloatArray1::zeros(dt.energies, 0),
-            magmoms: FloatArray2::zeros(dt.forces, 0, 3),
-            masses: masses_arr,
-            atom_ids: ids_arr,
-        }
+        (
+            ConFrame {
+                header,
+                atom_data,
+                positions: pos,
+                velocities: vel,
+                forces: frc,
+                atom_energies: eng,
+                charges: FloatArray1::zeros(dt.energies, 0),
+                spins: FloatArray1::zeros(dt.energies, 0),
+                magmoms: FloatArray2::zeros(dt.forces, 0, 3),
+                masses: masses_arr,
+                atom_ids: ids_arr,
+            },
+            permutation,
+        )
     }
 }
 
@@ -2441,6 +2499,78 @@ mod tests {
         assert_eq!(&*frame.atom_data[0].symbol, "H");
         assert_eq!(&*frame.atom_data[1].symbol, "H");
         assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+    }
+
+    #[test]
+    fn build_with_permutation_maps_interleaved_insertion_order() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 10, 1.008);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [false; 3], 11, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 12, 1.008);
+        builder.add_atom("O", 3.0, 0.0, 0.0, [false; 3], 13, 15.999);
+        builder.add_atom("Cu", 4.0, 0.0, 0.0, [false; 3], 14, 63.546);
+        // insertion: H, Cu, H, O, Cu
+        // grouped:   H, H, Cu, Cu, O
+        let (frame, perm) = builder.build_with_permutation();
+        assert_eq!(perm, vec![0, 2, 1, 4, 3]);
+        let ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+        assert_eq!(ids, vec![10, 12, 11, 14, 13]);
+        let symbols: Vec<&str> = frame.atom_data.iter().map(|a| a.symbol.as_ref()).collect();
+        assert_eq!(symbols, vec!["H", "H", "Cu", "Cu", "O"]);
+        let disp = [0.1, 0.2, 0.3, 0.4, 0.5];
+        let remapped: Vec<f64> = perm.iter().map(|&i| disp[i]).collect();
+        assert_eq!(remapped, vec![0.1, 0.3, 0.2, 0.5, 0.4]);
+        for (new_i, &old_i) in perm.iter().enumerate() {
+            assert_eq!(frame.atom_data[new_i].x, old_i as f64);
+        }
+    }
+
+    #[test]
+    fn build_with_permutation_is_identity_when_already_grouped() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [false; 3], 1, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 2, 1.008);
+        let (_, perm) = builder.build_with_permutation();
+        assert_eq!(perm, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn build_with_permutation_empty_is_empty() {
+        let builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let (frame, perm) = builder.build_with_permutation();
+        assert!(frame.atom_data.is_empty());
+        assert!(perm.is_empty());
+    }
+
+    #[test]
+    fn build_with_permutation_is_bijection_of_insertion_indices() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("O", 0.0, 0.0, 0.0, [false; 3], 0, 16.0);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        builder.add_atom("O", 2.0, 0.0, 0.0, [false; 3], 2, 16.0);
+        builder.add_atom("H", 3.0, 0.0, 0.0, [false; 3], 3, 1.0);
+        let n = 4;
+        let (frame, perm) = builder.build_with_permutation();
+        assert_eq!(perm.len(), n);
+        let mut sorted = perm.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..n).collect::<Vec<_>>());
+        for (new_i, &old_i) in perm.iter().enumerate() {
+            assert_eq!(frame.atom_data[new_i].atom_id, old_i as u64);
+        }
+    }
+
+    #[test]
+    fn build_matches_build_with_permutation_frame() {
+        let mut a = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        a.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        a.add_atom("Cu", 1.0, 0.0, 0.0, [true; 3], 1, 63.546);
+        a.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 2, 1.008);
+        let mut b = a.clone();
+        let frame = a.build();
+        let (frame_p, _) = b.build_with_permutation();
+        assert_eq!(frame, frame_p);
     }
 
     #[test]
