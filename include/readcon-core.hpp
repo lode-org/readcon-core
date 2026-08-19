@@ -627,8 +627,9 @@ class ConFrameWriter {
 /**
  * @brief A builder for constructing ConFrame objects from in-memory data.
  *
- * Atoms are accumulated and grouped by symbol on build() to compute
- * the header fields.
+ * Atoms are grouped by symbol in first-encounter order on build().
+ * Recover insertion order from atom_id. build() throws if two atoms
+ * share a symbol but disagree on mass.
  *
  * Example:
  *
@@ -1657,7 +1658,8 @@ inline ConFrame ConFrameBuilder::build() {
     RKRConFrame *frame = rkr_frame_builder_build(builder_handle_);
     builder_handle_ = nullptr; // ownership transferred
     if (!frame) {
-        throw std::runtime_error("Failed to build frame from builder.");
+        throw std::runtime_error(
+            "Failed to build frame from builder (null handle or same-symbol mass mismatch).");
     }
     return ConFrame(frame);
 }

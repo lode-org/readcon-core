@@ -77,7 +77,7 @@ fn test_builder_roundtrip() {
         2,
         1.008,
     );
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     let mut buffer: Vec<u8> = Vec::new();
     {
@@ -111,7 +111,7 @@ fn test_writer_precision_default_vs_high() {
         0,
         63.546,
     );
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     // Default precision (6)
     let mut buf6: Vec<u8> = Vec::new();
@@ -145,7 +145,7 @@ fn test_builder_velocity_roundtrip() {
     builder
         .add_atom("H", 4.0, 5.0, 6.0, [false, false, false], 1, 1.008)
         .with_velocity([0.4, 0.5, 0.6]);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     assert!(frame.has_velocities());
 
@@ -171,7 +171,7 @@ fn test_writer_emits_empty_sections_when_validate_true() {
     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
     builder.metadata(metadata);
     builder.add_atom("Cu", 1.0, 2.0, 3.0, [false, false, false], 0, 63.546);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     let mut buffer: Vec<u8> = Vec::new();
     {
@@ -208,7 +208,7 @@ fn test_nonsequential_atom_index_roundtrip() {
     builder.add_atom("O", 3.0, 0.0, 0.0, [false, false, false], 3, 15.999);
     builder.add_atom("C", 4.0, 0.0, 0.0, [false, false, false], 4, 12.011);
     builder.add_atom("C", 5.0, 0.0, 0.0, [false, false, false], 5, 12.011);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     // After build(), atoms are grouped: C(0),C(1),C(2),C(4),C(5),O(3)
     assert_eq!(frame.header.natm_types, 2);

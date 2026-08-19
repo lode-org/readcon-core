@@ -768,3 +768,22 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
         }
     }
 }
+
+#[test]
+fn builder_build_returns_null_on_same_symbol_mass_mismatch() {
+    let b = builder();
+    assert!(!b.is_null());
+    let h = CString::new("H").unwrap();
+    unsafe {
+        assert_eq!(
+            rkr_frame_add_atom(b, h.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.008),
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_eq!(
+            rkr_frame_add_atom(b, h.as_ptr(), 1.0, 0.0, 0.0, false, 1, 2.014),
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = rkr_frame_builder_build(b);
+        assert!(frame.is_null());
+    }
+}

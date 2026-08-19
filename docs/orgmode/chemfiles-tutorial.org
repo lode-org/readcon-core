@@ -196,7 +196,7 @@ for a in &imported.atom_data {
     );
 }
 b.set_bonds(&[Bond::new(0, 1), Bond::new(0, 2)]);
-let frame = b.build();
+let frame = b.build()?;
 
 let angles = evaluate_selection_on_con_frame("angles: all", &frame)?;
 assert_eq!(angles.context_size, 3);

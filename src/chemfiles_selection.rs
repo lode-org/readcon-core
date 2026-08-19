@@ -145,17 +145,17 @@ mod stub_tests {
 
     #[test]
     fn selection_stub_is_feature_disabled() {
-        let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
+        let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build().unwrap();
         let err = evaluate_selection_on_con_frame("name O", &frame).unwrap_err();
         assert!(matches!(err, ChemfilesImportError::FeatureDisabled));
     }
 
     #[test]
     fn multi_frame_selection_stub_is_feature_disabled() {
-        let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
+        let frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build().unwrap();
         let err = evaluate_selection_on_frames("name H", &[frame]).unwrap_err();
         assert!(matches!(err, ChemfilesImportError::FeatureDisabled));
-        let frame2 = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build();
+        let frame2 = ConFrameBuilder::new([10.0; 3], [90.0; 3]).build().unwrap();
         let err2 = select_atom_positions_on_frames("name H", &[frame2]).unwrap_err();
         assert!(matches!(err2, ChemfilesImportError::FeatureDisabled));
     }

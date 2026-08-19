@@ -374,7 +374,9 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     );
 
     builder.metadata(metadata);
-    let mut con = builder.build();
+    let mut con = builder
+        .build()
+        .map_err(|e| ChemfilesImportError::InvalidFrame(e.to_string()))?;
 
     // Optional topology: chemfiles bonds -> CON metadata["bonds"].
     // Chemfiles indices are 0..n in trajectory order. `ConFrameBuilder::build`

@@ -174,7 +174,7 @@ fn test_energies_roundtrip() {
         .add_atom("H", 2.1, 2.2, 2.3, [false, false, false], 2, 1.008)
         .with_force([7.0, 8.0, 9.0])
         .with_energy(0.07);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
     assert!(frame.has_energies());
     assert_eq!(frame.atom_data[0].energy, Some(-0.42));
 
@@ -233,7 +233,7 @@ fn test_builder_with_forces() {
     builder
         .add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 1, 63.546)
         .with_force([4.0, 5.0, 6.0]);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     assert!(frame.has_forces());
     assert!(!frame.has_velocities());
@@ -251,7 +251,7 @@ fn test_builder_with_velocity_and_forces() {
         .add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546)
         .with_velocity([0.1, 0.2, 0.3])
         .with_force([1.0, 2.0, 3.0]);
-    let frame = builder.build();
+    let frame = builder.build().unwrap();
 
     assert!(frame.has_velocities());
     assert!(frame.has_forces());
