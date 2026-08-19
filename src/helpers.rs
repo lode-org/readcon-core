@@ -18,8 +18,9 @@
 //! unknown atomic numbers.
 //!
 //! The same lookup is exposed to C/C++ via [`crate::ffi::rkr_symbol_to_z`]
-//! and [`crate::ffi::rkr_z_to_symbol`] so downstream tools can drop
-//! their own copies of the periodic table.
+//! and [`crate::ffi::rkr_z_to_symbol`], and to Python as
+//! `readcon.symbol_to_atomic_number` / `readcon.atomic_number_to_symbol`,
+//! so downstream tools can drop their own copies of the periodic table.
 
 /// Returns the atomic number for a chemical symbol, or 0 if unknown.
 pub fn symbol_to_atomic_number(symbol: &str) -> u64 {

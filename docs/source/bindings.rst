@@ -61,7 +61,7 @@ task.
     +----------------------------------------------------------------+------------------------------------------------------+-----------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+--------------------------------------------+
     | Per-atom ``energies`` section                                  | yes                                                  | yes                                                 | yes                                                                | yes                                                   | yes                                                          | yes                                        |
     +----------------------------------------------------------------+------------------------------------------------------+-----------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+--------------------------------------------+
-    | Symbol <-> Z helpers                                           | yes                                                  | derived from Atom                                   | yes                                                                | ``rkr_symbol_to_z`` / ``rkr_z_to_symbol``             | ``rkr_symbol_to_z`` / ``rkr_z_to_symbol``                    | ``readcon::symbol_to_z`` / ``z_to_symbol`` |
+    | Symbol <-> Z helpers                                           | yes                                                  | symbol_to_atomic_number (Z = 92)                    | yes                                                                | ``rkr_symbol_to_z`` / ``rkr_z_to_symbol``             | ``rkr_symbol_to_z`` / ``rkr_z_to_symbol``                    | ``readcon::symbol_to_z`` / ``z_to_symbol`` |
     +----------------------------------------------------------------+------------------------------------------------------+-----------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+--------------------------------------------+
     | ``atom_id`` reverse index                                      | ``build_atom_id_index``                              | ``build_atom_id_index``                             | ``build_atom_id_index``                                            | ``rkr_frame_atom_index_by_id``                        | ``rkr_frame_atom_index_by_id``                               | ``ConFrame::atom_index_by_id``             |
     +----------------------------------------------------------------+------------------------------------------------------+-----------------------------------------------------+--------------------------------------------------------------------+-------------------------------------------------------+--------------------------------------------------------------+--------------------------------------------+
@@ -243,6 +243,12 @@ Usage
     ase_atoms = frame.to_ase()
     frame2 = readcon.ConFrame.from_ase(ase_atoms)
 
+    # Symbol <-> Z (H..U, ceiling Z = 92; D/T -> 1; unknown -> 0 / "X")
+    readcon.symbol_to_atomic_number("Fe")   # 26
+    readcon.atomic_number_to_symbol(92)     # "U"
+    readcon.symbol_to_atomic_number("D")    # 1
+    readcon.atomic_number_to_symbol(93)     # "X"
+
 Types
 ~~~~~
 
@@ -276,6 +282,15 @@ Types
     Return a Python iterator over frames.
     The iterator API avoids indexing into ``read_con(path)`` for
     first-frame and loop-based workflows.
+
+``readcon.symbol_to_atomic_number(symbol)``
+    Atomic number for a chemical symbol, or the sentinel 0 if unknown.
+    Coverage is Z = 1 through the Z = 92 ceiling (H through U) plus D
+    and T (both Z = 1).
+
+``readcon.atomic_number_to_symbol(z)``
+    Chemical symbol for Z, or the sentinel ``X`` if unknown (Z = 0 or
+    Z above 92). Z = 1 returns ``H``, not ``D`` or ``T``.
 
 NumPy array views and DLPack interop (v0.10.0+)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

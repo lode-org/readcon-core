@@ -1549,6 +1549,34 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
     })
 }
 
+/// Atomic number for a chemical symbol, or the sentinel 0 if unknown.
+///
+/// Coverage is hydrogen through uranium (Z = 92) plus the hydrogen
+/// isotopes deuterium (``D``) and tritium (``T``), both of which map
+/// to Z = 1. The reverse map always returns ``H`` for Z = 1; isotope
+/// identity is out of band.
+///
+/// The table stops at Z = 92. Transuranic symbols (``Np`` and above),
+/// lowercase tokens, ghost-atom placeholders, and any other unknown
+/// string return the sentinel 0. There is no in-tree standard-mass
+/// table; this helper returns Z only.
+#[pyfunction]
+fn symbol_to_atomic_number(symbol: &str) -> u64 {
+    crate::helpers::symbol_to_atomic_number(symbol)
+}
+
+/// Chemical symbol for an atomic number, or the sentinel ``X`` if unknown.
+///
+/// Coverage is Z = 1 through the Z = 92 ceiling (H through U). Z = 1
+/// returns ``H``, not ``D`` or ``T``. Values outside that range,
+/// including the sentinel 0 and anything above Z = 92, return the
+/// sentinel ``X``. There is no in-tree standard-mass table; this
+/// helper returns the symbol only.
+#[pyfunction]
+fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
+    crate::helpers::atomic_number_to_symbol(atomic_number)
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1576,6 +1604,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_selection_on_frames, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_positions_on_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(symbol_to_atomic_number, m)?)?;
+    m.add_function(wrap_pyfunction!(atomic_number_to_symbol, m)?)?;
     Ok(())
 }
 
