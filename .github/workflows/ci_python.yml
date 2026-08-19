@@ -58,13 +58,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install maturin, pytest, emacs (org-babel)
+      - name: Install maturin, pytest, ase, emacs (org-babel)
         run: |
           python -m venv .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install -U pip
-          .venv/bin/python -m pip install maturin pytest numpy
+          .venv/bin/python -m pip install maturin pytest numpy ase
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends emacs-nox
 
