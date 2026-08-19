@@ -4,27 +4,43 @@ const Libdl = Base.Libc.Libdl
     _lib_handle()
 
 Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Searches `READCON_LIB_PATH` then `READCON_CORE_LIB` (file or directory
+that contains the shared library), then a local cargo build path.
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
+    for key in ("READCON_LIB_PATH", "READCON_CORE_LIB")
+        found = _lib_from_env(get(ENV, key, ""))
+        found === nothing || return found
     end
     # Fall back to looking relative to this package
     pkg_dir = dirname(@__DIR__)
     for candidate in [
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.dylib"),
+        joinpath(pkg_dir, "..", "..", "target", "release", "readcon_core.dll"),
         joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.so"),
         joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.dylib"),
+        joinpath(pkg_dir, "..", "..", "target", "debug", "readcon_core.dll"),
     ]
         if isfile(candidate)
             return candidate
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or READCON_CORE_LIB, or build with cargo build --release.")
+end
+
+function _lib_from_env(lib_env::AbstractString)
+    isempty(lib_env) && return nothing
+    if isfile(lib_env)
+        return lib_env
+    end
+    if isdir(lib_env)
+        for name in ("libreadcon_core.so", "libreadcon_core.dylib", "readcon_core.dll")
+            candidate = joinpath(lib_env, name)
+            isfile(candidate) && return candidate
+        end
+    end
+    return nothing
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)
