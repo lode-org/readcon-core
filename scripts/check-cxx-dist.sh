@@ -41,8 +41,11 @@ fi
 grep -q 'generation = false' Cargo.toml || die "Cargo.toml capi.header.generation must stay false"
 grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filename must be readcon-core"
 
-# Tarball assembler exists
+# Tarball assemblers exist
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
+[[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
+[[ -f .github/workflows/c_lib_tarball.yml ]] || die "missing .github/workflows/c_lib_tarball.yml"
+grep -q 'c_lib_tarball.yml' dist-workspace.toml || die "dist-workspace.toml must name the C ABI sibling workflow"
 [[ -f scripts/meson_cargo_build.py ]] || die "missing scripts/meson_cargo_build.py"
 
 # CMake version is not hardcoded to a stale release

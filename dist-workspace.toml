@@ -13,10 +13,14 @@ ci = "github"
 # before the tag is cut.
 pr-run-mode = "plan"
 installers = []
-# CLI binary archives (main.rs). C/C++ source tarballs
-# (readcon-core-cxx-$VERSION.tar.gz) are attached by cxx_tarball.yml
-# after the GitHub Release is published. cargo-c remains a third
-# install path; cbindgen is not required.
+# cargo-dist 0.28 ships the CLI binary archives (main.rs) only. It has
+# no cargo-c / C ABI prefix artifact type, so this file does not try to
+# force shared-library archives through dist. Prebuilt C ABI tarballs
+# (readcon-core-clib-$VERSION-$TARGET.tar.gz: libreadcon_core, headers,
+# pkg-config) are attached by the sibling workflow c_lib_tarball.yml
+# after the GitHub Release is published, the same split as the cxx
+# source tarballs (readcon-core-cxx-$VERSION.tar.gz via cxx_tarball.yml).
+# Local cargo-c remains a third install path; cbindgen is not required.
 targets = [
   "aarch64-apple-darwin",
   "aarch64-unknown-linux-gnu",

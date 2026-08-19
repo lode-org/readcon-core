@@ -167,6 +167,7 @@ for =cargo build --release= in step 3.
 | Release | =release.yml= | PR plan, =v*= tag | cargo-dist plan on PRs; GitHub Release on tag |
 | crates.io | =crates_publish.yml= | =v*= tag | =cargo publish --locked= |
 | cxx tarball | =cxx_tarball.yml= | GitHub Release | Attach slim + vendor C/C++ source tarballs |
+| C ABI tarball | =c_lib_tarball.yml= | GitHub Release | Attach prebuilt libreadcon_core + headers + pkg-config |
 
 ** Benchmark regression detection
 
@@ -216,7 +217,8 @@ broken (fallback is documented below).
         ├─► workflow "Publish to crates.io": cargo publish --locked
         │         needs repo secret CARGO_REGISTRY_TOKEN
         ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-        └─► workflow "cxx source tarball": after the GitHub Release exists
+        ├─► workflow "cxx source tarball": after the GitHub Release exists
+        └─► workflow "C ABI prefix tarball": after the GitHub Release exists
 #+end_example
 
 | Layer | What | Workflow / tool |
@@ -227,6 +229,7 @@ broken (fallback is documented below).
 | Tag publish | PyPI wheels | =.github/workflows/python_wheels.yml= |
 | Tag publish | GitHub Release + CLI tarballs | same cargo-dist =Release= workflow on the tag |
 | Tag publish | C/C++ source tarballs | =.github/workflows/cxx_tarball.yml= (after the Release exists) |
+| Tag publish | C ABI prefix tarballs | =.github/workflows/c_lib_tarball.yml= (after the Release exists; not cargo-dist) |
 
 ** cargo-dist release-PR path
 
@@ -410,12 +413,14 @@ Manual equivalent of the script:
 10. Verify all distribution channels:
     - [[https://crates.io/crates/readcon-core][crates.io]] shows the new version
     - [[https://pypi.org/project/readcon/][PyPI]] shows the new version (wait for CI)
-    - [[https://github.com/lode-org/readcon-core/releases][GitHub Releases]] has cargo-dist archives
-      (and any prior C ABI tarballs if still attached)
+    - [[https://github.com/lode-org/readcon-core/releases][GitHub Releases]] has cargo-dist CLI archives,
+      cxx source tarballs, and C ABI prefix tarballs
+      (=readcon-core-clib-$VERSION-$TARGET.tar.gz= via =c_lib_tarball.yml=)
 
-Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + =libreadcon_core.{a,so}= via =cargo build --release= or
-=cargo cinstall=) can still be attached with =gh release upload= if needed.
+cargo-dist 0.28 does not ship cargo-c / C ABI prefixes. Do not force
+shared libraries through =dist-workspace.toml=. CLI archives stay
+dist; C ABI tarballs stay =c_lib_tarball.yml= (same split as cxx
+source tarballs). Local =cargo cinstall= remains a third install path.
 
 ** Initial PyPI setup (first release only)
 

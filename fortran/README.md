@@ -2,6 +2,32 @@
 
 Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed with [fpm](https://fpm.fortran-lang.org/).
 
+## Prebuilt C ABI tarball (no cargo)
+
+GitHub Releases attach `readcon-core-clib-$VERSION-$TARGET.tar.gz` via
+`c_lib_tarball.yml` (not cargo-dist; cargo-dist ships the CLI only). Unpack
+and point fpm at the prefix with pkg-config:
+
+```bash
+curl -fsSL -O https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+prefix="$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu"
+export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$prefix/lib:${LD_LIBRARY_PATH:-}"
+pkg-config --cflags --libs readcon-core
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core)" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+`fpm.toml` already has `link = ["readcon_core"]`. A system install
+(`cargo cinstall --prefix /usr/local`, CMake `--install`, or this
+tarball unpacked under `/usr/local`) is the same path: fpm against
+the prefix lib.
+
+Windows chemfiles is not in the C ABI tarball matrix. Use a lean
+Windows tarball, or build from source with `--features chemfiles`.
+
 ## Types
 
 | Type | Role |

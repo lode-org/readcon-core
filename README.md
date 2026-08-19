@@ -179,8 +179,14 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 
 <tr>
 <td class="org-left">Julia</td>
-<td class="org-left"><code>julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'</code></td>
+<td class="org-left">unpack <code>readcon-core-clib-*</code> + <code>READCON_CORE_PREFIX</code> (or in-tree build)</td>
 <td class="org-left"><a href="docs/orgmode/bindings.html">bindings</a></td>
+</tr>
+
+<tr>
+<td class="org-left">Fortran</td>
+<td class="org-left">unpack <code>readcon-core-clib-*</code> + <code>PKG_CONFIG_PATH</code> (fpm)</td>
+<td class="org-left"><a href="fortran/README.md">fortran/README</a></td>
 </tr>
 
 <tr>
@@ -200,6 +206,12 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 <td class="org-left"><code>cargo cinstall --release --prefix /usr/local</code></td>
 <td class="org-left">same</td>
 </tr>
+
+<tr>
+<td class="org-left">C ABI prefix</td>
+<td class="org-left"><code>readcon-core-clib-$VERSION-$TARGET.tar.gz</code> on the GitHub Release</td>
+<td class="org-left">same (prebuilt; not cargo-dist)</td>
+</tr>
 </tbody>
 </table>
 
@@ -218,13 +230,13 @@ round-trip, build a frame with energy. Full steps:
 Short Python path from the repository root:
 
     import readcon
-    
+
     for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
         print(frame.cell, len(frame), frame.energy)
-    
+
     frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
     readcon.write_con("out.con", frames)
-    
+
     atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
     frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
     frame.set_energy(-42.5)
@@ -359,4 +371,3 @@ If you use `readcon-core` in academic work, please cite it via the metadata in [
 # License
 
 MIT.
-

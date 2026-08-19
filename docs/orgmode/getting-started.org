@@ -73,7 +73,10 @@ Headers in =include/= are shipped. cbindgen is *not* required.
 CMake FetchContent / =find_package(readcon-core)=, Meson
 =dependency('readcon-core')=, or =pkg-config --libs readcon-core=
 after a prefix install. The cxx tarball on the GitHub Release is
-=readcon-core-cxx-$VERSION.tar.gz=.
+=readcon-core-cxx-$VERSION.tar.gz= (FetchContent / wrap). The prebuilt
+C ABI prefix is =readcon-core-clib-$VERSION-$TARGET.tar.gz=
+(=c_lib_tarball.yml=, not cargo-dist) for Julia, Fortran/fpm, and
+pkg-config.
 
 #+begin_src cmake
 include(FetchContent)

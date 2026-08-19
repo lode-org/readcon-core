@@ -178,8 +178,11 @@ CMake (=FetchContent= / =find_package=), Meson (wrap / =pkg.generate=
 =filebase: readcon-core=), and cargo-c (=generation = false=) all
 install that file. None of them run cbindgen. The cxx source tarball
 (=scripts/package-cxx.sh= → =readcon-core-cxx-$VERSION.tar.gz= on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
-=scripts/regen-capi-headers.sh=.
+GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
+prefix (=scripts/package-clib.sh= → =readcon-core-clib-$VERSION-$TARGET.tar.gz=
+via =c_lib_tarball.yml=) is the Julia / Fortran / pkg-config URL.
+cargo-dist 0.28 ships CLI archives only and is not forced to produce
+cargo-c artifacts. Maintainers only: =scripts/regen-capi-headers.sh=.
 
 The
 =generation = false= flag in =[package.metadata.capi.header]= tells

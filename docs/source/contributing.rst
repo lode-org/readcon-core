@@ -216,6 +216,8 @@ Workflows
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
     | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release      | Attach slim + vendor C/C++ source tarballs           |
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | C ABI tarball             | ``c_lib_tarball.yml``      | GitHub Release      | Attach C ABI prefix (lib, headers, pkg-config)       |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -269,7 +271,8 @@ Mental model (new contributor)
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
           ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-          └─► workflow "cxx source tarball": after the GitHub Release exists
+          ├─► workflow "cxx source tarball": after the GitHub Release exists
+          └─► workflow "C ABI prefix tarball": after the GitHub Release exists
 
 .. table::
 
@@ -287,6 +290,8 @@ Mental model (new contributor)
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
+    +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
+    | Tag publish | C ABI prefix tarballs                  | ``.github/workflows/c_lib_tarball.yml`` (after the Release exists; not cargo-dist)                  |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 cargo-dist release-PR path
@@ -490,12 +495,14 @@ Manual equivalent of the script:
 
     - `PyPI <https://pypi.org/project/readcon/>`_ shows the new version (wait for CI)
 
-    - `GitHub Releases <https://github.com/lode-org/readcon-core/releases>`_ has cargo-dist archives
-      (and any prior C ABI tarballs if still attached)
+    - `GitHub Releases <https://github.com/lode-org/readcon-core/releases>`_ has cargo-dist CLI archives,
+      cxx source tarballs, and C ABI prefix tarballs
+      (``readcon-core-clib-$VERSION-$TARGET.tar.gz`` via ``c_lib_tarball.yml``)
 
-Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or
-``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
+cargo-dist 0.28 does not ship cargo-c / C ABI prefixes. Do not force
+shared libraries through ``dist-workspace.toml``. CLI archives stay
+dist; C ABI tarballs stay ``c_lib_tarball.yml`` (same split as cxx
+source tarballs). Local ``cargo cinstall`` remains a third install path.
 
 Initial PyPI setup (first release only)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

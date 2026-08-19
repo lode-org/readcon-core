@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased
+#### Packaging
+- attach prebuilt C ABI prefix tarballs on GitHub Release (Julia/Fortran/pkg-config)
+
 ## v0.14.7 - 2026-08-15
 #### Bug Fixes
 - link ``advapi32`` so Windows ``readcon-chemfiles`` resolves ``GetUserNameA``

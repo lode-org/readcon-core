@@ -1,18 +1,42 @@
 const Libdl = Base.Libc.Libdl
 
+const _LIB_NAMES = ("libreadcon_core.so", "libreadcon_core.dylib", "readcon_core.dll")
+
+function _lib_in_dir(dir::AbstractString)
+    for name in _LIB_NAMES
+        candidate = joinpath(dir, name)
+        isfile(candidate) && return candidate
+        nested = joinpath(dir, "lib", name)
+        isfile(nested) && return nested
+        nested_bin = joinpath(dir, "bin", name)
+        isfile(nested_bin) && return nested_bin
+    end
+    return nothing
+end
+
 """
     _lib_handle()
 
-Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Return a path to the readcon-core shared library.
+
+Search order: `READCON_LIB_PATH`, `READCON_CORE_LIB` (file or prefix
+directory), `READCON_CORE_PREFIX` (unpacked C ABI tarball), then an
+in-tree `target/{release,debug}` build.
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
+    for key in ("READCON_LIB_PATH", "READCON_CORE_LIB")
+        val = get(ENV, key, "")
+        if !isempty(val)
+            isfile(val) && return val
+            found = isdir(val) ? _lib_in_dir(val) : nothing
+            found !== nothing && return found
+        end
     end
-    # Fall back to looking relative to this package
+    prefix = get(ENV, "READCON_CORE_PREFIX", "")
+    if !isempty(prefix)
+        found = _lib_in_dir(prefix)
+        found !== nothing && return found
+    end
     pkg_dir = dirname(@__DIR__)
     for candidate in [
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
@@ -20,11 +44,13 @@ function _lib_handle()
         joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.so"),
         joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.dylib"),
     ]
-        if isfile(candidate)
-            return candidate
-        end
+        isfile(candidate) && return candidate
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error(
+        "Cannot find libreadcon_core. Unpack a readcon-core-clib-* tarball " *
+        "from the GitHub Release and set READCON_LIB_PATH / READCON_CORE_LIB " *
+        "or READCON_CORE_PREFIX, or build with cargo build --release.",
+    )
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

@@ -786,8 +786,11 @@ Installation and setup
 
 .. code:: julia
 
-    # Point to the shared library
+    # Prebuilt C ABI tarball from the GitHub Release (preferred)
+    ENV["READCON_CORE_PREFIX"] = "/path/to/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu"
+    # Or a file path (either name works):
     ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
+    ENV["READCON_CORE_LIB"] = "/path/to/libreadcon_core.so"
 
     # Or build from source (library auto-discovered)
     using Pkg

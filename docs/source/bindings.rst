@@ -383,13 +383,23 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Preferred: unpack a ``readcon-core-clib-$VERSION-$TARGET.tar.gz`` from
+the GitHub Release (``c_lib_tarball.yml``, not cargo-dist) and set one
+of:
 
 .. code:: shell
 
+    export READCON_CORE_PREFIX=/path/to/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu
+    # or a file path (either name works):
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
+
+A Julia ``Artifacts.toml`` entry can pin that Release URL. Yggdrasil /
+JuliaBinaryWrappers is the registry path; the clib tarball is the
+artifact a JLL would wrap.
+
+From a source checkout, ``cargo build --release`` and the package finds
+``target/release/libreadcon_core.so`` (or ``.dylib``) automatically.
 
 Usage
 ~~~~~
@@ -843,10 +853,21 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
-(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+(issue #6). Link ``libreadcon_core`` from a prebuilt
+``readcon-core-clib-$VERSION-$TARGET.tar.gz`` (set ``PKG_CONFIG_PATH`` to
+its ``lib/pkgconfig``), a system prefix (``cargo cinstall`` / CMake
+``--install``), Meson wrap, or CMake FetchContent / ``find_package``.
 
 .. code:: bash
 
+    # Prebuilt prefix from the GitHub Release (no cargo):
+    export PKG_CONFIG_PATH=/path/to/clib/lib/pkgconfig:$PKG_CONFIG_PATH
+    export LD_LIBRARY_PATH=/path/to/clib/lib:$LD_LIBRARY_PATH
+    cd fortran/ReadCon
+    fpm test --flag "$(pkg-config --cflags readcon-core)" \
+      --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+
+    # From a source checkout (builds libreadcon_core):
     # Lean (chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)
     READCON_FORTRAN_FEATURES=chemfiles scripts/run_fortran_tests.sh
 

@@ -1,0 +1,115 @@
+name: C ABI prefix tarball
+
+# Attaches prebuilt libreadcon_core + headers + pkg-config after
+# cargo-dist publishes the GitHub Release. cargo-dist 0.28 has no
+# cargo-c artifact type; this sibling workflow is the C ABI half of
+# that split (same pattern as cxx_tarball.yml).
+# cbindgen is not installed and not invoked. cargo-c is not required.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach C ABI tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clib-tarball:
+    name: clib ${{ matrix.variant }} (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Explicit rows only. Windows chemfiles is not in this matrix:
+      # official prebuilt libchemfiles + advapi32 is the wheel path
+      # (python_wheels.yml), not a prefix tarball.
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            features: ""
+            variant: lean
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            variant: chemfiles
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: ""
+            variant: lean
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            variant: chemfiles
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: ""
+            variant: lean
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: chemfiles
+            variant: chemfiles
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            features: ""
+            variant: lean
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            features: chemfiles
+            variant: chemfiles
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: ""
+            variant: lean
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # BFD is the stable Linux linker. Apple clang rejects -fuse-ld=bfd.
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      # chemfiles-sys vendored zlib vs current MacOSX SDK (same as wheels).
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS' && matrix.variant == 'chemfiles'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      - name: Assemble C ABI prefix tarball
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Linux' && '-C link-arg=-fuse-ld=bfd' || '' }}
+          CFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+          CXXFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+        run: |
+          mkdir -p dist-clib
+          if [ -n "${{ matrix.features }}" ]; then
+            bash scripts/package-clib.sh dist-clib --features "${{ matrix.features }}" --target "${{ matrix.target }}"
+          else
+            bash scripts/package-clib.sh dist-clib --target "${{ matrix.target }}"
+          fi
+          ls -lh dist-clib
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: ${{ matrix.os == 'ubuntu-22.04' && matrix.variant == 'lean' }}
+          body: |
+            C ABI prefix tarballs: `readcon-core-clib-$VERSION-$TARGET.tar.gz` (lean) and `-chemfiles` variants. Headers + `libreadcon_core` + pkg-config. cargo-dist CLI archives stay separate. Windows chemfiles is not in this matrix.
