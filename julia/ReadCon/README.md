@@ -2,6 +2,28 @@
 
 Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.h`).
 
+The wrapper searches, in order:
+
+1. `READCON_CORE_LIB` (preferred; CI uses this)
+2. `READCON_LIB_PATH` (alias)
+3. the `readcon_core` Julia artifact (`Artifacts.toml`, filled from `Artifacts.toml.in`)
+4. a local cargo `target/{release,debug}` build next to this tree
+
+## Prebuilt C ABI tarball
+
+GitHub Releases attach `readcon-core-clib-$VERSION-$target.tar.gz` (shipped
+headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required.
+
+`Artifacts.toml.in` is the registry template. `scripts/package-clib.sh` writes
+per-target sha256 fragments next to the tarball. Point the wrapper at an
+unpacked tarball without an artifact:
+
+```bash
+export READCON_CORE_LIB="$PREFIX/lib/libreadcon_core.so"
+```
+
+Windows chemfiles tarballs are not published.
+
 ## Run tests locally
 
 1. Build the shared library from the **repository root**:

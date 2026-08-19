@@ -383,13 +383,15 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
+Set ``READCON_CORE_LIB`` (or the ``READCON_LIB_PATH`` alias) to the
+shared library path, install the ``readcon_core`` artifact from
+``julia/ReadCon/Artifacts.toml.in``, or build with
 ``cargo build --release`` and the Julia package will find it
 automatically.
 
 .. code:: shell
 
-    export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
 
 Usage
 ~~~~~

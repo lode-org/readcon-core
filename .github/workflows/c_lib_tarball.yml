@@ -1,0 +1,124 @@
+name: C ABI library tarball
+
+# Attaches per-target prebuilt C ABI tarballs after cargo-dist publishes the
+# GitHub Release. cbindgen is not installed and not invoked.
+# Tarball: readcon-core-clib-$VERSION-$target.tar.gz
+# (shipped headers + libreadcon_core + readcon-core.pc).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clib-tarball:
+    name: clib ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            features: chemfiles-from-sources
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: chemfiles-from-sources
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            features: chemfiles
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: chemfiles
+          # Windows + chemfiles is an explicit skip. python_wheels.yml
+          # ships Windows chemfiles wheels via official prebuilt libchemfiles.
+          # This workflow does not attach a Windows clib tarball.
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      - name: Linux chemfiles build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential pkg-config zlib1g-dev
+
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      - name: Note cbindgen is unused
+        run: |
+          if command -v cbindgen >/dev/null 2>&1; then
+            echo "cbindgen is on PATH but this job must not invoke it"
+          else
+            echo "cbindgen: absent"
+          fi
+
+      - name: Assemble C ABI tarball
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: |
+          mkdir -p dist-clib
+          bash scripts/package-clib.sh dist-clib \
+            --target "${{ matrix.target }}" \
+            --features "${{ matrix.features }}"
+          ls -lh dist-clib
+          TAR=$(ls dist-clib/readcon-core-clib-*-${{ matrix.target }}.tar.gz | head -1)
+          tar -tzf "$TAR" | grep -E 'include/readcon-core\.h$'
+          tar -tzf "$TAR" | grep -E 'lib/pkgconfig/readcon-core\.pc$'
+          tar -tzf "$TAR" | grep -E 'lib/(libreadcon_core\.(so|dylib)|readcon_core\.dll)$'
+          if tar -tzf "$TAR" | grep -E '(^|/)cbindgen(\.toml)?$'; then
+            echo "clib tarball must not ship cbindgen.toml or a cbindgen binary" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.target }}
+          path: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish-clib:
+    name: Upload clib tarballs to GitHub Release
+    needs: clib-tarball
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clib-*
+          merge-multiple: true
+          path: dist-clib
+
+      - name: Upload tarballs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            C ABI library tarballs: `readcon-core-clib-$VERSION-$target.tar.gz` (shipped headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required. Windows chemfiles tarballs are not published.

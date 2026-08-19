@@ -337,12 +337,13 @@ frame.set_metadata_json('{"con_spec_version": 2, "energy": -1.0}')
 
 ** Installation
 
-Set =READCON_LIB_PATH= to the shared library path, or build with
-=cargo build --release= and the Julia package will find it
-automatically.
+Set =READCON_CORE_LIB= (or the =READCON_LIB_PATH= alias) to the shared
+library path, install the =readcon_core= artifact from
+=julia/ReadCon/Artifacts.toml.in=, or build with =cargo build --release=
+and the Julia package will find it automatically.
 
 #+begin_src shell
-export READCON_LIB_PATH=/path/to/libreadcon_core.so
+export READCON_CORE_LIB=/path/to/libreadcon_core.so
 #+end_src
 
 ** Usage
