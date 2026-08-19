@@ -97,11 +97,14 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
-      URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.5/readcon-core-cxx-0.14.5.tar.gz
+      URL_HASH SHA256=f49d98c1a722caf434449ffddf603be07144816107c4664d63364ff2b85e5f9a
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
+
+The last GitHub Release that attached ``readcon-core-cxx-*.tar.gz`` is
+``v0.14.5``. Python wheels on that page are ``0.14.7``.
 
 .. code:: meson
 
