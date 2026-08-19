@@ -1,0 +1,60 @@
+# Phase A CON conformance corpus.
+# Each [[valid]] / [[invalid]] table is one fixture keyed to a spec.org clause.
+# tests/conformance_corpus.rs reads this file.
+
+phase = "A"
+spec = "docs/orgmode/spec.org"
+
+[[valid]]
+id = "v2-minimal"
+path = "valid/v2_minimal.con"
+clause = "Line 2: Metadata"
+notes = "Minimal v2 JSON metadata with con_spec_version."
+
+[[valid]]
+id = "v3-units"
+path = "valid/v3_units.con"
+clause = "Units (required)"
+notes = "v3 with required length and energy units."
+
+[[valid]]
+id = "column-4-spec2-x-only"
+path = "valid/column4_spec2_x_only.con"
+clause = "Per-direction constraints (column 4)"
+expect_fixed = [true, false, false]
+notes = "Spec 2+ column 4 value 1 is x-only."
+
+[[valid]]
+id = "column-4-spec1-all-fixed"
+path = "valid/column4_spec1_all_fixed.con"
+clause = "Per-direction constraints (column 4)"
+expect_fixed = [true, true, true]
+notes = "Spec 1 column 4 value 1 is all-fixed."
+
+[[invalid]]
+id = "missing-spec-version"
+path = "invalid/missing_spec_version.con"
+clause = "Line 2: Metadata"
+error = "MissingSpecVersion"
+notes = "JSON object on line 2 without con_spec_version."
+
+[[invalid]]
+id = "v3-missing-units"
+path = "invalid/v3_missing_units.con"
+clause = "Units (required)"
+error = "ValidationError"
+notes = "con_spec_version 3 without units."
+
+[[invalid]]
+id = "v3-bad-units"
+path = "invalid/v3_bad_units.con"
+clause = "Units (required)"
+error = "ValidationError"
+notes = "v3 units with swapped length/energy dimensions."
+
+[[invalid]]
+id = "column-4-out-of-range"
+path = "invalid/column4_out_of_range.con"
+clause = "Per-direction constraints (column 4)"
+error = "ValidationError"
+notes = "validate=true rejects column 4 value 8 (outside 0-7)."
