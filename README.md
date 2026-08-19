@@ -200,6 +200,12 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 <td class="org-left"><code>cargo cinstall --release --prefix /usr/local</code></td>
 <td class="org-left">same</td>
 </tr>
+
+<tr>
+<td class="org-left">C ABI tarball</td>
+<td class="org-left">unpack <code>readcon-core-$VERSION-$triple.tar.gz</code> (GitHub Release)</td>
+<td class="org-left">same</td>
+</tr>
 </tbody>
 </table>
 

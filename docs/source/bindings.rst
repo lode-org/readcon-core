@@ -383,13 +383,15 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Set ``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` to the shared library
+file, or to an unpacked C ABI prefix from the GitHub Release
+(``readcon-core-$VERSION-$triple[-chemfiles].tar.gz``). A local
+``cargo build --release`` is also found automatically.
 
 .. code:: shell
 
-    export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
+    # alias: READCON_LIB_PATH (file or prefix directory)
 
 Usage
 ~~~~~
@@ -843,7 +845,9 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
-(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``,
+``pkg-config --libs readcon-core``, or the prebuilt C ABI tarball plus
+``PKG_CONFIG_PATH``).
 
 .. code:: bash
 

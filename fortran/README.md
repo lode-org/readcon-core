@@ -25,6 +25,23 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## Prebuilt prefix (fpm against system lib)
+
+Unpack `readcon-core-$VERSION-$triple[-chemfiles].tar.gz` from the
+GitHub Release (Linux archives are manylinux_2_28). Then:
+
+```bash
+export PKG_CONFIG_PATH="$PWD/readcon-core-$VERSION-$triple-chemfiles/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PWD/readcon-core-$VERSION-$triple-chemfiles/lib:${LD_LIBRARY_PATH:-}"
+pkg-config --cflags --libs readcon-core
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core)" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+`fpm.toml` already links `readcon_core`. Windows chemfiles uses the
+official prebuilt libchemfiles (not `chemfiles-from-sources`).
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:

@@ -167,6 +167,7 @@ for =cargo build --release= in step 3.
 | Release | =release.yml= | PR plan, =v*= tag | cargo-dist plan on PRs; GitHub Release on tag |
 | crates.io | =crates_publish.yml= | =v*= tag | =cargo publish --locked= |
 | cxx tarball | =cxx_tarball.yml= | GitHub Release | Attach slim + vendor C/C++ source tarballs |
+| C ABI tarball | =c_lib_tarball.yml= | =v*= tag, PR | Prebuilt manylinux/macOS/Windows lib + headers + pkg-config |
 
 ** Benchmark regression detection
 

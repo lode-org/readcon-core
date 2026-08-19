@@ -1,16 +1,46 @@
 const Libdl = Base.Libc.Libdl
 
+function _shared_lib_names()
+    if Sys.iswindows()
+        return ("readcon_core.dll", "libreadcon_core.dll")
+    elseif Sys.isapple()
+        return ("libreadcon_core.dylib",)
+    else
+        return ("libreadcon_core.so",)
+    end
+end
+
+"""Candidates from a file path or an unpacked C ABI prefix directory."""
+function _candidate_lib_paths(root::AbstractString)
+    if isfile(root)
+        return String[root]
+    end
+    out = String[]
+    if isdir(root)
+        for name in _shared_lib_names()
+            push!(out, joinpath(root, name))
+            push!(out, joinpath(root, "lib", name))
+            push!(out, joinpath(root, "bin", name))
+        end
+    end
+    return out
+end
+
 """
     _lib_handle()
 
 Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Searches `READCON_LIB_PATH` then `READCON_CORE_LIB` (file or prefix
+directory from the GitHub Release C ABI tarball), then a local build.
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
+    for key in ("READCON_LIB_PATH", "READCON_CORE_LIB")
+        val = get(ENV, key, "")
+        if !isempty(val)
+            for candidate in _candidate_lib_paths(val)
+                isfile(candidate) && return candidate
+            end
+        end
     end
     # Fall back to looking relative to this package
     pkg_dir = dirname(@__DIR__)
@@ -24,7 +54,7 @@ function _lib_handle()
             return candidate
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or READCON_CORE_LIB (file or unpacked prefix) or build with cargo build --release.")
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

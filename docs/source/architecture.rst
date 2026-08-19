@@ -256,7 +256,11 @@ CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. None of them run cbindgen. The cxx source tarball
 (``scripts/package-cxx.sh`` → ``readcon-core-cxx-$VERSION.tar.gz`` on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
+GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
+prefix (``scripts/package-clib.sh`` → ``readcon-core-$VERSION-$triple.tar.gz``)
+is built in ``c_lib_tarball.yml`` with the same manylinux / BFD /
+Windows-chemfiles flags as the Python wheels, in a separate workflow so
+a C-lib miss cannot skip wheel publish. Maintainers only:
 ``scripts/regen-capi-headers.sh``.
 
 The

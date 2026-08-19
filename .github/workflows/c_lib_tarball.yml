@@ -1,0 +1,305 @@
+name: C ABI tarball
+
+# Prebuilt libreadcon_core + headers + pkg-config on GitHub Releases.
+# Separate from python_wheels.yml so a C-lib miss cannot skip wheel publish.
+# manylinux image, BFD linker, cargo HTTP retries, macOS zlib flags, and
+# Windows chemfiles advapi32 are copied from python_wheels.yml.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/package-clib.sh'
+      - '.github/workflows/c_lib_tarball.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: c-lib-tarball-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_TIMEOUT: "120"
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: "cc"
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+jobs:
+  clib:
+    name: C lib ${{ matrix.variant }} (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Explicit rows only (no axis x include cartesian product).
+      # Native-arch runners only (same policy as python_wheels.yml).
+      matrix:
+        include:
+          - variant: lean
+            os: ubuntu-24.04
+            target: x86_64
+            triple: x86_64-unknown-linux-gnu
+            features: ''
+            manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
+          - variant: lean
+            os: ubuntu-24.04-arm
+            target: aarch64
+            triple: aarch64-unknown-linux-gnu
+            features: ''
+            manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
+          - variant: lean
+            os: macos-15-intel
+            target: x86_64
+            triple: x86_64-apple-darwin
+            features: ''
+            manylinux_image: ''
+          - variant: lean
+            os: macos-15
+            target: aarch64
+            triple: aarch64-apple-darwin
+            features: ''
+            manylinux_image: ''
+          - variant: lean
+            os: windows-2022
+            target: x86_64
+            triple: x86_64-pc-windows-msvc
+            features: ''
+            manylinux_image: ''
+          - variant: chemfiles
+            os: ubuntu-24.04
+            target: x86_64
+            triple: x86_64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
+          - variant: chemfiles
+            os: ubuntu-24.04-arm
+            target: aarch64
+            triple: aarch64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
+          - variant: chemfiles
+            os: macos-15-intel
+            target: x86_64
+            triple: x86_64-apple-darwin
+            features: chemfiles
+            manylinux_image: ''
+          - variant: chemfiles
+            os: macos-15
+            target: aarch64
+            triple: aarch64-apple-darwin
+            features: chemfiles
+            manylinux_image: ''
+          # Official prebuilt libchemfiles for x86_64-pc-windows-msvc.
+          # Do not use chemfiles-from-sources here (vendored zlib/CMake).
+          - variant: chemfiles
+            os: windows-2022
+            target: x86_64
+            triple: x86_64-pc-windows-msvc
+            features: chemfiles
+            manylinux_image: ''
+    steps:
+      - uses: actions/checkout@v6
+
+      # BFD is the stable manylinux linker. Apple clang rejects -fuse-ld=bfd.
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      # chemfiles-sys 0.10.41 builds vendored zlib. cmake-rs 0.1.58 ignores
+      # CMAKE_ARGS, so CHFL_SYSTEM_ZLIB never reached CMake. Old zconf.h does
+      # `#define fdopen ...` unless HAVE_UNISTD_H; that breaks the MacOSX SDK
+      # stdio.h. CFLAGS is forwarded by cmake-rs via the cc crate.
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS' && matrix.variant == 'chemfiles'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      # Official prebuilt libchemfiles.obj calls GetUserNameA (advapi32).
+      # cmake-rs does not add that import lib for the prebuilt path.
+      - name: Windows chemfiles link advapi32
+        if: runner.os == 'Windows' && matrix.variant == 'chemfiles'
+        shell: bash
+        run: echo "RUSTFLAGS=-C link-arg=advapi32.lib" >> "$GITHUB_ENV"
+
+      - name: Build C ABI (Linux manylinux)
+        if: runner.os == 'Linux'
+        id: build_linux
+        continue-on-error: true
+        env:
+          FEATURES: ${{ matrix.features }}
+          VARIANT: ${{ matrix.variant }}
+          TRIPLE: ${{ matrix.triple }}
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/io \
+            -w /io \
+            -e CARGO_HTTP_MULTIPLEXING=false \
+            -e CARGO_NET_RETRY=10 \
+            -e CARGO_HTTP_TIMEOUT=120 \
+            -e CMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -e CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=cc \
+            -e RUSTFLAGS="-C link-arg=-fuse-ld=bfd" \
+            -e FEATURES \
+            -e VARIANT \
+            -e TRIPLE \
+            "$MANYLINUX_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              if ! command -v rustc >/dev/null 2>&1; then
+                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+              fi
+              # shellcheck disable=SC1091
+              . "$HOME/.cargo/env"
+              mkdir -p dist-clib
+              if [ -n "${FEATURES}" ]; then
+                cargo build --release --locked --lib --features "${FEATURES}"
+              else
+                cargo build --release --locked --lib
+              fi
+              bash scripts/package-clib.sh dist-clib \
+                --lib-dir target/release \
+                --triple "${TRIPLE}" \
+                --features "${FEATURES}" \
+                --variant "${VARIANT}"
+            '
+
+      - name: Build C ABI (Linux manylinux retry)
+        if: runner.os == 'Linux' && steps.build_linux.outcome == 'failure'
+        env:
+          FEATURES: ${{ matrix.features }}
+          VARIANT: ${{ matrix.variant }}
+          TRIPLE: ${{ matrix.triple }}
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/io \
+            -w /io \
+            -e CARGO_HTTP_MULTIPLEXING=false \
+            -e CARGO_NET_RETRY=10 \
+            -e CARGO_HTTP_TIMEOUT=120 \
+            -e CMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -e CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=cc \
+            -e RUSTFLAGS="-C link-arg=-fuse-ld=bfd" \
+            -e FEATURES \
+            -e VARIANT \
+            -e TRIPLE \
+            "$MANYLINUX_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              if ! command -v rustc >/dev/null 2>&1; then
+                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+              fi
+              # shellcheck disable=SC1091
+              . "$HOME/.cargo/env"
+              mkdir -p dist-clib
+              if [ -n "${FEATURES}" ]; then
+                cargo build --release --locked --lib --features "${FEATURES}"
+              else
+                cargo build --release --locked --lib
+              fi
+              bash scripts/package-clib.sh dist-clib \
+                --lib-dir target/release \
+                --triple "${TRIPLE}" \
+                --features "${FEATURES}" \
+                --variant "${VARIANT}"
+            '
+
+      - name: Install Rust toolchain
+        if: runner.os != 'Linux'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build C ABI (macOS / Windows)
+        if: runner.os != 'Linux'
+        id: build_host
+        continue-on-error: true
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && matrix.variant == 'chemfiles' && '-C link-arg=advapi32.lib' || '' }}
+          CFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+          CXXFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+        run: |
+          mkdir -p dist-clib
+          if [ -n "${{ matrix.features }}" ]; then
+            cargo build --release --locked --lib --features "${{ matrix.features }}"
+          else
+            cargo build --release --locked --lib
+          fi
+          bash scripts/package-clib.sh dist-clib \
+            --lib-dir target/release \
+            --triple "${{ matrix.triple }}" \
+            --features "${{ matrix.features }}" \
+            --variant "${{ matrix.variant }}"
+
+      - name: Build C ABI (macOS / Windows retry)
+        if: runner.os != 'Linux' && steps.build_host.outcome == 'failure'
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && matrix.variant == 'chemfiles' && '-C link-arg=advapi32.lib' || '' }}
+          CFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+          CXXFLAGS: ${{ (runner.os == 'macOS' && matrix.variant == 'chemfiles') && '-DHAVE_UNISTD_H -DHAVE_FDOPEN' || '' }}
+        run: |
+          mkdir -p dist-clib
+          if [ -n "${{ matrix.features }}" ]; then
+            cargo build --release --locked --lib --features "${{ matrix.features }}"
+          else
+            cargo build --release --locked --lib
+          fi
+          bash scripts/package-clib.sh dist-clib \
+            --lib-dir target/release \
+            --triple "${{ matrix.triple }}" \
+            --features "${{ matrix.features }}" \
+            --variant "${{ matrix.variant }}"
+
+      - name: Check tarball layout
+        shell: bash
+        run: |
+          TAR=$(ls dist-clib/readcon-core-*.tar.gz | grep -v sha256 | head -1)
+          test -n "$TAR"
+          tar -tzf "$TAR" | grep -E 'include/readcon-core\.h$'
+          tar -tzf "$TAR" | grep -E 'lib/pkgconfig/readcon-core\.pc$'
+          if tar -tzf "$TAR" | grep -E '(^|/)cbindgen(\.toml)?$'; then
+            echo "C ABI tarball must not ship cbindgen.toml" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.variant }}-${{ matrix.os }}-${{ matrix.target }}
+          path: |
+            dist-clib/readcon-core-*.tar.gz
+            dist-clib/readcon-core-*.tar.gz.sha256
+          if-no-files-found: error
+
+  github-release:
+    name: Attach C ABI tarballs to GitHub Release
+    needs: [clib]
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: 'clib-*'
+          merge-multiple: true
+          path: dist-clib/
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-clib/readcon-core-*.tar.gz
+            dist-clib/readcon-core-*.tar.gz.sha256
+          fail_on_unmatched_files: false
+          append_body: true
+          body: |
+            Prebuilt C ABI prefixes: `readcon-core-$VERSION-$triple.tar.gz` (lean) and `readcon-core-$VERSION-$triple-chemfiles.tar.gz`. Linux archives are manylinux_2_28 (same linker and cargo HTTP flags as the Python wheels). Unpack and `export PKG_CONFIG_PATH=.../lib/pkgconfig` for fpm, or `READCON_CORE_LIB` / `READCON_LIB_PATH` for Julia.

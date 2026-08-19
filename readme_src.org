@@ -84,6 +84,7 @@ How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles p
 | C / C++ CMake | =FetchContent= / =find_package(readcon-core)= (cxx tarball) | headers + =libreadcon_core= + =readcon-core.pc= |
 | C / C++ Meson | =dependency('readcon-core')= (wrapdb / wrap-file) | same |
 | C / C++ cargo-c | =cargo cinstall --release --prefix /usr/local= | same |
+| C ABI tarball | unpack =readcon-core-$VERSION-$triple.tar.gz= (GitHub Release) | same |
 
 The C/C++ headers are *shipped* (=include/readcon-core.h=). cbindgen is a maintainer tool, not a consumer dependency. C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=) compiler. FetchContent URL: =readcon-core-cxx-$VERSION.tar.gz= on the GitHub Release.
 Full matrix: [[file:docs/orgmode/getting-started.org][getting-started]].

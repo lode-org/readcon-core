@@ -30,7 +30,7 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
+    | C / C++ / Fortran  | CMake / Meson / ``pkg-config`` / prebuilt C ABI tarball                             | :doc:`bindings`                                                                                                                             |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
@@ -89,8 +89,10 @@ Fortran / C / C++
 Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
-after a prefix install. The cxx tarball on the GitHub Release is
-``readcon-core-cxx-$VERSION.tar.gz``.
+after a prefix install. The cxx *source* tarball on the GitHub Release
+is ``readcon-core-cxx-$VERSION.tar.gz``. The *prebuilt* C ABI prefix is
+``readcon-core-$VERSION-$triple.tar.gz`` (lean) or
+``readcon-core-$VERSION-$triple-chemfiles.tar.gz`` (Linux is manylinux_2_28).
 
 .. code:: cmake
 
@@ -127,6 +129,19 @@ Fortran smoke from a checkout (after a release build of the cdylib):
 
     cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
       --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+One-command non-Python (prebuilt prefix from the Release, no Rust):
+
+.. code:: shell
+
+    tar xf readcon-core-0.14.7-x86_64-unknown-linux-gnu-chemfiles.tar.gz
+    export PKG_CONFIG_PATH=$PWD/readcon-core-0.14.7-x86_64-unknown-linux-gnu-chemfiles/lib/pkgconfig
+    export READCON_CORE_LIB=$PWD/readcon-core-0.14.7-x86_64-unknown-linux-gnu-chemfiles
+    pkg-config --cflags --libs readcon-core
+
+Julia accepts ``READCON_CORE_LIB`` or ``READCON_LIB_PATH`` as the library
+file or that prefix directory. Windows chemfiles uses official
+prebuilt libchemfiles (not ``chemfiles-from-sources``).
 
 Smoke test
 ----------
