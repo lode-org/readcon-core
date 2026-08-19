@@ -219,10 +219,13 @@ else
         fi
         (
             cd "$ROOT_DIR"
-            # shellcheck disable=SC2086
+            feat_args=()
+            if [[ -n "$FEATURES" ]]; then
+                feat_args=(--features "$FEATURES")
+            fi
             cargo build --release --locked --package readcon-core \
                 ${CARGO_TARGET_ARGS[@]+"${CARGO_TARGET_ARGS[@]}"} \
-                --features ${FEATURES}
+                ${feat_args[@]+"${feat_args[@]}"}
         )
     fi
 
