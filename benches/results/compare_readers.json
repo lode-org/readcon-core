@@ -1,0 +1,31 @@
+{
+  "host": "rgam5terra",
+  "platform": "Linux-7.0.13-arch1-1-rg-x86_64-with-glibc2.43",
+  "date_utc": "2026-08-19T22:56Z",
+  "commit": "8ce95a56",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "file_size_bytes": 1724500,
+  "protocol": "synthetic multi-frame CON (218 atoms/frame); median wall of --repeats; C sscanf / eOn Python / ASE eon / readcon path / readcon string",
+  "readers": {
+    "ASE (ase.io.eon)": {
+      "median_ms": 28.05649396032095,
+      "speedup_vs_slowest": 1.0
+    },
+    "C (sscanf) (eOn-style)": {
+      "median_ms": 7.38,
+      "speedup_vs_slowest": 3.8016929485529745
+    },
+    "readcon-core (from string)": {
+      "median_ms": 3.960837027989328,
+      "speedup_vs_slowest": 7.083475982995315
+    },
+    "readcon-core (file path)": {
+      "median_ms": 2.9616178944706917,
+      "speedup_vs_slowest": 9.473367247240812
+    }
+  },
+  "features": "python,chemfiles (maturin develop --release)",
+  "source_note": "wall times measured on rgam5terra 2026-08-19T22:56Z; commit field is the haozeke/main tree that supplied the harness"
+}

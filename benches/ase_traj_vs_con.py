@@ -110,7 +110,7 @@ def main() -> None:
         "n_frames": args.frames,
         "n_atoms": len(fr0),
         "repeats": args.repeats,
-        "fixture": str(args.fixture),
+        "fixture": str(Path(args.fixture).resolve().relative_to(REPO) if Path(args.fixture).resolve().is_relative_to(REPO) else args.fixture),
         "file_sizes_bytes": sizes,
         "ase_xyz_median_ms": median_ms(ase_xyz, args.repeats),
         "ase_traj_median_ms": median_ms(ase_traj, args.repeats),
