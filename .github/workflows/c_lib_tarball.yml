@@ -132,11 +132,13 @@ jobs:
       - name: Assemble clib tarball (macOS / Windows)
         if: runner.os != 'Linux'
         shell: bash
+        env:
+          CARGO_FEATURES: ${{ matrix.features }}
         run: |
           mkdir -p dist-clib
           feat_args=()
-          if [ -n "${{ matrix.features }}" ]; then
-            feat_args=(--features "${{ matrix.features }}")
+          if [ -n "${CARGO_FEATURES}" ]; then
+            feat_args=(--features "${CARGO_FEATURES}")
           fi
           bash packager/scripts/package-clib.sh dist-clib \
             --root src \
