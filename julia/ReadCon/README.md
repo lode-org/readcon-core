@@ -2,6 +2,21 @@
 
 Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.h`).
 
+## Library discovery
+
+`wrapper.jl` searches in this order and **fails fast** if none exist
+(FFI tests do not skip ABI checks):
+
+1. Julia artifact `libreadcon_core` from `Artifacts.toml` (lazy GitHub
+   Release clib tarball `readcon-core-clib-$VERSION-$target.tar.gz`)
+2. `READCON_LIB_PATH` (file or directory)
+3. `READCON_CORE_LIB` (file or directory; CI uses this)
+4. In-tree `target/{release,debug}` and `target/<triple>/{release,debug}`
+
+`scripts/package-clib.sh` prints the `[[libreadcon_core.download]]`
+fragment to paste into `Artifacts.toml` after a Release attaches the
+tarball.
+
 ## Run tests locally
 
 1. Build the shared library from the **repository root**:
@@ -16,16 +31,12 @@ Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.
 2. From `julia/ReadCon` (or with `JULIA_PROJECT` set):
 
    ```bash
-   julia --project=. -e 'using Pkg; Pkg.test()'
+   julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
    ```
-
-If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB`, tests that
-touch the FFI **fail fast** with a clear load error (they do not silently skip
-ABI checks). Pure Julia struct layout tests in `test/runtests.jl` still run.
 
 ## CI
 
-Workflow `.github/workflows/ci_julia.yml` runs when Julia is available on the
-runner: builds `libreadcon_core` with `chemfiles`, exports `READCON_CORE_LIB`,
-then `Pkg.test()`. Agents without Julia should treat missing `julia` as an
-environment limit, not an API gap—the package sources and tests remain in-tree.
+Workflow `.github/workflows/ci_julia.yml` builds `libreadcon_core` with
+`chemfiles`, exports `READCON_CORE_LIB`, then `Pkg.test()`. Agents
+without Julia should treat missing `julia` as an environment limit, not
+an API gap.

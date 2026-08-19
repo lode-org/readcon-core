@@ -1,0 +1,20 @@
+# libreadcon_core Julia artifact (lazy).
+#
+# scripts/package-clib.sh prints a [[libreadcon_core.download]] fragment
+# (URL + sha256, and git-tree-sha1 when julia is on PATH). After a GitHub
+# Release attaches readcon-core-clib-$VERSION-$target.tar.gz, paste the
+# fragment under [libreadcon_core] and set git-tree-sha1 to the unpacked
+# prefix tree hash.
+#
+# Until that table exists, wrapper.jl skips the artifact and uses
+# READCON_LIB_PATH, then READCON_CORE_LIB, then an in-tree target/ build.
+#
+# Example after a release (hashes are per tarball):
+#
+# [libreadcon_core]
+# git-tree-sha1 = "<tree sha1 of the unpacked prefix>"
+# lazy = true
+#
+#     [[libreadcon_core.download]]
+#     url = "https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz"
+#     sha256 = "<sha256>"

@@ -383,13 +383,21 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Search order in ``julia/ReadCon/src/wrapper.jl``: Julia artifact
+(``Artifacts.toml``, lazy clib tarball), then ``READCON_LIB_PATH``, then
+``READCON_CORE_LIB``, then in-tree ``target/``. Missing library is a hard
+error (FFI tests do not skip).
 
 .. code:: shell
 
+    # Prefix from the GitHub Release clib tarball (see getting-started)
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    # CI / in-tree also honours READCON_CORE_LIB
+    export READCON_CORE_LIB=$PWD/target/release/libreadcon_core.so
+
+Windows chemfiles is the Python ``readcon-chemfiles`` wheel
+(``python_wheels.yml`` ``windows-2022`` / prebuilt libchemfiles +
+``advapi32``). The clib tarball is lean Linux/macOS only.
 
 Usage
 ~~~~~
@@ -844,6 +852,15 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
 (issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+System prefix (no cargo): GitHub Release clib tarball, then
+``fpm.toml`` ``[extra.system]``:
+
+.. code:: bash
+
+    export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+    cd fortran/ReadCon
+    fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+      --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
 
 .. code:: bash
 

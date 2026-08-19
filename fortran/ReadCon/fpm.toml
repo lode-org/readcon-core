@@ -26,3 +26,20 @@ main = "test_read_con.f90"
 name = "read_first"
 source-dir = "example"
 main = "read_first.f90"
+
+# Prefix install of the GitHub Release clib tarball (or cmake --install).
+# cargo is not required once libreadcon_core is on PKG_CONFIG_PATH.
+#
+#   VER=0.14.7
+#   # TARGET: x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+#   #         x86_64-apple-darwin     | aarch64-apple-darwin
+#   curl -fsSL \
+#     "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz" \
+#     | tar -xz -C "$PREFIX" --strip-components=1
+#   export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+#   fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+#     --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+[extra.system]
+pkg-config = "readcon-core"
+library = "readcon_core"
+url-pattern = "https://github.com/lode-org/readcon-core/releases/download/v$VERSION/readcon-core-clib-$VERSION-$target.tar.gz"

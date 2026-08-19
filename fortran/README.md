@@ -25,6 +25,22 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## System lib (no cargo)
+
+After a prefix install of the GitHub Release clib tarball
+(`readcon-core-clib-$VERSION-$target.tar.gz`) or `cmake --install`:
+
+```bash
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+`fpm.toml` `[extra.system]` records the pkg-config name and URL pattern.
+The clib tarball is lean (no chemfiles). Windows chemfiles is the
+Python `readcon-chemfiles` wheel, not this prefix.
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:

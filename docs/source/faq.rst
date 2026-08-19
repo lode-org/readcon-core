@@ -415,6 +415,20 @@ JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
 keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
 How-to: :doc:`migrate`, :doc:`chemfiles-tutorial`.
 
+Does Windows ship chemfiles?
+----------------------------
+
+Yes for the Python wheel. ``python_wheels.yml`` has an explicit
+``windows-2022`` / ``x86_64`` / ``chemfiles`` row that links the official
+prebuilt libchemfiles and ``advapi32`` (``GetUserNameA``). Lean
+``readcon`` Windows wheels stay chemfiles-off.
+
+No for the C ABI tarball: ``c_lib_tarball.yml`` is Linux GNU and macOS
+lean ``libreadcon_core`` only (no Windows row, no chemfiles). Fortran
+CI does not call chemfiles C++ (SIGFPE under gfortran traps).
+The Rust crate still takes ``--features chemfiles`` on Windows with the
+same prebuilt + ``advapi32`` link as the wheel.
+
 Why an hourglass C ABI?
 -----------------------
 

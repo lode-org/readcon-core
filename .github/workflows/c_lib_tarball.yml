@@ -1,0 +1,67 @@
+name: C ABI tarball
+
+# Attaches prebuilt lean libreadcon_core + headers + pkg-config after
+# cargo-dist publishes the GitHub Release. URL pattern:
+#   readcon-core-clib-$VERSION-$target.tar.gz
+# cbindgen is not installed and not invoked. Chemfiles is off (lean C ABI).
+# Linux/macOS only; Windows chemfiles is the Python wheel matrix, not this job.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clib-tarball:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build lean cdylib
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+        run: cargo build --release --lib
+
+      - name: Assemble clib tarball
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p dist-clib
+          bash scripts/package-clib.sh dist-clib
+          ls -lh dist-clib
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            Prebuilt C ABI tarballs: `readcon-core-clib-$VERSION-$target.tar.gz` (headers + `libreadcon_core` + `readcon-core.pc`). Lean build; chemfiles is off. cbindgen is not required.

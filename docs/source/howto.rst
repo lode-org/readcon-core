@@ -786,10 +786,11 @@ Installation and setup
 
 .. code:: julia
 
-    # Point to the shared library
+    # Point to the shared library (or READCON_CORE_LIB). Artifact first
+    # if julia/ReadCon/Artifacts.toml lists libreadcon_core.
     ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
 
-    # Or build from source (library auto-discovered)
+    # Or build from source (library auto-discovered under target/)
     using Pkg
     Pkg.develop(path="julia/ReadCon")
 

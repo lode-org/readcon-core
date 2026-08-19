@@ -337,13 +337,21 @@ frame.set_metadata_json('{"con_spec_version": 2, "energy": -1.0}')
 
 ** Installation
 
-Set =READCON_LIB_PATH= to the shared library path, or build with
-=cargo build --release= and the Julia package will find it
-automatically.
+Search order in =julia/ReadCon/src/wrapper.jl=: Julia artifact
+(=Artifacts.toml=, lazy clib tarball), then =READCON_LIB_PATH=, then
+=READCON_CORE_LIB=, then in-tree =target/=. Missing library is a hard
+error (FFI tests do not skip).
 
 #+begin_src shell
+# Prefix from the GitHub Release clib tarball (see getting-started)
 export READCON_LIB_PATH=/path/to/libreadcon_core.so
+# CI / in-tree also honours READCON_CORE_LIB
+export READCON_CORE_LIB=$PWD/target/release/libreadcon_core.so
 #+end_src
+
+Windows chemfiles is the Python =readcon-chemfiles= wheel
+(=python_wheels.yml= =windows-2022= / prebuilt libchemfiles +
+=advapi32=). The clib tarball is lean Linux/macOS only.
 
 ** Usage
 
@@ -721,6 +729,15 @@ by another tool.
 
 Wrappers in =fortran/ReadCon/src/readcon.f90= over =include/readcon-core.h=
 (issue #6). Link =libreadcon_core= (Meson wrap, CMake FetchContent / =find_package=, or =pkg-config --libs readcon-core=).
+System prefix (no cargo): GitHub Release clib tarball, then
+=fpm.toml= =[extra.system]=:
+
+#+begin_src bash
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+#+end_src
 
 #+begin_src bash
 # Lean (chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)
