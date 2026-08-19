@@ -232,7 +232,7 @@ def _git_commit() -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", type=int, default=NUM_FRAMES)
-    ap.add_argument("--repeats", type=int, default=REPEAT)
+    ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument(
         "--out",
         type=Path,
