@@ -33,6 +33,7 @@ jobs:
       - name: Julia tests
         env:
           READCON_CORE_LIB: ${{ github.workspace }}/target/release/libreadcon_core.so
+          READCON_LIB_PATH: ${{ github.workspace }}/target/release/libreadcon_core.so
           LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
         run: |
           cd julia/ReadCon

@@ -1,18 +1,65 @@
 const Libdl = Base.Libc.Libdl
 
+function _lib_in_prefix(root::AbstractString)
+    for dir in (joinpath(root, "lib"), joinpath(root, "bin"), root)
+        for name in ("libreadcon_core.so", "libreadcon_core.dylib", "readcon_core.dll")
+            candidate = joinpath(dir, name)
+            isfile(candidate) && return candidate
+        end
+    end
+    return nothing
+end
+
+function _env_lib_path()
+    for key in ("READCON_CORE_LIB", "READCON_LIB_PATH", "READCON_CORE_PREFIX")
+        lib_env = get(ENV, key, "")
+        isempty(lib_env) && continue
+        isfile(lib_env) && return lib_env
+        if isdir(lib_env)
+            found = _lib_in_prefix(lib_env)
+            found !== nothing && return found
+        end
+    end
+    return nothing
+end
+
+function _artifact_lib_path()
+    artifacts = joinpath(dirname(@__DIR__), "Artifacts.toml")
+    isfile(artifacts) || return nothing
+    try
+        Artifacts = Base.require(Base.PkgId(
+            Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"),
+            "Artifacts",
+        ))
+        hash = Artifacts.artifact_hash("readcon_core", artifacts)
+        hash === nothing && return nothing
+        Artifacts.artifact_exists(hash) || return nothing
+        root = Artifacts.artifact_path(hash)
+        for dir in (joinpath(root, "lib"), root)
+            for name in ("libreadcon_core.so", "libreadcon_core.dylib", "readcon_core.dll")
+                candidate = joinpath(dir, name)
+                isfile(candidate) && return candidate
+            end
+        end
+    catch
+        return nothing
+    end
+    return nothing
+end
+
 """
     _lib_handle()
 
-Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Return a path to the readcon-core shared library.
+Search order: `READCON_CORE_LIB`, `READCON_LIB_PATH` (alias), a filled
+`Artifacts.toml` (`readcon_core` artifact from the clib tarball), then
+a local `target/{release,debug}` build.
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
-    end
-    # Fall back to looking relative to this package
+    env_path = _env_lib_path()
+    env_path !== nothing && return env_path
+    art_path = _artifact_lib_path()
+    art_path !== nothing && return art_path
     pkg_dir = dirname(@__DIR__)
     for candidate in [
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
@@ -24,7 +71,7 @@ function _lib_handle()
             return candidate
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error("Cannot find libreadcon_core. Set READCON_CORE_LIB (or READCON_LIB_PATH), install the clib artifact, or build with cargo build --release.")
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

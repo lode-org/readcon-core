@@ -22,6 +22,7 @@ Pick *one* language. Version pins match this tree (=0.14.7=).
 | Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
 | Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
 | C / C++ / Fortran | CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
+| Prebuilt C ABI | =readcon-core-clib-$VER-$target.tar.gz= on the GitHub Release | [[file:bindings.org][bindings]] (Julia / Fortran / =pkg-config=) |
 
 ** Python: CON I/O
 
@@ -110,6 +111,12 @@ Fortran smoke from a checkout (after a release build of the cdylib):
 cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
   --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
 #+end_src
+
+Prebuilt C ABI (no local cargo): unpack
+=readcon-core-clib-$VERSION-$target.tar.gz= from the GitHub Release, then
+=export READCON_CORE_LIB= / =PKG_CONFIG_PATH=. Attach assets to an
+already-published tag with Actions → *C ABI library tarball* →
+=tag=vX.Y.Z=. Windows + chemfiles is not a clib asset.
 
 * Smoke test
 

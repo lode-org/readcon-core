@@ -1,0 +1,173 @@
+name: C ABI library tarball
+
+# Prebuilt libreadcon_core + shipped headers + readcon-core.pc, attached
+# to a GitHub Release. cbindgen is not installed and not invoked.
+#
+# Attach-to-tag: workflow_dispatch inputs.tag works like cxx_tarball.yml so
+# an already-published tag (v0.14.7) can receive clib assets later.
+# The packager (scripts/package-clib.sh) comes from the *workflow ref*
+# (the branch selected in Actions). Sources and the Release tag come from
+# inputs.tag (dispatch) or github.ref (release published). That split is
+# required because v0.14.7 does not contain package-clib.sh.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_TIMEOUT: "120"
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+jobs:
+  clib-tarball:
+    name: clib ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: ""
+            manylinux_image: ""
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            features: chemfiles
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: chemfiles
+          # Windows + chemfiles is not a clib asset. See windows-chemfiles-skip.
+    steps:
+      - name: Checkout packager (workflow ref; has package-clib.sh)
+        uses: actions/checkout@v6
+        with:
+          path: packager
+
+      - name: Checkout tag sources
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          path: src
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      # chemfiles-sys 0.10.41 builds vendored zlib. cmake-rs 0.1.58 ignores
+      # CMAKE_ARGS, so CHFL_SYSTEM_ZLIB never reached CMake. Old zconf.h does
+      # `#define fdopen ...` unless HAVE_UNISTD_H; that breaks the MacOSX SDK
+      # stdio.h. CFLAGS is forwarded by cmake-rs via the cc crate.
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      - name: Assemble clib tarball (manylinux_2_28)
+        if: runner.os == 'Linux'
+        env:
+          RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+          CARGO_FEATURES: ${{ matrix.features }}
+          CARGO_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p src/.ci-cargo src/.ci-rustup src/target-manylinux dist-clib
+          docker run --rm \
+            -e RUSTFLAGS \
+            -e CARGO_FEATURES \
+            -e CARGO_TARGET \
+            -e CARGO_HTTP_MULTIPLEXING \
+            -e CARGO_NET_RETRY \
+            -e CARGO_HTTP_TIMEOUT \
+            -e CMAKE_POLICY_VERSION_MINIMUM \
+            -e CARGO_HOME=/io/src/.ci-cargo \
+            -e RUSTUP_HOME=/io/src/.ci-rustup \
+            -e CARGO_TARGET_DIR=/io/src/target \
+            -v "$GITHUB_WORKSPACE":/io \
+            -w /io/src \
+            "$MANYLINUX_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              export PATH="/io/src/.ci-cargo/bin:$PATH"
+              if ! command -v rustc >/dev/null 2>&1; then
+                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
+                  | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+                export PATH="/io/src/.ci-cargo/bin:$PATH"
+              fi
+              feat_args=()
+              if [ -n "${CARGO_FEATURES:-}" ]; then
+                feat_args=(--features "${CARGO_FEATURES}")
+              fi
+              bash /io/packager/scripts/package-clib.sh /io/dist-clib \
+                --root /io/src \
+                --target "${CARGO_TARGET}" \
+                "${feat_args[@]}"
+            '
+          ls -lh dist-clib
+
+      - name: Assemble clib tarball (macOS / Windows)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist-clib
+          feat_args=()
+          if [ -n "${{ matrix.features }}" ]; then
+            feat_args=(--features "${{ matrix.features }}")
+          fi
+          bash packager/scripts/package-clib.sh dist-clib \
+            --root src \
+            --target ${{ matrix.target }} \
+            "${feat_args[@]}"
+          ls -lh dist-clib
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+            dist-clib/Artifacts-*.toml
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            Prebuilt C ABI: `readcon-core-clib-$VERSION-$target.tar.gz` (shipped headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required. Julia/Fortran: unpack and set `READCON_CORE_LIB` / `PKG_CONFIG_PATH`. Windows + chemfiles is not a clib asset (Python wheel path only).
+
+  # Explicit skip: do not silently omit Windows chemfiles from the matrix.
+  # Official prebuilt libchemfiles for x86_64-pc-windows-msvc is the Python
+  # wheel path (python_wheels.yml, RUSTFLAGS advapi32.lib). Julia/Fortran
+  # consume the manylinux/macOS tarballs from clib-tarball.
+  windows-chemfiles-skip:
+    name: Windows chemfiles (explicit skip)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Record skip
+        run: |
+          echo "Windows + chemfiles is not a clib Release asset."
+          echo "Use python_wheels.yml (prebuilt libchemfiles + advapi32) for Windows chemfiles."
+          echo "Julia/Fortran consume manylinux/macOS readcon-core-clib-\$VER-\$target.tar.gz."
+          echo "Attach-to-tag: Actions → C ABI library tarball → tag=vX.Y.Z on main."
