@@ -1,0 +1,149 @@
+name: C ABI prefix tarball
+
+# cargo-dist Release (release.yml, generated) ships CLI archives only.
+# This sibling attaches prebuilt libreadcon_core prefixes after the
+# GitHub Release exists (same hook as cxx_tarball.yml). Do not
+# hand-edit release.yml.
+# cbindgen is not installed and not invoked.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_TIMEOUT: "120"
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+jobs:
+  clib-manylinux:
+    name: clib ${{ matrix.target }} (chemfiles=on)
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            image: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: chemfiles-from-sources
+            image: quay.io/pypa/manylinux_2_28_aarch64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Linux BFD linker
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      - name: Install Rust and cargo-c
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # shellcheck disable=SC1091
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y cargo-c
+
+      - name: Assemble C ABI prefix tarball
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p dist-clib
+          bash scripts/package-clib.sh dist-clib --features "${{ matrix.features }}"
+          ls -lh dist-clib
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            C ABI prefix tarball for `${{ matrix.target }}` (chemfiles=on, manylinux_2_28): `readcon-core-clib-$VERSION-$TARGET.tar.gz`. Headers are pre-generated; cbindgen is not required. cargo-dist still ships CLI archives only.
+
+  clib-native:
+    name: clib ${{ matrix.target }} (chemfiles=${{ matrix.chemfiles }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            features: chemfiles
+            chemfiles: "on"
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: chemfiles
+            chemfiles: "on"
+          # Windows clib tarball is lean. Chemfiles is NOT in this prefix.
+          # Windows chemfiles ships only as the Python wheel
+          # (python_wheels.yml: official prebuilt libchemfiles + advapi32).
+          # rkr_has_chemfiles_support() is 0; selection returns
+          # RKR_STATUS_FEATURE_DISABLED. Do not treat this as implicit.
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: ""
+            chemfiles: "off"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS' && matrix.chemfiles == 'on'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-c
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-c
+
+      - name: Assemble C ABI prefix tarball
+        shell: bash
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p dist-clib
+          if [ -n "${{ matrix.features }}" ]; then
+            bash scripts/package-clib.sh dist-clib --features "${{ matrix.features }}"
+          else
+            bash scripts/package-clib.sh dist-clib
+          fi
+          ls -lh dist-clib
+          echo "Windows chemfiles in this tarball: ${{ matrix.chemfiles }}"
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            C ABI prefix tarball for `${{ matrix.target }}` (chemfiles=${{ matrix.chemfiles }}): `readcon-core-clib-$VERSION-$TARGET.tar.gz`. Headers are pre-generated; cbindgen is not required. cargo-dist still ships CLI archives only. Windows chemfiles is not in the Windows clib prefix (lean DLL; FEATURE_DISABLED).

@@ -30,7 +30,7 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, prebuilt clib tarball, or ``pkg-config readcon-core`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
@@ -89,8 +89,29 @@ Fortran / C / C++
 Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
-after a prefix install. The cxx tarball on the GitHub Release is
-``readcon-core-cxx-$VERSION.tar.gz``.
+after a prefix install. The cxx *source* tarball on the GitHub
+Release is ``readcon-core-cxx-$VERSION.tar.gz`` (FetchContent / wrap;
+still needs rustc). The prebuilt C ABI prefix is
+``readcon-core-clib-$VERSION-$TARGET.tar.gz`` (headers +
+``libreadcon_core`` + ``readcon-core.pc``; no cargo). cargo-dist ships
+CLI archives only; the clib prefix is the sibling
+``c_lib_tarball.yml`` workflow.
+
+.. code:: shell
+
+    VER=0.14.7
+    TARGET=x86_64-unknown-linux-gnu   # or aarch64-unknown-linux-gnu, *-apple-darwin
+    curl -fsSL -O \
+      "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
+    tar xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"
+    export PKG_CONFIG_PATH="$PWD/readcon-core-clib-${VER}-${TARGET}/lib/pkgconfig"
+    pkg-config --cflags --libs readcon-core
+
+Windows: the clib tarball is **lean**. Chemfiles is **not** in that
+prefix (``rkr_has_chemfiles_support`` is 0; selection returns
+``RKR_STATUS_FEATURE_DISABLED``). Windows chemfiles is the Python
+wheel (``python_wheels.yml``, official prebuilt libchemfiles +
+advapi32). Do not treat a silent skip as coverage.
 
 .. code:: cmake
 

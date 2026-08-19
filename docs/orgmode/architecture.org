@@ -178,7 +178,13 @@ CMake (=FetchContent= / =find_package=), Meson (wrap / =pkg.generate=
 =filebase: readcon-core=), and cargo-c (=generation = false=) all
 install that file. None of them run cbindgen. The cxx source tarball
 (=scripts/package-cxx.sh= → =readcon-core-cxx-$VERSION.tar.gz= on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
+GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
+prefix (=scripts/package-clib.sh= →
+=readcon-core-clib-$VERSION-$TARGET.tar.gz= via =c_lib_tarball.yml=)
+is the one-command install for C / Fortran / Julia. cargo-dist ships
+CLI archives only; it does not emit this prefix. Windows clib
+tarballs are lean: chemfiles is not included
+(=RKR_STATUS_FEATURE_DISABLED=). Maintainers only:
 =scripts/regen-capi-headers.sh=.
 
 The

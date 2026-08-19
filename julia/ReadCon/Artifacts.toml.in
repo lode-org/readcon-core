@@ -1,0 +1,32 @@
+# Template for julia/ReadCon/Artifacts.toml.
+# Fill @VERSION@ / @SHA256_*@ / @GIT_TREE_SHA1@ from
+# readcon-core-clib-$VERSION-$TARGET.tar.gz.sha256 after
+# scripts/package-clib.sh (c_lib_tarball.yml) publishes the prefix.
+# lazy = true so Pkg downloads only on first load.
+#
+# Windows download is the lean DLL. Chemfiles is not in that prefix
+# (FEATURE_DISABLED). Linux/macOS prefixes include chemfiles.
+
+[libreadcon_core]
+git-tree-sha1 = "@GIT_TREE_SHA1@"
+lazy = true
+
+    [[libreadcon_core.download]]
+    sha256 = "@SHA256_X86_64_UNKNOWN_LINUX_GNU@"
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-unknown-linux-gnu.tar.gz"
+
+    [[libreadcon_core.download]]
+    sha256 = "@SHA256_AARCH64_UNKNOWN_LINUX_GNU@"
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-aarch64-unknown-linux-gnu.tar.gz"
+
+    [[libreadcon_core.download]]
+    sha256 = "@SHA256_X86_64_APPLE_DARWIN@"
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-apple-darwin.tar.gz"
+
+    [[libreadcon_core.download]]
+    sha256 = "@SHA256_AARCH64_APPLE_DARWIN@"
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-aarch64-apple-darwin.tar.gz"
+
+    [[libreadcon_core.download]]
+    sha256 = "@SHA256_X86_64_PC_WINDOWS_MSVC@"
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-pc-windows-msvc.tar.gz"

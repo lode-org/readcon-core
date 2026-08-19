@@ -25,6 +25,32 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## System prefix (`PKG_CONFIG_PATH`, no cargo)
+
+`fpm.toml` already has `link = ["readcon_core"]`. A prebuilt C ABI
+prefix (`readcon-core-clib-$VERSION-$TARGET.tar.gz` on the GitHub
+Release) is enough; do not rebuild the Rust crate.
+
+```bash
+VER=0.14.7
+TARGET="$(rustc -vV | sed -n 's/^host: //p')"   # or x86_64-unknown-linux-gnu
+curl -fsSL -O \
+  "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
+tar xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"
+PREFIX="$PWD/readcon-core-clib-${VER}-${TARGET}"
+export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export LD_LIBRARY_PATH="${PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+pkg-config --exists readcon-core
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+Windows: the clib tarball is **lean**. Chemfiles is not in that prefix
+(`rkr_has_chemfiles_support` is 0; selection returns
+`RKR_STATUS_FEATURE_DISABLED`). Windows chemfiles is the Python wheel
+path only. Fortran+chemfiles on Windows is not shipped here.
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:

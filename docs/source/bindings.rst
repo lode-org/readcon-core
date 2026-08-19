@@ -82,6 +82,15 @@ surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 probe with ``rkr_has_chemfiles_support()`` / ``has_chemfiles_support()`` (Julia) /
 feature at build time (Rust/Python).
 
+**Windows chemfiles is explicit.** The Windows C ABI tarball
+(``readcon-core-clib-*-x86_64-pc-windows-msvc.tar.gz``) is **lean**:
+chemfiles is not linked. ``rkr_has_chemfiles_support()`` is 0;
+selection and import return ``RKR_STATUS_FEATURE_DISABLED`` (``-11``).
+Windows chemfiles ships only as the Python wheel
+(``python_wheels.yml``: official prebuilt libchemfiles +
+``advapi32``). Do not treat a missing Windows clib+chemfiles job as
+an implicit skip.
+
 **Documentation map (Diátaxis):** core tutorial ``tutorial.org``; multi-language
 how-to ``howto.org``; chemfiles track ``chemfiles-tutorial.org`` /
 ``chemfiles-howto.org`` / ``chemfiles-explain.org`` / ``chemfiles-reference.org``.
@@ -383,13 +392,18 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Search order in ``wrapper.jl``: ``READCON_LIB_PATH``, then
+``READCON_CORE_LIB`` (both accepted), then the ``libreadcon_core``
+Julia artifact (``Artifacts.toml`` from ``Artifacts.toml.in`` after a
+clib tarball is published), then an in-tree ``target/`` build.
 
 .. code:: shell
 
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    # equivalent: export READCON_CORE_LIB=/path/to/libreadcon_core.so
+
+Windows artifact / clib prefix is lean (chemfiles off). See the
+Windows chemfiles note above.
 
 Usage
 ~~~~~
@@ -844,6 +858,11 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
 (issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+A prebuilt prefix is enough: unpack
+``readcon-core-clib-$VERSION-$TARGET.tar.gz``, set
+``PKG_CONFIG_PATH=$prefix/lib/pkgconfig``, then ``fpm test`` with
+``pkg-config --cflags/--libs readcon-core``. Windows prefix is lean
+(chemfiles not included).
 
 .. code:: bash
 
