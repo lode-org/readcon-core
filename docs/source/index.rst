@@ -38,7 +38,7 @@ corpora as CON text (`docs.rs <https://docs.rs/readcon-db>`_).
 
    pip install 'readcon==0.14.7'          # Python CON I/O
    # pip install 'readcon-chemfiles==0.14.7'  # + foreign -> CON
-   cargo add readcon-core                 # Rust
+   cargo add readcon-core@0.14.7          # Rust
    # cargo add readcon-db / pip install readcon-db  # campaigns
 
 Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
