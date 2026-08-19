@@ -3,10 +3,10 @@
 
 * Purpose
 
-This document records the design decisions behind the ~con~ file
-format version 2, the alternatives considered, and the reasoning for
-each choice. It serves as an institutional memory for contributors
-and a reference for implementers in other languages.
+Why CON v2 and v3 look the way they do. Each section names the
+rejected alternatives, then the constraint that decided the layout.
+Independent implementers should be able to reconstruct the same
+choices from this page and the spec.
 
 * Version 1 to version 2 feature matrix
 
@@ -58,7 +58,7 @@ and detectable by new readers (starts with ={=).
    3-tuples in the metadata line would work but makes per-atom access
    expensive and splits constraint info across two locations.
 3. *Separate constraint section*: a "Constraints of Component" section
-   adds complexity without benefit -- the constraint is a property of
+   adds complexity without benefit: the constraint is a property of
    the atom, not a separate dataset.
 
 ** Decision
@@ -74,7 +74,7 @@ bitmask value as fixed, which is a safe degradation.
 
 ** Alternatives considered
 
-1. *Fixed order*: coordinates, then velocities, then forces -- always
+1. *Fixed order*: coordinates, then velocities, then forces, always
    in that order, detected by blank separators. Simple but rigid: new
    section types require all implementations to update their order.
 2. *Tagged sections*: each section starts with a line like
@@ -87,8 +87,8 @@ bitmask value as fixed, which is a safe degradation.
 The =sections= key in the JSON metadata declares which sections exist
 and their order. The parser reads exactly those sections. Benefits:
 
-- New section types require no format-level changes -- just add a
-  string to the array.
+- New section types require no format-level changes: add a string
+  to the array.
 - Section order is explicit, not implicit.
 - Legacy files without =sections= fall back to blank-separator
   velocity detection (backward compatible).
@@ -113,14 +113,14 @@ v2 producers a strict interoperability contract.
 
 ** Decision
 
-Most potentials (EMT, EAM, DFT) produce a total energy, not per-atom
-decomposition. Storing per-frame energy in the JSON metadata (=energy=
-key) is sufficient for the primary use case. Per-atom energies can be
-added as a future section type if ML potential adoption demands it.
+Most potentials (EMT, EAM, DFT) produce a total energy, not a local
+decomposition. The per-frame =energy= metadata key covers that case.
+When a potential does supply per-atom contributions, writers emit the
+optional =energies= section; the two coexist.
 
-The =potential= metadata key provides structured provenance:
-={"type":"EMT","params":{"cutoff":6.0}}=. This makes energy and force
-values interpretable without external context.
+The =potential= metadata key records provenance
+(={"type":"EMT","params":{"cutoff":6.0}}=) so energy and force values
+stay interpretable without a sidecar README.
 
 * Why gzip (not zstd, lz4, or bzip2)
 
@@ -156,8 +156,9 @@ so consumers never see a corrupt parse on a zstd file.
 
 A v1 reader will:
 - Parse line 2 as a comment string (harmless).
-- Parse column 4 values: 0 and 7 work (free and fixed). Values 2-6
-  are treated as "fixed" by any =!= 0= check. Value 1 still works.
+- Parse column 4 as a boolean: any nonzero value is "fixed". Values
+  0 and 7 match free and all-fixed. Values 1-6 (partial masks on
+  spec 2) over-constrain y/z on a v1 reader.
 - Ignore the =sections= key (no JSON parsing).
 - Stop at the first blank line (velocity section), missing any force
   section that follows.
@@ -194,18 +195,20 @@ sections, no bitmask constraints).
 
 Version 3 keeps the nine-line header and type-grouped coordinates. Writers
 prefer emitting =units= inside the line-2 JSON object so quantities (length,
-energy, force, …) are not under-specified. Readers that implement v3 accept
+energy, force, ...) are not under-specified. Readers that implement v3 accept
 v2 files; strict mode rejects unknown =con_spec_version= values and missing
 v3 =units= when required by the library's write policy.
 
 ** Alternatives considered
 
-1. *Bump the entire grammar* (new extensions, binary framing): rejected—breaks
-   human inspectability and eOn/LODE interoperability that motivated CON.
-2. *Leave units forever optional*: rejected for *new* writes—downstream
-   optimizers and ML tools mis-scale energies and forces silently.
-3. *Encode units only in filenames or READMEs*: rejected—pairing and provenance
-   loss under campaign stores.
+1. *Bump the entire grammar* (new extensions, binary framing): rejected.
+   It breaks human inspectability and the eOn/LODE interoperability
+   that motivated CON.
+2. *Leave units forever optional*: rejected for *new* writes.
+   Downstream optimizers and ML tools mis-scale energies and forces
+   silently.
+3. *Encode units only in filenames or READMEs*: rejected. Campaign
+   stores lose the pairing.
 
 ** Compatibility expectations
 
@@ -224,12 +227,12 @@ without a format major. =charges= / =spins= (scalar, like =energies=) and
 surface. Files use =con_spec_version= 2 or 3; omit the sections when unused.
 Do not invent =con_spec_version: 4= solely for optional physics blocks.
 
-* Follow-ups (not format majors)
+* Gaps the spec still leaves to implementers
 
 ** Conformance corpus keyed to spec clauses
 
 The metadata schema (=schema/con-metadata.schema.json=) machine-checks
-line 2; whole-file conformance still rests on the reference test suite.
+line 2. Whole-file conformance still rests on the reference test suite.
 A published corpus of minimal valid and invalid files, each annotated with
 the normative clause it exercises and the required outcome
 (parse / specific =ParseError= variant), lets an independent implementation
@@ -237,7 +240,7 @@ claim conformance without reading readcon-core source.
 
 ** Vocabulary registry over ad hoc keys
 
-Reserved metadata keys currently live in one table in the spec. A registry
+Reserved metadata keys live in one table in the spec. A registry
 (one file, one key per row: name, type, since-version, producer semantics)
 with an extension-key convention (=x_= prefix) keeps third-party producers
 from colliding on bare names while unrecognized-key preservation stays

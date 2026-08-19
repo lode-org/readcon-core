@@ -1,36 +1,36 @@
 
 # Table of Contents
 
-1.  [About](#orgd6d7168)
-    1.  [Features](#org6d404b0)
-    2.  [Migrate onto CON](#orgd595133)
-    3.  [Install](#org65e1283)
-    4.  [Tutorial](#orgdf221ce)
-    5.  [Design Decisions](#org297db41)
-        1.  [FFI Layer](#org5b8d30e)
-    6.  [Specification](#orgd94c691)
-        1.  [CON format](#org8295504)
-        2.  [convel format](#orgc9210ef)
-    7.  [Capabilities](#org82593f8)
-    8.  [Citation](#org7bc2aad)
-2.  [License](#orgd83f4c1)
+1.  [About](#orgebfa45e)
+    1.  [Features](#orge8fcd79)
+    2.  [Migrate onto CON](#org14b0a24)
+    3.  [Install](#orgec613e1)
+    4.  [Tutorial](#org745ed6c)
+    5.  [Design Decisions](#org66baa52)
+        1.  [FFI Layer](#org4cf6a2a)
+    6.  [Specification](#org55a9f19)
+        1.  [CON format](#org60042df)
+        2.  [convel format](#orgae4b5fb)
+    7.  [Capabilities](#org1bbff09)
+    8.  [Citation](#org7028075)
+2.  [License](#org8b8a84b)
 
 
-<a id="orgd6d7168"></a>
+<a id="orgebfa45e"></a>
 
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
-This stack **puts CON everywhere**: every optimizer, potential driver, analysis
-tool, campaign store, and ML hand-off that needs a durable atomic configuration
-with constraints, forces, and identity.
+Rare-event codes already checkpoint on CON. This library is the spec and
+the hourglass API so the rest of the atomistic stack reads the same file:
+optimizers, potential drivers, analysis tools, campaign stores, and ML
+hand-off.
 
-CON is human-readable and complete on one frame: cell, type-grouped
-coordinates, per-direction fixed masks, column-5 `atom_id`, optional per-atom
-sections (velocities, forces, energies, charges, spins, magmoms), and JSON
-metadata (spec v2–v3, [docs/orgmode/spec.org](docs/orgmode/spec.org)).
-That payload is why saddle, dimer, and NEB codes already work on CON; the
-library exists so the rest of the atomistic stack adopts the same file.
+One frame is complete: cell, type-grouped coordinates, per-direction
+fixed masks, column-5 `atom_id`, optional per-atom sections (velocities,
+forces, energies, charges, spins, magmoms), and JSON metadata (spec
+v2-v3, [docs/orgmode/spec.org](docs/orgmode/spec.org)).
+Saddle, dimer, and NEB codes already depend on that payload.
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -40,13 +40,12 @@ library exists so the rest of the atomistic stack adopts the same file.
 
 <col  class="org-left" />
 </colgroup>
-<thead>
-<tr>
-<th scope="col" class="org-left">Layer</th>
-<th scope="col" class="org-left">Role in spreading CON</th>
-</tr>
-</thead>
 <tbody>
+<tr>
+<td class="org-left">Layer</td>
+<td class="org-left">Role</td>
+</tr>
+
 <tr>
 <td class="org-left">Spec + hot path</td>
 <td class="org-left">Spec v3 parse/write, <code>validate</code>, units, <code>sections</code>, SoA, Cachegrind CI</td>
@@ -87,7 +86,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org6d404b0"></a>
+<a id="orge8fcd79"></a>
 
 ## Features
 
@@ -105,7 +104,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="orgd595133"></a>
+<a id="org14b0a24"></a>
 
 ## Migrate onto CON
 
@@ -118,7 +117,7 @@ hand-rolling XYZ and a private atoms object.
 -   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 -   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/) · [docs.rs](https://docs.rs/readcon-db))
 -   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
--   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/` — [benchmarks.org](docs/orgmode/benchmarks.org)
+-   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/`. [benchmarks.org](docs/orgmode/benchmarks.org)
 
     # foreign → CON (needs --features chemfiles)
     cargo run --release --features chemfiles -- convert structure.xyz structure.con
@@ -132,7 +131,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="org65e1283"></a>
+<a id="orgec613e1"></a>
 
 ## Install
 
@@ -208,24 +207,24 @@ The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a main
 Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
-<a id="orgdf221ce"></a>
+<a id="org745ed6c"></a>
 
 ## Tutorial
 
-One Good Tutorial (Diátaxis): install, read a multi-frame fixture, inspect
-`atom_id`, write a round-trip, build a frame with energy. Full steps:
+Install, read a multi-frame fixture, inspect `atom_id`, write a
+round-trip, build a frame with energy. Full steps:
 [docs/orgmode/tutorial.org](docs/orgmode/tutorial.org) (or the published HTML `tutorial` page).
 
 Short Python path from the repository root:
 
     import readcon
-
+    
     for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
         print(frame.cell, len(frame), frame.energy)
-
+    
     frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
     readcon.write_con("out.con", frames)
-
+    
     atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
     frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
     frame.set_energy(-42.5)
@@ -239,7 +238,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org297db41"></a>
+<a id="org66baa52"></a>
 
 ## Design Decisions
 
@@ -247,7 +246,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** shipped C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
 
 
-<a id="org5b8d30e"></a>
+<a id="org4cf6a2a"></a>
 
 ### FFI Layer
 
@@ -261,14 +260,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="orgd94c691"></a>
+<a id="org55a9f19"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org8295504"></a>
+<a id="org60042df"></a>
 
 ### CON format
 
@@ -279,7 +278,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgc9210ef"></a>
+<a id="orgae4b5fb"></a>
 
 ### convel format
 
@@ -289,7 +288,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org82593f8"></a>
+<a id="org1bbff09"></a>
 
 ## Capabilities
 
@@ -320,7 +319,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 <tr>
 <td class="org-left">Spec</td>
-<td class="org-left">v2–v3, <code>validate=true</code>, declared sections (including optional physics blocks above), units (v3)</td>
+<td class="org-left">v2-v3, <code>validate=true</code>, declared sections (including optional physics blocks above), units (v3)</td>
 </tr>
 
 <tr>
@@ -348,15 +347,16 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org7bc2aad"></a>
+<a id="org7028075"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). The Zenodo DOI tracks the latest release.
 
 
-<a id="orgd83f4c1"></a>
+<a id="org8b8a84b"></a>
 
 # License
 
 MIT.
+

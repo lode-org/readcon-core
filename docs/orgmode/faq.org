@@ -4,32 +4,33 @@
 #+begin_export rst
 .. note::
 
-   Diátaxis *explanation* (understanding-oriented Q&A). Learning path:
+   Explanation (why the format looks like this). Learning path:
    :doc:`tutorial`. Task recipes: :doc:`howto`.
 #+end_export
 
 * What CON is for
 
-CON is the atomic configuration format this stack is pushing into everything
-that needs a durable structure on disk: optimizers, potential drivers,
-analysis, campaign stores, and ML hand-off. One frame keeps cell, constraints,
-=atom_id=, optional per-atom sections, and JSON metadata so tools stop inventing
-private dumps.
+CON stores one atomic configuration that rare-event codes already
+depend on. A frame keeps the cell, type-grouped coordinates, a
+per-direction constraint mask, a pre-group =atom_id=, optional
+per-atom sections, and line-2 JSON. Tools that invent a private dump
+lose the mask or the identity on the first rewrite.
 
 | On disk | Role |
 |---------+------|
 | Cell + angles | Periodic box |
 | Type-grouped coordinates | Stable =head=-able layout |
-| Column 4 fixed mask | Per-direction constraints (bitmask 0–7) |
+| Column 4 fixed mask | Per-direction constraints (bitmask 0-7) |
 | Column 5 =atom_id= | Pre-group index for NEB / dimer / reference matching |
 | Optional sections | Velocities, forces, energies, charges, spins, magmoms (v2/v3 =sections=) |
 | Line-2 JSON | =con_spec_version=, =energy=, =neb_bead=, =units=, … |
 
-Saddle, dimer, and NEB pipelines already depend on that payload. =readcon-core=
-is how CON spreads: formalized spec v2–v3, hourglass =rkr_*= ABI in every
-major language, chemfiles *into* CON, DLPack / metatensor *out* of CON,
+Saddle, dimer, and NEB pipelines already depend on that payload.
+=readcon-core= is the spec v2-v3 reader/writer and the hourglass
+=rkr_*= ABI in each language. Chemfiles converts *into* CON; DLPack
+and metatensor export *out* of it.
 [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
-+ =readcon-db= for corpora that stay CON text. Spec:
+and =readcon-db= index corpora that stay CON text. Spec:
 [[file:spec.org][spec.org]]. Design history: [[file:evolution.org][evolution.org]].
 
 * Is frame topology (=bonds=) required?
@@ -52,7 +53,7 @@ evaluator.
 The ~con~ format has no residue table, stores pair =bonds= only, and keeps a
 thin optional property subset after foreign-format import. So =resname=, most
 external property maps, impropers, and geometry-threshold minidialects are not
-on the selection surface—there is simply no data for them. Detail:
+on the selection surface: there is simply no data for them. Detail:
 =chemfiles-explain.org= (*What selection cannot see on CON*).
 
 Foreign formats (XYZ, PDB, …) enter through an *optional* conversion feature
@@ -283,9 +284,9 @@ lists include/lib paths for =libmetatensor=.
 
 * What is the stack for?
 
-Putting CON into every language and tool path that touches atomic structures —
-including a single code that would otherwise hand-roll XYZ and its own atoms
-type. Migration guide: [[file:migrate.org][migrate.org]] (=readcon-core convert=,
+One on-disk checkpoint and one =rkr_*= ABI, instead of each code
+hand-rolling XYZ and its own atoms type. Migration guide:
+[[file:migrate.org][migrate.org]] (=readcon-core convert=,
 =readcon.convert_to_con=).
 
 | Component | Job |
@@ -332,8 +333,9 @@ In this stack: *CON text* remains the structure contract; =readcon-db= is the
 campaign store on top of it (LMDB indexes for energy / formula / section
 presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 (optionally gzip/zstd) and =iter_con= / =forward= cover trajectory-style loads
-in =readcon-core= itself. That is the product path for corpora and screening —
-not a recommendation to abandon CON for a different structure dialect.
+in =readcon-core= itself. Large corpora stay CON text; =readcon-db=
+indexes them. Do not switch the on-disk structure to another dialect
+for screening.
 
 Install: =cargo add readcon-db= / =pip install readcon-db=.
 Package docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
