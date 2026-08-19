@@ -1,0 +1,149 @@
+name: C ABI prefix tarball
+
+# cargo-dist 0.28 does not emit a cargo-c prefix. package-libraries =
+# ["cdylib"] (since dist 0.20) only places libreadcon_core next to the
+# CLI binary; it does not write include/ or lib/pkgconfig/readcon-core.pc.
+# This sibling workflow attaches the cargo-c prefix after the GitHub
+# Release exists (same split as cxx_tarball.yml). cbindgen is not
+# installed and not invoked.
+#
+# Windows chemfiles is OFF. The Windows row is lean. Windows chemfiles
+# uses the official prebuilt libchemfiles (python_wheels.yml chemfiles /
+# windows-2022) and is not a C prefix; chemfiles-from-sources is not
+# used there (vendored zlib/CMake).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach C ABI tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_C_VERSION: "0.10.24"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clib-tarball:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-manylinux
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+            # Lean C prefix. chemfiles is not linked.
+            chemfiles: "off"
+          - name: macos-aarch64
+            os: macos-14
+            target: aarch64-apple-darwin
+            manylinux: ""
+            chemfiles: "off"
+          - name: windows-x86_64-lean
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            manylinux: ""
+            # Windows chemfiles is not in this tarball.
+            chemfiles: "off"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        if: matrix.manylinux == ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-c (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          curl -fsSL -o /tmp/cargo-c.zip \
+            "https://github.com/lu-zero/cargo-c/releases/download/v${CARGO_C_VERSION}/cargo-c-macos.zip"
+          mkdir -p "$HOME/.local/bin"
+          unzip -o /tmp/cargo-c.zip -d "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install cargo-c (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL -o /tmp/cargo-c.zip \
+            "https://github.com/lu-zero/cargo-c/releases/download/v${CARGO_C_VERSION}/cargo-c-windows-msvc.zip"
+          mkdir -p "$HOME/.local/bin"
+          unzip -o /tmp/cargo-c.zip -d "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Assemble cargo-c prefix (native)
+        if: matrix.manylinux == ''
+        shell: bash
+        run: |
+          mkdir -p dist-clib
+          bash scripts/package-clib.sh dist-clib --target "${{ matrix.target }}"
+          ls -lh dist-clib
+
+      - name: Assemble cargo-c prefix (manylinux_2_28)
+        if: matrix.manylinux != ''
+        shell: bash
+        run: |
+          mkdir -p dist-clib
+          docker run --rm \
+            -e CARGO_C_VERSION \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -w /src \
+            "quay.io/pypa/manylinux_${{ matrix.manylinux }}_x86_64" \
+            bash -lc '
+              set -euo pipefail
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-toolchain stable
+              # shellcheck source=/dev/null
+              source "$HOME/.cargo/env"
+              rustup target add "${{ matrix.target }}"
+              curl -fsSL -o /tmp/cargo-c.tgz \
+                "https://github.com/lu-zero/cargo-c/releases/download/v${CARGO_C_VERSION}/cargo-c-x86_64-unknown-linux-musl.tar.gz"
+              tar -C /usr/local/bin -xzf /tmp/cargo-c.tgz
+              export RUSTFLAGS="-C link-arg=-fuse-ld=bfd"
+              bash scripts/package-clib.sh /src/dist-clib --target "${{ matrix.target }}"
+            '
+          ls -lh dist-clib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.target }}
+          path: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          if-no-files-found: error
+
+  attach:
+    name: Attach C ABI tarballs to GitHub Release
+    needs: clib-tarball
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clib-*
+          merge-multiple: true
+          path: dist-clib
+
+      - name: Upload tarballs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            C ABI prefix tarballs: `readcon-core-clib-$VERSION-$target.tar.gz` (headers + `libreadcon_core` + `lib/pkgconfig/readcon-core.pc`). cargo-dist 0.28 CLI archives do not carry this prefix. cbindgen is not required. Linux is manylinux_2_28. Windows is lean (chemfiles OFF; Windows chemfiles uses official prebuilt libchemfiles and is not this tarball).

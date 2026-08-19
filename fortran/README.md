@@ -15,6 +15,29 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
 
+## System library (GitHub Release prefix)
+
+`fpm.toml` already has `link = ["readcon_core"]`. Unpack the cargo-c
+prefix tarball (`readcon-core-clib-$VERSION-$target.tar.gz` on the
+GitHub Release; not a cargo-dist CLI archive) and point pkg-config at
+it:
+
+```bash
+VER=0.14.7
+TRIPLE=x86_64-unknown-linux-gnu
+curl -fsSL -O \
+  "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TRIPLE}.tar.gz"
+mkdir -p "$HOME/.local/readcon-core"
+tar -C "$HOME/.local/readcon-core" --strip-components=1 \
+  -xzf "readcon-core-clib-${VER}-${TRIPLE}.tar.gz"
+export PKG_CONFIG_PATH="$HOME/.local/readcon-core/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/.local/readcon-core/lib:${LD_LIBRARY_PATH:-}"
+pkg-config --cflags --libs readcon-core
+cd fortran/ReadCon && fpm test
+```
+
+Windows prefix tarball is lean (chemfiles OFF).
+
 ## Test
 
 ```bash

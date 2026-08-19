@@ -1,18 +1,38 @@
 const Libdl = Base.Libc.Libdl
 
+function _prefix_lib_candidates(prefix::AbstractString)
+    return [
+        joinpath(prefix, "lib", "libreadcon_core.so"),
+        joinpath(prefix, "lib64", "libreadcon_core.so"),
+        joinpath(prefix, "lib", "libreadcon_core.dylib"),
+        joinpath(prefix, "bin", "readcon_core.dll"),
+        joinpath(prefix, "lib", "readcon_core.dll"),
+    ]
+end
+
 """
     _lib_handle()
 
-Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Return a path to the readcon-core shared library.
+
+Search order:
+1. `READCON_LIB_PATH` or `READCON_CORE_LIB` (exact file)
+2. `READCON_CORE_PREFIX` (cargo-c / Release clib tarball prefix)
+3. in-tree `target/{release,debug}/`
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
+    for key in ("READCON_LIB_PATH", "READCON_CORE_LIB")
+        lib_env = get(ENV, key, "")
+        if !isempty(lib_env) && isfile(lib_env)
+            return lib_env
+        end
     end
-    # Fall back to looking relative to this package
+    prefix = get(ENV, "READCON_CORE_PREFIX", "")
+    if !isempty(prefix)
+        for candidate in _prefix_lib_candidates(prefix)
+            isfile(candidate) && return candidate
+        end
+    end
     pkg_dir = dirname(@__DIR__)
     for candidate in [
         joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
@@ -24,7 +44,7 @@ function _lib_handle()
             return candidate
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error("Cannot find libreadcon_core. Set READCON_CORE_PREFIX, READCON_LIB_PATH, or READCON_CORE_LIB, or build with cargo build --release.")
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

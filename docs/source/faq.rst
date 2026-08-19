@@ -405,6 +405,16 @@ Install: ``cargo add readcon-db`` / ``pip install readcon-db``.
 Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
 Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
 
+Is Windows chemfiles in the C ABI tarball?
+------------------------------------------
+
+No. The GitHub Release C prefix
+(``readcon-core-clib-*-x86_64-pc-windows-msvc.tar.gz``) is lean:
+chemfiles is OFF. Windows chemfiles-linked builds use the official
+prebuilt libchemfiles (see ``python_wheels.yml`` chemfiles /
+windows-2022). ``chemfiles-from-sources`` is not used there (vendored
+zlib/CMake). cargo-dist 0.28 CLI archives do not carry this prefix.
+
 How do XYZ, PDB, GRO, and chemfiles fit in?
 -------------------------------------------
 

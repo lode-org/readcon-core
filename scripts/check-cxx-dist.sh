@@ -43,7 +43,12 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
+[[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
+[[ -f .github/workflows/c_lib_tarball.yml ]] || die "missing .github/workflows/c_lib_tarball.yml"
 [[ -f scripts/meson_cargo_build.py ]] || die "missing scripts/meson_cargo_build.py"
+if grep -qE '^package-libraries' dist-workspace.toml; then
+    die "dist-workspace.toml must not enable package-libraries (not a cargo-c prefix)"
+fi
 
 # CMake version is not hardcoded to a stale release
 if grep -nE 'project\(readcon-core VERSION 0\.13' CMakeLists.txt; then

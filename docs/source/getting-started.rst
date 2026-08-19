@@ -90,7 +90,9 @@ Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
 after a prefix install. The cxx tarball on the GitHub Release is
-``readcon-core-cxx-$VERSION.tar.gz``.
+``readcon-core-cxx-$VERSION.tar.gz`` (source). The prebuilt C prefix
+is ``readcon-core-clib-$VERSION-$target.tar.gz`` (not a cargo-dist
+CLI archive).
 
 .. code:: cmake
 
@@ -127,6 +129,27 @@ Fortran smoke from a checkout (after a release build of the cdylib):
 
     cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
       --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+Prebuilt C prefix (headers + ``libreadcon_core`` + pkg-config; no
+cbindgen, no cargo). Linux is manylinux_2_28. Windows is lean:
+chemfiles is not in this tarball.
+
+.. code:: shell
+
+    VER=0.14.7
+    TRIPLE=x86_64-unknown-linux-gnu   # or aarch64-apple-darwin
+    curl -fsSL -O \
+      https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TRIPLE}.tar.gz
+    mkdir -p "$HOME/.local/readcon-core"
+    tar -C "$HOME/.local/readcon-core" --strip-components=1 \
+      -xzf readcon-core-clib-${VER}-${TRIPLE}.tar.gz
+    export PKG_CONFIG_PATH="$HOME/.local/readcon-core/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    export READCON_CORE_PREFIX="$HOME/.local/readcon-core"
+    pkg-config --cflags --libs readcon-core
+
+Julia: set ``READCON_CORE_PREFIX`` or ``READCON_LIB_PATH`` /
+``READCON_CORE_LIB`` to the shared library. Fortran fpm: ``PKG_CONFIG_PATH``
+as above; ``fpm.toml`` already has ``link = ["readcon_core"]``.
 
 Smoke test
 ----------

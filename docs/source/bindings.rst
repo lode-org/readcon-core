@@ -383,13 +383,19 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Search order: ``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` (exact file),
+then ``READCON_CORE_PREFIX`` (unpacked
+``readcon-core-clib-$VERSION-$target.tar.gz`` cargo-c prefix on the
+GitHub Release), then in-tree ``target/release``.
 
 .. code:: shell
 
+    export READCON_CORE_PREFIX=$HOME/.local/readcon-core
+    # or:
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
+
+Windows C prefix tarball is lean (chemfiles OFF).
 
 Usage
 ~~~~~
