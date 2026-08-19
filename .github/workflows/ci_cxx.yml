@@ -27,7 +27,9 @@ jobs:
           python3 -m pip install meson
 
       - name: Structural gate (no cbindgen required)
-        run: bash scripts/check-cxx-dist.sh
+        run: |
+          bash scripts/check-cxx-dist.sh
+          bash scripts/check-clib-dist.sh
 
       - name: Note cbindgen is unused
         run: |

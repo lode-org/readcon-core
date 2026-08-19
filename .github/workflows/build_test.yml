@@ -39,6 +39,9 @@ jobs:
       - name: C/C++ distribution gate
         run: bash scripts/check-cxx-dist.sh
 
+      - name: C ABI tarball gate (no cbindgen)
+        run: bash scripts/check-clib-dist.sh
+
       - name: Run Rust tests
         run: cargo test
 

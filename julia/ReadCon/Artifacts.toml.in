@@ -1,0 +1,26 @@
+# Template for a JuliaBinaryWrappers / ArtifactUtils entry that points
+# at the prebuilt C ABI tarball on the GitHub Release.
+#
+# After `scripts/package-clib.sh dist-clib --target <triple>`:
+#   url  = .../readcon-core-clib-@VERSION@-<triple>.tar.gz
+#   sha256 from the sibling .sha256 file
+#
+# The wrapper does not require this file. Search order:
+#   READCON_CORE_LIB, READCON_LIB_PATH, READCON_CORE_PREFIX,
+#   then in-tree target/{release,debug}. cbindgen is not required.
+#
+# [libreadcon_core]
+# git-tree-sha1 = "<filled by ArtifactUtils / BinaryBuilder>"
+# lazy = true
+#
+#     [[libreadcon_core.download]]
+#     url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-unknown-linux-gnu.tar.gz"
+#     sha256 = "@SHA256_x86_64_unknown_linux_gnu@"
+#
+#     [[libreadcon_core.download]]
+#     url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-aarch64-apple-darwin.tar.gz"
+#     sha256 = "@SHA256_aarch64_apple_darwin@"
+#
+#     [[libreadcon_core.download]]
+#     url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-pc-windows-msvc.tar.gz"
+#     sha256 = "@SHA256_x86_64_pc_windows_msvc@"

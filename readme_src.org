@@ -84,8 +84,9 @@ How-to: [[file:docs/orgmode/migrate.org][docs/orgmode/migrate.org]]. Chemfiles p
 | C / C++ CMake | =FetchContent= / =find_package(readcon-core)= (cxx tarball) | headers + =libreadcon_core= + =readcon-core.pc= |
 | C / C++ Meson | =dependency('readcon-core')= (wrapdb / wrap-file) | same |
 | C / C++ cargo-c | =cargo cinstall --release --prefix /usr/local= | same |
+| C ABI tarball | =readcon-core-clib-$VERSION-$target.tar.gz= on the GitHub Release | same; no cbindgen; Julia/Fortran set =READCON_CORE_PREFIX= / =pkg-config= |
 
-The C/C++ headers are *shipped* (=include/readcon-core.h=). cbindgen is a maintainer tool, not a consumer dependency. C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=) compiler. FetchContent URL: =readcon-core-cxx-$VERSION.tar.gz= on the GitHub Release.
+The C/C++ headers are *shipped* (=include/readcon-core.h=). cbindgen is a maintainer tool, not a consumer dependency. C99 (=readcon-core.h=) or C++17 (=readcon-core.hpp=) compiler. FetchContent URL: =readcon-core-cxx-$VERSION.tar.gz= on the GitHub Release. Prebuilt C ABI: =readcon-core-clib-$VERSION-$target.tar.gz=. Windows chemfiles uses the official prebuilt libchemfiles and =advapi32=, not =chemfiles-from-sources=.
 Full matrix: [[file:docs/orgmode/getting-started.org][getting-started]].
 
 ** Tutorial

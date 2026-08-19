@@ -1,30 +1,59 @@
 const Libdl = Base.Libc.Libdl
 
 """
+    _lib_sonames()
+
+Platform shared-library names for the C ABI. Windows ships
+`readcon_core.dll` (cargo-c / cdylib), not `libreadcon_core.dll`.
+"""
+function _lib_sonames()
+    if Sys.iswindows()
+        return ("readcon_core.dll", "libreadcon_core.dll")
+    elseif Sys.isapple()
+        return ("libreadcon_core.dylib",)
+    else
+        return ("libreadcon_core.so",)
+    end
+end
+
+"""
     _lib_handle()
 
-Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Return a path to `libreadcon_core`. Search order:
+
+1. `READCON_CORE_LIB` (file)
+2. `READCON_LIB_PATH` (file; same meaning)
+3. `READCON_CORE_PREFIX` (`lib/` or `bin/` of an unpacked clib tarball)
+4. in-tree `target/{release,debug}`
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
-    end
-    # Fall back to looking relative to this package
-    pkg_dir = dirname(@__DIR__)
-    for candidate in [
-        joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
-        joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.dylib"),
-        joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.so"),
-        joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.dylib"),
-    ]
-        if isfile(candidate)
-            return candidate
+    for key in ("READCON_CORE_LIB", "READCON_LIB_PATH")
+        lib_env = get(ENV, key, "")
+        if !isempty(lib_env) && isfile(lib_env)
+            return lib_env
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    prefix = get(ENV, "READCON_CORE_PREFIX", "")
+    if !isempty(prefix)
+        for name in _lib_sonames()
+            for sub in ("lib", "bin")
+                candidate = joinpath(prefix, sub, name)
+                if isfile(candidate)
+                    return candidate
+                end
+            end
+        end
+    end
+    pkg_dir = dirname(@__DIR__)
+    for profile in ("release", "debug")
+        for name in _lib_sonames()
+            candidate = joinpath(pkg_dir, "..", "..", "target", profile, name)
+            if isfile(candidate)
+                return candidate
+            end
+        end
+    end
+    error("Cannot find libreadcon_core. Set READCON_CORE_LIB / READCON_LIB_PATH / READCON_CORE_PREFIX or unpack the clib tarball.")
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

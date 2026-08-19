@@ -1,6 +1,25 @@
 # Fortran `ReadCon` (fpm)
 
 Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed with [fpm](https://fpm.fortran-lang.org/).
+cbindgen is not required. Link the prebuilt C ABI tarball
+(`readcon-core-clib-$VERSION-$target.tar.gz` on the GitHub Release) or a
+prefix that provides `libreadcon_core` and `readcon-core.pc`.
+
+```bash
+tar -xzf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+prefix="$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu"
+export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LIBRARY_PATH="$prefix/lib:${LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$prefix/lib:${LD_LIBRARY_PATH:-}"
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core)" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+On Windows the archive ships `bin/readcon_core.dll` and
+`lib/pkgconfig/readcon-core.pc`. Chemfiles-enabled Windows libraries use
+the official prebuilt libchemfiles and `advapi32`; do **not** pass
+`chemfiles-from-sources` (vendored zlib/CMake).
 
 ## Types
 

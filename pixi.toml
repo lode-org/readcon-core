@@ -15,7 +15,9 @@ build-rpc = "cargo build --release --features rpc"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen (maintainers)" }
 check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Verify shipped C header matches what cbindgen would produce" }
 check-cxx-dist = { cmd = "scripts/check-cxx-dist.sh", description = "Gate: CMake/Meson/pkg-config never require cbindgen" }
+check-clib-dist = { cmd = "scripts/check-clib-dist.sh", description = "Gate: unpack clib tarball (headers, lib, pkg-config; no cbindgen)" }
 package-cxx = { cmd = "scripts/package-cxx.sh dist-cxx", description = "Assemble readcon-core-cxx-$VERSION.tar.gz" }
+package-clib = { cmd = "scripts/package-clib.sh dist-clib", description = "Assemble readcon-core-clib-$VERSION-$target.tar.gz" }
 prek = { cmd = "prek run -a", description = "Run prek hooks on all files" }
 prek-install = { cmd = "prek install", description = "Install prek git hooks in this checkout" }
 

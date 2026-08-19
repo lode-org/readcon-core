@@ -81,6 +81,9 @@ pixi r -e docs linkcheck
 echo "==> C/C++ distribution gate (no cbindgen required)"
 scripts/check-cxx-dist.sh
 
+echo "==> C ABI tarball gate (no cbindgen required)"
+scripts/check-clib-dist.sh
+
 echo "==> cbindgen header check (maintainer tool; optional)"
 if command -v cbindgen >/dev/null 2>&1; then
   scripts/regen-capi-headers.sh
@@ -99,6 +102,7 @@ echo "  # open PR so .github/workflows/release.yml runs dist plan"
 echo "  # after merge:"
 echo "  git tag -s v${VER} -m \"v${VER}\""
 echo "  git push origin v${VER}"
-echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release + cxx_tarball.yml"
+echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release + cxx_tarball.yml + c_lib_tarball.yml"
 echo "  # After the tag: scripts/package-cxx.sh dist/ --vendor"
 echo "  # Attach readcon-core-cxx-${VER}.tar.gz to the GitHub Release (cxx_tarball.yml)"
+echo "  # Attach readcon-core-clib-${VER}-\$target.tar.gz (c_lib_tarball.yml; no cbindgen)"

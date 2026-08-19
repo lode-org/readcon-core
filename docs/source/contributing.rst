@@ -216,6 +216,8 @@ Workflows
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
     | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release      | Attach slim + vendor C/C++ source tarballs           |
     +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    | C ABI tarball             | ``c_lib_tarball.yml``      | GitHub Release      | Attach prebuilt C ABI tarballs (no cbindgen)         |
+    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -256,7 +258,7 @@ Mental model (new contributor)
 
     scripts/release-prep.sh X.Y.Z
           │  prek, pixi docbld + lychee, version bump, cog CHANGELOG,
-          │  cxx-dist gate; cbindgen optional
+          │  cxx-dist + clib-dist gates; cbindgen optional
           ▼
     commit: maint: bump to vX.Y.Z   ──►  open Pull Request to main
           │                                    │
@@ -269,7 +271,8 @@ Mental model (new contributor)
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
           ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-          └─► workflow "cxx source tarball": after the GitHub Release exists
+          ├─► workflow "cxx source tarball": after the GitHub Release exists
+          └─► workflow "C ABI tarball": prebuilt libreadcon_core (no cbindgen)
 
 .. table::
 
@@ -287,6 +290,8 @@ Mental model (new contributor)
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
+    +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
+    | Tag publish | Prebuilt C ABI tarballs                | ``.github/workflows/c_lib_tarball.yml`` (after the Release exists)                                  |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 cargo-dist release-PR path
@@ -587,7 +592,7 @@ Updating the C header
 ~~~~~~~~~~~~~~~~~~~~~
 
 The C header ``include/readcon-core.h`` is **shipped pre-generated**.
-CMake, Meson, cargo-c, and the cxx tarball **never** run cbindgen.
+CMake, Meson, cargo-c, the cxx tarball, and the clib tarball **never** run cbindgen.
 After modifying ``src/ffi.rs``, maintainers regenerate and commit the header:
 
 .. code:: shell

@@ -383,13 +383,23 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Set ``READCON_CORE_LIB`` or ``READCON_LIB_PATH`` to the shared library, or
+``READCON_CORE_PREFIX`` to an unpacked ``readcon-core-clib-$VERSION-$target.tar.gz``
+from the GitHub Release. cbindgen is **not** required. A checkout
+``cargo build --release`` is still found automatically.
 
 .. code:: shell
 
-    export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    # Prebuilt C ABI tarball (preferred non-Python path)
+    tar -xzf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+    export READCON_CORE_PREFIX=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu
+    # or a single file:
+    export READCON_CORE_LIB=/path/to/libreadcon_core.so
+    # Windows: READCON_CORE_LIB=.../bin/readcon_core.dll
+
+``julia/ReadCon/Artifacts.toml.in`` is the JuliaBinaryWrappers template for
+those URLs. Windows chemfiles-enabled libraries use the official prebuilt
+libchemfiles and ``advapi32``, not ``chemfiles-from-sources``.
 
 Usage
 ~~~~~
@@ -843,7 +853,10 @@ Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
-(issue #6). Link ``libreadcon_core`` (Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+(issue #6). Link ``libreadcon_core`` (prebuilt ``readcon-core-clib-$VERSION-$target.tar.gz``,
+Meson wrap, CMake FetchContent / ``find_package``, or ``pkg-config --libs readcon-core``).
+cbindgen is **not** required. Windows chemfiles-enabled libraries use the
+official prebuilt libchemfiles and ``advapi32``, not ``chemfiles-from-sources``.
 
 .. code:: bash
 

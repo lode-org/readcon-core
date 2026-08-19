@@ -1,0 +1,93 @@
+name: C ABI prebuilt tarball
+
+# Attaches per-target readcon-core-clib-$VERSION-$target.tar.gz after
+# cargo-dist publishes the GitHub Release. Headers, libreadcon_core,
+# and readcon-core.pc; cbindgen is not installed and not invoked.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach C ABI tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  clib-tarball:
+    name: clib ${{ matrix.target }}${{ matrix.features && format(' ({0})', matrix.features) || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            features: ""
+          - os: macos-15
+            target: aarch64-apple-darwin
+            features: ""
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: ""
+          # Windows chemfiles: official prebuilt libchemfiles, never
+          # chemfiles-from-sources (vendored zlib/CMake). advapi32
+          # resolves GetUserNameA on the prebuilt import lib.
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            features: chemfiles
+            rustflags: "-C link-arg=advapi32.lib"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Windows chemfiles link advapi32
+        if: runner.os == 'Windows' && matrix.features == 'chemfiles'
+        shell: bash
+        run: echo "RUSTFLAGS=${{ matrix.rustflags }}" >> "$GITHUB_ENV"
+
+      - name: Note cbindgen is unused
+        shell: bash
+        run: |
+          if command -v cbindgen >/dev/null 2>&1; then
+            echo "cbindgen is on PATH but this job must not invoke it"
+          else
+            echo "cbindgen: absent"
+          fi
+
+      - name: Assemble C ABI tarball
+        shell: bash
+        run: |
+          mkdir -p dist-clib
+          extras=()
+          if [[ -n "${{ matrix.features }}" ]]; then
+            extras+=(--features "${{ matrix.features }}")
+          fi
+          bash scripts/package-clib.sh dist-clib --target "${{ matrix.target }}" "${extras[@]}"
+          ls -lh dist-clib
+
+      - name: Unpack-check tarball (no cbindgen)
+        shell: bash
+        run: |
+          bash scripts/check-clib-dist.sh --no-self-test dist-clib/readcon-core-clib-*.tar.gz
+
+      - name: Upload tarballs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            Prebuilt C ABI tarballs: `readcon-core-clib-$VERSION-$target.tar.gz` (headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required. Windows chemfiles uses the official prebuilt libchemfiles and `advapi32`, not `chemfiles-from-sources`.

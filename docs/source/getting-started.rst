@@ -28,9 +28,9 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Campaign store     | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_ |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
+    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`; unpack ``readcon-core-clib-$VERSION-$target.tar.gz`` and set ``READCON_CORE_PREFIX``                                       |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, ``pkg-config readcon-core``, or the clib tarball    | :doc:`bindings`                                                                                                                             |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
@@ -89,8 +89,15 @@ Fortran / C / C++
 Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
-after a prefix install. The cxx tarball on the GitHub Release is
-``readcon-core-cxx-$VERSION.tar.gz``.
+after a prefix install. The cxx *source* tarball on the GitHub Release is
+``readcon-core-cxx-$VERSION.tar.gz``. The prebuilt C ABI tarball is
+``readcon-core-clib-$VERSION-$target.tar.gz`` (headers + ``libreadcon_core``
++ ``readcon-core.pc``). Julia sets ``READCON_CORE_PREFIX`` to the unpacked
+tree; Fortran uses ``pkg-config --libs readcon-core`` against that prefix.
+
+Windows chemfiles-enabled clib archives use the official prebuilt
+libchemfiles and ``advapi32``. They are not built with
+``chemfiles-from-sources``.
 
 .. code:: cmake
 
