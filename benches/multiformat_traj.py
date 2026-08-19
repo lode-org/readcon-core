@@ -180,7 +180,7 @@ def run_one(
 
         row = {
             "fixture": fixture_key,
-            "fixture_path": str(fixture),
+            "fixture_path": _rel(fixture),
             "n_frames": n,
             "n_atoms": natoms,
             "repeats": repeats,
@@ -226,7 +226,7 @@ def run_one(
 
     return {
         "fixture": fixture_key,
-        "fixture_path": str(fixture),
+        "fixture_path": _rel(fixture),
         "ladder": ladder,
         "repeats": repeats,
         "n_atoms": natoms,
