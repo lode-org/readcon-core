@@ -958,7 +958,7 @@ impl ConFrame {
 /// let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
 /// builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
 /// builder.add_atom("H", 1.0, 2.0, 3.0, [false, false, false], 1, 1.008);
-/// let frame = builder.build();
+/// let frame = builder.build().unwrap();
 /// assert_eq!(frame.header.natm_types, 2);
 /// assert_eq!(frame.atom_data.len(), 2);
 /// ```
@@ -1466,10 +1466,10 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
-    /// Updates the mass of an existing atom. Note: changing the mass of the
-    /// only atom of a given type recomputes that type's `masses_per_type`
-    /// entry on `build()`; mixing different masses for the same symbol is
-    /// not supported by the .con format and the last value wins.
+    /// Updates the mass of an existing atom. CON line 9 stores one mass
+    /// per type. [`Self::build`] keeps the first-encountered mass for a
+    /// symbol and returns [`crate::error::ParseError::MassMismatch`] if
+    /// later atoms of that symbol disagree.
     pub fn set_atom_mass(
         &mut self,
         i: usize,
@@ -2010,13 +2010,16 @@ impl ConFrameBuilder {
     /// be remapped with the insertion-to-grouped index map.
     ///
     /// Atoms of the same symbol must share one mass (CON line 9). A
-    /// mismatch beyond [`Self::TYPE_MASS_ABS_TOL`] panics here;
-    /// [`Self::build_with_permutation`] returns the typed
+    /// mismatch beyond [`Self::TYPE_MASS_ABS_TOL`] returns
     /// [`crate::error::ParseError::MassMismatch`].
-    pub fn build(self) -> ConFrame {
-        self.build_with_permutation()
-            .map(|(frame, _perm)| frame)
-            .unwrap_or_else(|e| panic!("{e}"))
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
+    /// share a symbol and their masses differ by more than
+    /// [`Self::TYPE_MASS_ABS_TOL`].
+    pub fn build(self) -> Result<ConFrame, crate::error::ParseError> {
+        self.build_with_permutation().map(|(frame, _perm)| frame)
     }
 
     /// Consumes the builder and produces a `ConFrame` plus the
@@ -2426,7 +2429,7 @@ mod tests {
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 100, 63.546);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 42, 63.546);
         builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 7, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         let idx = frame.build_atom_id_index();
         assert_eq!(idx.get(&100).copied(), Some(0));
         assert_eq!(idx.get(&42).copied(), Some(1));
@@ -2442,7 +2445,7 @@ mod tests {
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
         builder.add_atom("H", 2.0, 3.0, 4.0, [false, false, false], 2, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert_eq!(frame.header.natm_types, 2);
         assert_eq!(frame.header.natms_per_type, vec![2, 1]);
@@ -2458,7 +2461,7 @@ mod tests {
         builder
             .add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546)
             .with_velocity([0.1, 0.2, 0.3]);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert!(frame.has_velocities());
         assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
@@ -2470,7 +2473,7 @@ mod tests {
         builder
             .prebox_header("line1")
             .postbox_header(["line3".to_string(), "line4".to_string()]);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert_eq!(frame.header.prebox_header.user, "line1");
         assert_eq!(frame.header.postbox_header, ["line3", "line4"]);
@@ -2483,7 +2486,7 @@ mod tests {
         builder.add_atom("H", 0.0, 0.0, 0.0, [false, false, false], 0, 1.008);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
         builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 2, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         // H appears first, so it should be first type
         assert_eq!(frame.header.natm_types, 2);
@@ -2547,6 +2550,13 @@ mod tests {
             }
             other => panic!("expected MassMismatch, got {other:?}"),
         }
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 2.014);
+        assert!(matches!(
+            builder.build(),
+            Err(crate::error::ParseError::MassMismatch { .. })
+        ));
     }
 
     #[test]
@@ -2630,7 +2640,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.storage_float32_positions();
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
         let t = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
@@ -2649,7 +2659,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
         b.add_atom("O", 4.0, 5.0, 6.0, [false; 3], 0, 16.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let t = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
             .expect("CUDA H2D export");
@@ -2669,7 +2679,7 @@ mod tests {
     fn frame_positions_as_dlpack_cuda_rejected_without_feature() {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let err = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
             .unwrap_err();
@@ -2694,7 +2704,7 @@ mod tests {
             .with_velocity([1.0, 0.0, 0.0])
             .with_force([0.0, 1.0, 0.0])
             .with_energy(-1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.velocities.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.forces.kind(), FloatStorageKind::Float32);
@@ -2710,7 +2720,7 @@ mod tests {
     fn typed_units_and_conversion_on_built_frame() {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
         // Builder injects default v3 units
         assert_eq!(frame.length_unit(), Some("angstrom"));
@@ -2815,7 +2825,7 @@ mod tests {
             .unwrap();
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
 
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
         assert_eq!(frame.header.frame_index(), Some(5));
         assert_eq!(frame.header.energy(), Some(-42.5));
@@ -2839,7 +2849,7 @@ mod tests {
         builder.set_string_metadata("generator", "eon");
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
 
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         assert_eq!(frame.header.frame_index(), Some(7));
         assert_eq!(frame.header.energy(), Some(-1.25));
         assert_eq!(frame.header.time(), Some(3.5));
@@ -2899,7 +2909,7 @@ mod tests {
         assert_eq!(b.get_atom_force(1).unwrap(), Some([10.0, 0.0, 0.0]));
         assert_eq!(b.get_atom_energy(2).unwrap(), Some(-1.5));
         // Frame should auto-declare all three sections on build.
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let names: Vec<&str> = frame.header.sections.iter().map(|s| s.as_str()).collect();
         assert!(names.contains(&"velocities"));
         assert!(names.contains(&"forces"));
@@ -2932,7 +2942,7 @@ mod tests {
         b.set_atom_fixed(0, [true, false, true]).unwrap();
         b.set_atom_mass(0, 100.0).unwrap();
         b.set_atom_mass(1, 100.0).unwrap();
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
         // type-grouped: index 0 in atom_data is the first "Cu" entry which
         // started life at builder index 0; mass survives via masses_per_type.
@@ -2956,7 +2966,7 @@ mod tests {
         // Restore the test fixture's id 42 so the build round-trip
         // check below still asserts the documented value.
         b.set_atom_id(0, 42).unwrap();
-        let frame = b.build();
+        let frame = b.build().unwrap();
         // Type-grouping reorders atom_data; locate ids via the symbol.
         let cu_ids: Vec<u64> = frame
             .atom_data
@@ -3041,7 +3051,7 @@ mod tests {
         b.set_forces_from_flat(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
             .unwrap();
         b.set_atom_energies_from_flat(&[-1.0, -2.0, -3.0]).unwrap();
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.atom_data.len(), 3);
         assert!(frame.has_forces());
         assert!(frame.has_energies());
@@ -3124,7 +3134,7 @@ mod tests {
         use std::io::Cursor;
         let mut frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         frame.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
-        let mut fr = frame.build();
+        let mut fr = frame.build().unwrap();
         // Strip units to simulate hand-built non-compliant header still claiming v3
         fr.header.metadata.remove(meta::UNITS);
         fr.header.spec_version = 3;
@@ -3153,7 +3163,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
         b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
-        let mut frame = b.build();
+        let mut frame = b.build().unwrap();
         assert!(!frame.has_bonds());
         assert!(frame.bonds().is_empty());
         assert!(!frame.header.metadata.contains_key(meta::BONDS));

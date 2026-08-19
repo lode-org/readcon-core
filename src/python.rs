@@ -970,7 +970,9 @@ impl PyConFrame {
             }
         }
 
-        Ok(builder.build())
+        builder
+            .build()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 

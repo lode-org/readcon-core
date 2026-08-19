@@ -305,7 +305,7 @@ mod tests {
         b.add_atom("O", 0.0, 0.0, 0.0, [false; 3], 0, 16.0);
         b.add_atom("H", 0.96, 0.0, 0.0, [false; 3], 1, 1.0);
         b.add_atom("H", -0.24, 0.93, 0.0, [false; 3], 2, 1.0);
-        b.build()
+        b.build().unwrap()
     }
 
     #[test]
@@ -675,7 +675,7 @@ mod chemfiles_selection_cpp_regression {
         b.add_atom("O", 1.0, 2.0, 3.0, [false; 3], 1, 16.0);
         b.add_atom("O", 2.0, 3.0, 4.0, [false; 3], 2, 16.0);
         b.add_atom("H", 3.0, 4.0, 5.0, [false; 3], 3, 1.0);
-        let mut frame = b.build();
+        let mut frame = b.build().unwrap();
         // After group: data order H(id0), H(id3), O(id1), O(id2) — bonds must use data idx.
         // chemfiles bonds 0-1,1-2,2-3 in id space → data pairs via atom_id lookup
         let id_to = |id: u64| {
@@ -817,7 +817,7 @@ mod chemfiles_selection_cpp_regression {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
         b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         // no topology → bonds: all is empty matches, still pair context
         let multi = evaluate_selection_on_frames("bonds: all", &[frame]).unwrap();
         assert_eq!(multi.frames[0].result.context_size, 2);

@@ -243,7 +243,7 @@ let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
 builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 0, 63.546);
 builder.add_atom("H",  1.0, 2.0, 3.0, false, 2, 1.008);
 builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 1, 63.546);
-let frame = builder.build();
+let frame = builder.build()?;
 // Atoms are now grouped: Cu(id=0), Cu(id=1), H(id=2)
 #+end_src
 

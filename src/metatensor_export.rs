@@ -215,7 +215,7 @@ mod tests {
             .with_velocity([0.0, 1.0, 0.0])
             .with_force([0.0, 0.5, 0.0])
             .with_energy(0.13);
-        builder.build()
+        builder.build().unwrap()
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
     fn velocities_block_is_none_when_data_absent() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder.add_atom("Cu", 0.1, 0.2, 0.3, [false, false, false], 0, 63.546);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         assert!(frame_velocities_block(&frame).unwrap().is_none());
         assert!(frame_forces_block(&frame).unwrap().is_none());
         assert!(frame_energies_block(&frame).unwrap().is_none());

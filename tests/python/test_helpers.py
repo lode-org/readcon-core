@@ -62,3 +62,21 @@ class TestHelperDocstrings:
         assert "sentinel ``X``" in rev
         assert "standard-mass" in fwd
         assert "standard-mass" in rev
+
+
+class TestBuilderMassMismatch:
+    def test_write_raises_on_same_symbol_mass_disagreement(self):
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=[
+                readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, mass=1.008, atom_id=0),
+                readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0, mass=2.014, atom_id=1),
+            ],
+        )
+        try:
+            readcon.write_con_string([frame])
+        except ValueError as exc:
+            assert "inconsistent masses" in str(exc)
+        else:
+            raise AssertionError("expected ValueError on same-symbol mass mismatch")
