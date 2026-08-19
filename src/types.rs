@@ -819,8 +819,7 @@ impl ConFrame {
                 }
             }
             if has_eng {
-                self.atom_energies
-                    .set_f64(i, a.energy.unwrap_or(0.0));
+                self.atom_energies.set_f64(i, a.energy.unwrap_or(0.0));
             }
             if has_chg {
                 self.charges.set_f64(i, a.charge.unwrap_or(0.0));
@@ -944,8 +943,12 @@ impl ConFrame {
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
 ///
-/// Atoms are accumulated and grouped by symbol on `build()` to compute the
-/// header fields (`natm_types`, `natms_per_type`, `masses_per_type`).
+/// Atoms are accumulated and grouped by symbol on [`ConFrameBuilder::build`]
+/// to compute the header fields (`natm_types`, `natms_per_type`,
+/// `masses_per_type`). CON cannot represent an interleaved type layout, so
+/// insertion order is not preserved; [`AtomDatum::atom_id`] is the recovery
+/// path, and [`ConFrameBuilder::build_with_permutation`] returns the
+/// insertion-to-grouped map.
 ///
 /// # Example
 ///
@@ -1095,6 +1098,13 @@ impl Default for ConFrameBuilder {
 }
 
 impl ConFrameBuilder {
+    /// Absolute mass difference allowed between atoms of the same CON type.
+    ///
+    /// CON line 9 stores one mass per type. [`Self::build_with_permutation`]
+    /// rejects a later atom of an already-seen symbol whose mass differs
+    /// from the first of that type by more than this value.
+    pub const TYPE_MASS_ABS_TOL: f64 = 1e-8;
+
     /// Creates a new builder with the given cell dimensions and angles.
     ///
     /// In-memory SoA on [`Self::build`] defaults to float64 unless
@@ -1125,10 +1135,7 @@ impl ConFrameBuilder {
     /// [`Self::build`] **allocates** positions/velocities/forces/energies/masses
     /// in these types (float32 or float64), then fills from builder f64 scratch
     /// buffers. On-disk CON text remains binary64.
-    pub fn storage_dtypes(
-        &mut self,
-        dtypes: crate::storage_dtype::StorageDtypes,
-    ) -> &mut Self {
+    pub fn storage_dtypes(&mut self, dtypes: crate::storage_dtype::StorageDtypes) -> &mut Self {
         dtypes.insert_into(&mut self.metadata);
         self
     }
@@ -1136,8 +1143,8 @@ impl ConFrameBuilder {
     /// Convenience: allocate positions (and other float fields if still default)
     /// as float32 in memory on the next [`Self::build`].
     pub fn storage_float32_positions(&mut self) -> &mut Self {
-        let mut d = crate::storage_dtype::StorageDtypes::from_metadata(&self.metadata)
-            .unwrap_or_default();
+        let mut d =
+            crate::storage_dtype::StorageDtypes::from_metadata(&self.metadata).unwrap_or_default();
         d.positions = crate::storage_dtype::FloatStorageKind::Float32;
         self.storage_dtypes(d)
     }
@@ -1996,9 +2003,39 @@ impl ConFrameBuilder {
 
     /// Consumes the builder and produces a `ConFrame`.
     ///
-    /// Atoms are grouped by symbol (in encounter order) to compute
-    /// `natm_types`, `natms_per_type`, and `masses_per_type`.
+    /// CON groups atoms by type (symbol, first-encounter order) so the
+    /// returned frame's `atom_data` order is not the insertion order.
+    /// `atom_id` (column 5) is the recovery path for the original index.
+    /// Use [`Self::build_with_permutation`] when a parallel array must
+    /// be remapped with the insertion-to-grouped index map.
+    ///
+    /// Atoms of the same symbol must share one mass (CON line 9). A
+    /// mismatch beyond [`Self::TYPE_MASS_ABS_TOL`] panics here;
+    /// [`Self::build_with_permutation`] returns the typed
+    /// [`crate::error::ParseError::MassMismatch`].
     pub fn build(self) -> ConFrame {
+        self.build_with_permutation()
+            .map(|(frame, _perm)| frame)
+            .unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// Consumes the builder and produces a `ConFrame` plus the
+    /// insertion-to-grouped index map.
+    ///
+    /// CON groups atoms by type (symbol, first-encounter order). The
+    /// returned `Vec<usize>` has length `N` (insertion count) and
+    /// `perm[i]` is the index of insertion-`i` in the built
+    /// `frame.atom_data`. Insertion order is not preserved; `atom_id`
+    /// is the on-disk recovery path for the same mapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
+    /// share a symbol and their masses differ by more than
+    /// [`Self::TYPE_MASS_ABS_TOL`]. CON line 9 stores one mass per type.
+    pub fn build_with_permutation(
+        self,
+    ) -> Result<(ConFrame, Vec<usize>), crate::error::ParseError> {
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -2013,6 +2050,15 @@ impl ConFrameBuilder {
             let mass = self.masses[i];
             let idx = match type_order.iter().position(|s| s == symbol) {
                 Some(idx) => {
+                    let first = type_masses[idx];
+                    if (mass - first).abs() > Self::TYPE_MASS_ABS_TOL {
+                        return Err(crate::error::ParseError::MassMismatch {
+                            symbol: symbol.clone(),
+                            first_mass: first,
+                            found_mass: mass,
+                            atom_index: i,
+                        });
+                    }
                     type_counts[idx] += 1;
                     idx
                 }
@@ -2036,9 +2082,11 @@ impl ConFrameBuilder {
         let has_eng = self.has_energies;
 
         let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(n);
+        let mut insertion_to_grouped = vec![0usize; n];
         for (type_idx, indices) in buckets.iter().enumerate() {
             let symbol = &type_symbols[type_idx];
             for &i in indices {
+                insertion_to_grouped[i] = atom_data.len();
                 let pos = self.positions.row(i);
                 let velocity = if has_vel {
                     let r = self.velocities.row(i);
@@ -2150,19 +2198,22 @@ impl ConFrameBuilder {
             sections_declared,
         };
 
-        ConFrame {
-            header,
-            atom_data,
-            positions: pos,
-            velocities: vel,
-            forces: frc,
-            atom_energies: eng,
-            charges: FloatArray1::zeros(dt.energies, 0),
-            spins: FloatArray1::zeros(dt.energies, 0),
-            magmoms: FloatArray2::zeros(dt.forces, 0, 3),
-            masses: masses_arr,
-            atom_ids: ids_arr,
-        }
+        Ok((
+            ConFrame {
+                header,
+                atom_data,
+                positions: pos,
+                velocities: vel,
+                forces: frc,
+                atom_energies: eng,
+                charges: FloatArray1::zeros(dt.energies, 0),
+                spins: FloatArray1::zeros(dt.energies, 0),
+                magmoms: FloatArray2::zeros(dt.forces, 0, 3),
+                masses: masses_arr,
+                atom_ids: ids_arr,
+            },
+            insertion_to_grouped,
+        ))
     }
 }
 
@@ -2444,6 +2495,61 @@ mod tests {
     }
 
     #[test]
+    fn test_build_with_permutation_mixed_cu_h() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        // Insertion: Cu, H, Cu, H. Grouped encounter order: Cu, Cu, H, H.
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 10, 63.546);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 20, 1.008);
+        builder.add_atom("Cu", 2.0, 0.0, 0.0, [false; 3], 30, 63.546);
+        builder.add_atom("H", 3.0, 0.0, 0.0, [false; 3], 40, 1.008);
+        let (frame, perm) = builder.build_with_permutation().unwrap();
+
+        assert_eq!(perm, vec![0, 2, 1, 3]);
+        assert_eq!(
+            frame
+                .atom_data
+                .iter()
+                .map(|a| &*a.symbol)
+                .collect::<Vec<_>>(),
+            vec!["Cu", "Cu", "H", "H"]
+        );
+        assert_eq!(
+            frame
+                .atom_data
+                .iter()
+                .map(|a| a.atom_id)
+                .collect::<Vec<_>>(),
+            vec![10, 30, 20, 40]
+        );
+        for (insertion, &grouped) in perm.iter().enumerate() {
+            let expected_id = [10, 20, 30, 40][insertion];
+            assert_eq!(frame.atom_data[grouped].atom_id, expected_id);
+        }
+    }
+
+    #[test]
+    fn test_build_mass_mismatch_h_vs_d_same_symbol() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 2.014);
+        let err = builder.build_with_permutation().unwrap_err();
+        match err {
+            crate::error::ParseError::MassMismatch {
+                symbol,
+                first_mass,
+                found_mass,
+                atom_index,
+            } => {
+                assert_eq!(symbol, "H");
+                assert!((first_mass - 1.008).abs() < 1e-12);
+                assert!((found_mass - 2.014).abs() < 1e-12);
+                assert_eq!(atom_index, 1);
+            }
+            other => panic!("expected MassMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_metadata_helpers_energy() {
         let mut header = FrameHeader {
             prebox_header: PreboxHeader::default(),
@@ -2594,7 +2700,8 @@ mod tests {
         assert_eq!(frame.forces.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.atom_energies.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.masses.kind(), FloatStorageKind::Float32);
-        assert!(frame.velocities_as_dlpack(dlpk::sys::DLDevice::cpu())
+        assert!(frame
+            .velocities_as_dlpack(dlpk::sys::DLDevice::cpu())
             .unwrap()
             .is_some());
     }
@@ -2824,6 +2931,7 @@ mod tests {
         let mut b = three_atom_builder();
         b.set_atom_fixed(0, [true, false, true]).unwrap();
         b.set_atom_mass(0, 100.0).unwrap();
+        b.set_atom_mass(1, 100.0).unwrap();
         let frame = b.build();
         assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
         // type-grouped: index 0 in atom_data is the first "Cu" entry which
@@ -3026,7 +3134,10 @@ mod tests {
             w.write_frame(&fr).unwrap();
         }
         let s = String::from_utf8(buf.into_inner()).unwrap();
-        assert!(s.contains("\"units\""), "writer must emit units for v3: {s}");
+        assert!(
+            s.contains("\"units\""),
+            "writer must emit units for v3: {s}"
+        );
         assert!(s.contains("angstrom") || s.contains("length"), "{s}");
         // Round-trip parse must succeed as v3
         let parsed = crate::iterators::ConFrameIterator::new(&s)
@@ -3036,7 +3147,6 @@ mod tests {
         assert_eq!(parsed.header.spec_version, 3);
         assert_eq!(parsed.length_unit(), Some("angstrom"));
     }
-
 
     #[test]
     fn bonds_absent_vs_empty_array_are_both_no_topology() {
