@@ -743,8 +743,10 @@ writer.extend({out_frame});
 ** Installation and setup
 
 #+begin_src julia
-# Point to the shared library
-ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
+# Prebuilt cargo-c prefix from the GitHub Release
+ENV["READCON_CORE_PREFIX"] = "/path/to/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu-chemfiles"
+# or pin the file:
+# ENV["READCON_LIB_PATH"] = "/path/to/libreadcon_core.so"
 
 # Or build from source (library auto-discovered)
 using Pkg

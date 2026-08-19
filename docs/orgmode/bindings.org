@@ -337,12 +337,17 @@ frame.set_metadata_json('{"con_spec_version": 2, "energy": -1.0}')
 
 ** Installation
 
-Set =READCON_LIB_PATH= to the shared library path, or build with
-=cargo build --release= and the Julia package will find it
-automatically.
+Set =READCON_LIB_PATH= (or =READCON_CORE_LIB=) to the shared library,
+or =READCON_CORE_PREFIX= to an unpacked cargo-c tarball
+(=readcon-core-clib-$VERSION-$target-$variant.tar.gz= on the GitHub
+Release). A Yggdrasil / JuliaBinaryWrappers Artifact can ship that
+same prefix; until it exists, point the env vars at the unpacked
+tree. =cargo build --release= from a checkout is still auto-discovered.
 
 #+begin_src shell
-export READCON_LIB_PATH=/path/to/libreadcon_core.so
+# Prebuilt prefix from the GitHub Release (chemfiles variant)
+export READCON_CORE_PREFIX=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu-chemfiles
+# or: export READCON_LIB_PATH=/path/to/libreadcon_core.so
 #+end_src
 
 ** Usage
@@ -720,7 +725,18 @@ by another tool.
 ** Fortran (fpm ReadCon, ISO_C_BINDING)
 
 Wrappers in =fortran/ReadCon/src/readcon.f90= over =include/readcon-core.h=
-(issue #6). Link =libreadcon_core= (Meson wrap, CMake FetchContent / =find_package=, or =pkg-config --libs readcon-core=).
+(issue #6). Link =libreadcon_core= (Meson wrap, CMake FetchContent /
+=find_package=, or a prebuilt cargo-c prefix via =pkg-config --libs
+readcon-core=). Unpack =readcon-core-clib-$VERSION-$target-$variant.tar.gz=
+from the GitHub Release, then:
+
+#+begin_src bash
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH
+export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+#+end_src
 
 #+begin_src bash
 # Lean (chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)

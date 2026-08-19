@@ -43,7 +43,23 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
+[[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
 [[ -f scripts/meson_cargo_build.py ]] || die "missing scripts/meson_cargo_build.py"
+grep -q 'manylinux: auto' .github/workflows/c_lib_tarball.yml \
+    || die "c_lib_tarball.yml must keep manylinux: auto (python_wheels.yml policy)"
+grep -q 'fuse-ld=bfd' .github/workflows/c_lib_tarball.yml \
+    || die "c_lib_tarball.yml must keep the BFD linker on Linux"
+if ! awk '
+  /os: windows-2022/ { win=1 }
+  win && /features:/ {
+    if ($0 ~ /features: chemfiles$/) found=1
+    if ($0 ~ /chemfiles-from-sources/) bad=1
+    win=0
+  }
+  END { exit((found && !bad) ? 0 : 1) }
+' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml needs an explicit Windows chemfiles row (prebuilt, not from-sources)"
+fi
 
 # CMake version is not hardcoded to a stale release
 if grep -nE 'project\(readcon-core VERSION 0\.13' CMakeLists.txt; then

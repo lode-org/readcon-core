@@ -178,7 +178,14 @@ CMake (=FetchContent= / =find_package=), Meson (wrap / =pkg.generate=
 =filebase: readcon-core=), and cargo-c (=generation = false=) all
 install that file. None of them run cbindgen. The cxx source tarball
 (=scripts/package-cxx.sh= → =readcon-core-cxx-$VERSION.tar.gz= on the
-GitHub Release) is the FetchContent / wrapdb URL. Maintainers only:
+GitHub Release) is the FetchContent / wrapdb URL. Prebuilt prefixes
+(=scripts/package-clib.sh= → =readcon-core-clib-$VERSION-$target-$variant.tar.gz=)
+are the one-command Julia / Fortran / C install: unpack, set
+=PKG_CONFIG_PATH= or =READCON_CORE_PREFIX=. Workflow
+=.github/workflows/c_lib_tarball.yml= builds those prefixes (manylinux
+=auto= + BFD, same runners as =python_wheels.yml=; Windows chemfiles
+uses the official prebuilt libchemfiles). It is a *separate* workflow
+so a C-lib miss cannot skip PyPI wheels. Maintainers only:
 =scripts/regen-capi-headers.sh=.
 
 The

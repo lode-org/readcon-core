@@ -20,8 +20,8 @@ Pick *one* language. Version pins match this tree (=0.14.7=).
 | Rust CON I/O | =cargo add readcon-core@0.14.7= | [[https://docs.rs/readcon-core][docs.rs]] |
 | Rust + chemfiles | =cargo add readcon-core@0.14.7 --features chemfiles= | same crate |
 | Campaign store | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
-| Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
-| C / C++ / Fortran | CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
+| Julia | unpack =readcon-core-clib-*= + =READCON_CORE_PREFIX=, or this repo | [[file:bindings.org][bindings]] |
+| C / C++ / Fortran | prebuilt =readcon-core-clib-*=, CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
 
 ** Python: CON I/O
 
@@ -59,7 +59,15 @@ cargo add readcon-db
 
 ** Julia
 
-From a checkout of this repository:
+Prebuilt path (no local cargo): unpack the =chemfiles= clib tarball from
+the GitHub Release and point the wrapper at it:
+
+#+begin_src shell
+export READCON_CORE_PREFIX=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu-chemfiles
+julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
+#+end_src
+
+From a checkout of this repository (builds the cdylib yourself):
 
 #+begin_src shell
 julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
@@ -70,10 +78,13 @@ Language API notes: [[file:bindings.org][bindings]].
 ** Fortran / C / C++
 
 Headers in =include/= are shipped. cbindgen is *not* required.
-CMake FetchContent / =find_package(readcon-core)=, Meson
-=dependency('readcon-core')=, or =pkg-config --libs readcon-core=
-after a prefix install. The cxx tarball on the GitHub Release is
-=readcon-core-cxx-$VERSION.tar.gz=.
+One-command install is the prebuilt cargo-c prefix on the GitHub
+Release (=readcon-core-clib-$VERSION-$target-$variant.tar.gz=): unpack
+and set =PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig=. CMake FetchContent /
+=find_package(readcon-core)=, Meson =dependency('readcon-core')=, or
+=pkg-config --libs readcon-core= after a prefix install. The cxx
+*source* tarball on the GitHub Release is
+=readcon-core-cxx-$VERSION.tar.gz= (needs a Rustc to compile).
 
 #+begin_src cmake
 include(FetchContent)
@@ -104,7 +115,15 @@ export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
 pkg-config --cflags --libs readcon-core
 #+end_src
 
-Fortran smoke from a checkout (after a release build of the cdylib):
+Fortran smoke against a prebuilt prefix (fpm + pkg-config):
+
+#+begin_src shell
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+cd fortran/ReadCon && fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+#+end_src
+
+From a checkout (after a release build of the cdylib):
 
 #+begin_src shell
 cd fortran/ReadCon && fpm test --flag "-L../../target/release" \

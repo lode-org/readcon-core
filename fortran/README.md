@@ -15,6 +15,28 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
 
+## Prebuilt system library (fpm)
+
+Tag CI attaches `readcon-core-clib-$VERSION-$target-$variant.tar.gz`, a
+cargo-c prefix with `lib/pkgconfig/readcon-core.pc`. fpm links
+`-lreadcon_core`; point it at the unpacked prefix instead of
+`target/release`.
+
+```bash
+tar -xzf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu-chemfiles.tar.gz
+PREFIX="$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu-chemfiles"
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
+pkg-config --exists --print-errors readcon-core
+cd fortran/ReadCon
+fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
+  --link-flag "$(pkg-config --libs readcon-core) -ldl -lpthread -lm"
+```
+
+Windows chemfiles prefixes use the official prebuilt libchemfiles (not
+`chemfiles-from-sources`); the import lib is under `lib/`, the DLL under
+`bin/`.
+
 ## Test
 
 ```bash
@@ -24,6 +46,7 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 ```
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
+Prebuilt prefixes are produced by `.github/workflows/c_lib_tarball.yml`.
 
 ## DLPack (builder, full C ABI parity)
 

@@ -167,6 +167,7 @@ for =cargo build --release= in step 3.
 | Release | =release.yml= | PR plan, =v*= tag | cargo-dist plan on PRs; GitHub Release on tag |
 | crates.io | =crates_publish.yml= | =v*= tag | =cargo publish --locked= |
 | cxx tarball | =cxx_tarball.yml= | GitHub Release | Attach slim + vendor C/C++ source tarballs |
+| C lib tarball | =c_lib_tarball.yml= | =v*= tag, PR, dispatch | cargo-c prefixes (manylinux/macOS/Windows; Windows chemfiles explicit) |
 
 ** Benchmark regression detection
 
@@ -216,6 +217,7 @@ broken (fallback is documented below).
         ├─► workflow "Publish to crates.io": cargo publish --locked
         │         needs repo secret CARGO_REGISTRY_TOKEN
         ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
+        ├─► workflow "C library tarball": cargo-c prefixes (does not publish wheels)
         └─► workflow "cxx source tarball": after the GitHub Release exists
 #+end_example
 
@@ -227,6 +229,7 @@ broken (fallback is documented below).
 | Tag publish | PyPI wheels | =.github/workflows/python_wheels.yml= |
 | Tag publish | GitHub Release + CLI tarballs | same cargo-dist =Release= workflow on the tag |
 | Tag publish | C/C++ source tarballs | =.github/workflows/cxx_tarball.yml= (after the Release exists) |
+| Tag publish | Prebuilt C library prefixes | =.github/workflows/c_lib_tarball.yml= (separate from PyPI wheels) |
 
 ** cargo-dist release-PR path
 
@@ -404,18 +407,21 @@ Manual equivalent of the script:
    CARGO_REGISTRY_TOKEN="$(pass show crates-io/readcon-core)" cargo publish --locked
    #+end_src
 
-9. Tag CI also runs =python_wheels.yml= (PyPI) and cargo-dist =Release=
-   (CLI tarballs + GitHub Release body from the changelog).
+9. Tag CI also runs =python_wheels.yml= (PyPI), =c_lib_tarball.yml=
+   (prebuilt cargo-c prefixes; does *not* publish wheels), and
+   cargo-dist =Release= (CLI tarballs + GitHub Release body from the
+   changelog).
 
 10. Verify all distribution channels:
     - [[https://crates.io/crates/readcon-core][crates.io]] shows the new version
     - [[https://pypi.org/project/readcon/][PyPI]] shows the new version (wait for CI)
     - [[https://github.com/lode-org/readcon-core/releases][GitHub Releases]] has cargo-dist archives
-      (and any prior C ABI tarballs if still attached)
+      plus =readcon-core-clib-*= prefixes and cxx source tarballs
 
-Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + =libreadcon_core.{a,so}= via =cargo build --release= or
-=cargo cinstall=) can still be attached with =gh release upload= if needed.
+Optional local C ABI tarball for consumers that do not wait for tag CI
+(headers + =libreadcon_core.{a,so}= via =cargo cinstall= /
+=scripts/package-clib.sh=) can still be attached with =gh release upload=
+if needed. Do not fold that job into =python_wheels.yml=.
 
 ** Initial PyPI setup (first release only)
 

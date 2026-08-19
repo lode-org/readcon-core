@@ -123,6 +123,8 @@ implementation detail, not a second public API surface.
 |---|---|
 | =python_wheels.yml= matrix =default= | PyPI =readcon= |
 | =python_wheels.yml= matrix =chemfiles= | PyPI =readcon-chemfiles= (no Windows chemfiles row) |
+| =c_lib_tarball.yml= matrix =default= | GitHub Release =readcon-core-clib-*-default.tar.gz= |
+| =c_lib_tarball.yml= matrix =chemfiles= | GitHub Release =readcon-core-clib-*-chemfiles.tar.gz= (Windows chemfiles uses official prebuilt libchemfiles, not from-sources) |
 | =crates_publish.yml= | crates.io =readcon-core= (chemfiles still optional feature) |
 
 Pending/active trusted publishers must use *exact* PyPI names =readcon= and
