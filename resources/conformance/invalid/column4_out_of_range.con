@@ -1,0 +1,12 @@
+conformance: column-4-out-of-range; spec.org: Per-direction constraints (column 4)
+{"con_spec_version":2,"sections":[],"validate":true}
+10.000000 10.000000 10.000000
+90.000000 90.000000 90.000000
+
+
+1
+1
+63.546000
+Cu
+Coordinates of Component 1
+0.000000 0.000000 0.000000 8 0
