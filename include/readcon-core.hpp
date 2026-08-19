@@ -627,8 +627,11 @@ class ConFrameWriter {
 /**
  * @brief A builder for constructing ConFrame objects from in-memory data.
  *
- * Atoms are accumulated and grouped by symbol on build() to compute
- * the header fields.
+ * Atoms are grouped by symbol in first-encounter order on build() so
+ * the CON header can store type counts and one mass per type. That
+ * grouping reorders atoms relative to insertion order; recover the
+ * original sequence from atom_id (column 5). build() throws if two
+ * atoms share a symbol but disagree on mass.
  *
  * Example:
  *
@@ -815,13 +818,20 @@ class ConFrameBuilder {
     /**
      * @brief Consumes the builder and returns a finalized ConFrame.
      *
+     * Atoms are grouped by symbol in first-encounter order. The
+     * returned frame's atom order is not the insertion order when
+     * types were interleaved; recover the original sequence from
+     * `atom_id`. CON line 9 stores one mass per type, so two atoms
+     * that share a symbol but disagree on mass fail the build.
+     *
      * The builder is invalidated after this call: every subsequent
      * method (add_atom, set_*, with_*, build) is a no-op or throws.
      * Construct a new ConFrameBuilder if you need to author another
      * frame.
      *
-     * @throws std::runtime_error if the build fails or if `build()`
-     *         is called on an already-consumed builder.
+     * @throws std::runtime_error if the build fails (including a
+     *         same-symbol mass mismatch) or if `build()` is called
+     *         on an already-consumed builder.
      */
     ConFrame build();
 

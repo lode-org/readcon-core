@@ -128,6 +128,17 @@
          :layout: [{"type":"name","value":"ValidationError"},{"type":"punctuation","value":"("},{"type":"link","value":"String","target":"String"},{"type":"punctuation","value":")"}]
 
 
+      .. rust:struct:: readcon_core::error::ParseError::MassMismatch
+         :index: 2
+         :vis: pub
+         :toc: MassMismatch
+         :layout: [{"type":"name","value":"MassMismatch"}]
+
+
+         Two atoms share a chemical symbol but their masses disagree.
+         CON line 9 stores one mass per type.
+
+
       .. rubric:: Traits implemented
 
 

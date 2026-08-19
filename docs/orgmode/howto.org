@@ -233,7 +233,9 @@ Use =ConFrameBuilder= to construct frames programmatically. The
 index -- the position of this atom in your input before type-based
 grouping. The builder groups atoms by symbol automatically, but
 preserves each atom's =atom_id= so the original ordering can be
-reconstructed.
+reconstructed. =build()= returns =Result=: CON line 9 stores one mass
+per type, so two atoms that share a symbol but disagree on mass are an
+error.
 
 #+begin_src rust
 use readcon_core::types::ConFrameBuilder;
@@ -243,7 +245,7 @@ let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
 builder.add_atom("Cu", 0.0, 0.0, 0.0, false, 0, 63.546);
 builder.add_atom("H",  1.0, 2.0, 3.0, false, 2, 1.008);
 builder.add_atom("Cu", 2.55, 2.55, 0.0, false, 1, 63.546);
-let frame = builder.build();
+let frame = builder.build().expect("matching per-type masses");
 // Atoms are now grouped: Cu(id=0), Cu(id=1), H(id=2)
 #+end_src
 

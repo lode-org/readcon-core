@@ -797,9 +797,10 @@ only at I/O boundaries:
   the field, the next =build()= MUST NOT declare the section.
 - =set_atom_mass= updates the per-type =masses_per_type= entry on
   =build()=. The .con format binds one mass per element type, so
-  if multiple atoms of the same symbol carry different masses, the
-  last value wins. Bindings SHOULD document this; future spec
-  versions MAY tighten it.
+  if multiple atoms of the same symbol carry different masses,
+  =build()= MUST return an error (=ParseError::MassMismatch=)
+  rather than silently keeping one of the values. Recover the
+  insertion order of a grouped frame from =atom_id= (column 5).
 
 The reference implementation surface lands in v0.11.0:
 

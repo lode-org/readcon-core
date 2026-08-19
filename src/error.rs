@@ -24,6 +24,20 @@ pub enum ParseError {
     /// the current length. Surfaces as `IndexError` in PyO3 and as
     /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` over the C ABI.
     IndexOutOfBounds { index: usize, len: usize },
+    /// Two atoms share a chemical symbol but their masses disagree.
+    ///
+    /// CON line 9 stores one mass per type, so the format cannot represent
+    /// isotope-substituted atoms that keep the same symbol (H and D both
+    /// written as `"H"`). [`crate::types::ConFrameBuilder::build`] returns
+    /// this instead of silently keeping the first-encountered mass.
+    MassMismatch {
+        /// Chemical symbol that collided.
+        symbol: String,
+        /// Mass recorded on the first atom of this symbol.
+        first: f64,
+        /// Disagreeing mass on a later atom of the same symbol.
+        found: f64,
+    },
 }
 
 impl fmt::Display for ParseError {
@@ -75,6 +89,16 @@ impl fmt::Display for ParseError {
                 write!(
                     f,
                     "atom index {index} is out of bounds (builder holds {len} atoms)"
+                )
+            }
+            ParseError::MassMismatch {
+                symbol,
+                first,
+                found,
+            } => {
+                write!(
+                    f,
+                    "same-symbol mass mismatch for {symbol}: first {first}, found {found} (CON stores one mass per type)"
                 )
             }
         }

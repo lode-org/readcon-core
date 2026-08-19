@@ -305,8 +305,11 @@
 
       A builder for constructing ``ConFrame`` objects from in-memory data.
       
-      Atoms are accumulated and grouped by symbol on ``build()`` to compute the
-      header fields (``natm_types``, ``natms_per_type``, ``masses_per_type``).
+      ``build()`` groups atoms by symbol in first-encounter order so the
+      CON header can store ``natm_types``, ``natms_per_type``, and
+      ``masses_per_type``. That grouping reorders atoms relative to insertion
+      order; recover the original sequence from ``atom_id``. Same-symbol
+      masses must agree, or ``build`` returns ``ParseError::MassMismatch``.
       
       **Example**
       
@@ -317,7 +320,7 @@
          let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
          builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
          builder.add_atom("H", 1.0, 2.0, 3.0, [false, false, false], 1, 1.008);
-         let frame = builder.build();
+         let frame = builder.build().expect("matching per-type masses");
          assert_eq!(frame.header.natm_types, 2);
          assert_eq!(frame.atom_data.len(), 2);
 
@@ -366,12 +369,16 @@
          .. rust:function:: readcon_core::types::ConFrameBuilder::build
             :index: -1
             :vis: pub
-            :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"build"},{"type":"punctuation","value":"("},{"type":"keyword","value":"self"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"ConFrame","target":"ConFrame"}]
+            :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"build"},{"type":"punctuation","value":"("},{"type":"keyword","value":"self"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Result","target":"Result"},{"type":"punctuation","value":"<"},{"type":"link","value":"ConFrame","target":"ConFrame"},{"type":"punctuation","value":", "},{"type":"link","value":"ParseError","target":"ParseError"},{"type":"punctuation","value":">"}]
 
             Consumes the builder and produces a ``ConFrame``.
             
-            Atoms are grouped by symbol (in encounter order) to compute
-            ``natm_types``, ``natms_per_type``, and ``masses_per_type``.
+            Atoms are grouped by symbol in first-encounter order. The
+            returned frame's atom order is not the insertion order when
+            types were interleaved; recover the original sequence from
+            ``atom_id``. Returns ``ParseError::MassMismatch`` when two
+            atoms share a symbol but disagree on mass (CON line 9 is
+            one mass per type).
 
          .. rust:function:: readcon_core::types::ConFrameBuilder::metadata
             :index: -1

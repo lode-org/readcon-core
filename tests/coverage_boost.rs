@@ -43,6 +43,11 @@ fn parse_error_display_and_from_all_variants() {
         ParseError::UnknownSection("nope".into()),
         ParseError::ValidationError("v".into()),
         ParseError::IndexOutOfBounds { index: 9, len: 2 },
+        ParseError::MassMismatch {
+            symbol: "H".into(),
+            first: 1.008,
+            found: 2.014,
+        },
     ];
     for e in &variants {
         let s = e.to_string();
@@ -287,7 +292,7 @@ fn types_header_metadata_helpers() {
     b.prebox_header("u").postbox_header(["0 0".into(), "0 0 0".into()]);
     b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.5);
     b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
-    let mut frame = b.build();
+    let mut frame = b.build().unwrap();
 
     frame.header.set_pbc([true, false, true]);
     assert_eq!(frame.header.pbc(), Some([true, false, true]));
@@ -653,7 +658,7 @@ fn types_builder_full_surface() {
     b.set_atom_position(0, 0.1, 0.2, 0.3).unwrap();
     b.set_atom_velocity(0, [0.0, 0.0, 0.1]).unwrap();
     b.set_atom_force(1, [0.1, 0.0, 0.0]).unwrap();
-    let frame = b.build();
+    let frame = b.build().unwrap();
     assert!(frame.atom_data.len() >= 3);
     let _ = frame.has_velocities();
     let _ = frame.has_forces();

@@ -944,8 +944,12 @@ impl ConFrame {
 
 /// A builder for constructing `ConFrame` objects from in-memory data.
 ///
-/// Atoms are accumulated and grouped by symbol on `build()` to compute the
-/// header fields (`natm_types`, `natms_per_type`, `masses_per_type`).
+/// [`Self::build`] groups atoms by symbol in first-encounter order so the
+/// CON header can store `natm_types`, `natms_per_type`, and
+/// `masses_per_type`. That grouping reorders atoms relative to insertion
+/// order; recover the original sequence from [`AtomDatum::atom_id`]. Same-
+/// symbol masses must agree, or `build` returns
+/// [`crate::error::ParseError::MassMismatch`].
 ///
 /// # Example
 ///
@@ -955,7 +959,7 @@ impl ConFrame {
 /// let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
 /// builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
 /// builder.add_atom("H", 1.0, 2.0, 3.0, [false, false, false], 1, 1.008);
-/// let frame = builder.build();
+/// let frame = builder.build().expect("matching per-type masses");
 /// assert_eq!(frame.header.natm_types, 2);
 /// assert_eq!(frame.atom_data.len(), 2);
 /// ```
@@ -1459,10 +1463,12 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
-    /// Updates the mass of an existing atom. Note: changing the mass of the
-    /// only atom of a given type recomputes that type's `masses_per_type`
-    /// entry on `build()`; mixing different masses for the same symbol is
-    /// not supported by the .con format and the last value wins.
+    /// Updates the mass of an existing atom.
+    ///
+    /// [`Self::build`] uses the first-encountered mass of each symbol as that
+    /// type's `masses_per_type` entry (CON line 9). If another atom of the
+    /// same symbol carries a different mass, `build` returns
+    /// [`crate::error::ParseError::MassMismatch`].
     pub fn set_atom_mass(
         &mut self,
         i: usize,
@@ -1994,11 +2000,40 @@ impl ConFrameBuilder {
 
     // ----- end in-place mutation API ----------------------------------------
 
-    /// Consumes the builder and produces a `ConFrame`.
+    /// Consumes the builder and produces a [`ConFrame`].
     ///
-    /// Atoms are grouped by symbol (in encounter order) to compute
-    /// `natm_types`, `natms_per_type`, and `masses_per_type`.
-    pub fn build(self) -> ConFrame {
+    /// # Grouping and atom order
+    ///
+    /// CON header lines 7 and 8 are a type count and per-type counts, so the
+    /// format cannot represent an interleaved layout. This method buckets
+    /// atoms by chemical symbol in first-encounter order and flattens those
+    /// buckets. The returned frame's [`ConFrame::atom_data`] order is
+    /// therefore **not** the insertion order whenever two types were
+    /// interleaved.
+    ///
+    /// Recover the insertion sequence from [`AtomDatum::atom_id`] (column 5):
+    /// pass sequential insertion indices as `atom_id` in [`Self::add_atom`],
+    /// then use [`ConFrame::atom_index_by_id`] or
+    /// [`ConFrame::build_atom_id_index`] to map those ids back onto the
+    /// grouped frame. Parallel arrays (eigenmodes, displacements, Hessians)
+    /// must be permuted the same way.
+    ///
+    /// # Masses
+    ///
+    /// CON line 9 stores one mass per type. [`Self::add_atom`] takes a
+    /// per-atom mass, but only the first-encountered mass of each symbol is
+    /// kept as that type's `masses_per_type` entry. If a later atom of the
+    /// same symbol carries a mass that differs by more than a relative
+    /// tolerance of `1e-12` (absolute floor `1e-12`), this method returns
+    /// [`crate::error::ParseError::MassMismatch`] instead of silently
+    /// dropping the variation. Use distinct symbols for isotope pairs (for
+    /// example `H` and `D`) when the masses must differ.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
+    /// share a symbol and their masses disagree beyond the tolerance above.
+    pub fn build(self) -> Result<ConFrame, crate::error::ParseError> {
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -2013,6 +2048,14 @@ impl ConFrameBuilder {
             let mass = self.masses[i];
             let idx = match type_order.iter().position(|s| s == symbol) {
                 Some(idx) => {
+                    let first = type_masses[idx];
+                    if !type_masses_agree(first, mass) {
+                        return Err(crate::error::ParseError::MassMismatch {
+                            symbol: symbol.clone(),
+                            first,
+                            found: mass,
+                        });
+                    }
                     type_counts[idx] += 1;
                     idx
                 }
@@ -2150,7 +2193,7 @@ impl ConFrameBuilder {
             sections_declared,
         };
 
-        ConFrame {
+        Ok(ConFrame {
             header,
             atom_data,
             positions: pos,
@@ -2162,8 +2205,25 @@ impl ConFrameBuilder {
             magmoms: FloatArray2::zeros(dt.forces, 0, 3),
             masses: masses_arr,
             atom_ids: ids_arr,
-        }
+        })
     }
+}
+
+/// Relative tolerance for same-symbol mass agreement in
+/// [`ConFrameBuilder::build`]. The comparison scale is
+/// `max(|first|, |found|, 1.0)`, so near-zero masses still have an
+/// absolute floor of `1e-12`.
+const TYPE_MASS_REL_TOL: f64 = 1e-12;
+
+fn type_masses_agree(first: f64, found: f64) -> bool {
+    if first == found {
+        return true;
+    }
+    if !first.is_finite() || !found.is_finite() {
+        return false;
+    }
+    let scale = first.abs().max(found.abs()).max(1.0);
+    (first - found).abs() <= TYPE_MASS_REL_TOL * scale
 }
 
 /// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
@@ -2375,7 +2435,7 @@ mod tests {
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 100, 63.546);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [false, false, false], 42, 63.546);
         builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 7, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         let idx = frame.build_atom_id_index();
         assert_eq!(idx.get(&100).copied(), Some(0));
         assert_eq!(idx.get(&42).copied(), Some(1));
@@ -2391,7 +2451,7 @@ mod tests {
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
         builder.add_atom("H", 2.0, 3.0, 4.0, [false, false, false], 2, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert_eq!(frame.header.natm_types, 2);
         assert_eq!(frame.header.natms_per_type, vec![2, 1]);
@@ -2407,7 +2467,7 @@ mod tests {
         builder
             .add_atom("Cu", 0.0, 0.0, 0.0, [true, true, true], 0, 63.546)
             .with_velocity([0.1, 0.2, 0.3]);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert!(frame.has_velocities());
         assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
@@ -2419,7 +2479,7 @@ mod tests {
         builder
             .prebox_header("line1")
             .postbox_header(["line3".to_string(), "line4".to_string()]);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         assert_eq!(frame.header.prebox_header.user, "line1");
         assert_eq!(frame.header.postbox_header, ["line3", "line4"]);
@@ -2432,7 +2492,7 @@ mod tests {
         builder.add_atom("H", 0.0, 0.0, 0.0, [false, false, false], 0, 1.008);
         builder.add_atom("Cu", 1.0, 0.0, 0.0, [true, true, true], 1, 63.546);
         builder.add_atom("H", 2.0, 0.0, 0.0, [false, false, false], 2, 1.008);
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
 
         // H appears first, so it should be first type
         assert_eq!(frame.header.natm_types, 2);
@@ -2441,6 +2501,84 @@ mod tests {
         assert_eq!(&*frame.atom_data[0].symbol, "H");
         assert_eq!(&*frame.atom_data[1].symbol, "H");
         assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+    }
+
+    #[test]
+    fn test_builder_atom_id_recovers_insertion_order() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("Cu", 1.0, 0.0, 0.0, [false; 3], 1, 63.546);
+        builder.add_atom("H", 2.0, 0.0, 0.0, [false; 3], 2, 1.008);
+        let frame = builder.build().unwrap();
+        // Grouped order is H, H, Cu; atom_id is the insertion index.
+        assert_eq!(
+            frame
+                .atom_data
+                .iter()
+                .map(|a| a.atom_id)
+                .collect::<Vec<_>>(),
+            vec![0, 2, 1]
+        );
+        let idx = frame.build_atom_id_index();
+        assert_eq!(idx.get(&0).copied(), Some(0));
+        assert_eq!(idx.get(&1).copied(), Some(2));
+        assert_eq!(idx.get(&2).copied(), Some(1));
+        assert_eq!(frame.atom_index_by_id(1), Some(2));
+    }
+
+    #[test]
+    fn test_builder_mass_mismatch_same_symbol() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 2.014);
+        let err = builder.build().unwrap_err();
+        match err {
+            crate::error::ParseError::MassMismatch {
+                symbol,
+                first,
+                found,
+            } => {
+                assert_eq!(symbol, "H");
+                assert!((first - 1.008).abs() < 1e-15);
+                assert!((found - 2.014).abs() < 1e-15);
+            }
+            other => panic!("expected MassMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_builder_mass_mismatch_from_set_atom_mass() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.008);
+        builder.set_atom_mass(1, 2.014).unwrap();
+        let err = builder.build().unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::ParseError::MassMismatch { ref symbol, .. } if symbol == "H"
+        ));
+        assert!(err.to_string().contains("mass mismatch"));
+    }
+
+    #[test]
+    fn test_builder_mass_agreement_within_tolerance() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.008 + 1e-13);
+        let frame = builder.build().unwrap();
+        assert_eq!(frame.header.masses_per_type, vec![1.008]);
+        assert_eq!(frame.atom_data.len(), 2);
+    }
+
+    #[test]
+    fn test_builder_mass_mismatch_non_finite() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, f64::NAN);
+        assert!(matches!(
+            builder.build().unwrap_err(),
+            crate::error::ParseError::MassMismatch { .. }
+        ));
     }
 
     #[test]
@@ -2524,7 +2662,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.storage_float32_positions();
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
         let t = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
@@ -2543,7 +2681,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
         b.add_atom("O", 4.0, 5.0, 6.0, [false; 3], 0, 16.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let t = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
             .expect("CUDA H2D export");
@@ -2563,7 +2701,7 @@ mod tests {
     fn frame_positions_as_dlpack_cuda_rejected_without_feature() {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let err = frame
             .positions_as_dlpack(dlpk::sys::DLDevice::cuda(0))
             .unwrap_err();
@@ -2588,7 +2726,7 @@ mod tests {
             .with_velocity([1.0, 0.0, 0.0])
             .with_force([0.0, 1.0, 0.0])
             .with_energy(-1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.positions.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.velocities.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.forces.kind(), FloatStorageKind::Float32);
@@ -2603,7 +2741,7 @@ mod tests {
     fn typed_units_and_conversion_on_built_frame() {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
         // Builder injects default v3 units
         assert_eq!(frame.length_unit(), Some("angstrom"));
@@ -2708,7 +2846,7 @@ mod tests {
             .unwrap();
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
 
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         assert_eq!(frame.header.spec_version, crate::CON_SPEC_VERSION);
         assert_eq!(frame.header.frame_index(), Some(5));
         assert_eq!(frame.header.energy(), Some(-42.5));
@@ -2732,7 +2870,7 @@ mod tests {
         builder.set_string_metadata("generator", "eon");
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546);
 
-        let frame = builder.build();
+        let frame = builder.build().unwrap();
         assert_eq!(frame.header.frame_index(), Some(7));
         assert_eq!(frame.header.energy(), Some(-1.25));
         assert_eq!(frame.header.time(), Some(3.5));
@@ -2792,7 +2930,7 @@ mod tests {
         assert_eq!(b.get_atom_force(1).unwrap(), Some([10.0, 0.0, 0.0]));
         assert_eq!(b.get_atom_energy(2).unwrap(), Some(-1.5));
         // Frame should auto-declare all three sections on build.
-        let frame = b.build();
+        let frame = b.build().unwrap();
         let names: Vec<&str> = frame.header.sections.iter().map(|s| s.as_str()).collect();
         assert!(names.contains(&"velocities"));
         assert!(names.contains(&"forces"));
@@ -2823,8 +2961,10 @@ mod tests {
     fn builder_set_atom_fixed_and_mass() {
         let mut b = three_atom_builder();
         b.set_atom_fixed(0, [true, false, true]).unwrap();
+        // Both Cu atoms must agree; CON stores one mass per type.
         b.set_atom_mass(0, 100.0).unwrap();
-        let frame = b.build();
+        b.set_atom_mass(1, 100.0).unwrap();
+        let frame = b.build().unwrap();
         assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
         // type-grouped: index 0 in atom_data is the first "Cu" entry which
         // started life at builder index 0; mass survives via masses_per_type.
@@ -2848,7 +2988,7 @@ mod tests {
         // Restore the test fixture's id 42 so the build round-trip
         // check below still asserts the documented value.
         b.set_atom_id(0, 42).unwrap();
-        let frame = b.build();
+        let frame = b.build().unwrap();
         // Type-grouping reorders atom_data; locate ids via the symbol.
         let cu_ids: Vec<u64> = frame
             .atom_data
@@ -2933,7 +3073,7 @@ mod tests {
         b.set_forces_from_flat(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
             .unwrap();
         b.set_atom_energies_from_flat(&[-1.0, -2.0, -3.0]).unwrap();
-        let frame = b.build();
+        let frame = b.build().unwrap();
         assert_eq!(frame.atom_data.len(), 3);
         assert!(frame.has_forces());
         assert!(frame.has_energies());
@@ -3016,7 +3156,7 @@ mod tests {
         use std::io::Cursor;
         let mut frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         frame.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
-        let mut fr = frame.build();
+        let mut fr = frame.build().unwrap();
         // Strip units to simulate hand-built non-compliant header still claiming v3
         fr.header.metadata.remove(meta::UNITS);
         fr.header.spec_version = 3;
@@ -3043,7 +3183,7 @@ mod tests {
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
         b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
-        let mut frame = b.build();
+        let mut frame = b.build().unwrap();
         assert!(!frame.has_bonds());
         assert!(frame.bonds().is_empty());
         assert!(!frame.header.metadata.contains_key(meta::BONDS));

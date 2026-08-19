@@ -1439,9 +1439,12 @@ enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(struct RKR
 
 /**
  * Consumes the builder and returns a finalized RKRConFrame handle.
- * The builder handle is invalidated after this call.
+ * The builder handle is invalidated after this call, including when
+ * the call fails.
  * The caller OWNS the returned frame and MUST call `free_rkr_frame`.
- * Returns NULL on error.
+ *
+ * Returns NULL if `builder_handle` is null, or if two atoms share a
+ * symbol but disagree on mass (CON line 9 stores one mass per type).
  *
  * # Safety
  * builder_handle must be valid. The caller takes ownership of the returned frame.
