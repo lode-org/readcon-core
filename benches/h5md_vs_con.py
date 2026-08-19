@@ -185,7 +185,7 @@ def main() -> None:
         "n_frames": args.frames,
         "n_atoms": n_atoms,
         "repeats": args.repeats,
-        "fixture": str(args.fixture),
+        "fixture": str(Path(args.fixture).resolve().relative_to(REPO) if Path(args.fixture).resolve().is_relative_to(REPO) else args.fixture),
         "h5md_size_bytes": h5path.stat().st_size,
         "con_size_bytes": con.stat().st_size,
         "con_gz_size_bytes": con_gz.stat().st_size,

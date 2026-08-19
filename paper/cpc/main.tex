@@ -50,29 +50,33 @@ CON \sep convel \sep rare-event dynamics \sep checkpoint format
 \section*{Program Summary}
 
 \noindent
-\textit{Program Title:} readcon-core\\
+\textit{Program Title:} readcon-core (companion: readcon-db)\\
 \textit{CPC Library link to program files:} (assigned on acceptance)\\
 \textit{Developer's repository link:}
-\url{https://github.com/lode-org/readcon-core}\\
+\url{https://github.com/lode-org/readcon-core};
+companion store \url{https://github.com/lode-org/readcon-db}\\
 \textit{Licensing provisions:} MIT\\
 \textit{Programming language:} Rust (core and C ABI); C99 and C++17
 headers; Python 3.10+; Julia; Fortran 2008 (ISO\_C\_BINDING)\\
 \textit{External routines:} optional chemfiles, metatensor, DLPack,
-Cap'n Proto, zstd, CUDA (feature-gated)\\
+Cap'n Proto, zstd, CUDA (feature-gated); readcon-db uses LMDB\\
 \textit{Nature of problem:} Rare-event and nudged-elastic-band
 campaigns need a checkpoint that carries cell, masses, per-axis
 constraints, original atom indices, optional velocities/forces, and
 machine-readable metadata. Existing CON readers disagree on column~4,
-drop sections, and have no units contract.\\
+drop sections, and have no units contract. Campaign screening then
+needs an index over those files without a second structure dialect.\\
 \textit{Solution method:} A documented grammar (spec v2/v3) plus a
 reference parser/writer. A single C ABI exposes the full frame to
 non-Python drivers. Foreign structures enter through chemfiles and
-leave as CON. Campaign indexes live in a companion package
-(\texttt{readcon-db}) over the same text files.\\
+leave as CON. \texttt{readcon-db} is the companion campaign store:
+LMDB indexes (energy, formula, section presence) and a derived RCSO
+cache over the same text files.\\
 \textit{Additional comments:} Version 0.14.7. The C ABI is frozen
 within 0.14.x as documented in the library architecture page. A
 1.0.0 tag is the production classifier. No archival DOI is minted in
-this tree.
+this tree. Deposit both freeze tags together; do not write a second
+paper for readcon-db alone.
 
 \section{Introduction}
 
@@ -163,18 +167,22 @@ $19\,992\,618$ versus $32\,883\,110$ for fast-float2 versus
 instruction counts, not wall times.
 
 Equal-geometry wall timings are host-specific. A run on
-\texttt{rgam5terra} (2026-07-08) with 100 frames of the 218-atom
-\texttt{cuh2.con} fixture recorded:
+\texttt{rgam5terra} (2026-08-19T22:56Z, tree \texttt{8ce95a56},
+\texttt{maturin develop --features python,chemfiles --release})
+with 100 frames of the 218-atom \texttt{cuh2.con} fixture recorded:
 
 \begin{itemize}
-\item native CON parse $2.271\,\mathrm{ms}$; chemfiles XYZ$\to$CON
-  $14.121\,\mathrm{ms}$; ASE \texttt{.traj} $11.391\,\mathrm{ms}$;
-  ASE XYZ $27.16\,\mathrm{ms}$
+\item native CON parse $2.771\,\mathrm{ms}$; chemfiles XYZ$\to$CON
+  $16.450\,\mathrm{ms}$; ASE \texttt{.traj} $11.415\,\mathrm{ms}$;
+  ASE XYZ $27.923\,\mathrm{ms}$
   (\texttt{benches/results/ase\_traj\_vs\_con.json});
-\item native CON $3.539\,\mathrm{ms}$; chemfiles XYZ $15.710\,\mathrm{ms}$;
-  MDAnalysis H5MD (Universe + positions) $28.382\,\mathrm{ms}$;
-  h5py \texttt{position/value} only $0.281\,\mathrm{ms}$
-  (\texttt{benches/results/h5md\_vs\_con.json}).
+\item native CON $3.047\,\mathrm{ms}$; chemfiles XYZ $17.006\,\mathrm{ms}$;
+  MDAnalysis H5MD (Universe + positions) $30.147\,\mathrm{ms}$;
+  h5py \texttt{position/value} only $0.276\,\mathrm{ms}$
+  (\texttt{benches/results/h5md\_vs\_con.json});
+\item same CON text vs ASE \texttt{ase.io.eon} $28.056\,\mathrm{ms}$,
+  C sscanf $7.38\,\mathrm{ms}$, readcon path $2.962\,\mathrm{ms}$
+  (\texttt{benches/results/compare\_readers.json}).
 \end{itemize}
 
 h5py is faster because it loads a coordinate array. It does not

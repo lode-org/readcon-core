@@ -26,6 +26,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+def _rel(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 FIXTURE_MAP = {
     "tiny": REPO / "resources" / "test" / "tiny_cuh2.con",
     "cuh2": REPO / "resources" / "test" / "cuh2.con",
