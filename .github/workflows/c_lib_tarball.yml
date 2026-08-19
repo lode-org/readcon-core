@@ -1,0 +1,127 @@
+name: C library tarball
+
+# Prebuilt lean cargo-c prefixes (headers + cdylib + readcon-core.pc).
+# Sibling of cxx_tarball.yml: CLI archives stay cargo-dist; C ABI
+# prefixes attach here. cbindgen is not installed and not invoked.
+#
+# Matrix is explicit. Every row is the lean cdylib (no chemfiles).
+# Windows chemfiles is not shipped in this tarball.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clib:
+    name: clib ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Same BFD linker policy as python_wheels.yml (Linux).
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          # Lean MSVC DLL. Do not add --features chemfiles on this row.
+          # chemfiles Windows is not a clib tarball (explicit skip).
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Linux BFD linker
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
+
+      - name: Install cargo-c
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-c
+
+      - name: Note cbindgen is unused
+        shell: bash
+        run: |
+          if command -v cbindgen >/dev/null 2>&1; then
+            echo "cbindgen is on PATH but this job must not invoke it"
+          else
+            echo "cbindgen: absent"
+          fi
+
+      - name: Package lean cargo-c prefix
+        shell: bash
+        run: |
+          mkdir -p dist-clib
+          bash scripts/package-clib.sh dist-clib --target "${{ matrix.target }}"
+          ls -lh dist-clib
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.target }}
+          path: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Attach clib tarballs to GitHub Release
+    needs: clib
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clib-*
+          merge-multiple: true
+          path: dist-clib/
+
+      - name: List artifacts
+        run: ls -lh dist-clib
+
+      - name: Upload tarballs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-clib-*.tar.gz
+            dist-clib/readcon-core-clib-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            Prebuilt C library tarballs (`readcon-core-clib-$VERSION-$target.tar.gz`): lean cargo-c prefixes (headers + cdylib + `readcon-core.pc`). cbindgen is not required.
+
+            Matrix (all lean; `--features chemfiles` is off):
+
+            | Target | chemfiles |
+            | --- | --- |
+            | `x86_64-unknown-linux-gnu` | off |
+            | `aarch64-unknown-linux-gnu` | off |
+            | `aarch64-apple-darwin` | off |
+            | `x86_64-apple-darwin` | off |
+            | `x86_64-pc-windows-msvc` | **not shipped** (lean DLL only) |
+
+            Windows chemfiles is not an asset here. Conversion on Windows is the Python `readcon-chemfiles` wheel or a local `--features chemfiles` build.

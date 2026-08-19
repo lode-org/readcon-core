@@ -15,7 +15,10 @@ pr-run-mode = "plan"
 installers = []
 # CLI binary archives (main.rs). C/C++ source tarballs
 # (readcon-core-cxx-$VERSION.tar.gz) are attached by cxx_tarball.yml
-# after the GitHub Release is published. cargo-c remains a third
+# after the GitHub Release is published. Prebuilt cargo-c prefixes
+# (readcon-core-clib-$VERSION-$target.tar.gz) are attached by
+# c_lib_tarball.yml. Those rows are lean cdylibs; the Windows asset
+# does not include chemfiles. cargo-c from source remains a third
 # install path; cbindgen is not required.
 targets = [
   "aarch64-apple-darwin",

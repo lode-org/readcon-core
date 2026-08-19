@@ -1,0 +1,43 @@
+# Template for julia/ReadCon/Artifacts.toml.
+# Copy to Artifacts.toml and replace @VERSION@ / @SHA256_*@ from the
+# matching readcon-core-clib-$VERSION-$target.tar.gz.sha256 on the
+# GitHub Release. Until those hashes exist, the wrapper uses
+# READCON_LIB_PATH / READCON_CORE_LIB or a local cargo build.
+#
+# Every download is the lean cargo-c prefix. The Windows row is the
+# lean DLL; chemfiles is not shipped for Windows here.
+
+[readcon_core]
+git-tree-sha1 = "0000000000000000000000000000000000000000"
+lazy = true
+
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-unknown-linux-gnu.tar.gz"
+    sha256 = "@SHA256_X86_64_UNKNOWN_LINUX_GNU@"
+    os = "linux"
+    arch = "x86_64"
+
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-aarch64-unknown-linux-gnu.tar.gz"
+    sha256 = "@SHA256_AARCH64_UNKNOWN_LINUX_GNU@"
+    os = "linux"
+    arch = "aarch64"
+
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-aarch64-apple-darwin.tar.gz"
+    sha256 = "@SHA256_AARCH64_APPLE_DARWIN@"
+    os = "macos"
+    arch = "aarch64"
+
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-apple-darwin.tar.gz"
+    sha256 = "@SHA256_X86_64_APPLE_DARWIN@"
+    os = "macos"
+    arch = "x86_64"
+
+    # Lean DLL only. No Windows chemfiles clib tarball in this matrix.
+    [[readcon_core.download]]
+    url = "https://github.com/lode-org/readcon-core/releases/download/v@VERSION@/readcon-core-clib-@VERSION@-x86_64-pc-windows-msvc.tar.gz"
+    sha256 = "@SHA256_X86_64_PC_WINDOWS_MSVC@"
+    os = "windows"
+    arch = "x86_64"

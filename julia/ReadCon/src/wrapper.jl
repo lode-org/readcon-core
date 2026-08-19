@@ -1,30 +1,87 @@
 const Libdl = Base.Libc.Libdl
 
+const _LIB_BASENAMES = (
+    "libreadcon_core.so",
+    "libreadcon_core.dylib",
+    "readcon_core.dll",
+    "libreadcon_core.dll",
+)
+
+function _is_shared_lib(path::AbstractString)
+    isfile(path) || return false
+    name = lowercase(basename(path))
+    return any(==(name), lowercase.(String.(_LIB_BASENAMES)))
+end
+
+function _search_prefix(prefix::AbstractString)
+    isdir(prefix) || return ""
+    for rel in (
+        joinpath("lib", "libreadcon_core.so"),
+        joinpath("lib", "libreadcon_core.dylib"),
+        joinpath("bin", "readcon_core.dll"),
+        joinpath("lib", "readcon_core.dll"),
+        joinpath("bin", "libreadcon_core.dll"),
+        _LIB_BASENAMES...,
+    )
+        p = joinpath(prefix, rel)
+        _is_shared_lib(p) && return p
+    end
+    return ""
+end
+
+function _artifact_prefix()
+    artifacts_toml = joinpath(dirname(@__DIR__), "Artifacts.toml")
+    isfile(artifacts_toml) || return ""
+    text = read(artifacts_toml, String)
+    occursin("@SHA256", text) && return ""
+    occursin("@VERSION@", text) && return ""
+    try
+        artifacts_mod = Base.require(Base.PkgId(
+            Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"),
+            "Artifacts",
+        ))
+        hash = artifacts_mod.artifact_hash("readcon_core", artifacts_toml)
+        hash === nothing && return ""
+        artifacts_mod.artifact_exists(hash) || return ""
+        return artifacts_mod.artifact_path(hash)
+    catch
+        return ""
+    end
+end
+
 """
     _lib_handle()
 
-Return a handle to the readcon-core shared library.
-Searches READCON_LIB_PATH environment variable first, then falls back
-to a local build path.
+Return a path to the readcon-core shared library.
+
+Search order: `READCON_LIB_PATH`, `READCON_CORE_LIB` (file or cargo-c
+prefix), a filled `Artifacts.toml` `readcon_core` artifact, then a
+local `target/{release,debug}` build. The Windows clib tarball is the
+lean DLL; chemfiles is not shipped for Windows on that matrix.
 """
 function _lib_handle()
-    lib_env = get(ENV, "READCON_LIB_PATH", "")
-    if !isempty(lib_env) && isfile(lib_env)
-        return lib_env
+    for key in ("READCON_LIB_PATH", "READCON_CORE_LIB")
+        raw = get(ENV, key, "")
+        isempty(raw) && continue
+        _is_shared_lib(raw) && return raw
+        found = _search_prefix(raw)
+        !isempty(found) && return found
     end
-    # Fall back to looking relative to this package
+    artifact_prefix = _artifact_prefix()
+    if !isempty(artifact_prefix)
+        found = _search_prefix(artifact_prefix)
+        !isempty(found) && return found
+    end
     pkg_dir = dirname(@__DIR__)
-    for candidate in [
-        joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.so"),
-        joinpath(pkg_dir, "..", "..", "target", "release", "libreadcon_core.dylib"),
-        joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.so"),
-        joinpath(pkg_dir, "..", "..", "target", "debug", "libreadcon_core.dylib"),
-    ]
-        if isfile(candidate)
-            return candidate
-        end
+    for profile in ("release", "debug")
+        found = _search_prefix(joinpath(pkg_dir, "..", "..", "target", profile))
+        !isempty(found) && return found
     end
-    error("Cannot find libreadcon_core. Set READCON_LIB_PATH or build with cargo build --release.")
+    error(
+        "Cannot find libreadcon_core. Set READCON_LIB_PATH or READCON_CORE_LIB " *
+        "to the shared library (or a cargo-c prefix), install the clib artifact, " *
+        "or build with cargo build --release.",
+    )
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)

@@ -383,13 +383,20 @@ Julia (ccall)
 Installation
 ~~~~~~~~~~~~
 
-Set ``READCON_LIB_PATH`` to the shared library path, or build with
-``cargo build --release`` and the Julia package will find it
-automatically.
+Set ``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` to the shared library
+file, or to a cargo-c prefix directory. A local
+``cargo build --release`` is found automatically under
+``target/{release,debug}``. ``Artifacts.toml.in`` is the template for a
+Release ``readcon-core-clib-$VERSION-$target.tar.gz`` artifact.
 
 .. code:: shell
 
     export READCON_LIB_PATH=/path/to/libreadcon_core.so
+    # alias:
+    export READCON_CORE_LIB=/path/to/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu
+
+The Windows clib tarball is the lean DLL. chemfiles is not shipped
+for Windows on that matrix (see the prebuilt C library table below).
 
 Usage
 ~~~~~
@@ -463,6 +470,44 @@ addressable by named getters and setters; arbitrary keys go through
 
 C/C++ (FFI)
 -----------
+
+Prebuilt C library (lean cargo-c tarball)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+GitHub Releases attach ``readcon-core-clib-$VERSION-$target.tar.gz``
+(headers + cdylib + ``lib/pkgconfig/readcon-core.pc``). Workflow
+``.github/workflows/c_lib_tarball.yml``; assembler
+``scripts/package-clib.sh``. cbindgen is not required. This is not the
+cxx *source* tarball (``readcon-core-cxx-$VERSION.tar.gz``).
+
+.. code:: shell
+
+    tar xf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+    export PKG_CONFIG_PATH=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu/lib/pkgconfig
+    pkg-config --cflags --libs readcon-core
+
+Every row is the lean cdylib (``--features chemfiles`` off). The
+Windows asset is the **lean** DLL; chemfiles Windows is **not
+shipped** in this tarball.
+
+.. table::
+
+    +--------------------------------+-------------------------------------+
+    | Target                         | chemfiles                           |
+    +================================+=====================================+
+    | ``x86_64-unknown-linux-gnu``   | off                                 |
+    +--------------------------------+-------------------------------------+
+    | ``aarch64-unknown-linux-gnu``  | off                                 |
+    +--------------------------------+-------------------------------------+
+    | ``aarch64-apple-darwin``       | off                                 |
+    +--------------------------------+-------------------------------------+
+    | ``x86_64-apple-darwin``        | off                                 |
+    +--------------------------------+-------------------------------------+
+    | ``x86_64-pc-windows-msvc``     | **not shipped** (lean DLL only)     |
+    +--------------------------------+-------------------------------------+
+
+Fortran: ``PKG_CONFIG_PATH`` as above, then ``fpm`` in ``fortran/ReadCon``
+(``link = ["readcon_core"]``). Details: ``fortran/README.md``.
 
 Version and spec queries
 ~~~~~~~~~~~~~~~~~~~~~~~~

@@ -2,6 +2,28 @@
 
 Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.h`).
 
+## Library search
+
+`wrapper.jl` accepts **both** `READCON_LIB_PATH` and `READCON_CORE_LIB`.
+Each may be the shared library file or a cargo-c prefix directory
+(`lib/libreadcon_core.so`, `lib/libreadcon_core.dylib`,
+`bin/readcon_core.dll`). Next it looks for a filled `Artifacts.toml`
+(`readcon_core`), then `target/{release,debug}` next to this package.
+
+Prebuilt prefixes ship on the GitHub Release as
+`readcon-core-clib-$VERSION-$target.tar.gz`. Fill
+`Artifacts.toml.in` from the matching `.sha256` sidecars, or:
+
+```bash
+tar xf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+export READCON_LIB_PATH="$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu"
+export READCON_CORE_LIB="$READCON_LIB_PATH"   # alias; either name works
+```
+
+The Windows clib tarball is the **lean** DLL. chemfiles is **not**
+shipped for Windows in that matrix. Conversion stays on
+`readcon-chemfiles` wheels or a local `--features chemfiles` build.
+
 ## Run tests locally
 
 1. Build the shared library from the **repository root**:
@@ -19,9 +41,10 @@ Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.
    julia --project=. -e 'using Pkg; Pkg.test()'
    ```
 
-If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB`, tests that
-touch the FFI **fail fast** with a clear load error (they do not silently skip
-ABI checks). Pure Julia struct layout tests in `test/runtests.jl` still run.
+If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB` /
+`READCON_LIB_PATH`, tests that touch the FFI **fail fast** with a clear
+load error (they do not silently skip ABI checks). Pure Julia struct
+layout tests in `test/runtests.jl` still run.
 
 ## CI
 

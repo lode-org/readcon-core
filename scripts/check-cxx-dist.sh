@@ -43,7 +43,12 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
+[[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
 [[ -f scripts/meson_cargo_build.py ]] || die "missing scripts/meson_cargo_build.py"
+[[ -f .github/workflows/c_lib_tarball.yml ]] || die "missing C library tarball workflow"
+if grep -nE 'features:[[:space:]]*.*chemfiles' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must not enable chemfiles (Windows lean matrix)"
+fi
 
 # CMake version is not hardcoded to a stale release
 if grep -nE 'project\(readcon-core VERSION 0\.13' CMakeLists.txt; then

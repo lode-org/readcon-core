@@ -25,6 +25,29 @@ READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.
 
+## Prebuilt C library (fpm against a cargo-c prefix)
+
+GitHub Releases attach `readcon-core-clib-$VERSION-$target.tar.gz`
+(headers + `libreadcon_core` + `lib/pkgconfig/readcon-core.pc`).
+`fpm.toml` already has `link = ["readcon_core"]`.
+
+```bash
+tar xf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+prefix=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu
+export PKG_CONFIG_PATH=$prefix/lib/pkgconfig:$PKG_CONFIG_PATH
+export LD_LIBRARY_PATH=$prefix/lib:$LD_LIBRARY_PATH
+cd fortran/ReadCon && fpm test
+```
+
+| Target | chemfiles in the clib tarball |
+|--------|-------------------------------|
+| Linux x86_64 / aarch64 | off (lean) |
+| macOS x86_64 / aarch64 | off (lean) |
+| Windows MSVC x86_64 | **not shipped** (lean DLL only) |
+
+Windows chemfiles is not a clib asset. Use `readcon-chemfiles` on
+PyPI or `cargo build --release --features chemfiles` from source.
+
 ## DLPack (builder, full C ABI parity)
 
 All six owned exports plus delete; inspect primary fields without a second metadata API:

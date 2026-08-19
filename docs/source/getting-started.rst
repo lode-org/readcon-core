@@ -32,6 +32,8 @@ Pick **one** language. Version pins match this tree (``0.14.7``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+    | Prebuilt C lib     | ``readcon-core-clib-$VERSION-$target.tar.gz`` on the GitHub Release                 | :doc:`bindings` (Windows row is lean; chemfiles not shipped)                                                                     |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
 ~~~~~~~~~~~~~~~
@@ -81,6 +83,10 @@ From a checkout of this repository:
 
     julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
 
+Point the wrapper at a cargo-c prefix or shared library with
+``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` (both names work). The
+Windows clib tarball is lean; chemfiles is not in that asset.
+
 Language API notes: :doc:`bindings`.
 
 Fortran / C / C++
@@ -127,6 +133,48 @@ Fortran smoke from a checkout (after a release build of the cdylib):
 
     cd fortran/ReadCon && fpm test --flag "-L../../target/release" \
       --link-flag "-L../../target/release -lreadcon_core -ldl -lpthread -lm"
+
+Prebuilt C library tarball (lean cargo-c)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The GitHub Release also attaches
+``readcon-core-clib-$VERSION-$target.tar.gz`` (headers + shared
+library + ``readcon-core.pc``). This is a cargo-c prefix, not the
+cxx *source* tarball. cbindgen is not required.
+
+.. code:: shell
+
+    tar xf readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu.tar.gz
+    prefix=$PWD/readcon-core-clib-0.14.7-x86_64-unknown-linux-gnu
+    export PKG_CONFIG_PATH=$prefix/lib/pkgconfig:$PKG_CONFIG_PATH
+    export LD_LIBRARY_PATH=$prefix/lib:$LD_LIBRARY_PATH
+    pkg-config --cflags --libs readcon-core
+
+Julia: ``READCON_LIB_PATH`` or ``READCON_CORE_LIB`` (file or prefix).
+Fortran: same ``PKG_CONFIG_PATH``, then ``fpm test`` in
+``fortran/ReadCon`` (``link = ["readcon_core"]``).
+
+The Windows clib tarball is the **lean** DLL. chemfiles is **not**
+shipped for Windows here (explicit matrix).
+
+.. table::
+
+    +--------------------------------+-------------------------------------+------------------+
+    | Target                         | Runner                              | chemfiles        |
+    +================================+=====================================+==================+
+    | ``x86_64-unknown-linux-gnu``   | ubuntu-24.04 (BFD, same as wheels)  | off (lean)       |
+    +--------------------------------+-------------------------------------+------------------+
+    | ``aarch64-unknown-linux-gnu``  | ubuntu-24.04-arm                    | off (lean)       |
+    +--------------------------------+-------------------------------------+------------------+
+    | ``aarch64-apple-darwin``       | macos-15                            | off (lean)       |
+    +--------------------------------+-------------------------------------+------------------+
+    | ``x86_64-apple-darwin``        | macos-15-intel                      | off (lean)       |
+    +--------------------------------+-------------------------------------+------------------+
+    | ``x86_64-pc-windows-msvc``     | windows-2022                        | **not shipped**  |
+    +--------------------------------+-------------------------------------+------------------+
+
+Conversion on Windows: ``pip install 'readcon-chemfiles==0.14.7'``, or
+build from source with ``--features chemfiles``.
 
 Smoke test
 ----------
