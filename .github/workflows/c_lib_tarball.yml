@@ -1,0 +1,233 @@
+name: C library tarball
+
+# Prebuilt C ABI prefix (headers + libreadcon_core + readcon-core.pc).
+# Linux rows build inside manylinux_2_28 with the same BFD linker policy
+# as python_wheels.yml. Native-arch runners only (no local cargo).
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - 'scripts/package-clib.sh'
+      - '.github/workflows/c_lib_tarball.yml'
+      - 'include/**'
+      - 'cmake/readcon-core.pc.in'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach C lib tarballs to
+        required: false
+        type: string
+
+concurrency:
+  group: c-lib-tarball-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_HTTP_MULTIPLEXING: "false"
+  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_TIMEOUT: "120"
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: "cc"
+  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: "cc"
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+
+jobs:
+  clib:
+    name: C lib ${{ matrix.variant }} (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Explicit rows only (no axis x include cartesian product).
+      matrix:
+        include:
+          - variant: default
+            os: ubuntu-24.04
+            target: x86_64
+            platform: manylinux_2_28_x86_64
+            manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
+            features: ""
+          - variant: default
+            os: ubuntu-24.04-arm
+            target: aarch64
+            platform: manylinux_2_28_aarch64
+            manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
+            features: ""
+          - variant: default
+            os: macos-15-intel
+            target: x86_64
+            platform: macos_x86_64
+            manylinux_image: ""
+            features: ""
+          - variant: default
+            os: macos-15
+            target: aarch64
+            platform: macos_aarch64
+            manylinux_image: ""
+            features: ""
+          - variant: default
+            os: windows-2022
+            target: x86_64
+            platform: windows_x86_64
+            manylinux_image: ""
+            features: ""
+          - variant: chemfiles
+            os: ubuntu-24.04
+            target: x86_64
+            platform: manylinux_2_28_x86_64
+            manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
+            features: chemfiles-from-sources
+          - variant: chemfiles
+            os: ubuntu-24.04-arm
+            target: aarch64
+            platform: manylinux_2_28_aarch64
+            manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
+            features: chemfiles-from-sources
+          - variant: chemfiles
+            os: macos-15-intel
+            target: x86_64
+            platform: macos_x86_64
+            manylinux_image: ""
+            features: chemfiles
+          - variant: chemfiles
+            os: macos-15
+            target: aarch64
+            platform: macos_aarch64
+            manylinux_image: ""
+            features: chemfiles
+          # Windows + chemfiles is skipped. Official prebuilt libchemfiles
+          # for x86_64-pc-windows-msvc plus vendored zlib/CMake
+          # (chemfiles-from-sources) is not a supported C-tarball path.
+          # python_wheels.yml keeps the wheel-only Windows chemfiles row.
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Packager self-test
+        if: runner.os != 'Windows'
+        run: bash scripts/package-clib.sh --self-test
+
+      - name: Build cdylib in manylinux_2_28
+        if: runner.os == 'Linux'
+        env:
+          # BFD is the stable manylinux linker (same as python_wheels.yml).
+          RUSTFLAGS: "-C link-arg=-fuse-ld=bfd -C link-arg=-Wl,-soname,libreadcon_core.so"
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+          CARGO_FEATURES: ${{ matrix.features }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-cargo .ci-rustup target-manylinux
+          docker run --rm \
+            -e RUSTFLAGS \
+            -e CARGO_FEATURES \
+            -e CARGO_HTTP_MULTIPLEXING \
+            -e CARGO_NET_RETRY \
+            -e CARGO_HTTP_TIMEOUT \
+            -e CMAKE_POLICY_VERSION_MINIMUM \
+            -e CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER \
+            -e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER \
+            -e CARGO_HOME=/io/.ci-cargo \
+            -e RUSTUP_HOME=/io/.ci-rustup \
+            -e CARGO_TARGET_DIR=/io/target-manylinux \
+            -v "$GITHUB_WORKSPACE":/io \
+            -w /io \
+            "$MANYLINUX_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              export PATH="/io/.ci-cargo/bin:$PATH"
+              if ! command -v rustc >/dev/null 2>&1; then
+                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
+                  | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+                export PATH="/io/.ci-cargo/bin:$PATH"
+              fi
+              rustc --version
+              if ! command -v cmake >/dev/null 2>&1; then
+                yum install -y cmake
+              fi
+              if [ -n "${CARGO_FEATURES:-}" ]; then
+                cargo build --release --lib --locked --features "${CARGO_FEATURES}"
+              else
+                cargo build --release --lib --locked
+              fi
+            '
+
+      - name: Install Rust toolchain
+        if: runner.os != 'Linux'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: macOS chemfiles zlib vs SDK
+        if: runner.os == 'macOS' && matrix.variant == 'chemfiles'
+        run: |
+          echo "CFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-DHAVE_UNISTD_H -DHAVE_FDOPEN" >> "$GITHUB_ENV"
+
+      - name: Build cdylib (macOS / Windows)
+        if: runner.os != 'Linux'
+        shell: bash
+        env:
+          CARGO_FEATURES: ${{ matrix.features }}
+        run: |
+          set -euo pipefail
+          feat_args=()
+          if [ -n "${CARGO_FEATURES}" ]; then
+            feat_args=(--features "${CARGO_FEATURES}")
+          fi
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export RUSTFLAGS="-C link-arg=-Wl,-install_name,@rpath/libreadcon_core.dylib"
+          fi
+          cargo build --release --lib --locked "${feat_args[@]}"
+
+      - name: Package prefix tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-clib
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            lib_dir=target-manylinux/release
+            extra=(--require-manylinux 2.28)
+          else
+            lib_dir=target/release
+            extra=()
+          fi
+          bash scripts/package-clib.sh dist-clib \
+            --lib-dir "$lib_dir" \
+            --platform "${{ matrix.platform }}" \
+            --variant "${{ matrix.variant }}" \
+            "${extra[@]}"
+          ls -lh dist-clib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clib-${{ matrix.variant }}-${{ matrix.platform }}
+          path: |
+            dist-clib/readcon-core-*.tar.gz
+            dist-clib/readcon-core-*.tar.gz.sha256
+          if-no-files-found: error
+
+  github-release:
+    name: Attach C lib tarballs to GitHub Release
+    needs: [clib]
+    if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')) && needs.clib.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: 'clib-*'
+          merge-multiple: true
+          path: dist-clib/
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist-clib/readcon-core-*.tar.gz
+            dist-clib/readcon-core-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          append_body: true
+          body: |
+            Prebuilt C ABI prefixes: `readcon-core-$VERSION-manylinux_2_28-{x86_64,aarch64}.tar.gz` (and macOS / Windows lean). Extract and set `PKG_CONFIG_PATH=$prefix/lib/pkgconfig`. Linux builds are manylinux_2_28 with the BFD linker.
