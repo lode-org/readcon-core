@@ -1,0 +1,21 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "readcon-core",
+  "description": "A CON/convel reader/writer with a shipped C ABI and bindings for C++, Python, Julia, and Fortran.",
+  "version": "0.14.7",
+  "datePublished": "2026-08-15",
+  "license": "https://spdx.org/licenses/MIT",
+  "codeRepository": "https://github.com/lode-org/readcon-core",
+  "url": "https://lode-org.github.io/readcon-core",
+  "programmingLanguage": ["Rust", "C", "C++", "Python", "Julia", "Fortran"],
+  "author": [
+    {
+      "@type": "Person",
+      "givenName": "Rohit",
+      "familyName": "Goswami",
+      "email": "rgoswami@ieee.org",
+      "identifier": "https://orcid.org/0000-0002-2393-8056"
+    }
+  ]
+}
