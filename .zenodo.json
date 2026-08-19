@@ -1,0 +1,30 @@
+{
+  "title": "readcon-core: a CON/convel reader/writer with FFI bindings",
+  "version": "0.14.7",
+  "upload_type": "software",
+  "publication_date": "2026-08-15",
+  "creators": [
+    {
+      "name": "Goswami, Rohit",
+      "orcid": "0000-0002-2393-8056",
+      "affiliation": "Science Institute and Faculty of Physical Sciences, University of Iceland"
+    }
+  ],
+  "keywords": [
+    "parser",
+    "computational chemistry",
+    "molecular dynamics",
+    "file format",
+    "CON",
+    "convel"
+  ],
+  "license": "MIT",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/lode-org/readcon-core/tree/v0.14.7",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "notes": "Deposit the v0.14.7 software tag only. Do not attach the manuscript, cover letters, or reviewer correspondence. Do not mint a new version for prose edits."
+}
