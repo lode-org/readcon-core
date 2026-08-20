@@ -114,7 +114,8 @@ def gen_cachegrind() -> str:
     for name in order:
         repeats, n = rows[name]
         rep = repeats if isinstance(repeats, str) else str(repeats)
-        body.append(rf"\texttt{{{name}}} & {_int_tex(n)} & {rep} \\")
+        tex_name = name.replace("_", r"\_")
+        body.append(rf"\texttt{{{tex_name}}} & {_int_tex(n)} & {rep} \\")
     body += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
     return "\n".join(body)
 
