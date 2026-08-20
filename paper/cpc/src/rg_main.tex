@@ -1,4 +1,4 @@
-% Created 2026-08-20 Thu 13:40
+% Created 2026-08-20 Thu 14:31
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -73,6 +73,12 @@ companion store \url{https://github.com/lode-org/readcon-db}\\
 \textit{Licensing provisions:} MIT license (MIT)\\
 \textit{Programming language:} Rust (core and C ABI); C99 and C++17
 headers; Python 3.10+; Julia; Fortran 2008 (\texttt{ISO\_C\_BINDING})\\
+\textit{Supplementary material:} specification
+\texttt{docs/orgmode/spec.org}; Phase~A corpus
+\texttt{resources/conformance/}; printers
+\texttt{scripts/print\_neb\_band.py},
+\texttt{examples/print\_neb\_band.cpp},
+\texttt{examples/print\_neb\_band.f90}.\\
 \textit{Computer / Operating system:} any machine with a Rust 1.88+
 toolchain, or a prebuilt C library tarball; Linux, macOS, and Windows\\
 \textit{RAM:} of order the parsed frame. The committed 218-atom
@@ -95,7 +101,7 @@ Foreign structures enter through chemfiles and leave as CON.
 \texttt{readcon-db} is the companion campaign store: LMDB indexes
 (energy, formula, section presence) and a derived RCSO cache over the
 same text files.\\
-\textit{Restrictions / Unusual features:} Column~4 is a three-bit
+\textit{Additional comments including restrictions and unusual features:} Column~4 is a three-bit
 mask whose decode depends on \texttt{con\_spec\_version}. Lean
 builds keep chemfiles, metatensor, and CUDA symbols and return
 \texttt{RKR\_STATUS\_FEATURE\_DISABLED} rather than hiding them. The
@@ -105,7 +111,14 @@ interchange; gzip/zstd are envelopes of that text. A default
 C prefix enable \texttt{parallel}. Then
 \texttt{rkr\_read\_all\_frames} / \texttt{readcon.read\_con} use
 Rayon above $48$\,KiB; \texttt{rkr\_read\_all\_frames\_n\_threads}
-and \texttt{n\_threads} select the worker count.\\
+and \texttt{n\_threads} select the worker count. Version 0.14.7.
+The C ABI is frozen within 0.14.x. A 1.0.0 tag is the production
+classifier. Cite the software through \texttt{CITATION.cff}
+\cite{smithSoftwareCitationPrinciples2016}. The v0.14.7 software
+archive is \texttt{10.5281/zenodo.21959103}
+\cite{goswamiReadconcore01472026}. This manuscript does not invent a
+paper DOI. Deposit the core and readcon-db freeze tags together; do
+not write a second paper for readcon-db alone.\\
 \textit{Running time:} on the committed equal-geometry JSON (100
 frames of the 218-atom fixture), native CON parse is
 $\wallNativeMs\,\mathrm{ms}$ (Table \ref{tab:wall}). That call is
@@ -114,12 +127,6 @@ $\wallNativeMs\,\mathrm{ms}$ (Table \ref{tab:wall}). That call is
 $48$\,KiB auto-gate. Cachegrind I-refs include parse and the
 buffer writer (Table \ref{tab:cachegrind}). Sequential-versus-worker
 parse and a write wall are Table \ref{tab:io}.\\
-\textit{Additional comments:} Version 0.14.7. The C ABI is frozen
-within 0.14.x. A 1.0.0 tag is the production classifier. Cite the
-software through \texttt{CITATION.cff}
-\cite{smithSoftwareCitationPrinciples2016}. This manuscript does not
-invent an archival DOI. Deposit the core and readcon-db freeze tags
-together; do not write a second paper for readcon-db alone.
 \section{Introduction}
 \label{sec:introduction}
 Saddle searches, adaptive kinetic Monte Carlo, and nudged elastic
@@ -279,7 +286,7 @@ committed table
 (\texttt{docs/source/\_generated/cachegrind\_results.rst}, generated
 2026-08-20T00:38:48Z from commit \texttt{b1e1d11}, features
 \texttt{chemfiles-from-sources}). Those counts are instruction
-counts, not wall times. The harness writes \(100\) frames to a
+counts, not wall times. That program writes \(100\) frames to a
 buffer; that I-ref is in the table. There is no Cachegrind
 scenario for Rayon.
 
@@ -314,7 +321,7 @@ feature set enables Rayon. The \$1.68\$$\backslash$,MB concat is above
 \texttt{PARALLEL\_BYTES\_THRESHOLD} (\$48\$$\backslash$,KiB). Those rows are the
 automatic policy, not \texttt{n\_threads=1}, and they include
 \texttt{PyConFrame} conversion. Table \ref{tab:io} is a different
-protocol: the Rust harness
+protocol: the Rust program
 \texttt{examples/wall\_scale\_harness.rs} on the same 100-frame
 payload, no Python.
 
@@ -351,15 +358,19 @@ between potential evaluations and saddle searches.
 section presence.
 
 \texttt{resources/examples/neb\_band.con} is a four-image spec-3
-band. Each frame declares \texttt{neb\_bead}, \texttt{neb\_band},
-\texttt{energy}, \texttt{fmax}, and a \texttt{forces} section.
+band (two atoms). \texttt{resources/examples/cuh2\_band.con} is the same
+declared bead tags on the 218-atom \texttt{cuh2.con} geometry.
+Each frame declares \texttt{neb\_bead}, \texttt{neb\_band},
+\texttt{energy}, \texttt{fmax}.
 \texttt{scripts/print\_neb\_band.py},
 \texttt{examples/print\_neb\_band.cpp}, and
 \texttt{examples/print\_neb\_band.f90} print bead, energy, and
-\(f_{\max}\). Table \ref{tab:neb} is that output. The energies are
-the line-2 JSON. They are not a production NEB. The declared
-barrier \(E_1-E_0\) is \$\nebBarrierEv\$$\backslash$,eV. The declared \(f_{\max}\) is not
-recomputed from the force block.
+\(f_{\max}\). Table \ref{tab:neb} is that output for the two-atom
+file. The energies are line-2 JSON. They are not a production NEB.
+The declared barrier \(E_1-E_0\) is \$\nebBarrierEv\$$\backslash$,eV. The declared
+\(f_{\max}\) is not recomputed from the force block.
+Python \texttt{index\_projection()} returns the same campaign scalars
+(formula, energy, \texttt{neb\_bead}) that \texttt{readcon-db} indexes.
 
 \input{figures/generated/neb_table}
 
@@ -380,9 +391,10 @@ packages. CMake FetchContent and the in-tree Meson wrap-file point
 at the slim cxx tarball on the matching GitHub Release. A
 conda-forge staged-recipes entry is open (PR 32605) at the same
 version. Cite the software through \texttt{CITATION.cff}
-\cite{smithSoftwareCitationPrinciples2016}. An archival DOI is
-minted on a freeze tag and recorded there; this manuscript does not
-invent one.
+\cite{smithSoftwareCitationPrinciples2016}. The v0.14.7 archive DOI
+is \texttt{10.5281/zenodo.21959103}
+\cite{goswamiReadconcore01472026}. This manuscript does not invent a
+paper DOI.
 
 \bibliographystyle{elsarticle-num}
 \end{document}
