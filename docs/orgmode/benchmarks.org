@@ -139,7 +139,11 @@ the code, not a promise about every host):
 - File load: =read_to_string= below 64 KiB, mmap at/above (=MMAP_THRESHOLD= in
   =src/compression.rs=)
 - Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and =parallel= is on
-  (=PARALLEL_BYTES_THRESHOLD= in =src/iterators.rs=)
+  (=PARALLEL_BYTES_THRESHOLD= in =src/iterators.rs=). Sequential vs
+  pinned workers: =examples/wall_scale_harness.rs= writes
+  =benches/results/wall_scale.json= (host, date, commit). That JSON is
+  Table io in =paper/cpc/main.tex=. Do not mix it with the Python
+  =readcon.read_con= wall table.
 - Skip without atoms: =forward= / =forward_fast= (Cachegrind =forward_*=)
 
 h5py =position/value= alone loads a coordinate array (not cell / constraints /

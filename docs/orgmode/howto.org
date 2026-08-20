@@ -316,6 +316,27 @@ let results = parse_frames_parallel(&contents);
 let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
 #+end_src
 
+Python (wheels enable =parallel=):
+
+#+begin_src python
+frames = readcon.read_con("large_trajectory.con")            # auto
+seq = readcon.read_con("large_trajectory.con", n_threads=1)  # sequential
+pinned = readcon.read_con("large_trajectory.con", n_threads=8)
+assert readcon.has_parallel_support()
+#+end_src
+
+C (published prefix is built with =parallel=):
+
+#+begin_src c
+uintptr_t n = 0;
+RKRConFrame **auto_p = rkr_read_all_frames(path, &n);
+RKRConFrame **seq = rkr_read_all_frames_n_threads(path, &n, 1);
+RKRConFrame **pool = rkr_read_all_frames_n_threads(path, &n, 8);
+if (!rkr_has_parallel_support()) {
+    /* seq and pool are the same sequential path */
+}
+#+end_src
+
 * Python
 
 ** Installation
