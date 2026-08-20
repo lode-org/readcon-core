@@ -131,16 +131,22 @@ program print_neb_band
         have_fmax = .not. ieee_is_nan(real(fmax_v, real64))
       end if
 
-      if (bead /= -1_c_int64_t) then
+      if (bead == -1_c_int64_t) then
+        write(*, '(a)', advance='no') "NA"
+      else
         write(*, '(i0)', advance='no') int(bead, int64)
       end if
       write(*, '(a)', advance='no') achar(tab)
-      if (.not. ieee_is_nan(real(energy, real64))) then
+      if (ieee_is_nan(real(energy, real64))) then
+        write(*, '(a)', advance='no') "NA"
+      else
         write(*, '(g0)', advance='no') real(energy, real64)
       end if
       write(*, '(a)', advance='no') achar(tab)
       if (have_fmax) then
         write(*, '(g0)', advance='no') real(fmax_v, real64)
+      else
+        write(*, '(a)', advance='no') "NA"
       end if
       write(*, '(a)')
     end do
