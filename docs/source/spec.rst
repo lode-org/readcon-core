@@ -446,9 +446,10 @@ the reference implementation stay in sync.
     +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 A minimal example of each path: the file
-``resources/test/tiny_cuh2_strict_invalid.con`` (if present) and the
-test cases under ``src/parser.rs::tests`` and ``tests/parseforces.rs``
-exercise these branches and serve as executable references.
+``resources/test/tiny_cuh2_strict_invalid.con`` (``validate=true``
+rejects column~4 value 8) and the clause-keyed corpus under
+``resources/conformance/``, plus the test cases under
+``src/parser.rs::tests`` and ``tests/parseforces.rs``.
 
 Legacy section detection
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -966,9 +967,9 @@ only at I/O boundaries:
   ``build()``. The .con format binds one mass per element type. If
   multiple atoms of the same symbol carry masses that differ by
   more than the implementation tolerance (reference:
-  ``ConFrameBuilder::TYPE_MASS_ABS_TOL`` = :math:`10^{-8}`),
-  ``build()`` MUST return an error (``ParseError::MassMismatch``).
-  The C ABI maps that error to a ``NULL`` handle from
+  ``ConFrameBuilder::TYPE_MASS_ABS_TOL`` = :math:`10^{-8}`), ``build()``
+  MUST return an error (``ParseError::MassMismatch``). The C ABI
+  maps that error to a ``NULL`` handle from
   ``rkr_frame_builder_build``.
 
 The reference implementation surface lands in v0.11.0:

@@ -191,33 +191,33 @@ Workflows
 
 .. table::
 
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Workflow                  | File                       | Trigger             | Purpose                                              |
-    +===========================+============================+=====================+======================================================+
-    | Prek                      | ``ci_prek.yml``            | push, PR            | ``prek run -a`` (whitespace, ruff, taplo, codespell) |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Documentation             | ``ci_docs.yml``            | push, PR            | ``pixi r -e docs docbld`` then lychee on HTML        |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | C/C++ dist                | ``ci_cxx.yml``             | push, PR            | CMake/Meson/pkg-config without cbindgen              |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR      | Build wheels for 5 platforms, publish to PyPI        |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main          | ASV on base+PR (Python); optional Criterion          |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete  | Post ASV/spyglass table as PR comment                |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Coverage                  | ``coverage.yml``           | push, PR            | Code coverage via tarpaulin                          |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Lint                      | ``lint.yml``               | PR                  | Conventional commit check + large file audit         |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | Release                   | ``release.yml``            | PR plan, ``v*`` tag | cargo-dist plan on PRs; GitHub Release on tag        |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | crates.io                 | ``crates_publish.yml``     | ``v*`` tag          | ``cargo publish --locked``                           |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release      | Attach slim + vendor C/C++ source tarballs           |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
-    | clib tarball              | ``c_lib_tarball.yml``      | Release + dispatch  | Attach prebuilt C ABI (``readcon-core-clib``)        |
-    +---------------------------+----------------------------+---------------------+------------------------------------------------------+
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Workflow                  | File                       | Trigger                                    | Purpose                                                    |
+    +===========================+============================+============================================+============================================================+
+    | Prek                      | ``ci_prek.yml``            | push, PR                                   | ``prek run -a`` (whitespace, ruff, taplo, codespell)       |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Documentation             | ``ci_docs.yml``            | push, PR                                   | ``pixi r -e docs docbld`` then lychee on HTML              |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | C/C++ dist                | ``ci_cxx.yml``             | push, PR                                   | CMake/Meson/pkg-config without cbindgen                    |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR                             | Build wheels for 5 platforms, publish to PyPI              |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main                                 | ASV on base+PR (Python); optional Criterion                |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete                         | Post ASV/spyglass table as PR comment                      |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Coverage                  | ``coverage.yml``           | push, PR                                   | Code coverage via tarpaulin                                |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Lint                      | ``lint.yml``               | PR                                         | Conventional commit check + large file audit               |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | Release                   | ``release.yml``            | PR plan, ``v*`` tag                        | cargo-dist plan on PRs; GitHub Release on tag              |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | crates.io                 | ``crates_publish.yml``     | ``v*`` tag                                 | ``cargo publish --locked``                                 |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release                             | Attach slim + vendor C/C++ source tarballs                 |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    | clib tarball              | ``c_lib_tarball.yml``      | GitHub Release + ``workflow_dispatch`` tag | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
+    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -297,15 +297,16 @@ Mental model (new contributor)
 Attach prebuilt C ABI to an existing tag
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``:
-``release`` published, or ``workflow_dispatch`` with required
-``inputs.tag``. Use this to put
-``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
+``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``: ``release``
+published, or ``workflow_dispatch`` with required ``inputs.tag``. Use this
+to put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
 workflow (for example ``v0.14.7``).
 
 1. Open Actions → **C ABI library tarball**.
+
 2. Run the workflow from a branch that **has** ``scripts/package-clib.sh``
    (usually ``main`` after this lands).
+
 3. Set ``tag`` to the existing Git tag (``v0.14.7``).
 
 The packager comes from the selected workflow ref. Sources and the

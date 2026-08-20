@@ -228,7 +228,7 @@ authoritative interchange. Three reasons:
   "text CON" and "bcon" camps for no gain on typical rare-event file
   sizes (KiB to low MiB).
 
-- ``schema/ReadCon.capnp`` is the *RPC wire* for ``parseFrames`` /
+- ``schema/ReadCon.capnp`` is the **RPC wire** for ``parseFrames`` /
   ``writeFrames``. It is a parsed-frame transport, not an on-disk
   format. Treating it as a file format would freeze an 0.x RPC
   surface as a corpus authority.
@@ -236,7 +236,7 @@ authoritative interchange. Three reasons:
 - ``readcon-db`` indexes CON text. RCSO is a derived cache. Rebuilding
   the cache from text is always legal; the inverse is not.
 
-A packed bcon remains a possible *derived* layout for mmap-heavy
+A packed bcon remains a possible **derived** layout for mmap-heavy
 campaigns (one segment per frame, identity/constraints/sections
 copied losslessly, pointer back to the source CON hash). It is not
 the interchange file and it is not a replacement for LMDB. The paper
