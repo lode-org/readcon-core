@@ -1834,6 +1834,11 @@ void rkr_selection_result_free(struct RKRSelectionResult *result_handle);
 uint8_t rkr_has_chemfiles_support(void);
 
 /**
+ * Returns 1 when this library build includes Rayon multi-frame parse.
+ */
+uint8_t rkr_has_parallel_support(void);
+
+/**
  * Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
  * Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
  *

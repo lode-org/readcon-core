@@ -38,22 +38,22 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            features: chemfiles-from-sources
+            features: chemfiles-from-sources,parallel
             manylinux_image: quay.io/pypa/manylinux_2_28_x86_64
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            features: chemfiles-from-sources
+            features: chemfiles-from-sources,parallel
             manylinux_image: quay.io/pypa/manylinux_2_28_aarch64
           - os: windows-2022
             target: x86_64-pc-windows-msvc
-            features: ""
+            features: parallel
             manylinux_image: ""
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            features: chemfiles
+            features: chemfiles,parallel
           - os: macos-15
             target: aarch64-apple-darwin
-            features: chemfiles
+            features: chemfiles,parallel
           # Windows + chemfiles is not a clib asset. See windows-chemfiles-skip.
     steps:
       - name: Checkout packager (workflow ref; has package-clib.sh)

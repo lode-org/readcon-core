@@ -540,11 +540,10 @@ pub fn parse_frames_parallel_with_threads(
         None => parse_chunks(),
         Some(n) => {
             let n = n.max(1);
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(n)
-                .build()
-                .expect("rayon pool");
-            pool.install(parse_chunks)
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => pool.install(parse_chunks),
+                Err(_) => parse_chunks(),
+            }
         }
     }
 }
