@@ -42,8 +42,30 @@ Forces of Component 1
 H
 Forces of Component 2
 0.010000 0.000000 0.000000 0 1
-example NEB image 2 (product)
-{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"sections":["forces"],"neb_bead":2,"neb_band":0,"energy":-1.10,"fmax":0.27}
+example NEB image 2 (descending)
+{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"sections":["forces"],"neb_bead":2,"neb_band":0,"energy":-0.65,"fmax":0.12}
+10.000000 10.000000 10.000000
+90.000000 90.000000 90.000000
+0 0
+2 0 1
+2
+1 1
+63.546000 1.007930
+Cu
+Coordinates of Component 1
+0.000000 0.000000 0.000000 7 0
+H
+Coordinates of Component 2
+2.250000 0.000000 0.400000 0 1
+
+Cu
+Forces of Component 1
+0.000000 0.000000 0.000000 7 0
+H
+Forces of Component 2
+0.090000 0.000000 -0.040000 0 1
+example NEB image 3 (product)
+{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"sections":["forces"],"neb_bead":3,"neb_band":0,"energy":-1.10,"fmax":0.27}
 10.000000 10.000000 10.000000
 90.000000 90.000000 90.000000
 0 0
