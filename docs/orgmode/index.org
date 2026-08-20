@@ -38,8 +38,8 @@ metatensor hand off to ML; `readcon-db
 
 .. code-block:: shell
 
-   pip install 'readcon==0.14.0'          # Python CON I/O
-   # pip install 'readcon-chemfiles==0.14.0'  # + foreign → CON
+   pip install 'readcon==0.14.7'          # Python CON I/O
+   # pip install 'readcon-chemfiles==0.14.7'  # + foreign → CON
    cargo add readcon-core                 # Rust
    # cargo add readcon-db / pip install readcon-db  # campaigns
 

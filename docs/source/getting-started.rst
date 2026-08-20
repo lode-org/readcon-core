@@ -11,16 +11,16 @@ Getting started
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.14.1``).
+Pick **one** language. Version pins match this tree (``0.14.7``).
 
 .. table::
 
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Package            | Install                                                                             | Destination                                                                                                                                 |
     +====================+=====================================================================================+=============================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.14.1'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
+    | Python CON I/O     | ``pip install 'readcon==0.14.7'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.1'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.7'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Rust CON I/O       | ``cargo add readcon-core``                                                          | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -38,14 +38,14 @@ Python — CON I/O
 
 .. code:: shell
 
-    pip install 'readcon==0.14.1'
+    pip install 'readcon==0.14.7'
 
 Python — CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.14.1'
+    pip install 'readcon-chemfiles==0.14.7'
     # do not also install lean readcon in the same venv
 
 Rust — CON I/O
@@ -97,7 +97,7 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.1/readcon-core-cxx-0.14.1.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
       URL_HASH SHA256=<sha256 from the .sha256 sidecar on the GitHub Release>
     )
     FetchContent_MakeAvailable(readcon-core)
