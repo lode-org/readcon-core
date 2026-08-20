@@ -112,10 +112,10 @@ fi
 
 default_features() {
     case "$TARGET" in
-        *linux*) echo chemfiles-from-sources ;;
-        *apple*) echo chemfiles ;;
-        *windows*) echo "" ;;
-        *) echo chemfiles ;;
+        *linux*) echo chemfiles-from-sources,parallel ;;
+        *apple*) echo chemfiles,parallel ;;
+        *windows*) echo parallel ;;
+        *) echo chemfiles,parallel ;;
     esac
 }
 

@@ -375,12 +375,31 @@ mod aos_soa_agreement_tests {
 pub(crate) const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
 
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    let text = contents.as_str()?;
+    read_all_frames_with_threads(path, None)
+}
+
+/// Collect every frame from `text`.
+///
+/// `num_threads` is `None` for the automatic policy (Rayon when the
+/// `parallel` feature is on and the buffer is at least
+/// [`PARALLEL_BYTES_THRESHOLD`]), `Some(1)` for a sequential iterator,
+/// and `Some(n)` with `n >= 2` for an explicit Rayon pool. Builds
+/// without `parallel` always parse sequentially.
+pub fn frames_from_text(
+    text: &str,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::ParseError> {
     #[cfg(feature = "parallel")]
     {
-        if text.len() >= PARALLEL_BYTES_THRESHOLD {
-            let parts = parse_frames_parallel(text);
+        let use_parallel = match num_threads {
+            Some(1) => false,
+            Some(n) if n >= 2 => true,
+            // None and Some(0): automatic policy.
+            _ => text.len() >= PARALLEL_BYTES_THRESHOLD,
+        };
+        if use_parallel {
+            let pool = num_threads.filter(|&n| n >= 2);
+            let parts = parse_frames_parallel_with_threads(text, pool);
             let mut frames = Vec::with_capacity(parts.len());
             for r in parts {
                 frames.push(r?);
@@ -388,9 +407,25 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
             return Ok(frames);
         }
     }
-    let iter = ConFrameIterator::new(text);
-    let frames: Result<Vec<_>, _> = iter.collect();
-    Ok(frames?)
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    ConFrameIterator::new(text).collect()
+}
+
+/// Like [`read_all_frames`], with an explicit worker count.
+///
+/// `None` is the automatic policy used by [`read_all_frames`]. `Some(1)`
+/// forces sequential parse. `Some(n)` with `n >= 2` pins a Rayon pool
+/// (ignored when the `parallel` feature is off).
+pub fn read_all_frames_with_threads(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str()?;
+    Ok(frames_from_text(text, num_threads)?)
 }
 
 /// Count frames without building atom payloads (uses [`ConFrameIterator::forward_fast`]

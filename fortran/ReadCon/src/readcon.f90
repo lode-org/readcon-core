@@ -273,6 +273,13 @@ module readcon
       integer(c_size_t), intent(out) :: nout
       type(c_ptr) :: c_rkr_read_all_frames
     end function
+    function c_rkr_read_all_frames_n_threads(fn, nout, nthr) bind(C, name="rkr_read_all_frames_n_threads")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), intent(out) :: nout
+      integer(c_size_t), value :: nthr
+      type(c_ptr) :: c_rkr_read_all_frames_n_threads
+    end function
     subroutine c_free_rkr_frame_array(arr, n) bind(C, name="free_rkr_frame_array")
       import :: c_ptr, c_size_t
       type(c_ptr), value :: arr
@@ -732,15 +739,21 @@ contains
     end do
   end function
 
-  function read_all_frames(path) result(frames)
+  function read_all_frames(path, n_threads) result(frames)
     character(len=*), intent(in) :: path
+    integer, intent(in), optional :: n_threads
     type(frame_t), allocatable :: frames(:)
     character(kind=c_char), allocatable :: c(:)
     type(c_ptr) :: arr, fp
-    integer(c_size_t) :: n, i
+    integer(c_size_t) :: n, i, nthr
     type(c_ptr), pointer :: ptrs(:)
     call to_c(path, c)
-    arr = c_rkr_read_all_frames(c, n)
+    if (present(n_threads)) then
+      nthr = int(max(n_threads, 0), c_size_t)
+      arr = c_rkr_read_all_frames_n_threads(c, n, nthr)
+    else
+      arr = c_rkr_read_all_frames(c, n)
+    end if
     if (.not. c_associated(arr) .or. n == 0_c_size_t) then
       allocate(frames(0))
       return
