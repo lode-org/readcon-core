@@ -426,6 +426,18 @@ class TestConFrameConstructor:
         assert energies[1] > energies[0]
         assert energies[1] > energies[3]
 
+    def test_cuh2_band_is_four_218_atom_images(self):
+        path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "resources", "examples", "cuh2_band.con"
+        )
+        frames = readcon.read_con(path)
+        assert len(frames) == 4
+        assert [len(fr) for fr in frames] == [218, 218, 218, 218]
+        assert [fr.neb_bead for fr in frames] == [0, 1, 2, 3]
+        proj = frames[0].index_projection()
+        assert proj["formula"]
+        assert proj["n_atoms"] == 218
+
     def test_charges_spins_magmoms_write_roundtrip(self):
         frames = readcon.read_con(_resource("tiny_cuh2_charges_spins_magmoms.con"))
         assert frames[0].atoms[0].charge == pytest.approx(0.5)
