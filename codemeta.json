@@ -8,6 +8,7 @@
   "license": "https://spdx.org/licenses/MIT",
   "codeRepository": "https://github.com/lode-org/readcon-core",
   "url": "https://lode-org.github.io/readcon-core",
+  "identifier": "https://doi.org/10.5281/zenodo.21959103",
   "programmingLanguage": ["Rust", "C", "C++", "Python", "Julia", "Fortran"],
   "author": [
     {

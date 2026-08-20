@@ -12,6 +12,10 @@ repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
 version: 0.14.7
 date-released: "2026-08-15"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21959103
+    description: Software archive for the v0.14.7 tag on lode-org/readcon-core
 keywords:
   - parser
   - computational chemistry
