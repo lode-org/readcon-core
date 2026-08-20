@@ -1,0 +1,9 @@
+{
+  "id": "v3-units",
+  "n_atoms": 1,
+  "spec_version": 3,
+  "fixed": [[true, true, true]],
+  "positions": [[0.0, 0.0, 0.0]],
+  "atom_ids": [0],
+  "symbols": ["Cu"]
+}
