@@ -1,12 +1,15 @@
 //! Clause-keyed CON conformance corpus.
 //!
 //! Reads `resources/conformance/manifest.toml` and checks each fixture:
-//! valid files parse (with optional column-4 `expect_fixed`); invalid files
-//! yield the named [`ParseError`] variant. Clause strings must appear in
-//! `docs/orgmode/spec.org`.
+//! valid files parse (with optional column-4 `expect_fixed`) and match the
+//! sibling JSON under `resources/conformance/golden/`; invalid files yield
+//! the named [`ParseError`] variant and must not have a golden. Clause
+//! strings must appear in `docs/orgmode/spec.org`. A missing golden for a
+//! valid id fails; an extra file in `golden/` fails.
 
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
+use readcon_core::types::ConFrame;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,7 +117,10 @@ fn parse_manifest(text: &str) -> Vec<Case> {
             continue;
         }
         let Some((key, val)) = line.split_once('=') else {
-            panic!("manifest line {}: expected key = value, got {line}", idx + 1);
+            panic!(
+                "manifest line {}: expected key = value, got {line}",
+                idx + 1
+            );
         };
         let key = key.trim();
         let val = val.trim();
@@ -176,6 +182,140 @@ fn listed_con_files(root: &Path) -> BTreeSet<String> {
     out
 }
 
+fn listed_golden_files(root: &Path) -> BTreeSet<String> {
+    let dir = root.join("golden");
+    let mut out = BTreeSet::new();
+    if !dir.is_dir() {
+        return out;
+    }
+    for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+        let entry = entry.expect("dirent");
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.ends_with(".json") {
+            out.insert(name.into_owned());
+        }
+    }
+    out
+}
+
+fn json_u64(val: &serde_json::Value, ctx: &str) -> u64 {
+    val.as_u64()
+        .unwrap_or_else(|| panic!("{ctx}: expected unsigned integer, got {val}"))
+}
+
+fn json_str(val: &serde_json::Value, ctx: &str) -> String {
+    val.as_str()
+        .unwrap_or_else(|| panic!("{ctx}: expected string, got {val}"))
+        .to_string()
+}
+
+fn json_bool3_rows(val: &serde_json::Value, ctx: &str) -> Vec<[bool; 3]> {
+    let rows = val
+        .as_array()
+        .unwrap_or_else(|| panic!("{ctx}: expected array of [fx, fy, fz]"));
+    rows.iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let cells = row
+                .as_array()
+                .unwrap_or_else(|| panic!("{ctx}[{i}]: expected [fx, fy, fz]"));
+            assert_eq!(cells.len(), 3, "{ctx}[{i}]: expected 3 bools");
+            let bit = |j: usize| {
+                cells[j]
+                    .as_bool()
+                    .unwrap_or_else(|| panic!("{ctx}[{i}][{j}]: expected bool"))
+            };
+            [bit(0), bit(1), bit(2)]
+        })
+        .collect()
+}
+
+fn json_f64_3_rows(val: &serde_json::Value, ctx: &str) -> Vec<[f64; 3]> {
+    let rows = val
+        .as_array()
+        .unwrap_or_else(|| panic!("{ctx}: expected array of [x, y, z]"));
+    rows.iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let cells = row
+                .as_array()
+                .unwrap_or_else(|| panic!("{ctx}[{i}]: expected [x, y, z]"));
+            assert_eq!(cells.len(), 3, "{ctx}[{i}]: expected 3 numbers");
+            let num = |j: usize| {
+                cells[j]
+                    .as_f64()
+                    .unwrap_or_else(|| panic!("{ctx}[{i}][{j}]: expected number"))
+            };
+            [num(0), num(1), num(2)]
+        })
+        .collect()
+}
+
+fn json_u64_rows(val: &serde_json::Value, ctx: &str) -> Vec<u64> {
+    let rows = val
+        .as_array()
+        .unwrap_or_else(|| panic!("{ctx}: expected array of integers"));
+    rows.iter()
+        .enumerate()
+        .map(|(i, v)| json_u64(v, &format!("{ctx}[{i}]")))
+        .collect()
+}
+
+fn json_str_rows(val: &serde_json::Value, ctx: &str) -> Vec<String> {
+    let rows = val
+        .as_array()
+        .unwrap_or_else(|| panic!("{ctx}: expected array of strings"));
+    rows.iter()
+        .enumerate()
+        .map(|(i, v)| json_str(v, &format!("{ctx}[{i}]")))
+        .collect()
+}
+
+fn assert_matches_golden(case_id: &str, frame: &ConFrame, golden: &serde_json::Value) {
+    let obj = golden
+        .as_object()
+        .unwrap_or_else(|| panic!("{case_id}: golden must be a JSON object"));
+    let field = |name: &str| {
+        obj.get(name)
+            .unwrap_or_else(|| panic!("{case_id}: golden missing {name}"))
+    };
+
+    let got_id = json_str(field("id"), &format!("{case_id}.id"));
+    assert_eq!(got_id, case_id, "{case_id}: golden id must match manifest");
+
+    let n_atoms = json_u64(field("n_atoms"), &format!("{case_id}.n_atoms")) as usize;
+    let spec_version = json_u64(field("spec_version"), &format!("{case_id}.spec_version")) as u32;
+    let fixed = json_bool3_rows(field("fixed"), &format!("{case_id}.fixed"));
+    let positions = json_f64_3_rows(field("positions"), &format!("{case_id}.positions"));
+    let atom_ids = json_u64_rows(field("atom_ids"), &format!("{case_id}.atom_ids"));
+    let symbols = json_str_rows(field("symbols"), &format!("{case_id}.symbols"));
+
+    assert_eq!(n_atoms, frame.atom_data.len(), "{case_id}: n_atoms");
+    assert_eq!(
+        spec_version, frame.header.spec_version,
+        "{case_id}: spec_version"
+    );
+    assert_eq!(fixed.len(), n_atoms, "{case_id}: fixed length");
+    assert_eq!(positions.len(), n_atoms, "{case_id}: positions length");
+    assert_eq!(atom_ids.len(), n_atoms, "{case_id}: atom_ids length");
+    assert_eq!(symbols.len(), n_atoms, "{case_id}: symbols length");
+
+    let got_fixed: Vec<[bool; 3]> = frame.atom_data.iter().map(|a| a.fixed).collect();
+    let got_positions: Vec<[f64; 3]> = frame.atom_data.iter().map(|a| [a.x, a.y, a.z]).collect();
+    let got_ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+    let got_symbols: Vec<String> = frame
+        .atom_data
+        .iter()
+        .map(|a| a.symbol.to_string())
+        .collect();
+
+    assert_eq!(got_fixed, fixed, "{case_id}: fixed");
+    assert_eq!(got_positions, positions, "{case_id}: positions");
+    assert_eq!(got_ids, atom_ids, "{case_id}: atom_ids");
+    assert_eq!(got_symbols, symbols, "{case_id}: symbols");
+}
+
 #[test]
 fn conformance_corpus_matches_manifest() {
     let root = corpus_root();
@@ -196,6 +336,25 @@ fn conformance_corpus_matches_manifest() {
         listed, on_disk,
         "manifest paths must match .con files under valid/ and invalid/"
     );
+
+    let valid_goldens: BTreeSet<String> = cases
+        .iter()
+        .filter(|c| c.kind == Kind::Valid)
+        .map(|c| format!("{}.json", c.id))
+        .collect();
+    let on_disk_goldens = listed_golden_files(&root);
+    assert_eq!(
+        valid_goldens, on_disk_goldens,
+        "golden/ must contain exactly one JSON file per valid manifest id"
+    );
+    for case in cases.iter().filter(|c| c.kind == Kind::Invalid) {
+        let extra = root.join("golden").join(format!("{}.json", case.id));
+        assert!(
+            !extra.exists(),
+            "{}: invalid case must not have a golden",
+            case.id
+        );
+    }
 
     for case in &cases {
         assert!(
@@ -226,6 +385,13 @@ fn conformance_corpus_matches_manifest() {
                         case.id
                     );
                 }
+                let golden_path = root.join("golden").join(format!("{}.json", case.id));
+                let golden_text = fs::read_to_string(&golden_path).unwrap_or_else(|e| {
+                    panic!("{}: missing golden {}: {e}", case.id, golden_path.display());
+                });
+                let golden: serde_json::Value = serde_json::from_str(&golden_text)
+                    .unwrap_or_else(|e| panic!("{}: golden JSON: {e}", case.id));
+                assert_matches_golden(&case.id, &frame, &golden);
             }
             Kind::Invalid => {
                 let err = match parsed {
