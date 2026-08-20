@@ -65,8 +65,9 @@ companion store \url{https://github.com/lode-org/readcon-db}\\
 headers; Python 3.10+; Julia; Fortran 2008 (\texttt{ISO\_C\_BINDING})\\
 \textit{Computer / Operating system:} any machine with a Rust 1.88+
 toolchain, or a prebuilt C library tarball; Linux, macOS, and Windows\\
-\textit{RAM:} of order the parsed frame (the 218-atom fixture is a few
-hundred kilobytes of text)\\
+\textit{RAM:} of order the parsed frame. The committed 218-atom
+\texttt{cuh2.con} frame is $16\,771$\,B of text; the 100-frame
+concat in Table~\ref{tab:wall} is $1\,677\,100$\,B.\\
 \textit{External routines:} optional chemfiles, metatensor, DLPack,
 zstd, CUDA (feature-gated); readcon-db uses LMDB. Cap'n Proto is a
 Rust-only RPC feature, not a C ABI symbol.\\
@@ -89,12 +90,20 @@ mask whose decode depends on \texttt{con\_spec\_version}. Lean
 builds keep chemfiles, metatensor, and CUDA symbols and return
 \texttt{RKR\_STATUS\_FEATURE\_DISABLED} rather than hiding them. The
 builder returns \texttt{NULL} on type-mass mismatch. Text CON is the
-interchange; gzip/zstd are envelopes of that text.\\
+interchange; gzip/zstd are envelopes of that text. A default
+\texttt{cargo build} is sequential. Python wheels and the published
+C prefix enable \texttt{parallel}. Then
+\texttt{rkr\_read\_all\_frames} / \texttt{readcon.read\_con} use
+Rayon above $48$\,KiB; \texttt{rkr\_read\_all\_frames\_n\_threads}
+and \texttt{n\_threads} select the worker count.\\
 \textit{Running time:} on the committed equal-geometry JSON (100
 frames of the 218-atom fixture), native CON parse is
-$2.771\,\mathrm{ms}$; see Table~\ref{tab:wall}. Cachegrind
-instruction counts are the commit-stable measurement
-(Table~\ref{tab:cachegrind}).\\
+$2.771\,\mathrm{ms}$ (Table~\ref{tab:wall}). That call is
+\texttt{readcon.read\_con} with \texttt{python,chemfiles}; the
+\texttt{python} feature pulls Rayon, and $1.68$\,MB is above the
+$48$\,KiB auto-gate. Cachegrind I-refs include parse and the
+buffer writer (Table~\ref{tab:cachegrind}). Sequential-versus-worker
+parse and a write wall are Table~\ref{tab:io}.\\
 \textit{Additional comments:} Version 0.14.7. The C ABI is frozen
 within 0.14.x. A 1.0.0 tag is the production classifier. Cite the
 software through \texttt{CITATION.cff}
@@ -152,7 +161,8 @@ constraint mask and a pre-grouping \texttt{atom\_id}. Lean XYZ, as
 timed in this paper, has no constraint mask. The library's ASE
 adapters convert a parsed \texttt{ConFrame} to \texttt{Atoms} and
 back; they do not register a \texttt{format='con'} plugin and do
-not replace \texttt{ase.io.eon}.
+not replace \texttt{ase.io.eon}. That reader treats leftover
+force-section lines after the coordinate parse as an error.
 
 H5MD is the structured particle container in this journal
 \cite{deBuylH5MDStructuredEfficient2014}. It can carry per-particle
@@ -174,7 +184,8 @@ chemfiles is the optional ingress library
 \cite{frauxChemfiles2023}: it opens many formats; this paper
 measures XYZ$\to$\texttt{ConFrame}. MDAnalysis is used only as the
 H5MD Python API in the wall-time table
-\cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016}.
+\cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016};
+MDTraj is not timed \cite{mcgibbonMDTrajModernOpen2015}.
 An optional metatensor export copies four \texttt{TensorBlock}s
 (positions, velocities, forces, per-atom energies)
 \cite{bigiMetatensorMetatomicFoundational2026}; it is not a
@@ -233,7 +244,15 @@ and that header is what CMake FetchContent, the Meson wrap-file, and
 
 Python (\texttt{readcon} / \texttt{readcon-chemfiles}), Julia, and
 Fortran bind the C ABI (Python also calls the Rust parser directly).
-Lean builds return \texttt{RKR\_STATUS\_FEATURE\_DISABLED} for
+The \texttt{python} feature enables Rayon. Then
+\texttt{read\_all\_frames} / \texttt{read\_con} parse in parallel
+when the buffer is at least $48$\,KiB; \texttt{n\_threads=1} forces
+the sequential iterator. A default \texttt{cargo build} is
+sequential. The published C prefix is built with \texttt{parallel},
+so \texttt{rkr\_read\_all\_frames} follows the same automatic
+policy. \texttt{rkr\_read\_all\_frames\_n\_threads} selects the
+worker count ($0$ auto, $1$ sequential, $n\geq 2$ a pool). Lean
+builds return \texttt{RKR\_STATUS\_FEATURE\_DISABLED} for
 chemfiles, metatensor, and CUDA rather than hiding the symbol. RPC
 is a Rust feature and is not on the C ABI. Builder
 \texttt{rkr\_frame\_builder\_build} returns \texttt{NULL} on
@@ -250,18 +269,23 @@ Two measurements are kept separate.
 
 Valgrind Cachegrind on \texttt{examples/cachegrind\_harness.rs} is
 the commit-stable instruction-count measurement.
-Table~\ref{tab:cachegrind} copies the
+Table~\ref{tab:cachegrind} reports selected rows from the
 committed table
 (\texttt{docs/source/\_generated/cachegrind\_results.rst}, generated
 2026-08-20T00:38:48Z from commit \texttt{b1e1d11}, features
 \texttt{chemfiles-from-sources}). Those counts are instruction
-counts, not wall times.
+counts, not wall times. The harness writes $100$ frames to a
+buffer; that I-ref is in the table. There is no Cachegrind
+scenario for Rayon.
 
 \begin{table}[ht]
 \centering
 \caption{Cachegrind instruction counts (I-refs). Lower is better on
 the same CI image. Source:
-\texttt{docs/source/\_generated/cachegrind\_results.rst}.}
+\texttt{docs/source/\_generated/cachegrind\_results.rst}.
+\texttt{write\_100\_frames} is \texttt{ConFrameWriter::extend} into
+a \texttt{Vec<u8>} on $100$ copies of \texttt{tiny\_cuh2.con}.
+There is no Rayon scenario.}
 \label{tab:cachegrind}
 \begin{tabular}{lrr}
 \toprule
@@ -269,6 +293,9 @@ Scenario & I-refs & Repeats \\
 \midrule
 \texttt{parse\_multi\_2x4} & $6\,447\,055$ & 50 \\
 \texttt{parse\_cuh2\_218} & $12\,674\,531$ & 20 \\
+\texttt{parse\_100\_frames} & $29\,094\,583$ & 10 \\
+\texttt{forward\_100\_frames} & $6\,893\,275$ & 10 \\
+\texttt{write\_100\_frames} & $35\,135\,501$ & 10 \\
 \texttt{chemfiles\_xyz\_path} & $8\,795\,751$ & 50 \\
 \texttt{float\_fast\_float2} & $19\,992\,587$ & $10^{4}$ fields \\
 \texttt{float\_std\_parse} & $32\,883\,079$ & $10^{4}$ fields \\
@@ -284,6 +311,8 @@ is the committed JSON from a Linux x86\_64 host
 with 100 frames of the 218-atom \texttt{cuh2.con} fixture. The
 \texttt{ase.io.eon} row uses a synthetic 100-frame file of the same
 atom count ($1\,724\,500$ bytes), not the fixture concatenation.
+Leftover force-section lines are an error in that reader, so the
+timed file is coordinates-only.
 
 \begin{table}[ht]
 \centering
@@ -320,16 +349,63 @@ Same CON text & ASE \texttt{ase.io.eon} & $28.056$ \\
 \end{tabular}
 \end{table}
 
-CON.gz is $0.86\times$ the positions-only H5MD file on this
-concatenation; CON.zst is $0.065\times$. The ratio holds for
-repeated rare-event checkpoints. h5py is faster because it loads a
+On this identical-frame concatenation, \texttt{CON.gz} (gzip of the
+text CON) is $0.86\times$ the positions-only H5MD file and
+\texttt{CON.zst} is $0.065\times$. Those sizes are for this blob,
+not a general rare-event law. h5py is faster because it loads a
 coordinate array. MDAnalysis H5MD cost is the Python API
 \cite{gowersMDAnalysisPythonPackage2016}. Chemfiles ingress is a
 different payload: lean XYZ has no constraint mask
-\cite{frauxChemfiles2023}. Those facts belong in the same table.
+\cite{frauxChemfiles2023}. The table reports them together so the
+payloads stay visible.
 
-Peer scripts write JSON with host, date, and commit. Numbers without
-that provenance are plots, not paper tables.
+The three native CON medians are \texttt{readcon.read\_con} (or
+\texttt{read\_con\_string}) under \texttt{python,chemfiles}. That
+feature set enables Rayon. The $1.68$\,MB concat is above
+\texttt{PARALLEL\_BYTES\_THRESHOLD} ($48$\,KiB). Those rows are the
+automatic policy, not \texttt{n\_threads=1}, and they include
+\texttt{PyConFrame} conversion. Table~\ref{tab:io} is a different
+protocol: the Rust harness
+\texttt{examples/wall\_scale\_harness.rs} on the same 100-frame
+payload, no Python.
+
+\begin{table}[ht]
+\centering
+\caption{Median wall times, 100 frames of the 218-atom
+\texttt{cuh2.con} geometry, five repeats
+(\texttt{benches/results/wall\_scale.json}, 2026-08-20T18:10Z, host
+\texttt{rgam5terra}, 32 CPUs, tree \texttt{72e3fb54},
+\texttt{cargo run --release --example wall\_scale\_harness
+--features parallel}). Sequential is
+\texttt{frames\_from\_text(..., Some(1))}. Auto is the $48$\,KiB
+policy on the global Rayon pool. Pinned pools use
+\texttt{parse\_frames\_parallel\_with\_threads}. Write is
+\texttt{ConFrameWriter} into a memory buffer of those frames. Do
+not average these with Table~\ref{tab:wall}.}
+\label{tab:io}
+\begin{tabular}{@{}llr@{}}
+\toprule
+Path & Policy & Median (ms) \\
+\midrule
+Parse & sequential (\texttt{n=1}) & $2.409$ \\
+ & auto (global pool) & $0.627$ \\
+ & Rayon $n=2$ & $1.192$ \\
+ & Rayon $n=4$ & $0.896$ \\
+ & Rayon $n=8$ & $0.771$ \\
+ & Rayon $n=16$ & $0.717$ \\
+\midrule
+Write & buffer, 100 frames & $4.126$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On this host the automatic policy is $3.8\times$ the sequential
+iterator. A 16-worker pool is slower than auto because auto uses
+the 32-CPU global pool. The write path is the same frames, not a
+peer-format comparison.
+
+Peer scripts write JSON with host, date, and commit. This paper
+tables only numbers that carry that provenance.
 
 \section{Multi-language fidelity}
 
@@ -339,9 +415,11 @@ value~$1$ is all-fixed; spec~2 value~$1$ is $x$-only; spec~2
 value~$7$ is all-fixed), required v3 units, missing
 \texttt{con\_spec\_version}, unsupported version~$4$, unknown
 section names, and \texttt{validate=true} without
-\texttt{sections}. Rust, the C ABI, and Python share the same
-parser. Fortran and Julia call the C ABI. The optional Pest grammar
-is exercised separately (\texttt{cargo test --features grammar}).
+\texttt{sections}. Each valid id has a JSON golden for spec
+version, column-4 mask, positions, atom ids, and symbols. Rust, the
+C ABI, and Python share the same parser. Fortran and Julia call the
+C ABI. The optional Pest grammar is exercised separately
+(\texttt{cargo test --features grammar}).
 The published cxx tarball on the \texttt{v0.14.7} GitHub Release is
 the CMake FetchContent URL (SHA256
 \texttt{14710ec007b2131d2c0e13931bf3e7e443ce87627ace2fb21497a05ea0b5df43}).
@@ -351,10 +429,41 @@ the CMake FetchContent URL (SHA256
 eOn and the amsel campaign stack consume CON as the checkpoint
 between potential evaluations and saddle searches.
 \texttt{readcon-db} indexes those files for energy, formula, and
-section presence. \texttt{resources/examples/neb\_band.con} is a
-three-image band with \texttt{neb\_bead}, \texttt{energy}, and
-forces; \texttt{scripts/print\_neb\_band.py} prints energy versus
-bead. Python notebooks use \texttt{readcon} for lean I/O and
+section presence.
+
+\texttt{resources/examples/neb\_band.con} is a four-image spec-3
+band. Each frame declares \texttt{neb\_bead}, \texttt{neb\_band},
+\texttt{energy}, \texttt{fmax}, and a \texttt{forces} section.
+\texttt{scripts/print\_neb\_band.py},
+\texttt{examples/print\_neb\_band.cpp}, and
+\texttt{examples/print\_neb\_band.f90} print bead, energy, and
+$f_{\max}$. Table~\ref{tab:neb} is that output. The energies are
+the line-2 JSON. They are not a production NEB. The declared
+barrier $E_1-E_0$ is $0.80$\,eV. The declared $f_{\max}$ is not
+recomputed from the force block.
+
+\begin{table}[ht]
+\centering
+\caption{Declared NEB metadata recovered from
+\texttt{resources/examples/neb\_band.con}. Spec~3, \texttt{units}
+length=\texttt{angstrom}, energy=\texttt{eV},
+\texttt{sections=[forces]}, \texttt{neb\_band=0}. $E$ and
+$f_{\max}$ are line-2 JSON. They are not recomputed from the force
+block.}
+\label{tab:neb}
+\begin{tabular}{@{}rlll@{}}
+\toprule
+Bead & Role & $E$ (eV) & $f_{\max}$ \\
+\midrule
+0 & reactant & $-1.20$ & $0.31$ \\
+1 & saddle   & $-0.40$ & $0.08$ \\
+2 & descending & $-0.65$ & $0.12$ \\
+3 & product  & $-1.10$ & $0.27$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Python notebooks use \texttt{readcon} for lean I/O and
 \texttt{readcon-chemfiles} when the input arrives as XYZ.
 \texttt{read\_chemfiles} also accepts PDB and GRO through chemfiles;
 those paths are untested in this tree and do not preserve residues
