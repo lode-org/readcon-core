@@ -1652,6 +1652,11 @@ fn has_chemfiles_support() -> bool {
     crate::chemfiles_import::chemfiles_enabled()
 }
 
+#[pyfunction]
+fn has_parallel_support() -> bool {
+    cfg!(feature = "parallel")
+}
+
 fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyErr {
     use crate::chemfiles_import::ChemfilesImportError;
     match e {

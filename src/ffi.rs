@@ -3875,6 +3875,19 @@ pub extern "C" fn rkr_has_chemfiles_support() -> u8 {
         0
     }
 }
+
+/// Returns 1 when this library build includes Rayon multi-frame parse.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_has_parallel_support() -> u8 {
+    #[cfg(feature = "parallel")]
+    {
+        1
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        0
+    }
+}
 /// Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
 /// Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
 ///
