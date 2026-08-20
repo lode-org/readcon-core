@@ -62,7 +62,7 @@ A separate =criterion-benchmark= job may save Criterion baselines; it uses
 =continue-on-error: true= so a Rust microbench miss does not fail the workflow
 conclusion that asv-perch requires.
 
-Suite (calls shipped =readcon= only):
+Suite (calls the installed =readcon= module only):
 
 | Class | API timed |
 |---------------------------------+-----------------------------------------------|
