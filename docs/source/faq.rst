@@ -36,8 +36,8 @@ lose the mask or the identity on the first rewrite.
     +--------------------------+----------------------------------------------------------------------------+
 
 Saddle, dimer, and NEB pipelines already depend on that payload.
-``readcon-core`` is the spec v2-v3 reader/writer and the hourglass
-``rkr_*`` ABI in each language. Chemfiles converts **into** CON; DLPack
+``readcon-core`` is the spec v2-v3 reader/writer and the ``rkr_*``
+ABI in each language. Chemfiles converts **into** CON; DLPack
 and metatensor export **out** of it.
 `index\_proj <https://docs.rs/readcon-core/latest/readcon_core/index_proj/>`_
 and ``readcon-db`` index corpora that stay CON text. Spec:
@@ -346,7 +346,7 @@ hand-rolling XYZ and its own atoms type. Migration guide:
     +=======================================================================================================+=====================================================================================================================================================================+
     | CON on disk                                                                                           | The checkpoint format (text, optional gzip/zstd)                                                                                                                    |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-core``                                                                                      | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor (`docs.rs <https://docs.rs/readcon-core>`_)                                  |
+    | ``readcon-core``                                                                                      | Frame API + ``rkr_*`` ABI + chemfiles in + selection + compression + DLPack/metatensor (`docs.rs <https://docs.rs/readcon-core>`_)                                  |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | ``readcon-db``                                                                                        | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader (`docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_) |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -411,16 +411,14 @@ How do XYZ, PDB, GRO, and chemfiles fit in?
 They are **ingress**. Chemfiles (Cargo ``chemfiles``, PyPI ``readcon-chemfiles``)
 maps foreign structures into ``ConFrame`` / CON so the rest of the stack speaks
 one format. The durable interchange is CON (constraints, ``atom_id``, sections,
-JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
+JSON, ``rkr_*`` ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
 keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
 How-to: :doc:`migrate`, :doc:`chemfiles-tutorial`.
 
-Why an hourglass C ABI?
------------------------
+Why a C ABI?
+------------
 
-Optimizers and drivers are often Fortran or C++. A single ``rkr_*`` surface
-gives those codes the same CON semantics as Python and Julia without embedding
-a Python interpreter on the I/O path. The 0.14.x stability contract
-(ownership, sentinels, no-abort errors, Z=1..92 helpers) is on the
-architecture page. A ``1.0.0`` cut is the production classifier, not a
-silent ABI rewrite.
+Optimizers and drivers are Fortran or C++. A single ``rkr_*`` surface
+gives those codes the same CON semantics as Python and Julia without
+a Python interpreter on the I/O path. Ownership, sentinels, and the
+Z=1..92 helper ceiling are on the architecture page.
