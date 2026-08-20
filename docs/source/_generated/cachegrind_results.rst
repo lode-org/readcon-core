@@ -23,7 +23,7 @@
      - 6,893,275
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
-     - 12,674,531
+     - 12,674,526
      - 218-atom frame (20×)
    * - ``float_fast_float2``
      - 19,992,587
@@ -44,7 +44,7 @@
      - 6,046,756
      - selection ``name O`` (50×)
 
-Generated **2026-08-20T00:38:48Z** from commit ``b1e1d11``
+Generated **2026-08-20T01:37:08Z** from commit ``4c53d06``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
