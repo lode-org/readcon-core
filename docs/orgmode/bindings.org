@@ -25,7 +25,7 @@ task.
 | Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~rkr_read_all_frames~ | ~readcon::read_all_frames~ |
 | Count frames (skip walk) | ~iterators::count_frames~ | ~readcon.count_frames~ | n/a | n/a | n/a | n/a |
 | Coordinates on a loaded frame | SoA on ~ConFrame~ | ~ConFrame.coords_array()~ (after full-frame load) | via frame fields | via frame accessors | via frame accessors | via frame accessors |
-| Parallel multi-frame parse | yes (~parallel~; size gate in ~read_all_frames~) | yes (via ~python~→~parallel~) | no | no | no | no |
+| Parallel multi-frame parse | yes (~parallel~; 48 KiB gate; ~n_threads~) | yes (~n_threads~; wheels enable ~parallel~) | no (iterator walk) | yes (optional ~n_threads~; needs a ~parallel~ lib) | yes (~rkr_read_all_frames_n_threads~) | yes (~read_all_frames(path, n)~) |
 | Builder API | ~ConFrameBuilder~ | ~PyConFrameBuilder~ | ~ConFrameBuilder~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~rkr_frame_new~ + ~rkr_frame_add_atom_full~ | ~readcon::ConFrameBuilder~ |
 | Writer API | ~ConFrameWriter~ | ~write_frames~ | ~write_frames~ | ~create_writer_from_path_c~ + ~rkr_writer_extend~ | ~create_writer_from_path_c~ + ~rkr_writer_extend~ | ~readcon::ConFrameWriter~ |
 | Velocity / force sections | yes | yes | yes | yes | yes | yes |
