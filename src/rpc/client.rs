@@ -2,6 +2,7 @@ use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
 use futures::AsyncReadExt;
 
 use super::convert::{fill_frame_builder, frame_from_reader};
+use super::{set_compatibility_stamp, validate_compatibility_stamp};
 use super::read_con_capnp::read_con_service;
 use crate::types::ConFrame;
 
@@ -55,9 +56,14 @@ impl RpcClient {
                     tokio::task::spawn_local(rpc_system);
 
                     let mut request = service.parse_frames_request();
-                    request.get().init_req().set_file_contents(data);
+                    {
+                        let mut parse_request = request.get().init_req();
+                        set_compatibility_stamp(parse_request.reborrow().init_compatibility());
+                        parse_request.set_file_contents(data);
+                    }
                     let response = request.send().promise.await?;
                     let result = response.get()?.get_result()?;
+                    validate_compatibility_stamp(result.get_compatibility()?)?;
                     let frame_data_list = result.get_frames()?;
 
                     let mut frames = Vec::with_capacity(frame_data_list.len() as usize);
@@ -94,6 +100,7 @@ impl RpcClient {
                     let mut request = service.write_frames_request();
                     {
                         let mut wr = request.get().init_req();
+                        set_compatibility_stamp(wr.reborrow().init_compatibility());
                         let mut list = wr.reborrow().init_frames(frames.len() as u32);
                         for (i, frame) in frames.iter().enumerate() {
                             fill_frame_builder(list.reborrow().get(i as u32), frame)
@@ -102,6 +109,7 @@ impl RpcClient {
                     }
                     let response = request.send().promise.await?;
                     let result = response.get()?.get_result()?;
+                    validate_compatibility_stamp(result.get_compatibility()?)?;
                     let bytes = result.get_file_contents()?;
                     Ok(bytes.to_vec())
                 })
