@@ -118,11 +118,12 @@ The format is small and human-readable. Independent implementations
 have treated column~4 as ``fixed or not'' and have ignored line~2.
 ASE's \texttt{ase.io.eon} reader is of that class
 \cite{larsenAtomicSimulationEnvironment2017}: it decodes column~4
-with \texttt{bool(int(...))}, discards column~5, and does not parse
-force sections. Archived eOn C++ does the same boolean decode while
-keeping the fifth integer on \texttt{.con} (not on \texttt{.convel}).
-Neither stack has a units object. Column~4 therefore cannot carry a
-per-axis mask unless the reader consults a spec version.
+with \texttt{bool(int(...))}, discards column~5, and treats leftover
+force-section lines after the coordinate parse as an error.
+Archived eOn C++ does the same boolean decode while keeping the
+fifth integer on \texttt{.con} (not on \texttt{.convel}). Neither
+stack has a units object. Column~4 therefore cannot carry a per-axis
+mask unless the reader consults a spec version.
 
 \texttt{readcon-core} is the reference reader and writer for that
 contract. Versions~2 and~3 are defined in the accompanying
@@ -148,7 +149,10 @@ grammar is the ASE/libAtoms dialect
 on line~2 for the same job (machine metadata on a line that old
 tools treat as a comment) and keeps a first-class three-bit
 constraint mask and a pre-grouping \texttt{atom\_id}. Lean XYZ, as
-timed in this paper, has no constraint mask.
+timed in this paper, has no constraint mask. The library's ASE
+adapters convert a parsed \texttt{ConFrame} to \texttt{Atoms} and
+back; they do not register a \texttt{format='con'} plugin and do
+not replace \texttt{ase.io.eon}.
 
 H5MD is the structured particle container in this journal
 \cite{deBuylH5MDStructuredEfficient2014}. It can carry per-particle
@@ -187,11 +191,13 @@ moments). The Rust writer fills \texttt{sections} from the frame.
 
 Column~4 is a bitmask $0\ldots 7$. Historical writers emit $0$ or
 $1$ (free or all-fixed). This specification assigns a three-bit
-mask for spec~2+: $1$ is $x$-only and $7$ is all-fixed. The decoder
-is spec-aware so that a legacy file with $1$ remains all-fixed. Old
-readers that test ``nonzero means fixed'' over-constrain $y$ and $z$
-on a legal spec~2 file whose mask is $1$--$6$; they still freeze the
-atom.
+mask for spec~2+: $1$ is $x$-only and $7$ is all-fixed. Writers
+emit $7$ for all-fixed, never $1$. The decoder is spec-aware so
+that a legacy file with $1$ remains all-fixed. Old readers that
+test ``nonzero means fixed'' over-constrain $y$ and $z$ on a legal
+spec~2 file whose mask is $1$--$6$; they still freeze the atom.
+Column~5 is \texttt{atom\_id}. Readers accept four-column lines and
+default the missing index to the sequential position in the frame.
 
 Line~2 was chosen because existing tools treat it as a comment.
 Adding a tenth header line, overwriting the postbox on lines 5--6, or
@@ -201,7 +207,8 @@ lose pairing.
 Velocities may live in a declared \texttt{sections} entry on a
 \texttt{.con} file. The \texttt{.convel} extension is the historical
 name and the blank-separator fallback when the \texttt{sections} key
-is absent.
+is absent. A present key, including an empty array, disables that
+fallback.
 
 Gzip is the portable compression. zstd is an optional feature with
 the same magic-byte detection. Both decompress to text and then
