@@ -88,7 +88,7 @@ Language API notes: :doc:`bindings`.
 Fortran / C / C++
 ~~~~~~~~~~~~~~~~~
 
-Headers live in ``include/``. cbindgen is not required to compile against them.
+Headers in ``include/`` are shipped. cbindgen is **not** required.
 CMake FetchContent / ``find_package(readcon-core)``, Meson
 ``dependency('readcon-core')``, or ``pkg-config --libs readcon-core``
 after a prefix install. The cxx tarball on the GitHub Release is
@@ -106,8 +106,8 @@ after a prefix install. The cxx tarball on the GitHub Release is
     target_link_libraries(app PRIVATE readcon-core::shared)
 
 The slim cxx tarball on the ``v0.14.7`` GitHub Release is the FetchContent
-URL. A vendor tarball (``readcon-core-cxx-0.14.7-vendor.tar.gz``)
-includes crates for offline builds. The Meson wrap file is
+URL. A vendor tarball (``readcon-core-cxx-0.14.7-vendor.tar.gz``) ships
+crates for offline builds. The Meson wrap file is
 ``packaging/wrapdb/readcon-core.wrap`` on that same release.
 
 .. code:: meson
@@ -163,7 +163,7 @@ Documentation follows `Diátaxis <https://diataxis.fr/>`_. Use one quadrant at a
     +-------------------------------------------------+------------------------------------------------+-------------+
     | Goal                                            | Page                                           | Kind        |
     +=================================================+================================================+=============+
-    | Learn CON I/O from file to frame                | :doc:`tutorial`                     | Tutorial    |
+    | Learn CON I/O end-to-end                        | :doc:`tutorial`                     | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
     | Migrate foreign formats → CON (+ db, selection) | :doc:`migrate`                       | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+

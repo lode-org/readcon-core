@@ -251,7 +251,7 @@ produces:
     | Windows DLL + import lib | ``target/.../readcon_core.dll{,.lib}`` | ``$PREFIX/{bin,lib}/readcon_core.dll{,.lib}``    |
     +--------------------------+----------------------------------------+--------------------------------------------------+
 
-The header is pre-generated at ``include/readcon-core.h``.
+The header is shipped pre-generated at ``include/readcon-core.h``.
 CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. None of them run cbindgen. The cxx source tarball
@@ -285,7 +285,7 @@ conda-forge feedstock in particular) check for at the hyphenated name.
 C ABI stability contract (``rkr_*``)
 ------------------------------------
 
-The published C surface is the ``rkr_*`` API in
+The published C surface is the ``rkr_*`` API in the shipped
 ``include/readcon-core.h``. Consumers compile against that header; they
 do not run cbindgen. The C++ wrapper (``include/readcon-core.hpp``) is a
 header-only RAII layer over the same symbols.
