@@ -1,0 +1,23 @@
+#+TITLE: CPC manuscript (readcon-core)
+
+Target: Computer Physics Communications.
+
+The source of truth is =src/rg_main.org=. Do not hand-edit
+=src/rg_main.tex=. Numbers in the Performance and Applications
+tables come from =scripts/gen_tables.py=, which reads committed
+JSON / Cachegrind rst / =neb_band.con=.
+
+* Build
+
+#+begin_src bash
+python paper/cpc/scripts/gen_tables.py
+emacs -nl --script paper/cpc/scripts/org2tex.el paper/cpc/src/rg_main.org
+# then, in paper/cpc/src/:
+latexmk -pdf rg_main.tex
+#+end_src
+
+From the repo root, =pixi r cpc-tex= runs the table generator and
+the org export.
+
+Do not invent a DOI. Do not type a wall-clock number into the org
+that is not in a committed artifact.
