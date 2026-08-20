@@ -3,10 +3,9 @@
 
 * Overview
 
-The parser lives in Rust. Language bindings call a C ABI
-(=src/ffi.rs=, prefix =rkr_*=). PyO3, Julia =ccall=, and the C++
-RAII header wrap that ABI. A second parser in Fortran or Python
-would diverge on column 4 and on =atom_id=.
+The library is an hourglass: a Rust core, a C ABI in =ffi.rs=, and
+thin wrappers (PyO3, Julia ccall, C++ RAII). Every language talks
+to the same =rkr_*= surface; none reimplements the parser.
 
 #+begin_example
   Python (PyO3)    Julia (ccall)    C++ (RAII header)
@@ -234,9 +233,9 @@ header-only RAII layer over the same symbols.
 
 ** What is not a 1.0 freeze **
 
-The crate, wheels, and Fortran package are 0.14.7. PyPI reports
-=Development Status :: 4 - Beta= until a =1.0.0= tag. That tag is
-the SONAME major. Until then:
+The crate, wheels, and Fortran package are 0.14.7. PyPI still reports
+=Development Status :: 4 - Beta=. A =1.0.0= cut is the production
+classifier and the SONAME/semver major bump. Until that tag:
 
 - Additive =rkr_*= symbols may appear in a 0.14.z patch.
 - Existing 0.14.x signatures, sentinels, and ownership do not change
@@ -255,16 +254,16 @@ committed header matches =src/ffi.rs=.
 :CUSTOM_ID: design-rationale
 :END:
 
-Rare-event drivers are Fortran and C++. Embedding CPython on the
-checkpoint path was the alternative; the cost is a Python on every
-image evaluation. The C ABI keeps the full CON payload (constraints,
-=atom_id=, sections, JSON) on that path.
+The hourglass is the design: Rust core, =rkr_*= C ABI, wrappers for
+C++, Python, Julia, and Fortran. The full CON payload (constraints,
+optional section data, =atom_id=, JSON) is available without a Python
+interpreter on the I/O path.
 
-Optional crates sit behind Cargo features (chemfiles ingress, DLPack,
-metatensor =TensorBlock=, CUDA SoA, Cap'n Proto RPC). A lean build
-returns =RKR_STATUS_FEATURE_DISABLED= instead of omitting the symbol.
-UTF-8 CON text is the on-disk authority. =readcon-db= indexes that
-text; it does not replace it.
+Also in-tree: chemfiles import/selection (land structures *as* CON), SoA +
+DLPack export (optional CUDA), metatensor =TensorBlock= export, =index_proj=
+for campaign screening (=readcon-db=), Cap'n Proto RPC. Lean builds return
+=RKR_STATUS_FEATURE_DISABLED= for missing features. UTF-8 CON remains
+authoritative on disk and in corpora.
 
 Related work and roles: [[file:faq.org][faq.org]]. Spec:
 [[file:spec.org][spec.org]]. Evolution: [[file:evolution.org][evolution.org]].
