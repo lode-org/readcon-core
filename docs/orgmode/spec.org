@@ -875,7 +875,7 @@ arrays for, on the same SIMD-throughput grounds.
 The =Arc<RwLock<ndarray::ArrayD<T>>>= storage hook + DLPack 1.0
 export pattern adopted here mirrors the design described in
 @@rst::cite:t:`bigiMetatensorMetatomicFoundational2026`@@, where
-the same layout serves as the foundational data exchange surface
+the same layout is the foundational data exchange surface
 across the metatensor / metatomic atomistic machine-learning
 libraries.
 

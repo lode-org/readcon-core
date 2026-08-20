@@ -5,7 +5,7 @@ Wrap name is `readcon-core`, matching the pkg-config file and
 
 The wrap points at the **cxx source tarball** (`readcon-core-cxx-$VERSION.tar.gz`),
 not the git tag archive. That tarball already contains `meson.build` and
-shipped headers, so wrapdb does **not** need a `packagefiles/` meson patch.
+pre-generated headers, so wrapdb does **not** need a `packagefiles/` meson patch.
 
 ## Produce the wrap
 
