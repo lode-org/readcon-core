@@ -968,6 +968,19 @@ impl PyConFrame {
             if let Some(energy) = py_atom.energy {
                 builder.with_energy(energy);
             }
+            if let Some(charge) = py_atom.charge {
+                builder.with_charge(charge);
+            }
+            if let Some(spin) = py_atom.spin {
+                builder.with_spin(spin);
+            }
+            if py_atom.mx.is_some() && py_atom.my.is_some() && py_atom.mz.is_some() {
+                builder.with_magmom([
+                    py_atom.mx.unwrap_or(0.0),
+                    py_atom.my.unwrap_or(0.0),
+                    py_atom.mz.unwrap_or(0.0),
+                ]);
+            }
         }
 
         builder
