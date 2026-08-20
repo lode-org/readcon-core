@@ -74,6 +74,24 @@ fn coords_only_still_ok_without_new_sections() {
 }
 
 #[test]
+fn builder_authors_charges_spins_magmoms() {
+    use readcon_core::types::ConFrameBuilder;
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546)
+        .with_charge(0.5)
+        .with_spin(1.0)
+        .with_magmom([0.0, 0.0, 1.0]);
+    let frame = b.build().expect("build");
+    assert!(frame.has_charges());
+    assert!(frame.has_spins());
+    assert!(frame.has_magmoms());
+    assert_eq!(frame.header.sections, vec!["charges", "spins", "magmoms"]);
+    assert_eq!(frame.atom_data[0].charge, Some(0.5));
+    assert_eq!(frame.atom_data[0].spin, Some(1.0));
+    assert_eq!(frame.atom_data[0].magmom, Some([0.0, 0.0, 1.0]));
+}
+
+#[test]
 fn unknown_section_still_errors() {
     let bad = r#"Random Number Seed
 {"con_spec_version":2,"sections":["not_a_real_section"]}

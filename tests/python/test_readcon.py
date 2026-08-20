@@ -406,6 +406,27 @@ class TestConFrameConstructor:
         arr3 = fr.coords_array()
         assert float(arr3[0, 0]) == pytest.approx(12.5)
 
+    def test_neb_band_example_has_three_beads(self):
+        path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "resources", "examples", "neb_band.con"
+        )
+        frames = readcon.read_con(path)
+        assert len(frames) == 3
+        assert [fr.neb_bead for fr in frames] == [0, 1, 2]
+        energies = [fr.energy for fr in frames]
+        assert energies[1] > energies[0]
+        assert energies[1] > energies[2]
+
+    def test_charges_spins_magmoms_write_roundtrip(self):
+        frames = readcon.read_con(_resource("tiny_cuh2_charges_spins_magmoms.con"))
+        assert frames[0].atoms[0].charge == pytest.approx(0.5)
+        text = readcon.write_con_string(frames)
+        reread = readcon.read_con_string(text)[0]
+        assert reread.atoms[0].charge == pytest.approx(0.5)
+        assert reread.atoms[0].spin == pytest.approx(0.5)
+        assert reread.atoms[0].mz == pytest.approx(1.0)
+        assert reread.atoms[1].mz == pytest.approx(-1.0)
+
 
 class TestMass:
     def test_mass_from_file(self):

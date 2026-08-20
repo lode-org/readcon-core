@@ -1070,6 +1070,15 @@ pub struct ConFrameBuilder {
     /// `(N,) f64` when has_energies, else `(0,)`.
     atom_energies: ndarray::ArcArray1<f64>,
     has_energies: bool,
+    /// `(N,) f64` when has_charges, else `(0,)`.
+    charges: ndarray::ArcArray1<f64>,
+    has_charges: bool,
+    /// `(N,) f64` when has_spins, else `(0,)`.
+    spins: ndarray::ArcArray1<f64>,
+    has_spins: bool,
+    /// `(N, 3) f64` when has_magmoms, else `(0, 3)`.
+    magmoms: ndarray::ArcArray2<f64>,
+    has_magmoms: bool,
 
     metadata: BTreeMap<String, serde_json::Value>,
 }
@@ -1092,6 +1101,12 @@ impl Default for ConFrameBuilder {
             has_forces: false,
             atom_energies: ndarray::ArcArray1::<f64>::zeros(0),
             has_energies: false,
+            charges: ndarray::ArcArray1::<f64>::zeros(0),
+            has_charges: false,
+            spins: ndarray::ArcArray1::<f64>::zeros(0),
+            has_spins: false,
+            magmoms: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            has_magmoms: false,
             metadata: BTreeMap::new(),
         }
     }
@@ -1292,6 +1307,15 @@ impl ConFrameBuilder {
         if self.has_energies {
             arc_push_f64_1d(&mut self.atom_energies, 0.0);
         }
+        if self.has_charges {
+            arc_push_f64_1d(&mut self.charges, 0.0);
+        }
+        if self.has_spins {
+            arc_push_f64_1d(&mut self.spins, 0.0);
+        }
+        if self.has_magmoms {
+            arc_push_row(&mut self.magmoms, array![0.0, 0.0, 0.0].view());
+        }
         self
     }
 
@@ -1345,6 +1369,51 @@ impl ConFrameBuilder {
             self.has_energies = true;
         }
         self.atom_energies[n - 1] = energy;
+        self
+    }
+
+    /// Attaches a per-atom charge to the most recently added atom.
+    pub fn with_charge(&mut self, charge: f64) -> &mut Self {
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
+        }
+        if !self.has_charges {
+            self.charges = ndarray::ArcArray1::<f64>::zeros(n);
+            self.has_charges = true;
+        }
+        self.charges[n - 1] = charge;
+        self
+    }
+
+    /// Attaches a per-atom spin to the most recently added atom.
+    pub fn with_spin(&mut self, spin: f64) -> &mut Self {
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
+        }
+        if !self.has_spins {
+            self.spins = ndarray::ArcArray1::<f64>::zeros(n);
+            self.has_spins = true;
+        }
+        self.spins[n - 1] = spin;
+        self
+    }
+
+    /// Attaches a per-atom magnetic moment to the most recently added atom.
+    pub fn with_magmom(&mut self, magmom: [f64; 3]) -> &mut Self {
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
+        }
+        if !self.has_magmoms {
+            self.magmoms = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_magmoms = true;
+        }
+        let mut row = self.magmoms.row_mut(n - 1);
+        row[0] = magmom[0];
+        row[1] = magmom[1];
+        row[2] = magmom[2];
         self
     }
 
@@ -2083,6 +2152,9 @@ impl ConFrameBuilder {
         let has_vel = self.has_velocities;
         let has_frc = self.has_forces;
         let has_eng = self.has_energies;
+        let has_chg = self.has_charges;
+        let has_spn = self.has_spins;
+        let has_mag = self.has_magmoms;
 
         let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(n);
         let mut insertion_to_grouped = vec![0usize; n];
@@ -2108,6 +2180,22 @@ impl ConFrameBuilder {
                 } else {
                     None
                 };
+                let charge = if has_chg {
+                    Some(self.charges[i])
+                } else {
+                    None
+                };
+                let spin = if has_spn {
+                    Some(self.spins[i])
+                } else {
+                    None
+                };
+                let magmom = if has_mag {
+                    let r = self.magmoms.row(i);
+                    Some([r[0], r[1], r[2]])
+                } else {
+                    None
+                };
                 atom_data.push(AtomDatum {
                     symbol: Arc::clone(symbol),
                     x: pos[0],
@@ -2118,9 +2206,9 @@ impl ConFrameBuilder {
                     velocity,
                     force,
                     energy,
-                    charge: None,
-                    spin: None,
-                    magmom: None,
+                    charge,
+                    spin,
+                    magmom,
                 });
             }
         }
@@ -2134,6 +2222,15 @@ impl ConFrameBuilder {
         }
         if has_eng {
             sections.push(SECTION_ENERGIES.into());
+        }
+        if has_chg {
+            sections.push(SECTION_CHARGES.into());
+        }
+        if has_spn {
+            sections.push(SECTION_SPINS.into());
+        }
+        if has_mag {
+            sections.push(SECTION_MAGMOMS.into());
         }
 
         let strict_validation = matches!(
@@ -2153,6 +2250,9 @@ impl ConFrameBuilder {
         let mut vel = FloatArray2::zeros(dt.velocities, if has_vel { n } else { 0 }, 3);
         let mut frc = FloatArray2::zeros(dt.forces, if has_frc { n } else { 0 }, 3);
         let mut eng = FloatArray1::zeros(dt.energies, if has_eng { n } else { 0 });
+        let mut chg = FloatArray1::zeros(dt.energies, if has_chg { n } else { 0 });
+        let mut spn = FloatArray1::zeros(dt.energies, if has_spn { n } else { 0 });
+        let mut mag = FloatArray2::zeros(dt.forces, if has_mag { n } else { 0 }, 3);
         let mut masses_arr = FloatArray1::zeros(dt.masses, n);
         let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
         if dt != StorageDtypes::all_f64() {
@@ -2173,6 +2273,17 @@ impl ConFrameBuilder {
             }
             if has_eng {
                 eng.set_f64(i, a.energy.unwrap_or(0.0));
+            }
+            if has_chg {
+                chg.set_f64(i, a.charge.unwrap_or(0.0));
+            }
+            if has_spn {
+                spn.set_f64(i, a.spin.unwrap_or(0.0));
+            }
+            if has_mag {
+                if let Some(m) = a.magmom {
+                    mag.set_f64_row(i, m);
+                }
             }
         }
         let mut off = 0usize;
@@ -2209,9 +2320,9 @@ impl ConFrameBuilder {
                 velocities: vel,
                 forces: frc,
                 atom_energies: eng,
-                charges: FloatArray1::zeros(dt.energies, 0),
-                spins: FloatArray1::zeros(dt.energies, 0),
-                magmoms: FloatArray2::zeros(dt.forces, 0, 3),
+                charges: chg,
+                spins: spn,
+                magmoms: mag,
                 masses: masses_arr,
                 atom_ids: ids_arr,
             },
