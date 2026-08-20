@@ -12,6 +12,11 @@ if get_option('with_cpp')
             'cpp_api_sample.cpp',
             f'@_msproot@/resources/test/tiny_multi_cuh2.con',
         ],
+        [
+            'print_neb_band',
+            'print_neb_band.cpp',
+            f'@_msproot@/resources/examples/neb_band.con',
+        ],
     ]
 endif
 foreach exmpl : examples_array
