@@ -64,6 +64,13 @@ mod tests {
     }
 
     #[test]
+    fn abi_stamp_is_explicit_and_nonzero() {
+        assert_eq!(ffi::RKR_ABI_VERSION_MAJOR, 1);
+        assert_eq!(ffi::RKR_ABI_VERSION_MINOR, 0);
+        assert_eq!(ffi::RKR_ABI_LAYOUT_REVISION, 1);
+    }
+
+    #[test]
     fn test_version_matches_cargo() {
         assert_eq!(VERSION, "0.14.7");
     }
