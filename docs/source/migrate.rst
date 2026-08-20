@@ -16,7 +16,7 @@ Why adopt CON (what you gain)
 Reach for a maintained library with a real frame API, not a hand-rolled XYZ
 parser and a home-grown ``Atoms`` struct. ``readcon-core`` already gives you
 parse/write, typed metadata, optional sections, validation, compression,
-lazy multi-frame iteration, selection, hourglass bindings in every major
+lazy multi-frame iteration, selection, ``rkr_*`` bindings in every major
 language, campaign storage via ``readcon-db``, and plotting via chemparseplot —
 one interchange file and one API surface.
 
@@ -36,7 +36,7 @@ selectors, or energy fields yourself.
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
     | Selection                 | ``select_atoms`` / ``rkr_frame_select`` (``name H``, bonds/angles when topology is present)                                   |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
-    | Hourglass ``rkr_*``       | Same semantics in Fortran / C / C++ / Python / Julia / Rust when the stack grows                                              |
+    | ``rkr_*`` C ABI           | Same semantics in Fortran / C / C++ / Python / Julia / Rust when the stack grows                                              |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
     | ``readcon-db``            | LMDB corpora on CON text: energy / formula / section indexes, dedup, multi-reader                                             |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
@@ -190,7 +190,7 @@ ASE hand-off (keep CON as authority)
     frame2.write_con("after.con")   # interchange stays CON text
 
 ASE adapters are optional. After the calculator step, write CON again so
-``readcon-db`` ingest and hourglass consumers still see the interchange file.
+``readcon-db`` ingest and ``rkr_*`` consumers still see the interchange file.
 
 Into a campaign store
 ---------------------

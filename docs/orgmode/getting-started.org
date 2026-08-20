@@ -156,7 +156,7 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | Task | Path |
 |------+------|
 | Read / write CON | =readcon= / =readcon-core= |
-| Link from Fortran / C / C++ | Hourglass =rkr_*= ABI |
+| Link from Fortran / C / C++ | =rkr_*= C ABI |
 | Campaign store (install) | =cargo add readcon-db= / =pip install readcon-db= |
 | Many trajectories, multi-reader | [[https://lode-org.github.io/readcon-db/][readcon-db docs]] · [[https://docs.rs/readcon-db][docs.rs API]] (CON text authoritative) |
 | Campaign field projection | [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]] (same meanings as db indexes) |

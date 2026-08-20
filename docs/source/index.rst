@@ -12,7 +12,7 @@
      <p class="rc-hero-tagline">Reference reader and writer for versioned CON checkpoints: cell, per-direction constraints, atom identity, optional forces.</p>
      <div class="rc-hero-pills">
        <span>Spec v2-v3</span>
-       <span>Hourglass ABI</span>
+       <span>rkr_* C ABI</span>
        <span>chemfiles import</span>
        <span>readcon-db</span>
        <span>ASV + Cachegrind</span>
