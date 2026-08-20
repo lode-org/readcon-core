@@ -280,31 +280,35 @@ atom count ($1\,724\,500$ bytes), not the fixture concatenation.
 
 \begin{table}[ht]
 \centering
-\caption{Equal-geometry wall times (median of five repeats) and file
-sizes. Native CON $2.771\,\mathrm{ms}$ is
-\texttt{ase\_traj\_vs\_con.json}; $3.047\,\mathrm{ms}$ is
-\texttt{h5md\_vs\_con.json}. Chemfiles XYZ follows the same pair.
-H5MD here is positions only; h5py loads \texttt{position/value} and
-does not reconstruct symbols, cell, constraints, \texttt{atom\_id},
-or JSON. CON.gz/zst sizes are for near-identical rare-event frame
-repetition. CON.zst load time is absent from this JSON
-(\texttt{zstd} feature off).}
+\caption{Median wall times, 100 frames of the 218-atom
+\texttt{cuh2.con} geometry, five repeats
+(\texttt{benches/results/*.json}, 2026-08-19T22:56Z, tree
+\texttt{8ce95a56}). The three blocks are separate protocols; native
+CON times are not averaged. H5MD is positions only
+($20\,192$\,B). h5py loads \texttt{position/value} only.
+\texttt{CON.gz} ($17\,427$\,B) is gzip of repeated frames.
+\texttt{CON.zst} is $1\,311$\,B; load time is absent (\texttt{zstd}
+feature off). The \texttt{ase.io.eon} block uses a synthetic file
+of the same atom count ($1\,724\,500$\,B).}
 \label{tab:wall}
-\begin{tabular}{lrr}
+\begin{tabular}{@{}llr@{}}
 \toprule
-Path & Time (ms) & Size (B) \\
+Protocol & Reader & Median (ms) \\
 \midrule
-native CON & $2.771$ / $3.047$ & $1\,677\,100$ \\
-CON.gz (parse) & $3.628$ & $17\,427$ \\
-CON.zst (size only) & n/a & $1\,311$ \\
-chemfiles XYZ$\to$CON & $16.450$ / $17.006$ & $1\,570\,100$ \\
-ASE \texttt{.traj} & $11.415$ & n/a \\
-ASE XYZ (lean) & $27.923$ & n/a \\
-ASE \texttt{ase.io.eon} & $28.056$ & $1\,724\,500$ \\
-C sscanf (eOn-style) & $7.38$ & n/a \\
-readcon path (same file) & $2.962$ & n/a \\
-MDAnalysis H5MD (Universe + positions) & $30.147$ & $20\,192$ \\
-h5py \texttt{position/value} & $0.276$ & $20\,192$ \\
+ASE / chemfiles vs CON & native CON & $2.771$ \\
+ & chemfiles XYZ$\to$CON & $16.450$ \\
+ & ASE \texttt{.traj} & $11.415$ \\
+ & ASE XYZ (lean) & $27.923$ \\
+\midrule
+H5MD vs CON & native CON & $3.047$ \\
+ & chemfiles XYZ$\to$CON & $17.006$ \\
+ & MDAnalysis H5MD & $30.147$ \\
+ & h5py \texttt{position/value} & $0.276$ \\
+ & native \texttt{CON.gz} & $3.628$ \\
+\midrule
+Same CON text & ASE \texttt{ase.io.eon} & $28.056$ \\
+ & C sscanf (eOn-style) & $7.38$ \\
+ & readcon path & $2.962$ \\
 \bottomrule
 \end{tabular}
 \end{table}
