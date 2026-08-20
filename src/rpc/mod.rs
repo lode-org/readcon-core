@@ -27,6 +27,12 @@ pub fn validate_compatibility_stamp(
             stamp.get_abi_major()
         ));
     }
+    if stamp.get_abi_minor() > crate::ffi::RKR_ABI_VERSION_MINOR {
+        return Err(format!(
+            "unsupported readcon-core ABI minor: {}",
+            stamp.get_abi_minor()
+        ));
+    }
     if stamp.get_abi_layout_revision() != crate::ffi::RKR_ABI_LAYOUT_REVISION {
         return Err(format!(
             "incompatible readcon-core ABI layout: {}",
@@ -61,5 +67,22 @@ mod tests {
             .expect("compatibility stamp root");
         let error = validate_compatibility_stamp(stamp).expect_err("major mismatch must fail");
         assert!(error.contains("ABI major"));
+    }
+
+    #[test]
+    fn rejects_a_newer_abi_minor() {
+        let mut message = capnp::message::Builder::new_default();
+        {
+            let mut stamp = message.init_root::<compatibility_stamp::Builder>();
+            stamp.set_abi_major(crate::ffi::RKR_ABI_VERSION_MAJOR);
+            stamp.set_abi_minor(crate::ffi::RKR_ABI_VERSION_MINOR + 1);
+            stamp.set_abi_layout_revision(crate::ffi::RKR_ABI_LAYOUT_REVISION);
+            stamp.set_con_spec_version(crate::CON_SPEC_VERSION);
+        }
+        let stamp = message
+            .get_root_as_reader::<compatibility_stamp::Reader>()
+            .expect("compatibility stamp root");
+        let error = validate_compatibility_stamp(stamp).expect_err("newer minor must fail");
+        assert!(error.contains("ABI minor"));
     }
 }
