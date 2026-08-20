@@ -31,6 +31,27 @@ clause = "Per-direction constraints (column 4)"
 expect_fixed = [true, true, true]
 notes = "Spec 1 column 4 value 1 is all-fixed."
 
+[[valid]]
+id = "column-4-spec2-all-fixed"
+path = "valid/column4_spec2_all_fixed.con"
+clause = "Per-direction constraints (column 4)"
+expect_fixed = [true, true, true]
+notes = "Spec 2+ column 4 value 7 is all-fixed."
+
+[[valid]]
+id = "column-4-spec2-y-only"
+path = "valid/column4_spec2_y_only.con"
+clause = "Per-direction constraints (column 4)"
+expect_fixed = [false, true, false]
+notes = "Spec 2+ column 4 value 2 is y-only."
+
+[[valid]]
+id = "column-4-spec2-xz"
+path = "valid/column4_spec2_xz.con"
+clause = "Per-direction constraints (column 4)"
+expect_fixed = [true, false, true]
+notes = "Spec 2+ column 4 value 5 is x+z."
+
 [[invalid]]
 id = "missing-spec-version"
 path = "invalid/missing_spec_version.con"
@@ -58,3 +79,24 @@ path = "invalid/column4_out_of_range.con"
 clause = "Per-direction constraints (column 4)"
 error = "ValidationError"
 notes = "validate=true rejects column 4 value 8 (outside 0-7)."
+
+[[invalid]]
+id = "unsupported-spec-version"
+path = "invalid/unsupported_spec_version.con"
+clause = "Line 2: Metadata"
+error = "UnsupportedSpecVersion"
+notes = "con_spec_version 4 exceeds CON_SPEC_VERSION."
+
+[[invalid]]
+id = "unknown-section"
+path = "invalid/unknown_section.con"
+clause = "Section declaration"
+error = "UnknownSection"
+notes = "Declared section name is not a reserved section."
+
+[[invalid]]
+id = "validate-true-missing-sections"
+path = "invalid/validate_true_missing_sections.con"
+clause = "Validation mode"
+error = "InvalidMetadataJson"
+notes = "validate=true requires a sections array even if empty."
