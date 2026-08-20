@@ -169,7 +169,11 @@ the code, not a promise about every host):
   ``src/compression.rs``)
 
 - Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and ``parallel`` is on
-  (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``)
+  (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``). Sequential vs
+  pinned workers: ``examples/wall_scale_harness.rs`` writes
+  ``benches/results/wall_scale.json`` (host, date, commit). That JSON is
+  Table io in ``paper/cpc/main.tex``. Do not mix it with the Python
+  ``readcon.read_con`` wall table.
 
 - Skip without atoms: ``forward`` / ``forward_fast`` (Cachegrind ``forward_*``)
 

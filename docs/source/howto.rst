@@ -316,11 +316,11 @@ Parallel parsing
 
 Behind the ``parallel`` feature gate, multi-frame files can be parsed
 concurrently using rayon. ``read_all_frames`` (and the C symbol
-``rkr_read_all_frames``) turns that path on automatically for files
-of at least 48 KiB. ``read_all_frames_with_threads`` /
+``rkr_read_all_frames``) turns that path on automatically for files of
+at least 48 KiB. ``read_all_frames_with_threads`` /
 ``rkr_read_all_frames_n_threads`` / ``readcon.read_con(..., n_threads=n)``
-pin the worker count: ``1`` is sequential, ``n >= 2`` is a Rayon
-pool, ``0``/``None`` is the automatic policy.
+pin the worker count: ``1`` is sequential, ``n >`` 2= is a Rayon pool,
+``0=/=None`` is the automatic policy.
 
 .. code:: rust
 
@@ -331,7 +331,27 @@ pool, ``0``/``None`` is the automatic policy.
     let sequential = frames_from_text(&contents, Some(1)).unwrap();
     let results = parse_frames_parallel(&contents);
     let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
-    assert_eq!(sequential.len(), frames.len());
+
+Python (wheels enable ``parallel``):
+
+.. code:: python
+
+    frames = readcon.read_con("large_trajectory.con")            # auto
+    seq = readcon.read_con("large_trajectory.con", n_threads=1)  # sequential
+    pinned = readcon.read_con("large_trajectory.con", n_threads=8)
+    assert readcon.has_parallel_support()
+
+C (published prefix is built with ``parallel``):
+
+.. code:: c
+
+    uintptr_t n = 0;
+    RKRConFrame **auto_p = rkr_read_all_frames(path, &n);
+    RKRConFrame **seq = rkr_read_all_frames_n_threads(path, &n, 1);
+    RKRConFrame **pool = rkr_read_all_frames_n_threads(path, &n, 8);
+    if (!rkr_has_parallel_support()) {
+        /* seq and pool are the same sequential path */
+    }
 
 Python
 ------

@@ -117,11 +117,16 @@ Iterators (iterators.rs)
 
 ``read_all_frames()``
     Convenience function using memmap2 for large
-    trajectory files.
+    trajectory files. With the ``parallel`` feature, Rayon parse turns on
+    automatically when the buffer is at least 48 KiB.
 
-``parse_frames_parallel()``
-    Rayon-based parallel parsing behind
-    the ``parallel`` feature gate.
+``read_all_frames_with_threads(path, n)``
+    ``None`` or ``0`` is that
+    automatic policy, ``1`` is sequential, ``n >`` 2= pins a Rayon pool
+    (sequential fallback when ``parallel`` is off).
+
+- ``parse_frames_parallel()`` / ``parse_frames_parallel_with_threads()``
+  \:\: Rayon-based parallel parsing behind the ``parallel`` feature gate.
 
 FFI layer (ffi.rs)
 ------------------
@@ -166,6 +171,17 @@ Per-frame metadata accessors:
 ``rkr_frame_energy(handle)``, ``rkr_frame_time(handle)``, etc.
     Typed
     accessors for common metadata keys.
+
+``rkr_read_all_frames``
+    Same automatic policy as
+    ``read_all_frames`` for the features the library was built with. The
+    published C prefix enables ``parallel``.
+
+``rkr_read_all_frames_n_threads(filename, num_frames, n_threads)``
+    ``0`` auto, ``1`` sequential, ``n_threads >`` 2= a Rayon pool.
+
+``rkr_has_parallel_support()``
+    ``1`` when Rayon is linked.
 
 ``RKRStatus``
     Prefixed C-compatible status codes such as
@@ -290,42 +306,49 @@ The published C surface is the ``rkr_*`` API in the shipped
 do not run cbindgen. The C++ wrapper (``include/readcon-core.hpp``) is a
 header-only RAII layer over the same symbols.
 
-What is frozen in 0.14.x
-~~~~~~~~~~~~~~~~~~~~~~~~
+What is frozen in 0.14.x \*\*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Symbol prefix ``rkr_*`` and the opaque handle types (``RKRConFrame``,
   ``RKRConFrameWriter``, ``RKRConFrameBuilder``, ``CConFrameIterator``).
+
 - Ownership rules in the header comment: caller-owned handles,
   ``free_rkr_frame_array`` vs ``free_rkr_frame``, ``rkr_free_string`` for
   heap ``char*``, process-static ``rkr_library_version``.
+
 - Sentinel policy: ``NaN`` for absent floats, ``UINT64_MAX`` for absent
   unsigned integers, ``NULL`` for absent strings.
+
 - Error policy: functions that allocate or validate return ``NULL`` or a
   negative ``RKRStatus``; they do not abort the process. Builder
   ``rkr_frame_builder_build`` returns ``NULL`` on ``MassMismatch`` and other
   ``ParseError`` cases.
+
 - Feature-gated symbols (``RKR_STATUS_FEATURE_DISABLED``) stay in the
   header; a lean build returns that status instead of hiding the
   symbol.
+
 - Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI does not
   grow a Z=118 table.
 
-What is not a 1.0 freeze
-~~~~~~~~~~~~~~~~~~~~~~~~
+What is not a 1.0 freeze \*\*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The crate, wheels, and Fortran package are 0.14.7. PyPI still reports
 ``Development Status :: 4 - Beta``. A ``1.0.0`` cut is the production
 classifier and the SONAME/semver major bump. Until that tag:
 
 - Additive ``rkr_*`` symbols may appear in a 0.14.z patch.
+
 - Existing 0.14.x signatures, sentinels, and ownership do not change
   in a patch.
+
 - A breaking C change requires a 0.15+ minor (0.x semver) and a
   matching header/SONAME bump. conda-forge ``run_exports`` already pin
-  ``upper_bound='x.x'`` for that reason.
+  ``upper_bound``'x.x'= for that reason.
 
-Drift check
-~~~~~~~~~~~
+Drift check \*\*
+~~~~~~~~~~~~~~~~
 
 ``scripts/regen-capi-headers.sh --check`` is the CI contract that the
 committed header matches ``src/ffi.rs``.
