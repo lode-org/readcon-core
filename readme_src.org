@@ -2,7 +2,7 @@
 
 ~readcon-core~ is the reference implementation of versioned =.con= / =.convel=.
 Rare-event codes already checkpoint on CON. This library is the spec and
-the =rkr_*= C ABI so the rest of the atomistic stack reads the same file:
+the hourglass API so the rest of the atomistic stack reads the same file:
 optimizers, potential drivers, analysis tools, campaign stores, and ML
 hand-off.
 
@@ -14,7 +14,7 @@ Saddle, dimer, and NEB codes already depend on that payload.
 
 | Layer | Role |
 | Spec + hot path | Spec v3 parse/write, =validate=, units, =sections=, SoA, Cachegrind CI |
-| =rkr_*= C ABI | C / C++ / Python / Julia / Fortran: one parser, one wire |
+| Hourglass ABI | C / C++ / Python / Julia / Fortran (=rkr_*=): link CON into any language |
 | Device / ML hand-off | DLPack (optional CUDA); optional metatensor =TensorBlock= without leaving CON authority |
 | Ingress | Chemfiles import/selection: foreign structures *into* CON |
 | Campaigns | =index_proj= + [[https://github.com/lode-org/readcon-db][readcon-db]] (=cargo add= / =pip install=; [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]]) |
@@ -39,7 +39,7 @@ See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 - *Lazy iteration:* ~ConFrameIterator~; =next_with_raw_span= keeps the on-disk blob for corpus ingest.
 - *Hot path:* [[https://github.com/aldanor/fast-float-rust][fast-float2]], [[https://docs.rs/memmap2][memmap2]], Cachegrind-tracked scenarios.
 - *Parallel frames:* Rayon behind the ~parallel~ Cargo feature.
-- *Bindings:* Python (PyO3), Julia (ccall), C (committed header), C++ (RAII header), Fortran (fpm). Same C ABI shape as [[https://github.com/metatensor/metatensor][metatensor]].
+- *Bindings:* Python (PyO3), Julia (ccall), C (committed header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [[https://github.com/metatensor/metatensor][metatensor]].
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 - *Fidelity:* =atom_id=, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
@@ -54,7 +54,7 @@ hand-rolling XYZ and a private atoms object.
 - *API:* parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 - *Payload:* constraints, =atom_id=, optional sections, versioned JSON on one frame
 - *Selection:* =select_atoms= / =rkr_frame_select= (=name H=, bonds/angles when topology is present)
-- *Languages:* =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
+- *Languages:* hourglass =rkr_*= in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 - *Campaigns:* [[https://github.com/lode-org/readcon-db][readcon-db]] on CON text (energy / formula / sections, dedup, multi-reader; [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]])
 - *Plotting:* [[https://chemparseplot.rgoswami.me][chemparseplot]] (+ [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]]) on the same files
 - *Measurements:* Cachegrind I-refs; PR ASV + spyglass; peer scripts in =benches/=. [[file:docs/orgmode/benchmarks.org][benchmarks.org]]
@@ -123,7 +123,7 @@ Conversion from XYZ/PDB/GRO: [[file:docs/orgmode/chemfiles-tutorial.org][chemfil
 ** Design Decisions
 
 - *Lazy parsing:* ~ConFrameIterator~ parses one frame at a time for large trajectories.
-- *C ABI:* C header plus a hand-written C++ RAII wrapper, same pattern as [[https://github.com/metatensor/metatensor][metatensor]]. CMake FetchContent, Meson wrap, and =readcon-core.pc= do not run cbindgen.
+- *Hourglass FFI:* C header plus a hand-written C++ RAII wrapper, same pattern as [[https://github.com/metatensor/metatensor][metatensor]]. CMake FetchContent, Meson wrap, and =readcon-core.pc= do not run cbindgen.
 
 *** FFI Layer
 

@@ -162,6 +162,6 @@ APIs and install matrices: [[file:bindings.org][bindings]],
 #+begin_export rst
    Interchange hub: CON on disk; potentials (rgpot); rare-event clients
    (eOn and others); analysis (rgpycrumbs); multi-format ingress (chemfiles);
-   campaigns (readcon-db); multi-language and ML consumers (=rkr_*= ABI,
+   campaigns (readcon-db); multi-language and ML consumers (hourglass ABI,
    DLPack, metatensor).
 #+end_export

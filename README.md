@@ -22,7 +22,7 @@
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
 Rare-event codes already checkpoint on CON. This library is the spec and
-the `rkr_*` C ABI so the rest of the atomistic stack reads the same file:
+the hourglass API so the rest of the atomistic stack reads the same file:
 optimizers, potential drivers, analysis tools, campaign stores, and ML
 hand-off.
 
@@ -52,7 +52,7 @@ Saddle, dimer, and NEB codes already depend on that payload.
 </tr>
 
 <tr>
-<td class="org-left"><code>rkr_*</code> C ABI</td>
+<td class="org-left">Hourglass ABI</td>
 <td class="org-left">C / C++ / Python / Julia / Fortran (<code>rkr_*</code>): link CON into any language</td>
 </tr>
 
@@ -96,7 +96,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
 -   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
 -   **Parallel frames:** Rayon behind the `parallel` Cargo feature.
--   **Bindings:** Python (PyO3), Julia (ccall), C (committed header), C++ (RAII header), Fortran (fpm). Same C ABI shape as [metatensor](https://github.com/metatensor/metatensor).
+-   **Bindings:** Python (PyO3), Julia (ccall), C (committed header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [metatensor](https://github.com/metatensor/metatensor).
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 -   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
@@ -114,7 +114,7 @@ hand-rolling XYZ and a private atoms object.
 -   **API:** parse/write, builders, metadata, validation, compression, lazy multi-frame iteration
 -   **Payload:** constraints, `atom_id`, optional sections, versioned JSON on one frame
 -   **Selection:** `select_atoms` / `rkr_frame_select` (`name H`, bonds/angles when topology is present)
--   **Languages:** `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
+-   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 -   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/) · [docs.rs](https://docs.rs/readcon-db))
 -   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
 -   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/`. [benchmarks.org](docs/orgmode/benchmarks.org)
@@ -243,7 +243,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 ## Design Decisions
 
 -   **Lazy parsing:** `ConFrameIterator` parses one frame at a time for large trajectories.
--   **C ABI:** C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
+-   **Hourglass FFI:** C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
 
 
 <a id="org4cf6a2a"></a>

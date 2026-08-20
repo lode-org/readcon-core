@@ -25,7 +25,7 @@ frame holds the cell, type-grouped coordinates, a per-direction
 constraint mask, a pre-group =atom_id=, optional per-atom sections, and
 versioned JSON on line 2. The layout comes from the [[https://eondocs.org][eOn]]
 rare-event stack @@rst::cite:t:`chillEONSoftwareLong2014`@@.
-=readcon-core= is the reference implementation (=rkr_*= C ABI).
+=readcon-core= is the reference implementation (hourglass =rkr_*= ABI).
 
 A file is a concatenation of /frames/. Each frame is a nine-line header,
 one coordinate block per atom type, then zero or more declared sections

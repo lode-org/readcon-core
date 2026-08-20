@@ -172,5 +172,5 @@ Place in the broader stack
 
    Interchange hub: CON on disk; potentials (rgpot); rare-event clients
    (eOn and others); analysis (rgpycrumbs); multi-format ingress (chemfiles);
-   campaigns (readcon-db); multi-language and ML consumers (``rkr_*`` ABI,
+   campaigns (readcon-db); multi-language and ML consumers (hourglass ABI,
    DLPack, metatensor).
