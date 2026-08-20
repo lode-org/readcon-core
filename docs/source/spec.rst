@@ -963,10 +963,13 @@ only at I/O boundaries:
   the field, the next ``build()`` MUST NOT declare the section.
 
 - ``set_atom_mass`` updates the per-type ``masses_per_type`` entry on
-  ``build()``. The .con format binds one mass per element type, so
-  if multiple atoms of the same symbol carry different masses, the
-  last value wins. Bindings SHOULD document this; future spec
-  versions MAY tighten it.
+  ``build()``. The .con format binds one mass per element type. If
+  multiple atoms of the same symbol carry masses that differ by
+  more than the implementation tolerance (reference:
+  ``ConFrameBuilder::TYPE_MASS_ABS_TOL`` = :math:`10^{-8}`),
+  ``build()`` MUST return an error (``ParseError::MassMismatch``).
+  The C ABI maps that error to a ``NULL`` handle from
+  ``rkr_frame_builder_build``.
 
 The reference implementation surface lands in v0.11.0:
 
