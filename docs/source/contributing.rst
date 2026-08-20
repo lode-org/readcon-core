@@ -67,7 +67,7 @@ The CI lint check rejects non-conforming commit messages on the PR
 range. Some historical commits use ``docs+bench:`` or untyped merges;
 ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
 ``scripts/release-prep.sh`` runs ``cog changelog`` from the previous tag
-and retitles ``Unreleased`` to ``## vX.Y.Z`` so tagged releases have no
+and retitles ``Unreleased`` to ``## vX.Y.Z`` so shipped tags have no
 Unreleased dump.
 
 Recognized commit types (from ``cog.toml``):
@@ -535,7 +535,7 @@ configured. Publish manually:
     uvx twine upload target/wheels/*
 
 
-Python publishes **two** distributions from ``python_wheels.yml``:
+Python ships **two** distributions from ``python_wheels.yml``:
 
 .. table::
 
@@ -609,7 +609,7 @@ Adding a new binding
 Updating the C header
 ~~~~~~~~~~~~~~~~~~~~~
 
-The C header ``include/readcon-core.h`` is pre-generated in the tree.
+The C header ``include/readcon-core.h`` is **shipped pre-generated**.
 CMake, Meson, cargo-c, and the cxx tarball **never** run cbindgen.
 After modifying ``src/ffi.rs``, maintainers regenerate and commit the header:
 

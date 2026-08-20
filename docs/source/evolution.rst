@@ -208,7 +208,7 @@ Alternatives considered
    can ``mmap`` a frame without a text parse. Attractive for random
    access over millions of images.
 
-2. **gzip/zstd of the text**: already in the crate. Decompresses to a
+2. **gzip/zstd of the text**: already shipped. Decompresses to a
    ``String`` then parses. Smaller files, same grammar, no new
    authority.
 
@@ -240,7 +240,7 @@ A packed bcon remains a possible *derived* layout for mmap-heavy
 campaigns (one segment per frame, identity/constraints/sections
 copied losslessly, pointer back to the source CON hash). It is not
 the interchange file and it is not a replacement for LMDB. The paper
-can discuss that layout; adding it is a separate feature.
+can discuss that layout; shipping it is a separate feature.
 
 Migration guide for existing tools
 ----------------------------------
