@@ -54,9 +54,9 @@ Pins and call sites. LODE: eOn, rgpot, readcon-db. Third-party: ASE, chemfiles.
 
 | Name | Side | Integration | Pin / surface |
 |------+------+-------------+---------------|
-| eOn | LODE | C++ RAII for =.con= / =.convel=; Python =readcon= | =readcon>=0.14.5= in =pyproject.toml= and pixi; Meson wrap =v0.14.5= |
-| rgpot | LODE | =atoms_from_con= calls =read_con_as_ase= | pixi =readcon>=0.7=; lazy import; no =pyproject.toml= dep |
-| readcon-db | LODE | campaign LMDB; CON text authoritative | =readcon-core = "0.14"= in =Cargo.toml= |
+| eOn | LODE | C++ RAII for =.con= / =.convel=; Python =readcon= | =readcon>=0.14.7= in =pyproject.toml= and pixi; Meson wrap =v0.14.7= |
+| rgpot | LODE | =atoms_from_con= calls =read_con_as_ase= | pixi =readcon>=0.14.7=; lazy import; no =pyproject.toml= dep |
+| readcon-db | LODE | campaign LMDB; CON text authoritative | =readcon-core = "=0.14.7"= in =Cargo.toml= |
 | ASE | third-party | optional =to_ase= / =from_ase= / =read_con_as_ase=; peer =ase.io.eon= | no =format='con'= plugin (=readcon-core-j98r=) |
 | chemfiles | third-party | optional XYZ / PDB / GRO ingress to CON | Cargo =chemfiles=; PyPI =readcon-chemfiles= |
 
