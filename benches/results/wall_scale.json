@@ -1,0 +1,22 @@
+{
+  "protocol": "sequential vs Rayon n-thread parse of repeated cuh2.con; write-path is ConFrameWriter to an in-memory buffer",
+  "host": "rgam5terra",
+  "date_utc": "2026-08-20T18:10Z",
+  "commit": "72e3fb54",
+  "features": "parallel",
+  "ncpus": 32,
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "fixture": "resources/test/cuh2.con",
+  "payload_bytes": 1677100,
+  "sequential_ms": 2.409198,
+  "auto_ms": 0.626515,
+  "write_100_frames_ms": 4.126396,
+  "parallel": {
+    "n2": 1.191504,
+    "n4": 0.895935,
+    "n8": 0.770999,
+    "n16": 0.716615
+  }
+}
