@@ -26,3 +26,8 @@ main = "test_read_con.f90"
 name = "read_first"
 source-dir = "example"
 main = "read_first.f90"
+
+[[example]]
+name = "print_neb_band"
+source-dir = "example"
+main = "print_neb_band.f90"
