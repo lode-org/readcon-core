@@ -990,20 +990,33 @@ impl PyConFrame {
 }
 
 /// Read frames from a .con or .convel file path.
+///
+/// `n_threads` is `None` or `0` for the automatic policy (Rayon when the
+/// buffer is at least 48 KiB), `1` for sequential parse, and `n >= 2`
+/// for an explicit Rayon pool.
 #[pyfunction]
-#[pyo3(name = "read_all_frames")]
-fn read_all_frames(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
-    read_con(py, path)
+#[pyo3(name = "read_all_frames", signature = (path, n_threads=None))]
+fn read_all_frames(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Vec<PyConFrame>> {
+    read_con(py, path, n_threads)
 }
 
 #[pyfunction]
-fn read_con(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
+#[pyo3(signature = (path, n_threads=None))]
+fn read_con(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Vec<PyConFrame>> {
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
     let path_owned = path.to_owned();
-    // `detach` requires Ungil; map errors to String inside the closure.
     let frames = py
         .detach(|| {
-            crate::iterators::read_all_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
+            crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), n_threads)
+                .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
     frames
@@ -1026,14 +1039,17 @@ fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
 
 /// Read frames from a string containing .con or .convel data.
 #[pyfunction]
-fn read_con_string(py: Python<'_>, contents: &str) -> PyResult<Vec<PyConFrame>> {
+#[pyo3(signature = (contents, n_threads=None))]
+fn read_con_string(
+    py: Python<'_>,
+    contents: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Vec<PyConFrame>> {
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
     let owned = contents.to_owned();
     let frames = py
         .detach(|| {
-            let iter = ConFrameIterator::new(&owned);
-            iter.collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())
+            crate::iterators::frames_from_text(&owned, n_threads).map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
     frames
@@ -1215,7 +1231,7 @@ fn write_con_string(
 /// Requires the ase package.
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
-    let frames = read_con(py, path)?;
+    let frames = read_con(py, path, None)?;
     frames.iter().map(|f| ase_from_pyconframe(py, f)).collect()
 }
 

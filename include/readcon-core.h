@@ -32,9 +32,11 @@
  *   - Opaque handles are NOT Sync. Do not share a single
  *     RKRConFrame/RKRConFrameWriter/RKRConFrameBuilder across threads
  *     without external synchronization. Distinct handles are independent.
- *   - rkr_read_all_frames internally uses sequential parsing; the
- *     `parallel` Cargo feature is exposed only through the Rust API and
- *     is not surfaced via this C header.
+ *   - rkr_read_all_frames uses Rayon when the library is built with the
+ *     `parallel` Cargo feature and the file is at least 48 KiB.
+ *     rkr_read_all_frames_n_threads selects the worker count: 0 is that
+ *     automatic policy, 1 is sequential, n>=2 is a Rayon pool of n
+ *     workers (sequential fallback when `parallel` is off).
  */
 
 /* Forward-declare the DLPack-managed tensor type for the tier-3
@@ -1553,6 +1555,20 @@ struct RKRConFrame *rkr_read_first_frame(const char *filename_c);
  */
 struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
                                          uintptr_t *num_frames);
+
+/**
+ * Like `rkr_read_all_frames`, with an explicit worker count.
+ *
+ * `n_threads == 0` is the automatic policy (Rayon when built with
+ * `parallel` and the file is at least 48 KiB). `n_threads == 1` is
+ * sequential. `n_threads >= 2` pins a Rayon pool of that size when
+ * `parallel` is on; otherwise the parse is sequential.
+ *
+ * Ownership matches `rkr_read_all_frames`.
+ */
+struct RKRConFrame **rkr_read_all_frames_n_threads(const char *filename_c,
+                                                   uintptr_t *num_frames,
+                                                   uintptr_t n_threads);
 
 /**
  * Frees an array of frame handles returned by `rkr_read_all_frames`.

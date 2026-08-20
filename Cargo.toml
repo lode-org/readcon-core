@@ -117,6 +117,10 @@ tempfile = "3"
 [[example]]
 name = "rust_usage"
 
+[[example]]
+name = "wall_scale_harness"
+required-features = ["parallel"]
+
 [[bench]]
 name = "iterator_bench"
 harness = false

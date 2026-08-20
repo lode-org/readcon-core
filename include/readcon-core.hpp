@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <iterator>
@@ -879,9 +880,9 @@ inline ConFrame read_first_frame(const std::filesystem::path &path) {
  * @brief Reads all frames from a .con file using mmap.
  * @throws std::runtime_error on failure.
  */
-inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) {
-    size_t num_frames = 0;
-    RKRConFrame **handles = rkr_read_all_frames(path.string().c_str(), &num_frames);
+inline std::vector<ConFrame>
+adopt_frame_handles(RKRConFrame **handles, size_t num_frames,
+                    const std::filesystem::path &path) {
     if (!handles) {
         throw std::runtime_error("Failed to read frames from: " +
                                  path.string());
@@ -898,6 +899,25 @@ inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) 
     }
     free_rkr_frame_array(handles, num_frames);
     return frames;
+}
+
+inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) {
+    size_t num_frames = 0;
+    RKRConFrame **handles = rkr_read_all_frames(path.string().c_str(), &num_frames);
+    return adopt_frame_handles(handles, num_frames, path);
+}
+
+/// Read all frames with an explicit worker count.
+///
+/// `n_threads == 0` is the automatic policy. `n_threads == 1` is
+/// sequential. `n_threads >= 2` pins a Rayon pool when the library is
+/// built with `parallel`.
+inline std::vector<ConFrame>
+read_all_frames(const std::filesystem::path &path, std::size_t n_threads) {
+    size_t num_frames = 0;
+    RKRConFrame **handles = rkr_read_all_frames_n_threads(
+        path.string().c_str(), &num_frames, n_threads);
+    return adopt_frame_handles(handles, num_frames, path);
 }
 
 // --- Implementation of ConFrameIterator and its nested Iterator ---

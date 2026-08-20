@@ -2985,24 +2985,60 @@ pub unsafe extern "C" fn rkr_read_all_frames(
         Err(_) => return ptr::null_mut(),
     };
     match iterators::read_all_frames(Path::new(filename)) {
-        Ok(frames) => {
-            let count = frames.len();
-            // shrink_to_fit ensures len == capacity so the matching
-            // free_rkr_frame_array can soundly call Vec::from_raw_parts
-            // with len == cap.
-            let mut handles: Vec<*mut RKRConFrame> = frames
-                .into_iter()
-                .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
-                .collect();
-            handles.shrink_to_fit();
-            debug_assert_eq!(handles.len(), handles.capacity());
-            let ptr = handles.as_mut_ptr();
-            std::mem::forget(handles);
-            unsafe { *num_frames = count };
-            ptr
-        }
+        Ok(frames) => pack_frame_handles(frames, num_frames),
         Err(_) => ptr::null_mut(),
     }
+}
+
+/// Like [`rkr_read_all_frames`], with an explicit worker count.
+///
+/// `n_threads == 0` is the automatic policy (Rayon when the library is
+/// built with `parallel` and the file is at least 48 KiB). `n_threads == 1`
+/// is sequential. `n_threads >= 2` pins a Rayon pool of that size when
+/// `parallel` is on; otherwise the parse is sequential.
+///
+/// # Safety
+/// Same contract as [`rkr_read_all_frames`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
+    filename_c: *const c_char,
+    num_frames: *mut usize,
+    n_threads: usize,
+) -> *mut *mut RKRConFrame {
+    if filename_c.is_null() || num_frames.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    let threads = if n_threads == 0 {
+        None
+    } else {
+        Some(n_threads)
+    };
+    match iterators::read_all_frames_with_threads(Path::new(filename), threads) {
+        Ok(frames) => pack_frame_handles(frames, num_frames),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
+fn pack_frame_handles(
+    frames: Vec<ConFrame>,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
+    let count = frames.len();
+    let mut handles: Vec<*mut RKRConFrame> = frames
+        .into_iter()
+        .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
+        .collect();
+    handles.shrink_to_fit();
+    debug_assert_eq!(handles.len(), handles.capacity());
+    let ptr = handles.as_mut_ptr();
+    std::mem::forget(handles);
+    unsafe { *num_frames = count };
+    ptr
 }
 /// Frees an array of frame handles returned by `rkr_read_all_frames`.
 /// Each frame is freed individually, then the array itself.
@@ -3950,6 +3986,23 @@ mod tests {
             RKRStatus::RKR_STATUS_SUCCESS
         );
         unsafe { free_rkr_frame_array(arr, n) };
+    }
+
+    #[test]
+    fn read_all_frames_n_threads_matches_auto() {
+        let path = std::ffi::CString::new("resources/test/tiny_cuh2.con").unwrap();
+        let mut n_auto: usize = 0;
+        let mut n_one: usize = 0;
+        let auto = unsafe { rkr_read_all_frames_n_threads(path.as_ptr(), &mut n_auto, 0) };
+        let one = unsafe { rkr_read_all_frames_n_threads(path.as_ptr(), &mut n_one, 1) };
+        assert!(!auto.is_null() && !one.is_null());
+        assert_eq!(n_auto, n_one);
+        assert_eq!(n_auto, 1);
+        let nat_auto = unsafe { rkr_frame_atom_count(*auto) };
+        let nat_one = unsafe { rkr_frame_atom_count(*one) };
+        assert_eq!(nat_auto, nat_one);
+        unsafe { free_rkr_frame_array(auto, n_auto) };
+        unsafe { free_rkr_frame_array(one, n_one) };
     }
 
     #[test]
