@@ -299,13 +299,19 @@ println!("Loaded {} frames", frames.len());
 ** Parallel parsing
 
 Behind the =parallel= feature gate, multi-frame files can be parsed
-concurrently using rayon.
+concurrently using rayon. =read_all_frames= (and the C symbol
+=rkr_read_all_frames=) turns that path on automatically for files of
+at least 48 KiB. =read_all_frames_with_threads= /
+=rkr_read_all_frames_n_threads= / =readcon.read_con(..., n_threads=n)=
+pin the worker count: =1= is sequential, =n >= 2= is a Rayon pool,
+=0=/=None= is the automatic policy.
 
 #+begin_src rust
 #[cfg(feature = "parallel")]
-use readcon_core::iterators::parse_frames_parallel;
+use readcon_core::iterators::{frames_from_text, parse_frames_parallel};
 
 let contents = std::fs::read_to_string("large_trajectory.con").unwrap();
+let sequential = frames_from_text(&contents, Some(1)).unwrap();
 let results = parse_frames_parallel(&contents);
 let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
 #+end_src

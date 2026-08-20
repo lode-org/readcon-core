@@ -39,6 +39,15 @@ class TestReadCon:
         assert len(frames[0]) == 4
         assert len(frames[1]) == 4
 
+    def test_read_con_n_threads_matches(self):
+        path = _resource("tiny_multi_cuh2.con")
+        auto = readcon.read_con(path)
+        one = readcon.read_con(path, n_threads=1)
+        two = readcon.read_con(path, n_threads=2)
+        assert len(auto) == len(one) == len(two) == 2
+        assert auto[0].atoms[0].atom_id == one[0].atoms[0].atom_id
+        assert one[1].atoms[0].x == pytest.approx(two[1].atoms[0].x)
+
 
 class TestReadConvel:
     def test_read_convel(self):
