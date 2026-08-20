@@ -85,6 +85,21 @@ namespace readcon {
 #define CON_SPEC_VERSION 3
 
 /**
+ * Breaking-change major for the public C ABI.
+ */
+#define RKR_ABI_VERSION_MAJOR 1
+
+/**
+ * Additive-change minor for the public C ABI.
+ */
+#define RKR_ABI_VERSION_MINOR 0
+
+/**
+ * Layout revision for opaque handles and exported records.
+ */
+#define RKR_ABI_LAYOUT_REVISION 1
+
+/**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
  * to gate code that depends on atom_index semantics.
  *
@@ -384,6 +399,26 @@ typedef struct mts_block_t {
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * Returns the breaking-change major for the public C ABI.
+ */
+uint32_t rkr_abi_version_major(void);
+
+/**
+ * Returns the additive-change minor for the public C ABI.
+ */
+uint32_t rkr_abi_version_minor(void);
+
+/**
+ * Returns the opaque-handle and exported-record layout revision.
+ */
+uint32_t rkr_abi_layout_revision(void);
+
+/**
+ * Returns the stable human-readable ABI negotiation stamp.
+ */
+const char *rkr_abi_stamp(void);
 
 /**
  * Returns the spec version at runtime (for dynamically linked consumers).
