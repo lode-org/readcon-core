@@ -334,9 +334,8 @@ Valgrind Cachegrind on =examples/cachegrind_harness.rs= is
 the commit-stable instruction-count measurement.
 Table \ref{tab:cachegrind} reports selected rows from the
 committed table
-(=docs/source/_generated/cachegrind_results.rst=, generated
-2026-08-20T18:45:01Z from commit =751aaa3=, features
-=chemfiles-from-sources=). Those counts are instruction
+(=docs/source/_generated/cachegrind_results.rst=,
+2026-08-20T18:45:01Z, commit =751aaa3=). Those counts are instruction
 counts, not wall times. That program writes $100$ frames to a
 buffer; that I-ref is in the table. There is no Cachegrind
 scenario for Rayon.
