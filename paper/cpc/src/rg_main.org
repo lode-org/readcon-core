@@ -1,0 +1,450 @@
+#+TITLE: readcon-core: a specification-aware reader and writer for the CON checkpoint format with a language-neutral C ABI
+#+OPTIONS: toc:nil title:nil todo:nil num:t author:nil
+#+STARTUP: fninline
+#+EXCLUDE_TAGS: noexport
+
+* Configuration :ignoreheading:ignore:
+:PROPERTIES:
+:VISIBILITY: folded
+:END:
+#+BEGIN_SRC emacs-lisp :exports none :eval always :results none
+(when (require 'ox-extra nil t)
+  (ox-extras-activate '(ignore-headlines)))
+#+END_SRC
+** Theme :ignoreheading:ignore:
+#+BEGIN_SRC emacs-lisp :exports none :results none :eval always
+(add-to-list 'org-latex-classes
+             '("elsarticle" "\\documentclass[preprint,12pt]{elsarticle}"
+               ("\\section{%s}" . "\\section*{%s}")
+               ("\\subsection{%s}" . "\\subsection*{%s}")
+               ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+               ("\\paragraph{%s}" . "\\paragraph*{%s}")
+               ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+(setq org-latex-packages-alist nil)
+(setq org-latex-listings t)
+(setq org-latex-src-block-backend 'listings)
+(setq org-latex-prefer-user-labels t)
+(setq org-latex-default-packages-alist
+  '(("" "graphicx" t)
+    ("" "rotating" nil)
+    ("normalem" "ulem" t)))
+#+END_SRC
+*** TeX activation :ignoreheading:ignore:
+#+LATEX_COMPILER: pdflatex
+#+LATEX_CLASS: elsarticle
+#+LATEX_CLASS_OPTIONS: [preprint,12pt]
+*** Preamble :ignoreheading:ignore:
+#+LATEX_HEADER: \journal{Computer Physics Communications}
+#+LATEX_HEADER: \usepackage{amssymb,amsmath}
+#+LATEX_HEADER: \usepackage{booktabs}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \input{figures/generated/macros}
+#+LATEX_HEADER: \input{figures/generated/neb_macros}
+#+LATEX_HEADER: \bibliography{rg_main}
+
+* Abstract :ignoreheading:
+:PROPERTIES:
+:CUSTOM_ID: sec:abstract
+:END:
+#+BEGIN_EXPORT latex
+\begin{frontmatter}
+
+\title{readcon-core: a specification-aware reader and writer for the CON
+checkpoint format with a language-neutral C ABI}
+
+\input{authors.tex}
+
+\begin{abstract}
+Rare-event and saddle-search codes in the eOn family write atomic
+checkpoints as \texttt{.con} and \texttt{.convel} text
+\cite{chillEONSoftwareLong2014}. The historical layout is a nine-line
+header plus type-grouped atom blocks. Independent readers treat
+column~4 as a boolean and do not parse declared force sections, the
+pre-grouping atom index, or a units object. This paper records CON
+versions~2 and~3 (JSON metadata on line~2, a spec-aware constraint
+bitmask, declared sections, required units in v3) and describes
+\texttt{readcon-core}, the reference implementation. The library is an
+hourglass: a Rust core, a C ABI (\texttt{rkr\_*}) published as
+\texttt{include/readcon-core.h}, and wrappers for C++, Python, Julia,
+and Fortran. Chemfiles
+\cite{frauxChemfiles2023} is an optional ingress path; the measured
+mapping is XYZ into the same \texttt{ConFrame}. Instruction-count
+measurements (Valgrind Cachegrind) and equal-geometry wall timings
+against ASE \cite{larsenAtomicSimulationEnvironment2017}, chemfiles,
+MDAnalysis H5MD
+\cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016},
+and raw h5py are reported with host provenance. Text CON remains the
+on-disk authority; gzip and optional zstd compress that text; a
+Cap'n Proto schema is an RPC wire, not a binary file format.
+\end{abstract}
+
+\begin{keyword}
+CON \sep convel \sep rare-event dynamics \sep checkpoint format
+\sep FFI \sep chemfiles \sep H5MD
+\end{keyword}
+
+\end{frontmatter}
+#+END_EXPORT
+
+* Program summary :ignoreheading:
+:PROPERTIES:
+:CUSTOM_ID: sec:program-summary
+:END:
+#+BEGIN_EXPORT latex
+\section*{Program Summary}
+
+\noindent
+\textit{Program Title:} readcon-core (companion: readcon-db)\\
+\textit{CPC Library link to program files:} (assigned on acceptance)\\
+\textit{Developer's repository link:}
+\url{https://github.com/lode-org/readcon-core};
+companion store \url{https://github.com/lode-org/readcon-db}\\
+\textit{Licensing provisions:} MIT license (MIT)\\
+\textit{Programming language:} Rust (core and C ABI); C99 and C++17
+headers; Python 3.10+; Julia; Fortran 2008 (\texttt{ISO\_C\_BINDING})\\
+\textit{Computer / Operating system:} any machine with a Rust 1.88+
+toolchain, or a prebuilt C library tarball; Linux, macOS, and Windows\\
+\textit{RAM:} of order the parsed frame. The committed 218-atom
+\texttt{cuh2.con} frame is $\conFrameBytes$\,B of text; the 100-frame
+concat in Table \ref{tab:wall} is $\conConcatBytes$\,B.\\
+\textit{External routines:} optional chemfiles, metatensor, DLPack,
+zstd, CUDA (feature-gated); readcon-db uses LMDB. Cap'n Proto is a
+Rust-only RPC feature, not a C ABI symbol.\\
+\textit{Nature of problem:} Rare-event and nudged-elastic-band
+campaigns need a checkpoint that carries cell, per-type masses,
+per-axis constraints, original atom indices, optional
+velocities/forces, and machine-readable metadata. Historical CON
+readers disagree on column~4, ignore line~2, and have no units
+contract. Campaign screening then needs an index over those files
+without a second structure dialect.\\
+\textit{Solution method:} A documented grammar (spec v2/v3, with an
+optional Pest companion) plus a hand-written reference parser and
+writer. A single C ABI exposes the parsed frame to non-Python drivers.
+Foreign structures enter through chemfiles and leave as CON.
+\texttt{readcon-db} is the companion campaign store: LMDB indexes
+(energy, formula, section presence) and a derived RCSO cache over the
+same text files.\\
+\textit{Restrictions / Unusual features:} Column~4 is a three-bit
+mask whose decode depends on \texttt{con\_spec\_version}. Lean
+builds keep chemfiles, metatensor, and CUDA symbols and return
+\texttt{RKR\_STATUS\_FEATURE\_DISABLED} rather than hiding them. The
+builder returns \texttt{NULL} on type-mass mismatch. Text CON is the
+interchange; gzip/zstd are envelopes of that text. A default
+\texttt{cargo build} is sequential. Python wheels and the published
+C prefix enable \texttt{parallel}. Then
+\texttt{rkr\_read\_all\_frames} / \texttt{readcon.read\_con} use
+Rayon above $48$\,KiB; \texttt{rkr\_read\_all\_frames\_n\_threads}
+and \texttt{n\_threads} select the worker count.\\
+\textit{Running time:} on the committed equal-geometry JSON (100
+frames of the 218-atom fixture), native CON parse is
+$\wallNativeMs\,\mathrm{ms}$ (Table \ref{tab:wall}). That call is
+\texttt{readcon.read\_con} with \texttt{python,chemfiles}; the
+\texttt{python} feature pulls Rayon, and $1.68$\,MB is above the
+$48$\,KiB auto-gate. Cachegrind I-refs include parse and the
+buffer writer (Table \ref{tab:cachegrind}). Sequential-versus-worker
+parse and a write wall are Table \ref{tab:io}.\\
+\textit{Additional comments:} Version 0.14.7. The C ABI is frozen
+within 0.14.x. A 1.0.0 tag is the production classifier. Cite the
+software through \texttt{CITATION.cff}
+\cite{smithSoftwareCitationPrinciples2016}. This manuscript does not
+invent an archival DOI. Deposit the core and readcon-db freeze tags
+together; do not write a second paper for readcon-db alone.
+#+END_EXPORT
+
+* Introduction
+:PROPERTIES:
+:CUSTOM_ID: sec:introduction
+:END:
+
+Saddle searches, adaptive kinetic Monte Carlo, and nudged elastic
+band calculations checkpoint atomic configurations many times per
+image. The eOn =.con= file is that checkpoint
+\cite{chillEONSoftwareLong2014}: a short header, then atoms grouped
+by chemical type, each line a position, a constraint flag, and a
+fifth integer that historical writers used as a display index.
+Velocities were conventionally stored in a sibling =.convel=
+file. Later practice added force blocks and free-form comments on
+line 2.
+
+The format is small and human-readable. Independent implementations
+have treated column 4 as ``fixed or not'' and have ignored line 2.
+ASE's =ase.io.eon= reader is of that class
+\cite{larsenAtomicSimulationEnvironment2017}: it decodes column 4
+with =bool(int(...))=, discards column 5, and treats leftover
+force-section lines after the coordinate parse as an error.
+Archived eOn C++ does the same boolean decode while keeping the
+fifth integer on =.con= (not on =.convel=). Neither
+stack has a units object. Column 4 therefore cannot carry a per-axis
+mask unless the reader consults a spec version.
+
+=readcon-core= is the reference reader and writer for that
+contract. Versions 2 and 3 are defined in the accompanying
+specification (=docs/orgmode/spec.org=); this paper states the
+parts that matter for interchange. The design goal is one on-disk
+checkpoint and one C ABI, so a Fortran optimizer, a C++ driver, and
+a Python notebook see the same constraints, identities, and
+metadata.
+
+* Related work
+:PROPERTIES:
+:CUSTOM_ID: sec:related
+:END:
+
+CON is a rare-event checkpoint, not a general structure archive and
+not an MD analysis tape. The nine-line type-grouped layout is the
+unversioned eOn de facto format. Chill et al. describe the eOn
+software and do not specify atom-line columns
+\cite{chillEONSoftwareLong2014}.
+
+Extended XYZ puts ~Lattice=~ and a
+~Properties=~ column schema on the comment line; lean XYZ has
+neither. There is no journal specification of extXYZ; the living
+grammar is the ASE/libAtoms dialect
+\cite{larsenAtomicSimulationEnvironment2017}. CON uses a JSON object
+on line 2 for the same job (machine metadata on a line that old
+tools treat as a comment) and keeps a first-class three-bit
+constraint mask and a pre-grouping =atom_id=. Lean XYZ, as
+timed in this paper, has no constraint mask. The library's ASE
+adapters convert a parsed =ConFrame= to =Atoms= and
+back; they do not register a =format='con'= plugin and do
+not replace =ase.io.eon=. That reader treats leftover
+force-section lines after the coordinate parse as an error.
+
+H5MD is the structured particle container in this journal
+\cite{deBuylH5MDStructuredEfficient2014}. It can carry per-particle
+mass, force, velocity, SI unit attributes, and an observables tree.
+It has no first-class per-axis freeze mask and no type-grouped
+atom-index recovery. The equal-geometry timings below treat H5MD as
+a peer load path, not as ``MD tape.'' GROMACS XTC/TRR and CHARMM/NAMD
+DCD are engine tapes: masses and restraints live in the TPR or PSF,
+and restart is a separate checkpoint (=cpt=,
+=namdbin=) \cite{abrahamGromacsHighPerformance2015}. They are
+cited here and are not timed.
+
+LAMMPS =dump custom= can store ids and optional forces on one
+row \cite{thompsonLammpsFlexibleSimulation2022}. It does not store a
+spec-versioned constraint bitmask and does not require type-grouped
+blocks. Atomsk converts among many crystal and MD formats and does
+not read or write eOn CON \cite{hirelAtomskToolManipulating2015}.
+chemfiles is the optional ingress library
+\cite{frauxChemfiles2023}: it opens many formats; this paper
+measures XYZ\(\to\)\texttt{ConFrame}. MDAnalysis is used only as the
+H5MD Python API in the wall-time table
+\cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016};
+MDTraj is not timed \cite{mcgibbonMDTrajModernOpen2015}.
+An optional metatensor export copies four \texttt{TensorBlock}s
+(positions, velocities, forces, per-atom energies)
+\cite{bigiMetatensorMetatomicFoundational2026}; it is not a
+TensorMap or metatomic \texttt{System} path.
+
+* The CON format
+:PROPERTIES:
+:CUSTOM_ID: sec:format
+:END:
+
+A spec 2 file places a JSON object on line 2 with at least
+=con_spec_version=. Spec 3 requires a =units= object
+with non-empty =length= and =energy= keys. The
+=sections= array names the data blocks that follow the
+coordinates (velocities, forces, energies, charges, spins, magnetic
+moments). The Rust writer fills =sections= from the frame.
+
+Column 4 is a bitmask $0\ldots 7$. Historical writers emit $0$ or
+$1$ (free or all-fixed). This specification assigns a three-bit
+mask for spec 2+: \(1\) is \(x\)-only and \(7\) is all-fixed. Writers
+emit $7$ for all-fixed, never $1$. The decoder is spec-aware so
+that a legacy file with $1$ remains all-fixed. Old readers that
+test ``nonzero means fixed'' over-constrain $y$ and $z$ on a legal
+spec 2 file whose mask is $1$--$6$; they still freeze the atom.
+Column 5 is =atom_id=. Readers accept four-column lines and
+default the missing index to the sequential position in the frame.
+
+Line 2 was chosen because existing tools treat it as a comment.
+Adding a tenth header line, overwriting the postbox on lines 5--6, or
+shipping a sidecar =.con.meta= would break those parsers or
+lose pairing.
+
+Velocities may live in a declared =sections= entry on a
+=.con= file. The =.convel= extension is the historical
+name and the blank-separator fallback when the =sections= key
+is absent. A present key, including an empty array, disables that
+fallback.
+
+Gzip is the portable compression. zstd is an optional feature with
+the same magic-byte detection. Both decompress to text and then
+parse. They are not a new format.
+
+A Cap'n Proto schema (=schema/ReadCon.capnp=) exists for an
+optional Rust RPC service. It is a parsed-frame transport. It is not
+an on-disk ``bcon'' authority. The campaign store
+=readcon-db= keeps cooked SoA numerics in LMDB (RCSO) as a
+derived cache. Text CON remains the file that independent tools must
+implement.
+
+* Library architecture
+:PROPERTIES:
+:CUSTOM_ID: sec:architecture
+:END:
+
+The crate is an hourglass. The Rust core owns =ConFrame=, the
+writer, and optional chemfiles import. An optional Pest grammar
+(=grammar/readcon.pest=) is a surface-syntax companion; the
+I/O hot path is the hand-written parser. The C ABI in
+=src/ffi.rs= is generated into =include/readcon-core.h=
+and that header is what CMake FetchContent, the Meson wrap-file, and
+=pkg-config= install. Consumers do not run cbindgen.
+
+Python (=readcon= / =readcon-chemfiles=), Julia, and
+Fortran bind the C ABI (Python also calls the Rust parser directly).
+The =python= feature enables Rayon. Then
+=read_all_frames= / =read_con= parse in parallel
+when the buffer is at least $48$\,KiB; =n_threads=1= forces
+the sequential iterator. A default =cargo build= is
+sequential. The published C prefix is built with =parallel=,
+so =rkr_read_all_frames= follows the same automatic
+policy. =rkr_read_all_frames_n_threads= selects the
+worker count ($0$ auto, $1$ sequential, $n\geq 2$ a pool). Lean
+builds return =RKR_STATUS_FEATURE_DISABLED= for
+chemfiles, metatensor, and CUDA rather than hiding the symbol. RPC
+is a Rust feature and is not on the C ABI. Builder
+=rkr_frame_builder_build= returns =NULL= on
+validation errors (including type-mass mismatch); it does not abort.
+
+The 0.14.x contract freezes ownership, sentinels (=NaN=,
+\texttt{UINT64\_MAX}, \texttt{NULL}), and the Z \(=1\ldots 92\) (+ D/T)
+helpers. Additive symbols may appear in a 0.14.z patch. A breaking C
+change is a 0.15+ minor.
+
+* Performance
+:PROPERTIES:
+:CUSTOM_ID: sec:performance
+:END:
+
+Two measurements are kept separate.
+
+Valgrind Cachegrind on =examples/cachegrind_harness.rs= is
+the commit-stable instruction-count measurement.
+Table \ref{tab:cachegrind} reports selected rows from the
+committed table
+(=docs/source/_generated/cachegrind_results.rst=, generated
+2026-08-20T00:38:48Z from commit =b1e1d11=, features
+=chemfiles-from-sources=). Those counts are instruction
+counts, not wall times. The harness writes $100$ frames to a
+buffer; that I-ref is in the table. There is no Cachegrind
+scenario for Rayon.
+
+#+LATEX: \input{figures/generated/cachegrind_table}
+
+Equal-geometry wall timings are host-specific. Table \ref{tab:wall}
+is the committed JSON from a Linux x86_64 host
+(=benches/results/*.json=, 2026-08-19T22:56Z, tree
+=\wallCommit=,
+=maturin develop --features python,chemfiles --release=)
+with 100 frames of the 218-atom =cuh2.con= fixture. The
+=ase.io.eon= row uses a synthetic 100-frame file of the same
+atom count, not the fixture concatenation.
+Leftover force-section lines are an error in that reader, so the
+timed file is coordinates-only.
+
+#+LATEX: \input{figures/generated/wall_table}
+
+On this identical-frame concatenation, =CON.gz= (gzip of the
+text CON) is $0.86\times$ the positions-only H5MD file and
+=CON.zst= is $0.065\times$. Those sizes are for this blob,
+not a general rare-event law. h5py is faster because it loads a
+coordinate array. MDAnalysis H5MD cost is the Python API
+\cite{gowersMDAnalysisPythonPackage2016}. Chemfiles ingress is a
+different payload: lean XYZ has no constraint mask
+\cite{frauxChemfiles2023}. The table reports them together so the
+payloads stay visible.
+
+The three native CON medians are =readcon.read_con= (or
+=read_con_string=) under =python,chemfiles=. That
+feature set enables Rayon. The $1.68$\,MB concat is above
+=PARALLEL_BYTES_THRESHOLD= ($48$\,KiB). Those rows are the
+automatic policy, not =n_threads=1=, and they include
+=PyConFrame= conversion. Table \ref{tab:io} is a different
+protocol: the Rust harness
+=examples/wall_scale_harness.rs= on the same 100-frame
+payload, no Python.
+
+#+LATEX: \input{figures/generated/io_table}
+
+On this host the automatic policy is $\ioSpeedup\times$ the sequential
+iterator. A 16-worker pool is slower than auto because auto uses
+the $\ioNcpus$-CPU global pool. The write path is the same frames, not a
+peer-format comparison.
+
+Peer scripts write JSON with host, date, and commit. This paper
+tables only numbers that carry that provenance.
+
+* Multi-language fidelity
+:PROPERTIES:
+:CUSTOM_ID: sec:fidelity
+:END:
+
+A clause-keyed Phase A corpus under
+=resources/conformance/= locks the column-4 collision (spec 1
+value $1$ is all-fixed; spec 2 value $1$ is $x$-only; spec 2
+value $7$ is all-fixed), required v3 units, missing
+=con_spec_version=, unsupported version $4$, unknown
+section names, and =validate=true= without
+=sections=. Each valid id has a JSON golden for spec
+version, column-4 mask, positions, atom ids, and symbols. Rust, the
+C ABI, and Python share the same parser. Fortran and Julia call the
+C ABI. The optional Pest grammar is exercised separately
+(=cargo test --features grammar=).
+The published cxx tarball on the =v0.14.7= GitHub Release is
+the CMake FetchContent URL (SHA256
+=14710ec007b2131d2c0e13931bf3e7e443ce87627ace2fb21497a05ea0b5df43=).
+
+* Applications
+:PROPERTIES:
+:CUSTOM_ID: sec:applications
+:END:
+
+eOn and the amsel campaign stack consume CON as the checkpoint
+between potential evaluations and saddle searches.
+=readcon-db= indexes those files for energy, formula, and
+section presence.
+
+=resources/examples/neb_band.con= is a four-image spec-3
+band. Each frame declares =neb_bead=, =neb_band=,
+=energy=, =fmax=, and a =forces= section.
+=scripts/print_neb_band.py=,
+=examples/print_neb_band.cpp=, and
+=examples/print_neb_band.f90= print bead, energy, and
+$f_{\max}$. Table \ref{tab:neb} is that output. The energies are
+the line-2 JSON. They are not a production NEB. The declared
+barrier $E_1-E_0$ is $\nebBarrierEv$\,eV. The declared $f_{\max}$ is not
+recomputed from the force block.
+
+#+LATEX: \input{figures/generated/neb_table}
+
+Python notebooks use =readcon= for lean I/O and
+=readcon-chemfiles= when the input arrives as XYZ.
+=read_chemfiles= also accepts PDB and GRO through chemfiles;
+those paths are untested in this tree and do not preserve residues
+or occupancy. The C++ RAII header is the path for in-process drivers
+that cannot embed a Python interpreter.
+
+* Availability
+:PROPERTIES:
+:CUSTOM_ID: sec:availability
+:END:
+
+Source, headers, and language packages are versioned together at
+0.14.7: the crate on crates.io and wheels on PyPI (=readcon=
+and =readcon-chemfiles=). Julia =Project.toml= and the
+Fortran fpm package live in this repository and bind a prebuilt or
+locally built =libreadcon_core=; they are not registry
+packages. CMake FetchContent and the in-tree Meson wrap-file point
+at the slim cxx tarball on the matching GitHub Release. A
+conda-forge staged-recipes entry is open (PR 32605) at the same
+version. Cite the software through =CITATION.cff=
+\cite{smithSoftwareCitationPrinciples2016}. An archival DOI is
+minted on a freeze tag and recorded there; this manuscript does not
+invent one.
+
+\bibliographystyle{elsarticle-num}
