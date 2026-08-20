@@ -5,13 +5,10 @@
 \texttt{cuh2.con} geometry, five repeats
 (\texttt{benches/results/wall\_scale.json}, 2026-08-20T18:10Z, host
 \texttt{rgam5terra}, 32 CPUs, tree \texttt{72e3fb54},
-\texttt{cargo run --release --example wall\_scale\_harness
---features parallel}). Sequential is
-\texttt{frames\_from\_text(..., Some(1))}. Auto is the $48$\,KiB
-policy on the global Rayon pool. Pinned pools use
-\texttt{parse\_frames\_parallel\_with\_threads}. Write is
-\texttt{ConFrameWriter} into a memory buffer of those frames. Do
-not average these with Table~\ref{tab:wall}.}
+\texttt{wall\_scale\_harness --features parallel}).
+Sequential is \texttt{n=1}. Auto is the $48$\,KiB Rayon policy.
+Write is \texttt{ConFrameWriter} to a memory buffer.
+Do not average these with Table~\ref{tab:wall}.}
 \label{tab:io}
 \begin{tabular}{@{}llr@{}}
 \toprule
