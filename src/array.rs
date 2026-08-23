@@ -142,9 +142,8 @@ where
         // optimisation: build a custom Array impl that exposes the
         // Arc-shared storage directly via dlpk's manager_ctx).
         let owned: ArrayD<T> = lock.to_owned();
-        DLPackTensor::try_from(owned).map_err(|e| {
-            ParseError::ValidationError(format!("dlpk ArrayD conversion failed: {e}"))
-        })
+        DLPackTensor::try_from(owned)
+            .map_err(|e| ParseError::ValidationError(format!("dlpk ArrayD conversion failed: {e}")))
     }
 
     fn copy(&self) -> Box<dyn Array> {
@@ -340,7 +339,7 @@ impl Array for DeviceTaggedF64Array {
                 strides: std::ptr::null_mut(),
                 byte_offset: 0,
             },
-            flags: 0,
+            flags: dlpk::sys::DLPACK_FLAG_BITMASK_READ_ONLY,
         };
         managed.manager_ctx = Box::into_raw(manager) as *mut std::ffi::c_void;
         // Safety: valid DLManagedTensorVersioned; deleter frees DeviceTaggedManager
@@ -417,10 +416,7 @@ mod tests {
         let a = allocate_array_on_device(&[2, 3], DLDevice::cuda(0))
             .expect("CUDA allocate must succeed with --features cuda and a driver");
         assert_eq!(a.device(), DLDevice::cuda(0));
-        assert_eq!(
-            a.device().device_type,
-            dlpk::sys::DLDeviceType::kDLCUDA
-        );
+        assert_eq!(a.device().device_type, dlpk::sys::DLDeviceType::kDLCUDA);
         let t = a
             .as_dlpack(DLDevice::cuda(0), None, DLPackVersion::current())
             .expect("matching as_dlpack");
@@ -462,7 +458,8 @@ mod tests {
 
     #[test]
     fn cpu_tagged_path_unchanged() {
-        let a = array_from_host_f64_on_device(&[1, 3], vec![1.0, 2.0, 3.0], DLDevice::cpu()).unwrap();
+        let a =
+            array_from_host_f64_on_device(&[1, 3], vec![1.0, 2.0, 3.0], DLDevice::cpu()).unwrap();
         assert_eq!(a.device(), DLDevice::cpu());
         let t = a
             .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())

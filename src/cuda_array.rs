@@ -160,9 +160,7 @@ impl Array for CudaF64Array {
     fn copy(&self) -> Box<dyn Array> {
         // Deep copy on device: host round-trip (sufficient for correctness tests).
         let host = self.to_host().unwrap_or_default();
-        Box::new(
-            Self::from_host(&self.shape, &host, self.device_id).expect("cuda copy"),
-        )
+        Box::new(Self::from_host(&self.shape, &host, self.device_id).expect("cuda copy"))
     }
 }
 
@@ -220,15 +218,15 @@ impl Array for CudaArrayHandle {
                 strides: std::ptr::null_mut(),
                 byte_offset: 0,
             },
-            flags: 0,
+            flags: dlpk::sys::DLPACK_FLAG_BITMASK_READ_ONLY,
         };
         managed.manager_ctx = Box::into_raw(manager) as *mut std::ffi::c_void;
         Ok(unsafe { DLPackTensor::from_raw(managed) })
     }
     fn copy(&self) -> Box<dyn Array> {
         let host = self.0.to_host().unwrap_or_default();
-        let inner = CudaF64Array::from_host(&self.0.shape, &host, self.0.device_id)
-            .expect("cuda copy");
+        let inner =
+            CudaF64Array::from_host(&self.0.shape, &host, self.0.device_id).expect("cuda copy");
         Box::new(CudaArrayHandle(Arc::new(inner)))
     }
 }
