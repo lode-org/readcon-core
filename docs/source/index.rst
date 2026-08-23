@@ -5,7 +5,7 @@
      <div class="rc-hero-brand">
        <img class="rc-hero-mark" src="_static/mark.svg" width="56" height="56" alt="" />
        <div>
-         <p class="rc-hero-name">readcon</p>
+         <p class="rc-hero-name"><span class="rc-hero-read">read</span><span class="rc-hero-con">con</span></p>
          <p class="rc-hero-sub">core / CON I/O</p>
        </div>
      </div>
