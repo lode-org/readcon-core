@@ -317,6 +317,9 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub spec_version: u32,
     metadata: Py<PyDict>,
+    /// Rust SoA when this frame came from the parser. Numeric hot path
+    /// (`xyz`) reads this instead of walking the Python atom list.
+    inner: Option<ConFrame>,
 }
 
 #[pymethods]
@@ -345,6 +348,7 @@ impl PyConFrame {
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
             metadata,
+            inner: None,
         })
     }
 
@@ -402,6 +406,74 @@ impl PyConFrame {
     // arrays are zero-copy interoperable with torch / jax / cupy via
     // `torch.from_dlpack(frame.coords_array())` etc.
 
+    /// SoA xyz as a contiguous numpy `[N, 3] float64` array.
+    ///
+    /// Parsed frames copy once from the Rust column (not per-atom Python
+    /// objects). A fresh array is returned so callers can mutate it.
+    /// `coords_array()` still walks `.atoms` so in-place Atom edits show up.
+    #[getter]
+    fn xyz<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if let Some(frame) = self.inner.as_ref() {
+            let n = frame.positions.nrows();
+            let mut data = Vec::with_capacity(n.saturating_mul(3));
+            if let Some(src) = frame.positions.f64_slice() {
+                data.extend_from_slice(src);
+            } else {
+                for i in 0..n {
+                    data.extend_from_slice(&frame.positions.as_f64_row(i));
+                }
+            }
+            let array = Array2::from_shape_vec((n, 3), data)
+                .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?;
+            return Ok(array.into_pyarray(py));
+        }
+        self.coords_array(py)
+    }
+
+    #[getter]
+    fn vel<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if let Some(frame) = self.inner.as_ref() {
+            let n = frame.velocities.nrows();
+            if n == 0 {
+                return Ok(None);
+            }
+            let mut data = Vec::with_capacity(n.saturating_mul(3));
+            if let Some(src) = frame.velocities.f64_slice() {
+                data.extend_from_slice(src);
+            } else {
+                for i in 0..n {
+                    data.extend_from_slice(&frame.velocities.as_f64_row(i));
+                }
+            }
+            let array = Array2::from_shape_vec((n, 3), data)
+                .map_err(|e| PyValueError::new_err(format!("vel shape error: {e}")))?;
+            return Ok(Some(array.into_pyarray(py)));
+        }
+        self.velocities_array(py)
+    }
+
+    #[getter]
+    fn frc<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if let Some(frame) = self.inner.as_ref() {
+            let n = frame.forces.nrows();
+            if n == 0 {
+                return Ok(None);
+            }
+            let mut data = Vec::with_capacity(n.saturating_mul(3));
+            if let Some(src) = frame.forces.f64_slice() {
+                data.extend_from_slice(src);
+            } else {
+                for i in 0..n {
+                    data.extend_from_slice(&frame.forces.as_f64_row(i));
+                }
+            }
+            let array = Array2::from_shape_vec((n, 3), data)
+                .map_err(|e| PyValueError::new_err(format!("frc shape error: {e}")))?;
+            return Ok(Some(array.into_pyarray(py)));
+        }
+        self.forces_array(py)
+    }
+
     /// Returns the per-atom xyz positions as a contiguous numpy
     /// `[N, 3] float64` array, in the type-grouped order used by the
     /// underlying frame.
@@ -409,10 +481,7 @@ impl PyConFrame {
     /// Always allocates a **fresh** array from the current Python atom list so
     /// in-place mutation of a previous return value cannot corrupt later
     /// calls, and edits to `atoms` are reflected immediately.
-    fn coords_array<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    fn coords_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
         let atoms = self.py_atoms(py)?;
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
         for atom in &atoms {
@@ -448,10 +517,7 @@ impl PyConFrame {
     /// Returns the per-atom force vectors as a contiguous numpy
     /// `[N, 3] float64` array. Returns `None` if the frame has no
     /// force data.
-    fn forces_array<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+    fn forces_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         let atoms = self.py_atoms(py)?;
         if !atoms.first().is_some_and(PyAtomDatum::has_forces) {
             return Ok(None);
@@ -470,10 +536,7 @@ impl PyConFrame {
     /// Returns the per-atom energy contributions as a contiguous
     /// numpy `[N] float64` array. Returns `None` if the frame has no
     /// per-atom energies (only a frame-total energy in metadata).
-    fn energies_array<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+    fn energies_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
         let atoms = self.py_atoms(py)?;
         if !atoms.first().is_some_and(PyAtomDatum::has_energy) {
             return Ok(None);
@@ -487,10 +550,7 @@ impl PyConFrame {
 
     /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
     /// array, useful for filtering / one-hot encoding workflows.
-    fn atom_ids_array<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyArray1<u64>>> {
+    fn atom_ids_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u64>>> {
         let atoms = self.py_atoms(py)?;
         let data: Vec<u64> = atoms.iter().map(|a| a.atom_id).collect();
         Ok(data.into_pyarray(py))
@@ -504,10 +564,7 @@ impl PyConFrame {
     /// O(N) per call. For repeated lookups, build a dict once with
     /// `build_atom_id_index()` and look up there.
     fn atom_index_by_id(&self, py: Python<'_>, atom_id: u64) -> PyResult<Option<usize>> {
-        Ok(self
-            .py_atoms(py)?
-            .iter()
-            .position(|a| a.atom_id == atom_id))
+        Ok(self.py_atoms(py)?.iter().position(|a| a.atom_id == atom_id))
     }
 
     /// Builds a fresh `dict[int, int]` mapping `atom_id -> position`
@@ -891,6 +948,7 @@ impl PyConFrame {
             atoms: py_atoms_to_list(py, atoms)?,
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
+            inner: Some(frame.clone()),
         })
     }
 
@@ -1006,11 +1064,7 @@ fn read_all_frames(
 
 #[pyfunction]
 #[pyo3(signature = (path, n_threads=None))]
-fn read_con(
-    py: Python<'_>,
-    path: &str,
-    n_threads: Option<usize>,
-) -> PyResult<Vec<PyConFrame>> {
+fn read_con(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Vec<PyConFrame>> {
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
     let path_owned = path.to_owned();
     let frames = py
@@ -1048,9 +1102,7 @@ fn read_con_string(
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
     let owned = contents.to_owned();
     let frames = py
-        .detach(|| {
-            crate::iterators::frames_from_text(&owned, n_threads).map_err(|e| e.to_string())
-        })
+        .detach(|| crate::iterators::frames_from_text(&owned, n_threads).map_err(|e| e.to_string()))
         .map_err(PyIOError::new_err)?;
     frames
         .iter()
@@ -1133,10 +1185,8 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| {
-        crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string())
-    })
-    .map_err(PyIOError::new_err)
+    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string()))
+        .map_err(PyIOError::new_err)
 }
 
 /// Convert a structure/trajectory path to CON (migration one-liner).
@@ -1219,7 +1269,8 @@ fn write_con_string(
     let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
-        let mut writer = ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
+        let mut writer =
+            ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -1577,6 +1628,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
         metadata: PyDict::new(py).unbind(),
+        inner: None,
     })
 }
 
@@ -1753,7 +1805,11 @@ fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyRes
 ///
 /// Prefer :meth:`ConFrame.select_atoms` for idiomatic method-call style.
 #[pyfunction]
-fn select_atom_indices(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Vec<usize>> {
+fn select_atom_indices(
+    py: Python<'_>,
+    frame: &PyConFrame,
+    selection: &str,
+) -> PyResult<Vec<usize>> {
     use crate::chemfiles_selection::select_atom_indices as rust_select;
     let rust_frame = frame.to_con_frame(py)?;
     rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
@@ -1786,9 +1842,7 @@ fn multi_frame_selection_to_py(
 
 fn py_frames_to_con(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
     let seq = frames.extract::<Vec<PyRef<'_, PyConFrame>>>()?;
-    seq.iter()
-        .map(|f| f.to_con_frame(py))
-        .collect()
+    seq.iter().map(|f| f.to_con_frame(py)).collect()
 }
 
 /// Evaluate a chemfiles selection on **each** frame (trajectory-safe).

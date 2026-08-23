@@ -22,6 +22,9 @@ header = """
  *     to call with NULL (no-op).
  *   - const char* returned by rkr_library_version is process-static; do
  *     NOT free it.
+ *   - rkr_frame_*_view / rkr_frame_xyz_f64 borrow the frame SoA. The
+ *     pointer is valid until free_rkr_frame. Prefer these over
+ *     rkr_frame_to_c_frame (which allocates an AoS copy).
  *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
  *     by the caller; release with free_c_frame.
  *

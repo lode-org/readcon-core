@@ -409,6 +409,26 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
             rkr_frame_copy_positions(frame, buf.as_mut_ptr(), buf.len()),
             RKRStatus::RKR_STATUS_SUCCESS
         );
+        let mut nn = 0usize;
+        let xyz = rkr_frame_xyz_f64(frame, &mut nn);
+        assert!(!xyz.is_null());
+        assert_eq!(nn, nat);
+        assert!((unsafe { *xyz } - buf[0]).abs() < 1e-15);
+        let mut view = RKRArrayView {
+            data: ptr::null(),
+            n: 0,
+            cols: 0,
+            dtype_code: 0,
+            dtype_bits: 0,
+        };
+        assert_eq!(
+            rkr_frame_xyz_view(frame, &mut view),
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_eq!(view.n, nat);
+        assert_eq!(view.cols, 3);
+        assert_eq!(view.dtype_bits, 64);
+        assert_eq!(view.data as *const f64, xyz);
         // too-small buffer
         assert_eq!(
             rkr_frame_copy_positions(frame, buf.as_mut_ptr(), 1),

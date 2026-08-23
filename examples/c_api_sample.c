@@ -9,6 +9,9 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
     if (!frame_handle)
         return;
 
+    size_t n = 0;
+    const double *xyz = rkr_frame_xyz_f64(frame_handle, &n);
+
     // To inspect the data, extract a temporary, transparent CFrame.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle);
     if (!c_frame) {
@@ -39,6 +42,10 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
     printf("  - Post-box header 2:\"%s\"\n", header_buffer);
 
     printf("  - Total atoms:      %zu\n", c_frame->num_atoms);
+    if (xyz && n > 0) {
+        printf("  - SoA xyz[0]:       [%.4f, %.4f, %.4f] (no copy)\n", xyz[0],
+               xyz[1], xyz[2]);
+    }
     printf("  - Has velocities:   %s\n",
            c_frame->has_velocities ? "yes" : "no");
     if (c_frame->num_atoms > 0) {

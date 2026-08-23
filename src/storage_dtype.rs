@@ -9,7 +9,7 @@
 
 use crate::error::ParseError;
 use crate::types::meta;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Element type for a numeric SoA field in memory (maps to DLPack codes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -331,6 +331,36 @@ impl Array2Storage {
         }
     }
 
+    /// Contiguous f64 row-major slice when storage is float64. None otherwise.
+    pub fn f64_slice(&self) -> Option<&[f64]> {
+        match self {
+            Self::F64(a) => a.as_slice_memory_order(),
+            _ => None,
+        }
+    }
+
+    /// Pointer to the first element of the contiguous SoA block, or null.
+    pub fn data_ptr(&self) -> *const u8 {
+        let p = match self {
+            Self::F64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::F32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::F16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::I8(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::I16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::I32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::I64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::U8(a) | Self::Bool(a) => {
+                a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8)
+            }
+            Self::U16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::U32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::U64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::C64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+            Self::C128(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
+        };
+        p.unwrap_or(std::ptr::null())
+    }
+
     /// Reallocate in `kind` and copy values via f64 real part (allocate-as-type).
     pub fn project_to(&mut self, kind: ElementKind) {
         if self.kind() == kind {
@@ -503,10 +533,7 @@ impl Array2Storage {
         }
     }
 
-    pub fn as_dlpack(
-        &self,
-        device: dlpk::sys::DLDevice,
-    ) -> Result<dlpk::DLPackTensor, ParseError> {
+    pub fn as_dlpack(&self, device: dlpk::sys::DLDevice) -> Result<dlpk::DLPackTensor, ParseError> {
         if device != dlpk::sys::DLDevice::cpu() {
             #[cfg(feature = "cuda")]
             {
@@ -536,7 +563,8 @@ impl Array2Storage {
             Self::F32(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::F16(_) => Err(ParseError::ValidationError(
-                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates".into(),
+                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates"
+                    .into(),
             )),
             Self::I8(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
@@ -663,6 +691,34 @@ impl Array1Storage {
         }
     }
 
+    /// Contiguous f64 slice when storage is float64.
+    pub fn f64_slice(&self) -> Option<&[f64]> {
+        match self {
+            Self::F64(a) => a.as_slice(),
+            _ => None,
+        }
+    }
+
+    /// Pointer to the first element of the contiguous SoA block, or null.
+    pub fn data_ptr(&self) -> *const u8 {
+        let p = match self {
+            Self::F64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::F32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::F16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::I8(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::I16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::I32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::I64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::C64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::C128(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+        };
+        p.unwrap_or(std::ptr::null())
+    }
+
     pub fn project_to(&mut self, kind: ElementKind) {
         if self.kind() == kind {
             return;
@@ -712,10 +768,7 @@ impl Array1Storage {
         }
     }
 
-    pub fn as_dlpack(
-        &self,
-        device: dlpk::sys::DLDevice,
-    ) -> Result<dlpk::DLPackTensor, ParseError> {
+    pub fn as_dlpack(&self, device: dlpk::sys::DLDevice) -> Result<dlpk::DLPackTensor, ParseError> {
         if device != dlpk::sys::DLDevice::cpu() {
             #[cfg(feature = "cuda")]
             {
@@ -743,7 +796,8 @@ impl Array1Storage {
             Self::F32(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
             Self::F16(_) => Err(ParseError::ValidationError(
-                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates".into(),
+                "float16 as_dlpack blocked on half/dlpk version skew; storage still allocates"
+                    .into(),
             )),
             Self::I8(a) => dlpk::DLPackTensor::try_from(a.clone())
                 .map_err(|e| ParseError::ValidationError(format!("as_dlpack: {e}"))),
@@ -846,10 +900,7 @@ impl IdArray1 {
         }
     }
 
-    pub fn as_dlpack(
-        &self,
-        device: dlpk::sys::DLDevice,
-    ) -> Result<dlpk::DLPackTensor, ParseError> {
+    pub fn as_dlpack(&self, device: dlpk::sys::DLDevice) -> Result<dlpk::DLPackTensor, ParseError> {
         if device != dlpk::sys::DLDevice::cpu() {
             return Err(ParseError::ValidationError(
                 "IdArray1 is CPU-resident".into(),
@@ -927,7 +978,10 @@ mod tests {
 
     #[test]
     fn accept_complex_and_float16_strings() {
-        assert_eq!(ElementKind::parse("complex64").unwrap(), ElementKind::Complex64);
+        assert_eq!(
+            ElementKind::parse("complex64").unwrap(),
+            ElementKind::Complex64
+        );
         assert_eq!(ElementKind::parse("float16").unwrap(), ElementKind::Float16);
     }
 

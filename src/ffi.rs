@@ -1,8 +1,8 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
-use crate::types::{ConFrame, ConFrameBuilder, meta};
+use crate::types::{meta, ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{c_char, CStr, CString};
 use std::fs::File;
 use std::path::Path;
 use std::ptr;
@@ -445,6 +445,51 @@ pub struct RKRConFrameWriter {
 /// A transparent, "lossy" C-struct containing only the core atomic data.
 /// This can be extracted from an `RKRConFrame` handle for direct data access.
 /// The caller is responsible for freeing the `atoms` array using `free_c_frame`.
+/// Borrowed SoA column. `data` is valid until the parent frame is freed
+/// or a mutating call reallocates storage. No copy.
+#[repr(C)]
+pub struct RKRArrayView {
+    pub data: *const std::ffi::c_void,
+    pub n: usize,
+    pub cols: u32,
+    pub dtype_code: u8,
+    pub dtype_bits: u8,
+}
+
+impl RKRArrayView {
+    fn empty() -> Self {
+        Self {
+            data: std::ptr::null(),
+            n: 0,
+            cols: 0,
+            dtype_code: 0,
+            dtype_bits: 0,
+        }
+    }
+
+    fn from_array2(arr: &crate::storage_dtype::FloatArray2) -> Self {
+        let kind = arr.kind();
+        Self {
+            data: arr.data_ptr() as *const std::ffi::c_void,
+            n: arr.nrows(),
+            cols: arr.ncols() as u32,
+            dtype_code: kind.dlpack_code(),
+            dtype_bits: kind.dlpack_bits(),
+        }
+    }
+
+    fn from_array1(arr: &crate::storage_dtype::FloatArray1) -> Self {
+        let kind = arr.kind();
+        Self {
+            data: arr.data_ptr() as *const std::ffi::c_void,
+            n: arr.len(),
+            cols: 1,
+            dtype_code: kind.dlpack_code(),
+            dtype_bits: kind.dlpack_bits(),
+        }
+    }
+}
+
 #[repr(C)]
 pub struct CFrame {
     pub atoms: *mut CAtom,
@@ -759,7 +804,11 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
             _ => None,
         }
     } else {
-        frame.header.postbox_header.get(line_index).map(String::as_str)
+        frame
+            .header
+            .postbox_header
+            .get(line_index)
+            .map(String::as_str)
     };
     if let Some(line) = line_to_copy {
         let bytes = line.as_bytes();
@@ -802,7 +851,11 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
             _ => None,
         }
     } else {
-        frame.header.postbox_header.get(line_index).map(String::as_str)
+        frame
+            .header
+            .postbox_header
+            .get(line_index)
+            .map(String::as_str)
     };
     if let Some(line) = line_to_copy {
         // Convert the Rust string slice to a C-compatible, heap-allocated string.
@@ -845,10 +898,7 @@ type RkrWriter = ConFrameWriter<Box<dyn std::io::Write>>;
 /// Boxes a sink into an `RKRConFrameWriter` handle at the requested
 /// precision. `precision == None` selects the writer's built-in default.
 #[inline]
-fn into_rkr_writer(
-    sink: Box<dyn std::io::Write>,
-    precision: Option<u8>,
-) -> *mut RKRConFrameWriter {
+fn into_rkr_writer(sink: Box<dyn std::io::Write>, precision: Option<u8>) -> *mut RKRConFrameWriter {
     let writer: RkrWriter = match precision {
         Some(p) => ConFrameWriter::with_precision(sink, p as usize),
         None => ConFrameWriter::new(sink),
@@ -994,7 +1044,10 @@ mod index_proj_ffi_tests {
         }
         let cv = rkr_frame_cell_volume(handle);
         match proj.cell_volume {
-            Some(v) => assert!((cv - v).abs() < 1e-6 * v.max(1.0), "cell_volume C={cv} proj={v}"),
+            Some(v) => assert!(
+                (cv - v).abs() < 1e-6 * v.max(1.0),
+                "cell_volume C={cv} proj={v}"
+            ),
             None => assert!(cv.is_nan()),
         }
         let fm = rkr_frame_fmax(handle);
@@ -1696,7 +1749,9 @@ impl Default for RKRDlpackExportOptions {
 
 /// Resolve options; NULL → defaults.
 /// CPU always; CUDA accepted when built with `--features cuda` (H2D export).
-fn resolve_dlpack_opts(opts: *const RKRDlpackExportOptions) -> Result<RKRDlpackExportOptions, RKRStatus> {
+fn resolve_dlpack_opts(
+    opts: *const RKRDlpackExportOptions,
+) -> Result<RKRDlpackExportOptions, RKRStatus> {
     let o = if opts.is_null() {
         RKRDlpackExportOptions::default()
     } else {
@@ -1853,10 +1908,7 @@ fn export_owned_array1_u64_dlpack(
     arr: &ndarray::ArcArray1<u64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    finish_dlpack_tensor(
-        dlpk::DLPackTensor::try_from(arr.clone()),
-        out_tensor,
-    )
+    finish_dlpack_tensor(dlpk::DLPackTensor::try_from(arr.clone()), out_tensor)
 }
 
 /// Atom ids: default uint64; or cast via f64 path when `opts.dtype` requests another host type.
@@ -3024,10 +3076,7 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
 }
 
 /// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
-fn pack_frame_handles(
-    frames: Vec<ConFrame>,
-    num_frames: *mut usize,
-) -> *mut *mut RKRConFrame {
+fn pack_frame_handles(frames: Vec<ConFrame>, num_frames: *mut usize) -> *mut *mut RKRConFrame {
     let count = frames.len();
     let mut handles: Vec<*mut RKRConFrame> = frames
         .into_iter()
@@ -3065,7 +3114,10 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
 /// `frames` null or from `rkr_read_all_frames` with length `num_frames`. Frame
 /// pointers must be owned elsewhere (e.g. language wrappers).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_rkr_frame_ptr_array(frames: *mut *mut RKRConFrame, num_frames: usize) {
+pub unsafe extern "C" fn free_rkr_frame_ptr_array(
+    frames: *mut *mut RKRConFrame,
+    num_frames: usize,
+) {
     if frames.is_null() {
         return;
     }
@@ -3191,7 +3243,9 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
 }
 #[cfg(not(feature = "zstd"))]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn create_writer_zstd_c(_filename_c: *const c_char) -> *mut RKRConFrameWriter {
+pub unsafe extern "C" fn create_writer_zstd_c(
+    _filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
     ptr::null_mut()
 }
 #[cfg(not(feature = "zstd"))]
@@ -3266,37 +3320,191 @@ pub unsafe extern "C" fn rkr_frame_atom_count(frame_handle: *const RKRConFrame) 
     };
     frame.atom_data.len()
 }
+/// Borrow positions SoA. `out->data` is valid until `free_rkr_frame`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_xyz_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array2_view(frame_handle, out, |f| &f.positions, false)
+}
+
+/// Borrow velocities SoA, or `SECTION_ABSENT`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array2_view(frame_handle, out, |f| &f.velocities, true)
+}
+
+/// Borrow forces SoA, or `SECTION_ABSENT`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array2_view(frame_handle, out, |f| &f.forces, true)
+}
+
+/// Borrow per-atom energies, or `SECTION_ABSENT`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_energies_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array1_view(frame_handle, out, |f| &f.atom_energies, true)
+}
+
+/// Borrow per-atom masses.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_masses_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array1_view(frame_handle, out, |f| &f.masses, false)
+}
+
+/// Borrow `atom_id` column (always u64).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_ids_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let slice = frame.atom_ids.as_slice_memory_order();
+    unsafe {
+        *out = RKRArrayView {
+            data: slice
+                .map(|s| s.as_ptr() as *const std::ffi::c_void)
+                .unwrap_or(std::ptr::null()),
+            n: frame.atom_ids.len(),
+            cols: 1,
+            dtype_code: 1, // kDLUInt
+            dtype_bits: 64,
+        };
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Row-major f64 xyz pointer, or NULL if storage is not float64.
+/// `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_xyz_f64(
+    frame_handle: *const RKRConFrame,
+    n: *mut usize,
+) -> *const f64 {
+    f64_col_ptr(frame_handle, n, |f| f.positions.f64_slice())
+}
+
+/// Row-major f64 velocities pointer, or NULL if absent / not float64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_velocities_f64(
+    frame_handle: *const RKRConFrame,
+    n: *mut usize,
+) -> *const f64 {
+    f64_col_ptr(frame_handle, n, |f| f.velocities.f64_slice())
+}
+
+/// Row-major f64 forces pointer, or NULL if absent / not float64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_forces_f64(
+    frame_handle: *const RKRConFrame,
+    n: *mut usize,
+) -> *const f64 {
+    f64_col_ptr(frame_handle, n, |f| f.forces.f64_slice())
+}
+
+fn fill_array2_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+    get: impl FnOnce(&ConFrame) -> &crate::storage_dtype::FloatArray2,
+    section: bool,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = get(frame);
+    if section && arr.nrows() == 0 {
+        unsafe { *out = RKRArrayView::empty() };
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    unsafe { *out = RKRArrayView::from_array2(arr) };
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+fn fill_array1_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+    get: impl FnOnce(&ConFrame) -> &crate::storage_dtype::FloatArray1,
+    section: bool,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = get(frame);
+    if section && arr.len() == 0 {
+        unsafe { *out = RKRArrayView::empty() };
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    unsafe { *out = RKRArrayView::from_array1(arr) };
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+fn f64_col_ptr(
+    frame_handle: *const RKRConFrame,
+    n: *mut usize,
+    get: impl FnOnce(&ConFrame) -> Option<&[f64]>,
+) -> *const f64 {
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        if !n.is_null() {
+            unsafe { *n = 0 };
+        }
+        return std::ptr::null();
+    };
+    match get(frame) {
+        Some(s) if !s.is_empty() => {
+            if !n.is_null() {
+                unsafe { *n = s.len() / 3 };
+            }
+            s.as_ptr()
+        }
+        _ => {
+            if !n.is_null() {
+                unsafe { *n = 0 };
+            }
+            std::ptr::null()
+        }
+    }
+}
+
 /// Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
+/// Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_positions(
     frame_handle: *const RKRConFrame,
     out: *mut f64,
     out_len: usize,
 ) -> RKRStatus {
-    if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    }
-    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    };
-    let n = frame.atom_data.len();
-    let need = n.saturating_mul(3);
-    if out_len < need {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
-    }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
-    for (i, a) in frame.atom_data.iter().enumerate() {
-        slice[i * 3] = a.x;
-        slice[i * 3 + 1] = a.y;
-        slice[i * 3 + 2] = a.z;
-    }
-    RKRStatus::RKR_STATUS_SUCCESS
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.positions, false)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_frame_copy_velocities(
+fn copy_array2_f64(
     frame_handle: *const RKRConFrame,
     out: *mut f64,
     out_len: usize,
+    get: impl FnOnce(&ConFrame) -> &crate::storage_dtype::FloatArray2,
+    section: bool,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
@@ -3304,22 +3512,84 @@ pub unsafe extern "C" fn rkr_frame_copy_velocities(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    if !frame.has_velocities() {
+    let arr = get(frame);
+    let n = if arr.nrows() > 0 {
+        arr.nrows()
+    } else {
+        frame.atom_data.len()
+    };
+    if section && arr.nrows() == 0 {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
-    let n = frame.atom_data.len();
     let need = n.saturating_mul(3);
     if out_len < need {
         return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
     }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
+    let dest = unsafe { std::slice::from_raw_parts_mut(out, need) };
+    if arr.nrows() == n {
+        if let Some(src) = arr.f64_slice() {
+            dest.copy_from_slice(&src[..need.min(src.len())]);
+            return RKRStatus::RKR_STATUS_SUCCESS;
+        }
+        for i in 0..n {
+            let row = arr.as_f64_row(i);
+            dest[i * 3] = row[0];
+            dest[i * 3 + 1] = row[1];
+            dest[i * 3 + 2] = row[2];
+        }
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
     for (i, a) in frame.atom_data.iter().enumerate() {
-        let [vx, vy, vz] = a.velocity.unwrap_or([0.0; 3]);
-        slice[i * 3] = vx;
-        slice[i * 3 + 1] = vy;
-        slice[i * 3 + 2] = vz;
+        dest[i * 3] = a.x;
+        dest[i * 3 + 1] = a.y;
+        dest[i * 3 + 2] = a.z;
     }
     RKRStatus::RKR_STATUS_SUCCESS
+}
+
+fn copy_array1_f64(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+    get: impl FnOnce(&ConFrame) -> &crate::storage_dtype::FloatArray1,
+    section: bool,
+) -> RKRStatus {
+    if frame_handle.is_null() || out.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    let arr = get(frame);
+    let n = if arr.len() > 0 {
+        arr.len()
+    } else {
+        frame.atom_data.len()
+    };
+    if section && arr.len() == 0 {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    if out_len < n {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    if let Some(src) = arr.f64_slice() {
+        dest.copy_from_slice(&src[..n.min(src.len())]);
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
+    for i in 0..n {
+        dest[i] = arr.get_f64(i);
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_velocities(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.velocities, true)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_forces(
@@ -3327,28 +3597,7 @@ pub unsafe extern "C" fn rkr_frame_copy_forces(
     out: *mut f64,
     out_len: usize,
 ) -> RKRStatus {
-    if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    }
-    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    };
-    if !frame.has_forces() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
-    }
-    let n = frame.atom_data.len();
-    let need = n.saturating_mul(3);
-    if out_len < need {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
-    }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, need) };
-    for (i, a) in frame.atom_data.iter().enumerate() {
-        let [fx, fy, fz] = a.force.unwrap_or([0.0; 3]);
-        slice[i * 3] = fx;
-        slice[i * 3 + 1] = fy;
-        slice[i * 3 + 2] = fz;
-    }
-    RKRStatus::RKR_STATUS_SUCCESS
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.forces, true)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
@@ -3356,24 +3605,7 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
     out: *mut f64,
     out_len: usize,
 ) -> RKRStatus {
-    if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    }
-    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    };
-    if !frame.has_energies() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
-    }
-    let n = frame.atom_data.len();
-    if out_len < n {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
-    }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
-    for (i, a) in frame.atom_data.iter().enumerate() {
-        slice[i] = a.energy.unwrap_or(0.0);
-    }
-    RKRStatus::RKR_STATUS_SUCCESS
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.atom_energies, true)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_masses(
@@ -3381,27 +3613,7 @@ pub unsafe extern "C" fn rkr_frame_copy_masses(
     out: *mut f64,
     out_len: usize,
 ) -> RKRStatus {
-    if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    }
-    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
-    };
-    let n = frame.atom_data.len();
-    if out_len < n {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
-    }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
-    let mut expanded: Vec<f64> = Vec::with_capacity(n);
-    for (ti, &count) in frame.header.natms_per_type.iter().enumerate() {
-        let m = frame.header.masses_per_type.get(ti).copied().unwrap_or(0.0);
-        expanded.extend(std::iter::repeat_n(m, count));
-    }
-    if expanded.len() != n {
-        expanded.resize(n, 0.0);
-    }
-    slice.copy_from_slice(&expanded[..n]);
-    RKRStatus::RKR_STATUS_SUCCESS
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.masses, false)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
@@ -3415,13 +3627,17 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
-    let n = frame.atom_data.len();
+    let n = frame.atom_ids.len().max(frame.atom_data.len());
     if out_len < n {
         return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
     }
-    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    if let Some(src) = frame.atom_ids.as_slice_memory_order() {
+        dest[..src.len().min(n)].copy_from_slice(&src[..src.len().min(n)]);
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
     for (i, a) in frame.atom_data.iter().enumerate() {
-        slice[i] = a.atom_id;
+        dest[i] = a.atom_id;
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
@@ -3540,10 +3756,9 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
     }
     for i in 0..n {
-        frame.positions.set_f64_row(
-            i,
-            [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]],
-        );
+        frame
+            .positions
+            .set_f64_row(i, [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]]);
     }
     frame.sync_atom_data_from_arrays();
     RKRStatus::RKR_STATUS_SUCCESS
@@ -3557,7 +3772,15 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     unsafe {
-        rkr_frame_positions_as_dlpack(frame_handle, rkr_dl_device_type::RKR_DL_CPU, 0, 0, 1, 0, out_tensor)
+        rkr_frame_positions_as_dlpack(
+            frame_handle,
+            rkr_dl_device_type::RKR_DL_CPU,
+            0,
+            0,
+            1,
+            0,
+            out_tensor,
+        )
     }
 }
 
@@ -3754,8 +3977,7 @@ pub unsafe extern "C" fn rkr_selection_result_match_count(
     if result_handle.is_null() {
         return 0;
     }
-    let result =
-        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     result.matches.len() as u64
 }
 /// Selection context size (1=atom, 2=pair, 3=angle, 4=dihedral).
@@ -3769,8 +3991,7 @@ pub unsafe extern "C" fn rkr_selection_result_context_size(
     if result_handle.is_null() {
         return 0;
     }
-    let result =
-        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     result.context_size as u32
 }
 /// Copy match `match_index` atom indices into `out_atoms` (up to 4 slots).
@@ -3788,8 +4009,7 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
     if result_handle.is_null() || out_atoms.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
-    let result =
-        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     let idx = match_index as usize;
     if idx >= result.matches.len() {
         return RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS;
@@ -3824,8 +4044,7 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
     if result_handle.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
-    let result =
-        unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
+    let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     let n = result.matches.len() as u64;
     if !out_written.is_null() {
         unsafe {
@@ -4659,7 +4878,7 @@ mod tests {
             free_rkr_frame(frame_ptr);
         }
     }
-        /// C surface: chemfiles selection.cpp chain topology via `rkr_frame_select`.
+    /// C surface: chemfiles selection.cpp chain topology via `rkr_frame_select`.
     #[cfg(feature = "chemfiles")]
     #[test]
     fn rkr_frame_select_cpp_topology_bonds_angles_dihedrals() {
@@ -4710,7 +4929,9 @@ mod tests {
         let mut array = unsafe { std::mem::zeroed::<metatensor::c_api::mts_array_t>() };
         let status = unsafe { metatensor::c_api::mts_block_data(block, &mut array) };
         assert_eq!(status, metatensor::c_api::MTS_SUCCESS);
-        let shape_fn = array.shape.expect("mts_array_t.shape from metatensor C API");
+        let shape_fn = array
+            .shape
+            .expect("mts_array_t.shape from metatensor C API");
         let mut shape_ptr: *const usize = std::ptr::null();
         let mut shape_count: usize = 0;
         let st_shape = unsafe { shape_fn(array.ptr, &mut shape_ptr, &mut shape_count) };
@@ -4818,8 +5039,8 @@ mod tests {
 
     #[test]
     fn string_iterator_yields_frames_from_buffer() {
-        let text = std::fs::read_to_string("resources/test/tiny_cuh2.con")
-            .expect("fixture tiny_cuh2.con");
+        let text =
+            std::fs::read_to_string("resources/test/tiny_cuh2.con").expect("fixture tiny_cuh2.con");
         let c_text = CString::new(text.as_str()).unwrap();
         let it = unsafe { read_con_string_iterator(c_text.as_ptr()) };
         assert!(!it.is_null());

@@ -330,6 +330,68 @@ class ConFrame {
                              : 0;
     }
 
+    /** Borrowed SoA view. `data` valid until this ConFrame is destroyed. */
+    RKRArrayView xyz_view() const {
+        RKRArrayView v{};
+        if (!frame_handle_)
+            return v;
+        rkr_frame_xyz_view(frame_handle_.get(), &v);
+        return v;
+    }
+    RKRArrayView velocities_view() const {
+        RKRArrayView v{};
+        if (frame_handle_)
+            rkr_frame_velocities_view(frame_handle_.get(), &v);
+        return v;
+    }
+    RKRArrayView forces_view() const {
+        RKRArrayView v{};
+        if (frame_handle_)
+            rkr_frame_forces_view(frame_handle_.get(), &v);
+        return v;
+    }
+
+    /**
+     * Row-major f64 xyz, no copy. Null if storage is not float64.
+     * `n` receives the atom count.
+     */
+    const double *xyz_f64(std::size_t *n) const {
+        if (!frame_handle_) {
+            if (n)
+                *n = 0;
+            return nullptr;
+        }
+        uintptr_t nn = 0;
+        const double *p = rkr_frame_xyz_f64(frame_handle_.get(), &nn);
+        if (n)
+            *n = static_cast<std::size_t>(nn);
+        return p;
+    }
+    const double *velocities_f64(std::size_t *n) const {
+        if (!frame_handle_) {
+            if (n)
+                *n = 0;
+            return nullptr;
+        }
+        uintptr_t nn = 0;
+        const double *p = rkr_frame_velocities_f64(frame_handle_.get(), &nn);
+        if (n)
+            *n = static_cast<std::size_t>(nn);
+        return p;
+    }
+    const double *forces_f64(std::size_t *n) const {
+        if (!frame_handle_) {
+            if (n)
+                *n = 0;
+            return nullptr;
+        }
+        uintptr_t nn = 0;
+        const double *p = rkr_frame_forces_f64(frame_handle_.get(), &nn);
+        if (n)
+            *n = static_cast<std::size_t>(nn);
+        return p;
+    }
+
     /** Row-major xyz length >= 3*N. Status from C ABI. */
     RKRStatus copy_positions(double *out, std::size_t out_len) const {
         if (!frame_handle_)
