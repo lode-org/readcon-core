@@ -541,10 +541,19 @@ html[data-theme="dark"] .rc-hero-mark {
 .rc-hero-name {
   margin: 0;
   font-size: clamp(1.75rem, 3vw, 2.15rem);
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: #312e81;
+}
+.rc-hero-read {
+  font-family: var(--rc-font-sans);
+  font-weight: 700;
+}
+.rc-hero-con {
+  font-family: var(--rc-font-mono);
+  font-weight: 700;
+  letter-spacing: -0.06em;
 }
 html.dark .rc-hero-name,
 html[data-theme="dark"] .rc-hero-name {
