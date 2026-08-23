@@ -391,6 +391,40 @@ fn ffi_null_and_error_paths() {
 }
 
 #[test]
+fn iterator_forward_skip_nth_and_count() {
+    unsafe {
+        let path = CString::new("resources/test/tiny_multi_cuh2.con").unwrap();
+        let n = rkr_count_frames(path.as_ptr());
+        assert_eq!(n, 2);
+        let first = rkr_read_nth_frame(path.as_ptr(), 0);
+        let second = rkr_read_nth_frame(path.as_ptr(), 1);
+        assert!(!first.is_null() && !second.is_null());
+        let mut n0 = 0usize;
+        let mut n1 = 0usize;
+        let x0 = rkr_frame_xyz_f64(first, &mut n0);
+        let x1 = rkr_frame_xyz_f64(second, &mut n1);
+        assert!(!x0.is_null() && !x1.is_null());
+        assert_eq!(n0, n1);
+        let it = read_con_file_iterator(path.as_ptr());
+        assert!(!it.is_null());
+        assert_eq!(
+            con_frame_iterator_forward(it),
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let skipped = con_frame_iterator_next(it);
+        assert!(!skipped.is_null());
+        let mut ns = 0usize;
+        let xs = rkr_frame_xyz_f64(skipped, &mut ns);
+        assert!((*xs - *x1).abs() < 1e-15);
+        free_rkr_frame(skipped);
+        free_con_frame_iterator(it);
+        free_rkr_frame(first);
+        free_rkr_frame(second);
+        assert!(rkr_read_nth_frame(path.as_ptr(), 99).is_null());
+    }
+}
+
+#[test]
 fn frame_copy_dlpack_metatensor_and_add_variants() {
     use std::ptr;
     unsafe {
@@ -409,6 +443,11 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
             rkr_frame_copy_positions(frame, buf.as_mut_ptr(), buf.len()),
             RKRStatus::RKR_STATUS_SUCCESS
         );
+        let nframes = rkr_count_frames(path.as_ptr());
+        assert!(nframes >= 1 && nframes != usize::MAX);
+        let nth = rkr_read_nth_frame(path.as_ptr(), 0);
+        assert!(!nth.is_null());
+        free_rkr_frame(nth);
         let mut nn = 0usize;
         let xyz = rkr_frame_xyz_f64(frame, &mut nn);
         assert!(!xyz.is_null());

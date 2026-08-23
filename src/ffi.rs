@@ -654,6 +654,89 @@ pub unsafe extern "C" fn con_frame_iterator_next(
         _ => ptr::null_mut(),
     }
 }
+
+/// Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
+/// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` at EOF, other codes on parse error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn con_frame_iterator_forward(
+    iterator: *mut CConFrameIterator,
+) -> RKRStatus {
+    if iterator.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let iter = unsafe { &mut *(*iterator).iterator };
+    match iter.forward() {
+        Some(Ok(())) => RKRStatus::RKR_STATUS_SUCCESS,
+        Some(Err(_)) => RKRStatus::RKR_STATUS_IO_ERROR,
+        None => RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS,
+    }
+}
+
+/// Skip `n` frames without parsing atoms. Returns the number skipped, or
+/// `usize::MAX` on a null iterator.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn con_frame_iterator_skip(
+    iterator: *mut CConFrameIterator,
+    n: usize,
+) -> usize {
+    if iterator.is_null() {
+        return usize::MAX;
+    }
+    let iter = unsafe { &mut *(*iterator).iterator };
+    iter.skip_frames(n).unwrap_or(usize::MAX)
+}
+
+/// Skip `index` frames, then parse the next. NULL at EOF or on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn con_frame_iterator_nth(
+    iterator: *mut CConFrameIterator,
+    index: usize,
+) -> *mut RKRConFrame {
+    if iterator.is_null() {
+        return ptr::null_mut();
+    }
+    let iter = unsafe { &mut *(*iterator).iterator };
+    match iter.skip_frames(index) {
+        Ok(skipped) if skipped == index => {}
+        _ => return ptr::null_mut(),
+    }
+    match iter.next() {
+        Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        _ => ptr::null_mut(),
+    }
+}
+
+/// Count frames on a path (skip walk, no atom parse). `usize::MAX` on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_count_frames(filename_c: *const c_char) -> usize {
+    if filename_c.is_null() {
+        return usize::MAX;
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return usize::MAX,
+    };
+    crate::iterators::count_frames(Path::new(filename)).unwrap_or(usize::MAX)
+}
+
+/// Skip `index` frames on a path, then parse one. Caller frees with `free_rkr_frame`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_nth_frame(
+    filename_c: *const c_char,
+    index: usize,
+) -> *mut RKRConFrame {
+    if filename_c.is_null() {
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+    match crate::iterators::read_nth_frame(Path::new(filename), index) {
+        Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(_) => ptr::null_mut(),
+    }
+}
 /// Frees the memory for an opaque `RKRConFrame` handle.
 ///
 /// # Safety

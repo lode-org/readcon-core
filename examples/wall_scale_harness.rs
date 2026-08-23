@@ -9,7 +9,10 @@
 //!
 //! Writes JSON with host, date, commit, ncpus. Does not invent numbers.
 
-use readcon_core::iterators::{frames_from_text, parse_frames_parallel_with_threads};
+use readcon_core::iterators::{
+    frame_start_offsets, frames_from_text, parse_frames_parallel_with_threads,
+    read_nth_frame_from_text, ConFrameIterator,
+};
 use readcon_core::writer::ConFrameWriter;
 use std::env;
 use std::fs;
@@ -110,6 +113,27 @@ fn main() {
         std::hint::black_box(frames);
     });
 
+    let skip_ms = time_ms(repeats, || {
+        let mut it = ConFrameIterator::new(&text);
+        let mut n = 0usize;
+        while let Some(Ok(())) = it.forward() {
+            n += 1;
+        }
+        assert_eq!(n, n_frames);
+        std::hint::black_box(n);
+    });
+
+    let nth_last_ms = time_ms(repeats, || {
+        let f = read_nth_frame_from_text(&text, n_frames - 1).expect("nth last");
+        std::hint::black_box(f);
+    });
+
+    let span_ms = time_ms(repeats, || {
+        let s = frame_start_offsets(&text);
+        assert_eq!(s.len(), n_frames);
+        std::hint::black_box(s);
+    });
+
     let frames = frames_from_text(&text, Some(1)).expect("write payload");
     let write_ms = time_ms(repeats, || {
         let mut buf = Vec::with_capacity(text.len());
@@ -129,7 +153,7 @@ fn main() {
 
     let mut json = String::new();
     json.push_str("{\n");
-    json.push_str("  \"protocol\": \"sequential vs Rayon n-thread parse of repeated cuh2.con; write-path is ConFrameWriter to an in-memory buffer\",\n");
+    json.push_str("  \"protocol\": \"sequential vs Rayon n-thread parse of repeated cuh2.con; write-path is ConFrameWriter to an in-memory buffer; skip/nth/span use the same payload\",\n");
     json.push_str(&format!("  \"host\": \"{}\",\n", hostname()));
     json.push_str(&format!("  \"date_utc\": \"{}\",\n", date));
     json.push_str(&format!("  \"commit\": \"{}\",\n", git_commit()));
@@ -143,6 +167,9 @@ fn main() {
     json.push_str(&format!("  \"sequential_ms\": {:.6},\n", seq_ms));
     json.push_str(&format!("  \"auto_ms\": {:.6},\n", auto_ms));
     json.push_str(&format!("  \"write_100_frames_ms\": {:.6},\n", write_ms));
+    json.push_str(&format!("  \"skip_100_frames_ms\": {:.6},\n", skip_ms));
+    json.push_str(&format!("  \"read_nth_last_ms\": {:.6},\n", nth_last_ms));
+    json.push_str(&format!("  \"frame_start_offsets_ms\": {:.6},\n", span_ms));
     json.push_str("  \"parallel\": {\n");
     for (i, (n, ms)) in scale.iter().enumerate() {
         let comma = if i + 1 == scale.len() { "" } else { "," };

@@ -1156,6 +1156,41 @@ impl PyConFrameIterator {
             }
         }
     }
+
+    /// Skip one frame without building a `ConFrame`. False at EOF.
+    fn forward(&mut self) -> PyResult<bool> {
+        if self.pos >= self.contents.len() {
+            return Ok(false);
+        }
+        let slice = &self.contents[self.pos..];
+        let mut iter = ConFrameIterator::new(slice);
+        match iter.forward() {
+            Some(Ok(())) => {
+                self.pos += iter.byte_pos();
+                Ok(true)
+            }
+            Some(Err(e)) => Err(PyIOError::new_err(format!("skip error: {e}"))),
+            None => Ok(false),
+        }
+    }
+
+    /// Skip `n` frames without parsing atoms. Returns how many were skipped.
+    fn skip(&mut self, n: usize) -> PyResult<usize> {
+        let mut skipped = 0usize;
+        for _ in 0..n {
+            if !self.forward()? {
+                break;
+            }
+            skipped += 1;
+        }
+        Ok(skipped)
+    }
+
+    /// Skip `index` frames, then parse the next.
+    fn nth(&mut self, py: Python<'_>, index: usize) -> PyResult<Option<PyConFrame>> {
+        self.skip(index)?;
+        self.__next__(py)
+    }
 }
 
 /// Return a **streaming** iterator over frames from a path.
@@ -1187,6 +1222,19 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
     py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string()))
         .map_err(PyIOError::new_err)
+}
+
+/// Skip `index` frames (no atom parse), then return that frame.
+#[pyfunction]
+fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
+    let path_owned = path.to_owned();
+    let frame = py
+        .detach(|| {
+            crate::iterators::read_nth_frame(Path::new(&path_owned), index)
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    PyConFrame::from_con_frame(py, &frame)
 }
 
 /// Convert a structure/trajectory path to CON (migration one-liner).
@@ -1674,6 +1722,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
     m.add_function(wrap_pyfunction!(count_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;

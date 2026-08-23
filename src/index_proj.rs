@@ -43,7 +43,9 @@ pub fn composition_formula(counts: &[(String, u32)]) -> String {
 }
 
 /// Species multiset from atom symbols (non-empty only), sorted by symbol.
-pub fn species_counts_from_symbols(symbols: impl Iterator<Item = impl AsRef<str>>) -> Vec<(String, u32)> {
+pub fn species_counts_from_symbols(
+    symbols: impl Iterator<Item = impl AsRef<str>>,
+) -> Vec<(String, u32)> {
     let mut m = BTreeMap::new();
     for s in symbols {
         let s = s.as_ref();
@@ -67,18 +69,14 @@ pub fn frame_composition_formula(frame: &ConFrame) -> String {
 
 /// Finite frame energy from header helper or metadata `"energy"`; **None** if missing or non-finite.
 pub fn finite_energy(frame: &ConFrame) -> Option<f64> {
-    frame
-        .header
-        .energy()
-        .filter(|e| e.is_finite())
-        .or_else(|| {
-            frame
-                .header
-                .metadata
-                .get("energy")
-                .and_then(|v| v.as_f64())
-                .filter(|e| e.is_finite())
-        })
+    frame.header.energy().filter(|e| e.is_finite()).or_else(|| {
+        frame
+            .header
+            .metadata
+            .get("energy")
+            .and_then(|v| v.as_f64())
+            .filter(|e| e.is_finite())
+    })
 }
 
 /// Max Euclidean \(\|F_i\|\) over atoms with force data; None if no finite forces.
@@ -350,7 +348,46 @@ impl FrameByteSpan {
 /// Structural pre-pass: frame byte ranges via span-preserving iteration (parses each frame).
 /// Concatenating spans in order reproduces `file_contents` for well-formed multi-frame CON
 /// with no leading/trailing junk (trailing newline at EOF may be absorbed into the last span).
-pub fn frame_byte_spans(file_contents: &str) -> Result<Vec<FrameByteSpan>, crate::error::ParseError> {
+/// Frame ranges from a skip walk ([`crate::iterators::frame_start_offsets`]).
+/// Does not parse atom payloads. Prefer this over [`frame_byte_spans`] when
+/// you only need to seek.
+pub fn frame_byte_spans_skip(
+    file_contents: &str,
+) -> Result<Vec<FrameByteSpan>, crate::error::ParseError> {
+    let starts = crate::iterators::frame_start_offsets(file_contents);
+    let n = file_contents.len();
+    Ok(starts
+        .iter()
+        .enumerate()
+        .map(|(i, &start)| FrameByteSpan {
+            start,
+            end: starts.get(i + 1).copied().unwrap_or(n),
+        })
+        .collect())
+}
+
+/// Parse frame `index` from `file_contents` using a skip-built span table.
+pub fn parse_frame_at(
+    file_contents: &str,
+    index: usize,
+) -> Result<crate::types::ConFrame, crate::error::ParseError> {
+    let spans = frame_byte_spans_skip(file_contents)?;
+    let span = spans.get(index).ok_or(crate::error::ParseError::IndexOutOfBounds {
+        index,
+        len: spans.len(),
+    })?;
+    let slice = span
+        .slice(file_contents)
+        .ok_or(crate::error::ParseError::IncompleteFrame)?;
+    match crate::iterators::ConFrameIterator::new(slice).next() {
+        Some(r) => r,
+        None => Err(crate::error::ParseError::IncompleteFrame),
+    }
+}
+
+pub fn frame_byte_spans(
+    file_contents: &str,
+) -> Result<Vec<FrameByteSpan>, crate::error::ParseError> {
     let mut it = crate::iterators::ConFrameIterator::new(file_contents);
     let mut out = Vec::new();
     while let Some(item) = it.next_with_raw_span(file_contents) {
@@ -363,7 +400,9 @@ pub fn frame_byte_spans(file_contents: &str) -> Result<Vec<FrameByteSpan>, crate
 }
 
 /// Symbol multiset histogram without retaining frames (ingest planning / cheap stats).
-pub fn symbol_histogram(file_contents: &str) -> Result<BTreeMap<String, u32>, crate::error::ParseError> {
+pub fn symbol_histogram(
+    file_contents: &str,
+) -> Result<BTreeMap<String, u32>, crate::error::ParseError> {
     let mut hist = BTreeMap::new();
     for item in crate::iterators::ConFrameIterator::new(file_contents) {
         let frame = item?;
@@ -447,18 +486,35 @@ mod tests {
             let _ = e;
         }
         // inject only non-finite in metadata and ensure filter works when energy() absent
-        fr2.header.metadata.insert("energy".into(), serde_json::json!(f64::INFINITY));
-        let e = fr2.header.energy().or_else(|| {
-            fr2.header
-                .metadata
-                .get("energy")
-                .and_then(|v| v.as_f64())
-        });
+        fr2.header
+            .metadata
+            .insert("energy".into(), serde_json::json!(f64::INFINITY));
+        let e = fr2
+            .header
+            .energy()
+            .or_else(|| fr2.header.metadata.get("energy").and_then(|v| v.as_f64()));
         if let Some(x) = e {
             if !x.is_finite() {
                 assert!(finite_energy(&fr2).is_none());
             }
         }
+    }
+
+    #[test]
+    fn skip_spans_seek_second_frame() {
+        let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/tiny_multi_cuh2.con");
+        let text = std::fs::read_to_string(p).unwrap();
+        let skip = frame_byte_spans_skip(&text).unwrap();
+        assert_eq!(skip.len(), 2);
+        let a = parse_frame_at(&text, 0).unwrap();
+        let b = parse_frame_at(&text, 1).unwrap();
+        let mut it = ConFrameIterator::new(&text);
+        let fa = it.next().unwrap().unwrap();
+        let fb = it.next().unwrap().unwrap();
+        assert_eq!(a.atom_data[0].x, fa.atom_data[0].x);
+        assert_eq!(b.atom_data[0].x, fb.atom_data[0].x);
+        assert!(parse_frame_at(&text, 9).is_err());
     }
 
     #[test]
