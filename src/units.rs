@@ -445,6 +445,102 @@ pub fn default_v3_units_json() -> serde_json::Value {
     })
 }
 
+fn preferred_atom(alias: &str) -> Option<&'static str> {
+    Some(match alias.trim().to_ascii_lowercase().as_str() {
+        "a" | "å" | "angstrom" | "ångstrom" => "angstrom",
+        "nm" | "nanometer" | "nanometre" => "nm",
+        "m" | "meter" | "metre" => "m",
+        "bohr" | "a0" => "bohr",
+        "fs" | "femtosecond" | "femtoseconds" => "fs",
+        "ps" | "picosecond" | "picoseconds" => "ps",
+        "ns" | "nanosecond" | "nanoseconds" => "ns",
+        "s" | "sec" | "second" | "seconds" => "s",
+        "ev" => "eV",
+        "mev" => "meV",
+        "hartree" | "ha" => "hartree",
+        "j" | "joule" => "J",
+        "kj" => "kJ",
+        "kcal" => "kcal",
+        "amu" | "u" | "dalton" | "da" => "amu",
+        "kg" | "kilogram" => "kg",
+        "mol" => "mol",
+        _ => return None,
+    })
+}
+
+/// Rewrite a unit expression to preferred names (`A` → `angstrom`, `ev` → `eV`).
+/// The expression MUST parse (`unit_conversion_factor` identity).
+pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
+    let trimmed = expr.trim();
+    if trimmed.is_empty() {
+        return Err(ParseError::ValidationError("empty unit".into()));
+    }
+    let _ = unit_conversion_factor(trimmed, trimmed)?;
+    let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
+    let mut out = String::new();
+    let bytes = compact.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if matches!(b, b'*' | b'/' | b'(' | b')' | b'^') {
+            if !out.is_empty() && !out.ends_with(' ') && b != b')' && b != b'^' {
+                out.push(' ');
+            }
+            out.push(b as char);
+            if b != b'(' && b != b'^' {
+                out.push(' ');
+            }
+            i += 1;
+            continue;
+        }
+        if b == b'-' || b.is_ascii_digit() || b == b'.' {
+            out.push(b as char);
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < bytes.len() && (bytes[i].is_ascii_alphabetic() || bytes[i] > 127) {
+            i += 1;
+        }
+        if start == i {
+            return Err(ParseError::ValidationError(format!(
+                "bad unit token in '{expr}'"
+            )));
+        }
+        let atom = &compact[start..i];
+        out.push_str(preferred_atom(atom).unwrap_or(atom));
+    }
+    Ok(out.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// Rewrite every string member. Does not require v3 `length`+`energy`.
+pub fn canonicalize_units_object(
+    units: &serde_json::Value,
+) -> Result<serde_json::Value, ParseError> {
+    let obj = units.as_object().ok_or_else(|| {
+        ParseError::ValidationError("units must be a JSON object".into())
+    })?;
+    let mut out = serde_json::Map::new();
+    for (k, v) in obj {
+        let s = v.as_str().ok_or_else(|| {
+            ParseError::ValidationError(format!("units.{k} must be a string"))
+        })?;
+        out.insert(
+            k.clone(),
+            serde_json::Value::String(canonicalize_unit_expression(s)?),
+        );
+    }
+    Ok(serde_json::Value::Object(out))
+}
+
+/// v3 validate then canonicalize (preferred names on line 2).
+pub fn canonicalize_units_metadata(
+    units: &serde_json::Value,
+) -> Result<serde_json::Value, ParseError> {
+    validate_v3_units_metadata(units)?;
+    canonicalize_units_object(units)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,5 +583,25 @@ mod tests {
     fn v3_units_require_length_energy() {
         assert!(validate_v3_units_metadata(&serde_json::json!({"length": "A"})).is_err());
         validate_v3_units_metadata(&default_v3_units_json()).unwrap();
+    }
+
+    #[test]
+    fn canonicalize_aliases() {
+        assert_eq!(canonicalize_unit_expression("A").unwrap(), "angstrom");
+        assert_eq!(canonicalize_unit_expression("ev").unwrap(), "eV");
+        assert_eq!(canonicalize_unit_expression("femtosecond").unwrap(), "fs");
+        assert_eq!(
+            canonicalize_unit_expression("eV/angstrom").unwrap(),
+            "eV / angstrom"
+        );
+        let u = canonicalize_units_metadata(&serde_json::json!({
+            "length": "A",
+            "energy": "ev",
+            "time": "femtosecond"
+        }))
+        .unwrap();
+        assert_eq!(u["length"], "angstrom");
+        assert_eq!(u["energy"], "eV");
+        assert_eq!(u["time"], "fs");
     }
 }

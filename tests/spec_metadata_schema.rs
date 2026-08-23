@@ -119,3 +119,30 @@ fn reference_writer_output_validates() {
         assert!(validated > 0, "{name}: writer emitted no JSON metadata line");
     }
 }
+
+#[test]
+fn writer_line2_canonicalizes_unit_aliases() {
+    use readcon_core::types::ConFrameBuilder;
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+    let mut fr = b.build().unwrap();
+    fr.header.spec_version = 3;
+    fr.header.set_units(serde_json::json!({
+        "length": "A",
+        "energy": "ev",
+        "time": "femtosecond"
+    }));
+    let mut buf = Vec::new();
+    {
+        let mut w = ConFrameWriter::new(&mut buf);
+        w.write_frame(&fr).unwrap();
+    }
+    let s = String::from_utf8(buf).unwrap();
+    let line2 = s.lines().nth(1).expect("line 2");
+    assert!(line2.starts_with('{'), "{line2}");
+    let meta: serde_json::Value = serde_json::from_str(line2).unwrap();
+    assert_eq!(meta["units"]["length"], "angstrom");
+    assert_eq!(meta["units"]["energy"], "eV");
+    assert_eq!(meta["units"]["time"], "fs");
+    assert!(!line2.contains("\"A\""), "alias must not remain on line 2: {line2}");
+}
