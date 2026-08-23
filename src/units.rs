@@ -197,12 +197,13 @@ fn base_table() -> HashMap<&'static str, UnitValue> {
             dim: Dimension::CHARGE,
         },
     );
-    // mol (dimensionless for our 5-vector — treat as ZERO so kcal/mol works as energy/mol scale)
+    // 1 mol = N_A entities. `kcal / mol` is then 4184/N_A J per entity
+    // (metatomic: eV -> kcal/mol is ~23.06).
     ins(
         &mut m,
         &["mol"],
         UnitValue {
-            si_factor: 1.0 / 6.022_140_76e23,
+            si_factor: 6.022_140_76e23,
             dim: Dimension::ZERO,
         },
     );
@@ -235,10 +236,7 @@ pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError>
     parse_expr(&s.to_ascii_lowercase(), &table)
 }
 
-fn parse_expr(
-    s: &str,
-    table: &HashMap<&str, UnitValue>,
-) -> Result<(f64, Dimension), ParseError> {
+fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimension), ParseError> {
     // Split on * and / with left-associative scan; handle ^N on atoms.
     let mut factor = 1.0_f64;
     let mut dim = Dimension::ZERO;
@@ -275,7 +273,9 @@ fn parse_atom(
 ) -> Result<(f64, Dimension, usize), ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
-        return Err(ParseError::ValidationError("trailing operator in unit".into()));
+        return Err(ParseError::ValidationError(
+            "trailing operator in unit".into(),
+        ));
     }
     if bytes[0] == b'(' {
         let mut depth = 0;
@@ -298,7 +298,8 @@ fn parse_atom(
     }
     // identifier [ ^ number ]
     let mut j = 0;
-    while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] > 127)
+    while j < bytes.len()
+        && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] > 127)
     {
         j += 1;
     }
@@ -308,9 +309,9 @@ fn parse_atom(
         )));
     }
     let name = &s[..j];
-    let base = table.get(name).ok_or_else(|| {
-        ParseError::ValidationError(format!("unknown unit '{name}'"))
-    })?;
+    let base = table
+        .get(name)
+        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
     end += extra;
@@ -330,11 +331,13 @@ fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usiz
             k += 1;
         }
         if k == start {
-            return Err(ParseError::ValidationError("expected exponent after ^".into()));
+            return Err(ParseError::ValidationError(
+                "expected exponent after ^".into(),
+            ));
         }
-        let mut p: f64 = rest[start..k].parse().map_err(|_| {
-            ParseError::ValidationError("invalid unit exponent".into())
-        })?;
+        let mut p: f64 = rest[start..k]
+            .parse()
+            .map_err(|_| ParseError::ValidationError("invalid unit exponent".into()))?;
         if neg {
             p = -p;
         }
@@ -386,9 +389,9 @@ pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), Pars
 
 /// CON v3 requires `units` object with non-empty `length` and `energy` strings.
 pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), ParseError> {
-    let obj = units.as_object().ok_or_else(|| {
-        ParseError::ValidationError("units must be a JSON object".into())
-    })?;
+    let obj = units
+        .as_object()
+        .ok_or_else(|| ParseError::ValidationError("units must be a JSON object".into()))?;
     for key in ["length", "energy"] {
         let Some(v) = obj.get(key) else {
             return Err(ParseError::ValidationError(format!(
@@ -453,6 +456,14 @@ mod tests {
     #[test]
     fn dimensional_mismatch() {
         assert!(unit_conversion_factor("angstrom", "eV").is_err());
+    }
+
+    #[test]
+    fn ev_to_kcal_per_mol_is_metatomic() {
+        let f = unit_conversion_factor("eV", "kcal / mol").unwrap();
+        assert!((f - 23.060_548).abs() < 1e-3, "got {f}");
+        let force = unit_conversion_factor("eV / angstrom", "kJ / mol / angstrom").unwrap();
+        assert!((force - 96.485_332).abs() < 1e-3, "got {force}");
     }
 
     #[test]
