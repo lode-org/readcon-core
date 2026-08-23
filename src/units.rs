@@ -135,6 +135,14 @@ fn base_table() -> HashMap<&'static str, UnitValue> {
             dim: Dimension::TIME,
         },
     );
+    ins(
+        &mut m,
+        &["ns", "nanosecond"],
+        UnitValue {
+            si_factor: 1e-9,
+            dim: Dimension::TIME,
+        },
+    );
     // Mass → kg
     ins(
         &mut m,
@@ -464,6 +472,8 @@ mod tests {
         assert!((f - 23.060_548).abs() < 1e-3, "got {f}");
         let force = unit_conversion_factor("eV / angstrom", "kJ / mol / angstrom").unwrap();
         assert!((force - 96.485_332).abs() < 1e-3, "got {force}");
+        let ns = unit_conversion_factor("ns", "ps").unwrap();
+        assert!((ns - 1000.0).abs() < 1e-9, "got {ns}");
     }
 
     #[test]
