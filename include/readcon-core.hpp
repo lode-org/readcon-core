@@ -188,6 +188,30 @@ class ConFrameIterator {
      * @throws std::runtime_error if the file cannot be opened.
      */
     explicit ConFrameIterator(const std::filesystem::path &path);
+
+    /// Skip one frame without parsing atoms. False at EOF.
+    bool forward() {
+        if (!iterator_ptr_)
+            return false;
+        return con_frame_iterator_forward(iterator_ptr_.get()) ==
+               RKR_STATUS_SUCCESS;
+    }
+    /// Skip `n` frames without parsing atoms.
+    std::size_t skip(std::size_t n) {
+        if (!iterator_ptr_)
+            return 0;
+        return con_frame_iterator_skip(iterator_ptr_.get(), n);
+    }
+    /// Skip `index` frames, then take the next parsed frame.
+    std::optional<ConFrame> nth(std::size_t index) {
+        if (!iterator_ptr_)
+            return std::nullopt;
+        RKRConFrame *h = con_frame_iterator_nth(iterator_ptr_.get(), index);
+        if (!h)
+            return std::nullopt;
+        return ConFrame(h);
+    }
+
     /**
      * @brief Returns an iterator to the beginning of the sequence of frames.
      */
@@ -223,6 +247,7 @@ class ConFrame {
     friend class ConFrameWriter;
     friend class ConFrameBuilder;
     friend ConFrame read_first_frame(const std::filesystem::path &);
+    friend ConFrame read_nth_frame(const std::filesystem::path &, std::size_t);
     friend std::vector<ConFrame> read_all_frames(const std::filesystem::path &);
 
     ConFrame(const ConFrame &) = delete;
@@ -933,6 +958,24 @@ inline ConFrame read_first_frame(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_first_frame(path.string().c_str());
     if (!handle) {
         throw std::runtime_error("Failed to read first frame from: " +
+                                 path.string());
+    }
+    return ConFrame(handle);
+}
+
+inline std::size_t count_frames(const std::filesystem::path &path) {
+    std::size_t n = rkr_count_frames(path.string().c_str());
+    if (n == static_cast<std::size_t>(-1))
+        throw std::runtime_error("count_frames failed: " + path.string());
+    return n;
+}
+
+inline ConFrame read_nth_frame(const std::filesystem::path &path,
+                               std::size_t index) {
+    RKRConFrame *handle = rkr_read_nth_frame(path.string().c_str(), index);
+    if (!handle) {
+        throw std::runtime_error("Failed to read frame " +
+                                 std::to_string(index) + " from: " +
                                  path.string());
     }
     return ConFrame(handle);

@@ -20,7 +20,8 @@ module readcon
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
-  public :: read_first_frame, read_all_frames, open_iterator, new_builder, open_writer
+  public :: read_first_frame, read_all_frames, read_nth_frame, count_frames
+  public :: open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
   public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
   public :: read_chemfiles_first
@@ -153,6 +154,9 @@ module readcon
   contains
     procedure :: valid => it_valid
     procedure :: next => it_next
+    procedure :: forward => it_forward
+    procedure :: skip => it_skip
+    procedure :: nth => it_nth
     procedure :: free => it_free
   end type
 
@@ -424,6 +428,34 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: it
       type(c_ptr) :: c_con_frame_iterator_next
+    end function
+    function c_con_frame_iterator_forward(it) bind(C, name="con_frame_iterator_forward")
+      import :: c_ptr, c_int
+      type(c_ptr), value :: it
+      integer(c_int) :: c_con_frame_iterator_forward
+    end function
+    function c_con_frame_iterator_skip(it, n) bind(C, name="con_frame_iterator_skip")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: it
+      integer(c_size_t), value :: n
+      integer(c_size_t) :: c_con_frame_iterator_skip
+    end function
+    function c_con_frame_iterator_nth(it, idx) bind(C, name="con_frame_iterator_nth")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: it
+      integer(c_size_t), value :: idx
+      type(c_ptr) :: c_con_frame_iterator_nth
+    end function
+    function c_rkr_count_frames(fn) bind(C, name="rkr_count_frames")
+      import :: c_char, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t) :: c_rkr_count_frames
+    end function
+    function c_rkr_read_nth_frame(fn, idx) bind(C, name="rkr_read_nth_frame")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), value :: idx
+      type(c_ptr) :: c_rkr_read_nth_frame
     end function
     subroutine c_free_con_frame_iterator(it) bind(C, name="free_con_frame_iterator")
       import :: c_ptr
@@ -1139,6 +1171,54 @@ contains
     fr%cview = c_null_ptr
     if (.not. c_associated(self%it)) return
     fr%handle = c_con_frame_iterator_next(self%it)
+  end function
+
+  integer function it_forward(self)
+    class(iterator_t), intent(inout) :: self
+    it_forward = rkr_status_null_pointer
+    if (.not. c_associated(self%it)) return
+    it_forward = int(c_con_frame_iterator_forward(self%it))
+  end function
+
+  integer(c_size_t) function it_skip(self, n)
+    class(iterator_t), intent(inout) :: self
+    integer, intent(in) :: n
+    it_skip = 0_c_size_t
+    if (.not. c_associated(self%it)) return
+    it_skip = c_con_frame_iterator_skip(self%it, int(max(n, 0), c_size_t))
+  end function
+
+  function it_nth(self, idx) result(fr)
+    class(iterator_t), intent(inout) :: self
+    integer, intent(in) :: idx
+    type(frame_t) :: fr
+    fr%handle = c_null_ptr
+    fr%cview = c_null_ptr
+    if (.not. c_associated(self%it)) return
+    fr%handle = c_con_frame_iterator_nth(self%it, int(max(idx, 0), c_size_t))
+  end function
+
+  integer function count_frames(path)
+    character(len=*), intent(in) :: path
+    character(kind=c_char), allocatable :: c(:)
+    integer(c_size_t) :: n
+    call to_c(path, c)
+    n = c_rkr_count_frames(c)
+    if (n == huge(n)) then
+      count_frames = -1
+    else
+      count_frames = int(n)
+    end if
+  end function
+
+  function read_nth_frame(path, idx) result(fr)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: idx
+    type(frame_t) :: fr
+    character(kind=c_char), allocatable :: c(:)
+    call to_c(path, c)
+    fr%handle = c_rkr_read_nth_frame(c, int(max(idx, 0), c_size_t))
+    fr%cview = c_null_ptr
   end function
 
   subroutine it_free(self)

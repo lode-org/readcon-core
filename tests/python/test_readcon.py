@@ -379,6 +379,21 @@ class TestConFrameConstructor:
         assert len(frames) == 2
         assert [len(frame) for frame in frames] == [4, 4]
 
+    def test_iterator_forward_skip_and_nth(self):
+        path = _resource("tiny_multi_cuh2.con")
+        it = readcon.iter_con(path)
+        assert it.forward() is True
+        second = next(it)
+        first, also_second = readcon.read_all_frames(path)
+        assert second.atoms[0].x == pytest.approx(also_second.atoms[0].x)
+        assert first.atoms[0].x == pytest.approx(readcon.read_nth_frame(path, 0).atoms[0].x)
+        nth = readcon.read_nth_frame(path, 1)
+        assert nth.atoms[0].x == pytest.approx(also_second.atoms[0].x)
+        it2 = readcon.iter_con(path)
+        assert it2.skip(1) == 1
+        skipped = it2.nth(0)
+        assert skipped.atoms[0].x == pytest.approx(also_second.atoms[0].x)
+
     def test_count_frames_and_streaming_matches_batch(self):
         path = _resource("tiny_multi_cuh2.con")
         assert readcon.count_frames(path) == 2

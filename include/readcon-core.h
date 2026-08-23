@@ -633,6 +633,36 @@ struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
 struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
 
 /**
+ * Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
+ * `RKR_STATUS_INDEX_OUT_OF_BOUNDS` at EOF, other codes on parse error.
+ */
+enum RKRStatus con_frame_iterator_forward(struct CConFrameIterator *iterator);
+
+/**
+ * Skip `n` frames without parsing atoms. Returns the number skipped, or
+ * `usize::MAX` on a null iterator.
+ */
+uintptr_t con_frame_iterator_skip(struct CConFrameIterator *iterator,
+                                  uintptr_t n);
+
+/**
+ * Skip `index` frames, then parse the next. NULL at EOF or on error.
+ */
+struct RKRConFrame *con_frame_iterator_nth(struct CConFrameIterator *iterator,
+                                           uintptr_t index);
+
+/**
+ * Count frames on a path (skip walk, no atom parse). `usize::MAX` on error.
+ */
+uintptr_t rkr_count_frames(const char *filename_c);
+
+/**
+ * Skip `index` frames on a path, then parse one. Caller frees with `free_rkr_frame`.
+ */
+struct RKRConFrame *rkr_read_nth_frame(const char *filename_c,
+                                       uintptr_t index);
+
+/**
  * Frees the memory for an opaque `RKRConFrame` handle.
  *
  * # Safety

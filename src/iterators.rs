@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_declared_sections, parse_single_frame, LineStream};
+use crate::parser::{LineStream, parse_declared_sections, parse_single_frame};
 use crate::{error, types};
 use std::path::Path;
 
@@ -220,6 +220,25 @@ impl<'a> ConFrameIterator<'a> {
         self.forward_fast()
     }
 
+    /// Byte offset of the next frame start in the buffer passed to [`Self::new`].
+    pub fn byte_pos(&self) -> usize {
+        self.lines.pos
+    }
+
+    /// Skip `n` frames without parsing atom data. Returns how many were skipped.
+    /// Named `skip_frames` so it does not collide with [`Iterator::skip`].
+    pub fn skip_frames(&mut self, n: usize) -> Result<usize, error::ParseError> {
+        let mut skipped = 0usize;
+        for _ in 0..n {
+            match self.forward() {
+                None => break,
+                Some(Err(e)) => return Err(e),
+                Some(Ok(())) => skipped += 1,
+            }
+        }
+        Ok(skipped)
+    }
+
     /// Next frame plus the exact substring of the buffer passed to [`Self::new`].
     ///
     /// **Corpus ingest contract:** successive successful spans from the same
@@ -277,14 +296,12 @@ impl<'a> Iterator for ConFrameIterator<'a> {
         // Optional sections mutate AoS; only re-sync section SoA when needed.
         // Plain .con assembly already filled positions/ids/masses (no O(N)
         // post-scan when no velocity/force sections were applied).
-        let sections = match parse_declared_sections(
-            &mut self.lines,
-            &mut frame.header,
-            &mut frame.atom_data,
-        ) {
-            Ok(n) => n,
-            Err(e) => return Some(Err(e)),
-        };
+        let sections =
+            match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data)
+            {
+                Ok(n) => n,
+                Err(e) => return Some(Err(e)),
+            };
         if sections > 0 {
             frame.sync_arrays_from_atom_data();
         }
@@ -337,8 +354,8 @@ mod aos_soa_agreement_tests {
     /// (nrows already equals N); forces SoA still filled from AoS.
     #[test]
     fn sync_skips_pos_when_nrows_matches_keeps_force_soa() {
-        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test/tiny_cuh2_forces.con");
+        let p =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2_forces.con");
         let text = std::fs::read_to_string(&p).expect("fixture");
         let fr = ConFrameIterator::new(&text)
             .next()
@@ -462,6 +479,55 @@ pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::err
     }
 }
 
+/// Skip `index` frames (no atom parse), then parse the next one.
+///
+/// `index == 0` is [`read_first_frame`]. Out of range is an error.
+pub fn read_nth_frame(
+    path: &Path,
+    index: usize,
+) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str()?;
+    read_nth_frame_from_text(text, index)
+}
+
+/// Same as [`read_nth_frame`] on an already-loaded buffer.
+pub fn read_nth_frame_from_text(
+    text: &str,
+    index: usize,
+) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
+    let mut iter = ConFrameIterator::new(text);
+    let skipped = iter.skip_frames(index)?;
+    if skipped < index {
+        return Err(format!("frame {index} out of range (only {skipped} frames)").into());
+    }
+    match iter.next() {
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(e)) => Err(Box::new(e)),
+        None => Err(format!("frame {index} out of range").into()),
+    }
+}
+
+/// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
+/// Stops at the first skip error (that start is still included).
+pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
+    let mut boundaries = Vec::new();
+    let mut scanner = ConFrameIterator::new(file_contents);
+    loop {
+        scanner.lines.clear_peek();
+        let start = scanner.lines.pos;
+        if start >= scanner.lines.bytes.len() {
+            break;
+        }
+        boundaries.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            Some(Err(_)) | None => break,
+        }
+    }
+    boundaries
+}
+
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
 ///
 /// Phase 1: sequential O(N) scan via memchr-backed
@@ -498,22 +564,8 @@ pub fn parse_frames_parallel_with_threads(
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
     use rayon::prelude::*;
 
-    // Phase 1: walk the file once with forward_fast and snapshot the
-    // cursor before each frame.
-    let mut boundaries: Vec<usize> = Vec::new();
-    let mut scanner = ConFrameIterator::new(file_contents);
-    loop {
-        scanner.lines.clear_peek();
-        let start = scanner.lines.pos;
-        if start >= scanner.lines.bytes.len() {
-            break;
-        }
-        boundaries.push(start);
-        match scanner.forward_fast() {
-            Some(Ok(())) => {}
-            Some(Err(_)) | None => break,
-        }
-    }
+    // Phase 1: skip walk (no atom parse) for frame start offsets.
+    let boundaries = frame_start_offsets(file_contents);
 
     let parse_chunks = || {
         let num_frames = boundaries.len();
@@ -554,8 +606,7 @@ mod parallel_strong_scale_tests {
     use std::path::PathBuf;
 
     fn multi_frame_fixture() -> String {
-        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test/tiny_cuh2.con");
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
         let one = std::fs::read_to_string(p).expect("fixture");
         // Enough frames for >1 worker to exercise the pool.
         one.repeat(8)
