@@ -44,8 +44,9 @@ pub mod python;
 ///   ignore it. No JSON metadata line.
 /// - Version 2: column 5 is the original atom index before type-based
 ///   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
-/// - Version 3: same as v2 plus **required** `metadata["units"]` object
-///   with non-empty `length` and `energy` unit strings (see `units` module).
+/// - Version 3: same as v2 plus **required** `units` object on JSON **line 2**
+///   with non-empty `length` and `energy`. Writers emit canonical names
+///   (`angstrom`, `eV`, `fs`); see `units::canonicalize_unit_expression`.
 ///
 /// See `docs/orgmode/spec.org` for the full specification.
 pub const CON_SPEC_VERSION: u32 = 3;

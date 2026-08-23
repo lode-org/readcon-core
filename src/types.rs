@@ -30,7 +30,7 @@ use std::sync::Arc;
 /// | [`NEB_BEAD`] | non-negative integer | optional | Bead index along an NEB band. |
 /// | [`NEB_BAND`] | non-negative integer | optional | NEB band index. |
 /// | [`GENERATOR`] | string | optional | Producing tool name (e.g. `"eOn 0.4.2"`). |
-/// | [`UNITS`] | object | optional | Unit identifiers, typically with `length`, `energy`, `time` keys. |
+/// | [`UNITS`] | object | optional (required v3) | Line-2 unit system. v3 needs `length` and `energy`. Writers store canonical names (`angstrom`, `eV`, `fs`), not aliases (`A`, `ev`). |
 /// | [`POTENTIAL`] | object | optional | Force-field descriptor; if a `type` field is present it must be a string. |
 /// | [`PBC`] | length-3 array of booleans | optional | Periodic-boundary flags per cell axis. |
 /// | [`LATTICE_VECTORS`] | 3x3 numeric array | optional | Full lattice basis when `boxl`/`angles` is insufficient. |
@@ -345,9 +345,11 @@ impl FrameHeader {
         crate::units::unit_conversion_factor(from, to_unit)
     }
 
-    /// Sets the unit system.
+    /// Sets the unit system. Aliases are rewritten to preferred names
+    /// (`A` → `angstrom`) so line 2 carries the contract spelling.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        self.metadata.insert(meta::UNITS.into(), units);
+        let stored = crate::units::canonicalize_units_object(&units).unwrap_or(units);
+        self.metadata.insert(meta::UNITS.into(), stored);
     }
 
     /// Periodic boundary conditions as `[pbc_x, pbc_y, pbc_z]`.

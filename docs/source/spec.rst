@@ -641,7 +641,7 @@ expressions: named bases combined with ``\*`` / ``/`` / ``^``).
     +--------------+----------------+-----------------------------------+
     | ``mass``     | amu            | ``amu``, ``kg``                   |
     +--------------+----------------+-----------------------------------+
-    | ``time``     | fs             | ``fs``, ``ps``                    |
+    | ``time``     | fs             | ``fs``, ``ps``, ``ns``                |
     +--------------+----------------+-----------------------------------+
     | ``energy``   | eV             | ``eV``, ``hartree``, ``kcal/mol`` |
     +--------------+----------------+-----------------------------------+
@@ -650,12 +650,18 @@ expressions: named bases combined with ``\*`` / ``/`` / ``^``).
     | ``force``    | derived        | energy / length                   |
     +--------------+----------------+-----------------------------------+
 
-**Version 3:** ``units`` is **required**. The object MUST include non-empty
-``length`` and ``energy`` strings whose dimensions match those quantities.
+**Version 3:** ``units`` is **required** on JSON **line 2**. The object MUST include
+non-empty ``length`` and ``energy`` strings whose dimensions match those quantities.
 Optional keys (``mass``, ``time``, ``velocity``, ``force``) MUST be dimensionally
 valid when present. Version 2 MAY omit ``units``; readers SHOULD preserve the
-key when present. Library conversion uses ``unit_conversion_factor(from, to)``
-(see ``src/units.rs``).
+key when present.
+
+Callers MAY write aliases (``A``, ``ev``, ``femtosecond``). A conforming
+**writer** SHALL canonicalize those strings to preferred names
+(``angstrom``, ``eV``, ``fs``) before they appear on line 2
+(``canonicalize_unit_expression`` / ``set_units``). Readers MUST accept
+both aliases and preferred names. Library conversion uses
+``unit_conversion_factor(from, to)`` (see ``src/units.rs``).
 
 .. _pbc:
 
@@ -711,9 +717,11 @@ Version history
     +---------+------------+--------------------------------------------------------------------------+
     | \       | \          | Declared sections. Force blocks. Compression.                            |
     +---------+------------+--------------------------------------------------------------------------+
-    |       3 | 2026-06-27 | Required ``units`` (``length``, ``energy``). Optional ``storage_dtypes`` |
+    |       3 | 2026-06-27 | Required ``units`` (``length``, ``energy``) on line 2. Writers emit      |
     +---------+------------+--------------------------------------------------------------------------+
-    | \       | \          | for in-memory SoA element types (float32/float64).                       |
+    | \       | \          | canonical names. Optional ``storage_dtypes`` for in-memory SoA           |
+    +---------+------------+--------------------------------------------------------------------------+
+    | \       | \          | element types (float32/float64).                                         |
     +---------+------------+--------------------------------------------------------------------------+
 
 Version 3 (normative)
@@ -730,7 +738,9 @@ object. That object SHALL contain the string members ``length`` and ``energy``,
 each a non-empty unit expression whose physical dimension matches the
 named quantity (length and energy respectively). Implementations SHALL
 reject Version 3 inputs that omit ``units`` or supply dimensionally invalid
-strings for those members.
+strings for those members. A conforming writer SHALL emit preferred unit
+names on line 2 (``angstrom`` not ``A``, ``eV`` not ``ev``, ``fs`` not
+``femtosecond``).
 
 Optional members ``mass``, ``time``, ``velocity``, and ``force``, when present,
 SHALL likewise be dimensionally valid for those quantities.

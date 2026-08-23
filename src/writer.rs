@@ -172,10 +172,7 @@ impl<W: Write> ConFrameWriter<W> {
 
         if !cache_hit {
             let mut meta_obj = serde_json::Map::new();
-            meta_obj.insert(
-                meta::CON_SPEC_VERSION.into(),
-                json!(spec_version),
-            );
+            meta_obj.insert(meta::CON_SPEC_VERSION.into(), json!(spec_version));
             let mut sections = Vec::new();
             if has_vel {
                 sections.push(json!(SECTION_VELOCITIES));
@@ -211,17 +208,19 @@ impl<W: Write> ConFrameWriter<W> {
                 }
                 meta_obj.insert(k.clone(), v.clone());
             }
-            // v3 compliance: always emit valid units (inject defaults if missing/invalid).
+            // v3: required units on line 2. Canonicalize aliases; inject defaults if missing/invalid.
+            if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
+                if let Ok(c) = crate::units::canonicalize_units_object(&u) {
+                    meta_obj.insert(meta::UNITS.into(), c);
+                }
+            }
             if spec_version >= 3 {
                 let need_default = match meta_obj.get(meta::UNITS) {
                     None => true,
                     Some(u) => crate::units::validate_v3_units_metadata(u).is_err(),
                 };
                 if need_default {
-                    meta_obj.insert(
-                        meta::UNITS.into(),
-                        crate::units::default_v3_units_json(),
-                    );
+                    meta_obj.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
                 }
             }
             // serde_json::Map iterates in key order → stable string for corpus hashes.

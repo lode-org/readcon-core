@@ -28,7 +28,7 @@
     },
     "units": {
       "type": "object",
-      "description": "Unit system, metatomic-style expressions. Required at version 3 with non-empty length and energy.",
+      "description": "Line-2 unit system, metatomic-style expressions. Required at version 3 with length and energy. Writers store canonical names (angstrom, eV, fs).",
       "properties": {
         "length": { "type": "string", "minLength": 1 },
         "energy": { "type": "string", "minLength": 1 },
