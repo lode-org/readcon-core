@@ -390,6 +390,17 @@ class TestConFrameConstructor:
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
+    def test_xyz_matches_coords_and_soa(self):
+        path = _resource("tiny_cuh2.con")
+        fr = readcon.read_first_frame(path)
+        xyz = fr.xyz
+        pos = fr.coords_array()
+        assert xyz.shape == pos.shape == (len(fr.atoms), 3)
+        assert float(xyz[0, 0]) == pytest.approx(fr.atoms[0].x)
+        assert float(xyz[0, 0]) == pytest.approx(float(pos[0, 0]))
+        xyz[0, 0] = -999.0
+        assert float(fr.xyz[0, 0]) == pytest.approx(fr.atoms[0].x)
+
     def test_coords_array_matches_atoms_after_full_frame_load(self):
         path = _resource("tiny_multi_cuh2.con")
         frames = readcon.read_all_frames(path)

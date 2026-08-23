@@ -128,6 +128,9 @@ module readcon
     procedure :: copy_velocities => fr_copy_velocities
     procedure :: copy_forces => fr_copy_forces
     procedure :: copy_masses => fr_copy_masses
+    procedure :: xyz_ptr => fr_xyz_ptr
+    procedure :: velocities_ptr => fr_velocities_ptr
+    procedure :: forces_ptr => fr_forces_ptr
     procedure :: potential_type => fr_pot
     procedure :: frame_index => fr_fidx
     procedure :: sim_time => fr_time
@@ -232,6 +235,24 @@ module readcon
       import :: c_ptr, c_size_t
       type(c_ptr), value :: f
       integer(c_size_t) :: c_rkr_frame_atom_count
+    end function
+    function c_rkr_frame_xyz_f64(f, n) bind(C, name="rkr_frame_xyz_f64")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: f
+      integer(c_size_t), intent(out) :: n
+      type(c_ptr) :: c_rkr_frame_xyz_f64
+    end function
+    function c_rkr_frame_velocities_f64(f, n) bind(C, name="rkr_frame_velocities_f64")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: f
+      integer(c_size_t), intent(out) :: n
+      type(c_ptr) :: c_rkr_frame_velocities_f64
+    end function
+    function c_rkr_frame_forces_f64(f, n) bind(C, name="rkr_frame_forces_f64")
+      import :: c_ptr, c_size_t
+      type(c_ptr), value :: f
+      integer(c_size_t), intent(out) :: n
+      type(c_ptr) :: c_rkr_frame_forces_f64
     end function
     function c_rkr_frame_copy_positions(f, out, n) bind(C, name="rkr_frame_copy_positions")
       import :: c_ptr, c_int, c_double, c_size_t
@@ -738,6 +759,52 @@ contains
       pos(3, i) = real(flat(3*(i-1)+3), real64)
     end do
   end function
+
+  subroutine fr_xyz_ptr(self, xyz, n)
+    ! Zero-copy: associate xyz(3,n) with the frame SoA. Valid until free().
+    class(frame_t), intent(in) :: self
+    real(c_double), pointer, intent(out) :: xyz(:,:)
+    integer, intent(out) :: n
+    integer(c_size_t) :: nn
+    type(c_ptr) :: p
+    n = 0
+    xyz => null()
+    if (.not. c_associated(self%handle)) return
+    p = c_rkr_frame_xyz_f64(self%handle, nn)
+    n = int(nn)
+    if (.not. c_associated(p) .or. n <= 0) return
+    call c_f_pointer(p, xyz, [3, n])
+  end subroutine
+
+  subroutine fr_velocities_ptr(self, vel, n)
+    class(frame_t), intent(in) :: self
+    real(c_double), pointer, intent(out) :: vel(:,:)
+    integer, intent(out) :: n
+    integer(c_size_t) :: nn
+    type(c_ptr) :: p
+    n = 0
+    vel => null()
+    if (.not. c_associated(self%handle)) return
+    p = c_rkr_frame_velocities_f64(self%handle, nn)
+    n = int(nn)
+    if (.not. c_associated(p) .or. n <= 0) return
+    call c_f_pointer(p, vel, [3, n])
+  end subroutine
+
+  subroutine fr_forces_ptr(self, frc, n)
+    class(frame_t), intent(in) :: self
+    real(c_double), pointer, intent(out) :: frc(:,:)
+    integer, intent(out) :: n
+    integer(c_size_t) :: nn
+    type(c_ptr) :: p
+    n = 0
+    frc => null()
+    if (.not. c_associated(self%handle)) return
+    p = c_rkr_frame_forces_f64(self%handle, nn)
+    n = int(nn)
+    if (.not. c_associated(p) .or. n <= 0) return
+    call c_f_pointer(p, frc, [3, n])
+  end subroutine
 
   function read_all_frames(path, n_threads) result(frames)
     character(len=*), intent(in) :: path

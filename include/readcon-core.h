@@ -17,6 +17,9 @@
  *     to call with NULL (no-op).
  *   - const char* returned by rkr_library_version is process-static; do
  *     NOT free it.
+ *   - rkr_frame_*_view / rkr_frame_xyz_f64 borrow the frame SoA. The
+ *     pointer is valid until free_rkr_frame. Prefer these over
+ *     rkr_frame_to_c_frame (which allocates an AoS copy).
  *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
  *     by the caller; release with free_c_frame.
  *
@@ -131,6 +134,15 @@ namespace readcon {
  * Bit 2: energies section or finite frame energy present.
  */
 #define SECTIONS_MASK_ENERGIES (1 << 2)
+
+/**
+ * Absolute mass difference allowed between atoms of the same CON type.
+ *
+ * CON line 9 stores one mass per type. [`Self::build_with_permutation`]
+ * rejects a later atom of an already-seen symbol whose mass differs
+ * from the first of that type by more than this value.
+ */
+#define ConFrameBuilder_TYPE_MASS_ABS_TOL 1e-8
 
 /**
  * Error codes for RKR functions.
@@ -277,11 +289,6 @@ typedef struct CAtom {
     bool has_energy;
 } CAtom;
 
-/**
- * A transparent, "lossy" C-struct containing only the core atomic data.
- * This can be extracted from an `RKRConFrame` handle for direct data access.
- * The caller is responsible for freeing the `atoms` array using `free_c_frame`.
- */
 typedef struct CFrame {
     struct CAtom *atoms;
     uintptr_t num_atoms;
@@ -374,6 +381,21 @@ typedef struct mts_block_t {
     uint8_t _private[0];
 } mts_block_t;
 #endif
+
+/**
+ * A transparent, "lossy" C-struct containing only the core atomic data.
+ * This can be extracted from an `RKRConFrame` handle for direct data access.
+ * The caller is responsible for freeing the `atoms` array using `free_c_frame`.
+ * Borrowed SoA column. `data` is valid until the parent frame is freed
+ * or a mutating call reallocates storage. No copy.
+ */
+typedef struct RKRArrayView {
+    const void *data;
+    uintptr_t n;
+    uint32_t cols;
+    uint8_t dtype_code;
+    uint8_t dtype_bits;
+} RKRArrayView;
 
 
 
@@ -1443,8 +1465,8 @@ enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(struct RKR
  * Consumes the builder and returns a finalized RKRConFrame handle.
  * The builder handle is invalidated after this call.
  * The caller OWNS the returned frame and MUST call `free_rkr_frame`.
- * Returns NULL on error, including when two atoms share a symbol
- * but disagree on mass (CON line 9 stores one mass per type).
+ * Returns NULL on error, including
+ * [`crate::error::ParseError::MassMismatch`].
  *
  * # Safety
  * builder_handle must be valid. The caller takes ownership of the returned frame.
@@ -1557,14 +1579,15 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
                                          uintptr_t *num_frames);
 
 /**
- * Like `rkr_read_all_frames`, with an explicit worker count.
+ * Like [`rkr_read_all_frames`], with an explicit worker count.
  *
- * `n_threads == 0` is the automatic policy (Rayon when built with
- * `parallel` and the file is at least 48 KiB). `n_threads == 1` is
- * sequential. `n_threads >= 2` pins a Rayon pool of that size when
+ * `n_threads == 0` is the automatic policy (Rayon when the library is
+ * built with `parallel` and the file is at least 48 KiB). `n_threads == 1`
+ * is sequential. `n_threads >= 2` pins a Rayon pool of that size when
  * `parallel` is on; otherwise the parse is sequential.
  *
- * Ownership matches `rkr_read_all_frames`.
+ * # Safety
+ * Same contract as [`rkr_read_all_frames`].
  */
 struct RKRConFrame **rkr_read_all_frames_n_threads(const char *filename_c,
                                                    uintptr_t *num_frames,
@@ -1662,7 +1685,63 @@ enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame
 uintptr_t rkr_frame_atom_count(const struct RKRConFrame *frame_handle);
 
 /**
+ * Borrow positions SoA. `out->data` is valid until `free_rkr_frame`.
+ */
+enum RKRStatus rkr_frame_xyz_view(const struct RKRConFrame *frame_handle,
+                                  struct RKRArrayView *out);
+
+/**
+ * Borrow velocities SoA, or `SECTION_ABSENT`.
+ */
+enum RKRStatus rkr_frame_velocities_view(const struct RKRConFrame *frame_handle,
+                                         struct RKRArrayView *out);
+
+/**
+ * Borrow forces SoA, or `SECTION_ABSENT`.
+ */
+enum RKRStatus rkr_frame_forces_view(const struct RKRConFrame *frame_handle,
+                                     struct RKRArrayView *out);
+
+/**
+ * Borrow per-atom energies, or `SECTION_ABSENT`.
+ */
+enum RKRStatus rkr_frame_energies_view(const struct RKRConFrame *frame_handle,
+                                       struct RKRArrayView *out);
+
+/**
+ * Borrow per-atom masses.
+ */
+enum RKRStatus rkr_frame_masses_view(const struct RKRConFrame *frame_handle,
+                                     struct RKRArrayView *out);
+
+/**
+ * Borrow `atom_id` column (always u64).
+ */
+enum RKRStatus rkr_frame_atom_ids_view(const struct RKRConFrame *frame_handle,
+                                       struct RKRArrayView *out);
+
+/**
+ * Row-major f64 xyz pointer, or NULL if storage is not float64.
+ * `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+ */
+const double *rkr_frame_xyz_f64(const struct RKRConFrame *frame_handle,
+                                uintptr_t *n);
+
+/**
+ * Row-major f64 velocities pointer, or NULL if absent / not float64.
+ */
+const double *rkr_frame_velocities_f64(const struct RKRConFrame *frame_handle,
+                                       uintptr_t *n);
+
+/**
+ * Row-major f64 forces pointer, or NULL if absent / not float64.
+ */
+const double *rkr_frame_forces_f64(const struct RKRConFrame *frame_handle,
+                                   uintptr_t *n);
+
+/**
  * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
+ * Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
  */
 enum RKRStatus rkr_frame_copy_positions(const struct RKRConFrame *frame_handle,
                                         double *out,
