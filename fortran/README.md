@@ -106,6 +106,8 @@ Build with `cargo build --release --features chemfiles`, then:
 
 ```fortran
 fr = read_chemfiles_first("water.xyz")
+n  = chemfiles_nsteps("traj.xyz")
+fr = read_chemfiles_nth("traj.xyz", 10)
 st = fr%select("name O", nmatch)
 st = fr%select_primary("name H", indices, nwritten)
 ```

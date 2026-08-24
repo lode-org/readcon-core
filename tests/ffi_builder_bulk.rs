@@ -770,6 +770,9 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
             assert!(rkr_read_chemfiles_first(ptr::null()).is_null());
             let mut n = 0usize;
             assert!(rkr_read_chemfiles_memory(ptr::null(), ptr::null(), &mut n).is_null());
+            assert!(rkr_read_chemfiles(ptr::null(), &mut n).is_null());
+            assert!(rkr_read_chemfiles_nth(ptr::null(), 0).is_null());
+            assert_eq!(rkr_chemfiles_nsteps(ptr::null()), usize::MAX);
         }
 
         // builder data ptrs for masses/ids

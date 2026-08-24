@@ -49,6 +49,36 @@ def test_read_chemfiles_all_and_memory(water_xyz: Path):
     assert len(mem[0].atoms) == 3
 
 
+def test_chemfiles_stamps_internal_units(water_xyz: Path):
+    frame = readcon.read_chemfiles_first(str(water_xyz))
+    units = frame.metadata["units"]
+    assert units["length"] == "angstrom"
+    assert units["time"] == "ps"
+    assert units["mass"] == "amu"
+    assert frame.metadata["chemfiles::unit_system"]["velocity"] == "angstrom/ps"
+
+
+def test_read_chemfiles_nth_and_nsteps(tmp_path: Path):
+    p = tmp_path / "three.xyz"
+    p.write_text(
+        "2\nframe0\nCu 0.0 0.0 0.0\nH 1.0 0.0 0.0\n"
+        "2\nframe1\nCu 2.0 0.0 0.0\nH 3.0 0.0 0.0\n"
+        "2\nframe2\nCu 4.0 0.0 0.0\nH 5.0 0.0 0.0\n"
+    )
+    assert readcon.read_chemfiles_nsteps(str(p)) == 3
+    mid = readcon.read_chemfiles_nth(str(p), 1)
+    xs = [a.x for a in mid.atoms if a.symbol == "Cu"]
+    assert xs and xs[0] == pytest.approx(2.0)
+    strided = readcon.read_chemfiles(str(p), skip=0, step=2)
+    assert len(strided) == 2
+    guessed = readcon.read_chemfiles_memory(
+        "3\nwater\nO 0 0 0\nH 0.957 0 0\nH -0.240 0.927 0\n",
+        "XYZ",
+        guess_bonds=True,
+    )
+    assert guessed[0].has_bonds
+
+
 def test_select_methods_on_frame_with_bonds():
     atoms = [
         readcon.Atom(

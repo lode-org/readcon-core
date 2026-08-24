@@ -24,7 +24,7 @@ module readcon
   public :: open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
   public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
-  public :: read_chemfiles_first
+  public :: read_chemfiles_first, read_chemfiles_nth, chemfiles_nsteps
 
   ! Mirror include/readcon-core.h RKRStatus (keep in sync with src/ffi.rs)
   integer(c_int), parameter :: rkr_status_success = 0
@@ -575,6 +575,17 @@ module readcon
       import :: c_char, c_ptr
       character(kind=c_char), intent(in) :: fn(*)
       type(c_ptr) :: c_rkr_read_chemfiles_first
+    end function
+    function c_rkr_read_chemfiles_nth(fn, idx) bind(C, name="rkr_read_chemfiles_nth")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), value :: idx
+      type(c_ptr) :: c_rkr_read_chemfiles_nth
+    end function
+    function c_rkr_chemfiles_nsteps(fn) bind(C, name="rkr_chemfiles_nsteps")
+      import :: c_char, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t) :: c_rkr_chemfiles_nsteps
     end function
     function c_rkr_frame_builder_positions_data(b) bind(C, name="rkr_frame_builder_positions_data")
       import :: c_ptr
@@ -1393,6 +1404,30 @@ contains
     fr%cview = c_null_ptr
     call to_c(path, c)
     fr%handle = c_rkr_read_chemfiles_first(c)
+  end function
+
+  function read_chemfiles_nth(path, index) result(fr)
+    character(len=*), intent(in) :: path
+    integer, intent(in) :: index
+    type(frame_t) :: fr
+    character(kind=c_char), allocatable :: c(:)
+    fr%handle = c_null_ptr
+    fr%cview = c_null_ptr
+    call to_c(path, c)
+    fr%handle = c_rkr_read_chemfiles_nth(c, int(index, c_size_t))
+  end function
+
+  integer function chemfiles_nsteps(path)
+    character(len=*), intent(in) :: path
+    character(kind=c_char), allocatable :: c(:)
+    integer(c_size_t) :: n
+    call to_c(path, c)
+    n = c_rkr_chemfiles_nsteps(c)
+    if (n == huge(n)) then
+      chemfiles_nsteps = -1
+    else
+      chemfiles_nsteps = int(n)
+    end if
   end function
 
   integer function fr_select_primary(self, selection, indices, nwritten)

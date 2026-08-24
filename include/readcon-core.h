@@ -82,8 +82,9 @@ namespace readcon {
  *   ignore it. No JSON metadata line.
  * - Version 2: column 5 is the original atom index before type-based
  *   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
- * - Version 3: same as v2 plus **required** `metadata["units"]` object
- *   with non-empty `length` and `energy` unit strings (see `units` module).
+ * - Version 3: same as v2 plus **required** `units` object on JSON **line 2**
+ *   with non-empty `length` and `energy`. Writers emit canonical names
+ *   (`angstrom`, `eV`, `fs`); see `units::canonicalize_unit_expression`.
  *
  * See `docs/orgmode/spec.org` for the full specification.
  */
@@ -1955,6 +1956,51 @@ uint8_t rkr_has_parallel_support(void);
  * `path_c` must be a valid NUL-terminated UTF-8 path.
  */
 struct RKRConFrame *rkr_read_chemfiles_first(const char *path_c);
+
+/**
+ * Read every step from a chemfiles-supported path. Sets `*num_frames`.
+ * Free with `free_rkr_frame_array`. NULL on error / without chemfiles.
+ *
+ * # Safety
+ * `path_c` valid UTF-8; `num_frames` non-null.
+ */
+struct RKRConFrame **rkr_read_chemfiles(const char *path_c,
+                                        uintptr_t *num_frames);
+
+/**
+ * Read step `index` via chemfiles `Trajectory::read_step`.
+ * Returns NULL on error, out of range, or without the `chemfiles` feature.
+ *
+ * # Safety
+ * `path_c` must be a valid NUL-terminated UTF-8 path.
+ */
+struct RKRConFrame *rkr_read_chemfiles_nth(const char *path_c, uintptr_t index);
+
+/**
+ * Number of steps in a chemfiles trajectory (`Trajectory::nsteps`).
+ * Returns `usize::MAX` on error or without the `chemfiles` feature.
+ *
+ * # Safety
+ * `path_c` must be a valid NUL-terminated UTF-8 path.
+ */
+uintptr_t rkr_chemfiles_nsteps(const char *path_c);
+
+/**
+ * Read a chemfiles window: steps `start, start+step, … < stop`.
+ * `stop == usize::MAX` means `nsteps`. `guess_bonds != 0` guesses topology
+ * when the frame has no bonds. Sets `*num_frames`.
+ * Free with `free_rkr_frame_array`. NULL on error / without chemfiles.
+ *
+ * # Safety
+ * `path_c` valid UTF-8; `num_frames` non-null. `topology_c` may be NULL.
+ */
+struct RKRConFrame **rkr_read_chemfiles_range(const char *path_c,
+                                              uintptr_t start,
+                                              uintptr_t step,
+                                              uintptr_t stop,
+                                              const char *topology_c,
+                                              uint8_t guess_bonds,
+                                              uintptr_t *num_frames);
 
 /**
  * Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
