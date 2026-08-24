@@ -5,7 +5,10 @@ pub mod read_con_capnp {
 
 pub mod client;
 pub mod convert;
+pub mod endpoint;
 pub mod server;
+
+pub use endpoint::Endpoint;
 
 use read_con_capnp::compatibility_stamp;
 

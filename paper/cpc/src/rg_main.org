@@ -283,11 +283,11 @@ the same magic-byte detection. Both decompress to text and then
 parse. They are not a new format.
 
 A Cap'n Proto schema (=schema/ReadCon.capnp=) exists for an
-optional Rust RPC service. It is a parsed-frame transport. It is not
-an on-disk ``bcon'' authority. The campaign store
-=readcon-db= keeps cooked SoA numerics in LMDB (RCSO) as a
-derived cache. Text CON remains the file that independent tools must
-implement.
+optional Rust RPC service. It is a parsed-frame encoding over TCP or
+a Unix domain socket. It is not UCX, ADIOS, or an on-disk ``bcon''
+authority. The campaign store =readcon-db= keeps cooked SoA
+numerics in LMDB (RCSO) as a derived cache. Text CON remains the
+file that independent tools must implement.
 
 * Library architecture
 :PROPERTIES:
