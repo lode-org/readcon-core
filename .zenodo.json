@@ -1,6 +1,6 @@
 {
   "title": "readcon-core: a CON/convel reader/writer with FFI bindings",
-  "version": "0.14.7",
+  "version": "0.14.8",
   "upload_type": "software",
   "publication_date": "2026-08-15",
   "creators": [

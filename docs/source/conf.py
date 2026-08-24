@@ -1,7 +1,7 @@
 project = "readcon-core"
 copyright = "2025--present, LODE developers"
 author = "LODE developers"
-release = "0.14.7"
+release = "0.14.8"
 
 extensions = [
     "sphinx.ext.autodoc",
