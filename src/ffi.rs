@@ -4396,6 +4396,136 @@ pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersio
         }
     }
 }
+
+/// Pack a frame as RCSO bytes for a caller-side `MPI_Bcast`.
+///
+/// `buf == NULL` writes the required size to `*out_len` and returns
+/// success. If `buf` is non-null and `buflen` is too small, returns
+/// `BUFFER_TOO_SMALL` and still writes the need to `*out_len`.
+/// This function does not call MPI.
+///
+/// # Safety
+/// `frame_handle` valid. `out_len` non-null. `buf` valid for `buflen` if non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_pack_rcso(
+    frame_handle: *const RKRConFrame,
+    buf: *mut u8,
+    buflen: usize,
+    out_len: *mut usize,
+) -> RKRStatus {
+    if out_len.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    let bytes = match crate::rcso::Rcso::encode_frame(frame) {
+        Ok(b) => b,
+        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    unsafe { *out_len = bytes.len() };
+    if buf.is_null() {
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
+    if buflen < bytes.len() {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Read `natoms` from an RCSO blob. No MPI.
+///
+/// # Safety
+/// `buf` valid for `buflen`. `out_natoms` non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_unpack_rcso_natoms(
+    buf: *const u8,
+    buflen: usize,
+    out_natoms: *mut u32,
+) -> RKRStatus {
+    if buf.is_null() || out_natoms.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
+    match crate::rcso::Rcso::decode(bytes) {
+        Ok(s) => {
+            unsafe { *out_natoms = s.natoms };
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    }
+}
+
+/// Copy RCSO positions into row-major `dest` (`natoms * 3` doubles).
+///
+/// # Safety
+/// `buf` valid for `buflen`. `dest` valid for `dest_natoms * 3` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_unpack_rcso_positions(
+    buf: *const u8,
+    buflen: usize,
+    dest: *mut f64,
+    dest_natoms: u32,
+) -> RKRStatus {
+    if buf.is_null() || dest.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
+    let soa = match crate::rcso::Rcso::decode(bytes) {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    if soa.natoms != dest_natoms {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(dest, dest_natoms as usize * 3) };
+    for (i, p) in soa.positions.iter().enumerate() {
+        out[i * 3] = p[0];
+        out[i * 3 + 1] = p[1];
+        out[i * 3 + 2] = p[2];
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Copy RCSO forces into row-major `dest`. `SECTION_ABSENT` if the blob
+/// has no force block.
+///
+/// # Safety
+/// `buf` valid for `buflen`. `dest` valid for `dest_natoms * 3` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_unpack_rcso_forces(
+    buf: *const u8,
+    buflen: usize,
+    dest: *mut f64,
+    dest_natoms: u32,
+) -> RKRStatus {
+    if buf.is_null() || dest.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
+    let soa = match crate::rcso::Rcso::decode(bytes) {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    };
+    let Some(forces) = soa.forces else {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    };
+    if soa.natoms != dest_natoms {
+        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(dest, dest_natoms as usize * 3) };
+    for (i, f) in forces.iter().enumerate() {
+        out[i * 3] = f[0];
+        out[i * 3 + 1] = f[1];
+        out[i * 3 + 2] = f[2];
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4508,6 +4638,38 @@ mod tests {
         let copied = unsafe { CStr::from_ptr(buffer.as_ptr()) };
         assert_eq!(copied.to_str().unwrap(), "Generated");
     }
+
+    #[test]
+    fn pack_rcso_size_query_then_dest() {
+        let path = std::ffi::CString::new("resources/test/tiny_cuh2_forces.con").unwrap();
+        let frame = unsafe { rkr_read_nth_frame(path.as_ptr(), 0) };
+        assert!(!frame.is_null());
+        let mut need = 0usize;
+        let st = unsafe { rkr_pack_rcso(frame, std::ptr::null_mut(), 0, &mut need) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(need >= 24);
+        let mut buf = vec![0u8; need];
+        let mut wrote = 0usize;
+        let st = unsafe { rkr_pack_rcso(frame, buf.as_mut_ptr(), buf.len(), &mut wrote) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert_eq!(wrote, need);
+        assert_eq!(&buf[0..4], b"RCSO");
+        let mut natoms = 0u32;
+        let st = unsafe { rkr_unpack_rcso_natoms(buf.as_ptr(), buf.len(), &mut natoms) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert_eq!(natoms, unsafe { rkr_frame_atom_count(frame) } as u32);
+        let mut xyz = vec![0.0f64; natoms as usize * 3];
+        let st = unsafe {
+            rkr_unpack_rcso_positions(buf.as_ptr(), buf.len(), xyz.as_mut_ptr(), natoms)
+        };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        let mut frc = vec![0.0f64; natoms as usize * 3];
+        let st =
+            unsafe { rkr_unpack_rcso_forces(buf.as_ptr(), buf.len(), frc.as_mut_ptr(), natoms) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        unsafe { free_rkr_frame(frame) };
+    }
+
     fn test_builder_handle() -> *mut RKRConFrameBuilder {
         let cell = [10.0, 11.0, 12.0];
         let angles = [90.0, 91.0, 92.0];
