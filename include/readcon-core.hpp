@@ -236,12 +236,18 @@ class ConFrameIterator {
  */
 class ConFrame {
   public:
+    friend class ConFrameIterator;
     friend class ConFrameIterator::Iterator;
     friend class ConFrameWriter;
     friend class ConFrameBuilder;
     friend ConFrame read_first_frame(const std::filesystem::path &);
     friend ConFrame read_nth_frame(const std::filesystem::path &, std::size_t);
     friend std::vector<ConFrame> read_all_frames(const std::filesystem::path &);
+    friend ConFrame read_chemfiles_first(const std::filesystem::path &);
+    friend ConFrame read_chemfiles_nth(const std::filesystem::path &,
+                                      std::size_t);
+    friend std::vector<ConFrame>
+    adopt_frame_handles(RKRConFrame **, size_t, const std::filesystem::path &);
 
     ConFrame(const ConFrame &) = delete;
     ConFrame &operator=(const ConFrame &) = delete;
