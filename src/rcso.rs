@@ -265,6 +265,39 @@ mod tests {
     }
 
     #[test]
+    fn rejects_truncated_and_bad_fields() {
+        assert!(Rcso::decode(&[0u8; 8]).is_err());
+        let frame = first_frame(include_str!(
+            "../resources/conformance/valid/v2_minimal.con"
+        ));
+        let good = Rcso::encode_frame(&frame).unwrap();
+        let mut ver = good.clone();
+        ver[4..8].copy_from_slice(&2u32.to_le_bytes());
+        assert!(Rcso::decode(&ver).is_err());
+        let mut dt = good.clone();
+        dt[16] = 1;
+        assert!(Rcso::decode(&dt).is_err());
+        assert!(Rcso::decode(&good[..20]).is_err());
+        assert!(decode_batch(b"xxxx").is_err());
+        assert!(decode_batch(b"RCSB\x02\x00\x00\x00\x00\x00\x00\x00").is_err());
+    }
+
+    #[test]
+    fn velocities_fixture_keeps_velocity_block() {
+        let text = include_str!("../resources/test/tiny_cuh2.convel");
+        let frame = first_frame(text);
+        assert!(frame.atom_data.iter().any(|a| a.velocity.is_some()));
+        let blob = Rcso::encode_frame(&frame).unwrap();
+        let flags = u32::from_le_bytes(blob[12..16].try_into().unwrap());
+        assert_ne!(flags & RCSO_FLAG_VELOCITIES, 0);
+        let got = Rcso::decode(&blob).unwrap();
+        let vels = got.velocities.expect("velocities");
+        for (a, v) in frame.atom_data.iter().zip(&vels) {
+            assert_eq!(a.velocity.unwrap_or([0.0; 3]), *v);
+        }
+    }
+
+    #[test]
     fn rcsb_batch_holds_two_blobs() {
         let text = include_str!("../resources/conformance/valid/v2_minimal.con");
         let frame = first_frame(text);

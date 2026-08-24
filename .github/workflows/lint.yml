@@ -13,10 +13,10 @@ jobs:
         fetch-depth: 0
 
     - name: Conventional commits check
-      uses: cocogitto/cocogitto-action@v3
-      with:
-        # Full-history check dies on pre-v0.14 `docs+bench:` / untyped merges.
-        check-latest-tag-only: true
+      # Latest-tag range only: full history still has pre-v0.14 `docs+bench:`
+      # and untyped merges. Git default `Revert "..."` subjects after v0.14.7
+      # are accepted by the script (cocogitto rejects them).
+      run: bash scripts/check_conventional_commits.sh
 
     - name: Audit for large files
       uses: HaoZeke/large-file-auditor@v0.1.0

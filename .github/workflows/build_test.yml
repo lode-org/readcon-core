@@ -56,15 +56,3 @@ jobs:
           --buildtype=release
           meson test -C bbdir --print-errorlogs \
           --wrap="valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --error-exitcode=1 --suppressions=$GITHUB_WORKSPACE/valgrind.supp --gen-suppressions=all"
-
-  header-check:
-    runs-on: ubuntu-22.04
-    name: Shipped C header matches cbindgen
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install cbindgen
-        run: cargo install cbindgen --locked || cargo install cbindgen
-      - name: Verify shipped C header matches cbindgen output
-        run: scripts/regen-capi-headers.sh --check

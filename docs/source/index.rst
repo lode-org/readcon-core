@@ -26,7 +26,7 @@
 
 Rare-event codes already checkpoint on CON. This library is the formal
 spec and the shared ``rkr_*`` ABI so Fortran, C, C++, Python, Julia, and
-Rust read and write the same file. Optional chemfiles conversion brings
+Rust read and write the same file everywhere. Optional chemfiles conversion brings
 XYZ, PDB, and GRO in; DLPack and metatensor export the same arrays out.
 `readcon-db <https://lode-org.github.io/readcon-db/>`_ indexes campaign
 corpora as CON text (`docs.rs <https://docs.rs/readcon-db>`_).

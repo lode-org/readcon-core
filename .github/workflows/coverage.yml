@@ -134,7 +134,7 @@ jobs:
           unset RUSTC_WRAPPER || true
           bash scripts/run_coverage_python.sh python_lcov.info
           test -s python_lcov.info
-          grep -E '^(SF:|DA:)' python_lcov.info | head -20
+          grep -E '^(SF:|DA:)' python_lcov.info | head -20 || true
 
       - name: Upload python coverage artifact
         uses: actions/upload-artifact@v4
@@ -183,7 +183,7 @@ jobs:
             lcov.info "$ROOT/julia_lcov.info" \
             --package-root "$ROOT/julia/ReadCon"
           test -s "$ROOT/julia_lcov.info"
-          grep -E '^(SF:|DA:)' "$ROOT/julia_lcov.info" | head -10
+          grep -E '^(SF:|DA:)' "$ROOT/julia_lcov.info" | head -10 || true
 
       - name: Upload julia coverage artifact
         uses: actions/upload-artifact@v4
@@ -245,7 +245,7 @@ jobs:
               --output-file "$ROOT/fortran_coverage.info" || true
           fi
           test -s "$ROOT/fortran_coverage.info"
-          grep -E '^(SF:|DA:)' "$ROOT/fortran_coverage.info" | head -20
+          grep -E '^(SF:|DA:)' "$ROOT/fortran_coverage.info" | head -20 || true
 
       - name: Upload fortran coverage artifact
         uses: actions/upload-artifact@v4

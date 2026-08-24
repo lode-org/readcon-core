@@ -386,7 +386,9 @@ class TestConFrameConstructor:
         second = next(it)
         first, also_second = readcon.read_all_frames(path)
         assert second.atoms[0].x == pytest.approx(also_second.atoms[0].x)
-        assert first.atoms[0].x == pytest.approx(readcon.read_nth_frame(path, 0).atoms[0].x)
+        assert first.atoms[0].x == pytest.approx(
+            readcon.read_nth_frame(path, 0).atoms[0].x
+        )
         nth = readcon.read_nth_frame(path, 1)
         assert nth.atoms[0].x == pytest.approx(also_second.atoms[0].x)
         it2 = readcon.iter_con(path)
@@ -443,7 +445,12 @@ class TestConFrameConstructor:
 
     def test_neb_band_example_has_four_beads(self):
         path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "resources", "examples", "neb_band.con"
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "resources",
+            "examples",
+            "neb_band.con",
         )
         frames = readcon.read_con(path)
         assert len(frames) == 4
@@ -454,7 +461,12 @@ class TestConFrameConstructor:
 
     def test_cuh2_band_is_four_218_atom_images(self):
         path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "resources", "examples", "cuh2_band.con"
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "resources",
+            "examples",
+            "cuh2_band.con",
         )
         frames = readcon.read_con(path)
         assert len(frames) == 4

@@ -218,13 +218,13 @@ round-trip, build a frame with energy. Full steps:
 Short Python path from the repository root:
 
     import readcon
-    
+
     for frame in readcon.iter_con("resources/test/tiny_multi_cuh2.con"):
         print(frame.cell, len(frame), frame.energy)
-    
+
     frames = readcon.read_con("resources/test/tiny_multi_cuh2.con")
     readcon.write_con("out.con", frames)
-    
+
     atoms = [readcon.Atom("Cu", 0.0, 0.0, 0.0, atom_id=0, mass=63.546)]
     frame = readcon.ConFrame(cell=[10.0, 10.0, 10.0], angles=[90.0, 90.0, 90.0], atoms=atoms)
     frame.set_energy(-42.5)
@@ -359,4 +359,3 @@ If you use `readcon-core` in academic work, please cite it via the metadata in [
 # License
 
 MIT.
-

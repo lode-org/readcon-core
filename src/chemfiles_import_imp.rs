@@ -375,6 +375,7 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     // Parallel arrays in chemfiles index order (= atom_id); survive type-grouped build.
     let mut chfl_names: Vec<String> = Vec::with_capacity(n);
     let mut chfl_types: Vec<String> = Vec::with_capacity(n);
+    let mut symbols: Vec<String> = Vec::with_capacity(n);
     let mut any_name_type_extra = false;
 
     for i in 0..n {
@@ -405,13 +406,40 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         }
         chfl_names.push(display_name);
         chfl_types.push(atomic_type_str);
+        symbols.push(symbol);
+    }
 
-        let mass = atom.mass();
-        let mass = if mass > 0.0 { mass } else { 1.0 };
+    // CON stores one mass per type. Chemfiles carries per-atom masses; a
+    // display name like H1 often has mass 0 while type H has 1.008. Collapse
+    // to one mass per CON symbol: prefer an atom whose name matches the type.
+    let mut type_mass: BTreeMap<String, f64> = BTreeMap::new();
+    let mut type_mass_canonical: BTreeMap<String, bool> = BTreeMap::new();
+    for i in 0..n {
+        let raw = frame.atom(i).mass();
+        if raw <= 0.0 {
+            continue;
+        }
+        let symbol = &symbols[i];
+        let canonical = chfl_names[i] == chfl_types[i];
+        let replace = match type_mass_canonical.get(symbol) {
+            None => true,
+            Some(false) if canonical => true,
+            _ => false,
+        };
+        if replace {
+            type_mass.insert(symbol.clone(), raw);
+            type_mass_canonical.insert(symbol.clone(), canonical);
+        }
+    }
+
+    for i in 0..n {
+        let atom = frame.atom(i);
+        let symbol = &symbols[i];
+        let mass = type_mass.get(symbol).copied().unwrap_or(1.0);
         let pos = positions[i];
         // chemfiles has no fix/constraint flags; default all mobile.
         let fixed = [false, false, false];
-        builder.add_atom(&symbol, pos[0], pos[1], pos[2], fixed, i as u64, mass);
+        builder.add_atom(symbol, pos[0], pos[1], pos[2], fixed, i as u64, mass);
         if let Some(vels) = velocities {
             if let Some(v) = vels.get(i) {
                 builder.with_velocity(*v);
@@ -667,6 +695,35 @@ mod tests {
         frame.set("custom_note", Property::String("hello".into()));
         frame.set("time", Property::Double(1.25));
         frame
+    }
+
+    #[test]
+    fn name_type_split_uses_one_mass_per_con_symbol() {
+        let mut frame = Frame::new();
+        let mut h1 = Atom::new("H1");
+        h1.set_atomic_type("H");
+        frame.add_atom(&h1, [0.0, 1.0, 2.0], None);
+        frame.add_atom(&Atom::new("O"), [1.0, 2.0, 3.0], None);
+        frame.add_atom(&Atom::new("O"), [2.0, 3.0, 4.0], None);
+        frame.add_atom(&Atom::new("H"), [3.0, 4.0, 5.0], None);
+        frame.set_cell(&UnitCell::new([10.0, 10.0, 10.0]));
+        let con = con_frame_from_chemfiles(&frame).expect("H1 and H share CON type H");
+        assert_eq!(con.header.natm_types, 2);
+        assert_eq!(
+            con.atom_data
+                .iter()
+                .filter(|a| a.symbol.as_ref() == "H")
+                .count(),
+            2
+        );
+        assert!(
+            con.header
+                .masses_per_type
+                .iter()
+                .any(|m| *m > 1.0 && *m < 2.0),
+            "expected a hydrogen mass, got {:?}",
+            con.header.masses_per_type
+        );
     }
 
     #[test]

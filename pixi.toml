@@ -12,8 +12,8 @@ bench = "cargo bench"
 cachegrind-bench = { cmd = "scripts/run_cachegrind_bench.sh", description = "Valgrind Cachegrind I-refs for docs (slow)" }
 build = "cargo build --release"
 build-rpc = "cargo build --release --features rpc"
-regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Regenerate include/readcon-core.h via cbindgen (maintainers)" }
-check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Verify shipped C header matches what cbindgen would produce" }
+regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Optional: draft include/readcon-core.h via cbindgen (maintainers only, not CI)" }
+check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Optional maintainer diff vs cbindgen; CI does not run this" }
 check-cxx-dist = { cmd = "scripts/check-cxx-dist.sh", description = "Gate: CMake/Meson/pkg-config never require cbindgen" }
 package-cxx = { cmd = "scripts/package-cxx.sh dist-cxx", description = "Assemble readcon-core-cxx-$VERSION.tar.gz" }
 prek = { cmd = "prek run -a", description = "Run prek hooks on all files" }
