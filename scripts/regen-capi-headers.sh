@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # Regenerate or check the C API header (include/readcon-core.h) with cbindgen.
 #
-# The header is shipped pre-generated so downstream packagers (conda-forge,
-# distro builds, cargo-c installs) never need cbindgen on the build host.
-# Run this script whenever the FFI surface in src/ffi.rs changes, then
-# commit the regenerated include/readcon-core.h alongside the source change.
+# Optional maintainer draft of include/readcon-core.h. The committed header
+# is the C ABI (metatensor/metatomic model). CI and consumers do not run
+# this script. Edit the shipped header, or use this to sketch declarations
+# and then review/commit the file.
 #
 # Usage:
-#   scripts/regen-capi-headers.sh           Regenerate the header in place.
+#   scripts/regen-capi-headers.sh           Write a cbindgen draft in place.
 #   scripts/regen-capi-headers.sh --check   Diff the shipped header against
-#                                           fresh cbindgen output. Non-zero
-#                                           exit if drift is detected.
+#                                           a cbindgen draft (maintainer only).
 #
 # Requires cbindgen on PATH. Install with: cargo install cbindgen
 set -euo pipefail
