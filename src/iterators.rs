@@ -592,32 +592,12 @@ pub fn parse_frames_parallel_with_threads(
         None => parse_chunks(),
         Some(n) => {
             let n = n.max(1);
-            match cached_parse_pool(n) {
-                Some(pool) => pool.install(parse_chunks),
-                None => parse_chunks(),
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => pool.install(parse_chunks),
+                Err(_) => parse_chunks(),
             }
         }
     }
-}
-
-/// Process-wide Rayon pools keyed by worker count. `Some(n)` in
-/// [`parse_frames_parallel_with_threads`] is the strong-scaling pin; building
-/// a pool on every call would measure spawn cost, not parse.
-#[cfg(feature = "parallel")]
-fn cached_parse_pool(n: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
-    use rustc_hash::FxHashMap;
-    use std::sync::{Arc, Mutex, OnceLock};
-
-    static POOLS: OnceLock<Mutex<FxHashMap<usize, Arc<rayon::ThreadPool>>>> = OnceLock::new();
-    let map = POOLS.get_or_init(|| Mutex::new(FxHashMap::default()));
-    let mut guard = map.lock().ok()?;
-    if let Some(pool) = guard.get(&n) {
-        return Some(Arc::clone(pool));
-    }
-    let built = rayon::ThreadPoolBuilder::new().num_threads(n).build().ok()?;
-    let pool = Arc::new(built);
-    guard.insert(n, Arc::clone(&pool));
-    Some(pool)
 }
 
 #[cfg(all(test, feature = "parallel"))]
