@@ -429,6 +429,9 @@ The declared barrier $E_1-E_0$ is $\nebBarrierEv$\,eV. The declared
 $f_{\max}$ is not recomputed from the force block.
 Python =index_projection()= returns the same campaign scalars
 (formula, energy, =neb_bead=) that =readcon-db= indexes.
+=scripts/run_cpc_vignette.sh= prints the two-atom band, checks
+=neb_band.tsv=, and, when =readcon-db= is on =PATH=, ingests the
+file and selects =neb_bead= 0--3.
 
 #+LATEX: \input{figures/generated/neb_table}
 
