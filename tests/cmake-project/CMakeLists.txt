@@ -35,3 +35,7 @@ target_link_libraries(c-main PRIVATE readcon-core::shared)
 
 add_executable(c-main-static main.c)
 target_link_libraries(c-main-static PRIVATE readcon-core::static)
+
+add_executable(c-conformance "${CMAKE_CURRENT_SOURCE_DIR}/../c/test_conformance_goldens.c")
+target_link_libraries(c-conformance PRIVATE readcon-core::shared)
+target_link_libraries(c-conformance PRIVATE m)
