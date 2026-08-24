@@ -46,10 +46,31 @@ if grep -E 'rustup\.rs|rustup.sh' "$WF" | grep -vqE '^\s*#|sha256|SHA256'; then
     die "release.yml fetches rustup without a checksum"
   fi
 fi
-if grep -qE 'sha256sum -c' "$WF"; then
+if grep -q 'matrix.install_dist.run' "$WF"; then
+  die "release.yml still uses generated matrix.install_dist.run"
+else
+  ok "release.yml does not use matrix.install_dist.run"
+fi
+if grep -q 'scripts/install-cargo-dist-ci.sh' "$WF"; then
+  ok "release.yml installs cargo-dist via the pinned script"
+else
+  die "release.yml does not call scripts/install-cargo-dist-ci.sh"
+fi
+if grep -qE 'sha256sum -c|install-cargo-dist-ci' "$WF"; then
   ok "release.yml checksum-verifies downloaded installers"
 else
   die "release.yml never checksum-verifies an installer"
+fi
+if grep -nE 'cargo-dist-installer.sh' "$ROOT/docs/orgmode/contributing.org" \
+  "$ROOT/docs/source/contributing.rst" | grep -vq '^\s*#'; then
+  die "docs still teach cargo-dist-installer.sh"
+else
+  ok "docs do not teach cargo-dist-installer.sh"
+fi
+if grep -q -- '--default-toolchain 1.88' "$WF"; then
+  ok "rustup-init pins default toolchain 1.88"
+else
+  die "rustup-init does not pin --default-toolchain 1.88"
 fi
 
 if [[ "$fail" -ne 0 ]]; then
