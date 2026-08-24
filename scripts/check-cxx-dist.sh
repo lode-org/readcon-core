@@ -45,6 +45,10 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
 [[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
 [[ -x scripts/check-clib-dist.sh ]] || die "scripts/check-clib-dist.sh must be executable"
+[[ -x scripts/check_wrap_hash.sh ]] || die "scripts/check_wrap_hash.sh must be executable"
+if ! bash scripts/check_wrap_hash.sh; then
+    die "check_wrap_hash.sh failed"
+fi
 if ! bash scripts/check-clib-dist.sh --no-self-test; then
     die "check-clib-dist.sh --no-self-test failed"
 fi
