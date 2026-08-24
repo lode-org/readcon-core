@@ -152,6 +152,31 @@ namespace readcon {
 #define SECTIONS_MASK_ENERGIES (1 << 2)
 
 /**
+ * Layout version 1.
+ */
+#define RCSO_VERSION 1
+
+/**
+ * Positions/forces/velocities stored as f64.
+ */
+#define RCSO_DTYPE_F64 0
+
+/**
+ * Bit 0: forces block present.
+ */
+#define RCSO_FLAG_FORCES (1 << 0)
+
+/**
+ * Bit 1: velocities block present.
+ */
+#define RCSO_FLAG_VELOCITIES (1 << 1)
+
+/**
+ * Batch envelope version 1.
+ */
+#define RCSB_VERSION 1
+
+/**
  * Absolute mass difference allowed between atoms of the same CON type.
  *
  * CON line 9 stores one mass per type. [`Self::build_with_permutation`]
@@ -667,39 +692,6 @@ struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
  * iterator must be valid. The caller takes ownership of the returned frame.
  */
 struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
-
-/**
- * Pack a frame as RCSO bytes for a caller-side MPI_Bcast.
- * `buf == NULL` writes the required size to `*out_len`.
- * Does not call MPI.
- */
-enum RKRStatus rkr_pack_rcso(const struct RKRConFrame *frame_handle,
-                             uint8_t *buf,
-                             uintptr_t buflen,
-                             uintptr_t *out_len);
-
-/**
- * Read natoms from an RCSO blob. Does not call MPI.
- */
-enum RKRStatus rkr_unpack_rcso_natoms(const uint8_t *buf,
-                                      uintptr_t buflen,
-                                      uint32_t *out_natoms);
-
-/**
- * Copy RCSO positions into row-major dest (`natoms * 3` doubles).
- */
-enum RKRStatus rkr_unpack_rcso_positions(const uint8_t *buf,
-                                         uintptr_t buflen,
-                                         double *dest,
-                                         uint32_t dest_natoms);
-
-/**
- * Copy RCSO forces. `RKR_STATUS_SECTION_ABSENT` if the blob has none.
- */
-enum RKRStatus rkr_unpack_rcso_forces(const uint8_t *buf,
-                                      uintptr_t buflen,
-                                      double *dest,
-                                      uint32_t dest_natoms);
 
 /**
  * Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
@@ -2089,6 +2081,55 @@ struct RKRConFrame **rkr_read_chemfiles_memory(const char *data_c,
  * `tensor` must be NULL or a pointer from a dlpack export of this library.
  */
 void rkr_dlpack_delete(RKRDLManagedTensorVersioned *tensor);
+
+/**
+ * Pack a frame as RCSO bytes for a caller-side `MPI_Bcast`.
+ *
+ * `buf == NULL` writes the required size to `*out_len` and returns
+ * success. If `buf` is non-null and `buflen` is too small, returns
+ * `BUFFER_TOO_SMALL` and still writes the need to `*out_len`.
+ * This function does not call MPI.
+ *
+ * # Safety
+ * `frame_handle` valid. `out_len` non-null. `buf` valid for `buflen` if non-null.
+ */
+enum RKRStatus rkr_pack_rcso(const struct RKRConFrame *frame_handle,
+                             uint8_t *buf,
+                             uintptr_t buflen,
+                             uintptr_t *out_len);
+
+/**
+ * Read `natoms` from an RCSO blob. No MPI.
+ *
+ * # Safety
+ * `buf` valid for `buflen`. `out_natoms` non-null.
+ */
+enum RKRStatus rkr_unpack_rcso_natoms(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      uint32_t *out_natoms);
+
+/**
+ * Copy RCSO positions into row-major `dest` (`natoms * 3` doubles).
+ *
+ * # Safety
+ * `buf` valid for `buflen`. `dest` valid for `dest_natoms * 3` f64.
+ */
+enum RKRStatus rkr_unpack_rcso_positions(const uint8_t *buf,
+                                         uintptr_t buflen,
+                                         double *dest,
+                                         uint32_t dest_natoms);
+
+/**
+ * Copy RCSO forces into row-major `dest`. `SECTION_ABSENT` if the blob
+ * has no force block.
+ *
+ * # Safety
+ * `buf` valid for `buflen`. `dest` valid for `dest_natoms * 3` f64.
+ */
+enum RKRStatus rkr_unpack_rcso_forces(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      double *dest,
+                                      uint32_t dest_natoms);
 
 #ifdef __cplusplus
 }  // extern "C"
