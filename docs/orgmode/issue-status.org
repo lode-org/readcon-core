@@ -28,23 +28,25 @@ Maps historical GitHub issues to commits / surfaces. Prefer =Closes #N= on merge
 | =readcon-core-anp5= | Bindings docs frame buffers / ptr_array free | Done | =docs/orgmode/bindings.org= section buffers + iterators |
 | =readcon-core-47kp= | Feature matrix CI | Done | =.github/workflows/ci_feature_matrix.yml= + =scripts/check_feature_matrix.sh= |
 | =readcon-core-oc8g= / =zs6n= | Parent plan / merge branch | Done (merge-ready) | Branch complete; gitguard blocks PR create — integrate when allowed |
-| =readcon-core-conda-32605= | conda-forge staged-recipes | STARTED | External maintainer gate (@conda-forge/help-rust) |
-| =readcon-core-aoqu= | Publish PyPI wheel for rgpot | TODO | External gate: PyPI credentials / publish workflow |
+| =readcon-core-conda-32605= | conda-forge staged-recipes | STARTED | External maintainer gate (@conda-forge/help-rust); recipe 0.14.7 |
+| =readcon-core-aoqu= | Publish PyPI wheel for rgpot | Done | PyPI readcon 0.14.7 |
 | =readcon-core-r2wh= | SoA ArcArray primary numeric store | Done | =de4b276= + =FloatArray= SoA; =project_storage_dtypes=; DLPack-shaped |
 | =readcon-core-bb34= | dlpk host element kinds + optional CUDA | Done (CPU + opt =cuda=) | =fe5ea6c= hosted kinds; =406160e=/=30611f9= real allocate + H2D frame/FFI; default still rejects non-CPU |
 | =readcon-core-0tlm= | Morton spatial sort | CANCELLED | Revert =2ee6daa= rationale stands; not re-landed on SoA in this pass |
 | =readcon-core-uu0a= | Frame velocities/forces/energies DLPack | Done | =rkr_frame_*_dlpack= + FFI test + C++ wrappers |
 | =readcon-core-c6ox= | C optional APIs always declared | Done | =include/readcon-core.h= metatensor/zstd decls unconditional; lean =-11=/NULL |
 | =readcon-core-box4= | Cachegrind main-only commit | Done | =ci_cachegrind.yml= commit step =if: github.ref == main=; PRs artifacts only |
-| =readcon-core-eqht= | Perf only via Cachegrind + equal-geometry (no vanity metrics) | TODO | Hot-path work needs harness deltas |
-| =readcon-core-a6od= | Refresh compare_readers historical tables on remote builder | TODO | =benchmarks.org= tables labeled illustrative until re-run |
-| =readcon-core-bg2u= | Chemfiles ingress vs native CON equal-geometry wall profile | TODO | Cachegrind =chemfiles_*= exists; wall peer table incomplete |
+| =readcon-core-eqht= | Perf only via Cachegrind + equal-geometry (no vanity metrics) | Done | leaf I/O + Cachegrind harness on the published benches |
+| =readcon-core-a6od= | Refresh compare_readers historical tables on remote builder | Done | benches/results restamped from the remote harness |
+| =readcon-core-bg2u= | Chemfiles ingress vs native CON equal-geometry wall profile | Done | equal-geometry wall tables in benches |
 | =readcon-core-nov2= | Keep Sphinx RST export in sync after org positioning rewrites | Done | =emacs docs/export.el= + fix_doc_links |
 | =readcon-core-3owo= | Wire =tests/python= pytest into CI | Done | =.github/workflows/ci_python.yml= (lean + chemfiles maturin/pytest) |
 | =readcon-core-bctw= | Fortran lazy frame iterator over C ABI | Done | =iterator_t= / =open_iterator=; fpm test walks =tiny_multi_cuh2.con=; bindings matrix |
 | =readcon-core-f58f= | LODE stack vs third-party scorecard | Done | section below |
 
-External packaging gates (leave open): =readcon-core-conda-32605=, =readcon-core-3xku=, =readcon-core-aoqu=.
+External packaging gates (leave open): =readcon-core-conda-32605=, =readcon-core-xr52=.
+=readcon-core-3xku= and =readcon-core-aoqu= are Done (PyPI 0.14.7).
+=readcon-core-nc5i= wrapdb PR: https://github.com/mesonbuild/wrapdb/pull/2906.
 
 Fortran details: =fortran/README.md=. Multi-language panels: bindings page.
 
