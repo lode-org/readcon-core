@@ -46,6 +46,7 @@ wheel, or a Linux/macOS tarball.
 
    ```bash
    julia --project=. -e 'using Pkg; Pkg.test()'
+   # test/test_conformance_goldens.jl locks resources/conformance against golden/*.json
    ```
 
 If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB`, tests that

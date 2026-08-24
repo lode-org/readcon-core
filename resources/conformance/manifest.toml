@@ -1,6 +1,9 @@
 # Phase A CON conformance corpus.
 # Each [[valid]] / [[invalid]] table is one fixture keyed to a spec.org clause.
 # tests/conformance_corpus.rs reads this file.
+# Language locks: tests/python/test_conformance_goldens.py,
+# tests/c/test_conformance_goldens.c, fortran/ReadCon/test_conformance/,
+# julia/ReadCon/test/test_conformance_goldens.jl.
 
 phase = "A"
 spec = "docs/orgmode/spec.org"
