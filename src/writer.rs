@@ -39,6 +39,9 @@ pub struct ConFrameWriter<W: Write> {
     /// and re-serialisation. Hot for trajectory writes where every
     /// frame has the same `units` / `potential` / `validate` keys.
     metadata_cache: Option<MetadataCacheEntry>,
+    /// One frame of CON text. Filled then flushed with a single `write_all`
+    /// so the sink is not entered once per atom line.
+    scratch: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -94,6 +97,7 @@ impl<W: Write> ConFrameWriter<W> {
             precision: DEFAULT_FLOAT_PRECISION,
             canonical: false,
             metadata_cache: None,
+            scratch: Vec::with_capacity(16 * 1024),
         }
     }
 
@@ -109,6 +113,7 @@ impl<W: Write> ConFrameWriter<W> {
             precision,
             canonical: false,
             metadata_cache: None,
+            scratch: Vec::with_capacity(16 * 1024),
         }
     }
 
@@ -134,20 +139,7 @@ impl<W: Write> ConFrameWriter<W> {
         self.canonical
     }
 
-    /// Writes a single `ConFrame` to the output stream.
-    pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
-        let prec = self.precision;
-
-        // --- Write the 9-line Header ---
-        writeln!(self.writer, "{}", frame.header.prebox_header.user)?;
-
-        // Line 2: serialised JSON metadata. The serialisation is
-        // deterministic in (spec_version, has_*, metadata), so we
-        // cache the previous frame's result and reuse it when the
-        // inputs are unchanged. For trajectory writes where every
-        // frame shares the same `units` / `potential` / `validate`
-        // keys this avoids rebuilding and re-serialising the JSON
-        // object on every frame.
+    fn refresh_metadata_cache(&mut self, frame: &ConFrame) {
         let spec_version = frame.header.spec_version;
         let has_vel = frame.has_velocities();
         let has_frc = frame.has_forces();
@@ -169,154 +161,167 @@ impl<W: Write> ConFrameWriter<W> {
                     &frame.header.metadata,
                 )
             });
-
-        if !cache_hit {
-            let mut meta_obj = serde_json::Map::new();
-            meta_obj.insert(meta::CON_SPEC_VERSION.into(), json!(spec_version));
-            let mut sections = Vec::new();
-            if has_vel {
-                sections.push(json!(SECTION_VELOCITIES));
-            }
-            if has_frc {
-                sections.push(json!(SECTION_FORCES));
-            }
-            if has_eng {
-                sections.push(json!(SECTION_ENERGIES));
-            }
-            if has_chg {
-                sections.push(json!(SECTION_CHARGES));
-            }
-            if has_spn {
-                sections.push(json!(SECTION_SPINS));
-            }
-            if has_mm {
-                sections.push(json!(SECTION_MAGMOMS));
-            }
-            let validate = frame
-                .header
-                .metadata
-                .get(meta::VALIDATE)
-                .and_then(|value| value.as_bool())
-                .unwrap_or(false);
-            if !sections.is_empty() || validate {
-                meta_obj.insert(meta::SECTIONS.into(), json!(sections));
-            }
-            // Canonical: insert remaining keys in BTree order (metadata is already BTreeMap).
-            for (k, v) in &frame.header.metadata {
-                if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
-                    continue;
-                }
-                meta_obj.insert(k.clone(), v.clone());
-            }
-            // v3: required units on line 2. Canonicalize aliases; inject defaults if missing/invalid.
-            if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
-                if let Ok(c) = crate::units::canonicalize_units_object(&u) {
-                    meta_obj.insert(meta::UNITS.into(), c);
-                }
-            }
-            if spec_version >= 3 {
-                let need_default = match meta_obj.get(meta::UNITS) {
-                    None => true,
-                    Some(u) => crate::units::validate_v3_units_metadata(u).is_err(),
-                };
-                if need_default {
-                    meta_obj.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
-                }
-            }
-            // serde_json::Map iterates in key order → stable string for corpus hashes.
-            let serialized = serde_json::Value::Object(meta_obj).to_string();
-            self.metadata_cache = Some(MetadataCacheEntry {
-                spec_version,
-                has_velocities: has_vel,
-                has_forces: has_frc,
-                has_energies: has_eng,
-                has_charges: has_chg,
-                has_spins: has_spn,
-                has_magmoms: has_mm,
-                metadata: frame.header.metadata.clone(),
-                serialized,
-            });
+        if cache_hit {
+            return;
         }
 
-        let cached = self
+        let mut meta_obj = serde_json::Map::new();
+        meta_obj.insert(meta::CON_SPEC_VERSION.into(), json!(spec_version));
+        let mut sections = Vec::new();
+        if has_vel {
+            sections.push(json!(SECTION_VELOCITIES));
+        }
+        if has_frc {
+            sections.push(json!(SECTION_FORCES));
+        }
+        if has_eng {
+            sections.push(json!(SECTION_ENERGIES));
+        }
+        if has_chg {
+            sections.push(json!(SECTION_CHARGES));
+        }
+        if has_spn {
+            sections.push(json!(SECTION_SPINS));
+        }
+        if has_mm {
+            sections.push(json!(SECTION_MAGMOMS));
+        }
+        let validate = frame
+            .header
+            .metadata
+            .get(meta::VALIDATE)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !sections.is_empty() || validate {
+            meta_obj.insert(meta::SECTIONS.into(), json!(sections));
+        }
+        for (k, v) in &frame.header.metadata {
+            if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
+                continue;
+            }
+            meta_obj.insert(k.clone(), v.clone());
+        }
+        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
+            if let Ok(c) = crate::units::canonicalize_units_object(&u) {
+                meta_obj.insert(meta::UNITS.into(), c);
+            }
+        }
+        if spec_version >= 3 {
+            let need_default = match meta_obj.get(meta::UNITS) {
+                None => true,
+                Some(u) => crate::units::validate_v3_units_metadata(u).is_err(),
+            };
+            if need_default {
+                meta_obj.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
+            }
+        }
+        let serialized = serde_json::Value::Object(meta_obj).to_string();
+        self.metadata_cache = Some(MetadataCacheEntry {
+            spec_version,
+            has_velocities: has_vel,
+            has_forces: has_frc,
+            has_energies: has_eng,
+            has_charges: has_chg,
+            has_spins: has_spn,
+            has_magmoms: has_mm,
+            metadata: frame.header.metadata.clone(),
+            serialized,
+        });
+    }
+
+    /// Writes a single `ConFrame` to the output stream.
+    pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
+        let prec = self.precision;
+        self.refresh_metadata_cache(frame);
+        let meta_line = self
             .metadata_cache
             .as_ref()
-            .expect("metadata_cache populated above");
-        writeln!(self.writer, "{}", cached.serialized)?;
-        writeln!(
-            self.writer,
-            "{1:.0$} {2:.0$} {3:.0$}",
-            prec, frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
-        )?;
-        writeln!(
-            self.writer,
-            "{1:.0$} {2:.0$} {3:.0$}",
-            prec, frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
-        )?;
-        writeln!(self.writer, "{}", frame.header.postbox_header[0])?;
-        writeln!(self.writer, "{}", frame.header.postbox_header[1])?;
-        writeln!(self.writer, "{}", frame.header.natm_types)?;
+            .expect("metadata_cache populated above")
+            .serialized
+            .clone();
+        self.scratch.clear();
+        {
+        let buf = &mut self.scratch;
 
-        let natms_str: Vec<String> = frame
-            .header
-            .natms_per_type
-            .iter()
-            .map(|n| n.to_string())
-            .collect();
-        writeln!(self.writer, "{}", natms_str.join(" "))?;
+        // --- Write the 9-line Header ---
+        let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
+        let _ = writeln!(buf, "{meta_line}");
+        push_f64_prec(buf, frame.header.boxl[0], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.boxl[1], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.boxl[2], prec);
+        buf.push(b'\n');
+        push_f64_prec(buf, frame.header.angles[0], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.angles[1], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.angles[2], prec);
+        buf.push(b'\n');
+        let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
+        let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
+        let _ = writeln!(buf, "{}", frame.header.natm_types);
 
-        let masses_str: Vec<String> = frame
-            .header
-            .masses_per_type
-            .iter()
-            .map(|m| format!("{:.1$}", m, prec))
-            .collect();
-        writeln!(self.writer, "{}", masses_str.join(" "))?;
+        for (i, n) in frame.header.natms_per_type.iter().enumerate() {
+            if i > 0 {
+                buf.push(b' ');
+            }
+            push_u64(buf, *n as u64);
+        }
+        buf.push(b'\n');
+
+        for (i, m) in frame.header.masses_per_type.iter().enumerate() {
+            if i > 0 {
+                buf.push(b' ');
+            }
+            push_f64_prec(buf, *m, prec);
+        }
+        buf.push(b'\n');
 
         // --- Write the Atom Data ---
         let mut atom_idx_offset = 0;
         for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
             let symbol = &frame.atom_data[atom_idx_offset].symbol;
-            writeln!(self.writer, "{}", symbol)?;
-            writeln!(self.writer, "Coordinates of Component {}", type_idx + 1)?;
+            let _ = writeln!(buf, "{symbol}");
+            let _ = writeln!(buf, "Coordinates of Component {}", type_idx + 1);
 
             for i in 0..num_atoms_in_type {
                 let atom = &frame.atom_data[atom_idx_offset + i];
-                writeln!(
-                    self.writer,
-                    "{x:.prec$} {y:.prec$} {z:.prec$} {fixed_flag} {atom_id}",
-                    prec = prec,
-                    x = atom.x,
-                    y = atom.y,
-                    z = atom.z,
-                    fixed_flag = encode_fixed_bitmask(atom.fixed),
-                    atom_id = atom.atom_id
-                )?;
+                push_xyz_line(
+                    buf,
+                    atom.x,
+                    atom.y,
+                    atom.z,
+                    prec,
+                    encode_fixed_bitmask(atom.fixed),
+                    atom.atom_id,
+                );
             }
             atom_idx_offset += num_atoms_in_type;
         }
 
         // --- Write optional velocity section ---
         if frame.has_velocities() {
-            // Blank separator line between coordinates and velocities
-            writeln!(self.writer)?;
+            buf.push(b'\n');
 
             let mut vel_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[vel_idx_offset].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Velocities of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Velocities of Component {}", type_idx + 1);
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[vel_idx_offset + i];
                     let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
-                    writeln!(
-                        self.writer,
-                        "{vx:.prec$} {vy:.prec$} {vz:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_xyz_line(
+                        buf,
+                        vx,
+                        vy,
+                        vz,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 vel_idx_offset += num_atoms_in_type;
             }
@@ -324,25 +329,26 @@ impl<W: Write> ConFrameWriter<W> {
 
         // --- Write optional force section ---
         if frame.has_forces() {
-            // Blank separator line
-            writeln!(self.writer)?;
+            buf.push(b'\n');
 
             let mut force_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[force_idx_offset].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Forces of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Forces of Component {}", type_idx + 1);
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[force_idx_offset + i];
                     let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
-                    writeln!(
-                        self.writer,
-                        "{fx:.prec$} {fy:.prec$} {fz:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_xyz_line(
+                        buf,
+                        fx,
+                        fy,
+                        fz,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 force_idx_offset += num_atoms_in_type;
             }
@@ -350,96 +356,99 @@ impl<W: Write> ConFrameWriter<W> {
 
         // --- Write optional energies section ---
         if frame.has_energies() {
-            writeln!(self.writer)?;
+            buf.push(b'\n');
 
             let mut energy_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[energy_idx_offset].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Energies of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Energies of Component {}", type_idx + 1);
 
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[energy_idx_offset + i];
                     let e = atom.energy.unwrap_or(0.0);
-                    writeln!(
-                        self.writer,
-                        "{e:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_scalar_line(
+                        buf,
+                        e,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 energy_idx_offset += num_atoms_in_type;
             }
         }
 
         if frame.has_charges() {
-            writeln!(self.writer)?;
+            buf.push(b'\n');
             let mut off = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[off].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Charges of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Charges of Component {}", type_idx + 1);
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[off + i];
                     let q = atom.charge.unwrap_or(0.0);
-                    writeln!(
-                        self.writer,
-                        "{q:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_scalar_line(
+                        buf,
+                        q,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 off += num_atoms_in_type;
             }
         }
 
         if frame.has_spins() {
-            writeln!(self.writer)?;
+            buf.push(b'\n');
             let mut off = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[off].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Spins of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Spins of Component {}", type_idx + 1);
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[off + i];
                     let s = atom.spin.unwrap_or(0.0);
-                    writeln!(
-                        self.writer,
-                        "{s:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_scalar_line(
+                        buf,
+                        s,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 off += num_atoms_in_type;
             }
         }
 
         if frame.has_magmoms() {
-            writeln!(self.writer)?;
+            buf.push(b'\n');
             let mut off = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[off].symbol;
-                writeln!(self.writer, "{}", symbol)?;
-                writeln!(self.writer, "Magmoms of Component {}", type_idx + 1)?;
+                let _ = writeln!(buf, "{symbol}");
+                let _ = writeln!(buf, "Magmoms of Component {}", type_idx + 1);
                 for i in 0..num_atoms_in_type {
                     let atom = &frame.atom_data[off + i];
                     let [mx, my, mz] = atom.magmom.unwrap_or([0.0; 3]);
-                    writeln!(
-                        self.writer,
-                        "{mx:.prec$} {my:.prec$} {mz:.prec$} {fixed_flag} {atom_id}",
-                        prec = prec,
-                        fixed_flag = encode_fixed_bitmask(atom.fixed),
-                        atom_id = atom.atom_id
-                    )?;
+                    push_xyz_line(
+                        buf,
+                        mx,
+                        my,
+                        mz,
+                        prec,
+                        encode_fixed_bitmask(atom.fixed),
+                        atom.atom_id,
+                    );
                 }
                 off += num_atoms_in_type;
             }
         }
+        }
 
-        Ok(())
+        self.writer.write_all(&self.scratch)
     }
 
     /// Writes all frames from an iterator to the output stream.
@@ -451,6 +460,81 @@ impl<W: Write> ConFrameWriter<W> {
         }
         Ok(())
     }
+}
+
+fn push_u64(buf: &mut Vec<u8>, n: u64) {
+    push_u128(buf, u128::from(n));
+}
+
+fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
+    let mut tmp = [0u8; 40];
+    let mut i = 40;
+    if n == 0 {
+        buf.push(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    buf.extend_from_slice(&tmp[i..]);
+}
+
+/// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
+/// Non-finite values and `prec > 17` fall back to `std::fmt`.
+fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
+    // Default writes are prec=6. Higher precision (lossless 17) stays on
+    // std::fmt so binary leftovers match `{:.prec$}`.
+    if !v.is_finite() || prec != 6 {
+        let _ = write!(buf, "{v:.prec$}");
+        return;
+    }
+    if v.is_sign_negative() {
+        buf.push(b'-');
+    }
+    let ax = v.abs();
+    if prec == 0 {
+        push_u128(buf, ax.round() as u128);
+        return;
+    }
+    let scale = 10u128.pow(prec as u32);
+    let n = (ax * scale as f64).round() as u128;
+    let int_part = n / scale;
+    let frac = n % scale;
+    push_u128(buf, int_part);
+    buf.push(b'.');
+    let mut tmp = [b'0'; 20];
+    let mut x = frac;
+    let mut i = prec;
+    while i > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (x % 10) as u8;
+        x /= 10;
+    }
+    buf.extend_from_slice(&tmp[..prec]);
+}
+
+fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: usize, fixed: u8, atom_id: u64) {
+    push_f64_prec(buf, x, prec);
+    buf.push(b' ');
+    push_f64_prec(buf, y, prec);
+    buf.push(b' ');
+    push_f64_prec(buf, z, prec);
+    buf.push(b' ');
+    push_u64(buf, u64::from(fixed));
+    buf.push(b' ');
+    push_u64(buf, atom_id);
+    buf.push(b'\n');
+}
+
+fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: usize, fixed: u8, atom_id: u64) {
+    push_f64_prec(buf, v, prec);
+    buf.push(b' ');
+    push_u64(buf, u64::from(fixed));
+    buf.push(b' ');
+    push_u64(buf, atom_id);
+    buf.push(b'\n');
 }
 
 // Implementation block specifically for when the writer is a `File`.
@@ -505,5 +589,43 @@ impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
     ) -> io::Result<Self> {
         let encoder = crate::compression::zstd_writer(path.as_ref())?;
         Ok(Self::with_precision(encoder, precision))
+    }
+}
+
+#[cfg(test)]
+mod float_format_tests {
+    use super::push_f64_prec;
+
+    fn formatted(v: f64, prec: usize) -> String {
+        let mut buf = Vec::new();
+        push_f64_prec(&mut buf, v, prec);
+        String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn matches_std_fixed_precision() {
+        let vals = [
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            0.9045,
+            6.975_299_999_999_995,
+            63.546,
+            1.008,
+            15.3456,
+            90.0,
+            218.0,
+            1e-6,
+            -1.23456789,
+            10.0,
+        ];
+        for prec in [0usize, 6] {
+            for v in vals {
+                let got = formatted(v, prec);
+                let exp = format!("{v:.prec$}");
+                assert_eq!(got, exp, "v={v:?} prec={prec}");
+            }
+        }
     }
 }
