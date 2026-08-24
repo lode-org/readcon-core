@@ -246,16 +246,18 @@ impl<W: Write> ConFrameWriter<W> {
         // --- Write the 9-line Header ---
         let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
         let _ = writeln!(buf, "{meta_line}");
-        let _ = writeln!(
-            buf,
-            "{1:.0$} {2:.0$} {3:.0$}",
-            prec, frame.header.boxl[0], frame.header.boxl[1], frame.header.boxl[2]
-        );
-        let _ = writeln!(
-            buf,
-            "{1:.0$} {2:.0$} {3:.0$}",
-            prec, frame.header.angles[0], frame.header.angles[1], frame.header.angles[2]
-        );
+        push_f64_prec(buf, frame.header.boxl[0], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.boxl[1], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.boxl[2], prec);
+        buf.push(b'\n');
+        push_f64_prec(buf, frame.header.angles[0], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.angles[1], prec);
+        buf.push(b' ');
+        push_f64_prec(buf, frame.header.angles[2], prec);
+        buf.push(b'\n');
         let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
         let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
         let _ = writeln!(buf, "{}", frame.header.natm_types);
@@ -272,7 +274,7 @@ impl<W: Write> ConFrameWriter<W> {
             if i > 0 {
                 buf.push(b' ');
             }
-            let _ = write!(buf, "{m:.prec$}");
+            push_f64_prec(buf, *m, prec);
         }
         buf.push(b'\n');
 
@@ -460,9 +462,13 @@ impl<W: Write> ConFrameWriter<W> {
     }
 }
 
-fn push_u64(buf: &mut Vec<u8>, mut n: u64) {
-    let mut tmp = [0u8; 20];
-    let mut i = 20;
+fn push_u64(buf: &mut Vec<u8>, n: u64) {
+    push_u128(buf, u128::from(n));
+}
+
+fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
+    let mut tmp = [0u8; 40];
+    let mut i = 40;
     if n == 0 {
         buf.push(b'0');
         return;
@@ -475,8 +481,45 @@ fn push_u64(buf: &mut Vec<u8>, mut n: u64) {
     buf.extend_from_slice(&tmp[i..]);
 }
 
+/// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
+/// Non-finite values and `prec > 17` fall back to `std::fmt`.
+fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
+    if !v.is_finite() || prec > 17 {
+        let _ = write!(buf, "{v:.prec$}");
+        return;
+    }
+    if v.is_sign_negative() {
+        buf.push(b'-');
+    }
+    let ax = v.abs();
+    if prec == 0 {
+        push_u128(buf, ax.round() as u128);
+        return;
+    }
+    let scale = 10u128.pow(prec as u32);
+    let mut n = (ax * scale as f64).round() as u128;
+    let int_part = n / scale;
+    let frac = n % scale;
+    push_u128(buf, int_part);
+    buf.push(b'.');
+    let mut tmp = [b'0'; 20];
+    let mut x = frac;
+    let mut i = prec;
+    while i > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (x % 10) as u8;
+        x /= 10;
+    }
+    buf.extend_from_slice(&tmp[..prec]);
+}
+
 fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: usize, fixed: u8, atom_id: u64) {
-    let _ = write!(buf, "{x:.prec$} {y:.prec$} {z:.prec$} ");
+    push_f64_prec(buf, x, prec);
+    buf.push(b' ');
+    push_f64_prec(buf, y, prec);
+    buf.push(b' ');
+    push_f64_prec(buf, z, prec);
+    buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');
     push_u64(buf, atom_id);
@@ -484,7 +527,8 @@ fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: usize, fixed: 
 }
 
 fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: usize, fixed: u8, atom_id: u64) {
-    let _ = write!(buf, "{v:.prec$} ");
+    push_f64_prec(buf, v, prec);
+    buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');
     push_u64(buf, atom_id);
@@ -543,5 +587,45 @@ impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
     ) -> io::Result<Self> {
         let encoder = crate::compression::zstd_writer(path.as_ref())?;
         Ok(Self::with_precision(encoder, precision))
+    }
+}
+
+#[cfg(test)]
+mod float_format_tests {
+    use super::push_f64_prec;
+
+    fn formatted(v: f64, prec: usize) -> String {
+        let mut buf = Vec::new();
+        push_f64_prec(&mut buf, v, prec);
+        String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn matches_std_fixed_precision() {
+        let vals = [
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            0.9045,
+            6.975_299_999_999_995,
+            63.546,
+            1.008,
+            15.3456,
+            90.0,
+            218.0,
+            1e-6,
+            -1.23456789,
+            9.999_999_4,
+            9.999_999_5,
+            10.0,
+        ];
+        for prec in [0usize, 1, 6, 17] {
+            for v in vals {
+                let got = formatted(v, prec);
+                let exp = format!("{v:.prec$}");
+                assert_eq!(got, exp, "v={v:?} prec={prec}");
+            }
+        }
     }
 }
