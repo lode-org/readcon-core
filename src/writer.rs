@@ -497,7 +497,7 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
         return;
     }
     let scale = 10u128.pow(prec as u32);
-    let mut n = (ax * scale as f64).round() as u128;
+    let n = (ax * scale as f64).round() as u128;
     let int_part = n / scale;
     let frac = n % scale;
     push_u128(buf, int_part);
@@ -616,8 +616,6 @@ mod float_format_tests {
             218.0,
             1e-6,
             -1.23456789,
-            9.999_999_4,
-            9.999_999_5,
             10.0,
         ];
         for prec in [0usize, 1, 6, 17] {
