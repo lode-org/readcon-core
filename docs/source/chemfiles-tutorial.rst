@@ -52,7 +52,7 @@ What you will build
 2. Drive conversion from another format (we use XYZ; the same APIs accept PDB,
    GRO, LAMMPS dump, and other chemfiles formats).
 
-3. Inspect geometry and optional bonds on the resulting CON frame.
+3. Inspect geometry, line-2 units (Å / ps from chemfiles), and optional bonds / residues.
 
 4. Run a selection (``name O``, ``angles: all``) in CON ``atom_data`` order.
 
@@ -75,7 +75,7 @@ Path A — Python full wheel (recommended)
 .. code:: shell
 
     python -m venv .venv && source .venv/bin/activate
-    pip install -U 'readcon-chemfiles==0.14.7'
+    pip install -U 'readcon-chemfiles==0.14.8'
     python -c "import readcon; print(readcon.has_chemfiles_support())"  # True
 
 Path B — Rust with chemfiles
