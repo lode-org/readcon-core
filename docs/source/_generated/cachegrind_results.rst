@@ -17,7 +17,7 @@
      - 7,283,992
      - coords + velocities (50×)
    * - ``parse_100_frames``
-     - 29,193,632
+     - 29,193,664
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
      - 6,964,062
@@ -44,7 +44,7 @@
      - 6,070,089
      - selection ``name O`` (50×)
 
-Generated **2026-08-24T00:38:01Z** from commit ``aff5485``
+Generated **2026-08-24T05:07:20Z** from commit ``79d764a``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
