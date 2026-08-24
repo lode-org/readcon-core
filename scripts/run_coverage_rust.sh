@@ -27,8 +27,11 @@ fi
 
 echo "==> cargo llvm-cov (features=${FEATURES}, CC=${CC:-default})"
 # shellcheck disable=SC2086
+# Do not pass --include-ffi. crate-type is lib+cdylib+staticlib; the unused
+# cdylib copy of every no_mangle records 0 hits and llvm-cov merges that
+# over the rlib, so the C ABI looks uncovered even when Rust tests call it.
 cargo llvm-cov --features ${FEATURES} --workspace \
-  --no-fail-fast --include-ffi \
+  --no-fail-fast \
   --ignore-filename-regex="${IGNORE}" \
   --lcov --output-path "${OUT_LCOV}"
 
