@@ -347,11 +347,11 @@ Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit
 
 .. code:: shell
 
-    # cargo-dist 0.28+ installs the `dist` binary (also linked as cargo-dist)
-    curl --proto '=https' --tlsv1.2 -LsSf \
-      https://github.com/axodotdev/cargo-dist/releases/download/v0.28.0/cargo-dist-installer.sh | sh
+    # cargo-dist 0.28 from the sha256-pinned archive
+    bash scripts/install-cargo-dist-ci.sh
     dist generate --mode=ci
-    git add .github/workflows/release.yml dist-workspace.toml
+    # Re-apply action SHA pins and the checksummed install steps.
+    git add .github/workflows/release.yml dist-workspace.toml scripts/install-cargo-dist-ci.sh
 
 crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -411,19 +411,33 @@ maturin retry; tag runs are not cancelled mid-flight by concurrency.
 Version files
 ~~~~~~~~~~~~~
 
-Versions are tracked in six source files that must stay synchronized:
+Versions are tracked in the files ``scripts/check_version_lockstep.sh`` gates:
 
 1. ``Cargo.toml`` (``version = "X.Y.Z"``)
 
 2. ``meson.build`` (``version: 'X.Y.Z'``)
 
-3. ``pyproject.toml`` (``version = "X.Y.Z"``)
+3. ``pyproject.toml`` (package version and ``readcon-chemfiles==X.Y.Z``)
 
-4. ``pixi.toml`` (``version = "X.Y.Z"``)
+4. ``pyproject.chemfiles.toml``
 
-5. ``docs/source/conf.py`` (``release = "X.Y.Z"``)
+5. ``pixi.toml``
 
-6. ``src/lib.rs`` (``assert_eq!(VERSION, "X.Y.Z")`` in the version test)
+6. ``docs/source/conf.py`` (``release = "X.Y.Z"``)
+
+7. ``src/lib.rs`` (``assert_eq!(VERSION, "X.Y.Z")``)
+
+8. ``julia/ReadCon/Project.toml``
+
+9. ``fortran/ReadCon/fpm.toml``
+
+10. ``CITATION.cff``
+
+11. ``codemeta.json``
+
+12. ``.zenodo.json``
+
+``scripts/release-prep.sh X.Y.Z`` bumps that set.
 
 Complete release checklist
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -458,7 +472,7 @@ Manual equivalent of the script:
        pixi r -e docs docbld
        pixi r -e docs linkcheck
 
-2. Bump the version in all six files listed above.
+2. Bump the version in every file listed above (``scripts/release-prep.sh``).
 
 3. Regenerate ``Cargo.lock`` after the version bump (``cargo test --locked``).
 

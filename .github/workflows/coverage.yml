@@ -22,10 +22,10 @@ concurrency:
   group: coverage-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# OIDC for codecov-action (required when use_oidc: true)
+# Generate jobs run on PRs with contents:read only. OIDC lives on
+# upload-codecov, which is push-to-main only.
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   coverage-rust:
@@ -89,16 +89,6 @@ jobs:
             rust_codecov.json
           if-no-files-found: error
 
-      - name: Upload rust coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: lcov.info,rust_codecov.json
-          flags: rust
-          name: readcon-core-rust
-          use_oidc: true
-          fail_ci_if_error: false
-          verbose: true
-
   coverage-python:
     runs-on: ubuntu-22.04
     name: python coverage
@@ -153,16 +143,6 @@ jobs:
           path: python_lcov.info
           if-no-files-found: error
 
-      - name: Upload python coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: python_lcov.info
-          flags: python
-          name: readcon-core-python
-          use_oidc: true
-          fail_ci_if_error: false
-          verbose: true
-
   coverage-julia:
     runs-on: ubuntu-22.04
     name: julia coverage
@@ -211,16 +191,6 @@ jobs:
           name: coverage-julia
           path: julia_lcov.info
           if-no-files-found: error
-
-      - name: Upload julia coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: julia_lcov.info
-          flags: julia
-          name: readcon-core-julia
-          use_oidc: true
-          fail_ci_if_error: false
-          verbose: true
 
   coverage-fortran:
     runs-on: ubuntu-22.04
@@ -284,10 +254,59 @@ jobs:
           path: fortran_coverage.info
           if-no-files-found: error
 
+  upload-codecov:
+    name: upload codecov
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - coverage-rust
+      - coverage-python
+      - coverage-julia
+      - coverage-fortran
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: cov
+          merge-multiple: false
+
+      - name: Upload rust coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: cov/coverage-rust/lcov.info,cov/coverage-rust/rust_codecov.json
+          flags: rust
+          name: readcon-core-rust
+          use_oidc: true
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload python coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: cov/coverage-python/python_lcov.info
+          flags: python
+          name: readcon-core-python
+          use_oidc: true
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload julia coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: cov/coverage-julia/julia_lcov.info
+          flags: julia
+          name: readcon-core-julia
+          use_oidc: true
+          fail_ci_if_error: false
+          verbose: true
+
       - name: Upload fortran coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: fortran_coverage.info
+          files: cov/coverage-fortran/fortran_coverage.info
           flags: fortran
           name: readcon-core-fortran
           use_oidc: true
