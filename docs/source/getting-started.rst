@@ -11,20 +11,20 @@ Getting started
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.14.7``).
+Pick **one** language. Version pins match this tree (``0.14.8``).
 
 .. table::
 
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Package            | Install                                                                             | Destination                                                                                                                                 |
     +====================+=====================================================================================+=============================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.14.7'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
+    | Python CON I/O     | ``pip install 'readcon==0.14.8'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.7'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.14.8'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Rust CON I/O       | ``cargo add readcon-core@0.14.7``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
+    | Rust CON I/O       | ``cargo add readcon-core@0.14.8``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Rust + chemfiles   | ``cargo add readcon-core@0.14.7 --features chemfiles``                              | same crate                                                                                                                                  |
+    | Rust + chemfiles   | ``cargo add readcon-core@0.14.8 --features chemfiles``                              | same crate                                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Campaign store     | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_ |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -40,14 +40,14 @@ Python: CON I/O
 
 .. code:: shell
 
-    pip install 'readcon==0.14.7'
+    pip install 'readcon==0.14.8'
 
 Python: CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.14.7'
+    pip install 'readcon-chemfiles==0.14.8'
     # do not also install lean readcon in the same venv
 
 Rust: CON I/O
@@ -55,14 +55,14 @@ Rust: CON I/O
 
 .. code:: shell
 
-    cargo add readcon-core@0.14.7
+    cargo add readcon-core@0.14.8
 
 Rust: with conversion
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    cargo add readcon-core@0.14.7 --features chemfiles
+    cargo add readcon-core@0.14.8 --features chemfiles
 
 Campaign store (``readcon-db``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,14 +99,14 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.7/readcon-core-cxx-0.14.7.tar.gz
-      URL_HASH SHA256=14710ec007b2131d2c0e13931bf3e7e443ce87627ace2fb21497a05ea0b5df43
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.14.8/readcon-core-cxx-0.14.8.tar.gz
+      URL_HASH SHA256=de72b5d36fa8a5c90bfe4fd726d99107194cd74f9d8bc41bc0c7ff828c8f779f
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
 
-The slim cxx tarball on the ``v0.14.7`` GitHub Release is the FetchContent
-URL. A vendor tarball (``readcon-core-cxx-0.14.7-vendor.tar.gz``) ships
+The slim cxx tarball on the ``v0.14.8`` GitHub Release is the FetchContent
+URL. A vendor tarball (``readcon-core-cxx-0.14.8-vendor.tar.gz``) ships
 crates for offline builds. The Meson wrap file is
 ``packaging/wrapdb/readcon-core.wrap`` on that same release.
 

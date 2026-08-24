@@ -28,7 +28,24 @@ How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 
 Chemfiles selects the reader from the path. If the format has topology, CON
 line-2 JSON may include ``bonds`` (0-based ``atom_data`` indices after import
-remap).
+remap) and ``chemfiles_residues``. Line-2 ``units.time`` is ``ps`` (chemfiles
+velocities are Å/ps), not the CON-native default ``fs``.
+
+Stride / random access uses chemfiles ``read_step``:
+
+.. code:: rust
+
+    use readcon_core::chemfiles_import::{
+        ChemfilesReadOpts, con_frame_from_trajectory_path_nth,
+        con_frames_from_trajectory_path_with, nsteps_from_trajectory_path,
+    };
+
+    let n = nsteps_from_trajectory_path("traj.xyz")?;
+    let frame = con_frame_from_trajectory_path_nth("traj.xyz", n - 1)?;
+    let every_other = con_frames_from_trajectory_path_with(
+        "traj.xyz",
+        &ChemfilesReadOpts { start: 0, step: 2, ..Default::default() },
+    )?;
 
 **Python** (``readcon-chemfiles``):
 
@@ -156,7 +173,7 @@ How to install lean CON I/O only (no libchemfiles)
 
 .. code:: shell
 
-    pip install 'readcon==0.14.7'          # has_chemfiles_support() is False
+    pip install 'readcon==0.14.8'          # has_chemfiles_support() is False
     cargo build                            # stubs; FeatureDisabled on import/select
 
 Selection symbols still import in Python/Rust; they error clearly. Use this
@@ -167,7 +184,7 @@ How to install full chemfiles support
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.14.7'   # preferred PyPI
+    pip install 'readcon-chemfiles==0.14.8'   # preferred PyPI
     # or: pip install 'readcon[chemfiles]'   # depends on readcon-chemfiles==X.Y.Z
     cargo build --features chemfiles
     maturin develop --features python,chemfiles
