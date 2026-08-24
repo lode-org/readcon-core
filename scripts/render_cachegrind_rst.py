@@ -60,7 +60,6 @@ def main() -> int:
         "",
         "Wall-clock Criterion tables elsewhere on this page are **illustrative** unless re-run for a release.",
         "PR workflow **Benchmark PR** still uses Criterion + ``critcmp`` for latency deltas.",
-        "",
     ]
     RST.parent.mkdir(parents=True, exist_ok=True)
     RST.write_text("\n".join(lines) + "\n", encoding="utf-8")

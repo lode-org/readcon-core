@@ -76,9 +76,7 @@ def gen_cachegrind() -> str:
         "float_fast_float2": (r"$10^{4}$ fields", None),
         "float_std_parse": (r"$10^{4}$ fields", None),
     }
-    for m in re.finditer(
-        r"``([a-z0-9_]+)``\s*\n\s*-\s*([0-9,]+)", rst
-    ):
+    for m in re.finditer(r"``([a-z0-9_]+)``\s*\n\s*-\s*([0-9,]+)", rst):
         name, raw = m.group(1), m.group(2)
         if name in rows:
             repeats, _ = rows[name]
