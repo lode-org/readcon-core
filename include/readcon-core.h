@@ -669,6 +669,39 @@ struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
 struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
 
 /**
+ * Pack a frame as RCSO bytes for a caller-side MPI_Bcast.
+ * `buf == NULL` writes the required size to `*out_len`.
+ * Does not call MPI.
+ */
+enum RKRStatus rkr_pack_rcso(const struct RKRConFrame *frame_handle,
+                             uint8_t *buf,
+                             uintptr_t buflen,
+                             uintptr_t *out_len);
+
+/**
+ * Read natoms from an RCSO blob. Does not call MPI.
+ */
+enum RKRStatus rkr_unpack_rcso_natoms(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      uint32_t *out_natoms);
+
+/**
+ * Copy RCSO positions into row-major dest (`natoms * 3` doubles).
+ */
+enum RKRStatus rkr_unpack_rcso_positions(const uint8_t *buf,
+                                         uintptr_t buflen,
+                                         double *dest,
+                                         uint32_t dest_natoms);
+
+/**
+ * Copy RCSO forces. `RKR_STATUS_SECTION_ABSENT` if the blob has none.
+ */
+enum RKRStatus rkr_unpack_rcso_forces(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      double *dest,
+                                      uint32_t dest_natoms);
+
+/**
  * Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
  * `RKR_STATUS_INDEX_OUT_OF_BOUNDS` at EOF, other codes on parse error.
  */
