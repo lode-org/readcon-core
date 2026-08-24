@@ -1,0 +1,399 @@
+{
+  "run_id": 1,
+  "fixture": "resources/test/tiny_cuh2.con",
+  "ladder": [
+    10,
+    50,
+    100,
+    200,
+    500
+  ],
+  "fair": true,
+  "note": "Shared CON ladder; ASE Atoms from readcon geometry (not legacy Cu2 stand-in)",
+  "readcon_db": [
+    {
+      "backend": "readcon-db",
+      "n_frames": 10,
+      "insert_s": 0.00029905300471000373,
+      "extract_all_mean_s": 6.750949250999838e-06,
+      "select_cu_mean_s": 4.440040211193263e-06,
+      "select_natoms_mean_s": 2.299899933859706e-06,
+      "select_mass_mean_s": 4.168959567323327e-06,
+      "select_volume_mean_s": 3.844919847324491e-06,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.0018037989793810993,
+      "insert_frames_per_s": 33438.888232195335,
+      "extract_frames_per_s": 1481273.1703647403,
+      "hit_symbol_Cu": 10,
+      "hit_natoms_1_10000": 10,
+      "hit_formula_Cu2H2": 10,
+      "hit_mass_window": 10,
+      "hit_volume_window": 10,
+      "methodology": "CON ladder append; Select via indexes; 8 threads share one ConCorpus (LMDB multi-reader)"
+    },
+    {
+      "backend": "readcon-db",
+      "n_frames": 50,
+      "insert_s": 0.000630166003247723,
+      "extract_all_mean_s": 3.815105010289699e-05,
+      "select_cu_mean_s": 2.0717820152640343e-05,
+      "select_natoms_mean_s": 1.0048539843410254e-05,
+      "select_mass_mean_s": 1.2810740154236555e-05,
+      "select_volume_mean_s": 1.1775220045819878e-05,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.0021970969974063337,
+      "insert_frames_per_s": 79344.17239634019,
+      "extract_frames_per_s": 1310579.9149733826,
+      "hit_symbol_Cu": 50,
+      "hit_natoms_1_10000": 50,
+      "hit_formula_Cu2H2": 50,
+      "hit_mass_window": 50,
+      "hit_volume_window": 50,
+      "methodology": "CON ladder append; Select via indexes; 8 threads share one ConCorpus (LMDB multi-reader)"
+    },
+    {
+      "backend": "readcon-db",
+      "n_frames": 100,
+      "insert_s": 0.001183963002404198,
+      "extract_all_mean_s": 6.362919957609847e-05,
+      "select_cu_mean_s": 2.7496659895405174e-05,
+      "select_natoms_mean_s": 1.2098419829271733e-05,
+      "select_mass_mean_s": 2.7627300005406143e-05,
+      "select_volume_mean_s": 2.3617520346306263e-05,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.0028764210001099855,
+      "insert_frames_per_s": 84462.0987285383,
+      "extract_frames_per_s": 1571605.4997737827,
+      "hit_symbol_Cu": 100,
+      "hit_natoms_1_10000": 100,
+      "hit_formula_Cu2H2": 100,
+      "hit_mass_window": 100,
+      "hit_volume_window": 100,
+      "methodology": "CON ladder append; Select via indexes; 8 threads share one ConCorpus (LMDB multi-reader)"
+    },
+    {
+      "backend": "readcon-db",
+      "n_frames": 200,
+      "insert_s": 0.002253550017485395,
+      "extract_all_mean_s": 0.0001157077495008707,
+      "select_cu_mean_s": 5.414266022853553e-05,
+      "select_natoms_mean_s": 2.3270120145753026e-05,
+      "select_mass_mean_s": 5.157175997737795e-05,
+      "select_volume_mean_s": 4.823123977985233e-05,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.003503896004986018,
+      "insert_frames_per_s": 88748.86221658764,
+      "extract_frames_per_s": 1728492.6970124417,
+      "hit_symbol_Cu": 200,
+      "hit_natoms_1_10000": 200,
+      "hit_formula_Cu2H2": 200,
+      "hit_mass_window": 200,
+      "hit_volume_window": 200,
+      "methodology": "CON ladder append; Select via indexes; 8 threads share one ConCorpus (LMDB multi-reader)"
+    },
+    {
+      "backend": "readcon-db",
+      "n_frames": 500,
+      "insert_s": 0.009952220018021762,
+      "extract_all_mean_s": 0.0004929079499561339,
+      "select_cu_mean_s": 0.00029869626043364404,
+      "select_natoms_mean_s": 0.0001395963196409866,
+      "select_mass_mean_s": 0.0002760430797934532,
+      "select_volume_mean_s": 0.0002695335604948923,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.010098630009451881,
+      "insert_frames_per_s": 50240.046853323765,
+      "extract_frames_per_s": 1014388.1835229016,
+      "hit_symbol_Cu": 500,
+      "hit_natoms_1_10000": 500,
+      "hit_formula_Cu2H2": 500,
+      "hit_mass_window": 500,
+      "hit_volume_window": 500,
+      "methodology": "CON ladder append; Select via indexes; 8 threads share one ConCorpus (LMDB multi-reader)"
+    }
+  ],
+  "ase_db": [
+    {
+      "backend": "ase.db",
+      "n_frames": 10,
+      "insert_s": 0.011415658984333277,
+      "extract_all_mean_s": 0.006092887349950615,
+      "select_cu_mean_s": 0.004220787720405497,
+      "select_natoms_mean_s": 0.004182167699909769,
+      "select_mass_mean_s": 0.0031814280396793037,
+      "select_volume_mean_s": 0.003093743640347384,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.060724644019501284,
+      "insert_frames_per_s": 875.9897272442956,
+      "extract_frames_per_s": 1641.257982568979,
+      "hit_symbol_Cu": 10,
+      "hit_natoms_1_10000": 10,
+      "hit_formula_CuH_ase": 0,
+      "hit_mass_window": 10,
+      "hit_volume_window": 10,
+      "hit_formula_note": "ASE reduced formula CuH vs readcon multiset Cu:2|H:2 \u2014 count agreement uses symbol+natoms+mass+volume",
+      "methodology": "Same CON frames via readcon\u2192Atoms (no Cu2 stand-in); 8 threads share one ase.db connection"
+    },
+    {
+      "backend": "ase.db",
+      "n_frames": 50,
+      "insert_s": 0.017776313005015254,
+      "extract_all_mean_s": 0.019635903200833128,
+      "select_cu_mean_s": 0.01386891147994902,
+      "select_natoms_mean_s": 0.013402859499910847,
+      "select_mass_mean_s": 0.014386490780161694,
+      "select_volume_mean_s": 0.01382203360029962,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.28319967398419976,
+      "insert_frames_per_s": 2812.731750723192,
+      "extract_frames_per_s": 2546.3560035210685,
+      "hit_symbol_Cu": 50,
+      "hit_natoms_1_10000": 50,
+      "hit_formula_CuH_ase": 0,
+      "hit_mass_window": 50,
+      "hit_volume_window": 50,
+      "hit_formula_note": "ASE reduced formula CuH vs readcon multiset Cu:2|H:2 \u2014 count agreement uses symbol+natoms+mass+volume",
+      "methodology": "Same CON frames via readcon\u2192Atoms (no Cu2 stand-in); 8 threads share one ase.db connection"
+    },
+    {
+      "backend": "ase.db",
+      "n_frames": 100,
+      "insert_s": 0.050012211984721944,
+      "extract_all_mean_s": 0.044370815699221564,
+      "select_cu_mean_s": 0.03699797161971219,
+      "select_natoms_mean_s": 0.055567771599744444,
+      "select_mass_mean_s": 0.02844674276013393,
+      "select_volume_mean_s": 0.02971562848018948,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 0.5581759340129793,
+      "insert_frames_per_s": 1999.5116398880468,
+      "extract_frames_per_s": 2253.7336405504575,
+      "hit_symbol_Cu": 100,
+      "hit_natoms_1_10000": 100,
+      "hit_formula_CuH_ase": 0,
+      "hit_mass_window": 100,
+      "hit_volume_window": 100,
+      "hit_formula_note": "ASE reduced formula CuH vs readcon multiset Cu:2|H:2 \u2014 count agreement uses symbol+natoms+mass+volume",
+      "methodology": "Same CON frames via readcon\u2192Atoms (no Cu2 stand-in); 8 threads share one ase.db connection"
+    },
+    {
+      "backend": "ase.db",
+      "n_frames": 200,
+      "insert_s": 0.058783896995009854,
+      "extract_all_mean_s": 0.10656192394963,
+      "select_cu_mean_s": 0.11991151574009563,
+      "select_natoms_mean_s": 0.09900201264012139,
+      "select_mass_mean_s": 0.11986112156009768,
+      "select_volume_mean_s": 0.10016106546041556,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 1.2036047549918294,
+      "insert_frames_per_s": 3402.29229812678,
+      "extract_frames_per_s": 1876.8429903211636,
+      "hit_symbol_Cu": 200,
+      "hit_natoms_1_10000": 200,
+      "hit_formula_CuH_ase": 0,
+      "hit_mass_window": 200,
+      "hit_volume_window": 200,
+      "hit_formula_note": "ASE reduced formula CuH vs readcon multiset Cu:2|H:2 \u2014 count agreement uses symbol+natoms+mass+volume",
+      "methodology": "Same CON frames via readcon\u2192Atoms (no Cu2 stand-in); 8 threads share one ase.db connection"
+    },
+    {
+      "backend": "ase.db",
+      "n_frames": 500,
+      "insert_s": 0.34074277902254835,
+      "extract_all_mean_s": 0.3777944220491918,
+      "select_cu_mean_s": 0.17577958349953404,
+      "select_natoms_mean_s": 0.2730271607398754,
+      "select_mass_mean_s": 0.2695867772802012,
+      "select_volume_mean_s": 0.2752112291799858,
+      "select_energy_present_mean_s": null,
+      "energy_select_skipped": true,
+      "mass_window": [
+        127.81692,
+        130.39908
+      ],
+      "volume_window": [
+        32969.99090879999,
+        33636.05133119999
+      ],
+      "concurrent_8readers_extract_s": 1.9454402239935007,
+      "insert_frames_per_s": 1467.382526591746,
+      "extract_frames_per_s": 1323.4711017911643,
+      "hit_symbol_Cu": 500,
+      "hit_natoms_1_10000": 500,
+      "hit_formula_CuH_ase": 0,
+      "hit_mass_window": 500,
+      "hit_volume_window": 500,
+      "hit_formula_note": "ASE reduced formula CuH vs readcon multiset Cu:2|H:2 \u2014 count agreement uses symbol+natoms+mass+volume",
+      "methodology": "Same CON frames via readcon\u2192Atoms (no Cu2 stand-in); 8 threads share one ase.db connection"
+    }
+  ],
+  "select_parity": [
+    {
+      "n_frames": 10,
+      "hit_symbol_Cu_rdb": 10,
+      "hit_symbol_Cu_ase": 10,
+      "symbol_Cu_agree": true,
+      "hit_natoms_rdb": 10,
+      "hit_natoms_ase": 10,
+      "natoms_agree": true,
+      "hit_mass_rdb": 10,
+      "hit_mass_ase": 10,
+      "mass_agree": true,
+      "hit_volume_rdb": 10,
+      "hit_volume_ase": 10,
+      "volume_agree": true
+    },
+    {
+      "n_frames": 50,
+      "hit_symbol_Cu_rdb": 50,
+      "hit_symbol_Cu_ase": 50,
+      "symbol_Cu_agree": true,
+      "hit_natoms_rdb": 50,
+      "hit_natoms_ase": 50,
+      "natoms_agree": true,
+      "hit_mass_rdb": 50,
+      "hit_mass_ase": 50,
+      "mass_agree": true,
+      "hit_volume_rdb": 50,
+      "hit_volume_ase": 50,
+      "volume_agree": true
+    },
+    {
+      "n_frames": 100,
+      "hit_symbol_Cu_rdb": 100,
+      "hit_symbol_Cu_ase": 100,
+      "symbol_Cu_agree": true,
+      "hit_natoms_rdb": 100,
+      "hit_natoms_ase": 100,
+      "natoms_agree": true,
+      "hit_mass_rdb": 100,
+      "hit_mass_ase": 100,
+      "mass_agree": true,
+      "hit_volume_rdb": 100,
+      "hit_volume_ase": 100,
+      "volume_agree": true
+    },
+    {
+      "n_frames": 200,
+      "hit_symbol_Cu_rdb": 200,
+      "hit_symbol_Cu_ase": 200,
+      "symbol_Cu_agree": true,
+      "hit_natoms_rdb": 200,
+      "hit_natoms_ase": 200,
+      "natoms_agree": true,
+      "hit_mass_rdb": 200,
+      "hit_mass_ase": 200,
+      "mass_agree": true,
+      "hit_volume_rdb": 200,
+      "hit_volume_ase": 200,
+      "volume_agree": true
+    },
+    {
+      "n_frames": 500,
+      "hit_symbol_Cu_rdb": 500,
+      "hit_symbol_Cu_ase": 500,
+      "symbol_Cu_agree": true,
+      "hit_natoms_rdb": 500,
+      "hit_natoms_ase": 500,
+      "natoms_agree": true,
+      "hit_mass_rdb": 500,
+      "hit_mass_ase": 500,
+      "mass_agree": true,
+      "hit_volume_rdb": 500,
+      "hit_volume_ase": 500,
+      "volume_agree": true
+    }
+  ],
+  "interchange": {
+    "n_frames": 100,
+    "repeats": 5,
+    "readcon_mean_s": 0.0006950007984414697,
+    "ase_io_mean_s": 0.03377580000087619,
+    "readcon_frames_per_s": 143884.72678628386,
+    "ase_io_frames_per_s": 2960.6996724698115
+  },
+  "all_symbol_natoms_agree": true,
+  "all_competitive_selects_agree": true
+}
