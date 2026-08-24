@@ -70,18 +70,29 @@ struct ConFrameData {
 
 struct ParseRequest {
   fileContents @0 :Data;
+  compatibility @1 :CompatibilityStamp;
+}
+
+struct CompatibilityStamp {
+  abiMajor @0 :UInt32;
+  abiMinor @1 :UInt32;
+  abiLayoutRevision @2 :UInt32;
+  conSpecVersion @3 :UInt32;
 }
 
 struct ParseResult {
   frames @0 :List(ConFrameData);
+  compatibility @1 :CompatibilityStamp;
 }
 
 struct WriteRequest {
   frames @0 :List(ConFrameData);
+  compatibility @1 :CompatibilityStamp;
 }
 
 struct WriteResult {
   fileContents @0 :Data;
+  compatibility @1 :CompatibilityStamp;
 }
 
 interface ReadConService {

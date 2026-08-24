@@ -9,6 +9,38 @@ use std::ptr;
 //=============================================================================
 // Version & Spec Constants (exported as #define by cbindgen)
 //=============================================================================
+/// Breaking-change major for the public C ABI.
+pub const RKR_ABI_VERSION_MAJOR: u32 = 1;
+/// Additive-change minor for the public C ABI.
+pub const RKR_ABI_VERSION_MINOR: u32 = 0;
+/// Layout revision for opaque handles and exported records.
+pub const RKR_ABI_LAYOUT_REVISION: u32 = 1;
+
+/// Returns the breaking-change major for the public C ABI.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_abi_version_major() -> u32 {
+    RKR_ABI_VERSION_MAJOR
+}
+
+/// Returns the additive-change minor for the public C ABI.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_abi_version_minor() -> u32 {
+    RKR_ABI_VERSION_MINOR
+}
+
+/// Returns the opaque-handle and exported-record layout revision.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_abi_layout_revision() -> u32 {
+    RKR_ABI_LAYOUT_REVISION
+}
+
+/// Returns the stable human-readable ABI negotiation stamp.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_abi_stamp() -> *const c_char {
+    const STAMP: &[u8] = b"readcon-core/abi-1.0/layout-1\0";
+    STAMP.as_ptr() as *const c_char
+}
+
 /// CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
 /// to gate code that depends on atom_index semantics.
 ///
