@@ -203,14 +203,7 @@ class ConFrameIterator {
         return con_frame_iterator_skip(iterator_ptr_.get(), n);
     }
     /// Skip `index` frames, then take the next parsed frame.
-    std::optional<ConFrame> nth(std::size_t index) {
-        if (!iterator_ptr_)
-            return std::nullopt;
-        RKRConFrame *h = con_frame_iterator_nth(iterator_ptr_.get(), index);
-        if (!h)
-            return std::nullopt;
-        return ConFrame(h);
-    }
+    std::optional<ConFrame> nth(std::size_t index);
 
     /**
      * @brief Returns an iterator to the beginning of the sequence of frames.
@@ -1087,6 +1080,15 @@ inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {
                                  path.string());
     }
     iterator_ptr_.reset(iter_ptr);
+}
+
+inline std::optional<ConFrame> ConFrameIterator::nth(std::size_t index) {
+    if (!iterator_ptr_)
+        return std::nullopt;
+    RKRConFrame *h = con_frame_iterator_nth(iterator_ptr_.get(), index);
+    if (!h)
+        return std::nullopt;
+    return ConFrame(h);
 }
 
 inline ConFrameIterator::Iterator ConFrameIterator::begin() {
