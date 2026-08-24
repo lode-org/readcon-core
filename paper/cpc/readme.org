@@ -5,7 +5,11 @@ Target: Computer Physics Communications.
 The source of truth is =src/rg_main.org=. Do not hand-edit
 =src/rg_main.tex=. Numbers in the Performance and Applications
 tables come from =scripts/gen_tables.py=, which reads committed
-JSON / Cachegrind rst / =neb_band.con=.
+JSON / Cachegrind rst / =neb_band.con= / the companion
+=freeze/ase_fair_campaign_1.json= payload (tiny_cuh2.con
+ladder 10/50/100/200/500). That fair-campaign table is
+appendix material, not a main-claim parse. Do not invent a
+cheaper ladder or type those rates into the org.
 
 * Build
 
