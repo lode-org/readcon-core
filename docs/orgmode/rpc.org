@@ -72,6 +72,30 @@ let output = client.write_frames(&frames).unwrap();
 
 * Protocol
 
-The RPC uses Cap'n Proto two-party protocol over TCP. The server
-listens on a configurable host:port and handles one connection per
-accepted socket using tokio for async I/O.
+The RPC uses Cap'n Proto two-party as the *encoding*. The byte pipe is
+not UCX, libfabric, Mercury, or ADIOS.
+
+| Spec | Pipe |
+|------|------|
+| =host:port= or =[ipv6]:port= | TCP |
+| =unix:/abs/path=, =unix:///abs/path=, or =/abs/path= | Unix domain socket |
+
+Same-node HPC jobs should use a Unix socket (no TCP loopback). TCP is
+for inet. UCX/ADIOS/DAOS are optional later adapters if a campaign
+consumer exists; they are not this crate and they are not the CON
+store. Corpus I/O decisions live in the readcon-db 2026-08-23
+exascale I/O literature note (ADIOS2/DAOS/SST move GB-class arrays;
+they do not replace a FrameKey mmap of CON).
+
+The MD-engine leaf is pack-then-Bcast on the *caller* comm. Encode a
+parsed frame with =readcon_core::rcso::Rcso::encode_frame= (magic
+=RCSO=, v1, same bytes as readcon-db cooked SoA). Many frames go in
+one =RCSB= envelope. This crate never calls =MPI_Init=.
+
+#+begin_src rust
+readcon_core::rpc::server::start_server("unix:/tmp/readcon.sock")
+#+end_src
+
+#+begin_src rust
+let client = RpcClient::new("unix:/tmp/readcon.sock").unwrap();
+#+end_src

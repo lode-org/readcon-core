@@ -1,0 +1,22 @@
+{
+  "protocol": "cuh2.con x100: CON parse vs RCSO encode/decode; one-frame RpcClient parse_bytes Unix vs TCP loopback",
+  "host": "rgam5terra",
+  "date_utc": "2026-08-24T13:01Z",
+  "commit": "9b94ca5c",
+  "features": "rpc",
+  "ncpus": 32,
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 5,
+  "fixture": "resources/test/cuh2.con",
+  "payload_bytes": 1677100,
+  "one_frame_bytes": 16771,
+  "rcsb_bytes": 526012,
+  "parse_100_frames_ms": 2.680600,
+  "rcso_pack_100_ms": 0.206410,
+  "rcso_decode_100_ms": 0.028133,
+  "parse_over_decode": 95.2831,
+  "rpc_unix_one_frame_ms": 0.078478,
+  "rpc_tcp_one_frame_ms": 0.138462,
+  "tcp_over_unix": 1.7643
+}

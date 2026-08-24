@@ -95,6 +95,18 @@ Client
 Protocol
 --------
 
-The RPC uses Cap'n Proto two-party protocol over TCP. The server
-listens on a configurable host:port and handles one connection per
-accepted socket using tokio for async I/O.
+The RPC uses Cap'n Proto two-party as the encoding. The byte pipe is
+not UCX, libfabric, Mercury, or ADIOS.
+
+- ``host:port`` or ``[ipv6]:port`` is TCP.
+- ``unix:/abs/path``, ``unix:///abs/path``, or ``/abs/path`` is a Unix
+  domain socket.
+
+Same-node HPC jobs should use a Unix socket. TCP is for inet. UCX,
+ADIOS, and DAOS are optional later adapters if a campaign consumer
+exists; they are not this crate and they are not the CON store.
+
+.. code:: rust
+
+    readcon_core::rpc::server::start_server("unix:/tmp/readcon.sock")
+    let client = RpcClient::new("unix:/tmp/readcon.sock").unwrap();

@@ -91,6 +91,21 @@ namespace readcon {
 #define CON_SPEC_VERSION 3
 
 /**
+ * Breaking-change major for the public C ABI.
+ */
+#define RKR_ABI_VERSION_MAJOR 1
+
+/**
+ * Additive-change minor for the public C ABI.
+ */
+#define RKR_ABI_VERSION_MINOR 0
+
+/**
+ * Layout revision for opaque handles and exported records.
+ */
+#define RKR_ABI_LAYOUT_REVISION 1
+
+/**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
  * to gate code that depends on atom_index semantics.
  *
@@ -411,6 +426,26 @@ extern "C" {
 #endif // __cplusplus
 
 /**
+ * Returns the breaking-change major for the public C ABI.
+ */
+uint32_t rkr_abi_version_major(void);
+
+/**
+ * Returns the additive-change minor for the public C ABI.
+ */
+uint32_t rkr_abi_version_minor(void);
+
+/**
+ * Returns the opaque-handle and exported-record layout revision.
+ */
+uint32_t rkr_abi_layout_revision(void);
+
+/**
+ * Returns the stable human-readable ABI negotiation stamp.
+ */
+const char *rkr_abi_stamp(void);
+
+/**
  * Returns the spec version at runtime (for dynamically linked consumers).
  */
 uint32_t rkr_con_spec_version(void);
@@ -632,6 +667,39 @@ struct CConFrameIterator *read_con_buffer_iterator(const uint8_t *data,
  * iterator must be valid. The caller takes ownership of the returned frame.
  */
 struct RKRConFrame *con_frame_iterator_next(struct CConFrameIterator *iterator);
+
+/**
+ * Pack a frame as RCSO bytes for a caller-side MPI_Bcast.
+ * `buf == NULL` writes the required size to `*out_len`.
+ * Does not call MPI.
+ */
+enum RKRStatus rkr_pack_rcso(const struct RKRConFrame *frame_handle,
+                             uint8_t *buf,
+                             uintptr_t buflen,
+                             uintptr_t *out_len);
+
+/**
+ * Read natoms from an RCSO blob. Does not call MPI.
+ */
+enum RKRStatus rkr_unpack_rcso_natoms(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      uint32_t *out_natoms);
+
+/**
+ * Copy RCSO positions into row-major dest (`natoms * 3` doubles).
+ */
+enum RKRStatus rkr_unpack_rcso_positions(const uint8_t *buf,
+                                         uintptr_t buflen,
+                                         double *dest,
+                                         uint32_t dest_natoms);
+
+/**
+ * Copy RCSO forces. `RKR_STATUS_SECTION_ABSENT` if the blob has none.
+ */
+enum RKRStatus rkr_unpack_rcso_forces(const uint8_t *buf,
+                                      uintptr_t buflen,
+                                      double *dest,
+                                      uint32_t dest_natoms);
 
 /**
  * Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
