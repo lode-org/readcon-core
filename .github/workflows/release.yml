@@ -63,15 +63,7 @@ jobs:
           submodules: recursive
       - name: Install dist
         shell: bash
-        run: |
-          set -euo pipefail
-          url="https://github.com/axodotdev/cargo-dist/releases/download/v0.28.0/cargo-dist-x86_64-unknown-linux-gnu.tar.xz"
-          curl --proto '=https' --tlsv1.2 -LsSf -o cargo-dist.tar.xz "$url"
-          echo "c5da0fc4e782315e860bf5d1fb5f9a35e0e78c2d61f27662dfb096cf43de12d8  cargo-dist.tar.xz" | sha256sum -c -
-          mkdir -p "$HOME/.cargo/bin"
-          tar -xJf cargo-dist.tar.xz
-          install -m 755 cargo-dist-*/dist "$HOME/.cargo/bin/dist"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        run: bash scripts/install-cargo-dist-ci.sh
       - name: Cache dist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -143,38 +135,11 @@ jobs:
             "https://static.rust-lang.org/rustup/archive/1.28.2/${triple}/rustup-init"
           echo "${sha}  rustup-init" | sha256sum -c -
           chmod +x rustup-init
-          ./rustup-init -y --no-modify-path
+          ./rustup-init -y --no-modify-path --default-toolchain 1.88.0
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install dist
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$(uname -s)" != Linux ]]; then
-            ${{ matrix.install_dist.run }}
-            exit 0
-          fi
-          arch="$(uname -m)"
-          case "$arch" in
-            x86_64)
-              asset=cargo-dist-x86_64-unknown-linux-gnu.tar.xz
-              sha=c5da0fc4e782315e860bf5d1fb5f9a35e0e78c2d61f27662dfb096cf43de12d8
-              ;;
-            aarch64)
-              asset=cargo-dist-aarch64-unknown-linux-gnu.tar.xz
-              sha=96ac038f1c01a1d3aeed56668c6fb60f9303770d40b3cdfe1c1a5224a2823060
-              ;;
-            *)
-              echo "unsupported arch $arch for checksummed dist install" >&2
-              exit 1
-              ;;
-          esac
-          url="https://github.com/axodotdev/cargo-dist/releases/download/v0.28.0/${asset}"
-          curl --proto '=https' --tlsv1.2 -LsSf -o cargo-dist.tar.xz "$url"
-          echo "${sha}  cargo-dist.tar.xz" | sha256sum -c -
-          mkdir -p "$HOME/.cargo/bin"
-          tar -xJf cargo-dist.tar.xz
-          install -m 755 cargo-dist-*/dist "$HOME/.cargo/bin/dist"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        run: bash scripts/install-cargo-dist-ci.sh
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
