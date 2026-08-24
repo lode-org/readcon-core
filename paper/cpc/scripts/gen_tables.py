@@ -10,7 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parents[1] / "src" / "figures" / "generated"
-FAIR_FREEZE = Path(__file__).resolve().parents[1] / "freeze" / "ase_fair_campaign_1.json"
+FAIR_FREEZE = (
+    Path(__file__).resolve().parents[1] / "freeze" / "ase_fair_campaign_1.json"
+)
 FAIR_LADDER = [10, 50, 100, 200, 500]
 # Measurement refresh recorded with the readcon-db companion freeze.
 FAIR_SOURCE_TREE = "4bef664"
@@ -352,7 +354,9 @@ def main() -> None:
     fair = _load(FAIR_FREEZE)
     fair_errors = validate_fair(fair)
     if fair_errors:
-        raise SystemExit("fair-campaign freeze rejected:\n  " + "\n  ".join(fair_errors))
+        raise SystemExit(
+            "fair-campaign freeze rejected:\n  " + "\n  ".join(fair_errors)
+        )
     _write("macros.tex", gen_macros(traj, h5, ws, cmp))
     _write("cachegrind_table.tex", gen_cachegrind())
     _write("wall_table.tex", gen_wall(traj, h5, cmp))
