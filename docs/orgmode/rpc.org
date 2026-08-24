@@ -87,6 +87,11 @@ store. Corpus I/O decisions live in the readcon-db 2026-08-23
 exascale I/O literature note (ADIOS2/DAOS/SST move GB-class arrays;
 they do not replace a FrameKey mmap of CON).
 
+The MD-engine leaf is pack-then-Bcast on the *caller* comm. Encode a
+parsed frame with =readcon_core::rcso::Rcso::encode_frame= (magic
+=RCSO=, v1, same bytes as readcon-db cooked SoA). Many frames go in
+one =RCSB= envelope. This crate never calls =MPI_Init=.
+
 #+begin_src rust
 readcon_core::rpc::server::start_server("unix:/tmp/readcon.sock")
 #+end_src
