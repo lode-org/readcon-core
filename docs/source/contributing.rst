@@ -624,16 +624,13 @@ Adding a new binding
 Updating the C header
 ~~~~~~~~~~~~~~~~~~~~~
 
-The C header ``include/readcon-core.h`` is **shipped pre-generated**.
-CMake, Meson, cargo-c, and the cxx tarball **never** run cbindgen.
-After modifying ``src/ffi.rs``, maintainers regenerate and commit the header:
+The C header ``include/readcon-core.h`` is the shipped ABI, the same
+model as metatensor/metatomic. CMake, Meson, cargo-c, CI, and the
+cxx tarball **never** run cbindgen. Edit the header (or optionally
+draft with ``scripts/regen-capi-headers.sh``) and commit it with the
+FFI change. CI compiles C/C++ against that file and checks symbols
+in the built library.
 
-.. code:: shell
-
-    scripts/regen-capi-headers.sh
-    scripts/regen-capi-headers.sh --check
-
-CI (``build_test.yml``, ``ci_feature_matrix.yml``) runs the ``--check`` form.
 ``ci_cxx.yml`` installs no cbindgen and must stay green.
 
 The C++ header ``include/readcon-core.hpp`` is hand-maintained and must

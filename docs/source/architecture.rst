@@ -288,8 +288,10 @@ cbindgen at install time. Optional metatensor C exports are gated
 (``metatensor.h`` first). Fat builds write
 ``target/<profile>/readcon-metatensor.env`` for include/lib. Ownership:
 ``tensor_block_into_raw_mts`` then ``mts_block_free`` only (bindings page).
-Run ``scripts/regen-capi-headers.sh`` when the FFI surface in ``src/ffi.rs``
-changes; CI verifies drift via ``scripts/regen-capi-headers.sh --check``.
+Maintainers may draft a header with ``scripts/regen-capi-headers.sh``.
+That tool is not a consumer or CI dependency. CI compiles C/C++ against
+the committed header and checks that the library exports the declared
+``rkr_*`` symbols.
 
 The ``[package.metadata.capi.pkg_config] filename = "readcon-core"``
 override is load-bearing: without it cargo-c defaults the .pc filename
@@ -350,8 +352,10 @@ classifier and the SONAME/semver major bump. Until that tag:
 Drift check \*\*
 ~~~~~~~~~~~~~~~~
 
-``scripts/regen-capi-headers.sh --check`` is the CI contract that the
-committed header matches ``src/ffi.rs``.
+The committed ``include/readcon-core.h`` is the C ABI. CI (``ci_cxx.yml``,
+Meson C/C++ examples, ``check_feature_matrix.sh``) compiles against that
+file and ``nm``-checks the exported symbols. cbindgen is a maintainer
+draft helper only.
 
 .. _design-rationale:
 

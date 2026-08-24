@@ -12,9 +12,18 @@ has() { nm "$LIB" 2>/dev/null | grep -E "[[:space:]]T[[:space:]]+$1(@@|$)" >/dev
 
 echo "== matrix check FEATURES=$FEATURES LIB=$LIB =="
 
+HEADER="$ROOT/include/readcon-core.h"
+# Shipped header is the C ABI (metatensor/metatomic model). cbindgen is
+# not invoked. Each symbol must be declared in the header and exported.
 for s in create_writer_from_path_c create_writer_gzip_c create_writer_zstd_c \
          rkr_dlpack_delete rkr_frame_builder_positions_dlpack \
-         rkr_frame_metatensor_positions_block rkr_mts_block_free; do
+         rkr_frame_metatensor_positions_block rkr_mts_block_free \
+         rkr_pack_rcso rkr_unpack_rcso_natoms rkr_unpack_rcso_positions \
+         rkr_unpack_rcso_forces; do
+  grep -q "$s" "$HEADER" || {
+    echo "shipped header missing $s"
+    exit 1
+  }
   if has "$s"; then
     echo "  ok $s"
   else
@@ -36,5 +45,4 @@ if [[ "$FEATURES" == *metatensor* ]]; then
   echo "  ok readcon-metatensor.env"
 fi
 
-bash scripts/regen-capi-headers.sh --check
-echo "OK matrix $FEATURES"
+echo "OK matrix $FEATURES (shipped header + nm, no cbindgen)"
