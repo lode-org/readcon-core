@@ -53,6 +53,13 @@ If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB`, tests tha
 touch the FFI **fail fast** with a clear load error (they do not silently skip
 ABI checks). Pure Julia struct layout tests in `test/runtests.jl` still run.
 
+## General registry
+
+This package is not on Julia General yet. The `uuid` in `Project.toml` is
+the package identity for a future Registrator.jl submission from a
+`vX.Y.Z` tag (comment `@JuliaRegistrator register()` on that commit).
+Do not change the uuid after the first General registration.
+
 ## CI
 
 Workflow `.github/workflows/ci_julia.yml` runs when Julia is available on the
