@@ -121,6 +121,10 @@ name = "rust_usage"
 name = "wall_scale_harness"
 required-features = ["parallel"]
 
+[[example]]
+name = "leaf_io_harness"
+required-features = ["rpc"]
+
 [[bench]]
 name = "iterator_bench"
 harness = false
