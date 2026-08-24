@@ -37,3 +37,8 @@ fn release_workflow_pins_actions_and_verifies_installers() {
 fn language_package_versions_match_cargo() {
     run_gate("scripts/check_version_lockstep.sh");
 }
+
+#[test]
+fn rpc_feature_has_no_ucx_dependency() {
+    run_gate("scripts/check_rpc_no_ucx.sh");
+}
