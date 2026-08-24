@@ -2,7 +2,8 @@
 
 ~readcon-core~ is the reference implementation of versioned =.con= / =.convel=.
 Rare-event codes already checkpoint on CON. This library is the spec and
-the hourglass API so the rest of the atomistic stack reads the same file:
+the hourglass API so the rest of the atomistic stack reads the same file
+everywhere:
 optimizers, potential drivers, analysis tools, campaign stores, and ML
 hand-off.
 
