@@ -158,7 +158,7 @@ mod unix_tests {
         let client = RpcClient::new(&spec).expect("client");
         let frames = client.parse_bytes(MINIMAL.as_bytes()).expect("parse");
         assert_eq!(frames.len(), 1);
-        assert_eq!(frames[0].atom_count(), 1);
+        assert_eq!(frames[0].atom_data.len(), 1);
         let _ = std::fs::remove_file(&sock);
     }
 }
