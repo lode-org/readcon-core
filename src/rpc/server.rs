@@ -7,6 +7,7 @@ use crate::writer::ConFrameWriter;
 
 use super::convert::{fill_frame_builder, frame_from_reader};
 use super::read_con_capnp::read_con_service;
+use super::{set_compatibility_stamp, validate_compatibility_stamp};
 
 struct ReadConServiceImpl;
 
@@ -17,7 +18,11 @@ impl read_con_service::Server for ReadConServiceImpl {
         mut results: read_con_service::ParseFramesResults,
     ) -> Promise<(), capnp::Error> {
         let req = pry!(params.get());
-        let file_bytes = pry!(pry!(req.get_req()).get_file_contents());
+        let parse_request = pry!(req.get_req());
+        if let Err(e) = validate_compatibility_stamp(pry!(parse_request.get_compatibility())) {
+            return Promise::err(capnp::Error::failed(e));
+        }
+        let file_bytes = pry!(parse_request.get_file_contents());
         let file_str = match std::str::from_utf8(file_bytes) {
             Ok(s) => s,
             Err(e) => return Promise::err(capnp::Error::failed(e.to_string())),
@@ -30,6 +35,7 @@ impl read_con_service::Server for ReadConServiceImpl {
         };
 
         let mut result_builder = results.get().init_result();
+        set_compatibility_stamp(result_builder.reborrow().init_compatibility());
         let mut frames_builder = result_builder.reborrow().init_frames(frames.len() as u32);
 
         for (i, frame) in frames.iter().enumerate() {
@@ -48,7 +54,11 @@ impl read_con_service::Server for ReadConServiceImpl {
         mut results: read_con_service::WriteFramesResults,
     ) -> Promise<(), capnp::Error> {
         let req = pry!(params.get());
-        let frame_data_list = pry!(pry!(req.get_req()).get_frames());
+        let write_request = pry!(req.get_req());
+        if let Err(e) = validate_compatibility_stamp(pry!(write_request.get_compatibility())) {
+            return Promise::err(capnp::Error::failed(e));
+        }
+        let frame_data_list = pry!(write_request.get_frames());
 
         let mut frames = Vec::with_capacity(frame_data_list.len() as usize);
         for i in 0..frame_data_list.len() {
@@ -67,30 +77,53 @@ impl read_con_service::Server for ReadConServiceImpl {
             }
         }
 
-        results.get().init_result().set_file_contents(&buffer);
+        let mut result = results.get().init_result();
+        result.set_file_contents(&buffer);
+        set_compatibility_stamp(result.reborrow().init_compatibility());
 
         Promise::ok(())
     }
 }
 
-/// Starts an RPC server on the given address.
-///
-/// This function blocks until the server is shut down.
-pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let service: read_con_service::Client = capnp_rpc::new_client(ReadConServiceImpl);
+fn spawn_server_vat<S>(stream: S, service: read_con_service::Client)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
+{
+    let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
+    let network = twoparty::VatNetwork::new(
+        reader,
+        writer,
+        rpc_twoparty_capnp::Side::Server,
+        Default::default(),
+    );
+    let rpc_system = RpcSystem::new(Box::new(network), Some(service.client));
+    tokio::task::spawn_local(rpc_system);
+}
 
-    loop {
-        let (stream, _) = listener.accept().await?;
-        stream.set_nodelay(true)?;
-        let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
-        let network = twoparty::VatNetwork::new(
-            reader,
-            writer,
-            rpc_twoparty_capnp::Side::Server,
-            Default::default(),
-        );
-        let rpc_system = RpcSystem::new(Box::new(network), Some(service.clone().client));
-        tokio::task::spawn_local(rpc_system);
+/// Starts an RPC server on a TCP `host:port` or Unix `unix:/path` endpoint.
+///
+/// Blocks until the process is stopped. A pre-existing Unix socket file is
+/// removed before bind.
+pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let ep = super::endpoint::Endpoint::parse(addr)?;
+    let service: read_con_service::Client = capnp_rpc::new_client(ReadConServiceImpl);
+    match ep {
+        super::endpoint::Endpoint::Tcp(bind) => {
+            let listener = tokio::net::TcpListener::bind(&bind).await?;
+            loop {
+                let (stream, _) = listener.accept().await?;
+                stream.set_nodelay(true)?;
+                spawn_server_vat(stream, service.clone());
+            }
+        }
+        #[cfg(unix)]
+        super::endpoint::Endpoint::Unix(path) => {
+            let _ = std::fs::remove_file(&path);
+            let listener = tokio::net::UnixListener::bind(&path)?;
+            loop {
+                let (stream, _) = listener.accept().await?;
+                spawn_server_vat(stream, service.clone());
+            }
+        }
     }
 }

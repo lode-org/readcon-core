@@ -7,6 +7,8 @@ pub mod ffi;
 pub mod helpers;
 /// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
 pub mod index_proj;
+/// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
+pub mod rcso;
 pub mod iterators;
 pub mod parser;
 #[cfg(feature = "grammar")]
