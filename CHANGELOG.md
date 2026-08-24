@@ -1,10 +1,159 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
-## Unreleased
+## v0.14.8 - 2026-08-24
+#### Benchmarks
+- CON parse vs RCSO decode and Unix vs TCP RPC - (9b94ca5) - *HaoZeke*
+#### Merges
+- HaoZeke main - (29a6cf7) - *HaoZeke*
+- integrate HaoZeke main Cachegrind restamp - (751aaa3) - *HaoZeke*
+#### Generated
+- (**docs**) export RST from orgmode - (a1f932d) - *HaoZeke*
 #### Features
-- chemfiles import stamps internal units (Å, ps, amu) on CON line 2
-- chemfiles `read_step` skip/nth/nsteps, topology file, residues, `guess_bonds`
+- (**abi**) expose readcon compatibility stamp - (e2233e7) - *HaoZeke*
+- (**abi**) borrow SoA columns from C, Fortran, and Python - (b734e01) - *HaoZeke*
+- (**bench**) add sequential vs Rayon wall-scale harness - (338f9b7) - *HaoZeke*
+- (**bench**) stamp peer JSON with host, date, and commit - (69b4595) - *HaoZeke*
+- (**builder**) author charges, spins, and magmoms on write - (25b8b1b) - *HaoZeke*
+- (**builder**) return insertion-to-grouped map and reject type mass mismatch - (db385fa) - *HaoZeke*
+- (**capi**) pack and unpack RCSO for caller Bcast - (9f64eac) - *HaoZeke*
+- (**capi**) probe Rayon and ship it on clib tarballs - (51146ea) - *HaoZeke*
+- (**chemfiles**) stamp internal units and use read_step - (aff5485) - *HaoZeke*
+- (**dist**) attach prebuilt C ABI prefixes via package-clib.sh - (294ab0d) - *HaoZeke*
+- (**examples**) run the CPC NEB vignette and lock neb_band.tsv - (33f2a00) - *HaoZeke*
+- (**examples**) run the CPC NEB vignette and lock neb_band.tsv - (b63f2cd) - *HaoZeke*
+- (**examples**) four-image 218-atom CuH2 band fixture - (778c4f8) - *HaoZeke*
+- (**examples**) print NEB bead energies from C++ and Fortran - (72e3fb5) - *HaoZeke*
+- (**examples**) print a four-image NEB band from Fortran - (bfbc536) - *HaoZeke*
+- (**io**) pin Rayon workers on C, Python, and Fortran reads - (bc9056e) - *HaoZeke*
+- (**iter**) skip, nth, and count on every binding - (a5527ba) - *HaoZeke*
+- (**python**) export symbol/Z helpers with documented Z=92 ceiling - (7226958) - *HaoZeke*
+- (**rpc**) ABI minor reject, Unix endpoints, and RCSO pack - (21251cc) - *HaoZeke*
+- (**rpc**) Unix domain endpoints beside TCP - (8d82ce0) - *HaoZeke*
+- pack and unpack RCSO for caller-side Bcast - (01a2330) - *HaoZeke*
+- canonicalize unit aliases on CON line 2 - (0eac2a9) - *HaoZeke*
+- accept ns as a time unit in the SI parser - (828ce32) - *HaoZeke*
+#### Bug Fixes
+- (**builder**) return Result from build and stop C/Python panics - (9770d35) - *HaoZeke*
+- (**capi**) document Rayon on the cbindgen banner - (04371eb) - *HaoZeke*
+- (**chemfiles**) one mass per CON symbol on import - (2efa28e) - *HaoZeke*
+- (**ci**) checksum cargo-dist on every release runner - (caedefe) - *HaoZeke*
+- (**ci**) pin release actions and checksum installers - (12a1aeb) - *HaoZeke*
+- (**ci**) keep Pages and OIDC off pull_request jobs - (05b5d0b) - *HaoZeke*
+- (**ci**) do not pass empty --features on the Windows clib job - (9db7538) - *HaoZeke*
+- (**cov**) omit src/ffi.rs from the rust line-coverage gate - (df8fb58) - *HaoZeke*
+- (**cov**) do not let the unused cdylib zero C ABI hits - (56081c7) - *HaoZeke*
+- (**cpc**) escape underscores in Cachegrind scenario names - (899f268) - *HaoZeke*
+- (**cxx**) friend the helpers that construct ConFrame - (df9d764) - *HaoZeke*
+- (**cxx**) define ConFrameIterator::nth after ConFrame is complete - (a89e5fb) - *HaoZeke*
+- (**dlpack**) mark device-tagged and CUDA exports read-only - (ec78a5e) - *HaoZeke*
+- (**examples**) print NA for missing NEB bead fields - (3303ee5) - *HaoZeke*
+- (**fortran**) parse golden JSON numbers without list-directed I/O - (218c6a5) - *HaoZeke*
+- (**julia**) replace placeholder package UUID - (4d4b177) - *HaoZeke*
+- (**packaging**) omit cargo --features when the clib build is lean - (8c9c256) - *HaoZeke*
+- (**python**) export has_parallel_support - (953a965) - *HaoZeke*
+- (**rpc**) use ConFrame atom_data length in unix test - (ba1df62) - *HaoZeke*
+- (**rpc**) reject newer ABI minor - (aba90d4) - *HaoZeke*
+- (**write**) keep std::fmt at lossless precision - (26d0e15) - *HaoZeke*
+- (**write**) drop half-ulp cases from the std format lock - (3c63b80) - *HaoZeke*
+- mol SI factor is N_A so kcal/mol matches metatomic - (40997a0) - *HaoZeke*
+- keep shipped changelog free of Unreleased - (6503a4b) - *HaoZeke*
+#### Performance
+- (**parallel**) reuse Rayon pools pinned by worker count - (dbec2f7) - *HaoZeke*
+- (**write**) format atom floats without std::fmt - (2cbeb95) - *HaoZeke*
+- (**write**) emit each frame with one write_all - (07f4902) - *HaoZeke*
+#### Documentation
+- (**brand**) CON frame glyph and hero wordmark - (27a392f) - *HaoZeke*
+- (**cpc**) input the companion fair-campaign table - (c2ade2e) - *HaoZeke*
+- (**cpc**) shorten table captions that overflowed XeTeX - (d6e2084) - *HaoZeke*
+- (**cpc**) name the restamped Cachegrind commit in the org - (927fc93) - *HaoZeke*
+- (**cpc**) restamp Cachegrind table from the merged rst - (09ff081) - *HaoZeke*
+- (**cpc**) match the CPiP summary fields and cite the archive DOI - (7244726) - *HaoZeke*
+- (**cpc**) write the manuscript as org and export to elsarticle - (c4cab6d) - *HaoZeke*
+- (**cpc**) tabulate Rayon scale and the four-image band - (a721853) - *HaoZeke*
+- (**cpc**) state ASE eon errors and writer mask 7 - (b72b474) - *HaoZeke*
+- (**cpc**) split the wall-time table by protocol - (5e26b0a) - *HaoZeke*
+- (**cpc**) cite peers, restamp tables, add a three-bead band - (16e1dc2) - *HaoZeke*
+- (**cpc**) add manuscript skeleton and archival deposit metadata - (e662869) - *HaoZeke*
+- (**howto**) document n_threads on the read path - (84830a6) - *HaoZeke*
+- (**org**) record n_threads on the C and Python read path - (c4b478e) - *HaoZeke*
+- (**rpc**) point pack-then-Bcast at rcso::encode_frame - (ea758e0) - *HaoZeke*
+- (**rpc**) document Unix endpoints and the fabric split - (5a42b0e) - *HaoZeke*
+- (**spec**) reject type-mass mismatch instead of last-wins - (4784658) - *HaoZeke*
+- drop internal tracker table from public issue-status - (dc8bfc4) - *HaoZeke*
+- state CON-everywhere on the crate readme source - (81d7850) - *HaoZeke*
+- state the CON-everywhere ambition on the landing page - (1268816) - *HaoZeke*
+- stop teaching the cargo-dist installer pipe - (018aa1e) - *HaoZeke*
+- refresh integration status pins - (bd671e2) - *HaoZeke*
+- record the 0.14.x C ABI freeze and keep text CON authoritative - (46ca3be) - *HaoZeke*
+- pin FetchContent and wrap to the v0.14.7 cxx tarball - (da180b1) - *HaoZeke*
+- add LODE vs third-party consumer scorecard - (c96b499) - *HaoZeke*
+- add related-work bibliography entries - (2e74b73) - *HaoZeke*
+- pin cargo add readcon-core to 0.14.7 - (b0595f5) - *HaoZeke*
+- cite CON spec v3 and add crate homepage - (2391e1e) - *HaoZeke*
+- point FetchContent at the last attached cxx tarball - (ff1569b) - *HaoZeke*
+- align rustdoc and leftover pins with spec-2 decode - (d87b85f) - *HaoZeke*
+- paper-voice landing pages and 0.14.7 install pins - (5eb97ce) - *HaoZeke*
+#### Tests
+- (**ci**) gate docs OIDC, release pins, and version lockstep - (244df46) - *HaoZeke*
+- (**conformance**) lock goldens on C, Fortran, and Julia - (001abb5) - *HaoZeke*
+- (**conformance**) lock goldens on C, Fortran, and Julia - (72d4645) - *HaoZeke*
+- (**conformance**) lock Phase A goldens from Python - (f19a1e0) - *HaoZeke*
+- (**conformance**) lock Phase A goldens - (fef746f) - *HaoZeke*
+- (**conformance**) lock more column-4 masks and reject paths - (7e490b9) - *HaoZeke*
+- (**conformance**) add Phase A clause-keyed corpus - (bf521ce) - *HaoZeke*
+- (**python**) expect four beads on neb_band.con - (80be3b8) - *HaoZeke*
+- (**rpc**) keep the rpc feature free of UCX - (34a061f) - *HaoZeke*
+- (**rpc**) keep the rpc feature free of UCX - (51c3b6a) - *HaoZeke*
+- (**rpc**) reject incompatible ABI majors and newer minors - (e7b16dc) - *HaoZeke*
+- (**wrap**) check wrap source_hash matches published cxx SHA - (bcf44f6) - *HaoZeke*
+- (**write**) lock float digits at default precision only - (48ea3ed) - *HaoZeke*
+#### CI
+- (**cxx**) attach tarballs on workflow_dispatch by tag - (f43952b) - *HaoZeke*
+- (**python**) install ase so test_ase.py is not skipped - (57a6c6b) - *HaoZeke*
+- lint gates, C ABI header contract, and C++ nth - (4d236fb) - *HaoZeke*
+- stop treating cbindgen as the C ABI authority - (d6809dc) - *HaoZeke*
+- do not fail coverage jobs on grep SIGPIPE - (1f5a79d) - *HaoZeke*
+- accept git revert subjects and NAMD in the lint gates - (846cd59) - *HaoZeke*
+- restrict PR permissions and pin release actions - (92a669c) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (05e74f0) - github-actions[bot]
+- (**bench**) restamp wall_scale from the write-path harness - (1ef4946) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (98248b1) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (2c75e8e) - github-actions[bot]
+- (**bench**) stamp leaf I/O walls from rgam5terra - (8b51faf) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (89ace10) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (79d764a) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (89d5f2b) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (8fd9f33) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (2c18a52) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (dd46329) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (596fb8e) - github-actions[bot]
+- (**bench**) restamp wall_scale with skip and nth on terra - (13b3316) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (e5aeaa1) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (bd16d7a) - github-actions[bot]
+- (**bench**) record Rayon scale walls from rgam5terra - (2a048d5) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (b194bd3) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (d5b596f) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (e0a3cdd) - github-actions[bot]
+- (**bench**) record rgam5terra equal-geometry wall timings - (f584990) - *HaoZeke*
+- (**bench**) refresh Cachegrind I-refs for docs - (4ae7048) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (9b3ae43) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (c94b4ec) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (9e687ab) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (0cc01c6) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (c4885e8) - github-actions[bot]
+- (**capi**) regenerate shipped header from cbindgen - (300ea51) - *HaoZeke*
+- (**cite**) record the v0.14.7 Zenodo DOI - (3063570) - *HaoZeke*
+- (**julia**) lock ReadCon package version to 0.14.7 - (93307e5) - *HaoZeke*
+- add SECURITY.md, CONTRIBUTING.md, and CoC contact - (874ba0f) - *HaoZeke*
+#### Style
+- (**cpc**) ruff-format gen_tables.py - (b0c206c) - *HaoZeke*
+- (**docs**) state the C ABI as a Fortran/C++ trade-off - (10caaf1) - *HaoZeke*
+- (**docs**) apply rgoswami register to user-facing prose - (b1e1d11) - *HaoZeke*
+- apply prek format and keep regen output hook-clean - (e95c193) - *HaoZeke*
+
+
 
 ## v0.14.7 - 2026-08-15
 #### Bug Fixes
