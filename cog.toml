@@ -39,6 +39,8 @@ test = { changelog_title = "Tests" }
 docs = { changelog_title = "Documentation" }
 fix = { changelog_title = "Bug Fixes" }
 feat = { changelog_title = "Features" }
+# Git default revert subjects are accepted by scripts/check_conventional_commits.sh.
+revert = { changelog_title = "Reverts" }
 
 [changelog]
 path = "CHANGELOG.md"

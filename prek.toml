@@ -58,4 +58,4 @@ hooks = [{ id = "taplo-format", exclude = "^prek\\.toml$" }]
 [[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
-hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor"] }]
+hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD"] }]
