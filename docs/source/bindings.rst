@@ -717,7 +717,7 @@ After a fat ``cargo build --features metatensor``, ``build.rs`` writes
     | ``metatensor.h`` (from env INCLUDE or install) | Values/labels/free via sys C API; **required** to interpret the pointer                                                                                      |
     +------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
-Regenerate ``readcon-core.h`` with ``scripts/regen-capi-headers.sh`` (CI ``--check``).
+The shipped ``readcon-core.h`` is the C ABI. cbindgen is a maintainer draft tool only.
 
 **Status codes (C/Fortran)**
 

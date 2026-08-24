@@ -23,8 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cbindgen (header check)
-        run: cargo install cbindgen --locked || cargo install cbindgen
       - name: Build + symbol/header matrix
         env:
           FEATURES: ${{ matrix.features }}

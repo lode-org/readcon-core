@@ -5,15 +5,17 @@
 #   - lcov.info (line coverage; Codecov's primary metric from DA records)
 #   - rust_codecov.json (optional second artifact)
 #
-# Features: full non-CUDA set. Ignores CLI/CUDA/PyO3/RPC glue and the thin
-# chemfiles_selection facade (real code is *_imp.rs).
+# Features: full non-CUDA set. Ignores CLI/CUDA/PyO3/RPC glue, the thin
+# chemfiles_selection facade (real code is *_imp.rs), and src/ffi.rs:
+# crate-type lib+cdylib+staticlib leaves no_mangle DA at 0 even when
+# Rust tests call those symbols. C/Fortran jobs cover the C ABI.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT_JSON="${1:-rust_codecov.json}"
 OUT_LCOV="${2:-lcov.info}"
 FEATURES="${READCON_COV_FEATURES:-parallel,chemfiles,zstd,grammar,metatensor}"
-IGNORE='(/src/main\.rs|/src/cuda_array\.rs|/src/python\.rs|/src/rpc/|/src/chemfiles_selection\.rs$)'
+IGNORE='(/src/main\.rs|/src/cuda_array\.rs|/src/python\.rs|/src/rpc/|/src/chemfiles_selection\.rs$|/src/ffi\.rs$)'
 
 unset RUSTC_WRAPPER SCCACHE_GHA_ENABLED || true
 export RUSTC_WRAPPER=""
@@ -27,8 +29,11 @@ fi
 
 echo "==> cargo llvm-cov (features=${FEATURES}, CC=${CC:-default})"
 # shellcheck disable=SC2086
+# Do not pass --include-ffi. crate-type is lib+cdylib+staticlib; the unused
+# cdylib copy of every no_mangle records 0 hits and llvm-cov merges that
+# over the rlib, so the C ABI looks uncovered even when Rust tests call it.
 cargo llvm-cov --features ${FEATURES} --workspace \
-  --no-fail-fast --include-ffi \
+  --no-fail-fast \
   --ignore-filename-regex="${IGNORE}" \
   --lcov --output-path "${OUT_LCOV}"
 

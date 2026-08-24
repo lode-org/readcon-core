@@ -203,14 +203,7 @@ class ConFrameIterator {
         return con_frame_iterator_skip(iterator_ptr_.get(), n);
     }
     /// Skip `index` frames, then take the next parsed frame.
-    std::optional<ConFrame> nth(std::size_t index) {
-        if (!iterator_ptr_)
-            return std::nullopt;
-        RKRConFrame *h = con_frame_iterator_nth(iterator_ptr_.get(), index);
-        if (!h)
-            return std::nullopt;
-        return ConFrame(h);
-    }
+    std::optional<ConFrame> nth(std::size_t index);
 
     /**
      * @brief Returns an iterator to the beginning of the sequence of frames.
@@ -243,12 +236,18 @@ class ConFrameIterator {
  */
 class ConFrame {
   public:
+    friend class ConFrameIterator;
     friend class ConFrameIterator::Iterator;
     friend class ConFrameWriter;
     friend class ConFrameBuilder;
     friend ConFrame read_first_frame(const std::filesystem::path &);
     friend ConFrame read_nth_frame(const std::filesystem::path &, std::size_t);
     friend std::vector<ConFrame> read_all_frames(const std::filesystem::path &);
+    friend ConFrame read_chemfiles_first(const std::filesystem::path &);
+    friend ConFrame read_chemfiles_nth(const std::filesystem::path &,
+                                      std::size_t);
+    friend std::vector<ConFrame>
+    adopt_frame_handles(RKRConFrame **, size_t, const std::filesystem::path &);
 
     ConFrame(const ConFrame &) = delete;
     ConFrame &operator=(const ConFrame &) = delete;
@@ -1087,6 +1086,15 @@ inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {
                                  path.string());
     }
     iterator_ptr_.reset(iter_ptr);
+}
+
+inline std::optional<ConFrame> ConFrameIterator::nth(std::size_t index) {
+    if (!iterator_ptr_)
+        return std::nullopt;
+    RKRConFrame *h = con_frame_iterator_nth(iterator_ptr_.get(), index);
+    if (!h)
+        return std::nullopt;
+    return ConFrame(h);
 }
 
 inline ConFrameIterator::Iterator ConFrameIterator::begin() {

@@ -25,11 +25,13 @@ fixed = re.sub(
     ),
     text,
 )
+# ox-md pads blank lines inside indented examples with trailing spaces.
+fixed = "\n".join(line.rstrip() for line in fixed.splitlines()) + "\n"
+p.write_text(fixed)
 if fixed != text:
-    p.write_text(fixed)
-    print("export-readme: rewrote docs/orgmode/*.md hrefs to .org")
+    print("export-readme: normalized hrefs and trailing whitespace")
 else:
-    print("export-readme: no .md orgmode hrefs to rewrite")
+    print("export-readme: no README.md rewrite")
 # Fail if any remain
 bad = re.findall(r"docs/orgmode/[A-Za-z0-9_./-]+\.md", p.read_text())
 if bad:
