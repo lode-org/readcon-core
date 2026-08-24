@@ -136,7 +136,7 @@ contains
     real(real64), allocatable :: pos(:,:)
     integer(int64), allocatable :: ids(:)
     character(len=8), allocatable :: syms(:)
-    character(len=16) :: gid, got_sym
+    character(len=128) :: gid, got_sym
     logical :: exists
     nfail = 0
     fixture = trim(root) // "/resources/conformance/" // trim(c%path)
@@ -277,12 +277,59 @@ contains
 
   integer function json_int(json, key) result(v)
     character(len=*), intent(in) :: json, key
-    integer :: p, ios
+    integer :: p
+    integer(int64) :: tmp
     v = 0
     p = key_pos(json, key)
     if (p == 0) return
-    read (json(p:), *, iostat=ios) v
+    call parse_int64_at(json, p, tmp)
+    v = int(tmp)
   end function
+
+  subroutine parse_int64_at(s, p, val)
+    character(len=*), intent(in) :: s
+    integer, intent(inout) :: p
+    integer(int64), intent(out) :: val
+    integer :: sign
+    val = 0_int64
+    sign = 1
+    call skip_ws_idx(s, p)
+    if (p > len(s)) return
+    if (s(p:p) == "-") then
+      sign = -1
+      p = p + 1
+    else if (s(p:p) == "+") then
+      p = p + 1
+    end if
+    do while (p <= len(s))
+      if (s(p:p) < "0" .or. s(p:p) > "9") exit
+      val = val * 10_int64 + int(ichar(s(p:p)) - ichar("0"), int64)
+      p = p + 1
+    end do
+    val = val * int(sign, int64)
+  end subroutine
+
+  subroutine parse_f64_at(s, p, val)
+    character(len=*), intent(in) :: s
+    integer, intent(inout) :: p
+    real(real64), intent(out) :: val
+    integer :: q, ios
+    val = 0.0_real64
+    call skip_ws_idx(s, p)
+    q = p
+    if (q <= len(s) .and. (s(q:q) == "+" .or. s(q:q) == "-")) q = q + 1
+    do while (q <= len(s))
+      if ((s(q:q) >= "0" .and. s(q:q) <= "9") .or. s(q:q) == "." .or. &
+          s(q:q) == "e" .or. s(q:q) == "E" .or. s(q:q) == "+" .or. s(q:q) == "-") then
+        q = q + 1
+      else
+        exit
+      end if
+    end do
+    if (q <= p) return
+    read (s(p:q - 1), *, iostat=ios) val
+    p = q
+  end subroutine
 
   subroutine skip_ws_idx(s, p)
     character(len=*), intent(in) :: s
@@ -300,6 +347,7 @@ contains
     logical, intent(out) :: fx(3, n)
     integer :: p, i, k
     p = start
+    if (p < 1) return
     call skip_ws_idx(json, p)
     if (p <= len(json) .and. json(p:p) == "[") p = p + 1
     do i = 1, n
@@ -330,8 +378,9 @@ contains
     character(len=*), intent(in) :: json
     integer, intent(in) :: start, n
     real(real64), intent(out) :: pos(3, n)
-    integer :: p, i, k, ios
+    integer :: p, i, k
     p = start
+    if (p < 1) return
     call skip_ws_idx(json, p)
     if (p <= len(json) .and. json(p:p) == "[") p = p + 1
     do i = 1, n
@@ -343,11 +392,7 @@ contains
         call skip_ws_idx(json, p)
         if (p <= len(json) .and. json(p:p) == ",") p = p + 1
         call skip_ws_idx(json, p)
-        read (json(p:), *, iostat=ios) pos(k, i)
-        do while (p <= len(json))
-          if (json(p:p) == "," .or. json(p:p) == "]") exit
-          p = p + 1
-        end do
+        call parse_f64_at(json, p, pos(k, i))
       end do
       call skip_ws_idx(json, p)
       if (p <= len(json) .and. json(p:p) == "]") p = p + 1
@@ -358,19 +403,16 @@ contains
     character(len=*), intent(in) :: json
     integer, intent(in) :: start, n
     integer(int64), intent(out) :: ids(n)
-    integer :: p, i, ios
+    integer :: p, i
     p = start
+    if (p < 1) return
     call skip_ws_idx(json, p)
     if (p <= len(json) .and. json(p:p) == "[") p = p + 1
     do i = 1, n
       call skip_ws_idx(json, p)
       if (p <= len(json) .and. json(p:p) == ",") p = p + 1
       call skip_ws_idx(json, p)
-      read (json(p:), *, iostat=ios) ids(i)
-      do while (p <= len(json))
-        if (json(p:p) == "," .or. json(p:p) == "]") exit
-        p = p + 1
-      end do
+      call parse_int64_at(json, p, ids(i))
     end do
   end subroutine
 
@@ -380,6 +422,7 @@ contains
     character(len=*), intent(out) :: syms(n)
     integer :: p, i, q2
     p = start
+    if (p < 1) return
     call skip_ws_idx(json, p)
     if (p <= len(json) .and. json(p:p) == "[") p = p + 1
     do i = 1, n
