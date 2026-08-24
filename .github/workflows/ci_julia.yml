@@ -8,6 +8,7 @@ on:
       - 'src/ffi.rs'
       - 'include/readcon-core.h'
       - 'Cargo.toml'
+      - 'resources/conformance/**'
       - '.github/workflows/ci_julia.yml'
   pull_request:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'src/ffi.rs'
       - 'include/readcon-core.h'
       - 'Cargo.toml'
+      - 'resources/conformance/**'
       - '.github/workflows/ci_julia.yml'
   workflow_dispatch:
 

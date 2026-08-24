@@ -46,6 +46,7 @@ jobs:
           cmake --build build/cmake-fetch --parallel
           ./build/cmake-fetch/c-main "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
           ./build/cmake-fetch/c-main-static "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
+          ./build/cmake-fetch/c-conformance "$GITHUB_WORKSPACE"
 
       - name: CMake install + find_package + pkg-config
         run: |
@@ -66,6 +67,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/prefix"
           cmake --build build/cmake-find --parallel
           ./build/cmake-find/c-main "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
+          ./build/cmake-find/c-conformance "$GITHUB_WORKSPACE"
 
       - name: Meson setup + install (no cbindgen)
         run: |
