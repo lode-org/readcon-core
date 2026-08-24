@@ -1,5 +1,5 @@
-//! Structural gates for CI permission split, release action pins, and
-//! language-package version lockstep.
+//! Structural gates for CI permission split, release action pins,
+//! language-package version lockstep, and wrap source_hash lockstep.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -41,4 +41,9 @@ fn language_package_versions_match_cargo() {
 #[test]
 fn rpc_feature_has_no_ucx_dependency() {
     run_gate("scripts/check_rpc_no_ucx.sh");
+}
+
+#[test]
+fn wrap_source_hash_matches_published_cxx_tarball() {
+    run_gate("scripts/check_wrap_hash.sh");
 }
