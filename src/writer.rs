@@ -484,7 +484,9 @@ fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
 /// Non-finite values and `prec > 17` fall back to `std::fmt`.
 fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
-    if !v.is_finite() || prec > 17 {
+    // Default writes are prec=6. Higher precision (lossless 17) stays on
+    // std::fmt so binary leftovers match `{:.prec$}`.
+    if !v.is_finite() || prec != 6 {
         let _ = write!(buf, "{v:.prec$}");
         return;
     }
