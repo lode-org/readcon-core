@@ -25,6 +25,12 @@ pub fn validate_compatibility_stamp(stamp: compatibility_stamp::Reader<'_>) -> R
             stamp.get_abi_major()
         ));
     }
+    if stamp.get_abi_minor() > crate::ffi::RKR_ABI_VERSION_MINOR {
+        return Err(format!(
+            "unsupported readcon-core ABI minor: {}",
+            stamp.get_abi_minor()
+        ));
+    }
     if stamp.get_abi_layout_revision() != crate::ffi::RKR_ABI_LAYOUT_REVISION {
         return Err(format!(
             "incompatible readcon-core ABI layout: {}",
