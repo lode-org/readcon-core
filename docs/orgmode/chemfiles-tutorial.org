@@ -52,7 +52,7 @@ For native CON files without conversion, start with [[file:tutorial.org][tutoria
 1. Install a chemfiles-linked build.
 2. Drive conversion from another format (we use XYZ; the same APIs accept PDB,
    GRO, LAMMPS dump, and other chemfiles formats).
-3. Inspect geometry and optional bonds on the resulting CON frame.
+3. Inspect geometry, line-2 units (Å / ps from chemfiles), and optional bonds / residues.
 4. Run a selection (=name O=, =angles: all=) in CON =atom_data= order.
 5. Write a =.con= (and optionally multi-frame) file for eOn / amsel / CON consumers.
 

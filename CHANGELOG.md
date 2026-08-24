@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased
+#### Features
+- chemfiles import stamps internal units (Å, ps, amu) on CON line 2
+- chemfiles `read_step` skip/nth/nsteps, topology file, residues, `guess_bonds`
+
 ## v0.14.7 - 2026-08-15
 #### Bug Fixes
 - link ``advapi32`` so Windows ``readcon-chemfiles`` resolves ``GetUserNameA``

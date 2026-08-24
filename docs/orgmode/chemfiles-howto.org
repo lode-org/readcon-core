@@ -28,7 +28,24 @@ w.write_frame(&frame)?;
 
 Chemfiles selects the reader from the path. If the format has topology, CON
 line-2 JSON may include =bonds= (0-based =atom_data= indices after import
-remap).
+remap) and =chemfiles_residues=. Line-2 =units.time= is =ps= (chemfiles
+velocities are Å/ps), not the CON-native default =fs=.
+
+Stride / random access uses chemfiles =read_step=:
+
+#+begin_src rust
+use readcon_core::chemfiles_import::{
+    ChemfilesReadOpts, con_frame_from_trajectory_path_nth,
+    con_frames_from_trajectory_path_with, nsteps_from_trajectory_path,
+};
+
+let n = nsteps_from_trajectory_path("traj.xyz")?;
+let frame = con_frame_from_trajectory_path_nth("traj.xyz", n - 1)?;
+let every_other = con_frames_from_trajectory_path_with(
+    "traj.xyz",
+    &ChemfilesReadOpts { start: 0, step: 2, ..Default::default() },
+)?;
+#+end_src
 
 *Python* (=readcon-chemfiles=):
 

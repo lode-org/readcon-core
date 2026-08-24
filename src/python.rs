@@ -1732,6 +1732,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
+    m.add_function(wrap_pyfunction!(read_chemfiles_nth, m)?)?;
+    m.add_function(wrap_pyfunction!(read_chemfiles_nsteps, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_memory, m)?)?;
     m.add_function(wrap_pyfunction!(select_on_frame, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
@@ -1790,19 +1792,54 @@ fn selection_result_to_py(
     Ok(dict.into())
 }
 
-/// Read **all** frames from a chemfiles-supported path (XYZ, PDB, GRO, …)
+fn chemfiles_opts_from_kwargs(
+    skip: usize,
+    step: usize,
+    stop: Option<usize>,
+    topology: Option<&str>,
+    format: Option<&str>,
+    guess_bonds: bool,
+) -> crate::chemfiles_import::ChemfilesReadOpts {
+    crate::chemfiles_import::ChemfilesReadOpts {
+        start: skip,
+        step,
+        stop,
+        format: format.map(str::to_string),
+        topology: topology.map(std::path::PathBuf::from),
+        topology_format: None,
+        guess_bonds,
+    }
+}
+
+/// Read frames from a chemfiles-supported path (XYZ, PDB, GRO, …)
 /// into CON :class:`ConFrame` values.
 ///
-/// This is the Python entry point for **format conversion into CON**: chemfiles
-/// chooses the reader from the path; topology becomes optional
-/// ``metadata['bonds']`` when present.
+/// Chemfiles chooses the reader from the path (or ``format``). Topology
+/// becomes optional ``metadata['bonds']`` and ``metadata['chemfiles_residues']``
+/// when present. Line-2 ``units`` is chemfiles internal (Å, ps, amu).
+///
+/// ``skip`` / ``step`` / ``stop`` map to chemfiles ``Trajectory.read_step``.
+/// ``topology`` is a companion topology file (``set_topology_file``).
+/// ``guess_bonds`` calls chemfiles bond guessing when the frame has none.
 ///
 /// Raises ``RuntimeError`` if this wheel was built without chemfiles (install
 /// ``readcon-chemfiles``), ``OSError`` on I/O failure, ``ValueError`` on bad frames.
 #[pyfunction]
-fn read_chemfiles(py: Python<'_>, path: &str) -> PyResult<Vec<PyConFrame>> {
-    use crate::chemfiles_import::con_frames_from_trajectory_path;
-    let frames = con_frames_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)?;
+#[pyo3(signature = (path, *, skip=0, step=1, stop=None, topology=None, format=None, guess_bonds=false))]
+fn read_chemfiles(
+    py: Python<'_>,
+    path: &str,
+    skip: usize,
+    step: usize,
+    stop: Option<usize>,
+    topology: Option<&str>,
+    format: Option<&str>,
+    guess_bonds: bool,
+) -> PyResult<Vec<PyConFrame>> {
+    use crate::chemfiles_import::con_frames_from_trajectory_path_with;
+    let opts = chemfiles_opts_from_kwargs(skip, step, stop, topology, format, guess_bonds);
+    let frames = con_frames_from_trajectory_path_with(Path::new(path), &opts)
+        .map_err(chemfiles_err_to_py)?;
     frames
         .iter()
         .map(|f| PyConFrame::from_con_frame(py, f))
@@ -1819,13 +1856,39 @@ fn read_chemfiles_first(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     PyConFrame::from_con_frame(py, &frame)
 }
 
-/// Read all frames from an in-memory trajectory buffer.
+/// Read step ``index`` via chemfiles ``Trajectory.read_step``.
+#[pyfunction]
+fn read_chemfiles_nth(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
+    use crate::chemfiles_import::con_frame_from_trajectory_path_nth;
+    let frame =
+        con_frame_from_trajectory_path_nth(Path::new(path), index).map_err(chemfiles_err_to_py)?;
+    PyConFrame::from_con_frame(py, &frame)
+}
+
+/// Number of steps in a chemfiles trajectory (``Trajectory.nsteps``).
+#[pyfunction]
+fn read_chemfiles_nsteps(path: &str) -> PyResult<usize> {
+    use crate::chemfiles_import::nsteps_from_trajectory_path;
+    nsteps_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)
+}
+
+/// Read frames from an in-memory trajectory buffer.
 ///
 /// ``format`` is a chemfiles format name such as ``"XYZ"``, ``"PDB"``, or ``"GRO"``.
 #[pyfunction]
-fn read_chemfiles_memory(py: Python<'_>, data: &str, format: &str) -> PyResult<Vec<PyConFrame>> {
-    use crate::chemfiles_import::con_frames_from_memory;
-    let frames = con_frames_from_memory(data, format).map_err(chemfiles_err_to_py)?;
+#[pyo3(signature = (data, format, *, skip=0, step=1, stop=None, guess_bonds=false))]
+fn read_chemfiles_memory(
+    py: Python<'_>,
+    data: &str,
+    format: &str,
+    skip: usize,
+    step: usize,
+    stop: Option<usize>,
+    guess_bonds: bool,
+) -> PyResult<Vec<PyConFrame>> {
+    use crate::chemfiles_import::con_frames_from_memory_with;
+    let opts = chemfiles_opts_from_kwargs(skip, step, stop, None, None, guess_bonds);
+    let frames = con_frames_from_memory_with(data, format, &opts).map_err(chemfiles_err_to_py)?;
     frames
         .iter()
         .map(|f| PyConFrame::from_con_frame(py, f))

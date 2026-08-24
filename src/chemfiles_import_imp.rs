@@ -13,9 +13,10 @@ use std::fmt;
 use std::path::Path;
 
 use chemfiles::{BondOrder, CellShape, Frame, Property, Trajectory, UnitCell};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::types::{meta, Bond, ConFrame, ConFrameBuilder};
+use super::{ChemfilesReadOpts, chemfiles_internal_units_json};
+use crate::types::{Bond, ConFrame, ConFrameBuilder, meta};
 
 /// Map chemfiles bond order to optional integer stored in CON `bonds` metadata.
 fn bond_order_to_i32(order: BondOrder) -> Option<i32> {
@@ -67,6 +68,12 @@ pub const CHEMFILES_ATOM_NAMES_KEY: &str = "chemfiles_atom_names";
 /// Chemfiles atomic types in **chemfiles / `atom_id` order** (parallel to names).
 /// Used with [`CHEMFILES_ATOM_NAMES_KEY`] when projecting to chemfiles for selection.
 pub const CHEMFILES_ATOM_TYPES_KEY: &str = "chemfiles_atom_types";
+
+/// Residue list (`name`, optional `id`, remapped `atoms`) from chemfiles topology.
+pub const CHEMFILES_RESIDUES_KEY: &str = "chemfiles_residues";
+
+/// Provenance object for chemfiles internal units (length/velocity/angle/mass).
+pub const CHEMFILES_UNIT_SYSTEM_KEY: &str = "chemfiles::unit_system";
 
 /// Errors from chemfiles I/O or conversion.
 #[derive(Debug)]
@@ -129,7 +136,10 @@ pub fn property_to_json(prop: &Property) -> Value {
 }
 
 fn normalize_meta_key(name: &str) -> String {
-    name.trim().to_ascii_lowercase().replace('-', "_").replace(' ', "_")
+    name.trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .replace(' ', "_")
 }
 
 /// Map a chemfiles frame property name into a reserved `meta::*` key when possible.
@@ -160,8 +170,15 @@ fn insert_mapped_or_extra(
     if let Some(meta_key) = map_frame_property_key(chemfiles_name) {
         // Reserved keys prefer scalar/bool/string shapes from the property.
         match (meta_key, prop) {
-            (meta::ENERGY | meta::TIME | meta::TIMESTEP | meta::FMAX
-             | meta::CONVERGENCE_FMAX | meta::CONVERGENCE_ENERGY, Property::Double(d)) => {
+            (
+                meta::ENERGY
+                | meta::TIME
+                | meta::TIMESTEP
+                | meta::FMAX
+                | meta::CONVERGENCE_FMAX
+                | meta::CONVERGENCE_ENERGY,
+                Property::Double(d),
+            ) => {
                 metadata.insert(meta_key.into(), json!(d));
             }
             (meta::FRAME_INDEX | meta::NEB_BEAD | meta::NEB_BAND, Property::Double(d)) => {
@@ -208,6 +225,100 @@ fn cell_to_box_and_angles(cell: &UnitCell) -> ([f64; 3], [f64; 3], bool) {
     }
 }
 
+fn stamp_chemfiles_units(metadata: &mut BTreeMap<String, Value>) {
+    if !metadata.contains_key(meta::UNITS) {
+        metadata.insert(meta::UNITS.into(), chemfiles_internal_units_json());
+    }
+    metadata.insert(
+        CHEMFILES_UNIT_SYSTEM_KEY.into(),
+        json!({
+            "length": "angstrom",
+            "velocity": "angstrom/ps",
+            "angle": "degree",
+            "mass": "amu",
+        }),
+    );
+}
+
+fn residues_from_chemfiles_frame(frame: &Frame) -> Vec<Value> {
+    let topo = frame.topology();
+    let n = topo.residues_count() as usize;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let Some(res) = topo.residue(i) else {
+            continue;
+        };
+        let mut obj = serde_json::Map::new();
+        obj.insert("name".into(), json!(res.name()));
+        if let Some(id) = res.id() {
+            obj.insert("id".into(), json!(id));
+        }
+        let atoms: Vec<Value> = res.atoms().into_iter().map(|a| json!(a)).collect();
+        obj.insert("atoms".into(), Value::Array(atoms));
+        let mut props = serde_json::Map::new();
+        for (key, prop) in res.properties() {
+            props.insert(key, property_to_json(&prop));
+        }
+        if !props.is_empty() {
+            obj.insert("properties".into(), Value::Object(props));
+        }
+        out.push(Value::Object(obj));
+    }
+    out
+}
+
+fn remap_residue_atoms(residues: Vec<Value>, id_to_data: &BTreeMap<u64, u32>) -> Vec<Value> {
+    let mut out = Vec::with_capacity(residues.len());
+    for res in residues {
+        let Some(obj) = res.as_object() else {
+            continue;
+        };
+        let mut mapped = obj.clone();
+        if let Some(atoms) = obj.get("atoms").and_then(|v| v.as_array()) {
+            let remapped: Vec<Value> = atoms
+                .iter()
+                .filter_map(|v| v.as_u64())
+                .filter_map(|chfl_idx| id_to_data.get(&chfl_idx).copied())
+                .map(|i| json!(i))
+                .collect();
+            if remapped.is_empty() {
+                continue;
+            }
+            mapped.insert("atoms".into(), Value::Array(remapped));
+        }
+        out.push(Value::Object(mapped));
+    }
+    out
+}
+
+fn apply_guess_bonds(frame: &mut Frame, guess_bonds: bool) -> Result<(), ChemfilesImportError> {
+    if guess_bonds && frame.topology().bonds().is_empty() {
+        frame.guess_bonds()?;
+    }
+    Ok(())
+}
+
+fn open_trajectory(
+    path: &Path,
+    opts: &ChemfilesReadOpts,
+) -> Result<Trajectory, ChemfilesImportError> {
+    let mut traj = match opts.format.as_deref() {
+        Some(fmt) if !fmt.is_empty() => Trajectory::open_with_format(path, 'r', fmt)?,
+        _ => Trajectory::open(path, 'r')?,
+    };
+    if let Some(topo) = opts.topology.as_ref() {
+        match opts.topology_format.as_deref() {
+            Some(fmt) if !fmt.is_empty() => {
+                traj.set_topology_with_format(topo, fmt)?;
+            }
+            _ => {
+                traj.set_topology_file(topo)?;
+            }
+        }
+    }
+    Ok(traj)
+}
+
 fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
     match cell.shape() {
         CellShape::Infinite => None,
@@ -234,6 +345,9 @@ fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
 /// - Per-atom properties are collected under `chemfiles_atom_properties`.
 /// - Chemfiles topology bonds are stored under reserved `metadata["bonds"]`
 ///   (optional; absent when the chemfiles frame has no bonds).
+/// - Residues land under [`CHEMFILES_RESIDUES_KEY`] (optional).
+/// - Line-2 `units` is chemfiles internal (Å, ps, amu); see
+///   [`chemfiles_internal_units_json`].
 /// - `generator` defaults to `readcon-core chemfiles import` when unset.
 /// - `frame_index` defaults to chemfiles `step` when unset.
 pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImportError> {
@@ -249,10 +363,7 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     let cell_ref = frame.cell();
     let (boxl, angles, has_pbc) = cell_to_box_and_angles(&cell_ref);
     let mut builder = ConFrameBuilder::new(boxl, angles);
-    builder.prebox_header(format!(
-        "imported via chemfiles {}",
-        chemfiles::version()
-    ));
+    builder.prebox_header(format!("imported via chemfiles {}", chemfiles::version()));
 
     let velocities = if frame.has_velocities() {
         frame.velocities()
@@ -373,6 +484,10 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         Value::String(chemfiles::version()),
     );
 
+    // Numbers are already in chemfiles internal units (Å, Å/ps, amu).
+    // Stamp those onto line 2 so CON default time=fs cannot relabel velocities.
+    stamp_chemfiles_units(&mut metadata);
+
     builder.metadata(metadata);
     let mut con = builder
         .build()
@@ -405,6 +520,20 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         }
     }
 
+    let chfl_residues = residues_from_chemfiles_frame(frame);
+    if !chfl_residues.is_empty() {
+        let mut id_to_data_idx: BTreeMap<u64, u32> = BTreeMap::new();
+        for (data_idx, atom) in con.atom_data.iter().enumerate() {
+            id_to_data_idx.insert(atom.atom_id, data_idx as u32);
+        }
+        let remapped = remap_residue_atoms(chfl_residues, &id_to_data_idx);
+        if !remapped.is_empty() {
+            con.header
+                .metadata
+                .insert(CHEMFILES_RESIDUES_KEY.into(), Value::Array(remapped));
+        }
+    }
+
     Ok(con)
 }
 
@@ -412,14 +541,45 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
 pub fn con_frames_from_trajectory_path<P: AsRef<Path>>(
     path: P,
 ) -> Result<Vec<ConFrame>, ChemfilesImportError> {
+    con_frames_from_trajectory_path_with(path, &ChemfilesReadOpts::default())
+}
+
+/// Open a trajectory with skip / stride / topology / `guess_bonds`.
+///
+/// Uses sequential [`Trajectory::read`] for the dense `start=0, step=1, stop=None`
+/// path. Any other window uses [`Trajectory::read_step`].
+pub fn con_frames_from_trajectory_path_with<P: AsRef<Path>>(
+    path: P,
+    opts: &ChemfilesReadOpts,
+) -> Result<Vec<ConFrame>, ChemfilesImportError> {
     let path = path.as_ref();
-    let mut traj = Trajectory::open(path, 'r')?;
+    let stride = opts.stride().map_err(ChemfilesImportError::InvalidFrame)?;
+    let mut traj = open_trajectory(path, opts)?;
     let nsteps = traj.nsteps();
-    let mut frames = Vec::with_capacity(nsteps);
+    let start = opts.start;
+    let end = opts.stop.unwrap_or(nsteps).min(nsteps);
+    if start > end {
+        return Err(ChemfilesImportError::InvalidFrame(format!(
+            "chemfiles start {start} is past stop {end} ({nsteps} steps)"
+        )));
+    }
+    let mut frames = Vec::new();
     let mut chfl_frame = Frame::new();
-    for _ in 0..nsteps {
-        traj.read(&mut chfl_frame)?;
-        frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+    let dense = start == 0 && stride == 1 && opts.stop.is_none();
+    if dense {
+        for _ in 0..nsteps {
+            traj.read(&mut chfl_frame)?;
+            apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
+            frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+        }
+    } else {
+        let mut i = start;
+        while i < end {
+            traj.read_step(i, &mut chfl_frame)?;
+            apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
+            frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+            i = i.saturating_add(stride);
+        }
     }
     Ok(frames)
 }
@@ -428,11 +588,31 @@ pub fn con_frames_from_trajectory_path<P: AsRef<Path>>(
 pub fn con_frame_from_trajectory_path<P: AsRef<Path>>(
     path: P,
 ) -> Result<ConFrame, ChemfilesImportError> {
+    con_frame_from_trajectory_path_nth(path, 0)
+}
+
+/// Read step `index` via chemfiles [`Trajectory::read_step`].
+pub fn con_frame_from_trajectory_path_nth<P: AsRef<Path>>(
+    path: P,
+    index: usize,
+) -> Result<ConFrame, ChemfilesImportError> {
     let path = path.as_ref();
     let mut traj = Trajectory::open(path, 'r')?;
+    let nsteps = traj.nsteps();
+    if index >= nsteps {
+        return Err(ChemfilesImportError::InvalidFrame(format!(
+            "frame {index} out of range ({nsteps} steps)"
+        )));
+    }
     let mut chfl_frame = Frame::new();
-    traj.read(&mut chfl_frame)?;
+    traj.read_step(index, &mut chfl_frame)?;
     con_frame_from_chemfiles(&chfl_frame)
+}
+
+/// Number of steps in a chemfiles trajectory ([`Trajectory::nsteps`]).
+pub fn nsteps_from_trajectory_path<P: AsRef<Path>>(path: P) -> Result<usize, ChemfilesImportError> {
+    let mut traj = Trajectory::open(path.as_ref(), 'r')?;
+    Ok(traj.nsteps())
 }
 
 /// Read a trajectory from an in-memory buffer (chemfiles memory reader).
@@ -442,13 +622,29 @@ pub fn con_frames_from_memory(
     data: &str,
     format: &str,
 ) -> Result<Vec<ConFrame>, ChemfilesImportError> {
+    con_frames_from_memory_with(data, format, &ChemfilesReadOpts::default())
+}
+
+/// In-memory read with skip / stride / `guess_bonds`.
+pub fn con_frames_from_memory_with(
+    data: &str,
+    format: &str,
+    opts: &ChemfilesReadOpts,
+) -> Result<Vec<ConFrame>, ChemfilesImportError> {
     use chemfiles::MemoryTrajectoryReader;
+    let stride = opts.stride().map_err(ChemfilesImportError::InvalidFrame)?;
     let mut reader = MemoryTrajectoryReader::new(data.as_bytes(), format)?;
     let nsteps = reader.nsteps();
-    let mut frames = Vec::with_capacity(nsteps);
+    let start = opts.start;
+    let end = opts.stop.unwrap_or(nsteps).min(nsteps);
+    let mut frames = Vec::new();
     let mut chfl_frame = Frame::new();
-    for _ in 0..nsteps {
+    for i in 0..nsteps {
         reader.read(&mut chfl_frame)?;
+        if i < start || i >= end || (i - start) % stride != 0 {
+            continue;
+        }
+        apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
         frames.push(con_frame_from_chemfiles(&chfl_frame)?);
     }
     Ok(frames)
@@ -482,11 +678,7 @@ mod tests {
         assert_eq!(con.header.angles, [90.0, 90.0, 90.0]);
         assert_eq!(con.header.natm_types, 2); // O and H grouped
 
-        let symbols: Vec<&str> = con
-            .atom_data
-            .iter()
-            .map(|a| a.symbol.as_ref())
-            .collect();
+        let symbols: Vec<&str> = con.atom_data.iter().map(|a| a.symbol.as_ref()).collect();
         assert!(symbols.contains(&"O"));
         assert!(symbols.contains(&"H"));
 
@@ -500,10 +692,7 @@ mod tests {
             .get(meta::GENERATOR)
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        assert!(
-            generator.contains("readcon-core"),
-            "generator={generator}"
-        );
+        assert!(generator.contains("readcon-core"), "generator={generator}");
         assert!(generator.contains("chemfiles"), "generator={generator}");
 
         let extra = con
@@ -515,10 +704,11 @@ mod tests {
 
         assert!(con.header.metadata.contains_key(meta::PBC));
         assert!(con.header.metadata.contains_key(meta::LATTICE_VECTORS));
-        assert!(con
-            .header
-            .metadata
-            .contains_key(&format!("{CHEMFILES_EXTRA_PREFIX}library_version")));
+        assert!(
+            con.header
+                .metadata
+                .contains_key(&format!("{CHEMFILES_EXTRA_PREFIX}library_version"))
+        );
     }
 
     #[test]
@@ -573,11 +763,7 @@ H  1.0 0.0 0.0
         assert_eq!(frames.len(), 1);
         let con = &frames[0];
         assert_eq!(con.atom_data.len(), 2);
-        let symbols: Vec<&str> = con
-            .atom_data
-            .iter()
-            .map(|a| a.symbol.as_ref())
-            .collect();
+        let symbols: Vec<&str> = con.atom_data.iter().map(|a| a.symbol.as_ref()).collect();
         assert!(symbols.contains(&"Cu"));
         assert!(symbols.contains(&"H"));
         // XYZ via chemfiles typically has infinite/default cell
@@ -633,5 +819,177 @@ H -0.240  0.927  0.000
             .and_then(|v| v.as_f64())
             .expect("partial_charge");
         assert!((q - (-0.5)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn stamps_chemfiles_internal_units_not_con_default_fs() {
+        let frame = make_water_frame();
+        let con = con_frame_from_chemfiles(&frame).expect("convert");
+        assert_eq!(con.header.length_unit(), Some("angstrom"));
+        assert_eq!(con.header.unit_for("time"), Some("ps"));
+        assert_eq!(con.header.unit_for("mass"), Some("amu"));
+        assert_eq!(con.header.energy_unit(), Some("eV"));
+        let sys = con
+            .header
+            .metadata
+            .get(CHEMFILES_UNIT_SYSTEM_KEY)
+            .and_then(|v| v.as_object())
+            .expect("unit_system");
+        assert_eq!(
+            sys.get("velocity").and_then(|v| v.as_str()),
+            Some("angstrom/ps")
+        );
+        assert_eq!(sys.get("angle").and_then(|v| v.as_str()), Some("degree"));
+    }
+
+    #[test]
+    fn gro_nm_converts_to_angstrom_via_chemfiles() {
+        // GROMACS .gro is nm; chemfiles converts lengths to Å.
+        let gro = "\
+water
+    2
+    1WATER  OW     1   0.000   0.000   0.000
+    1WATER  HW     2   0.100   0.000   0.000
+   1.00000   1.00000   1.00000
+";
+        let frames = con_frames_from_memory(gro, "GRO").expect("gro");
+        assert_eq!(frames.len(), 1);
+        let con = &frames[0];
+        assert_eq!(con.header.length_unit(), Some("angstrom"));
+        assert!(
+            (con.header.boxl[0] - 10.0).abs() < 1e-6,
+            "box={:?}",
+            con.header.boxl
+        );
+        let hw = con
+            .atom_data
+            .iter()
+            .find(|a| a.symbol.as_ref() == "H" || a.symbol.as_ref() == "HW")
+            .expect("H");
+        // 0.100 nm → 1.00 Å
+        assert!((hw.x - 1.0).abs() < 1e-6, "H.x={} (expected 1 Å)", hw.x);
+        let residues = con
+            .header
+            .metadata
+            .get(CHEMFILES_RESIDUES_KEY)
+            .and_then(|v| v.as_array())
+            .expect("residues");
+        assert!(!residues.is_empty());
+        assert_eq!(
+            residues[0].get("name").and_then(|v| v.as_str()),
+            Some("WATER")
+        );
+    }
+
+    #[test]
+    fn read_step_nth_and_stride() {
+        let xyz = "\
+2
+frame0
+Cu 0.0 0.0 0.0
+H  1.0 0.0 0.0
+2
+frame1
+Cu 2.0 0.0 0.0
+H  3.0 0.0 0.0
+2
+frame2
+Cu 4.0 0.0 0.0
+H  5.0 0.0 0.0
+";
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("three.xyz");
+        std::fs::write(&path, xyz).expect("write");
+
+        assert_eq!(nsteps_from_trajectory_path(&path).expect("nsteps"), 3);
+        let mid = con_frame_from_trajectory_path_nth(&path, 1).expect("nth 1");
+        let cu = mid
+            .atom_data
+            .iter()
+            .find(|a| a.symbol.as_ref() == "Cu")
+            .expect("Cu");
+        assert!((cu.x - 2.0).abs() < 1e-12);
+
+        let opts = ChemfilesReadOpts {
+            start: 0,
+            step: 2,
+            stop: None,
+            ..ChemfilesReadOpts::default()
+        };
+        let strided = con_frames_from_trajectory_path_with(&path, &opts).expect("stride");
+        assert_eq!(strided.len(), 2); // frames 0 and 2
+        let cu0 = strided[0]
+            .atom_data
+            .iter()
+            .find(|a| a.symbol.as_ref() == "Cu")
+            .unwrap();
+        let cu2 = strided[1]
+            .atom_data
+            .iter()
+            .find(|a| a.symbol.as_ref() == "Cu")
+            .unwrap();
+        assert!((cu0.x - 0.0).abs() < 1e-12);
+        assert!((cu2.x - 4.0).abs() < 1e-12);
+
+        let err = con_frame_from_trajectory_path_nth(&path, 99).unwrap_err();
+        assert!(err.to_string().contains("out of range"), "{err}");
+    }
+
+    #[test]
+    fn guess_bonds_adds_water_topology() {
+        let xyz = "\
+3
+water
+O  0.000  0.000  0.000
+H  0.957  0.000  0.000
+H -0.240  0.927  0.000
+";
+        let plain = con_frames_from_memory(xyz, "XYZ").expect("plain");
+        assert!(
+            !plain[0].header.has_bonds(),
+            "XYZ has no bonds unless guessed"
+        );
+        let opts = ChemfilesReadOpts {
+            guess_bonds: true,
+            ..ChemfilesReadOpts::default()
+        };
+        let guessed = con_frames_from_memory_with(xyz, "XYZ", &opts).expect("guess");
+        let bonds = guessed[0].header.bonds();
+        assert_eq!(bonds.len(), 2, "water should guess 2 O-H bonds");
+    }
+
+    #[test]
+    fn residues_from_constructed_frame() {
+        use chemfiles::Residue;
+        let mut frame = Frame::new();
+        frame.add_atom(&Atom::new("N"), [0.0, 0.0, 0.0], None);
+        frame.add_atom(&Atom::new("CA"), [1.0, 0.0, 0.0], None);
+        frame.add_atom(&Atom::new("C"), [2.0, 0.0, 0.0], None);
+        let mut res = Residue::with_id("ALA", 7);
+        res.add_atom(0);
+        res.add_atom(1);
+        res.add_atom(2);
+        frame.add_residue(&res).expect("add residue");
+        frame.set_cell(&UnitCell::new([10.0, 10.0, 10.0]));
+        let con = con_frame_from_chemfiles(&frame).expect("convert");
+        let residues = con
+            .header
+            .metadata
+            .get(CHEMFILES_RESIDUES_KEY)
+            .and_then(|v| v.as_array())
+            .expect("residues");
+        assert_eq!(residues.len(), 1);
+        assert_eq!(
+            residues[0].get("name").and_then(|v| v.as_str()),
+            Some("ALA")
+        );
+        assert_eq!(residues[0].get("id").and_then(|v| v.as_i64()), Some(7));
+        assert_eq!(
+            residues[0]
+                .get("atoms")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len()),
+            Some(3)
+        );
     }
 }

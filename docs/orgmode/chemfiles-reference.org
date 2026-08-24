@@ -37,8 +37,14 @@ Optional extra on lean package: =readcon[chemfiles]= → depends on
 |---|---|
 | =con_frame_from_chemfiles(&Frame)= | Single chemfiles frame |
 | =con_frame_from_trajectory_path(path)= | First step of a file |
+| =con_frame_from_trajectory_path_nth(path, i)= | Step =i= via =read_step= |
+| =nsteps_from_trajectory_path(path)= | =Trajectory::nsteps= |
 | =con_frames_from_trajectory_path(path)= | All steps |
+| =con_frames_from_trajectory_path_with(path, opts)= | Skip / stride / topology / =guess_bonds= |
 | =con_frames_from_memory(data, format)= | Buffer + format name (="XYZ"=, …) |
+| =con_frames_from_memory_with= | Memory + skip / stride / =guess_bonds= |
+| =ChemfilesReadOpts= | =start= / =step= / =stop= / =format= / =topology= / =guess_bonds= |
+| =chemfiles_internal_units_json()= | Line-2 units chemfiles actually emits (Å, ps, amu) |
 | =bonds_from_chemfiles_frame= | Topology → =Vec<Bond>= |
 | =chemfiles_enabled()= | =const fn= probe |
 
@@ -56,7 +62,14 @@ available with the feature (needs =chemfiles::Frame= in the signature).
 | =parse_selection_string(sel)= | Context size only |
 
 Constants: =CHEMFILES_EXTRA_PREFIX=, =CHEMFILES_ATOM_PROPS_KEY=,
-=CHEMFILES_ATOM_NAMES_KEY=, =CHEMFILES_ATOM_TYPES_KEY=.
+=CHEMFILES_ATOM_NAMES_KEY=, =CHEMFILES_ATOM_TYPES_KEY=,
+=CHEMFILES_RESIDUES_KEY=, =CHEMFILES_UNIT_SYSTEM_KEY=.
+
+Imported frames stamp chemfiles *internal* units on CON line 2
+(=length= =angstrom=, =time= =ps=, =mass= =amu=). Chemfiles converts
+GRO nm → Å (and other format units) on read; the CON numbers are
+already in that system. Energy stays the CON default =eV= because
+chemfiles does not convert energies.
 
 Error: =ChemfilesImportError= (=Chemfiles= / =InvalidFrame= / =Io= /
 =FeatureDisabled=; =Chemfiles= variant only in full builds).
@@ -66,9 +79,11 @@ Error: =ChemfilesImportError= (=Chemfiles= / =InvalidFrame= / =Io= /
 | API | Lean wheel | =readcon-chemfiles= |
 |---|---|---|
 | =has_chemfiles_support()= | =False= | =True= |
-| =read_chemfiles(path)= | =RuntimeError= | =list[ConFrame]= (all steps) |
+| =read_chemfiles(path, *, skip=0, step=1, stop=None, topology=None, format=None, guess_bonds=False)= | =RuntimeError= | =list[ConFrame]= |
 | =read_chemfiles_first(path)= | =RuntimeError= | =ConFrame= |
-| =read_chemfiles_memory(data, format)= | =RuntimeError= | =list[ConFrame]= |
+| =read_chemfiles_nth(path, index)= | =RuntimeError= | =ConFrame= (=read_step=) |
+| =read_chemfiles_nsteps(path)= | =RuntimeError= | =int= |
+| =read_chemfiles_memory(data, format, *, skip=0, step=1, stop=None, guess_bonds=False)= | =RuntimeError= | =list[ConFrame]= |
 | =select_on_frame(frame, sel)= / =frame.select(sel)= | error | dict |
 | =select_atom_indices(frame, sel)= / =frame.select_atoms(sel)= | error | =list[int]= |
 | =frame.write_con(path)= | yes | yes |

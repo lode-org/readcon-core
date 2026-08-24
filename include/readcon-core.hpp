@@ -981,6 +981,34 @@ inline ConFrame read_nth_frame(const std::filesystem::path &path,
     return ConFrame(handle);
 }
 
+inline ConFrame read_chemfiles_first(const std::filesystem::path &path) {
+    RKRConFrame *handle = rkr_read_chemfiles_first(path.string().c_str());
+    if (!handle) {
+        throw std::runtime_error("Failed to read chemfiles first frame from: " +
+                                 path.string());
+    }
+    return ConFrame(handle);
+}
+
+inline ConFrame read_chemfiles_nth(const std::filesystem::path &path,
+                                   std::size_t index) {
+    RKRConFrame *handle = rkr_read_chemfiles_nth(path.string().c_str(), index);
+    if (!handle) {
+        throw std::runtime_error("Failed to read chemfiles frame " +
+                                 std::to_string(index) + " from: " +
+                                 path.string());
+    }
+    return ConFrame(handle);
+}
+
+inline std::size_t chemfiles_nsteps(const std::filesystem::path &path) {
+    std::size_t n = rkr_chemfiles_nsteps(path.string().c_str());
+    if (n == static_cast<std::size_t>(-1)) {
+        throw std::runtime_error("chemfiles_nsteps failed: " + path.string());
+    }
+    return n;
+}
+
 /**
  * @brief Reads all frames from a .con file using mmap.
  * @throws std::runtime_error on failure.
@@ -1009,6 +1037,31 @@ adopt_frame_handles(RKRConFrame **handles, size_t num_frames,
 inline std::vector<ConFrame> read_all_frames(const std::filesystem::path &path) {
     size_t num_frames = 0;
     RKRConFrame **handles = rkr_read_all_frames(path.string().c_str(), &num_frames);
+    return adopt_frame_handles(handles, num_frames, path);
+}
+
+inline std::vector<ConFrame> read_chemfiles(const std::filesystem::path &path) {
+    size_t num_frames = 0;
+    RKRConFrame **handles = rkr_read_chemfiles(path.string().c_str(), &num_frames);
+    return adopt_frame_handles(handles, num_frames, path);
+}
+
+inline std::vector<ConFrame>
+read_chemfiles_range(const std::filesystem::path &path, std::size_t start,
+                     std::size_t step, std::size_t stop,
+                     const std::filesystem::path *topology = nullptr,
+                     bool guess_bonds = false) {
+    size_t num_frames = 0;
+    std::string topo_owned;
+    const char *topo = nullptr;
+    if (topology) {
+        topo_owned = topology->string();
+        topo = topo_owned.c_str();
+    }
+    std::string path_owned = path.string();
+    RKRConFrame **handles =
+        rkr_read_chemfiles_range(path_owned.c_str(), start, step, stop, topo,
+                                 guess_bonds ? 1 : 0, &num_frames);
     return adopt_frame_handles(handles, num_frames, path);
 }
 

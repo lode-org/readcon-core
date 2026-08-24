@@ -1,8 +1,8 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
-use crate::types::{meta, ConFrame, ConFrameBuilder};
+use crate::types::{ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::fs::File;
 use std::path::Path;
 use std::ptr;
@@ -658,9 +658,7 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 /// Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
 /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` at EOF, other codes on parse error.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn con_frame_iterator_forward(
-    iterator: *mut CConFrameIterator,
-) -> RKRStatus {
+pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIterator) -> RKRStatus {
     if iterator.is_null() {
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     }
@@ -4208,6 +4206,112 @@ pub unsafe extern "C" fn rkr_read_chemfiles_first(path_c: *const c_char) -> *mut
         Err(_) => std::ptr::null_mut(),
     }
 }
+
+/// Read every step from a chemfiles-supported path. Sets `*num_frames`.
+/// Free with `free_rkr_frame_array`. NULL on error / without chemfiles.
+///
+/// # Safety
+/// `path_c` valid UTF-8; `num_frames` non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_chemfiles(
+    path_c: *const c_char,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
+    if path_c.is_null() || num_frames.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    match crate::chemfiles_import::con_frames_from_trajectory_path(path_str) {
+        Ok(frames) => pack_frame_handles(frames, num_frames),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Read step `index` via chemfiles `Trajectory::read_step`.
+/// Returns NULL on error, out of range, or without the `chemfiles` feature.
+///
+/// # Safety
+/// `path_c` must be a valid NUL-terminated UTF-8 path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_chemfiles_nth(
+    path_c: *const c_char,
+    index: usize,
+) -> *mut RKRConFrame {
+    if path_c.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    match crate::chemfiles_import::con_frame_from_trajectory_path_nth(path_str, index) {
+        Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Number of steps in a chemfiles trajectory (`Trajectory::nsteps`).
+/// Returns `usize::MAX` on error or without the `chemfiles` feature.
+///
+/// # Safety
+/// `path_c` must be a valid NUL-terminated UTF-8 path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_chemfiles_nsteps(path_c: *const c_char) -> usize {
+    if path_c.is_null() {
+        return usize::MAX;
+    }
+    let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
+        return usize::MAX;
+    };
+    crate::chemfiles_import::nsteps_from_trajectory_path(path_str).unwrap_or(usize::MAX)
+}
+
+/// Read a chemfiles window: steps `start, start+step, … < stop`.
+/// `stop == usize::MAX` means `nsteps`. `guess_bonds != 0` guesses topology
+/// when the frame has no bonds. Sets `*num_frames`.
+/// Free with `free_rkr_frame_array`. NULL on error / without chemfiles.
+///
+/// # Safety
+/// `path_c` valid UTF-8; `num_frames` non-null. `topology_c` may be NULL.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_chemfiles_range(
+    path_c: *const c_char,
+    start: usize,
+    step: usize,
+    stop: usize,
+    topology_c: *const c_char,
+    guess_bonds: u8,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
+    if path_c.is_null() || num_frames.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    let topology = if topology_c.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(topology_c) }.to_str() {
+            Ok(s) if !s.is_empty() => Some(std::path::PathBuf::from(s)),
+            _ => return std::ptr::null_mut(),
+        }
+    };
+    let opts = crate::chemfiles_import::ChemfilesReadOpts {
+        start,
+        step,
+        stop: if stop == usize::MAX { None } else { Some(stop) },
+        format: None,
+        topology,
+        topology_format: None,
+        guess_bonds: guess_bonds != 0,
+    };
+    match crate::chemfiles_import::con_frames_from_trajectory_path_with(path_str, &opts) {
+        Ok(frames) => pack_frame_handles(frames, num_frames),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
 /// Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
 /// Sets `*num_frames`. Free frames with `free_rkr_frame` and the array with
 /// `free_rkr_frame_array`. NULL on error / without chemfiles.
@@ -5152,8 +5256,8 @@ mod tests {
 
     #[test]
     fn file_iterator_reads_gzip_when_present() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
         let plain = std::fs::read("resources/test/tiny_cuh2.con").expect("fixture");
         let dir = tempfile::tempdir().expect("tempdir");
