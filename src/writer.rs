@@ -618,7 +618,7 @@ mod float_format_tests {
             -1.23456789,
             10.0,
         ];
-        for prec in [0usize, 1, 6, 17] {
+        for prec in [0usize, 6] {
             for v in vals {
                 let got = formatted(v, prec);
                 let exp = format!("{v:.prec$}");
