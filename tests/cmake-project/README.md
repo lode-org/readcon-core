@@ -9,6 +9,7 @@ cmake -S tests/cmake-project -B build/cmake-fetch \
   -DREADCON_CORE_USE_FETCHCONTENT=ON
 cmake --build build/cmake-fetch
 ./build/cmake-fetch/c-main resources/test/tiny_multi_cuh2.con
+./build/cmake-fetch/c-conformance $PWD
 
 # find_package after a prefix install
 cmake -S . -B build/core-prefix -DCMAKE_INSTALL_PREFIX=$PWD/prefix

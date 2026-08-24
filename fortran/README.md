@@ -21,6 +21,7 @@ Always `call obj%free()` when done (no FINAL — avoids double-free).
 # From repo root — sets READCON_CORE_ROOT, always passes -cpp
 READCON_FORTRAN_FEATURES=chemfiles scripts/run_fortran_tests.sh
 READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
+# test_conformance_goldens locks resources/conformance against golden/*.json
 ```
 
 CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via the same script.

@@ -22,6 +22,11 @@ name = "test_read_con"
 source-dir = "test"
 main = "test_read_con.f90"
 
+[[test]]
+name = "test_conformance_goldens"
+source-dir = "test_conformance"
+main = "test_conformance_goldens.f90"
+
 [[example]]
 name = "read_first"
 source-dir = "example"

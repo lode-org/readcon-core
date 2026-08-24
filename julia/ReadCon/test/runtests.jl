@@ -243,4 +243,6 @@ end
         )
         @test a3.has_energy
     end
+
+    include("test_conformance_goldens.jl")
 end
