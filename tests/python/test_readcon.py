@@ -458,6 +458,28 @@ class TestConFrameConstructor:
         energies = [fr.energy for fr in frames]
         assert energies[1] > energies[0]
         assert energies[1] > energies[3]
+        tsv = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "resources",
+            "examples",
+            "neb_band.tsv",
+        )
+        rows = []
+        with open(tsv, encoding="utf-8") as handle:
+            header = handle.readline().strip().split("\t")
+            assert header == ["bead", "energy_eV", "fmax"]
+            for line in handle:
+                bead, energy, fmax = line.strip().split("\t")
+                rows.append((int(bead), float(energy), float(fmax)))
+        assert [(fr.neb_bead, fr.energy, fr.metadata["fmax"]) for fr in frames] == rows
+        assert [int(fr.index_projection()["neb_bead"]) for fr in frames] == [
+            0,
+            1,
+            2,
+            3,
+        ]
 
     def test_cuh2_band_is_four_218_atom_images(self):
         path = os.path.join(
