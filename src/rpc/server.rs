@@ -85,24 +85,45 @@ impl read_con_service::Server for ReadConServiceImpl {
     }
 }
 
-/// Starts an RPC server on the given address.
-///
-/// This function blocks until the server is shut down.
-pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let service: read_con_service::Client = capnp_rpc::new_client(ReadConServiceImpl);
+fn spawn_server_vat<S>(stream: S, service: read_con_service::Client)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
+{
+    let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
+    let network = twoparty::VatNetwork::new(
+        reader,
+        writer,
+        rpc_twoparty_capnp::Side::Server,
+        Default::default(),
+    );
+    let rpc_system = RpcSystem::new(Box::new(network), Some(service.client));
+    tokio::task::spawn_local(rpc_system);
+}
 
-    loop {
-        let (stream, _) = listener.accept().await?;
-        stream.set_nodelay(true)?;
-        let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
-        let network = twoparty::VatNetwork::new(
-            reader,
-            writer,
-            rpc_twoparty_capnp::Side::Server,
-            Default::default(),
-        );
-        let rpc_system = RpcSystem::new(Box::new(network), Some(service.clone().client));
-        tokio::task::spawn_local(rpc_system);
+/// Starts an RPC server on a TCP `host:port` or Unix `unix:/path` endpoint.
+///
+/// Blocks until the process is stopped. A pre-existing Unix socket file is
+/// removed before bind.
+pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let ep = super::endpoint::Endpoint::parse(addr)?;
+    let service: read_con_service::Client = capnp_rpc::new_client(ReadConServiceImpl);
+    match ep {
+        super::endpoint::Endpoint::Tcp(bind) => {
+            let listener = tokio::net::TcpListener::bind(&bind).await?;
+            loop {
+                let (stream, _) = listener.accept().await?;
+                stream.set_nodelay(true)?;
+                spawn_server_vat(stream, service.clone());
+            }
+        }
+        #[cfg(unix)]
+        super::endpoint::Endpoint::Unix(path) => {
+            let _ = std::fs::remove_file(&path);
+            let listener = tokio::net::UnixListener::bind(&path)?;
+            loop {
+                let (stream, _) = listener.accept().await?;
+                spawn_server_vat(stream, service.clone());
+            }
+        }
     }
 }
