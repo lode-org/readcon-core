@@ -15,6 +15,7 @@ build-rpc = "cargo build --release --features rpc"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Optional: draft include/readcon-core.h via cbindgen (maintainers only, not CI)" }
 check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Optional maintainer diff vs cbindgen; CI does not run this" }
 check-cxx-dist = { cmd = "scripts/check-cxx-dist.sh", description = "Gate: CMake/Meson/pkg-config never require cbindgen" }
+check-wrap-hash = { cmd = "scripts/check_wrap_hash.sh", description = "Gate: wrap source_hash matches published cxx SHA" }
 package-cxx = { cmd = "scripts/package-cxx.sh dist-cxx", description = "Assemble readcon-core-cxx-$VERSION.tar.gz" }
 prek = { cmd = "prek run -a", description = "Run prek hooks on all files" }
 cpc-tables = { cmd = "python paper/cpc/scripts/gen_tables.py", description = "Write CPC table fragments from committed bench JSON" }
