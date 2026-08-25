@@ -100,7 +100,7 @@ after a prefix install. The cxx tarball on the GitHub Release is
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.14.9/readcon-core-cxx-0.14.9.tar.gz
-      URL_HASH SHA256=5ae875b90faef98102949c9c0ec03d34ffab9ba5bdc8386c70e42cc153fcbd4e
+      URL_HASH SHA256=94df61bccfe2518a95b76041cf9042ef9f331d781ca400de2bfef5c070e1309a
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
