@@ -11,8 +11,7 @@
        </div>
      </div>
      <p class="rc-hero-tagline">Reference reader and writer for versioned CON checkpoints: cell, per-direction constraints, atom identity, optional forces.</p>
-     <pre class="rc-hero-conline" aria-hidden="true">{"con_spec_version":2}
-15.345600	21.702000	100.000000</pre>
+     <pre class="rc-hero-conline" aria-hidden="true">{"con_spec_version":2}&#10;15.345600  21.702000  100.000000</pre>
    </div>
 
 ================
