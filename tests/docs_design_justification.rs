@@ -211,12 +211,15 @@ fn readcon_db_surface_has_hosted_docs() {
         "Sphinx Ecosystem nav must not list docs.rs/readcon-db as a peer"
     );
     assert!(
-        !conf.contains("eondocs.org")
-            && !conf.contains("rgpot")
-            && !conf.contains("chemparseplot")
-            && !conf.contains("rgpycrumbs")
-            && !conf.contains("docs.rs/readcon-core"),
-        "nav must not dump adjacent tools or docs.rs into Ecosystem"
+        conf.contains("eondocs.org")
+            && conf.contains("rgpot")
+            && conf.contains("chemparseplot")
+            && conf.contains("rgpycrumbs"),
+        "Ecosystem nav must keep the sibling docs sites"
+    );
+    assert!(
+        !conf.contains("docs.rs/readcon-core"),
+        "top nav must not list docs.rs as a peer"
     );
 }
 
