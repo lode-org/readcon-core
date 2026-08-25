@@ -3,8 +3,8 @@
 \centering
 \caption{Median wall times, 100 frames of the 218-atom
 \texttt{cuh2.con} geometry, five repeats
-(\texttt{benches/results/wall\_scale.json}, 2026-08-20T18:10Z, host
-\texttt{rgam5terra}, 32 CPUs, tree \texttt{72e3fb54},
+(\texttt{benches/results/wall\_scale.json}, 2026-08-24T22:18Z, host
+\texttt{rgam5terra}, 32 CPUs, tree \texttt{3c63b806},
 \texttt{wall\_scale\_harness --features parallel}).
 Sequential is \texttt{n=1}. Auto is the $48$\,KiB Rayon policy.
 Write is \texttt{ConFrameWriter} to a memory buffer.
@@ -14,14 +14,14 @@ Do not average these with Table~\ref{tab:wall}.}
 \toprule
 Path & Policy & Median (ms) \\
 \midrule
-Parse & sequential (\texttt{n=1}) & $2.409$ \\
- & auto (global pool) & $0.627$ \\
- & Rayon $n=2$ & $1.192$ \\
- & Rayon $n=4$ & $0.896$ \\
- & Rayon $n=8$ & $0.771$ \\
- & Rayon $n=16$ & $0.717$ \\
+Parse & sequential (\texttt{n=1}) & $2.832$ \\
+ & auto (global pool) & $0.767$ \\
+ & Rayon $n=2$ & $1.978$ \\
+ & Rayon $n=4$ & $1.213$ \\
+ & Rayon $n=8$ & $0.918$ \\
+ & Rayon $n=16$ & $0.823$ \\
 \midrule
-Write & buffer, 100 frames & $4.126$ \\
+Write & buffer, 100 frames & $3.015$ \\
 \bottomrule
 \end{tabular}
 \end{table}
