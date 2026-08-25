@@ -26,7 +26,7 @@ Pick **one** language. Version pins match this tree (``0.14.9``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Rust + chemfiles   | ``cargo add readcon-core@0.14.9 --features chemfiles``                              | same crate                                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Campaign store     | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_ |
+    | readcon-db         | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/docs/>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_                                      |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
     | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -64,10 +64,11 @@ Rust: with conversion
 
     cargo add readcon-core@0.14.9 --features chemfiles
 
-Campaign store (``readcon-db``)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+readcon-db
+~~~~~~~~~~
 
-Separate package; CON text stays authoritative.
+Separate package; CON text stays authoritative. Hosted docs:
+`lode-org.github.io/readcon-db/docs <https://lode-org.github.io/readcon-db/docs/>`_.
 
 .. code:: shell
 
@@ -196,9 +197,9 @@ Scope (map of the stack)
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
     | Link from Fortran / C / C++     | Hourglass ``rkr_*`` ABI                                                                                                            |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Campaign store (install)        | ``cargo add readcon-db`` / ``pip install readcon-db``                                                                              |
+    | readcon-db (install)            | ``cargo add readcon-db`` / ``pip install readcon-db``                                                                              |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Many trajectories, multi-reader | `readcon-db docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs API <https://docs.rs/readcon-db>`_ (CON text authoritative) |
+    | Many trajectories, multi-reader | `readcon-db docs <https://lode-org.github.io/readcon-db/docs/>`_ (CON text authoritative)                                           |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
     | Campaign field projection       | ```index_proj`` <https://docs.rs/readcon-core/latest/readcon_core/index_proj/>`_ (same meanings as db indexes)                     |
     +---------------------------------+------------------------------------------------------------------------------------------------------------------------------------+

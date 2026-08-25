@@ -36,7 +36,7 @@ selectors, or energy fields yourself.
 | Ingress | Chemfiles: XYZ/PDB/GRO/… → CON with one convert path |
 | Performance gates | Cachegrind I-refs (main); Python ASV + spyglass (PRs); peer scripts under =benches/= |
 
-Migrate so the structure object, selector, campaign store, and plots all speak
+Migrate so the structure object, selector, readcon-db, and plots all speak
 CON. Format rules: [[file:spec.org][spec.org]].
 
 * Performance
@@ -47,9 +47,9 @@ zero-copy line views, header-sized atom vectors, =read_to_string= vs mmap at
 and local scripts measure that (Cachegrind, ASV, peers):
 [[file:benchmarks.org][benchmarks.org]].
 
-* Benefit: campaign store (=readcon-db=)
+* Benefit: readcon-db
 
-=readcon-core= is the decoder/writer. [[https://github.com/lode-org/readcon-db][readcon-db]] is the campaign
+=readcon-core= is the decoder/writer. [[https://github.com/lode-org/readcon-db][readcon-db]] is the corpus
 layer that *assumes CON text is authoritative*:
 
 | Capability | What you get after switching to CON |
@@ -60,11 +60,10 @@ layer that *assumes CON text is authoritative*:
 | Join / split / reindex | Corpus ops stay on UTF-8 CON; no opaque binary fork of the structure |
 
 Install (separate package): =cargo add readcon-db= / =pip install readcon-db=.
-Package docs: [[https://lode-org.github.io/readcon-db/][lode-org.github.io/readcon-db]].
-Rust API: [[https://docs.rs/readcon-db][docs.rs/readcon-db]].
+Package docs: [[https://lode-org.github.io/readcon-db/docs/][lode-org.github.io/readcon-db/docs]].
 Source: [[https://github.com/lode-org/readcon-db][github.com/lode-org/readcon-db]].
 Multi-frame CON (with optional compression) plus selection and =index_proj=
-feed the same campaign path; you do not need a second structure dialect for
+feed the same corpus path; you do not need a second structure dialect for
 "real" trajectories or screening corpora.
 
 * Benefit: the API (stop owning your own atoms object)
@@ -163,7 +162,7 @@ frame2.write_con("after.con")   # interchange stays CON text
 ASE adapters are optional. After the calculator step, write CON again so
 =readcon-db= ingest and hourglass consumers still see the interchange file.
 
-* Into a campaign store
+* Into readcon-db
 
 Once files are CON text:
 
@@ -205,5 +204,5 @@ More chemfiles recipes: [[file:chemfiles-howto.org][chemfiles-howto.org]].
 | Selection / bonds on CON | [[file:chemfiles-howto.org][chemfiles-howto]], [[file:faq.org][faq]] |
 | Declared sections / validate | [[file:faq.org][faq]], [[file:spec.org][spec]] |
 | Link C / Fortran / Julia | [[file:bindings.org][bindings]], [[file:howto.org][howto]] |
-| Campaign store | [[https://github.com/lode-org/readcon-db][readcon-db]] · [[https://lode-org.github.io/readcon-db/][docs]] · [[https://docs.rs/readcon-db][docs.rs]] |
+| readcon-db | [[https://github.com/lode-org/readcon-db][readcon-db]] · [[https://lode-org.github.io/readcon-db/docs/][docs]] |
 | Plotting | [[https://chemparseplot.rgoswami.me][chemparseplot]] · [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] |

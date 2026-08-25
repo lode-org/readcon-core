@@ -498,25 +498,28 @@ html[data-theme="dark"] .highlight pre,
   color: var(--rc-pre-fg) !important;
 }
 
-/* ---- Hero (rtrash-style brand card; indigo system) ----------------------- */
+/* ---- Hero: CON frame sheet (gold line-2 rule, indigo tile, no pills) ----- */
 .rc-hero {
   margin: 0 0 1.75rem;
-  padding: 1.6rem 1.4rem 1.35rem;
-  border-radius: 16px;
-  background:
-    radial-gradient(120% 80% at 0% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
-    linear-gradient(145deg, #eef2ff 0%, #e0e7ff 42%, #f8fafc 100%);
-  border: 1px solid #c7d2fe;
-  box-shadow: 0 1px 0 rgba(49, 46, 129, 0.06);
+  padding: 0 0 1.15rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #c7d2fe;
+  border-radius: 0;
+  box-shadow: none;
   text-align: left;
   max-width: none;
 }
+.rc-hero-rule {
+  height: 3px;
+  width: 100%;
+  margin: 0 0 1.15rem;
+  background: #c9a227;
+}
 html.dark .rc-hero,
 html[data-theme="dark"] .rc-hero {
-  background:
-    radial-gradient(120% 80% at 0% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
-    linear-gradient(145deg, #1e1b4b 0%, #0f172a 100%);
-  border-color: #3730a3;
+  background: transparent;
+  border-bottom-color: #3730a3;
   box-shadow: none;
 }
 
@@ -530,12 +533,12 @@ html[data-theme="dark"] .rc-hero {
   width: 56px;
   height: 56px;
   flex: 0 0 auto;
-  border-radius: 14px;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
+  border-radius: 0;
+  box-shadow: none;
 }
 html.dark .rc-hero-mark,
 html[data-theme="dark"] .rc-hero-mark {
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
 }
 
 .rc-hero-name {
@@ -586,37 +589,26 @@ html[data-theme="dark"] .rc-hero-tagline {
   color: #c7d2fe;
 }
 
-.rc-hero-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 1rem;
-}
-.rc-hero-pills span {
-  font-size: 0.78rem;
-  padding: 0.22rem 0.62rem;
-  border-radius: 999px;
-  background: #e0e7ff;
-  color: #312e81;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-html.dark .rc-hero-pills span,
-html[data-theme="dark"] .rc-hero-pills span {
-  background: #312e81;
-  color: #e0e7ff;
-}
-
-.rc-hero-flow {
-  margin: 0.85rem 0 0;
-  font-size: 0.9rem;
+.rc-hero-conline {
+  margin: 1rem 0 0;
+  padding: 0.65rem 0 0;
+  border: 0;
+  border-top: 1px solid #c7d2fe;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
   font-family: var(--rc-font-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
   color: #4338ca;
-  opacity: 0.9;
+  white-space: pre;
+  overflow-x: auto;
 }
-html.dark .rc-hero-flow,
-html[data-theme="dark"] .rc-hero-flow {
+html.dark .rc-hero-conline,
+html[data-theme="dark"] .rc-hero-conline {
+  border-top-color: #3730a3;
   color: #a5b4fc;
+  background: transparent;
 }
 
 /* Sphinx section H1 duplicates the brand name — keep for a11y, hide visually. */
