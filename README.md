@@ -191,7 +191,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 
 <tr>
 <td class="org-left">C / C++ Meson</td>
-<td class="org-left"><code>dependency('readcon-core')</code> (wrapdb / wrap-file)</td>
+<td class="org-left"><code>dependency('readcon-core')</code> (in-tree wrap-file)</td>
 <td class="org-left">same</td>
 </tr>
 
