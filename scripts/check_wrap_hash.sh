@@ -54,6 +54,17 @@ else
   die "wrap source_hash '${source_hash_raw}' is not a 64-char sha256"
 fi
 
+if command -v curl >/dev/null 2>&1; then
+  live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
+  if [[ -z "$live" ]]; then
+    die "could not fetch ${source_url}.sha256"
+  elif [[ "$live" == "$source_hash" ]]; then
+    ok "GitHub Release .sha256 matches wrap source_hash"
+  else
+    die "live ${source_url}.sha256 is '${live}', wrap has '${source_hash}'"
+  fi
+fi
+
 generated="$(sed -e "s/@VERSION@/${cargo_ver}/g" -e "s/@SHA256@/${source_hash}/g" "$WRAP_IN")"
 if [[ "$generated" == "$(cat "$WRAP")" ]]; then
   ok "wrap.in substitutes to packaging/wrapdb/readcon-core.wrap"
