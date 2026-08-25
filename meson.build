@@ -29,8 +29,14 @@ cc = meson.get_compiler('c')
 cargo_prog = find_program('cargo', required: true)
 rustc_prog = find_program('rustc', required: true)
 _py = find_program('python3', 'python')
-_rv = run_command(rustc_prog, '--version', check: true).stdout().strip().split()
-if _rv.length() < 2 or not _rv[1].version_compare('>= 1.88.0')
+_rv = run_command(rustc_prog, '--version', check: false)
+if _rv.returncode() != 0
+    # wrapdb qemu Alpine loongarch64/riscv64: rustc --version SIGABRT (scudo).
+    # wrapdb treats this exact phrase as an architecture skip.
+    error('unsupported architecture')
+endif
+_rv_bits = _rv.stdout().strip().split()
+if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
     error('readcon-core requires rustc >= 1.88.0')
 endif
 
@@ -54,7 +60,11 @@ endif
 
 if host_machine.system() == 'windows'
     _cargo_shared = 'readcon_core.dll'
-    _cargo_static = 'readcon_core.lib'
+    if cc.get_argument_syntax() == 'msvc'
+        _cargo_static = 'readcon_core.lib'
+    else
+        _cargo_static = 'libreadcon_core.a'
+    endif
 else
     _so = host_machine.system() == 'darwin' ? '.dylib' : '.so'
     _cargo_shared = 'libreadcon_core' + _so
