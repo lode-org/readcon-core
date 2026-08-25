@@ -2,7 +2,7 @@
   "title": "readcon-core: a CON/convel reader/writer with FFI bindings",
   "version": "0.14.8",
   "upload_type": "software",
-  "publication_date": "2026-08-15",
+  "publication_date": "2026-08-24",
   "creators": [
     {
       "name": "Goswami, Rohit",
@@ -21,10 +21,10 @@
   "license": "MIT",
   "related_identifiers": [
     {
-      "identifier": "https://github.com/lode-org/readcon-core/tree/v0.14.7",
+      "identifier": "https://github.com/lode-org/readcon-core/tree/v0.14.8",
       "relation": "isSupplementTo",
       "scheme": "url"
     }
   ],
-  "notes": "Deposit the v0.14.7 software tag only. Do not attach the manuscript, cover letters, or reviewer correspondence. Do not mint a new version for prose edits."
+  "notes": "Deposit the v0.14.8 software tag only. Do not attach the manuscript, cover letters, or reviewer correspondence. Do not mint a new version for prose edits."
 }

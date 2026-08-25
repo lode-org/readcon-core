@@ -295,8 +295,8 @@ the committed header and checks that the library exports the declared
 
 The ``[package.metadata.capi.pkg_config] filename = "readcon-core"``
 override is load-bearing: without it cargo-c defaults the .pc filename
-to the ``[lib]`` name (``readcon_core``), which downstream packagers (the
-conda-forge feedstock in particular) check for at the hyphenated name.
+to the ``[lib]`` name (``readcon_core``), which downstream packagers check
+for at the hyphenated name.
 
 .. _abi-stability:
 
@@ -346,8 +346,8 @@ classifier and the SONAME/semver major bump. Until that tag:
   in a patch.
 
 - A breaking C change requires a 0.15+ minor (0.x semver) and a
-  matching header/SONAME bump. conda-forge ``run_exports`` already pin
-  ``upper_bound``'x.x'= for that reason.
+  matching header/SONAME bump. Downstream packagers that ship
+  ``run_exports`` should pin an ``upper_bound`` of ``x.x`` for that reason.
 
 Drift check \*\*
 ~~~~~~~~~~~~~~~~
