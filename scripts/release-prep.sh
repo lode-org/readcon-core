@@ -47,6 +47,8 @@ sed -i "s/^version: .*/version: ${VER}/" CITATION.cff
 # First JSON "version" key in each metadata file.
 sed -i "0,/\"version\": /{s/\"version\": \"[^\"]*\"/\"version\": \"${VER}\"/}" codemeta.json
 sed -i "0,/\"version\": /{s/\"version\": \"[^\"]*\"/\"version\": \"${VER}\"/}" .zenodo.json
+sed -i "s#tree/v[0-9.][0-9.]*#tree/v${VER}#g" .zenodo.json
+sed -i "s/Deposit the v[0-9.][0-9.]* software tag/Deposit the v${VER} software tag/" .zenodo.json
 
 echo "==> Cargo.lock refresh"
 if [[ "${READCON_RELEASE_PREP_SKIP_TESTS:-}" == 1 ]]; then

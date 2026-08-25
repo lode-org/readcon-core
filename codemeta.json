@@ -4,11 +4,11 @@
   "name": "readcon-core",
   "description": "A CON/convel reader/writer with a shipped C ABI and bindings for C++, Python, Julia, and Fortran.",
   "version": "0.14.8",
-  "datePublished": "2026-08-15",
+  "datePublished": "2026-08-24",
   "license": "https://spdx.org/licenses/MIT",
   "codeRepository": "https://github.com/lode-org/readcon-core",
   "url": "https://lode-org.github.io/readcon-core",
-  "identifier": "https://doi.org/10.5281/zenodo.21959103",
+  "identifier": "https://doi.org/10.5281/zenodo.18753567",
   "programmingLanguage": ["Rust", "C", "C++", "Python", "Julia", "Fortran"],
   "author": [
     {
