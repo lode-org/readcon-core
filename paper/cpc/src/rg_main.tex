@@ -111,11 +111,12 @@ interchange; gzip/zstd are envelopes of that text. A default
 C prefix enable \texttt{parallel}. Then
 \texttt{rkr\_read\_all\_frames} / \texttt{readcon.read\_con} use
 Rayon above $48$\,KiB; \texttt{rkr\_read\_all\_frames\_n\_threads}
-and \texttt{n\_threads} select the worker count. Version 0.14.7.
+and \texttt{n\_threads} select the worker count. Version 0.14.8.
 The C ABI is frozen within 0.14.x. A 1.0.0 tag is the production
 classifier. Cite the software through \texttt{CITATION.cff}
-\cite{smithSoftwareCitationPrinciples2016}. The v0.14.7 software
-archive is \texttt{10.5281/zenodo.21959103}
+\cite{smithSoftwareCitationPrinciples2016}. The freeze tag is the
+\texttt{v0.14.8} GitHub Release. The software archive series is
+\texttt{10.5281/zenodo.18753567}
 \cite{goswamiReadconcore01472026}. This manuscript does not invent a
 paper DOI. Deposit the core and readcon-db freeze tags together; do
 not write a second paper for readcon-db alone.\\
@@ -284,7 +285,7 @@ the commit-stable instruction-count measurement.
 Table \ref{tab:cachegrind} reports selected rows from the
 committed table
 (\texttt{docs/source/\_generated/cachegrind\_results.rst},
-2026-08-20T18:45:01Z, commit \texttt{751aaa3}). Those counts are instruction
+\texttt{\cgDate}, commit \texttt{\cgCommit}). Those counts are instruction
 counts, not wall times. That program writes \(100\) frames to a
 buffer; that I-ref is in the table. There is no Cachegrind
 scenario for Rayon.
@@ -346,9 +347,9 @@ version, column-4 mask, positions, atom ids, and symbols. Rust, the
 C ABI, and Python share the same parser. Fortran and Julia call the
 C ABI. The optional Pest grammar is exercised separately
 (\texttt{cargo test -{}-{}features grammar}).
-The published cxx tarball on the \texttt{v0.14.7} GitHub Release is
+The published cxx tarball on the \texttt{v0.14.8} GitHub Release is
 the CMake FetchContent URL (SHA256
-\texttt{14710ec007b2131d2c0e13931bf3e7e443ce87627ace2fb21497a05ea0b5df43}).
+\texttt{de72b5d36fa8a5c90bfe4fd726d99107194cd74f9d8bc41bc0c7ff828c8f779f}).
 \section{Applications}
 \label{sec:applications}
 eOn and the amsel campaign stack consume CON as the checkpoint
@@ -388,16 +389,16 @@ that cannot embed a Python interpreter.
 \section{Availability}
 \label{sec:availability}
 Source, headers, and language packages are versioned together at
-0.14.7: the crate on crates.io and wheels on PyPI (\texttt{readcon}
+0.14.8: the crate on crates.io and wheels on PyPI (\texttt{readcon}
 and \texttt{readcon-chemfiles}). Julia \texttt{Project.toml} and the
 Fortran fpm package live in this repository and bind a prebuilt or
 locally built \texttt{libreadcon\_core}; they are not registry
 packages. CMake FetchContent and the in-tree Meson wrap-file point
-at the slim cxx tarball on the matching GitHub Release. A
-conda-forge staged-recipes entry is open (PR 32605) at the same
-version. Cite the software through \texttt{CITATION.cff}
-\cite{smithSoftwareCitationPrinciples2016}. The v0.14.7 archive DOI
-is \texttt{10.5281/zenodo.21959103}
+at the slim cxx tarball on the matching GitHub Release. Cite the
+software through \texttt{CITATION.cff}
+\cite{smithSoftwareCitationPrinciples2016}. The freeze tag is the
+\texttt{v0.14.8} GitHub Release. The software archive series is
+\texttt{10.5281/zenodo.18753567}
 \cite{goswamiReadconcore01472026}. This manuscript does not invent a
 paper DOI.
 
