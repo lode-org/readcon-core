@@ -10,7 +10,7 @@ authors:
 license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
-version: 0.14.8
+version: 0.14.9
 date-released: "2026-08-24"
 identifiers:
   - type: doi
