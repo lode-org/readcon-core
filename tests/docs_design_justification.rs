@@ -140,7 +140,7 @@ fn faq_con_contract() {
     assert!(!t.contains("When should I use CON vs XYZ"));
     assert!(
         t.contains("readcon-db")
-            && (t.contains("Where do large campaigns") || t.contains("campaign store")),
+            && (t.contains("Where do large campaigns") || t.contains("Why is readcon-db")),
         "FAQ must route corpora to readcon-db, not invent HDF5 as product archival"
     );
     assert!(
@@ -168,11 +168,10 @@ fn product_docs_ban_anti_product_carveouts() {
 }
 
 #[test]
-fn readcon_db_surface_has_docs_and_api_destinations() {
-    // Campaign entry points must name hosted package docs + docs.rs API, not
-    // install-only with no API destination.
-    let pages = "https://lode-org.github.io/readcon-db/";
-    let docsrs = "https://docs.rs/readcon-db";
+fn readcon_db_surface_has_hosted_docs() {
+    // User-facing entry points name the crate and the hosted Sphinx tree,
+    // not a docs.rs peer and not the product label "campaign store".
+    let hosted = "lode-org.github.io/readcon-db/docs";
     for (label, text) in [
         ("faq.org", read("faq.org")),
         ("migrate.org", read("migrate.org")),
@@ -183,21 +182,29 @@ fn readcon_db_surface_has_docs_and_api_destinations() {
     ] {
         assert!(
             text.contains("readcon-db") || text.contains("readcon_db"),
-            "{label} must mention the campaign package"
+            "{label} must mention readcon-db"
         );
         assert!(
-            text.contains(pages) || text.contains("lode-org.github.io/readcon-db"),
-            "{label} must link hosted readcon-db docs"
+            text.contains(hosted),
+            "{label} must link hosted readcon-db docs under /docs/"
         );
         assert!(
-            text.contains(docsrs) || text.contains("docs.rs/readcon-db"),
-            "{label} must link docs.rs readcon-db API"
+            !text.contains("https://docs.rs/readcon-db"),
+            "{label} must not advertise docs.rs/readcon-db as the package docs"
+        );
+        assert!(
+            !text.contains("campaign store") && !text.contains("Campaign store"),
+            "{label} must not label readcon-db as campaign store"
         );
     }
     let conf = read_repo("docs/source/conf.py");
     assert!(
-        conf.contains("readcon-db Rust API") || conf.contains("docs.rs/readcon-db"),
-        "Sphinx nav must surface readcon-db Rust API"
+        conf.contains("readcon-db docs") && conf.contains(hosted),
+        "Sphinx Ecosystem nav must point at hosted readcon-db /docs/"
+    );
+    assert!(
+        !conf.contains("docs.rs/readcon-db"),
+        "Sphinx Ecosystem nav must not list docs.rs/readcon-db as a peer"
     );
 }
 
@@ -509,8 +516,13 @@ fn docs_nav_uses_compact_nav_logos() {
     let index = read("index.org");
     assert!(
         index.contains("rc-hero-brand")
-            && index.contains("rc-hero-pills")
+            && index.contains("rc-hero-rule")
+            && index.contains("rc-hero-conline")
             && index.contains("mark.svg"),
-        "index hero must use rtrash-style brand card (mark + pills)"
+        "index hero must use the CON-frame sheet (mark, gold rule, fixture header)"
+    );
+    assert!(
+        !index.contains("rc-hero-pills"),
+        "index hero must not use pill badges"
     );
 }

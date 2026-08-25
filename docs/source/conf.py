@@ -152,19 +152,14 @@ html_theme_options = {
             "title": "Ecosystem",
             "children": [
                 {
-                    "title": "readcon-db (campaign store)",
+                    "title": "readcon-db",
                     "url": "https://github.com/lode-org/readcon-db",
-                    "summary": "LMDB corpora: energy/section indexes, xxHash3 dedup, multi-reader",
+                    "summary": "mmap CON/convel corpus: indexes, xxHash3 match, multi-reader",
                 },
                 {
                     "title": "readcon-db docs",
-                    "url": "https://lode-org.github.io/readcon-db/",
-                    "summary": "Hosted package docs: corpus architecture, Select, C/Python/Fortran",
-                },
-                {
-                    "title": "readcon-db Rust API",
-                    "url": "https://docs.rs/readcon-db",
-                    "summary": "docs.rs crate API for the campaign store",
+                    "url": "https://lode-org.github.io/readcon-db/docs/",
+                    "summary": "Architecture, Select, C / Python / Fortran",
                 },
                 {
                     "title": "eOn",

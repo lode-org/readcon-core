@@ -1,22 +1,22 @@
 
 # Table of Contents
 
-1.  [About](#org577cf09)
-    1.  [Features](#org7913347)
-    2.  [Migrate onto CON](#org714f8b5)
-    3.  [Install](#orgab3b5ed)
-    4.  [Tutorial](#org41aa60c)
-    5.  [Design Decisions](#orge6c7001)
-        1.  [FFI Layer](#org7dbd2fc)
-    6.  [Specification](#org3bf23f4)
-        1.  [CON format](#orgcd825ff)
-        2.  [convel format](#orga5a2947)
-    7.  [Capabilities](#org1833589)
-    8.  [Citation](#org046d8b2)
-2.  [License](#org591228f)
+1.  [About](#org8a516dd)
+    1.  [Features](#orge280c29)
+    2.  [Migrate onto CON](#org9a4c2eb)
+    3.  [Install](#org34cb29e)
+    4.  [Tutorial](#org096ec3a)
+    5.  [Design Decisions](#org518562a)
+        1.  [FFI Layer](#orgd88ce4e)
+    6.  [Specification](#org82eb141)
+        1.  [CON format](#orgcefba1f)
+        2.  [convel format](#org521e4d3)
+    7.  [Capabilities](#org112ad98)
+    8.  [Citation](#org0dc7c45)
+2.  [License](#org5fa1ad7)
 
 
-<a id="org577cf09"></a>
+<a id="org8a516dd"></a>
 
 # About
 
@@ -24,7 +24,7 @@
 Rare-event codes already checkpoint on CON. This library is the spec and
 the hourglass API so the rest of the atomistic stack reads the same file
 everywhere:
-optimizers, potential drivers, analysis tools, campaign stores, and ML
+optimizers, potential drivers, analysis tools, and ML
 hand-off.
 
 One frame is complete: cell, type-grouped coordinates, per-direction
@@ -68,14 +68,14 @@ Saddle, dimer, and NEB codes already depend on that payload.
 </tr>
 
 <tr>
-<td class="org-left">Campaigns</td>
-<td class="org-left"><code>index_proj</code> + <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add</code> / <code>pip install</code>; <a href="https://lode-org.github.io/readcon-db/">docs</a> · <a href="https://docs.rs/readcon-db">docs.rs</a>)</td>
+<td class="org-left">Corpora</td>
+<td class="org-left"><code>index_proj</code> + <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<code>cargo add</code> / <code>pip install</code>; <a href="https://lode-org.github.io/readcon-db/docs/">docs</a>)</td>
 </tr>
 </tbody>
 </table>
 
 Already on that path: rare-event clients, rgpot, rgpycrumbs, ASE adapters,
-amsel, campaign stores, and anything that takes DLPack or metatensor blocks.
+amsel, and anything that takes DLPack or metatensor blocks.
 
 Rust rewrite of [readCon](https://github.com/HaoZeke/readCon). Chemfiles owns
 format diversity at the edge; this crate owns CON fidelity on the wire and in
@@ -87,7 +87,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="org7913347"></a>
+<a id="orge280c29"></a>
 
 ## Features
 
@@ -101,11 +101,11 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 -   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
--   **Campaigns:** Pair with [readcon-db](https://github.com/lode-org/readcon-db) (CON-text indexes, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/) · [docs.rs](https://docs.rs/readcon-db)).
+-   **Corpora:** Pair with [readcon-db](https://github.com/lode-org/readcon-db) (CON-text indexes, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/docs/)).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org714f8b5"></a>
+<a id="org9a4c2eb"></a>
 
 ## Migrate onto CON
 
@@ -116,7 +116,7 @@ hand-rolling XYZ and a private atoms object.
 -   **Payload:** constraints, `atom_id`, optional sections, versioned JSON on one frame
 -   **Selection:** `select_atoms` / `rkr_frame_select` (`name H`, bonds/angles when topology is present)
 -   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
--   **Campaigns:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/) · [docs.rs](https://docs.rs/readcon-db))
+-   **Corpora:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/docs/))
 -   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
 -   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/`. [benchmarks.org](docs/orgmode/benchmarks.org)
 
@@ -126,13 +126,12 @@ hand-rolling XYZ and a private atoms object.
     # python -c "import readcon; readcon.convert_to_con('structure.xyz','structure.con')"
 
 How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI-run):
-[chemfiles-notebook](docs/orgmode/chemfiles-notebook.org). Campaigns:
-[readcon-db docs](https://lode-org.github.io/readcon-db/) ·
-[docs.rs/readcon-db](https://docs.rs/readcon-db). Plotting:
+[chemfiles-notebook](docs/orgmode/chemfiles-notebook.org). Corpora:
+[readcon-db docs](https://lode-org.github.io/readcon-db/docs/). Plotting:
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orgab3b5ed"></a>
+<a id="org34cb29e"></a>
 
 ## Install
 
@@ -173,9 +172,9 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 </tr>
 
 <tr>
-<td class="org-left">Campaign store</td>
+<td class="org-left">readcon-db</td>
 <td class="org-left"><code>cargo add readcon-db</code> / <code>pip install readcon-db</code></td>
-<td class="org-left"><a href="https://lode-org.github.io/readcon-db/">docs</a> · <a href="https://docs.rs/readcon-db">docs.rs</a></td>
+<td class="org-left"><a href="https://lode-org.github.io/readcon-db/docs/">docs</a></td>
 </tr>
 
 <tr>
@@ -208,7 +207,7 @@ The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a main
 Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
-<a id="org41aa60c"></a>
+<a id="org096ec3a"></a>
 
 ## Tutorial
 
@@ -239,7 +238,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="orge6c7001"></a>
+<a id="org518562a"></a>
 
 ## Design Decisions
 
@@ -247,7 +246,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** shipped C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
 
 
-<a id="org7dbd2fc"></a>
+<a id="orgd88ce4e"></a>
 
 ### FFI Layer
 
@@ -261,14 +260,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org3bf23f4"></a>
+<a id="org82eb141"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="orgcd825ff"></a>
+<a id="orgcefba1f"></a>
 
 ### CON format
 
@@ -279,7 +278,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orga5a2947"></a>
+<a id="org521e4d3"></a>
 
 ### convel format
 
@@ -289,7 +288,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org1833589"></a>
+<a id="org112ad98"></a>
 
 ## Capabilities
 
@@ -329,8 +328,8 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 </tr>
 
 <tr>
-<td class="org-left">Campaigns</td>
-<td class="org-left"><code>index_proj</code> + <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<a href="https://lode-org.github.io/readcon-db/">docs</a> · <a href="https://docs.rs/readcon-db">docs.rs</a>)</td>
+<td class="org-left">Corpora</td>
+<td class="org-left"><code>index_proj</code> + <a href="https://github.com/lode-org/readcon-db">readcon-db</a> (<a href="https://lode-org.github.io/readcon-db/docs/">docs</a>)</td>
 </tr>
 
 <tr>
@@ -348,15 +347,16 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org046d8b2"></a>
+<a id="org0dc7c45"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). A Zenodo DOI is minted on a freeze tag and recorded in `CITATION.cff` identifiers; this tree does not invent one.
 
 
-<a id="org591228f"></a>
+<a id="org5fa1ad7"></a>
 
 # License
 
 MIT.
+

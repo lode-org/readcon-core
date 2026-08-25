@@ -7,9 +7,8 @@ Language bindings
 
    Install: :doc:`getting-started`. Rust crate API:
    `docs.rs/readcon-core <https://docs.rs/readcon-core>`_
-   (includes :code:`index_proj`). Campaign store:
-   `readcon-db docs <https://lode-org.github.io/readcon-db/>`_ ·
-   `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+   (includes :code:`index_proj`). readcon-db:
+   `hosted docs <https://lode-org.github.io/readcon-db/docs/>`_.
    This page is the multi-language *reference* (parity matrix + examples).
 
 Feature parity matrix

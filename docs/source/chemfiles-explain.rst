@@ -34,7 +34,7 @@ elsewhere as XYZ, PDB, GRO, LAMMPS dumps, and other chemfiles-readable layouts.
 Rather than reimplement every reader in readcon-core, v0.13 uses **chemfiles as the ingress router**: chemfiles owns format diversity; readcon-core owns
 **CON fidelity** (atom\_id, sections, writer, FFI, multi-language builders). The
 job is to **land foreign trajectories in CON** for every CON-native consumer
-(eOn, amsel, LODE tooling, campaign stores, and the rest).
+(eOn, amsel, LODE tooling, readcon-db, and the rest).
 
 Why is chemfiles optional (Cargo feature + two PyPI names)?
 -----------------------------------------------------------

@@ -348,7 +348,7 @@ hand-rolling XYZ and its own atoms type. Migration guide:
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | ``readcon-core``                                                                                      | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor (`docs.rs <https://docs.rs/readcon-core>`_)                                  |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-db``                                                                                        | Campaign LMDB: energy / formula / section indexes, dedup, multi-reader (`docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_) |
+    | ``readcon-db``                                                                                        | LMDB corpus: energy / formula / section indexes, dedup, multi-reader (`docs <https://lode-org.github.io/readcon-db/docs/>`_)                                        |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | Chemfiles                                                                                             | Land foreign structures **as** CON                                                                                                                                  |
     +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -378,23 +378,22 @@ UTF-8 CON text is authoritative for files and for ``readcon-db`` ``frames`` (has
 dedup, join/split, ``reindex``). Cooked RCSO / SoA / DLPack buffers accelerate
 extract and device hand-off and are discardable or ephemeral.
 
-Why is the campaign store a separate package?
----------------------------------------------
+Why is readcon-db a separate package?
+------------------------------------
 
 ``readcon-core`` is the shared decoder/writer. ``readcon-db`` owns LMDB indexes and
-SWMR campaign access. That split is a **migration benefit**: once structures are
-CON text, the same files plug into campaign query (energy / formula / section
+SWMR corpus access. That split is a **migration benefit**: once structures are
+CON text, the same files plug into corpus query (energy / formula / section)
 indexes, dedup) without rewriting the optimizer or potential. Install
 ``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``).
-Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
-Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+Package docs: `lode-org.github.io/readcon-db/docs <https://lode-org.github.io/readcon-db/docs/>`_.
 Source: `github.com/lode-org/readcon-db <https://github.com/lode-org/readcon-db>`_.
 
 Where do large campaigns and many frames go?
 --------------------------------------------
 
 In this stack: **CON text** remains the structure contract; ``readcon-db`` is the
-campaign store on top of it (LMDB indexes for energy / formula / section
+LMDB corpus on top of it (LMDB indexes for energy / formula / section
 presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 (optionally gzip/zstd) and ``iter_con`` / ``forward`` cover trajectory-style loads
 in ``readcon-core`` itself. Large corpora stay CON text; ``readcon-db``
@@ -402,8 +401,7 @@ indexes them. Do not switch the on-disk structure to another dialect
 for screening.
 
 Install: ``cargo add readcon-db`` / ``pip install readcon-db``.
-Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
-Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+Package docs: `lode-org.github.io/readcon-db/docs <https://lode-org.github.io/readcon-db/docs/>`_.
 
 How do XYZ, PDB, GRO, and chemfiles fit in?
 -------------------------------------------

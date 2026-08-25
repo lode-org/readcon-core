@@ -47,7 +47,7 @@ selectors, or energy fields yourself.
     | Performance gates         | Cachegrind I-refs (main); Python ASV + spyglass (PRs); peer scripts under ``benches/``                                        |
     +---------------------------+-------------------------------------------------------------------------------------------------------------------------------+
 
-Migrate so the structure object, selector, campaign store, and plots all speak
+Migrate so the structure object, selector, readcon-db, and plots all speak
 CON. Format rules: :doc:`spec`.
 
 Performance
@@ -59,10 +59,10 @@ zero-copy line views, header-sized atom vectors, ``read_to_string`` vs mmap at
 and local scripts measure that (Cachegrind, ASV, peers):
 :doc:`benchmarks`.
 
-Benefit: campaign store (``readcon-db``)
-----------------------------------------
+Benefit: readcon-db
+--------------------
 
-``readcon-core`` is the decoder/writer. `readcon-db <https://github.com/lode-org/readcon-db>`_ is the campaign
+``readcon-core`` is the decoder/writer. `readcon-db <https://github.com/lode-org/readcon-db>`_ is the corpus
 layer that **assumes CON text is authoritative**:
 
 .. table::
@@ -80,11 +80,10 @@ layer that **assumes CON text is authoritative**:
     +------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 Install (separate package): ``cargo add readcon-db`` / ``pip install readcon-db``.
-Package docs: `lode-org.github.io/readcon-db <https://lode-org.github.io/readcon-db/>`_.
-Rust API: `docs.rs/readcon-db <https://docs.rs/readcon-db>`_.
+Package docs: `lode-org.github.io/readcon-db/docs <https://lode-org.github.io/readcon-db/docs/>`_.
 Source: `github.com/lode-org/readcon-db <https://github.com/lode-org/readcon-db>`_.
 Multi-frame CON (with optional compression) plus selection and ``index_proj``
-feed the same campaign path; you do not need a second structure dialect for
+feed the same corpus path; you do not need a second structure dialect for
 "real" trajectories or screening corpora.
 
 Benefit: the API (stop owning your own atoms object)
@@ -192,8 +191,8 @@ ASE hand-off (keep CON as authority)
 ASE adapters are optional. After the calculator step, write CON again so
 ``readcon-db`` ingest and hourglass consumers still see the interchange file.
 
-Into a campaign store
----------------------
+Into readcon-db
+---------------
 
 Once files are CON text:
 
@@ -244,7 +243,7 @@ After conversion
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
     | Link C / Fortran / Julia     | :doc:`bindings`, :doc:`howto`                                                                                                    |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Campaign store               | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/>`_ · `docs.rs <https://docs.rs/readcon-db>`_ |
+    | readcon-db                   | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/docs/>`_                                     |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
     | Plotting                     | `chemparseplot <https://chemparseplot.rgoswami.me>`_ · `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_                                               |
     +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
