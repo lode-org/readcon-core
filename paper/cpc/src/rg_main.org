@@ -144,8 +144,9 @@ Rayon above $48$\,KiB; \texttt{rkr\_read\_all\_frames\_n\_threads}
 and \texttt{n\_threads} select the worker count. Version 0.14.8.
 The C ABI is frozen within 0.14.x. A 1.0.0 tag is the production
 classifier. Cite the software through \texttt{CITATION.cff}
-\cite{smithSoftwareCitationPrinciples2016}. The v0.14.8 software
-archive is \texttt{10.5281/zenodo.21959103}
+\cite{smithSoftwareCitationPrinciples2016}. The freeze tag is the
+\texttt{v0.14.8} GitHub Release. The software archive series is
+\texttt{10.5281/zenodo.18753567}
 \cite{goswamiReadconcore01472026}. This manuscript does not invent a
 paper DOI. Deposit the core and readcon-db freeze tags together; do
 not write a second paper for readcon-db alone.\\
@@ -335,7 +336,7 @@ the commit-stable instruction-count measurement.
 Table \ref{tab:cachegrind} reports selected rows from the
 committed table
 (=docs/source/_generated/cachegrind_results.rst=,
-2026-08-20T18:45:01Z, commit =751aaa3=). Those counts are instruction
+=\cgDate=, commit =\cgCommit=). Those counts are instruction
 counts, not wall times. That program writes $100$ frames to a
 buffer; that I-ref is in the table. There is no Cachegrind
 scenario for Rayon.
@@ -459,11 +460,11 @@ and =readcon-chemfiles=). Julia =Project.toml= and the
 Fortran fpm package live in this repository and bind a prebuilt or
 locally built =libreadcon_core=; they are not registry
 packages. CMake FetchContent and the in-tree Meson wrap-file point
-at the slim cxx tarball on the matching GitHub Release. A
-conda-forge staged-recipes entry is open (PR 32605) at the same
-version. Cite the software through =CITATION.cff=
-\cite{smithSoftwareCitationPrinciples2016}. The v0.14.8 archive DOI
-is \texttt{10.5281/zenodo.21959103}
+at the slim cxx tarball on the matching GitHub Release. Cite the
+software through =CITATION.cff=
+\cite{smithSoftwareCitationPrinciples2016}. The freeze tag is the
+\texttt{v0.14.8} GitHub Release. The software archive series is
+\texttt{10.5281/zenodo.18753567}
 \cite{goswamiReadconcore01472026}. This manuscript does not invent a
 paper DOI.
 

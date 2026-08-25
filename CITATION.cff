@@ -11,11 +11,11 @@ license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
 version: 0.14.8
-date-released: "2026-08-15"
+date-released: "2026-08-24"
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.21959103
-    description: Software archive for the v0.14.7 tag on lode-org/readcon-core
+    value: 10.5281/zenodo.18753567
+    description: Concept DOI for the readcon-core software archive
 keywords:
   - parser
   - computational chemistry
