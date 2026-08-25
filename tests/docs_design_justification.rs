@@ -171,7 +171,7 @@ fn product_docs_ban_anti_product_carveouts() {
 fn readcon_db_surface_has_hosted_docs() {
     // User-facing entry points name the crate and the hosted Sphinx tree,
     // not a docs.rs peer and not the product label "campaign store".
-    let hosted = "lode-org.github.io/readcon-db/docs";
+    let hosted = "lode-org.github.io/readcon-db";
     for (label, text) in [
         ("faq.org", read("faq.org")),
         ("migrate.org", read("migrate.org")),
@@ -186,7 +186,7 @@ fn readcon_db_surface_has_hosted_docs() {
         );
         assert!(
             text.contains(hosted),
-            "{label} must link hosted readcon-db docs under /docs/"
+            "{label} must link hosted readcon-db docs"
         );
         assert!(
             !text.contains("https://docs.rs/readcon-db"),
@@ -199,8 +199,12 @@ fn readcon_db_surface_has_hosted_docs() {
     }
     let conf = read_repo("docs/source/conf.py");
     assert!(
-        conf.contains("readcon-db docs") && conf.contains(hosted),
-        "Sphinx Ecosystem nav must point at hosted readcon-db /docs/"
+        conf.contains("https://lode-org.github.io/readcon-db/"),
+        "Sphinx Ecosystem nav must point at the hosted readcon-db site"
+    );
+    assert!(
+        !conf.contains("https://github.com/lode-org/readcon-db"),
+        "Sphinx Ecosystem nav must not list the readcon-db GitHub repo"
     );
     assert!(
         !conf.contains("docs.rs/readcon-db"),
