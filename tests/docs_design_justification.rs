@@ -540,4 +540,10 @@ fn docs_nav_uses_compact_nav_logos() {
         !index.contains("rc-hero-pills"),
         "index hero must not use pill badges"
     );
+    let rst = read_repo("docs/source/index.rst");
+    assert!(
+        rst.lines()
+            .any(|l| l.contains("rc-hero-conline") && l.contains("</pre>")),
+        "hero CON line must be one raw-html line so Sphinx cannot leak </pre>"
+    );
 }
