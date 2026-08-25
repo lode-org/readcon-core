@@ -153,13 +153,8 @@ html_theme_options = {
             "children": [
                 {
                     "title": "readcon-db",
-                    "url": "https://github.com/lode-org/readcon-db",
+                    "url": "https://lode-org.github.io/readcon-db/",
                     "summary": "mmap CON/convel corpus: indexes, xxHash3 match, multi-reader",
-                },
-                {
-                    "title": "readcon-db docs",
-                    "url": "https://lode-org.github.io/readcon-db/docs/",
-                    "summary": "Architecture, Select, C / Python / Fortran",
                 },
                 {
                     "title": "eOn",
@@ -180,16 +175,6 @@ html_theme_options = {
                     "title": "rgpycrumbs",
                     "url": "https://rgpycrumbs.rgoswami.me",
                     "summary": "CLI helpers for LODE / eOn workflows",
-                },
-                {
-                    "title": "pychum",
-                    "url": "https://github.com/HaoZeke/pychum",
-                    "summary": "ORCA / NWChem input generation",
-                },
-                {
-                    "title": "LODE org",
-                    "url": "https://github.com/lode-org",
-                    "summary": "Long-timescale dynamics ecosystem",
                 },
             ],
         },
