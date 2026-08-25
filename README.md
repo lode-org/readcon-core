@@ -359,4 +359,3 @@ If you use `readcon-core` in academic work, please cite it via the metadata in [
 # License
 
 MIT.
-
