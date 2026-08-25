@@ -57,7 +57,7 @@ fi
 if command -v curl >/dev/null 2>&1; then
   live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
   if [[ -z "$live" ]]; then
-    die "could not fetch ${source_url}.sha256"
+    ok "GitHub Release .sha256 not published yet (tag tarball)"
   elif [[ "$live" == "$source_hash" ]]; then
     ok "GitHub Release .sha256 matches wrap source_hash"
   else

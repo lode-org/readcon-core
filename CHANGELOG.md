@@ -1,6 +1,22 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## v0.14.9 - 2026-08-24
+#### Bug Fixes
+- (**meson**) copy Windows cargo artifacts and skip dead rustc hosts - (c62ed1c) - *HaoZeke*
+#### Documentation
+- (**cpc**) sync manuscript tex to the 0.14.8 freeze claims - (d86c084) - *HaoZeke*
+- (**cpc**) restamp the fair campaign freeze with host and commit - (4667baa) - *HaoZeke*
+- (**cpc**) cite the archive series and drop unlanded install paths - (232b3d3) - *HaoZeke*
+- (**cpc**) restamp generated I/O and Cachegrind tables - (ba71353) - *HaoZeke*
+- (**dist**) pin cxx wrap hash to the published v0.14.8 tarball - (0be0059) - *HaoZeke*
+#### Tests
+- (**dist**) fail the wrap hash gate when the Release digest differs - (0e1b044) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (b2e8b2e) - github-actions[bot]
+
+
+
 ## v0.14.8 - 2026-08-24
 #### Benchmarks
 - CON parse vs RCSO decode and Unix vs TCP RPC - (9b94ca5) - *HaoZeke*

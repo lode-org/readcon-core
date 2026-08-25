@@ -75,7 +75,7 @@ in the same venv (both provide =import readcon=).
 
 #+begin_src shell
 python -m venv .venv && source .venv/bin/activate
-pip install -U 'readcon-chemfiles==0.14.8'
+pip install -U 'readcon-chemfiles==0.14.9'
 python -c "import readcon; print(readcon.has_chemfiles_support())"  # True
 #+end_src
 
