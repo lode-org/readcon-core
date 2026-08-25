@@ -12,6 +12,41 @@ import subprocess
 import sys
 from pathlib import Path
 
+_SHARED_ALIASES = (
+    "readcon_core.dll",
+    "libreadcon_core.dll",
+    "libreadcon_core.so",
+    "libreadcon_core.dylib",
+)
+_STATIC_ALIASES = (
+    "readcon_core.lib",
+    "libreadcon_core.a",
+    "libreadcon_core.lib",
+    "readcon_core.dll.lib",
+)
+
+
+def _copy_artifact(
+    built: Path, wanted: str, dest: str, aliases: tuple[str, ...]
+) -> None:
+    candidates = [built / wanted]
+    for name in aliases:
+        path = built / name
+        if path not in candidates:
+            candidates.append(path)
+        dep = built / "deps" / name
+        if dep not in candidates:
+            candidates.append(dep)
+    for path in candidates:
+        if path.is_file():
+            shutil.copy2(path, dest)
+            return
+    listing = sorted(p.name for p in built.iterdir()) if built.is_dir() else []
+    raise FileNotFoundError(
+        f"cargo artifact {wanted!r} not in {built} (tried {[str(p) for p in candidates]}); "
+        f"directory listing: {listing}"
+    )
+
 
 def main(argv: list[str]) -> int:
     if len(argv) not in (9, 10):
@@ -50,17 +85,20 @@ def main(argv: list[str]) -> int:
         cmd.append("--release")
     if features.strip():
         cmd.extend(["--features", features.strip()])
-    rustc_args = ["--crate-type=cdylib", "--crate-type=staticlib"]
-    if sys.platform.startswith("linux"):
-        rustc_args.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
-    elif sys.platform == "darwin":
-        rustc_args.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
-    cmd.extend(["--", *rustc_args])
     env = os.environ.copy()
-    subprocess.check_call(cmd, cwd=src_root, env=env)
+    rustc_extra: list[str] = []
+    if sys.platform.startswith("linux"):
+        rustc_extra.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
+    elif sys.platform == "darwin":
+        rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
+    # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
+    # call can omit readcon_core.lib while still writing the DLL.
+    for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
+        crate_cmd = cmd + ["--", f"--crate-type={crate_type}", *extra]
+        subprocess.check_call(crate_cmd, cwd=src_root, env=env)
     built = Path(target_dir) / profile
-    shutil.copy2(built / shared_name, out_shared)
-    shutil.copy2(built / static_name, out_static)
+    _copy_artifact(built, shared_name, out_shared, _SHARED_ALIASES)
+    _copy_artifact(built, static_name, out_static, _STATIC_ALIASES)
     return 0
 
 
