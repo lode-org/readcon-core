@@ -1415,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "readcon-core"
-version = "0.14.8"
+version = "0.14.9"
 dependencies = [
  "capnp",
  "capnp-rpc",

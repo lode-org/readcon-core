@@ -1,28 +1,29 @@
 
 # Table of Contents
 
-1.  [About](#orgebfa45e)
-    1.  [Features](#orge8fcd79)
-    2.  [Migrate onto CON](#org14b0a24)
-    3.  [Install](#orgec613e1)
-    4.  [Tutorial](#org745ed6c)
-    5.  [Design Decisions](#org66baa52)
-        1.  [FFI Layer](#org4cf6a2a)
-    6.  [Specification](#org55a9f19)
-        1.  [CON format](#org60042df)
-        2.  [convel format](#orgae4b5fb)
-    7.  [Capabilities](#org1bbff09)
-    8.  [Citation](#org7028075)
-2.  [License](#org8b8a84b)
+1.  [About](#org577cf09)
+    1.  [Features](#org7913347)
+    2.  [Migrate onto CON](#org714f8b5)
+    3.  [Install](#orgab3b5ed)
+    4.  [Tutorial](#org41aa60c)
+    5.  [Design Decisions](#orge6c7001)
+        1.  [FFI Layer](#org7dbd2fc)
+    6.  [Specification](#org3bf23f4)
+        1.  [CON format](#orgcd825ff)
+        2.  [convel format](#orga5a2947)
+    7.  [Capabilities](#org1833589)
+    8.  [Citation](#org046d8b2)
+2.  [License](#org591228f)
 
 
-<a id="orgebfa45e"></a>
+<a id="org577cf09"></a>
 
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
 Rare-event codes already checkpoint on CON. This library is the spec and
-the hourglass API so the rest of the atomistic stack reads the same file:
+the hourglass API so the rest of the atomistic stack reads the same file
+everywhere:
 optimizers, potential drivers, analysis tools, campaign stores, and ML
 hand-off.
 
@@ -86,7 +87,7 @@ Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
 
-<a id="orge8fcd79"></a>
+<a id="org7913347"></a>
 
 ## Features
 
@@ -104,7 +105,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 
 
-<a id="org14b0a24"></a>
+<a id="org714f8b5"></a>
 
 ## Migrate onto CON
 
@@ -131,7 +132,7 @@ How-to: [docs/orgmode/migrate.org](docs/orgmode/migrate.org). Chemfiles path (CI
 [chemparseplot](https://chemparseplot.rgoswami.me).
 
 
-<a id="orgec613e1"></a>
+<a id="orgab3b5ed"></a>
 
 ## Install
 
@@ -207,7 +208,7 @@ The C/C++ headers are **shipped** (`include/readcon-core.h`). cbindgen is a main
 Full matrix: [getting-started](docs/orgmode/getting-started.org).
 
 
-<a id="org745ed6c"></a>
+<a id="org41aa60c"></a>
 
 ## Tutorial
 
@@ -238,7 +239,7 @@ Other languages and task recipes: [docs/orgmode/howto.org](docs/orgmode/howto.or
 Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutorial.org).
 
 
-<a id="org66baa52"></a>
+<a id="orge6c7001"></a>
 
 ## Design Decisions
 
@@ -246,7 +247,7 @@ Conversion from XYZ/PDB/GRO: [chemfiles-tutorial](docs/orgmode/chemfiles-tutoria
 -   **Hourglass FFI:** shipped C header plus a hand-written C++ RAII wrapper, same pattern as [metatensor](https://github.com/metatensor/metatensor). CMake FetchContent, Meson wrap, and `readcon-core.pc` do not run cbindgen.
 
 
-<a id="org4cf6a2a"></a>
+<a id="org7dbd2fc"></a>
 
 ### FFI Layer
 
@@ -260,14 +261,14 @@ Two exposure modes:
     `free_c_frame`.
 
 
-<a id="org55a9f19"></a>
+<a id="org3bf23f4"></a>
 
 ## Specification
 
 See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build](https://lode-org.github.io/readcon-core/spec.html)) for the full specification. A summary follows.
 
 
-<a id="org60042df"></a>
+<a id="orgcd825ff"></a>
 
 ### CON format
 
@@ -278,7 +279,7 @@ See [docs/orgmode/spec.org](docs/orgmode/spec.org) (or the [published HTML build
 -   Multiple frames are concatenated directly with no separator
 
 
-<a id="orgae4b5fb"></a>
+<a id="orga5a2947"></a>
 
 ### convel format
 
@@ -288,7 +289,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 -   Per-type velocity blocks (symbol, label, atom lines with vx vy vz fixed atomID)
 
 
-<a id="org1bbff09"></a>
+<a id="org1833589"></a>
 
 ## Capabilities
 
@@ -347,15 +348,16 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 Predecessor: [readCon](https://github.com/HaoZeke/readCon).
 
 
-<a id="org7028075"></a>
+<a id="org046d8b2"></a>
 
 ## Citation
 
 If you use `readcon-core` in academic work, please cite it via the metadata in [CITATION.cff](CITATION.cff). A Zenodo DOI is minted on a freeze tag and recorded in `CITATION.cff` identifiers; this tree does not invent one.
 
 
-<a id="org8b8a84b"></a>
+<a id="org591228f"></a>
 
 # License
 
 MIT.
+
