@@ -3,7 +3,7 @@
   "@type": "SoftwareSourceCode",
   "name": "readcon-core",
   "description": "A CON/convel reader/writer with a shipped C ABI and bindings for C++, Python, Julia, and Fortran.",
-  "version": "0.14.8",
+  "version": "0.14.9",
   "datePublished": "2026-08-24",
   "license": "https://spdx.org/licenses/MIT",
   "codeRepository": "https://github.com/lode-org/readcon-core",
