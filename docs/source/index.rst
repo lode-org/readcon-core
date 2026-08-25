@@ -33,7 +33,7 @@ CON corpora.
    pip install 'readcon==0.14.9'          # Python CON I/O
    # pip install 'readcon-chemfiles==0.14.9'  # + foreign -> CON
    cargo add readcon-core@0.14.9          # Rust
-   # cargo add readcon-db / pip install readcon-db  # campaigns
+   # cargo add readcon-db / pip install readcon-db
 
 Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
 
@@ -120,7 +120,6 @@ Site map
    bindings
    chemfiles-reference
    rpc
-   Rust API (docs.rs) <https://docs.rs/readcon-core>
 
 .. toctree::
    :maxdepth: 1

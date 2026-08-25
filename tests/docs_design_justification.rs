@@ -221,6 +221,33 @@ fn readcon_db_surface_has_hosted_docs() {
         !conf.contains("docs.rs/readcon-core"),
         "top nav must not list docs.rs as a peer"
     );
+
+    // Landing page: no # campaigns product label, no docs.rs rustdoc twin
+    // in the toctree / left nav. Ecosystem stays sibling hosted docs.
+    let index_org = read("index.org");
+    let index_rst = read_repo("docs/source/index.rst");
+    for (label, text) in [
+        ("index.org", &index_org),
+        ("docs/source/index.rst", &index_rst),
+    ] {
+        assert!(
+            !text.contains("# campaigns"),
+            "{label} must not comment the hero readcon-db install as campaigns"
+        );
+        assert!(
+            !text.contains("pip install readcon-db  # campaigns")
+                && !text.contains("pip install readcon-db # campaigns"),
+            "{label} must not ship the hero pip install readcon-db # campaigns comment"
+        );
+        assert!(
+            !text.contains("docs.rs/readcon-core"),
+            "{label} must not list docs.rs/readcon-core as a toctree or sidebar twin"
+        );
+        assert!(
+            !text.contains("Rust API (docs.rs)"),
+            "{label} must not title a nav item Rust API (docs.rs)"
+        );
+    }
 }
 
 #[test]
