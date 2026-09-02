@@ -357,6 +357,26 @@ All notable changes to this project will be documented in this file. See [conven
 - (**readme**) re-export README.md anchors from readme_src.org - (5f58a7d) - *HaoZeke*
 
 - - -
+## v0.14.10 - 2026-09-02
+#### Buildsystem
+- (**meson**) order consumers on a generated stub, not the cargo outputs - (17254f5) - *HaoZeke*
+#### Bug Fixes
+- (**docs**) drop campaigns hero comment and docs.rs toctree twin - (fedd1b9) - *HaoZeke*
+- (**docs**) keep the hero CON header inside one raw-html line - (f1ecc57) - *HaoZeke*
+#### Documentation
+- (**dist**) pin cxx wrap hash to the published v0.14.9 tarball - (c7ac66c) - *HaoZeke*
+- restore eOn rgpot chemparseplot rgpycrumbs in Ecosystem - (a9b91aa) - *HaoZeke*
+- Ecosystem is only the sibling docs site - (0776586) - *HaoZeke*
+- Ecosystem nav lists docs sites only - (eeb2e0e) - *HaoZeke*
+- drop campaign-store wording and docs.rs from the ecosystem - (96ec065) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (b77555a) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (29a75e1) - github-actions[bot]
+#### Style
+- (**docs**) give README.md a trailing newline - (489e6e6) - *HaoZeke*
+
+- - -
+
 
 ## v0.14.0 - 2026-06-28
 #### Features
