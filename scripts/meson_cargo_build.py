@@ -94,7 +94,7 @@ def main(argv: list[str]) -> int:
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
     for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
-        crate_cmd = cmd + ["--", f"--crate-type={crate_type}", *extra]
+        crate_cmd = cmd + ["--crate-type", crate_type, "--", *extra]
         subprocess.check_call(crate_cmd, cwd=src_root, env=env)
     built = Path(target_dir) / profile
     _copy_artifact(built, shared_name, out_shared, _SHARED_ALIASES)

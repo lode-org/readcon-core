@@ -109,11 +109,15 @@ install_headers(
     'include/readcon-metatensor.h',
 )
 
-# link_args + sources: Meson must not promote an installed static consumer
-# to link_whole (custom_target is not a library target).
-_link_idx = get_option('default_library') == 'static' ? 1 : 0
+# Static consumers use raw link arguments to avoid link_whole promotion.
+# Shared consumers retain target metadata for runtime search paths.
+_readcon_link = get_option('default_library') == 'static' ? {
+    'link_args': [readcon_cargo[1].full_path()],
+} : {
+    'link_with': readcon_cargo[0],
+}
 readcon_dep = declare_dependency(
-    link_args: [readcon_cargo[_link_idx].full_path()],
+    kwargs: _readcon_link,
     sources: readcon_cargo,
     dependencies: _rust_sys_deps,
     include_directories: _incdir,
