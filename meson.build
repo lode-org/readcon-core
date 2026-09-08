@@ -40,6 +40,20 @@ if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
     error('readcon-core requires rustc >= 1.88.0')
 endif
 
+# Cargo links the C ABI with the same compiler and libc as its consumer.
+_rust_host = ''
+foreach line : run_command(rustc_prog, '-vV', check: true).stdout().split('\n')
+    if line.startswith('host: ')
+        _rust_host = line.substring(6).strip()
+    endif
+endforeach
+if _rust_host == ''
+    error('rustc did not report its host target')
+endif
+_rust_linker_key = 'CARGO_TARGET_' + _rust_host.to_upper().replace('-', '_') + '_LINKER'
+_cargo_env = {'CC': ' '.join(cc.cmd_array()), 'CFLAGS': ' '.join(get_option('c_args'))}
+_cargo_env += {_rust_linker_key: cc.cmd_array()[-1]}
+
 _rust_sys_deps = []
 if host_machine.system() == 'linux'
     _rust_sys_deps += [
@@ -98,6 +112,7 @@ readcon_cargo = custom_target(
         '@OUTPUT1@',
         get_option('cargo_features'),
     ],
+    env: _cargo_env,
     build_by_default: true,
     install: true,
     install_dir: [get_option('libdir'), get_option('libdir')],
