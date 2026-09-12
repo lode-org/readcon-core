@@ -26,7 +26,6 @@ impl Default for FloatFormat {
     }
 }
 
-
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
 /// This struct encapsulates a writer (like a file) and provides a high-level API
@@ -549,7 +548,15 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
     buf.extend_from_slice(&tmp[..prec]);
 }
 
-fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: FloatFormat, fixed: u8, atom_id: u64) {
+fn push_xyz_line(
+    buf: &mut Vec<u8>,
+    x: f64,
+    y: f64,
+    z: f64,
+    prec: FloatFormat,
+    fixed: u8,
+    atom_id: u64,
+) {
     push_f64(buf, x, prec);
     buf.push(b' ');
     push_f64(buf, y, prec);
