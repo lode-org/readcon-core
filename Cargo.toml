@@ -77,7 +77,7 @@ half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
 flate2 = "1"
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"
 rustc-hash = "2"
