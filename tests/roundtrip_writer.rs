@@ -25,8 +25,15 @@ fn round_trip_preserves_every_numeric_section() {
             );
             builder.set_energy(value);
             builder
-                .add_atom("H", value, -value, -0.0, [true, false, true], 7,
-                          1.001_527_890_189_282_6)
+                .add_atom(
+                    "H",
+                    value,
+                    -value,
+                    -0.0,
+                    [true, false, true],
+                    7,
+                    1.001_527_890_189_282_6,
+                )
                 .with_velocity([value, -value, -0.0])
                 .with_force([value, -value, -0.0])
                 .with_energy(value)
@@ -36,9 +43,9 @@ fn round_trip_preserves_every_numeric_section() {
             let frame = builder.build().unwrap();
             let mut buffer = Vec::new();
             {
-                let mut writer = ConFrameWriter::with_float_format(
-                    &mut buffer, FloatFormat::RoundTrip,
-                ).canonical(canonical);
+                let mut writer =
+                    ConFrameWriter::with_float_format(&mut buffer, FloatFormat::RoundTrip)
+                        .canonical(canonical);
                 writer.write_frame(&frame).unwrap();
             }
             let text = String::from_utf8(buffer).unwrap();
@@ -49,12 +56,20 @@ fn round_trip_preserves_every_numeric_section() {
             let atom = &actual.atom_data[0];
             let stored = [atom.x, atom.y, atom.z];
             let expected = [value, -value, -0.0];
-            for vector in [stored, atom.force.unwrap(), atom.velocity.unwrap(),
-                           atom.magmom.unwrap()] {
+            for vector in [
+                stored,
+                atom.force.unwrap(),
+                atom.velocity.unwrap(),
+                atom.magmom.unwrap(),
+            ] {
                 assert_eq!(vector.map(f64::to_bits), expected.map(f64::to_bits));
             }
-            for scalar in [atom.energy.unwrap(), atom.charge.unwrap(),
-                           atom.spin.unwrap(), actual.header.energy().unwrap()] {
+            for scalar in [
+                atom.energy.unwrap(),
+                atom.charge.unwrap(),
+                atom.spin.unwrap(),
+                actual.header.energy().unwrap(),
+            ] {
                 assert_eq!(scalar.to_bits(), value.to_bits());
             }
         }
