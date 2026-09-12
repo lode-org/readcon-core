@@ -10,6 +10,23 @@ use std::path::Path;
 /// Default floating-point precision used for writing coordinates, cell dimensions, and masses.
 const DEFAULT_FLOAT_PRECISION: usize = 6;
 
+/// Numeric text representation for CON frame fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FloatFormat {
+    /// A fixed number of digits after the decimal point.
+    DecimalPlaces(usize),
+    /// The shortest scientific representation preserving each finite f64.
+    /// Signed zero is preserved; decimal precision does not limit this mode.
+    RoundTrip,
+}
+
+impl Default for FloatFormat {
+    fn default() -> Self {
+        Self::DecimalPlaces(DEFAULT_FLOAT_PRECISION)
+    }
+}
+
+
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///
 /// This struct encapsulates a writer (like a file) and provides a high-level API
@@ -26,7 +43,7 @@ const DEFAULT_FLOAT_PRECISION: usize = 6;
 /// ```
 pub struct ConFrameWriter<W: Write> {
     writer: BufWriter<W>,
-    precision: usize,
+    float_format: FloatFormat,
     /// When true: sort metadata keys in JSON, emit sections in canonical
     /// order (velocities, forces, energies), fixed precision suitable for
     /// content-stable corpus writes / semantic-ish dedup. Opt-in so default
@@ -92,13 +109,7 @@ impl<W: Write> ConFrameWriter<W> {
     ///
     /// * `writer` - Any type that implements `std::io::Write`, e.g., a `File`.
     pub fn new(writer: W) -> Self {
-        Self {
-            writer: BufWriter::new(writer),
-            precision: DEFAULT_FLOAT_PRECISION,
-            canonical: false,
-            metadata_cache: None,
-            scratch: Vec::with_capacity(16 * 1024),
-        }
+        Self::with_float_format(writer, FloatFormat::default())
     }
 
     /// Creates a new `ConFrameWriter` with a custom floating-point precision.
@@ -108,9 +119,17 @@ impl<W: Write> ConFrameWriter<W> {
     /// * `writer` - Any type that implements `std::io::Write`.
     /// * `precision` - Number of decimal places for floating-point output.
     pub fn with_precision(writer: W, precision: usize) -> Self {
+        Self::with_float_format(writer, FloatFormat::DecimalPlaces(precision))
+    }
+
+    /// Creates a writer with an explicit numeric text representation.
+    ///
+    /// `FloatFormat::RoundTrip` retains small forces and coordinates exactly.
+    /// Metadata floats use the JSON serializer independently of this setting.
+    pub fn with_float_format(writer: W, float_format: FloatFormat) -> Self {
         Self {
             writer: BufWriter::new(writer),
-            precision,
+            float_format,
             canonical: false,
             metadata_cache: None,
             scratch: Vec::with_capacity(16 * 1024),
@@ -231,7 +250,7 @@ impl<W: Write> ConFrameWriter<W> {
 
     /// Writes a single `ConFrame` to the output stream.
     pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
-        let prec = self.precision;
+        let prec = self.float_format;
         self.refresh_metadata_cache(frame);
         let meta_line = self
             .metadata_cache
@@ -246,17 +265,17 @@ impl<W: Write> ConFrameWriter<W> {
             // --- Write the 9-line Header ---
             let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
             let _ = writeln!(buf, "{meta_line}");
-            push_f64_prec(buf, frame.header.boxl[0], prec);
+            push_f64(buf, frame.header.boxl[0], prec);
             buf.push(b' ');
-            push_f64_prec(buf, frame.header.boxl[1], prec);
+            push_f64(buf, frame.header.boxl[1], prec);
             buf.push(b' ');
-            push_f64_prec(buf, frame.header.boxl[2], prec);
+            push_f64(buf, frame.header.boxl[2], prec);
             buf.push(b'\n');
-            push_f64_prec(buf, frame.header.angles[0], prec);
+            push_f64(buf, frame.header.angles[0], prec);
             buf.push(b' ');
-            push_f64_prec(buf, frame.header.angles[1], prec);
+            push_f64(buf, frame.header.angles[1], prec);
             buf.push(b' ');
-            push_f64_prec(buf, frame.header.angles[2], prec);
+            push_f64(buf, frame.header.angles[2], prec);
             buf.push(b'\n');
             let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
             let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
@@ -274,7 +293,7 @@ impl<W: Write> ConFrameWriter<W> {
                 if i > 0 {
                     buf.push(b' ');
                 }
-                push_f64_prec(buf, *m, prec);
+                push_f64(buf, *m, prec);
             }
             buf.push(b'\n');
 
@@ -487,11 +506,20 @@ fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
     buf.extend_from_slice(&tmp[i..]);
 }
 
+fn push_f64(buf: &mut Vec<u8>, value: f64, format: FloatFormat) {
+    match format {
+        FloatFormat::DecimalPlaces(precision) => push_f64_prec(buf, value, precision),
+        FloatFormat::RoundTrip => {
+            let _ = write!(buf, "{value:e}");
+        }
+    }
+}
+
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
 /// Non-finite values and `prec > 17` fall back to `std::fmt`.
 fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
-    // Default writes are prec=6. Higher precision (lossless 17) stays on
-    // std::fmt so binary leftovers match `{:.prec$}`.
+    // The six-decimal path uses fixed-point arithmetic; other precisions
+    // use the standard formatter.
     if !v.is_finite() || prec != 6 {
         let _ = write!(buf, "{v:.prec$}");
         return;
@@ -521,12 +549,12 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
     buf.extend_from_slice(&tmp[..prec]);
 }
 
-fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: usize, fixed: u8, atom_id: u64) {
-    push_f64_prec(buf, x, prec);
+fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: FloatFormat, fixed: u8, atom_id: u64) {
+    push_f64(buf, x, prec);
     buf.push(b' ');
-    push_f64_prec(buf, y, prec);
+    push_f64(buf, y, prec);
     buf.push(b' ');
-    push_f64_prec(buf, z, prec);
+    push_f64(buf, z, prec);
     buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');
@@ -534,8 +562,8 @@ fn push_xyz_line(buf: &mut Vec<u8>, x: f64, y: f64, z: f64, prec: usize, fixed: 
     buf.push(b'\n');
 }
 
-fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: usize, fixed: u8, atom_id: u64) {
-    push_f64_prec(buf, v, prec);
+fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: FloatFormat, fixed: u8, atom_id: u64) {
+    push_f64(buf, v, prec);
     buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');
