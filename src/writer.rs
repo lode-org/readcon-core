@@ -241,211 +241,217 @@ impl<W: Write> ConFrameWriter<W> {
             .clone();
         self.scratch.clear();
         {
-        let buf = &mut self.scratch;
+            let buf = &mut self.scratch;
 
-        // --- Write the 9-line Header ---
-        let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
-        let _ = writeln!(buf, "{meta_line}");
-        push_f64_prec(buf, frame.header.boxl[0], prec);
-        buf.push(b' ');
-        push_f64_prec(buf, frame.header.boxl[1], prec);
-        buf.push(b' ');
-        push_f64_prec(buf, frame.header.boxl[2], prec);
-        buf.push(b'\n');
-        push_f64_prec(buf, frame.header.angles[0], prec);
-        buf.push(b' ');
-        push_f64_prec(buf, frame.header.angles[1], prec);
-        buf.push(b' ');
-        push_f64_prec(buf, frame.header.angles[2], prec);
-        buf.push(b'\n');
-        let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
-        let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
-        let _ = writeln!(buf, "{}", frame.header.natm_types);
+            // --- Write the 9-line Header ---
+            let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
+            let _ = writeln!(buf, "{meta_line}");
+            push_f64_prec(buf, frame.header.boxl[0], prec);
+            buf.push(b' ');
+            push_f64_prec(buf, frame.header.boxl[1], prec);
+            buf.push(b' ');
+            push_f64_prec(buf, frame.header.boxl[2], prec);
+            buf.push(b'\n');
+            push_f64_prec(buf, frame.header.angles[0], prec);
+            buf.push(b' ');
+            push_f64_prec(buf, frame.header.angles[1], prec);
+            buf.push(b' ');
+            push_f64_prec(buf, frame.header.angles[2], prec);
+            buf.push(b'\n');
+            let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
+            let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
+            let _ = writeln!(buf, "{}", frame.header.natm_types);
 
-        for (i, n) in frame.header.natms_per_type.iter().enumerate() {
-            if i > 0 {
-                buf.push(b' ');
+            for (i, n) in frame.header.natms_per_type.iter().enumerate() {
+                if i > 0 {
+                    buf.push(b' ');
+                }
+                push_u64(buf, *n as u64);
             }
-            push_u64(buf, *n as u64);
-        }
-        buf.push(b'\n');
-
-        for (i, m) in frame.header.masses_per_type.iter().enumerate() {
-            if i > 0 {
-                buf.push(b' ');
-            }
-            push_f64_prec(buf, *m, prec);
-        }
-        buf.push(b'\n');
-
-        // --- Write the Atom Data ---
-        let mut atom_idx_offset = 0;
-        for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-            let symbol = &frame.atom_data[atom_idx_offset].symbol;
-            let _ = writeln!(buf, "{symbol}");
-            let _ = writeln!(buf, "Coordinates of Component {}", type_idx + 1);
-
-            for i in 0..num_atoms_in_type {
-                let atom = &frame.atom_data[atom_idx_offset + i];
-                push_xyz_line(
-                    buf,
-                    atom.x,
-                    atom.y,
-                    atom.z,
-                    prec,
-                    encode_fixed_bitmask(atom.fixed),
-                    atom.atom_id,
-                );
-            }
-            atom_idx_offset += num_atoms_in_type;
-        }
-
-        // --- Write optional velocity section ---
-        if frame.has_velocities() {
             buf.push(b'\n');
 
-            let mut vel_idx_offset = 0;
+            for (i, m) in frame.header.masses_per_type.iter().enumerate() {
+                if i > 0 {
+                    buf.push(b' ');
+                }
+                push_f64_prec(buf, *m, prec);
+            }
+            buf.push(b'\n');
+
+            // --- Write the Atom Data ---
+            let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[vel_idx_offset].symbol;
+                let symbol = &frame.atom_data[atom_idx_offset].symbol;
                 let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Velocities of Component {}", type_idx + 1);
+                let _ = writeln!(buf, "Coordinates of Component {}", type_idx + 1);
 
                 for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[vel_idx_offset + i];
-                    let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
+                    let atom = &frame.atom_data[atom_idx_offset + i];
                     push_xyz_line(
                         buf,
-                        vx,
-                        vy,
-                        vz,
+                        atom.x,
+                        atom.y,
+                        atom.z,
                         prec,
                         encode_fixed_bitmask(atom.fixed),
                         atom.atom_id,
                     );
                 }
-                vel_idx_offset += num_atoms_in_type;
+                atom_idx_offset += num_atoms_in_type;
             }
-        }
 
-        // --- Write optional force section ---
-        if frame.has_forces() {
-            buf.push(b'\n');
+            // --- Write optional velocity section ---
+            if frame.has_velocities() {
+                buf.push(b'\n');
 
-            let mut force_idx_offset = 0;
-            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[force_idx_offset].symbol;
-                let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Forces of Component {}", type_idx + 1);
+                let mut vel_idx_offset = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[vel_idx_offset].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Velocities of Component {}", type_idx + 1);
 
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[force_idx_offset + i];
-                    let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
-                    push_xyz_line(
-                        buf,
-                        fx,
-                        fy,
-                        fz,
-                        prec,
-                        encode_fixed_bitmask(atom.fixed),
-                        atom.atom_id,
-                    );
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[vel_idx_offset + i];
+                        let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
+                        push_xyz_line(
+                            buf,
+                            vx,
+                            vy,
+                            vz,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    vel_idx_offset += num_atoms_in_type;
                 }
-                force_idx_offset += num_atoms_in_type;
             }
-        }
 
-        // --- Write optional energies section ---
-        if frame.has_energies() {
-            buf.push(b'\n');
+            // --- Write optional force section ---
+            if frame.has_forces() {
+                buf.push(b'\n');
 
-            let mut energy_idx_offset = 0;
-            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[energy_idx_offset].symbol;
-                let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Energies of Component {}", type_idx + 1);
+                let mut force_idx_offset = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[force_idx_offset].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Forces of Component {}", type_idx + 1);
 
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[energy_idx_offset + i];
-                    let e = atom.energy.unwrap_or(0.0);
-                    push_scalar_line(
-                        buf,
-                        e,
-                        prec,
-                        encode_fixed_bitmask(atom.fixed),
-                        atom.atom_id,
-                    );
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[force_idx_offset + i];
+                        let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
+                        push_xyz_line(
+                            buf,
+                            fx,
+                            fy,
+                            fz,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    force_idx_offset += num_atoms_in_type;
                 }
-                energy_idx_offset += num_atoms_in_type;
             }
-        }
 
-        if frame.has_charges() {
-            buf.push(b'\n');
-            let mut off = 0;
-            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[off].symbol;
-                let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Charges of Component {}", type_idx + 1);
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[off + i];
-                    let q = atom.charge.unwrap_or(0.0);
-                    push_scalar_line(
-                        buf,
-                        q,
-                        prec,
-                        encode_fixed_bitmask(atom.fixed),
-                        atom.atom_id,
-                    );
-                }
-                off += num_atoms_in_type;
-            }
-        }
+            // --- Write optional energies section ---
+            if frame.has_energies() {
+                buf.push(b'\n');
 
-        if frame.has_spins() {
-            buf.push(b'\n');
-            let mut off = 0;
-            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[off].symbol;
-                let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Spins of Component {}", type_idx + 1);
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[off + i];
-                    let s = atom.spin.unwrap_or(0.0);
-                    push_scalar_line(
-                        buf,
-                        s,
-                        prec,
-                        encode_fixed_bitmask(atom.fixed),
-                        atom.atom_id,
-                    );
-                }
-                off += num_atoms_in_type;
-            }
-        }
+                let mut energy_idx_offset = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[energy_idx_offset].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Energies of Component {}", type_idx + 1);
 
-        if frame.has_magmoms() {
-            buf.push(b'\n');
-            let mut off = 0;
-            for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
-                let symbol = &frame.atom_data[off].symbol;
-                let _ = writeln!(buf, "{symbol}");
-                let _ = writeln!(buf, "Magmoms of Component {}", type_idx + 1);
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[off + i];
-                    let [mx, my, mz] = atom.magmom.unwrap_or([0.0; 3]);
-                    push_xyz_line(
-                        buf,
-                        mx,
-                        my,
-                        mz,
-                        prec,
-                        encode_fixed_bitmask(atom.fixed),
-                        atom.atom_id,
-                    );
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[energy_idx_offset + i];
+                        let e = atom.energy.unwrap_or(0.0);
+                        push_scalar_line(
+                            buf,
+                            e,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    energy_idx_offset += num_atoms_in_type;
                 }
-                off += num_atoms_in_type;
             }
-        }
+
+            if frame.has_charges() {
+                buf.push(b'\n');
+                let mut off = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[off].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Charges of Component {}", type_idx + 1);
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[off + i];
+                        let q = atom.charge.unwrap_or(0.0);
+                        push_scalar_line(
+                            buf,
+                            q,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    off += num_atoms_in_type;
+                }
+            }
+
+            if frame.has_spins() {
+                buf.push(b'\n');
+                let mut off = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[off].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Spins of Component {}", type_idx + 1);
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[off + i];
+                        let s = atom.spin.unwrap_or(0.0);
+                        push_scalar_line(
+                            buf,
+                            s,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    off += num_atoms_in_type;
+                }
+            }
+
+            if frame.has_magmoms() {
+                buf.push(b'\n');
+                let mut off = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[off].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Magmoms of Component {}", type_idx + 1);
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[off + i];
+                        let [mx, my, mz] = atom.magmom.unwrap_or([0.0; 3]);
+                        push_xyz_line(
+                            buf,
+                            mx,
+                            my,
+                            mz,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    off += num_atoms_in_type;
+                }
+            }
         }
 
         self.writer.write_all(&self.scratch)
