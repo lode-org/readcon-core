@@ -138,6 +138,12 @@ readcon_dep = declare_dependency(
 meson.override_dependency('readcon-core', readcon_dep)
 
 if get_option('with_tests')
+    runtime_consumer = executable(
+        'test_runtime_dependency',
+        files('tests/meson-wrap/main.c'),
+        dependencies: readcon_dep,
+    )
+    test('runtime-dependency', runtime_consumer, env: {'LD_LIBRARY_PATH': ''})
     if host_machine.system() == 'linux'
         test(
             'shared-library-identity',
