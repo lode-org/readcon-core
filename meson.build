@@ -109,14 +109,21 @@ install_headers(
     'include/readcon-metatensor.h',
 )
 
-# link_args carries the cargo archive or shared object; Meson must not
+# link_args carries the cargo archive; Meson must not
 # promote an installed static consumer to link_whole (custom_target is not
 # a library target). The cargo outputs themselves cannot be consumer
 # sources: a static consumer would hand the archive to ar as an input.
 # A generated header that depends on the cargo target gives every
 # consumer the build ordering instead; a header needs no compiler in the
 # consumer, so C and C++ projects both take it.
-_link_idx = get_option('default_library') == 'static' ? 1 : 0
+_readcon_link_args = []
+_readcon_link_with = []
+if get_option('default_library') == 'static'
+    _readcon_link_args = [readcon_cargo[1].full_path()]
+else
+    # The shared target carries its runtime search directory to consumers.
+    _readcon_link_with = [readcon_cargo[0]]
+endif
 readcon_link_stub = custom_target(
     'readcon-link-order',
     input: readcon_cargo,
@@ -129,7 +136,8 @@ readcon_link_stub = custom_target(
     ],
 )
 readcon_dep = declare_dependency(
-    link_args: [readcon_cargo[_link_idx].full_path()],
+    link_args: _readcon_link_args,
+    link_with: _readcon_link_with,
     sources: readcon_link_stub,
     dependencies: _rust_sys_deps,
     include_directories: _incdir,
