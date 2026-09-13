@@ -138,6 +138,14 @@ readcon_dep = declare_dependency(
 meson.override_dependency('readcon-core', readcon_dep)
 
 if get_option('with_tests')
+    if host_machine.system() == 'linux'
+        test(
+            'shared-library-identity',
+            _py,
+            args: [files('scripts/check_shared_library_identity.py'), readcon_cargo[0]],
+            depends: readcon_cargo,
+        )
+    endif
     test(
         'cargo-tests',
         cargo_prog,
