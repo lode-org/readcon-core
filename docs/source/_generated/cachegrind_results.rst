@@ -44,7 +44,7 @@
      - 6,081,686
      - selection ``name O`` (50×)
 
-Generated **2026-09-14T09:59:24Z** from commit ``09808fe``
+Generated **2026-09-21T10:03:17Z** from commit ``e005890``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
