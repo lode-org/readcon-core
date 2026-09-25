@@ -464,13 +464,15 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
 }
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
-#[repr(C)]
+// No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
+// accept under -pedantic. The zero-length field keeps it unconstructible.
 pub struct RKRConFrame {
     _private: [u8; 0],
 }
 /// An opaque handle to a Rust `ConFrameWriter` object.
 /// The C/C++ side needs to treat this as a void pointer
-#[repr(C)]
+// No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
+// accept under -pedantic. The zero-length field keeps it unconstructible.
 pub struct RKRConFrameWriter {
     _private: [u8; 0],
 }
@@ -1233,7 +1235,8 @@ pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
 // Frame Builder FFI (construct ConFrame from C data)
 //=============================================================================
 /// An opaque handle to a Rust `ConFrameBuilder` object.
-#[repr(C)]
+// No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
+// accept under -pedantic. The zero-length field keeps it unconstructible.
 pub struct RKRConFrameBuilder {
     _private: [u8; 0],
 }
@@ -3373,7 +3376,8 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 /// Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
 /// Real implementations live under `feature = "metatensor"`.
 #[cfg(not(feature = "metatensor"))]
-#[repr(C)]
+// No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
+// accept under -pedantic. The zero-length field keeps it unconstructible.
 pub struct mts_block_t {
     _private: [u8; 0],
 }

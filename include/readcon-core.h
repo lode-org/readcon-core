@@ -279,9 +279,7 @@ typedef struct String String;
  * An opaque handle to a full, lossless Rust `ConFrame` object.
  * The C/C++ side needs to treat this as a void pointer
  */
-typedef struct RKRConFrame {
-    uint8_t _private[0];
-} RKRConFrame;
+typedef struct RKRConFrame RKRConFrame;
 
 typedef struct CConFrameIterator {
     struct ConFrameIterator *iterator;
@@ -344,16 +342,12 @@ typedef struct CFrame {
  * An opaque handle to a Rust `ConFrameWriter` object.
  * The C/C++ side needs to treat this as a void pointer
  */
-typedef struct RKRConFrameWriter {
-    uint8_t _private[0];
-} RKRConFrameWriter;
+typedef struct RKRConFrameWriter RKRConFrameWriter;
 
 /**
  * An opaque handle to a Rust `ConFrameBuilder` object.
  */
-typedef struct RKRConFrameBuilder {
-    uint8_t _private[0];
-} RKRConFrameBuilder;
+typedef struct RKRConFrameBuilder RKRConFrameBuilder;
 
 /**
  * Element type request — **layout-identical** to DLPack `DLDataType`
@@ -412,16 +406,6 @@ typedef struct RKRDlpackExportOptions {
      */
     struct RKRDLDevice device;
 } RKRDlpackExportOptions;
-
-#if !defined(READCON_CORE_HAS_METATENSOR)
-/**
- * Lean-build stubs: always export metatensor C symbols so Fortran/C can link without `#ifdef`.
- * Real implementations live under `feature = "metatensor"`.
- */
-typedef struct mts_block_t {
-    uint8_t _private[0];
-} mts_block_t;
-#endif
 
 /**
  * A transparent, "lossy" C-struct containing only the core atomic data.
