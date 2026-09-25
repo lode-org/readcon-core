@@ -99,4 +99,7 @@ line_endings = "LF"
 # through `rkr_frame_atom_index_by_id` instead; the hash map type
 # never crosses the FFI boundary, so cbindgen does not need to
 # generate a mangling for it.
-exclude = ["FxHashMap", "PARALLEL_BYTES_THRESHOLD"]
+# `mts_block_t` is declared once, globally, in the header preamble above (and
+# by metatensor.h when that feature is on); a second declaration inside the
+# readcon namespace collides with it in C++.
+exclude = ["FxHashMap", "PARALLEL_BYTES_THRESHOLD", "mts_block_t"]
