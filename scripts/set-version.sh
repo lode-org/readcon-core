@@ -2,12 +2,13 @@
 # Write one release version into every file that records it. cog.toml runs
 # this as a pre-bump hook, so the tag and the published packages agree.
 set -euo pipefail
-v=${1:?usage: set-version.sh VERSION}
+v=${1:?usage: set-version.sh VERSION [FROM]}
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
-# The outgoing version, read before Cargo.toml changes; install pins in the
-# docs match on it so unrelated version numbers stay as they are.
-old=$(sed -n -E 's/^version = "([^"]*)"$/\1/p' Cargo.toml | head -n 1)
+# The outgoing version, read before Cargo.toml changes unless FROM names it;
+# install pins and tarball names match on it so unrelated version numbers
+# stay as they are.
+old=${2:-$(sed -n -E 's/^version = "([^"]*)"$/\1/p' Cargo.toml | head -n 1)}
 o=${old//./\\.}
 # First version key only: the package's own, not a dependency's.
 sed -i -E "0,/^version = \"[^\"]*\"/s//version = \"$v\"/" Cargo.toml pyproject.toml \
@@ -16,8 +17,12 @@ sed -i -E "s/readcon-chemfiles==$o\"/readcon-chemfiles==$v\"/" pyproject.toml
 sed -i -E "s/assert_eq!\(VERSION, \"$o\"\)/assert_eq!(VERSION, \"$v\")/" src/lib.rs
 sed -i -E "s/^release = \"[^\"]*\"/release = \"$v\"/" docs/source/conf.py
 sed -i -E "s/^VER=.*/VER=$v/" julia/ReadCon/README.md fortran/README.md
-# Install pins and version statements in the docs. The cxx tarball URL and
-# its SHA256 name the published archive and move after the release does.
+# The wrapdb wrap names the release's cxx tarball. Its source_hash stays until
+# that tarball is published; scripts/check_wrap_hash.sh accepts the gap.
+sed -i -E "s/readcon-core-cxx-$o\b/readcon-core-cxx-$v/g; s#releases/download/v$o/#releases/download/v$v/#" \
+    packaging/wrapdb/readcon-core.wrap
+# Install pins, cxx tarball names and version statements in the docs. The
+# FetchContent URL_HASH stays with the wrap's source_hash.
 # Grid-table rows keep their column borders: a longer version takes its
 # extra characters out of the padding before the next cell border.
 python3 - "$old" "$v" docs/source/*.rst docs/orgmode/*.org <<'PY'
@@ -31,6 +36,9 @@ patterns = [
     rf"readcon-core@{o}\b",
     rf"this tree \((``|=){o}(``|=)\)",
     rf"Fortran package are {o}\.",
+    rf"readcon-core-cxx-{o}\b",
+    rf"releases/download/v{o}/",
+    rf"(=|``)v{o}(=|``) GitHub Release",
 ]
 pattern = re.compile("|".join(f"(?:{p})" for p in patterns))
 delta = len(new) - len(old)
