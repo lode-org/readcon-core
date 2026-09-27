@@ -1,6 +1,51 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+- - -
+## v0.14.11 - 2026-09-27
+#### Features
+- (**writer**) add an exact round-trip float format - (a75b176) - *HaoZeke*
+#### Bug Fixes
+- (**ffi**) declare opaque handles as incomplete structs - (3d17587) - *HaoZeke*
+- (**meson**) propagate shared runtime directories through dependencies - (09808fe) - *HaoZeke*
+- (**meson**) keep shared library identity across Cargo artifact builds - (ef9e94b) - *HaoZeke*
+- (**parser**) preserve binary64 values in JSON metadata - (2fd79dd) - *HaoZeke*
+- (**release**) cover every lockstep version surface in set-version.sh - (581604e) - *HaoZeke*
+- (**release**) write the version into every file on cog bump - (d66b037) - *HaoZeke*
+#### Tests
+- (**meson**) exercise consumers without a library path override - (afe9ed2) - *HaoZeke*
+- (**meson**) verify the shared C ABI library identity - (8bbc49e) - *HaoZeke*
+- (**writer**) cover exact floating-point round trips - (2b6134e) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (2dded30) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (5c54113) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (e005890) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (419f9b1) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (0d1531e) - github-actions[bot]
+#### Style
+- (**writer**) format numeric representation policy - (c25ae39) - *HaoZeke*
+- (**writer**) format frame serialization and numeric checks - (3fa186b) - *HaoZeke*
+
+- - -
+## v0.14.10 - 2026-09-02
+#### Buildsystem
+- (**meson**) order consumers on a generated stub, not the cargo outputs - (17254f5) - *HaoZeke*
+#### Bug Fixes
+- (**docs**) drop campaigns hero comment and docs.rs toctree twin - (fedd1b9) - *HaoZeke*
+- (**docs**) keep the hero CON header inside one raw-html line - (f1ecc57) - *HaoZeke*
+#### Documentation
+- (**dist**) pin cxx wrap hash to the published v0.14.9 tarball - (c7ac66c) - *HaoZeke*
+- restore eOn rgpot chemparseplot rgpycrumbs in Ecosystem - (a9b91aa) - *HaoZeke*
+- Ecosystem is only the sibling docs site - (0776586) - *HaoZeke*
+- Ecosystem nav lists docs sites only - (eeb2e0e) - *HaoZeke*
+- drop campaign-store wording and docs.rs from the ecosystem - (96ec065) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (b77555a) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (29a75e1) - github-actions[bot]
+#### Style
+- (**docs**) give README.md a trailing newline - (489e6e6) - *HaoZeke*
+
+- - -
 ## v0.14.9 - 2026-08-24
 #### Bug Fixes
 - (**meson**) copy Windows cargo artifacts and skip dead rustc hosts - (c62ed1c) - *HaoZeke*
@@ -356,26 +401,6 @@ All notable changes to this project will be documented in this file. See [conven
 - (**docs**) regenerate benchmark SVGs from make_plots.py - (fd8e346) - *HaoZeke*
 - (**readme**) re-export README.md anchors from readme_src.org - (5f58a7d) - *HaoZeke*
 
-- - -
-## v0.14.10 - 2026-09-02
-#### Buildsystem
-- (**meson**) order consumers on a generated stub, not the cargo outputs - (17254f5) - *HaoZeke*
-#### Bug Fixes
-- (**docs**) drop campaigns hero comment and docs.rs toctree twin - (fedd1b9) - *HaoZeke*
-- (**docs**) keep the hero CON header inside one raw-html line - (f1ecc57) - *HaoZeke*
-#### Documentation
-- (**dist**) pin cxx wrap hash to the published v0.14.9 tarball - (c7ac66c) - *HaoZeke*
-- restore eOn rgpot chemparseplot rgpycrumbs in Ecosystem - (a9b91aa) - *HaoZeke*
-- Ecosystem is only the sibling docs site - (0776586) - *HaoZeke*
-- Ecosystem nav lists docs sites only - (eeb2e0e) - *HaoZeke*
-- drop campaign-store wording and docs.rs from the ecosystem - (96ec065) - *HaoZeke*
-#### Chores
-- (**bench**) refresh Cachegrind I-refs for docs - (b77555a) - github-actions[bot]
-- (**bench**) refresh Cachegrind I-refs for docs - (29a75e1) - github-actions[bot]
-#### Style
-- (**docs**) give README.md a trailing newline - (489e6e6) - *HaoZeke*
-
-- - -
 
 
 ## v0.14.0 - 2026-06-28
