@@ -83,7 +83,7 @@ Why bonds live in frame JSON, not sections
 
 
 ``sections`` is the channel for **per-atom** optional blocks (velocities,
-forces, energies, charges, spins, magmoms) with fixed column layouts and one
+forces, energies, charges, spins, magmoms, displacements) with fixed column layouts and one
 row per atom. Bonds are
 **frame-scoped edges** (variable count, not N-aligned). Putting them in JSON
 metadata matches ``energy`` / ``pbc`` / ``lattice_vectors``: optional, preservable

@@ -22,7 +22,7 @@ lose the mask or the identity on the first rewrite.
 | Type-grouped coordinates | Stable =head=-able layout |
 | Column 4 fixed mask | Per-direction constraints (bitmask 0-7) |
 | Column 5 =atom_id= | Pre-group index for NEB / dimer / reference matching |
-| Optional sections | Velocities, forces, energies, charges, spins, magmoms (v2/v3 =sections=) |
+| Optional sections | Velocities, forces, energies, charges, spins, magmoms, displacements (v2/v3 =sections=) |
 | Line-2 JSON | =con_spec_version=, =energy=, =neb_bead=, =units=, … |
 
 Saddle, dimer, and NEB pipelines already depend on that payload.
@@ -126,14 +126,15 @@ and their order. Known names on the v2/v3 surface:
 
 | Name | Layout |
 |------+--------|
-| =velocities=, =forces=, =magmoms= | 3-vector + fixed + =atom_id= |
+| =velocities=, =forces=, =magmoms=, =displacements= | 3-vector + fixed + =atom_id= |
 | =energies=, =charges=, =spins= | scalar + fixed + =atom_id= |
 
 #+begin_example
 {"con_spec_version":2,"sections":["velocities","forces","charges"]}
 #+end_example
 
-Optional physics blocks such as =charges= / =spins= / =magmoms= use the same
+Optional physics blocks such as =charges= / =spins= / =magmoms= /
+=displacements= use the same
 declared-section channel; they do not require a new =con_spec_version=.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
@@ -166,7 +167,7 @@ integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
-* Can I store forces, energies, charges, spins, magmoms?
+* Can I store forces, energies, charges, spins, magmoms, displacements?
 
 Yes. Per-frame total energy lives in JSON under the =energy= key.
 Per-atom data uses declared =sections=:
@@ -175,6 +176,8 @@ Per-atom data uses declared =sections=:
 - *Per-atom energies* (scalar): =energies=
 - *Charges* / *spins* (scalar): =charges=, =spins=
 - *Magnetic moments* (3-vector): =magmoms=
+- *Displacement vectors* (3-vector, Angstrom, e.g. a normal mode):
+  =displacements=
 
 #+begin_example
 {"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
@@ -187,9 +190,11 @@ contributions, declare =energies= alongside =forces=:
 {"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
 #+end_example
 
-Charges, spins, and magmoms use the same wire format: list them in
-=sections= and emit the matching component blocks (see [[file:spec.org][spec.org]]).
-Example fixture: =resources/test/tiny_cuh2_charges_spins_magmoms.con=.
+Charges, spins, magmoms, and displacements use the same wire format: list
+them in =sections= and emit the matching component blocks (see
+[[file:spec.org][spec.org]]). Example fixtures:
+=resources/test/tiny_cuh2_charges_spins_magmoms.con=,
+=resources/test/tiny_cuh2_displacements.con=.
 
 The per-frame =energy= metadata key SHOULD equal the sum of the
 per-atom =energies= section when both are present. Frames with forces

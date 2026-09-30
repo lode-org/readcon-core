@@ -23,9 +23,9 @@ bcon file):
 | Cap'n Proto | Maps to |
 |-------------|---------|
 | =ConAtom.fixedMask= (u8, 0–7) | per-axis constraints (=encode_fixed_bitmask=) |
-| =ConAtom= velocity / force / energy / charge / spin / magmom | =AtomDatum= optional sections |
+| =ConAtom= velocity / force / energy / charge / spin / magmom / displacement | =AtomDatum= optional sections |
 | =ConFrameData.specVersion= | =FrameHeader.spec_version= (default 2) |
-| =hasForces= / =hasEnergies= / =hasCharges= / =hasSpins= / =hasMagmoms= | section presence |
+| =hasForces= / =hasEnergies= / =hasCharges= / =hasSpins= / =hasMagmoms= / =hasDisplacements= | section presence |
 | =massesPerType= / =natmsPerType= | type table |
 | =sections= | declared section names |
 | =metadataJson= | free-form + reserved JSON keys (=units=, energy, NEB, …) |

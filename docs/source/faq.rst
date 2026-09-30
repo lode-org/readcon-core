@@ -19,21 +19,21 @@ lose the mask or the identity on the first rewrite.
 
 .. table::
 
-    +--------------------------+----------------------------------------------------------------------------+
-    | On disk                  | Role                                                                       |
-    +==========================+============================================================================+
-    | Cell + angles            | Periodic box                                                               |
-    +--------------------------+----------------------------------------------------------------------------+
-    | Type-grouped coordinates | Stable ``head``-able layout                                                |
-    +--------------------------+----------------------------------------------------------------------------+
-    | Column 4 fixed mask      | Per-direction constraints (bitmask 0-7)                                    |
-    +--------------------------+----------------------------------------------------------------------------+
-    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching                       |
-    +--------------------------+----------------------------------------------------------------------------+
-    | Optional sections        | Velocities, forces, energies, charges, spins, magmoms (v2/v3 ``sections``) |
-    +--------------------------+----------------------------------------------------------------------------+
-    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …               |
-    +--------------------------+----------------------------------------------------------------------------+
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | On disk                  | Role                                                                                      |
+    +==========================+===========================================================================================+
+    | Cell + angles            | Periodic box                                                                              |
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | Type-grouped coordinates | Stable ``head``-able layout                                                               |
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | Column 4 fixed mask      | Per-direction constraints (bitmask 0-7)                                                   |
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching                                      |
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | Optional sections        | Velocities, forces, energies, charges, spins, magmoms, displacements (v2/v3 ``sections``) |
+    +--------------------------+-------------------------------------------------------------------------------------------+
+    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …                              |
+    +--------------------------+-------------------------------------------------------------------------------------------+
 
 Saddle, dimer, and NEB pipelines already depend on that payload.
 ``readcon-core`` is the spec v2-v3 reader/writer and the hourglass
@@ -148,19 +148,20 @@ and their order. Known names on the v2/v3 surface:
 
 .. table::
 
-    +-----------------------------------------+--------------------------------+
-    | Name                                    | Layout                         |
-    +=========================================+================================+
-    | ``velocities``, ``forces``, ``magmoms`` | 3-vector + fixed + ``atom_id`` |
-    +-----------------------------------------+--------------------------------+
-    | ``energies``, ``charges``, ``spins``    | scalar + fixed + ``atom_id``   |
-    +-----------------------------------------+--------------------------------+
+    +------------------------------------------------------------+--------------------------------+
+    | Name                                                       | Layout                         |
+    +============================================================+================================+
+    | ``velocities``, ``forces``, ``magmoms``, ``displacements`` | 3-vector + fixed + ``atom_id`` |
+    +------------------------------------------------------------+--------------------------------+
+    | ``energies``, ``charges``, ``spins``                       | scalar + fixed + ``atom_id``   |
+    +------------------------------------------------------------+--------------------------------+
 
 ::
 
     {"con_spec_version":2,"sections":["velocities","forces","charges"]}
 
-Optional physics blocks such as ``charges`` / ``spins`` / ``magmoms`` use the same
+Optional physics blocks such as ``charges`` / ``spins`` / ``magmoms`` /
+``displacements`` use the same
 declared-section channel; they do not require a new ``con_spec_version``.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
@@ -197,8 +198,8 @@ integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
-Can I store forces, energies, charges, spins, magmoms?
-------------------------------------------------------
+Can I store forces, energies, charges, spins, magmoms, displacements?
+---------------------------------------------------------------------
 
 Yes. Per-frame total energy lives in JSON under the ``energy`` key.
 Per-atom data uses declared ``sections``:
@@ -211,6 +212,9 @@ Per-atom data uses declared ``sections``:
 
 - **Magnetic moments** (3-vector): ``magmoms``
 
+- **Displacement vectors** (3-vector, Angstrom, e.g. a normal mode):
+  ``displacements``
+
 ::
 
     {"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
@@ -222,9 +226,11 @@ contributions, declare ``energies`` alongside ``forces``:
 
     {"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
 
-Charges, spins, and magmoms use the same wire format: list them in
-``sections`` and emit the matching component blocks (see :doc:`spec`).
-Example fixture: ``resources/test/tiny_cuh2_charges_spins_magmoms.con``.
+Charges, spins, magmoms, and displacements use the same wire format: list
+them in ``sections`` and emit the matching component blocks (see
+:doc:`spec`). Example fixtures:
+``resources/test/tiny_cuh2_charges_spins_magmoms.con``,
+``resources/test/tiny_cuh2_displacements.con``.
 
 The per-frame ``energy`` metadata key SHOULD equal the sum of the
 per-atom ``energies`` section when both are present. Frames with forces
@@ -341,23 +347,23 @@ hand-rolling XYZ and its own atoms type. Migration guide:
 
 .. table::
 
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Component                                                                                             | Job                                                                                                                                                                 |
-    +=======================================================================================================+=====================================================================================================================================================================+
-    | CON on disk                                                                                           | The checkpoint format (text, optional gzip/zstd)                                                                                                                    |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-core``                                                                                      | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor (`docs.rs <https://docs.rs/readcon-core>`_)                                  |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-db``                                                                                        | LMDB corpus: energy / formula / section indexes, dedup, multi-reader (`docs <https://lode-org.github.io/readcon-db/docs/>`_)                                        |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Chemfiles                                                                                             | Land foreign structures **as** CON                                                                                                                                  |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ASE adapters                                                                                          | Calculators without abandoning CON interchange                                                                                                                      |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ | Plotting and analysis on CON checkpoints                                                                                                                            |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | `rgpot <https://omnipotentrpc.github.io/rgpot/>`_ / `eOn <https://eondocs.org>`_                      | Optimizers and potentials on the same CON files                                                                                                                     |
-    +-------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | Component                                                                                             | Job                                                                                                                                |
+    +=======================================================================================================+====================================================================================================================================+
+    | CON on disk                                                                                           | The checkpoint format (text, optional gzip/zstd)                                                                                   |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | ``readcon-core``                                                                                      | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor (`docs.rs <https://docs.rs/readcon-core>`_) |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | ``readcon-db``                                                                                        | LMDB corpus: energy / formula / section indexes, dedup, multi-reader (`docs <https://lode-org.github.io/readcon-db/docs/>`_)       |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | Chemfiles                                                                                             | Land foreign structures **as** CON                                                                                                 |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | ASE adapters                                                                                          | Calculators without abandoning CON interchange                                                                                     |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ | Plotting and analysis on CON checkpoints                                                                                           |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    | `rgpot <https://omnipotentrpc.github.io/rgpot/>`_ / `eOn <https://eondocs.org>`_                      | Optimizers and potentials on the same CON files                                                                                    |
+    +-------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
 
 One on-disk format. One library API. Campaigns, selection, and plotting share it.
 Campaign field projection helpers live in
@@ -379,11 +385,11 @@ dedup, join/split, ``reindex``). Cooked RCSO / SoA / DLPack buffers accelerate
 extract and device hand-off and are discardable or ephemeral.
 
 Why is readcon-db a separate package?
-------------------------------------
+-------------------------------------
 
 ``readcon-core`` is the shared decoder/writer. ``readcon-db`` owns LMDB indexes and
 SWMR corpus access. That split is a **migration benefit**: once structures are
-CON text, the same files plug into corpus query (energy / formula / section)
+CON text, the same files plug into corpus query (energy / formula / section
 indexes, dedup) without rewriting the optimizer or potential. Install
 ``readcon-db`` separately (``cargo add readcon-db``, ``pip install readcon-db``).
 Package docs: `lode-org.github.io/readcon-db/docs <https://lode-org.github.io/readcon-db/docs/>`_.
@@ -393,7 +399,7 @@ Where do large campaigns and many frames go?
 --------------------------------------------
 
 In this stack: **CON text** remains the structure contract; ``readcon-db`` is the
-LMDB corpus on top of it (LMDB indexes for energy / formula / section
+LMDB corpus on top of it (indexes for energy / formula / section
 presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 (optionally gzip/zstd) and ``iter_con`` / ``forward`` cover trajectory-style loads
 in ``readcon-core`` itself. Large corpora stay CON text; ``readcon-db``

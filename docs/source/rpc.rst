@@ -30,25 +30,25 @@ bcon file):
 
 .. table::
 
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | Cap'n Proto                                                                      | Maps to                                                    |
-    +==================================================================================+============================================================+
-    | ``ConAtom.fixedMask`` (u8, 0–7)                                                  | per-axis constraints (``encode_fixed_bitmask``)            |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``ConAtom`` velocity / force / energy / charge / spin / magmom                   | ``AtomDatum`` optional sections                            |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``ConFrameData.specVersion``                                                     | ``FrameHeader.spec_version`` (default 2)                   |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``hasForces`` / ``hasEnergies`` / ``hasCharges`` / ``hasSpins`` / ``hasMagmoms`` | section presence                                           |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``massesPerType`` / ``natmsPerType``                                             | type table                                                 |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``sections``                                                                     | declared section names                                     |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``metadataJson``                                                                 | free-form + reserved JSON keys (``units``, energy, NEB, …) |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
-    | ``strictValidation`` / ``sectionsDeclared``                                      | parse policy flags                                         |
-    +----------------------------------------------------------------------------------+------------------------------------------------------------+
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | Cap'n Proto                                                                                             | Maps to                                                    |
+    +=========================================================================================================+============================================================+
+    | ``ConAtom.fixedMask`` (u8, 0–7)                                                                         | per-axis constraints (``encode_fixed_bitmask``)            |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``ConAtom`` velocity / force / energy / charge / spin / magmom / displacement                           | ``AtomDatum`` optional sections                            |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``ConFrameData.specVersion``                                                                            | ``FrameHeader.spec_version`` (default 2)                   |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``hasForces`` / ``hasEnergies`` / ``hasCharges`` / ``hasSpins`` / ``hasMagmoms`` / ``hasDisplacements`` | section presence                                           |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``massesPerType`` / ``natmsPerType``                                                                    | type table                                                 |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``sections``                                                                                            | declared section names                                     |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``metadataJson``                                                                                        | free-form + reserved JSON keys (``units``, energy, NEB, …) |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
+    | ``strictValidation`` / ``sectionsDeclared``                                                             | parse policy flags                                         |
+    +---------------------------------------------------------------------------------------------------------+------------------------------------------------------------+
 
 Round-trip helpers live in ``src/rpc/convert.rs`` (``fill_frame_builder`` /
 ``frame_from_reader``). Text ``.con`` remains the on-disk interchange authority.
@@ -95,18 +95,35 @@ Client
 Protocol
 --------
 
-The RPC uses Cap'n Proto two-party as the encoding. The byte pipe is
+The RPC uses Cap'n Proto two-party as the **encoding**. The byte pipe is
 not UCX, libfabric, Mercury, or ADIOS.
 
-- ``host:port`` or ``[ipv6]:port`` is TCP.
-- ``unix:/abs/path``, ``unix:///abs/path``, or ``/abs/path`` is a Unix
-  domain socket.
+.. table::
 
-Same-node HPC jobs should use a Unix socket. TCP is for inet. UCX,
-ADIOS, and DAOS are optional later adapters if a campaign consumer
-exists; they are not this crate and they are not the CON store.
+    +------------------------------------------------------------+--------------------+
+    | Spec                                                       | Pipe               |
+    +============================================================+====================+
+    | ``host:port`` or ``[ipv6]:port``                           | TCP                |
+    +------------------------------------------------------------+--------------------+
+    | ``unix:/abs/path``, ``unix:///abs/path``, or ``/abs/path`` | Unix domain socket |
+    +------------------------------------------------------------+--------------------+
+
+Same-node HPC jobs should use a Unix socket (no TCP loopback). TCP is
+for inet. UCX/ADIOS/DAOS are optional later adapters if a campaign
+consumer exists; they are not this crate and they are not the CON
+store. Corpus I/O decisions live in the readcon-db 2026-08-23
+exascale I/O literature note (ADIOS2/DAOS/SST move GB-class arrays;
+they do not replace a FrameKey mmap of CON).
+
+The MD-engine leaf is pack-then-Bcast on the **caller** comm. Encode a
+parsed frame with ``readcon_core::rcso::Rcso::encode_frame`` (magic
+``RCSO``, v1, same bytes as readcon-db cooked SoA). Many frames go in
+one ``RCSB`` envelope. This crate never calls ``MPI_Init``.
 
 .. code:: rust
 
     readcon_core::rpc::server::start_server("unix:/tmp/readcon.sock")
+
+.. code:: rust
+
     let client = RpcClient::new("unix:/tmp/readcon.sock").unwrap();
