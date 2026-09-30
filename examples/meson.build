@@ -17,6 +17,11 @@ if get_option('with_cpp')
             'print_neb_band.cpp',
             f'@_msproot@/resources/examples/neb_band.con',
         ],
+        [
+            'cpp_displacements_roundtrip',
+            'cpp_displacements_roundtrip.cpp',
+            meson.current_build_dir() / 'cpp_displacements_roundtrip.con',
+        ],
     ]
 endif
 foreach exmpl : examples_array

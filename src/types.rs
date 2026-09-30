@@ -1564,6 +1564,29 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Sets the displacement vector (Angstrom) of an existing atom. The
+    /// frame auto-declares a `"displacements"` section on `build()` if any
+    /// atom carries a displacement.
+    pub fn set_atom_displacement(
+        &mut self,
+        i: usize,
+        displacement: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_displacements {
+            self.displacements = ndarray::ArcArray2::<f64>::zeros((len, 3));
+            self.has_displacements = true;
+        }
+        let mut row = self.displacements.row_mut(i);
+        row[0] = displacement[0];
+        row[1] = displacement[1];
+        row[2] = displacement[2];
+        Ok(self)
+    }
+
     /// Sets the per-atom energy contribution of an existing atom. The frame
     /// auto-declares an `"energies"` section on `build()` when any atom
     /// carries per-atom energy.
@@ -1668,6 +1691,24 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Removes displacement data from an existing atom by zeroing the slot.
+    pub fn clear_atom_displacement(
+        &mut self,
+        i: usize,
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if self.has_displacements {
+            let mut row = self.displacements.row_mut(i);
+            row[0] = 0.0;
+            row[1] = 0.0;
+            row[2] = 0.0;
+        }
+        Ok(self)
+    }
+
     /// Removes per-atom energy data from an existing atom by zeroing the slot.
     pub fn clear_atom_energy(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
         let len = self.symbols.len();
@@ -1692,6 +1733,13 @@ impl ConFrameBuilder {
     pub fn clear_forces_section(&mut self) -> &mut Self {
         self.forces = ndarray::ArcArray2::<f64>::zeros((0, 3));
         self.has_forces = false;
+        self
+    }
+
+    /// Drops the displacements section entirely.
+    pub fn clear_displacements_section(&mut self) -> &mut Self {
+        self.displacements = ndarray::ArcArray2::<f64>::zeros((0, 3));
+        self.has_displacements = false;
         self
     }
 
@@ -1749,6 +1797,32 @@ impl ConFrameBuilder {
             .as_slice_memory_order_mut()
             .expect("forces standard layout invariant violated");
         dst.copy_from_slice(forces);
+        Ok(self)
+    }
+
+    /// Bulk-update displacements (Angstrom) for every atom from a flat
+    /// buffer of length `3 * atom_count()`. Auto-declares a
+    /// `"displacements"` section on `build()`.
+    pub fn set_displacements_from_flat(
+        &mut self,
+        displacements: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.symbols.len();
+        if displacements.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: displacements.len(),
+            });
+        }
+        if !self.has_displacements {
+            self.displacements = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_displacements = true;
+        }
+        let dst = self
+            .displacements
+            .as_slice_memory_order_mut()
+            .expect("displacements standard layout invariant violated");
+        dst.copy_from_slice(displacements);
         Ok(self)
     }
 
@@ -1813,6 +1887,22 @@ impl ConFrameBuilder {
             return Ok(None);
         }
         let row = self.forces.row(i);
+        Ok(Some([row[0], row[1], row[2]]))
+    }
+
+    /// Read-only accessor: displacement of atom `i`, if any.
+    pub fn get_atom_displacement(
+        &self,
+        i: usize,
+    ) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_displacements {
+            return Ok(None);
+        }
+        let row = self.displacements.row(i);
         Ok(Some([row[0], row[1], row[2]]))
     }
 
@@ -1947,6 +2037,35 @@ impl ConFrameBuilder {
         self.forces.view()
     }
 
+    /// Row-major displacements slice if the section is populated, else
+    /// an empty slice.
+    pub fn displacements(&self) -> &[f64] {
+        if self.has_displacements {
+            self.displacements
+                .as_slice_memory_order()
+                .expect("displacements standard layout invariant violated")
+        } else {
+            &[]
+        }
+    }
+
+    /// Mutable displacements slice. Auto-allocates the section if needed.
+    pub fn displacements_mut(&mut self) -> &mut [f64] {
+        if !self.has_displacements {
+            let n = self.symbols.len();
+            self.displacements = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_displacements = true;
+        }
+        self.displacements
+            .as_slice_memory_order_mut()
+            .expect("displacements standard layout invariant violated")
+    }
+
+    /// Typed 2D `(N, 3) f64` view onto displacements.
+    pub fn displacements_view(&self) -> ndarray::ArrayView2<'_, f64> {
+        self.displacements.view()
+    }
+
     /// Per-atom energies slice if the energies section is populated.
     pub fn atom_energies(&self) -> &[f64] {
         if self.has_energies {
@@ -2009,6 +2128,10 @@ impl ConFrameBuilder {
     /// Crate-internal `&Array2<f64>` forces ref.
     pub fn forces_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
         &self.forces
+    }
+    /// Crate-internal `&Array2<f64>` displacements ref.
+    pub fn displacements_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
+        &self.displacements
     }
     /// Crate-internal `&Array1<f64>` atom_energies ref.
     pub fn atom_energies_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
@@ -2124,6 +2247,11 @@ impl ConFrameBuilder {
     /// Whether the builder currently has a forces section populated.
     pub fn has_forces_section(&self) -> bool {
         self.has_forces
+    }
+
+    /// Whether the builder currently has a displacements section populated.
+    pub fn has_displacements_section(&self) -> bool {
+        self.has_displacements
     }
 
     /// Whether the builder currently has a per-atom energies section populated.

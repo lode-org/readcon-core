@@ -264,6 +264,9 @@ class ConFrame {
     /// True when at least one atom carries a per-atom energy
     /// contribution (file declared an `"energies"` section).
     bool has_energies() const;
+    /// True when the frame declares a `"displacements"` section
+    /// (per-atom 3-vector in Angstrom, e.g. a normal mode).
+    bool has_displacements() const;
 
     /// Returns the position of an atom in the frame whose `atom_id`
     /// equals the given id, or `std::nullopt` if no such atom exists.
@@ -374,6 +377,12 @@ class ConFrame {
             rkr_frame_forces_view(frame_handle_.get(), &v);
         return v;
     }
+    RKRArrayView displacements_view() const {
+        RKRArrayView v{};
+        if (frame_handle_)
+            rkr_frame_displacements_view(frame_handle_.get(), &v);
+        return v;
+    }
 
     /**
      * Row-major f64 xyz, no copy. Null if storage is not float64.
@@ -415,6 +424,18 @@ class ConFrame {
             *n = static_cast<std::size_t>(nn);
         return p;
     }
+    const double *displacements_f64(std::size_t *n) const {
+        if (!frame_handle_) {
+            if (n)
+                *n = 0;
+            return nullptr;
+        }
+        uintptr_t nn = 0;
+        const double *p = rkr_frame_displacements_f64(frame_handle_.get(), &nn);
+        if (n)
+            *n = static_cast<std::size_t>(nn);
+        return p;
+    }
 
     /** Row-major xyz length >= 3*N. Status from C ABI. */
     RKRStatus copy_positions(double *out, std::size_t out_len) const {
@@ -431,6 +452,11 @@ class ConFrame {
         if (!frame_handle_)
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_copy_forces(frame_handle_.get(), out, out_len);
+    }
+    RKRStatus copy_displacements(double *out, std::size_t out_len) const {
+        if (!frame_handle_)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_copy_displacements(frame_handle_.get(), out, out_len);
     }
     RKRStatus copy_atom_energies(double *out, std::size_t out_len) const {
         if (!frame_handle_)
@@ -483,6 +509,18 @@ class ConFrame {
         if (!frame_handle_ || !out_tensor)
             return RKR_STATUS_NULL_POINTER;
         return rkr_frame_forces_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
+    }
+    /** DLPack displacements; SECTION_ABSENT if missing. */
+    RKRStatus displacements_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_displacements_dlpack(frame_handle_.get(), out_tensor);
+    }
+    RKRStatus displacements_dlpack(const RKRDlpackExportOptions &opts,
+                                   RKRDLManagedTensorVersioned **out_tensor) const {
+        if (!frame_handle_ || !out_tensor)
+            return RKR_STATUS_NULL_POINTER;
+        return rkr_frame_displacements_dlpack_ex(frame_handle_.get(), &opts, out_tensor);
     }
     /** DLPack per-atom energies; SECTION_ABSENT if missing. */
     RKRStatus atom_energies_dlpack(RKRDLManagedTensorVersioned **out_tensor) const {
@@ -813,6 +851,10 @@ class ConFrameBuilder {
     ConFrameBuilder &with_velocity(const std::array<double, 3> &v);
     /// Attaches force to the most recently added atom (chainable).
     ConFrameBuilder &with_force(const std::array<double, 3> &f);
+    /// Attaches a displacement (Angstrom) to the most recently added atom
+    /// (chainable). The frame auto-declares a `"displacements"` section
+    /// on `build()` if any atom carries one.
+    ConFrameBuilder &with_displacement(const std::array<double, 3> &d);
     /// Attaches a per-atom energy contribution to the most recently
     /// added atom (chainable). The frame auto-declares an `"energies"`
     /// section on `build()` if any atom carries an energy.
@@ -837,6 +879,9 @@ class ConFrameBuilder {
                                        const std::array<double, 3> &v);
     /// Sets the force on an existing atom.
     ConFrameBuilder &set_atom_force(size_t i, const std::array<double, 3> &f);
+    /// Sets the displacement (Angstrom) of an existing atom.
+    ConFrameBuilder &set_atom_displacement(size_t i,
+                                           const std::array<double, 3> &d);
     /// Sets the per-atom energy contribution of an existing atom.
     ConFrameBuilder &set_atom_energy(size_t i, double energy);
     /// Updates per-direction fixed flags `[fixed_x, fixed_y, fixed_z]`.
@@ -851,6 +896,7 @@ class ConFrameBuilder {
     /// Removes velocity / force / energy data from an existing atom.
     ConFrameBuilder &clear_atom_velocity(size_t i);
     ConFrameBuilder &clear_atom_force(size_t i);
+    ConFrameBuilder &clear_atom_displacement(size_t i);
     ConFrameBuilder &clear_atom_energy(size_t i);
 
     /// Bulk-update positions for every atom from a flat row-major buffer
@@ -858,6 +904,10 @@ class ConFrameBuilder {
     ConFrameBuilder &set_positions_from_flat(const std::vector<double> &positions);
     /// Bulk-update forces from a flat row-major buffer of length `3 * atom_count()`.
     ConFrameBuilder &set_forces_from_flat(const std::vector<double> &forces);
+    /// Bulk-update displacements (Angstrom) from a flat row-major buffer
+    /// of length `3 * atom_count()`.
+    ConFrameBuilder &
+    set_displacements_from_flat(const std::vector<double> &displacements);
     /// Bulk-update per-atom energies from a buffer of length `atom_count()`.
     ConFrameBuilder &set_atom_energies_from_flat(const std::vector<double> &energies);
 
@@ -869,6 +919,9 @@ class ConFrameBuilder {
     /// Read-only accessor: force on atom `i`, if any.
     [[nodiscard]] std::optional<std::array<double, 3>>
     get_atom_force(size_t i) const;
+    /// Read-only accessor: displacement of atom `i`, if any.
+    [[nodiscard]] std::optional<std::array<double, 3>>
+    get_atom_displacement(size_t i) const;
     /// Read-only accessor: per-atom energy of atom `i`, if any.
     [[nodiscard]] std::optional<double> get_atom_energy(size_t i) const;
     /// Read-only accessor: mass of atom `i`.
@@ -895,6 +948,7 @@ class ConFrameBuilder {
     [[nodiscard]] double *positions_data() noexcept;
     [[nodiscard]] double *velocities_data() noexcept;
     [[nodiscard]] double *forces_data() noexcept;
+    [[nodiscard]] double *displacements_data() noexcept;
     [[nodiscard]] double *atom_energies_data() noexcept;
     [[nodiscard]] double *masses_data() noexcept;
     [[nodiscard]] const uint64_t *atom_ids_data() const noexcept;
@@ -1247,6 +1301,10 @@ inline bool ConFrame::has_forces() const {
     return has_forces_cache_;
 }
 
+inline bool ConFrame::has_displacements() const {
+    return frame_handle_ && rkr_frame_has_displacements(frame_handle_.get());
+}
+
 inline bool ConFrame::has_energies() const {
     cache_data();
     return has_energies_cache_;
@@ -1594,6 +1652,14 @@ ConFrameBuilder::with_force(const std::array<double, 3> &f) {
     return *this;
 }
 
+inline ConFrameBuilder &
+ConFrameBuilder::with_displacement(const std::array<double, 3> &d) {
+    throw_on_error(
+        rkr_frame_builder_set_last_displacement(builder_handle_, d.data()),
+        "Failed to attach displacement to last atom");
+    return *this;
+}
+
 inline ConFrameBuilder &ConFrameBuilder::with_energy(double energy) {
     throw_on_error(
         rkr_frame_builder_set_last_energy(builder_handle_, energy),
@@ -1628,6 +1694,15 @@ ConFrameBuilder::set_atom_force(size_t i, const std::array<double, 3> &f) {
     throw_on_error(
         rkr_frame_builder_set_atom_force(builder_handle_, i, f.data()),
         "Failed to set atom force");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_atom_displacement(size_t i,
+                                       const std::array<double, 3> &d) {
+    throw_on_error(
+        rkr_frame_builder_set_atom_displacement(builder_handle_, i, d.data()),
+        "Failed to set atom displacement");
     return *this;
 }
 
@@ -1674,6 +1749,13 @@ inline ConFrameBuilder &ConFrameBuilder::clear_atom_force(size_t i) {
     return *this;
 }
 
+inline ConFrameBuilder &ConFrameBuilder::clear_atom_displacement(size_t i) {
+    throw_on_error(
+        rkr_frame_builder_clear_atom_displacement(builder_handle_, i),
+        "Failed to clear atom displacement");
+    return *this;
+}
+
 inline ConFrameBuilder &ConFrameBuilder::clear_atom_energy(size_t i) {
     throw_on_error(rkr_frame_builder_clear_atom_energy(builder_handle_, i),
                    "Failed to clear atom energy");
@@ -1693,6 +1775,15 @@ ConFrameBuilder::set_forces_from_flat(const std::vector<double> &forces) {
     throw_on_error(rkr_frame_builder_set_forces_from_flat(
                        builder_handle_, forces.data(), forces.size()),
                    "Failed to bulk-set forces");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_displacements_from_flat(
+    const std::vector<double> &displacements) {
+    throw_on_error(rkr_frame_builder_set_displacements_from_flat(
+                       builder_handle_, displacements.data(),
+                       displacements.size()),
+                   "Failed to bulk-set displacements");
     return *this;
 }
 
@@ -1740,6 +1831,20 @@ ConFrameBuilder::get_atom_force(size_t i) const {
     return std::nullopt;
 }
 
+inline std::optional<std::array<double, 3>>
+ConFrameBuilder::get_atom_displacement(size_t i) const {
+    std::array<double, 3> xyz{0.0, 0.0, 0.0};
+    bool has_value = false;
+    throw_on_error(
+        rkr_frame_builder_get_atom_displacement(builder_handle_, i,
+                                                xyz.data(), &has_value),
+        "Failed to read atom displacement");
+    if (has_value) {
+        return xyz;
+    }
+    return std::nullopt;
+}
+
 inline std::optional<double>
 ConFrameBuilder::get_atom_energy(size_t i) const {
     double value = 0.0;
@@ -1768,6 +1873,9 @@ inline double *ConFrameBuilder::velocities_data() noexcept {
 }
 inline double *ConFrameBuilder::forces_data() noexcept {
     return rkr_frame_builder_forces_data(builder_handle_);
+}
+inline double *ConFrameBuilder::displacements_data() noexcept {
+    return rkr_frame_builder_displacements_data(builder_handle_);
 }
 inline double *ConFrameBuilder::atom_energies_data() noexcept {
     return rkr_frame_builder_atom_energies_data(builder_handle_);

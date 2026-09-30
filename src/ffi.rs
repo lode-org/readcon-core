@@ -1306,6 +1306,25 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
     builder.with_force(f);
     RKRStatus::RKR_STATUS_SUCCESS
 }
+/// Attaches a displacement vector (Angstrom) to the most recently added
+/// atom on a builder. No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid. displacement must point to 3 contiguous
+/// f64 values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_displacement(
+    builder_handle: *mut RKRConFrameBuilder,
+    displacement: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || displacement.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let d = unsafe { [*displacement, *displacement.add(1), *displacement.add(2)] };
+    builder.with_displacement(d);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
 /// Attaches a per-atom energy to the most recently added atom on a
 /// builder. No-op if no atom has been added yet.
 ///
@@ -1426,6 +1445,26 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_force(
         Err(e) => map_builder_err(e),
     }
 }
+/// Sets the displacement vector (Angstrom) of an existing atom from 3
+/// contiguous f64 values.
+/// # Safety
+/// builder_handle must be valid; displacement must point to 3 contiguous f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_atom_displacement(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+    displacement: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || displacement.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let d = unsafe { [*displacement, *displacement.add(1), *displacement.add(2)] };
+    match builder.set_atom_displacement(index, d) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
 /// Sets the per-atom energy contribution of an existing atom.
 /// # Safety
 /// builder_handle must be valid.
@@ -1539,6 +1578,22 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_force(
 /// # Safety
 /// builder_handle must be valid.
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_clear_atom_displacement(
+    builder_handle: *mut RKRConFrameBuilder,
+    index: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    match builder.clear_atom_displacement(index) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_clear_atom_energy(
     builder_handle: *mut RKRConFrameBuilder,
     index: usize,
@@ -1587,6 +1642,26 @@ pub unsafe extern "C" fn rkr_frame_builder_set_forces_from_flat(
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(forces, len) };
     match builder.set_forces_from_flat(slice) {
+        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(e) => map_builder_err(e),
+    }
+}
+/// Bulk-update displacements (Angstrom) for every atom.
+/// # Safety
+/// builder_handle must be valid; displacements must point to `len` f64
+/// (`len == 3 * atom_count`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_displacements_from_flat(
+    builder_handle: *mut RKRConFrameBuilder,
+    displacements: *const f64,
+    len: usize,
+) -> RKRStatus {
+    if builder_handle.is_null() || displacements.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let slice = unsafe { std::slice::from_raw_parts(displacements, len) };
+    match builder.set_displacements_from_flat(slice) {
         Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
         Err(e) => map_builder_err(e),
     }
@@ -1683,6 +1758,37 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
             *out_xyz = f[0];
             *out_xyz.add(1) = f[1];
             *out_xyz.add(2) = f[2];
+            *has_value = true;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Ok(None) => unsafe {
+            *has_value = false;
+            RKRStatus::RKR_STATUS_SUCCESS
+        },
+        Err(e) => map_builder_err(e),
+    }
+}
+/// Reads the displacement of an atom (if any). `*has_value` is set to
+/// `true` if the atom carries a displacement, else `false` and `out_xyz`
+/// is left untouched.
+/// # Safety
+/// builder_handle, out_xyz, has_value must all be valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_get_atom_displacement(
+    builder_handle: *const RKRConFrameBuilder,
+    index: usize,
+    out_xyz: *mut f64,
+    has_value: *mut bool,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    match builder.get_atom_displacement(index) {
+        Ok(Some(d)) => unsafe {
+            *out_xyz = d[0];
+            *out_xyz.add(1) = d[1];
+            *out_xyz.add(2) = d[2];
             *has_value = true;
             RKRStatus::RKR_STATUS_SUCCESS
         },
@@ -2155,6 +2261,50 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
     export_owned_array2_dlpack_opts(builder.forces_2d_ref(), &o, out_tensor)
 }
 
+/// Export builder displacements as a DLPack-managed tensor.
+///
+/// Returns `RKR_STATUS_SECTION_ABSENT` if the displacements section is not
+/// declared.
+///
+/// # Safety
+/// `builder_handle` must be a valid builder handle; `out_tensor` must
+/// be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_displacements_dlpack(
+    builder_handle: *const RKRConFrameBuilder,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe {
+        rkr_frame_builder_displacements_dlpack_ex(builder_handle, std::ptr::null(), out_tensor)
+    }
+}
+
+/// Like [`rkr_frame_builder_displacements_dlpack`] with export options
+/// (NULL `opts` selects float64 on CPU).
+///
+/// # Safety
+/// Same contract as [`rkr_frame_builder_displacements_dlpack`]; `opts` is
+/// NULL or points to a valid `RKRDlpackExportOptions`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_displacements_dlpack_ex(
+    builder_handle: *const RKRConFrameBuilder,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if builder_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
+    if !builder.has_displacements_section() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    export_owned_array2_dlpack_opts(builder.displacements_2d_ref(), &o, out_tensor)
+}
+
 /// Export builder per-atom energies as a DLPack-managed tensor.
 ///
 /// Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
@@ -2329,6 +2479,29 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_data(
         return std::ptr::null_mut();
     }
     let slice = builder.forces_mut();
+    if slice.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        slice.as_mut_ptr()
+    }
+}
+/// Borrow the displacements buffer as a raw `(N, 3) f64` row-major pointer.
+/// Returns NULL if the displacements section is absent.
+///
+/// # Safety
+/// Same contract as rkr_frame_builder_positions_data.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_displacements_data(
+    builder_handle: *mut RKRConFrameBuilder,
+) -> *mut f64 {
+    if builder_handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    if !builder.has_displacements_section() {
+        return std::ptr::null_mut();
+    }
+    let slice = builder.displacements_mut();
     if slice.is_empty() {
         std::ptr::null_mut()
     } else {
@@ -3464,6 +3637,31 @@ pub unsafe extern "C" fn rkr_frame_forces_view(
     fill_array2_view(frame_handle, out, |f| &f.forces, true)
 }
 
+/// True when the frame carries a `"displacements"` section. False for a
+/// NULL handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_displacements(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_displacements(),
+        None => false,
+    }
+}
+
+/// Borrow displacements SoA, or `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle and `out` a writable view.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_displacements_view(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRArrayView,
+) -> RKRStatus {
+    fill_array2_view(frame_handle, out, |f| &f.displacements, true)
+}
+
 /// Borrow per-atom energies, or `SECTION_ABSENT`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_energies_view(
@@ -3535,6 +3733,18 @@ pub unsafe extern "C" fn rkr_frame_forces_f64(
     n: *mut usize,
 ) -> *const f64 {
     f64_col_ptr(frame_handle, n, |f| f.forces.f64_slice())
+}
+
+/// Row-major f64 displacements pointer, or NULL if absent / not float64.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `n` is NULL or writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_displacements_f64(
+    frame_handle: *const RKRConFrame,
+    n: *mut usize,
+) -> *const f64 {
+    f64_col_ptr(frame_handle, n, |f| f.displacements.f64_slice())
 }
 
 fn fill_array2_view(
@@ -3715,6 +3925,19 @@ pub unsafe extern "C" fn rkr_frame_copy_forces(
     out_len: usize,
 ) -> RKRStatus {
     copy_array2_f64(frame_handle, out, out_len, |f| &f.forces, true)
+}
+/// Copy displacements into row-major `out` (length >= `3 * N`), or
+/// `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_displacements(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.displacements, true)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
@@ -4000,6 +4223,57 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
     for a in &frame.atom_data {
         let f = a.force.unwrap_or([0.0; 3]);
         data.extend_from_slice(&f);
+    }
+    let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
+        .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
+    export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
+}
+
+/// DLPack displacements from a frame, or `SECTION_ABSENT` if missing
+/// (f64/CPU default).
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out_tensor` must be a
+/// writable pointer. Free the tensor with `rkr_dlpack_delete`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_displacements_dlpack(
+    frame_handle: *const RKRConFrame,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    unsafe { rkr_frame_displacements_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
+}
+
+/// Like [`rkr_frame_displacements_dlpack`] with export options (NULL
+/// `opts` selects float64 on CPU).
+///
+/// # Safety
+/// Same contract as [`rkr_frame_displacements_dlpack`]; `opts` is NULL or
+/// points to a valid `RKRDlpackExportOptions`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_displacements_dlpack_ex(
+    frame_handle: *const RKRConFrame,
+    opts: *const RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> RKRStatus {
+    if frame_handle.is_null() || out_tensor.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe { *out_tensor = std::ptr::null_mut() };
+    let o = match resolve_dlpack_opts(opts) {
+        Ok(o) => o,
+        Err(st) => return st,
+    };
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    };
+    if !frame.has_displacements() {
+        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+    }
+    let n = frame.atom_data.len();
+    let mut data = Vec::with_capacity(n * 3);
+    for a in &frame.atom_data {
+        let d = a.displacement.unwrap_or([0.0; 3]);
+        data.extend_from_slice(&d);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
