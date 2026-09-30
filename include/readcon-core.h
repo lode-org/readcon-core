@@ -869,6 +869,17 @@ enum RKRStatus rkr_frame_builder_set_last_force(struct RKRConFrameBuilder *build
                                                 const double *force);
 
 /**
+ * Attaches a displacement vector (Angstrom) to the most recently added
+ * atom on a builder. No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid. displacement must point to 3 contiguous
+ * f64 values.
+ */
+enum RKRStatus rkr_frame_builder_set_last_displacement(struct RKRConFrameBuilder *builder_handle,
+                                                       const double *displacement);
+
+/**
  * Attaches a per-atom energy to the most recently added atom on a
  * builder. No-op if no atom has been added yet.
  *
@@ -920,6 +931,16 @@ enum RKRStatus rkr_frame_builder_set_atom_velocity(struct RKRConFrameBuilder *bu
 enum RKRStatus rkr_frame_builder_set_atom_force(struct RKRConFrameBuilder *builder_handle,
                                                 uintptr_t index,
                                                 const double *force);
+
+/**
+ * Sets the displacement vector (Angstrom) of an existing atom from 3
+ * contiguous f64 values.
+ * # Safety
+ * builder_handle must be valid; displacement must point to 3 contiguous f64.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_displacement(struct RKRConFrameBuilder *builder_handle,
+                                                       uintptr_t index,
+                                                       const double *displacement);
 
 /**
  * Sets the per-atom energy contribution of an existing atom.
@@ -981,6 +1002,13 @@ enum RKRStatus rkr_frame_builder_clear_atom_force(struct RKRConFrameBuilder *bui
  * # Safety
  * builder_handle must be valid.
  */
+enum RKRStatus rkr_frame_builder_clear_atom_displacement(struct RKRConFrameBuilder *builder_handle,
+                                                         uintptr_t index);
+
+/**
+ * # Safety
+ * builder_handle must be valid.
+ */
 enum RKRStatus rkr_frame_builder_clear_atom_energy(struct RKRConFrameBuilder *builder_handle,
                                                    uintptr_t index);
 
@@ -1002,6 +1030,16 @@ enum RKRStatus rkr_frame_builder_set_positions_from_flat(struct RKRConFrameBuild
 enum RKRStatus rkr_frame_builder_set_forces_from_flat(struct RKRConFrameBuilder *builder_handle,
                                                       const double *forces,
                                                       uintptr_t len);
+
+/**
+ * Bulk-update displacements (Angstrom) for every atom.
+ * # Safety
+ * builder_handle must be valid; displacements must point to `len` f64
+ * (`len == 3 * atom_count`).
+ */
+enum RKRStatus rkr_frame_builder_set_displacements_from_flat(struct RKRConFrameBuilder *builder_handle,
+                                                             const double *displacements,
+                                                             uintptr_t len);
 
 /**
  * Bulk-update per-atom energies (one f64 per atom).
@@ -1042,6 +1080,18 @@ enum RKRStatus rkr_frame_builder_get_atom_force(const struct RKRConFrameBuilder 
                                                 uintptr_t index,
                                                 double *out_xyz,
                                                 bool *has_value);
+
+/**
+ * Reads the displacement of an atom (if any). `*has_value` is set to
+ * `true` if the atom carries a displacement, else `false` and `out_xyz`
+ * is left untouched.
+ * # Safety
+ * builder_handle, out_xyz, has_value must all be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_displacement(const struct RKRConFrameBuilder *builder_handle,
+                                                       uintptr_t index,
+                                                       double *out_xyz,
+                                                       bool *has_value);
 
 /**
  * Reads the per-atom energy of an atom (if any). `*has_value` is set to
@@ -1127,6 +1177,31 @@ enum RKRStatus rkr_frame_builder_forces_dlpack_ex(const struct RKRConFrameBuilde
                                                   RKRDLManagedTensorVersioned **out_tensor);
 
 /**
+ * Export builder displacements as a DLPack-managed tensor.
+ *
+ * Returns `RKR_STATUS_SECTION_ABSENT` if the displacements section is not
+ * declared.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_displacements_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                      RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Like [`rkr_frame_builder_displacements_dlpack`] with export options
+ * (NULL `opts` selects float64 on CPU).
+ *
+ * # Safety
+ * Same contract as [`rkr_frame_builder_displacements_dlpack`]; `opts` is
+ * NULL or points to a valid `RKRDlpackExportOptions`.
+ */
+enum RKRStatus rkr_frame_builder_displacements_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                         const struct RKRDlpackExportOptions *opts,
+                                                         RKRDLManagedTensorVersioned **out_tensor);
+
+/**
  * Export builder per-atom energies as a DLPack-managed tensor.
  *
  * Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
@@ -1200,6 +1275,15 @@ double *rkr_frame_builder_velocities_data(struct RKRConFrameBuilder *builder_han
  * Same contract as rkr_frame_builder_positions_data.
  */
 double *rkr_frame_builder_forces_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the displacements buffer as a raw `(N, 3) f64` row-major pointer.
+ * Returns NULL if the displacements section is absent.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_displacements_data(struct RKRConFrameBuilder *builder_handle);
 
 /**
  * Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
@@ -1778,6 +1862,24 @@ enum RKRStatus rkr_frame_forces_view(const struct RKRConFrame *frame_handle,
                                      struct RKRArrayView *out);
 
 /**
+ * True when the frame carries a `"displacements"` section. False for a
+ * NULL handle.
+ *
+ * # Safety
+ * `frame_handle` is NULL or a valid frame handle.
+ */
+bool rkr_frame_has_displacements(const struct RKRConFrame *frame_handle);
+
+/**
+ * Borrow displacements SoA, or `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle and `out` a writable view.
+ */
+enum RKRStatus rkr_frame_displacements_view(const struct RKRConFrame *frame_handle,
+                                            struct RKRArrayView *out);
+
+/**
  * Borrow per-atom energies, or `SECTION_ABSENT`.
  */
 enum RKRStatus rkr_frame_energies_view(const struct RKRConFrame *frame_handle,
@@ -1815,6 +1917,15 @@ const double *rkr_frame_forces_f64(const struct RKRConFrame *frame_handle,
                                    uintptr_t *n);
 
 /**
+ * Row-major f64 displacements pointer, or NULL if absent / not float64.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
+ */
+const double *rkr_frame_displacements_f64(const struct RKRConFrame *frame_handle,
+                                          uintptr_t *n);
+
+/**
  * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
  * Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
  */
@@ -1829,6 +1940,17 @@ enum RKRStatus rkr_frame_copy_velocities(const struct RKRConFrame *frame_handle,
 enum RKRStatus rkr_frame_copy_forces(const struct RKRConFrame *frame_handle,
                                      double *out,
                                      uintptr_t out_len);
+
+/**
+ * Copy displacements into row-major `out` (length >= `3 * N`), or
+ * `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+ */
+enum RKRStatus rkr_frame_copy_displacements(const struct RKRConFrame *frame_handle,
+                                            double *out,
+                                            uintptr_t out_len);
 
 enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_handle,
                                             double *out,
@@ -1907,6 +2029,29 @@ enum RKRStatus rkr_frame_forces_dlpack(const struct RKRConFrame *frame_handle,
 enum RKRStatus rkr_frame_forces_dlpack_ex(const struct RKRConFrame *frame_handle,
                                           const struct RKRDlpackExportOptions *opts,
                                           RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack displacements from a frame, or `SECTION_ABSENT` if missing
+ * (f64/CPU default).
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out_tensor` must be a
+ * writable pointer. Free the tensor with `rkr_dlpack_delete`.
+ */
+enum RKRStatus rkr_frame_displacements_dlpack(const struct RKRConFrame *frame_handle,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Like [`rkr_frame_displacements_dlpack`] with export options (NULL
+ * `opts` selects float64 on CPU).
+ *
+ * # Safety
+ * Same contract as [`rkr_frame_displacements_dlpack`]; `opts` is NULL or
+ * points to a valid `RKRDlpackExportOptions`.
+ */
+enum RKRStatus rkr_frame_displacements_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                                 const struct RKRDlpackExportOptions *opts,
+                                                 RKRDLManagedTensorVersioned **out_tensor);
 
 /**
  * DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
