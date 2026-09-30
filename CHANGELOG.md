@@ -2,6 +2,23 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.15.0 - 2026-09-30
+#### Features
+- (**ffi**) displacements through the C and C++ API, with a C++ round trip - (1384f87) - *HaoZeke*
+- (**python**) displacements as an [N, 3] array through ConFrame.disp - (14baa48) - *HaoZeke*
+- (**python**) expose displacements on Atom and ConFrame - (fc87759) - *HaoZeke*
+- (**sections**) add optional per-atom displacements section - (1881706) - *HaoZeke*
+#### Documentation
+- (**spec**) document the displacements section - (cea5067) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (e3682d6) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (06d9401) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (33d040c) - github-actions[bot]
+#### Style
+- apply rustfmt across the workspace - (55d3995) - *HaoZeke*
+
+- - -
+
 ## Unreleased
 #### Features
 - (**sections**) add the optional per-atom `displacements` section (3-vector dx dy dz in Angstrom, same layout as `magmoms`) across the parser, writer, builder, PEG grammar, and Cap'n Proto schema (`ConAtom` @24-@27, `ConFrameData` @19)
