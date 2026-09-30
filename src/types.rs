@@ -137,6 +137,18 @@ pub const SECTION_DISPLACEMENTS: &str = "displacements";
 /// is a classical point); same block shape as [`SECTION_VELOCITIES`].
 pub const SECTION_SPREADS: &str = "spreads";
 
+/// A spread row is a standard deviation per axis: finite and non-negative.
+/// Zero is a classical point.
+pub(crate) fn spread_row_ok(spread: [f64; 3]) -> bool {
+    spread.iter().all(|v| v.is_finite() && *v >= 0.0)
+}
+
+pub(crate) fn invalid_spread(atom_index: usize) -> crate::error::ParseError {
+    crate::error::ParseError::ValidationError(format!(
+        "spreads: atom {atom_index} has a negative or non-finite spread"
+    ))
+}
+
 /// The two-line block preceding the box dimensions.
 ///
 /// Line 0 is free-form user text. Line 1 is reserved for machine-readable
@@ -1661,6 +1673,9 @@ impl ConFrameBuilder {
         if i >= len {
             return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
         }
+        if !spread_row_ok(spread) {
+            return Err(invalid_spread(i));
+        }
         if !self.has_spreads {
             self.spreads = ndarray::ArcArray2::<f64>::zeros((len, 3));
             self.has_spreads = true;
@@ -1946,6 +1961,12 @@ impl ConFrameBuilder {
                 expected: 3 * n,
                 found: spreads.len(),
             });
+        }
+        for (i, chunk) in spreads.chunks_exact(3).enumerate() {
+            let row = [chunk[0], chunk[1], chunk[2]];
+            if !spread_row_ok(row) {
+                return Err(invalid_spread(i));
+            }
         }
         if !self.has_spreads {
             self.spreads = ndarray::ArcArray2::<f64>::zeros((n, 3));
@@ -2573,7 +2594,11 @@ impl ConFrameBuilder {
                 };
                 let spread = if has_spr {
                     let r = self.spreads.row(i);
-                    Some([r[0], r[1], r[2]])
+                    let row = [r[0], r[1], r[2]];
+                    if !spread_row_ok(row) {
+                        return Err(invalid_spread(i));
+                    }
+                    Some(row)
                 } else {
                     None
                 };

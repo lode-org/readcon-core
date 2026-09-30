@@ -303,3 +303,37 @@ fn negative_spread_is_rejected() {
         "got {err:?}"
     );
 }
+
+#[test]
+fn builder_rejects_negative_spread() {
+    use readcon_core::types::ConFrameBuilder;
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008)
+        .with_spread([-0.1, 0.2, 0.0]);
+    let err = b.build().expect_err("negative spread");
+    assert!(
+        matches!(err, readcon_core::error::ParseError::ValidationError(ref m) if m.contains("spreads")),
+        "got {err:?}"
+    );
+
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008);
+    let err = b
+        .set_spreads_from_flat(&[0.0, f64::NAN, 0.0])
+        .expect_err("non-finite spread");
+    assert!(
+        matches!(err, readcon_core::error::ParseError::ValidationError(ref m) if m.contains("spreads")),
+        "got {err:?}"
+    );
+
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008)
+        .with_spread([0.0, 0.0, 0.0]);
+    let mut frame = b.build().expect("zero spread is a classical point");
+    frame.atom_data[0].spread = Some([0.1, -0.2, 0.0]);
+    let mut buffer = Vec::new();
+    let err = ConFrameWriter::with_precision(&mut buffer, 17)
+        .write_frame(&frame)
+        .expect_err("writer refuses a negative spread");
+    assert!(err.to_string().contains("spreads"), "got {err}");
+}
