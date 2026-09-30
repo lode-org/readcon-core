@@ -526,6 +526,15 @@ impl<W: Write> ConFrameWriter<W> {
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
                         let [sx, sy, sz] = atom.spread.unwrap_or([0.0; 3]);
+                        if !crate::types::spread_row_ok([sx, sy, sz]) {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                format!(
+                                    "spreads: atom {} has a negative or non-finite spread",
+                                    off + i
+                                ),
+                            ));
+                        }
                         push_xyz_line(
                             buf,
                             sx,

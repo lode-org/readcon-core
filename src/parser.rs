@@ -1444,10 +1444,8 @@ pub fn parse_spread_section<'a>(
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(spr_line, 4, 5, &defaults, &mut vals)?;
-            if vals[..3].iter().any(|v| !v.is_finite() || *v < 0.0) {
-                return Err(ParseError::ValidationError(format!(
-                    "spreads: atom {atom_idx} has a negative or non-finite spread"
-                )));
+            if !crate::types::spread_row_ok([vals[0], vals[1], vals[2]]) {
+                return Err(crate::types::invalid_spread(atom_idx));
             }
             if validate {
                 let (fixed, atom_id) = parse_identity_columns(
