@@ -29,7 +29,7 @@ hand-off.
 
 One frame is complete: cell, type-grouped coordinates, per-direction
 fixed masks, column-5 `atom_id`, optional per-atom sections (velocities,
-forces, energies, charges, spins, magmoms, displacements), and JSON metadata (spec
+forces, energies, charges, spins, magmoms, displacements, spreads), and JSON metadata (spec
 v2-v3, [docs/orgmode/spec.org](docs/orgmode/spec.org)).
 Saddle, dimer, and NEB codes already depend on that payload.
 
@@ -92,7 +92,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 ## Features
 
 -   **CON and convel:** Coordinates; optional sections declared in `sections`
-    (velocities, forces, energies, charges, spins, magmoms, displacements). Velocities also
+    (velocities, forces, energies, charges, spins, magmoms, displacements, spreads). Velocities also
     auto-detect on legacy `.convel` without a `sections` key.
 -   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
 -   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
@@ -309,7 +309,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 <tbody>
 <tr>
 <td class="org-left">Payload</td>
-<td class="org-left">Constraints, <code>atom_id</code>; optional velocities / forces / energies / charges / spins / magmoms / displacements; versioned JSON</td>
+<td class="org-left">Constraints, <code>atom_id</code>; optional velocities / forces / energies / charges / spins / magmoms / displacements / spreads; versioned JSON</td>
 </tr>
 
 <tr>

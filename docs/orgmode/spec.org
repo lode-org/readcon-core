@@ -29,7 +29,7 @@ rare-event stack @@rst::cite:t:`chillEONSoftwareLong2014`@@.
 
 A file is a concatenation of /frames/. Each frame is a nine-line header,
 one coordinate block per atom type, then zero or more declared sections
-(velocities, forces, energies, charges, spins, magmoms, displacements).
+(velocities, forces, energies, charges, spins, magmoms, displacements, spreads).
 There is no
 inter-frame separator.
 
@@ -256,15 +256,30 @@ present, complete, and parseable at its declared position. An empty
 | =spins=         | =Spins of Component /i/=         |       3 | spin fixed_flag atom_id     |
 | =magmoms=       | =Magmoms of Component /i/=       |       5 | mx my mz fixed_flag atom_id |
 | =displacements= | =Displacements of Component /i/= |       5 | dx dy dz fixed_flag atom_id |
+| =spreads=       | =Spreads of Component /i/=       |       5 | sx sy sz fixed_flag atom_id |
 
 The =energies= section carries one scalar per atom, useful for ML
 potentials that decompose total energy into local contributions.
 Writers MAY emit it alongside =forces=, alone, or omit it entirely.
 
 =charges= and =spins= are optional scalar sections (same column layout as
-=energies=). =magmoms= and =displacements= are optional 3-vector sections
-(same layout as =velocities=); =displacements= carries one displacement
-vector per atom in Angstrom, such as a normal mode. They are reserved names on the existing v2/v3 declared
+=energies=). =magmoms=, =displacements=, and =spreads= are optional 3-vector
+sections (same layout as =velocities=); =displacements= carries one
+displacement vector per atom in Angstrom, such as a normal mode.
+
+=spreads= carries, for every atom, the root-mean-square spread of its
+position distribution along x, y, and z, in Angstrom: three non-negative
+numbers per row, =sx sy sz fixed_flag atom_id=, with the same block layout,
+identity columns, and strict validation as =displacements=. The spread is
+taken about the coordinates on the same row of the coordinate block. Each
+value is a standard deviation (not a variance, not a full covariance), MUST
+be finite and non-negative, and 0 denotes a classical point. A frame that
+declares =spreads= records a delocalised nuclear configuration as centroid
+(the coordinates) plus spread. Producers include ring-polymer instanton
+beads collapsed to their centroid, ring-polymer and path-integral molecular
+dynamics bead trajectories, and thermostat statistics.
+
+These sections are reserved names on the existing v2/v3 declared
 =sections= surface: files MAY use =con_spec_version= 2 or 3; a format major
 bump is not required for these optional blocks.
 

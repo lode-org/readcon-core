@@ -35,7 +35,7 @@ Core types (types.rs)
 ``AtomDatum``
     Single atom data (symbol, coordinates, fixed flag,
     atom\_id (original atom index before type-based reordering),
-    optional velocity / force / charge / spin / magmom / displacement fields).
+    optional velocity / force / charge / spin / magmom / displacement / spread fields).
 
 ``ConFrame``
     Complete frame (header + atom data / SoA columns for
@@ -82,7 +82,7 @@ Parser (parser.rs)
 
 - Section parsers (``parse_velocity_section``, ``parse_force_section``, and
   the scalar / 3-vector paths for ``energies`` / ``charges`` / ``spins`` /
-  ``magmoms`` / ``displacements``) \:\: Optional blocks after coordinates. Spec-v2+ files declare
+  ``magmoms`` / ``displacements`` / ``spreads``) \:\: Optional blocks after coordinates. Spec-v2+ files declare
   sections in JSON metadata; files without a ``sections`` key can still
   auto-detect velocities by blank separator. Declared sections must be
   present at their declared position. If JSON metadata sets ``validate``
@@ -106,7 +106,7 @@ Writer (writer.rs)
 - Writes header, coordinate blocks, then any declared optional
   sections present on the frame (``has_velocities``, ``has_forces``,
   ``has_energies``, ``has_charges``, ``has_spins``, ``has_magmoms``,
-  ``has_displacements``) in
+  ``has_displacements``, ``has_spreads``) in
   ``sections`` order.
 
 Iterators (iterators.rs)
