@@ -567,6 +567,35 @@ impl PyConFrame {
         Ok(Some(array.into_pyarray(py)))
     }
 
+    /// Returns the per-atom displacements (Angstrom) as a contiguous
+    /// numpy `[N, 3] float64` array, or `None` when the frame declares no
+    /// `"displacements"` section. A normal mode, a dimer direction.
+    fn displacements_array<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_displacement) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.dx.unwrap_or(0.0));
+            data.push(atom.dy.unwrap_or(0.0));
+            data.push(atom.dz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("displacements_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// `[N, 3]` displacements, or `None`; the same array as
+    /// `displacements_array()`.
+    #[getter]
+    fn disp<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        self.displacements_array(py)
+    }
+
     /// Returns the per-atom energy contributions as a contiguous
     /// numpy `[N] float64` array. Returns `None` if the frame has no
     /// per-atom energies (only a frame-total energy in metadata).

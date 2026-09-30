@@ -522,6 +522,11 @@ class TestConFrameConstructor:
         assert reread.atoms[2].dy == pytest.approx(-0.25)
         assert reread.atoms[3].dx == pytest.approx(-0.125)
         assert reread.atoms[0].dz == pytest.approx(0.0)
+        disp = reread.disp
+        assert disp.shape == (len(reread), 3)
+        assert disp[2] == pytest.approx([0.125, -0.25, disp[2][2]])
+        assert disp[3][0] == pytest.approx(-0.125)
+        assert readcon.read_con(_resource("tiny_cuh2.con"))[0].disp is None
 
     def test_displacements_authored_from_python(self):
         atoms = [
