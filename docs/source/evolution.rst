@@ -346,8 +346,8 @@ Optional sections beyond velocities / forces / energies
 
 The declared-section mechanism already supports new optional section names
 without a format major. ``charges`` / ``spins`` (scalar, like ``energies``) and
-``magmoms`` (3-vector, like ``velocities``) are reserved on the **current** v2/v3
-surface. Files use ``con_spec_version`` 2 or 3; omit the sections when unused.
+``magmoms`` / ``displacements`` (3-vector, like ``velocities``) are reserved on the
+**current** v2/v3 surface. Files use ``con_spec_version`` 2 or 3; omit the sections when unused.
 Do not invent ``con_spec_version: 4`` solely for optional physics blocks.
 
 Gaps the spec still leaves to implementers

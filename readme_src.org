@@ -9,7 +9,7 @@ hand-off.
 
 One frame is complete: cell, type-grouped coordinates, per-direction
 fixed masks, column-5 =atom_id=, optional per-atom sections (velocities,
-forces, energies, charges, spins, magmoms), and JSON metadata (spec
+forces, energies, charges, spins, magmoms, displacements), and JSON metadata (spec
 v2-v3, [[file:docs/orgmode/spec.org][docs/orgmode/spec.org]]).
 Saddle, dimer, and NEB codes already depend on that payload.
 
@@ -35,7 +35,7 @@ See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
 ** Features
 
 - *CON and convel:* Coordinates; optional sections declared in =sections=
-  (velocities, forces, energies, charges, spins, magmoms). Velocities also
+  (velocities, forces, energies, charges, spins, magmoms, displacements). Velocities also
   auto-detect on legacy =.convel= without a =sections= key.
 - *Lazy iteration:* ~ConFrameIterator~; =next_with_raw_span= keeps the on-disk blob for corpus ingest.
 - *Hot path:* [[https://github.com/aldanor/fast-float-rust][fast-float2]], [[https://docs.rs/memmap2][memmap2]], Cachegrind-tracked scenarios.
@@ -156,7 +156,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 | Area | Surface |
 |------+---------|
-| Payload | Constraints, =atom_id=; optional velocities / forces / energies / charges / spins / magmoms; versioned JSON |
+| Payload | Constraints, =atom_id=; optional velocities / forces / energies / charges / spins / magmoms / displacements; versioned JSON |
 | Languages | One =rkr_*= surface for Fortran / C / C++ / Python / Julia |
 | Spec | v2-v3, =validate=true=, declared sections (including optional physics blocks above), units (v3) |
 | Tensors | DLPack; optional metatensor =TensorBlock= |

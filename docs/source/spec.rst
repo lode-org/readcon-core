@@ -43,7 +43,8 @@ rare-event stack :cite:t:`chillEONSoftwareLong2014`.
 
 A file is a concatenation of *frames*. Each frame is a nine-line header,
 one coordinate block per atom type, then zero or more declared sections
-(velocities, forces, energies, charges, spins, magmoms). There is no
+(velocities, forces, energies, charges, spins, magmoms, displacements).
+There is no
 inter-frame separator.
 
 File extensions
@@ -315,29 +316,32 @@ present, complete, and parseable at its declared position. An empty
 
 .. table::
 
-    +----------------+---------------------------------+---------+-------------------------------+
-    | Section name   | Label pattern                   | Columns | Data                          |
-    +================+=================================+=========+===============================+
-    | ``velocities`` | ``Velocities of Component /i/`` |       5 | vx vy vz fixed\_flag atom\_id |
-    +----------------+---------------------------------+---------+-------------------------------+
-    | ``forces``     | ``Forces of Component /i/``     |       5 | fx fy fz fixed\_flag atom\_id |
-    +----------------+---------------------------------+---------+-------------------------------+
-    | ``energies``   | ``Energies of Component /i/``   |       3 | energy fixed\_flag atom\_id   |
-    +----------------+---------------------------------+---------+-------------------------------+
-    | ``charges``    | ``Charges of Component /i/``    |       3 | charge fixed\_flag atom\_id   |
-    +----------------+---------------------------------+---------+-------------------------------+
-    | ``spins``      | ``Spins of Component /i/``      |       3 | spin fixed\_flag atom\_id     |
-    +----------------+---------------------------------+---------+-------------------------------+
-    | ``magmoms``    | ``Magmoms of Component /i/``    |       5 | mx my mz fixed\_flag atom\_id |
-    +----------------+---------------------------------+---------+-------------------------------+
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | Section name      | Label pattern                      | Columns | Data                          |
+    +===================+====================================+=========+===============================+
+    | ``velocities``    | ``Velocities of Component /i/``    |       5 | vx vy vz fixed\_flag atom\_id |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``forces``        | ``Forces of Component /i/``        |       5 | fx fy fz fixed\_flag atom\_id |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``energies``      | ``Energies of Component /i/``      |       3 | energy fixed\_flag atom\_id   |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``charges``       | ``Charges of Component /i/``       |       3 | charge fixed\_flag atom\_id   |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``spins``         | ``Spins of Component /i/``         |       3 | spin fixed\_flag atom\_id     |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``magmoms``       | ``Magmoms of Component /i/``       |       5 | mx my mz fixed\_flag atom\_id |
+    +-------------------+------------------------------------+---------+-------------------------------+
+    | ``displacements`` | ``Displacements of Component /i/`` |       5 | dx dy dz fixed\_flag atom\_id |
+    +-------------------+------------------------------------+---------+-------------------------------+
 
 The ``energies`` section carries one scalar per atom, useful for ML
 potentials that decompose total energy into local contributions.
 Writers MAY emit it alongside ``forces``, alone, or omit it entirely.
 
 ``charges`` and ``spins`` are optional scalar sections (same column layout as
-``energies``). ``magmoms`` is an optional 3-vector section (same layout as
-``velocities``). They are reserved names on the existing v2/v3 declared
+``energies``). ``magmoms`` and ``displacements`` are optional 3-vector sections
+(same layout as ``velocities``); ``displacements`` carries one displacement
+vector per atom in Angstrom, such as a normal mode. They are reserved names on the existing v2/v3 declared
 ``sections`` surface: files MAY use ``con_spec_version`` 2 or 3; a format major
 bump is not required for these optional blocks.
 
@@ -641,7 +645,7 @@ expressions: named bases combined with ``\*`` / ``/`` / ``^``).
     +--------------+----------------+-----------------------------------+
     | ``mass``     | amu            | ``amu``, ``kg``                   |
     +--------------+----------------+-----------------------------------+
-    | ``time``     | fs             | ``fs``, ``ps``, ``ns``                |
+    | ``time``     | fs             | ``fs``, ``ps``, ``ns``            |
     +--------------+----------------+-----------------------------------+
     | ``energy``   | eV             | ``eV``, ``hartree``, ``kcal/mol`` |
     +--------------+----------------+-----------------------------------+
@@ -651,17 +655,17 @@ expressions: named bases combined with ``\*`` / ``/`` / ``^``).
     +--------------+----------------+-----------------------------------+
 
 **Version 3:** ``units`` is **required** on JSON **line 2**. The object MUST include
-non-empty ``length`` and ``energy`` strings whose dimensions match those quantities.
-Optional keys (``mass``, ``time``, ``velocity``, ``force``) MUST be dimensionally
-valid when present. Version 2 MAY omit ``units``; readers SHOULD preserve the
-key when present.
+non-empty ``length`` and ``energy`` strings whose dimensions match those
+quantities. Optional keys (``mass``, ``time``, ``velocity``, ``force``) MUST be
+dimensionally valid when present. Version 2 MAY omit ``units``; readers SHOULD
+preserve the key when present.
 
-Callers MAY write aliases (``A``, ``ev``, ``femtosecond``). A conforming
-**writer** SHALL canonicalize those strings to preferred names
-(``angstrom``, ``eV``, ``fs``) before they appear on line 2
-(``canonicalize_unit_expression`` / ``set_units``). Readers MUST accept
-both aliases and preferred names. Library conversion uses
-``unit_conversion_factor(from, to)`` (see ``src/units.rs``).
+Callers MAY write aliases (``A``, ``ev``, ``femtosecond``). A conforming **writer**
+SHALL canonicalize those strings to preferred names (``angstrom``, ``eV``,
+``fs``) before they appear on line 2 (``canonicalize_unit_expression`` /
+``set_units``). Readers MUST accept both aliases and preferred names.
+Library conversion uses ``unit_conversion_factor(from, to)`` (see
+``src/units.rs``).
 
 .. _pbc:
 
@@ -708,21 +712,21 @@ Version history
 
 .. table::
 
-    +---------+------------+--------------------------------------------------------------------------+
-    | Version |       Date | Changes                                                                  |
-    +=========+============+==========================================================================+
-    |       1 | (original) | De facto format from eOn. Column 5 present, undefined.                   |
-    +---------+------------+--------------------------------------------------------------------------+
-    |       2 | 2026-03-25 | JSON metadata. atom\_id semantics. Per-direction constraints.            |
-    +---------+------------+--------------------------------------------------------------------------+
-    | \       | \          | Declared sections. Force blocks. Compression.                            |
-    +---------+------------+--------------------------------------------------------------------------+
-    |       3 | 2026-06-27 | Required ``units`` (``length``, ``energy``) on line 2. Writers emit      |
-    +---------+------------+--------------------------------------------------------------------------+
-    | \       | \          | canonical names. Optional ``storage_dtypes`` for in-memory SoA           |
-    +---------+------------+--------------------------------------------------------------------------+
-    | \       | \          | element types (float32/float64).                                         |
-    +---------+------------+--------------------------------------------------------------------------+
+    +---------+------------+----------------------------------------------------------------+
+    | Version |       Date | Changes                                                        |
+    +=========+============+================================================================+
+    |       1 | (original) | De facto format from eOn. Column 5 present, undefined.         |
+    +---------+------------+----------------------------------------------------------------+
+    |       2 | 2026-03-25 | JSON metadata. atom\_id semantics. Per-direction constraints.  |
+    +---------+------------+----------------------------------------------------------------+
+    | \       | \          | Declared sections. Force blocks. Compression.                  |
+    +---------+------------+----------------------------------------------------------------+
+    |       3 | 2026-06-27 | Required ``units`` (``length``, ``energy``) on line 2. Writers |
+    +---------+------------+----------------------------------------------------------------+
+    | \       | \          | emit canonical names. Optional ``storage_dtypes`` for          |
+    +---------+------------+----------------------------------------------------------------+
+    | \       | \          | in-memory SoA element types (float32/float64).                 |
+    +---------+------------+----------------------------------------------------------------+
 
 Version 3 (normative)
 ---------------------

@@ -29,7 +29,8 @@ rare-event stack @@rst::cite:t:`chillEONSoftwareLong2014`@@.
 
 A file is a concatenation of /frames/. Each frame is a nine-line header,
 one coordinate block per atom type, then zero or more declared sections
-(velocities, forces, energies, charges, spins, magmoms). There is no
+(velocities, forces, energies, charges, spins, magmoms, displacements).
+There is no
 inter-frame separator.
 
 * File extensions
@@ -246,22 +247,24 @@ unknown section names with an error. Every declared section MUST be
 present, complete, and parseable at its declared position. An empty
 =sections= array declares that no additional per-atom sections follow.
 
-| Section name | Label pattern                    | Columns | Data                        |
-|--------------+----------------------------------+---------+-----------------------------|
-| =velocities= | =Velocities of Component /i/=    |       5 | vx vy vz fixed_flag atom_id |
-| =forces=     | =Forces of Component /i/=        |       5 | fx fy fz fixed_flag atom_id |
-| =energies=   | =Energies of Component /i/=      |       3 | energy fixed_flag atom_id   |
-| =charges=    | =Charges of Component /i/=       |       3 | charge fixed_flag atom_id   |
-| =spins=      | =Spins of Component /i/=         |       3 | spin fixed_flag atom_id     |
-| =magmoms=    | =Magmoms of Component /i/=       |       5 | mx my mz fixed_flag atom_id |
+| Section name    | Label pattern                    | Columns | Data                        |
+|-----------------+----------------------------------+---------+-----------------------------|
+| =velocities=    | =Velocities of Component /i/=    |       5 | vx vy vz fixed_flag atom_id |
+| =forces=        | =Forces of Component /i/=        |       5 | fx fy fz fixed_flag atom_id |
+| =energies=      | =Energies of Component /i/=      |       3 | energy fixed_flag atom_id   |
+| =charges=       | =Charges of Component /i/=       |       3 | charge fixed_flag atom_id   |
+| =spins=         | =Spins of Component /i/=         |       3 | spin fixed_flag atom_id     |
+| =magmoms=       | =Magmoms of Component /i/=       |       5 | mx my mz fixed_flag atom_id |
+| =displacements= | =Displacements of Component /i/= |       5 | dx dy dz fixed_flag atom_id |
 
 The =energies= section carries one scalar per atom, useful for ML
 potentials that decompose total energy into local contributions.
 Writers MAY emit it alongside =forces=, alone, or omit it entirely.
 
 =charges= and =spins= are optional scalar sections (same column layout as
-=energies=). =magmoms= is an optional 3-vector section (same layout as
-=velocities=). They are reserved names on the existing v2/v3 declared
+=energies=). =magmoms= and =displacements= are optional 3-vector sections
+(same layout as =velocities=); =displacements= carries one displacement
+vector per atom in Angstrom, such as a normal mode. They are reserved names on the existing v2/v3 declared
 =sections= surface: files MAY use =con_spec_version= 2 or 3; a format major
 bump is not required for these optional blocks.
 

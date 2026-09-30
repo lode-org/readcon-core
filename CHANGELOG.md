@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## Unreleased
+#### Features
+- (**sections**) add the optional per-atom `displacements` section (3-vector dx dy dz in Angstrom, same layout as `magmoms`) across the parser, writer, builder, PEG grammar, and Cap'n Proto schema (`ConAtom` @24-@27, `ConFrameData` @19)
+- (**python**) `Atom.dx` / `dy` / `dz`, `Atom.has_displacement`, and `ConFrame.has_displacements`
+
+- - -
 ## v0.14.11 - 2026-09-27
 #### Features
 - (**writer**) add an exact round-trip float format - (a75b176) - *HaoZeke*
