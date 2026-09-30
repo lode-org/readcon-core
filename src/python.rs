@@ -59,12 +59,20 @@ pub struct PyAtomDatum {
     pub my: Option<f64>,
     #[pyo3(get, set)]
     pub mz: Option<f64>,
+    /// Displacement vector components (Angstrom); populated when the file
+    /// declares a `"displacements"` section.
+    #[pyo3(get, set)]
+    pub dx: Option<f64>,
+    #[pyo3(get, set)]
+    pub dy: Option<f64>,
+    #[pyo3(get, set)]
+    pub dz: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None, charge=None, spin=None, mx=None, my=None, mz=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None, charge=None, spin=None, mx=None, my=None, mz=None, dx=None, dy=None, dz=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
@@ -86,6 +94,9 @@ impl PyAtomDatum {
         mx: Option<f64>,
         my: Option<f64>,
         mz: Option<f64>,
+        dx: Option<f64>,
+        dy: Option<f64>,
+        dz: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -107,6 +118,9 @@ impl PyAtomDatum {
             mx,
             my,
             mz,
+            dx,
+            dy,
+            dz,
         }
     }
 
@@ -131,6 +145,11 @@ impl PyAtomDatum {
         self.energy.is_some()
     }
 
+    #[getter]
+    fn has_displacement(&self) -> bool {
+        self.dx.is_some() && self.dy.is_some() && self.dz.is_some()
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Atom(symbol='{}', x={}, y={}, z={}, atom_id={})",
@@ -150,6 +169,10 @@ impl PyAtomDatum {
             None => (None, None, None),
         };
         let (mx, my, mz) = match atom.magmom {
+            Some([x, y, z]) => (Some(x), Some(y), Some(z)),
+            None => (None, None, None),
+        };
+        let (dx, dy, dz) = match atom.displacement {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
@@ -173,6 +196,9 @@ impl PyAtomDatum {
             mx,
             my,
             mz,
+            dx,
+            dy,
+            dz,
         }
     }
 }
@@ -382,6 +408,14 @@ impl PyConFrame {
             .py_atoms(py)?
             .first()
             .is_some_and(PyAtomDatum::has_forces))
+    }
+
+    #[getter]
+    fn has_displacements(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self
+            .py_atoms(py)?
+            .first()
+            .is_some_and(PyAtomDatum::has_displacement))
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -1039,6 +1073,13 @@ impl PyConFrame {
                     py_atom.mz.unwrap_or(0.0),
                 ]);
             }
+            if py_atom.has_displacement() {
+                builder.with_displacement([
+                    py_atom.dx.unwrap_or(0.0),
+                    py_atom.dy.unwrap_or(0.0),
+                    py_atom.dz.unwrap_or(0.0),
+                ]);
+            }
         }
 
         builder
@@ -1664,6 +1705,9 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 mx: None,
                 my: None,
                 mz: None,
+                dx: None,
+                dy: None,
+                dz: None,
             }
         })
         .collect();
