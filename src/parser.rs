@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
-    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_ENERGIES,
-    SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_DISPLACEMENTS,
+    SECTION_ENERGIES, SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES,
     decode_fixed_bitmask_for_spec, meta,
 };
 use serde_json::Value;
@@ -697,6 +697,7 @@ pub fn parse_single_frame<'a>(
                 charge: None,
                 spin: None,
                 magmom: None,
+                displacement: None,
             });
             global_atom_idx += 1;
             atom_i += 1;
@@ -1154,6 +1155,13 @@ pub fn parse_declared_sections<'a>(
                     }
                     applied += 1;
                 }
+                SECTION_DISPLACEMENTS => {
+                    let found = parse_displacement_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()));
+                    }
+                    applied += 1;
+                }
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
@@ -1308,6 +1316,78 @@ pub fn parse_magmom_section<'a>(
             }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].magmom = Some([vals[0], vals[1], vals[2]]);
+            }
+            atom_idx += 1;
+        }
+    }
+    Ok(true)
+}
+
+/// Displacements: 3-vector per atom (Angstrom), same layout as velocities/forces.
+pub fn parse_displacement_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    match lines.peek_line() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next_line();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?
+            .trim();
+
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?;
+        if !comp_line.contains("Displacements of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()));
+        }
+        if validate {
+            validate_section_component(
+                "Displacements",
+                type_idx,
+                atom_idx,
+                symbol,
+                comp_line,
+                header,
+                atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let dsp_line = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?;
+            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(dsp_line, 4, 5, &defaults, &mut vals)?;
+            if validate {
+                let (fixed, atom_id) = parse_identity_columns(
+                    dsp_line,
+                    SECTION_DISPLACEMENTS,
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?;
+                validate_section_atom_identity(
+                    SECTION_DISPLACEMENTS,
+                    atom_idx,
+                    fixed,
+                    atom_id,
+                    atom_data,
+                )?;
+            }
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].displacement = Some([vals[0], vals[1], vals[2]]);
             }
             atom_idx += 1;
         }

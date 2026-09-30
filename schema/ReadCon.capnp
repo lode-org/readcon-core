@@ -37,6 +37,11 @@ struct ConAtom {
   mx @21 :Float64;
   my @22 :Float64;
   mz @23 :Float64;
+
+  hasDisplacement @24 :Bool;
+  dx @25 :Float64;
+  dy @26 :Float64;
+  dz @27 :Float64;
 }
 
 # One complete frame: header fields + atoms + section presence + metadata.
@@ -66,6 +71,7 @@ struct ConFrameData {
   sectionsDeclared @17 :Bool;
   # User free-form line 1 only (also first preboxHeader entry when present)
   preboxUser @18 :Text;
+  hasDisplacements @19 :Bool;
 }
 
 struct ParseRequest {
