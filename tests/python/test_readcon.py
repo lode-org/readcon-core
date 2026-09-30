@@ -560,6 +560,11 @@ class TestConFrameConstructor:
         assert reread.atoms[2].sy == pytest.approx(0.25)
         assert reread.atoms[3].sz == pytest.approx(0.0625)
         assert reread.atoms[0].sz == pytest.approx(0.0)
+        spread = reread.spread
+        assert spread.shape == (len(reread), 3)
+        assert spread[2] == pytest.approx([0.125, 0.25, spread[2][2]])
+        assert spread[3][2] == pytest.approx(0.0625)
+        assert readcon.read_con(_resource("tiny_cuh2.con"))[0].spread is None
 
     def test_spreads_authored_from_python(self):
         atoms = [
