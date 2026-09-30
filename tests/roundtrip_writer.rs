@@ -39,7 +39,8 @@ fn round_trip_preserves_every_numeric_section() {
                 .with_energy(value)
                 .with_charge(value)
                 .with_spin(value)
-                .with_magmom([value, -value, -0.0]);
+                .with_magmom([value, -value, -0.0])
+                .with_displacement([value, -value, -0.0]);
             let frame = builder.build().unwrap();
             let mut buffer = Vec::new();
             {
@@ -61,6 +62,7 @@ fn round_trip_preserves_every_numeric_section() {
                 atom.force.unwrap(),
                 atom.velocity.unwrap(),
                 atom.magmom.unwrap(),
+                atom.displacement.unwrap(),
             ] {
                 assert_eq!(vector.map(f64::to_bits), expected.map(f64::to_bits));
             }

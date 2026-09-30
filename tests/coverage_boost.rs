@@ -407,6 +407,29 @@ fn project_storage_and_optional_sections() {
 }
 
 #[test]
+fn project_storage_displacements_section() {
+    let data = std::fs::read_to_string("resources/test/tiny_cuh2_displacements.con").unwrap();
+    let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
+        .next()
+        .unwrap()
+        .unwrap();
+    assert!(frame.has_displacements());
+    let dt = StorageDtypes {
+        positions: ElementKind::Float32,
+        velocities: ElementKind::Float32,
+        forces: ElementKind::Float32,
+        energies: ElementKind::Float32,
+        masses: ElementKind::Float32,
+        atom_ids: ElementKind::UInt32,
+    };
+    frame.project_storage_dtypes(&dt);
+    assert_eq!(frame.displacements.kind(), ElementKind::Float32);
+    assert_eq!(frame.displacements.nrows(), 4);
+    frame.sync_atom_data_from_arrays();
+    assert_eq!(frame.atom_data[2].displacement, Some([0.125, -0.25, 0.0]));
+}
+
+#[test]
 fn parser_rejects_bad_bonds_and_lattice_metadata() {
     let base = std::fs::read_to_string("resources/test/tiny_cuh2.con").unwrap();
     let lines: Vec<&str> = base.lines().collect();
@@ -567,6 +590,7 @@ fn types_bonds_charges_spins_helpers() {
         let _ = a.has_charge();
         let _ = a.has_spin();
         let _ = a.has_magmom();
+        let _ = a.has_displacement();
         let _ = a.has_velocity();
         let _ = a.has_forces();
         let _ = a.has_energy();
@@ -590,6 +614,7 @@ fn more_types_frame_helpers_and_chemfiles_convert() {
     let _ = frame.has_charges();
     let _ = frame.has_spins();
     let _ = frame.has_magmoms();
+    let _ = frame.has_displacements();
     let _ = frame.bonds();
     let _ = frame.has_bonds();
     frame.header.set_bonds(&[Bond {

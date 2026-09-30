@@ -11,7 +11,7 @@
 // `grammar` feature / dev-dependencies.
 //
 // Section row arities (spec §sections):
-//   vector: velocities, forces, magmoms  →  v0 v1 v2 fixed [atom_id]
+//   vector: velocities, forces, magmoms, displacements  →  v0 v1 v2 fixed [atom_id]
 //   scalar: energies, charges, spins     →  value fixed [atom_id]
 
 /// One or more frames, no inter-frame marker (frames are concatenated).
@@ -105,7 +105,7 @@ section_type_block_scalar = {
     ~ NL?
 }
 
-section_kind_vector = { ^"Velocities" | ^"Forces" | ^"Magmoms" }
+section_kind_vector = { ^"Velocities" | ^"Forces" | ^"Magmoms" | ^"Displacements" }
 section_kind_scalar = { ^"Energies" | ^"Charges" | ^"Spins" }
 
 /// Union of all section kinds (docs / tests).
