@@ -1649,6 +1649,29 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Sets the spread vector (Angstrom) of an existing atom. The
+    /// frame auto-declares a `"spreads"` section on `build()` if any
+    /// atom carries a spread.
+    pub fn set_atom_spread(
+        &mut self,
+        i: usize,
+        spread: [f64; 3],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_spreads {
+            self.spreads = ndarray::ArcArray2::<f64>::zeros((len, 3));
+            self.has_spreads = true;
+        }
+        let mut row = self.spreads.row_mut(i);
+        row[0] = spread[0];
+        row[1] = spread[1];
+        row[2] = spread[2];
+        Ok(self)
+    }
+
     /// Sets the per-atom energy contribution of an existing atom. The frame
     /// auto-declares an `"energies"` section on `build()` when any atom
     /// carries per-atom energy.
@@ -1771,6 +1794,21 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Removes spread data from an existing atom by zeroing the slot.
+    pub fn clear_atom_spread(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if self.has_spreads {
+            let mut row = self.spreads.row_mut(i);
+            row[0] = 0.0;
+            row[1] = 0.0;
+            row[2] = 0.0;
+        }
+        Ok(self)
+    }
+
     /// Removes per-atom energy data from an existing atom by zeroing the slot.
     pub fn clear_atom_energy(&mut self, i: usize) -> Result<&mut Self, crate::error::ParseError> {
         let len = self.symbols.len();
@@ -1802,6 +1840,13 @@ impl ConFrameBuilder {
     pub fn clear_displacements_section(&mut self) -> &mut Self {
         self.displacements = ndarray::ArcArray2::<f64>::zeros((0, 3));
         self.has_displacements = false;
+        self
+    }
+
+    /// Drops the spreads section entirely.
+    pub fn clear_spreads_section(&mut self) -> &mut Self {
+        self.spreads = ndarray::ArcArray2::<f64>::zeros((0, 3));
+        self.has_spreads = false;
         self
     }
 
@@ -1888,6 +1933,32 @@ impl ConFrameBuilder {
         Ok(self)
     }
 
+    /// Bulk-update spreads (Angstrom) for every atom from a flat
+    /// buffer of length `3 * atom_count()`. Auto-declares a
+    /// `"spreads"` section on `build()`.
+    pub fn set_spreads_from_flat(
+        &mut self,
+        spreads: &[f64],
+    ) -> Result<&mut Self, crate::error::ParseError> {
+        let n = self.symbols.len();
+        if spreads.len() != 3 * n {
+            return Err(crate::error::ParseError::InvalidVectorLength {
+                expected: 3 * n,
+                found: spreads.len(),
+            });
+        }
+        if !self.has_spreads {
+            self.spreads = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_spreads = true;
+        }
+        let dst = self
+            .spreads
+            .as_slice_memory_order_mut()
+            .expect("spreads standard layout invariant violated");
+        dst.copy_from_slice(spreads);
+        Ok(self)
+    }
+
     /// Bulk-update per-atom energies for every atom from a buffer of length
     /// `atom_count()`. Auto-declares an `"energies"` section on `build()`.
     pub fn set_atom_energies_from_flat(
@@ -1965,6 +2036,19 @@ impl ConFrameBuilder {
             return Ok(None);
         }
         let row = self.displacements.row(i);
+        Ok(Some([row[0], row[1], row[2]]))
+    }
+
+    /// Read-only accessor: spread of atom `i`, if any.
+    pub fn get_atom_spread(&self, i: usize) -> Result<Option<[f64; 3]>, crate::error::ParseError> {
+        let len = self.symbols.len();
+        if i >= len {
+            return Err(crate::error::ParseError::IndexOutOfBounds { index: i, len });
+        }
+        if !self.has_spreads {
+            return Ok(None);
+        }
+        let row = self.spreads.row(i);
         Ok(Some([row[0], row[1], row[2]]))
     }
 
@@ -2128,6 +2212,35 @@ impl ConFrameBuilder {
         self.displacements.view()
     }
 
+    /// Row-major spreads slice if the section is populated, else
+    /// an empty slice.
+    pub fn spreads(&self) -> &[f64] {
+        if self.has_spreads {
+            self.spreads
+                .as_slice_memory_order()
+                .expect("spreads standard layout invariant violated")
+        } else {
+            &[]
+        }
+    }
+
+    /// Mutable spreads slice. Auto-allocates the section if needed.
+    pub fn spreads_mut(&mut self) -> &mut [f64] {
+        if !self.has_spreads {
+            let n = self.symbols.len();
+            self.spreads = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_spreads = true;
+        }
+        self.spreads
+            .as_slice_memory_order_mut()
+            .expect("spreads standard layout invariant violated")
+    }
+
+    /// Typed 2D `(N, 3) f64` view onto spreads.
+    pub fn spreads_view(&self) -> ndarray::ArrayView2<'_, f64> {
+        self.spreads.view()
+    }
+
     /// Per-atom energies slice if the energies section is populated.
     pub fn atom_energies(&self) -> &[f64] {
         if self.has_energies {
@@ -2194,6 +2307,10 @@ impl ConFrameBuilder {
     /// Crate-internal `&Array2<f64>` displacements ref.
     pub fn displacements_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
         &self.displacements
+    }
+    /// Crate-internal `&Array2<f64>` spreads ref.
+    pub fn spreads_2d_ref(&self) -> &ndarray::ArcArray2<f64> {
+        &self.spreads
     }
     /// Crate-internal `&Array1<f64>` atom_energies ref.
     pub fn atom_energies_1d_ref(&self) -> &ndarray::ArcArray1<f64> {
@@ -2314,6 +2431,11 @@ impl ConFrameBuilder {
     /// Whether the builder currently has a displacements section populated.
     pub fn has_displacements_section(&self) -> bool {
         self.has_displacements
+    }
+
+    /// Whether the builder currently has a spreads section populated.
+    pub fn has_spreads_section(&self) -> bool {
+        self.has_spreads
     }
 
     /// Whether the builder currently has a per-atom energies section populated.
