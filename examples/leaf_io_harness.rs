@@ -10,7 +10,7 @@
 //! Same fixture and repeat count as `wall_scale_harness`. Does not invent numbers.
 
 use readcon_core::iterators::frames_from_text;
-use readcon_core::rcso::{encode_batch, Rcso};
+use readcon_core::rcso::{Rcso, encode_batch};
 use readcon_core::rpc::client::RpcClient;
 use readcon_core::rpc::server;
 use std::env;
@@ -218,10 +218,16 @@ fn main() {
     json.push_str(&format!("  \"parse_100_frames_ms\": {:.6},\n", parse_ms));
     json.push_str(&format!("  \"rcso_pack_100_ms\": {:.6},\n", pack_ms));
     json.push_str(&format!("  \"rcso_decode_100_ms\": {:.6},\n", decode_ms));
-    json.push_str(&format!("  \"parse_over_decode\": {:.4},\n", ratio_parse_over_decode));
+    json.push_str(&format!(
+        "  \"parse_over_decode\": {:.4},\n",
+        ratio_parse_over_decode
+    ));
     json.push_str(&format!("  \"rpc_unix_one_frame_ms\": {:.6},\n", unix_ms));
     json.push_str(&format!("  \"rpc_tcp_one_frame_ms\": {:.6},\n", tcp_ms));
-    json.push_str(&format!("  \"tcp_over_unix\": {:.4}\n", ratio_tcp_over_unix));
+    json.push_str(&format!(
+        "  \"tcp_over_unix\": {:.4}\n",
+        ratio_tcp_over_unix
+    ));
     json.push_str("}\n");
 
     if let Some(parent) = out_path.parent() {

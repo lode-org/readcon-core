@@ -9,7 +9,7 @@ use chemfiles::{Atom, BondOrder, Frame, Selection, UnitCell};
 use serde_json::Value;
 
 use crate::chemfiles_import::{
-    ChemfilesImportError, CHEMFILES_ATOM_NAMES_KEY, CHEMFILES_ATOM_TYPES_KEY,
+    CHEMFILES_ATOM_NAMES_KEY, CHEMFILES_ATOM_TYPES_KEY, ChemfilesImportError,
 };
 use crate::types::ConFrame;
 
@@ -197,7 +197,10 @@ pub fn evaluate_selection_on_con_frame(
 }
 
 /// Convenience: atom-context selection returns sorted unique indices only.
-pub fn select_atom_indices(selection: &str, frame: &ConFrame) -> Result<Vec<usize>, ChemfilesImportError> {
+pub fn select_atom_indices(
+    selection: &str,
+    frame: &ConFrame,
+) -> Result<Vec<usize>, ChemfilesImportError> {
     let result = evaluate_selection_on_con_frame(selection, frame)?;
     if result.context_size != 1 {
         return Err(ChemfilesImportError::InvalidFrame(format!(
@@ -214,9 +217,7 @@ pub fn select_atom_indices(selection: &str, frame: &ConFrame) -> Result<Vec<usiz
 fn positions_for_atom_indices(frame: &ConFrame, indices: &[usize]) -> Vec<[f64; 3]> {
     indices
         .iter()
-        .filter_map(|&i| {
-            frame.atom_data.get(i).map(|a| [a.x, a.y, a.z])
-        })
+        .filter_map(|&i| frame.atom_data.get(i).map(|a| [a.x, a.y, a.z]))
         .collect()
 }
 
@@ -358,11 +359,9 @@ mod tests {
         frame.add_atom(&Atom::new("H"), [-1.0, 0.0, 0.0], None);
         frame.set_cell(&UnitCell::new([10.0, 10.0, 10.0]));
 
-        let result = evaluate_selection_on_chemfiles_frame(
-            "pairs: name(#1) H and name(#2) O",
-            &frame,
-        )
-        .expect("pair sel");
+        let result =
+            evaluate_selection_on_chemfiles_frame("pairs: name(#1) H and name(#2) O", &frame)
+                .expect("pair sel");
         assert_eq!(result.context_size, 2);
         assert_eq!(result.matches.len(), 2);
         for m in &result.matches {
@@ -415,7 +414,11 @@ mod tests {
         let result = evaluate_selection_on_con_frame("angles: all", &frame).expect("angles: all");
         assert_eq!(result.context_size, 3);
         // H-O-H angle: one triple (1,0,2) or (2,0,1)
-        assert_eq!(result.matches.len(), 1, "water with 2 bonds should yield 1 angle");
+        assert_eq!(
+            result.matches.len(),
+            1,
+            "water with 2 bonds should yield 1 angle"
+        );
         let m = &result.matches[0];
         assert_eq!(m.size, 3);
         assert_eq!(m.atoms[1], 0, "center should be O (index 0)");
@@ -520,11 +523,7 @@ mod chemfiles_selection_cpp_regression {
             3 => {
                 // Angle i-j-k is same as k-j-i (same center j).
                 let (i, j, k) = (indices[0], indices[1], indices[2]);
-                if i <= k {
-                    vec![i, j, k]
-                } else {
-                    vec![k, j, i]
-                }
+                if i <= k { vec![i, j, k] } else { vec![k, j, i] }
             }
             4 => {
                 let a = indices.to_vec();
@@ -735,7 +734,10 @@ mod chemfiles_selection_cpp_regression {
         for sel in ["bonds: all", "angles: all", "dihedrals: all"] {
             let a = multiset_topology_keys(&evaluate_selection_on_con_frame(sel, &con1).unwrap());
             let b = multiset_topology_keys(&evaluate_selection_on_con_frame(sel, &con2).unwrap());
-            assert_eq!(a, b, "CON→project→import must preserve topology multiset for '{sel}'");
+            assert_eq!(
+                a, b,
+                "CON→project→import must preserve topology multiset for '{sel}'"
+            );
         }
     }
 
@@ -753,7 +755,11 @@ mod chemfiles_selection_cpp_regression {
         let direct = evaluate_selection_on_chemfiles_frame("name H1", &chfl).unwrap();
         assert_eq!(direct.primary_indices(), vec![0]);
         let via = evaluate_selection_on_con_frame("name H1", &con).unwrap();
-        assert_eq!(via.matches.len(), 1, "display name H1 must survive projection");
+        assert_eq!(
+            via.matches.len(),
+            1,
+            "display name H1 must survive projection"
+        );
         // CON atom_data order: H(id0) is first in type-group → data index 0
         assert_eq!(via.primary_indices(), vec![0]);
 

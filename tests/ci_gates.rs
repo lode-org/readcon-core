@@ -16,11 +16,7 @@ fn run_gate(rel: &str) {
         .current_dir(repo_root())
         .status()
         .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", script.display()));
-    assert!(
-        status.success(),
-        "{rel} failed (exit {:?})",
-        status.code()
-    );
+    assert!(status.success(), "{rel} failed (exit {:?})", status.code());
 }
 
 #[test]

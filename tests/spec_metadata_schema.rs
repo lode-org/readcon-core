@@ -59,7 +59,10 @@ fn spec_examples_validate() {
         r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"storage_dtypes":{"positions":"float32","atom_ids":"uint64"}}"#,
     );
     // Unknown keys are permitted and preserved
-    assert_valid(&v, r#"{"con_spec_version":2,"x_custom":{"anything":[1,2]}}"#);
+    assert_valid(
+        &v,
+        r#"{"con_spec_version":2,"x_custom":{"anything":[1,2]}}"#,
+    );
 }
 
 #[test]
@@ -116,7 +119,10 @@ fn reference_writer_output_validates() {
                 validated += 1;
             }
         }
-        assert!(validated > 0, "{name}: writer emitted no JSON metadata line");
+        assert!(
+            validated > 0,
+            "{name}: writer emitted no JSON metadata line"
+        );
     }
 }
 
@@ -144,5 +150,8 @@ fn writer_line2_canonicalizes_unit_aliases() {
     assert_eq!(meta["units"]["length"], "angstrom");
     assert_eq!(meta["units"]["energy"], "eV");
     assert_eq!(meta["units"]["time"], "fs");
-    assert!(!line2.contains("\"A\""), "alias must not remain on line 2: {line2}");
+    assert!(
+        !line2.contains("\"A\""),
+        "alias must not remain on line 2: {line2}"
+    );
 }

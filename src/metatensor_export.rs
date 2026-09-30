@@ -38,7 +38,8 @@ pub fn tensor_block_into_raw_mts(block: TensorBlock) -> *mut mts_block_t {
         ptr: *mut mts_block_t,
     }
     let block = ManuallyDrop::new(block);
-    let layout = unsafe { std::ptr::read(&*block as *const TensorBlock as *const TensorBlockLayout) };
+    let layout =
+        unsafe { std::ptr::read(&*block as *const TensorBlock as *const TensorBlockLayout) };
     debug_assert!(!layout.ptr.is_null());
     layout.ptr
 }
@@ -77,9 +78,7 @@ pub fn frame_positions_block(frame: &ConFrame) -> Result<TensorBlock, metatensor
 /// Builds a `TensorBlock` with shape `[N, 3]` carrying the per-atom
 /// velocity vectors. Returns `Ok(None)` when the frame has no velocity
 /// data; users should not assume the block exists for every frame.
-pub fn frame_velocities_block(
-    frame: &ConFrame,
-) -> Result<Option<TensorBlock>, metatensor::Error> {
+pub fn frame_velocities_block(frame: &ConFrame) -> Result<Option<TensorBlock>, metatensor::Error> {
     if !frame.has_velocities() {
         return Ok(None);
     }
@@ -95,20 +94,13 @@ pub fn frame_velocities_block(
 
     let samples = build_atom_id_samples(frame)?;
     let properties = build_xyz_properties()?;
-    Ok(Some(TensorBlock::new(
-        values,
-        &samples,
-        &[],
-        &properties,
-    )?))
+    Ok(Some(TensorBlock::new(values, &samples, &[], &properties)?))
 }
 
 /// Builds a `TensorBlock` with shape `[N, 3]` carrying the per-atom
 /// forces. Returns `Ok(None)` if the frame did not carry a forces
 /// section.
-pub fn frame_forces_block(
-    frame: &ConFrame,
-) -> Result<Option<TensorBlock>, metatensor::Error> {
+pub fn frame_forces_block(frame: &ConFrame) -> Result<Option<TensorBlock>, metatensor::Error> {
     if !frame.has_forces() {
         return Ok(None);
     }
@@ -124,20 +116,13 @@ pub fn frame_forces_block(
 
     let samples = build_atom_id_samples(frame)?;
     let properties = build_xyz_properties()?;
-    Ok(Some(TensorBlock::new(
-        values,
-        &samples,
-        &[],
-        &properties,
-    )?))
+    Ok(Some(TensorBlock::new(values, &samples, &[], &properties)?))
 }
 
 /// Builds a `TensorBlock` with shape `[N, 1]` carrying the per-atom
 /// energy contributions. Returns `Ok(None)` if the frame did not carry
 /// an energies section.
-pub fn frame_energies_block(
-    frame: &ConFrame,
-) -> Result<Option<TensorBlock>, metatensor::Error> {
+pub fn frame_energies_block(frame: &ConFrame) -> Result<Option<TensorBlock>, metatensor::Error> {
     if !frame.has_energies() {
         return Ok(None);
     }
@@ -155,12 +140,7 @@ pub fn frame_energies_block(
     let mut props = LabelsBuilder::new(vec!["energy"]);
     props.add(&[0]);
     let properties = props.finish();
-    Ok(Some(TensorBlock::new(
-        values,
-        &samples,
-        &[],
-        &properties,
-    )?))
+    Ok(Some(TensorBlock::new(values, &samples, &[], &properties)?))
 }
 
 fn build_atom_id_samples(frame: &ConFrame) -> Result<Labels, metatensor::Error> {

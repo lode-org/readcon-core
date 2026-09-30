@@ -372,10 +372,12 @@ pub fn parse_frame_at(
     index: usize,
 ) -> Result<crate::types::ConFrame, crate::error::ParseError> {
     let spans = frame_byte_spans_skip(file_contents)?;
-    let span = spans.get(index).ok_or(crate::error::ParseError::IndexOutOfBounds {
-        index,
-        len: spans.len(),
-    })?;
+    let span = spans
+        .get(index)
+        .ok_or(crate::error::ParseError::IndexOutOfBounds {
+            index,
+            len: spans.len(),
+        })?;
     let slice = span
         .slice(file_contents)
         .ok_or(crate::error::ParseError::IncompleteFrame)?;

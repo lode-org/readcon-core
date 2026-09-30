@@ -10,8 +10,8 @@ mod common;
 
 use readcon_core::compression::read_file_contents;
 use readcon_core::ffi::{
-    create_writer_gzip_c, create_writer_gzip_with_precision_c, free_rkr_frame, free_rkr_writer,
-    rkr_writer_extend, RKRConFrame, RKRStatus,
+    RKRConFrame, RKRStatus, create_writer_gzip_c, create_writer_gzip_with_precision_c,
+    free_rkr_frame, free_rkr_writer, rkr_writer_extend,
 };
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrame;
@@ -21,8 +21,8 @@ use std::path::Path;
 
 /// Parse the bundled multi-frame fixture into owned frames.
 fn load_fixture_frames() -> Vec<ConFrame> {
-    let data = fs::read_to_string(test_case!("tiny_multi_cuh2.con"))
-        .expect("Can't find test fixture.");
+    let data =
+        fs::read_to_string(test_case!("tiny_multi_cuh2.con")).expect("Can't find test fixture.");
     ConFrameIterator::new(&data)
         .map(|r| r.expect("fixture frame should parse"))
         .collect()
@@ -46,10 +46,17 @@ fn free_handles(handles: &[*const RKRConFrame]) {
 
 /// Drive the writer FFI: create -> extend -> free, returning nothing
 /// (panics on any failure so tests surface the real status).
-fn write_through_ffi(handle: *mut readcon_core::ffi::RKRConFrameWriter, frames: &[*const RKRConFrame]) {
+fn write_through_ffi(
+    handle: *mut readcon_core::ffi::RKRConFrameWriter,
+    frames: &[*const RKRConFrame],
+) {
     assert!(!handle.is_null(), "writer handle should be non-null");
     let status = unsafe { rkr_writer_extend(handle, frames.as_ptr(), frames.len()) };
-    assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "extend should succeed");
+    assert_eq!(
+        status,
+        RKRStatus::RKR_STATUS_SUCCESS,
+        "extend should succeed"
+    );
     // Dropping the writer flushes the BufWriter and finalizes the
     // compression stream.
     unsafe { free_rkr_writer(handle) };
@@ -67,7 +74,10 @@ fn assert_roundtrip(path: &Path, expected: &[ConFrame]) {
         expected.len(),
         "frame count must survive the compressed roundtrip"
     );
-    assert_eq!(frames, *expected, "frame data must be identical after roundtrip");
+    assert_eq!(
+        frames, *expected,
+        "frame data must be identical after roundtrip"
+    );
 }
 
 #[test]

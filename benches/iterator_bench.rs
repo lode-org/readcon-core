@@ -209,10 +209,7 @@ fn writer_bench(c: &mut Criterion) {
     // every frame's JSON metadata line is identical, but the writer
     // still has to (re)serialise it without the cache.
     let cuh2 = std::fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find test.");
-    let single_frame = ConFrameIterator::new(&cuh2)
-        .next()
-        .unwrap()
-        .unwrap();
+    let single_frame = ConFrameIterator::new(&cuh2).next().unwrap().unwrap();
     let mut heavy_meta_frames = Vec::with_capacity(100);
     for i in 0..100u64 {
         let mut frame = single_frame.clone();
@@ -224,7 +221,10 @@ fn writer_bench(c: &mut Criterion) {
             "units".into(),
             serde_json::json!({"length": "Angstrom", "energy": "eV", "time": "fs"}),
         );
-        frame.header.metadata.insert("validate".into(), serde_json::json!(false));
+        frame
+            .header
+            .metadata
+            .insert("validate".into(), serde_json::json!(false));
         // Per-frame keys do NOT change — match the cache's hot path.
         let _ = i;
         heavy_meta_frames.push(frame);

@@ -96,9 +96,8 @@ pub fn read_frames_for_convert(input: &Path) -> Result<(Vec<ConFrame>, bool), Co
     }
     if path_looks_like_con(input) {
         // gzip/zstd-aware (same path as library readers)
-        let contents = compression::read_file_contents(input).map_err(|e| {
-            ConvertError::Io(io::Error::other(e.to_string()))
-        })?;
+        let contents = compression::read_file_contents(input)
+            .map_err(|e| ConvertError::Io(io::Error::other(e.to_string())))?;
         let text = contents
             .as_str()
             .map_err(|e| ConvertError::Parse(format!("input is not valid UTF-8: {e}")))?;
