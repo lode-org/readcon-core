@@ -880,6 +880,17 @@ enum RKRStatus rkr_frame_builder_set_last_displacement(struct RKRConFrameBuilder
                                                        const double *displacement);
 
 /**
+ * Attaches a spread vector (Angstrom) to the most recently added
+ * atom on a builder. No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid. spread must point to 3 contiguous
+ * f64 values.
+ */
+enum RKRStatus rkr_frame_builder_set_last_spread(struct RKRConFrameBuilder *builder_handle,
+                                                       const double *spread);
+
+/**
  * Attaches a per-atom energy to the most recently added atom on a
  * builder. No-op if no atom has been added yet.
  *
@@ -941,6 +952,16 @@ enum RKRStatus rkr_frame_builder_set_atom_force(struct RKRConFrameBuilder *build
 enum RKRStatus rkr_frame_builder_set_atom_displacement(struct RKRConFrameBuilder *builder_handle,
                                                        uintptr_t index,
                                                        const double *displacement);
+
+/**
+ * Sets the spread vector (Angstrom) of an existing atom from 3
+ * contiguous f64 values.
+ * # Safety
+ * builder_handle must be valid; spread must point to 3 contiguous f64.
+ */
+enum RKRStatus rkr_frame_builder_set_atom_spread(struct RKRConFrameBuilder *builder_handle,
+                                                       uintptr_t index,
+                                                       const double *spread);
 
 /**
  * Sets the per-atom energy contribution of an existing atom.
@@ -1009,6 +1030,13 @@ enum RKRStatus rkr_frame_builder_clear_atom_displacement(struct RKRConFrameBuild
  * # Safety
  * builder_handle must be valid.
  */
+enum RKRStatus rkr_frame_builder_clear_atom_spread(struct RKRConFrameBuilder *builder_handle,
+                                                         uintptr_t index);
+
+/**
+ * # Safety
+ * builder_handle must be valid.
+ */
 enum RKRStatus rkr_frame_builder_clear_atom_energy(struct RKRConFrameBuilder *builder_handle,
                                                    uintptr_t index);
 
@@ -1039,6 +1067,16 @@ enum RKRStatus rkr_frame_builder_set_forces_from_flat(struct RKRConFrameBuilder 
  */
 enum RKRStatus rkr_frame_builder_set_displacements_from_flat(struct RKRConFrameBuilder *builder_handle,
                                                              const double *displacements,
+                                                             uintptr_t len);
+
+/**
+ * Bulk-update spreads (Angstrom) for every atom.
+ * # Safety
+ * builder_handle must be valid; spreads must point to `len` f64
+ * (`len == 3 * atom_count`).
+ */
+enum RKRStatus rkr_frame_builder_set_spreads_from_flat(struct RKRConFrameBuilder *builder_handle,
+                                                             const double *spreads,
                                                              uintptr_t len);
 
 /**
@@ -1089,6 +1127,18 @@ enum RKRStatus rkr_frame_builder_get_atom_force(const struct RKRConFrameBuilder 
  * builder_handle, out_xyz, has_value must all be valid pointers.
  */
 enum RKRStatus rkr_frame_builder_get_atom_displacement(const struct RKRConFrameBuilder *builder_handle,
+                                                       uintptr_t index,
+                                                       double *out_xyz,
+                                                       bool *has_value);
+
+/**
+ * Reads the spread of an atom (if any). `*has_value` is set to
+ * `true` if the atom carries a spread, else `false` and `out_xyz`
+ * is left untouched.
+ * # Safety
+ * builder_handle, out_xyz, has_value must all be valid pointers.
+ */
+enum RKRStatus rkr_frame_builder_get_atom_spread(const struct RKRConFrameBuilder *builder_handle,
                                                        uintptr_t index,
                                                        double *out_xyz,
                                                        bool *has_value);
@@ -1202,6 +1252,31 @@ enum RKRStatus rkr_frame_builder_displacements_dlpack_ex(const struct RKRConFram
                                                          RKRDLManagedTensorVersioned **out_tensor);
 
 /**
+ * Export builder spreads as a DLPack-managed tensor.
+ *
+ * Returns `RKR_STATUS_SECTION_ABSENT` if the spreads section is not
+ * declared.
+ *
+ * # Safety
+ * `builder_handle` must be a valid builder handle; `out_tensor` must
+ * be a valid pointer to a writable `*mut DLManagedTensorVersioned`.
+ */
+enum RKRStatus rkr_frame_builder_spreads_dlpack(const struct RKRConFrameBuilder *builder_handle,
+                                                      RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Like [`rkr_frame_builder_spreads_dlpack`] with export options
+ * (NULL `opts` selects float64 on CPU).
+ *
+ * # Safety
+ * Same contract as [`rkr_frame_builder_spreads_dlpack`]; `opts` is
+ * NULL or points to a valid `RKRDlpackExportOptions`.
+ */
+enum RKRStatus rkr_frame_builder_spreads_dlpack_ex(const struct RKRConFrameBuilder *builder_handle,
+                                                         const struct RKRDlpackExportOptions *opts,
+                                                         RKRDLManagedTensorVersioned **out_tensor);
+
+/**
  * Export builder per-atom energies as a DLPack-managed tensor.
  *
  * Returns `RKR_STATUS_SECTION_ABSENT` if the energies section is not
@@ -1284,6 +1359,15 @@ double *rkr_frame_builder_forces_data(struct RKRConFrameBuilder *builder_handle)
  * Same contract as rkr_frame_builder_positions_data.
  */
 double *rkr_frame_builder_displacements_data(struct RKRConFrameBuilder *builder_handle);
+
+/**
+ * Borrow the spreads buffer as a raw `(N, 3) f64` row-major pointer.
+ * Returns NULL if the spreads section is absent.
+ *
+ * # Safety
+ * Same contract as rkr_frame_builder_positions_data.
+ */
+double *rkr_frame_builder_spreads_data(struct RKRConFrameBuilder *builder_handle);
 
 /**
  * Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
@@ -1880,6 +1964,24 @@ enum RKRStatus rkr_frame_displacements_view(const struct RKRConFrame *frame_hand
                                             struct RKRArrayView *out);
 
 /**
+ * True when the frame carries a `"spreads"` section. False for a
+ * NULL handle.
+ *
+ * # Safety
+ * `frame_handle` is NULL or a valid frame handle.
+ */
+bool rkr_frame_has_spreads(const struct RKRConFrame *frame_handle);
+
+/**
+ * Borrow spreads SoA, or `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle and `out` a writable view.
+ */
+enum RKRStatus rkr_frame_spreads_view(const struct RKRConFrame *frame_handle,
+                                            struct RKRArrayView *out);
+
+/**
  * Borrow per-atom energies, or `SECTION_ABSENT`.
  */
 enum RKRStatus rkr_frame_energies_view(const struct RKRConFrame *frame_handle,
@@ -1926,6 +2028,15 @@ const double *rkr_frame_displacements_f64(const struct RKRConFrame *frame_handle
                                           uintptr_t *n);
 
 /**
+ * Row-major f64 spreads pointer, or NULL if absent / not float64.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
+ */
+const double *rkr_frame_spreads_f64(const struct RKRConFrame *frame_handle,
+                                          uintptr_t *n);
+
+/**
  * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
  * Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
  */
@@ -1949,6 +2060,17 @@ enum RKRStatus rkr_frame_copy_forces(const struct RKRConFrame *frame_handle,
  * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
  */
 enum RKRStatus rkr_frame_copy_displacements(const struct RKRConFrame *frame_handle,
+                                            double *out,
+                                            uintptr_t out_len);
+
+/**
+ * Copy spreads into row-major `out` (length >= `3 * N`), or
+ * `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+ */
+enum RKRStatus rkr_frame_copy_spreads(const struct RKRConFrame *frame_handle,
                                             double *out,
                                             uintptr_t out_len);
 
@@ -2050,6 +2172,29 @@ enum RKRStatus rkr_frame_displacements_dlpack(const struct RKRConFrame *frame_ha
  * points to a valid `RKRDlpackExportOptions`.
  */
 enum RKRStatus rkr_frame_displacements_dlpack_ex(const struct RKRConFrame *frame_handle,
+                                                 const struct RKRDlpackExportOptions *opts,
+                                                 RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * DLPack spreads from a frame, or `SECTION_ABSENT` if missing
+ * (f64/CPU default).
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out_tensor` must be a
+ * writable pointer. Free the tensor with `rkr_dlpack_delete`.
+ */
+enum RKRStatus rkr_frame_spreads_dlpack(const struct RKRConFrame *frame_handle,
+                                              RKRDLManagedTensorVersioned **out_tensor);
+
+/**
+ * Like [`rkr_frame_spreads_dlpack`] with export options (NULL
+ * `opts` selects float64 on CPU).
+ *
+ * # Safety
+ * Same contract as [`rkr_frame_spreads_dlpack`]; `opts` is NULL or
+ * points to a valid `RKRDlpackExportOptions`.
+ */
+enum RKRStatus rkr_frame_spreads_dlpack_ex(const struct RKRConFrame *frame_handle,
                                                  const struct RKRDlpackExportOptions *opts,
                                                  RKRDLManagedTensorVersioned **out_tensor);
 
