@@ -1,6 +1,7 @@
 use crate::types::{
     ConFrame, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES, SECTION_FORCES,
-    SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES, encode_fixed_bitmask, meta,
+    SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES, encode_fixed_bitmask,
+    meta,
 };
 use serde_json::json;
 use std::fs::File;
@@ -73,6 +74,7 @@ struct MetadataCacheEntry {
     has_spins: bool,
     has_magmoms: bool,
     has_displacements: bool,
+    has_spreads: bool,
     metadata: std::collections::BTreeMap<String, serde_json::Value>,
     /// Cached serialised metadata line (without trailing newline).
     serialized: String,
@@ -89,6 +91,7 @@ impl MetadataCacheEntry {
         has_spins: bool,
         has_magmoms: bool,
         has_displacements: bool,
+        has_spreads: bool,
         metadata: &std::collections::BTreeMap<String, serde_json::Value>,
     ) -> bool {
         self.spec_version == spec_version
@@ -99,6 +102,7 @@ impl MetadataCacheEntry {
             && self.has_spins == has_spins
             && self.has_magmoms == has_magmoms
             && self.has_displacements == has_displacements
+            && self.has_spreads == has_spreads
             && &self.metadata == metadata
     }
 }
@@ -169,6 +173,7 @@ impl<W: Write> ConFrameWriter<W> {
         let has_spn = frame.has_spins();
         let has_mm = frame.has_magmoms();
         let has_dsp = frame.has_displacements();
+        let has_spr = frame.has_spreads();
 
         let cache_hit = !self.canonical
             && self.metadata_cache.as_ref().is_some_and(|c| {
@@ -181,6 +186,7 @@ impl<W: Write> ConFrameWriter<W> {
                     has_spn,
                     has_mm,
                     has_dsp,
+                    has_spr,
                     &frame.header.metadata,
                 )
             });
@@ -211,6 +217,9 @@ impl<W: Write> ConFrameWriter<W> {
         }
         if has_dsp {
             sections.push(json!(SECTION_DISPLACEMENTS));
+        }
+        if has_spr {
+            sections.push(json!(SECTION_SPREADS));
         }
         let validate = frame
             .header
@@ -251,6 +260,7 @@ impl<W: Write> ConFrameWriter<W> {
             has_spins: has_spn,
             has_magmoms: has_mm,
             has_displacements: has_dsp,
+            has_spreads: has_spr,
             metadata: frame.header.metadata.clone(),
             serialized,
         });
@@ -496,6 +506,31 @@ impl<W: Write> ConFrameWriter<W> {
                             dx,
                             dy,
                             dz,
+                            prec,
+                            encode_fixed_bitmask(atom.fixed),
+                            atom.atom_id,
+                        );
+                    }
+                    off += num_atoms_in_type;
+                }
+            }
+
+            if frame.has_spreads() {
+                buf.push(b'\n');
+                let mut off = 0;
+                for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
+                {
+                    let symbol = &frame.atom_data[off].symbol;
+                    let _ = writeln!(buf, "{symbol}");
+                    let _ = writeln!(buf, "Spreads of Component {}", type_idx + 1);
+                    for i in 0..num_atoms_in_type {
+                        let atom = &frame.atom_data[off + i];
+                        let [sx, sy, sz] = atom.spread.unwrap_or([0.0; 3]);
+                        push_xyz_line(
+                            buf,
+                            sx,
+                            sy,
+                            sz,
                             prec,
                             encode_fixed_bitmask(atom.fixed),
                             atom.atom_id,
