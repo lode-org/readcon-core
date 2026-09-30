@@ -39,6 +39,7 @@ pub fn fill_frame_builder(
     fb.set_has_spins(frame.atom_data.iter().any(|a| a.has_spin()));
     fb.set_has_magmoms(frame.atom_data.iter().any(|a| a.has_magmom()));
     fb.set_has_displacements(frame.atom_data.iter().any(|a| a.has_displacement()));
+    fb.set_has_spreads(frame.atom_data.iter().any(|a| a.has_spread()));
 
     let mut masses = fb
         .reborrow()
@@ -126,6 +127,14 @@ pub fn fill_frame_builder(
             ab.set_dz(dz);
         } else {
             ab.set_has_displacement(false);
+        }
+        if let Some([sx, sy, sz]) = atom.spread {
+            ab.set_has_spread(true);
+            ab.set_sx(sx);
+            ab.set_sy(sy);
+            ab.set_sz(sz);
+        } else {
+            ab.set_has_spread(false);
         }
     }
     Ok(())
@@ -312,6 +321,11 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
             } else {
                 None
             },
+            spread: if a.get_has_spread() {
+                Some([a.get_sx(), a.get_sy(), a.get_sz()])
+            } else {
+                None
+            },
         });
     }
 
@@ -402,6 +416,30 @@ mod tests {
         }
         assert!(back.atom_data.iter().all(|a| a.has_displacement()));
         assert!(back.has_displacements());
+    }
+
+    #[test]
+    fn capnp_roundtrip_spreads() {
+        let frame = load_fixture("tiny_cuh2_spreads.con");
+        let mut message = Builder::new_default();
+        {
+            let root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root, &frame).unwrap();
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        assert!(reader.get_has_spreads());
+        let back = frame_from_reader(reader).unwrap();
+
+        assert_eq!(back.atom_data.len(), frame.atom_data.len());
+        for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
+            assert_eq!(a.symbol, b.symbol);
+            assert_eq!(a.atom_id, b.atom_id);
+            assert_eq!(a.spread, b.spread);
+        }
+        assert!(back.atom_data.iter().all(|a| a.has_spread()));
+        assert!(back.has_spreads());
     }
 
     #[test]

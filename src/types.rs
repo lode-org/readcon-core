@@ -132,6 +132,10 @@ pub const SECTION_MAGMOMS: &str = "magmoms";
 /// Per-atom displacement vector `[dx, dy, dz]` in Angstrom (e.g. a normal
 /// mode); same block shape as [`SECTION_VELOCITIES`].
 pub const SECTION_DISPLACEMENTS: &str = "displacements";
+/// Per-atom root-mean-square spread `[sx, sy, sz]` in Angstrom about the
+/// written coordinates (a standard deviation per axis, each non-negative; 0
+/// is a classical point); same block shape as [`SECTION_VELOCITIES`].
+pub const SECTION_SPREADS: &str = "spreads";
 
 /// The two-line block preceding the box dimensions.
 ///
@@ -559,6 +563,9 @@ pub struct AtomDatum {
     /// Displacement vector `[dx, dy, dz]` in Angstrom (present when
     /// `"displacements"` declared).
     pub displacement: Option<[f64; 3]>,
+    /// Root-mean-square spread `[sx, sy, sz]` in Angstrom about `[x, y, z]`
+    /// (present when `"spreads"` declared).
+    pub spread: Option<[f64; 3]>,
 }
 
 impl AtomDatum {
@@ -601,6 +608,10 @@ impl AtomDatum {
 
     pub fn has_displacement(&self) -> bool {
         self.displacement.is_some()
+    }
+
+    pub fn has_spread(&self) -> bool {
+        self.spread.is_some()
     }
 }
 
@@ -672,6 +683,8 @@ pub struct ConFrame {
     pub magmoms: crate::storage_dtype::FloatArray2,
     /// Displacements `(N, 3)` in Angstrom when present; else `(0, 3)`.
     pub displacements: crate::storage_dtype::FloatArray2,
+    /// Spreads `(N, 3)` in Angstrom when present; else `(0, 3)`.
+    pub spreads: crate::storage_dtype::FloatArray2,
     /// Per-atom masses `(N,)`.
     pub masses: crate::storage_dtype::FloatArray1,
     /// Per-atom ids `(N,)` u64 (always).
@@ -703,6 +716,9 @@ impl ConFrame {
         if self.displacements.nrows() > 0 {
             self.displacements.project_to(dtypes.forces);
         }
+        if self.spreads.nrows() > 0 {
+            self.spreads.project_to(dtypes.forces);
+        }
         if self.masses.len() > 0 {
             self.masses.project_to(dtypes.masses);
         }
@@ -723,6 +739,7 @@ impl ConFrame {
         let has_spn = self.spins.len() == n;
         let has_mm = self.magmoms.nrows() == n;
         let has_dsp = self.displacements.nrows() == n;
+        let has_spr = self.spreads.nrows() == n;
         for i in 0..n {
             let a = &mut self.atom_data[i];
             let p = self.positions.as_f64_row(i);
@@ -750,6 +767,9 @@ impl ConFrame {
             if has_dsp {
                 a.displacement = Some(self.displacements.as_f64_row(i));
             }
+            if has_spr {
+                a.spread = Some(self.spreads.as_f64_row(i));
+            }
             if i < self.atom_ids.len() {
                 a.atom_id = self.atom_ids[i];
             }
@@ -775,6 +795,7 @@ impl ConFrame {
         let has_spn = self.atom_data.iter().any(|a| a.has_spin());
         let has_mm = self.atom_data.iter().any(|a| a.has_magmom());
         let has_dsp = self.atom_data.iter().any(|a| a.has_displacement());
+        let has_spr = self.atom_data.iter().any(|a| a.has_spread());
         // Only allocate positions if missing (should not happen on parse-primary path).
         let need_pos_fill = self.positions.nrows() != n;
         if need_pos_fill {
@@ -829,6 +850,13 @@ impl ConFrame {
         } else if self.displacements.nrows() != 0 {
             self.displacements = FloatArray2::zeros(dt.forces, 0, 3);
         }
+        if has_spr {
+            if self.spreads.nrows() != n {
+                self.spreads = FloatArray2::zeros(dt.forces, n, 3);
+            }
+        } else if self.spreads.nrows() != 0 {
+            self.spreads = FloatArray2::zeros(dt.forces, 0, 3);
+        }
         if self.atom_ids.len() != n {
             self.atom_ids = ndarray::ArcArray1::<u64>::zeros(n);
         }
@@ -863,6 +891,9 @@ impl ConFrame {
             }
             if has_dsp && let Some(d) = a.displacement {
                 self.displacements.set_f64_row(i, d);
+            }
+            if has_spr && let Some(d) = a.spread {
+                self.spreads.set_f64_row(i, d);
             }
         }
     }
@@ -936,6 +967,11 @@ impl ConFrame {
     pub fn has_displacements(&self) -> bool {
         self.displacements.nrows() == self.positions.nrows() && self.positions.nrows() > 0
             || self.atom_data.first().is_some_and(|a| a.has_displacement())
+    }
+
+    pub fn has_spreads(&self) -> bool {
+        self.spreads.nrows() == self.positions.nrows() && self.positions.nrows() > 0
+            || self.atom_data.first().is_some_and(|a| a.has_spread())
     }
 
     pub fn has_energies(&self) -> bool {
@@ -1119,6 +1155,9 @@ pub struct ConFrameBuilder {
     /// `(N, 3) f64` when has_displacements, else `(0, 3)`.
     displacements: ndarray::ArcArray2<f64>,
     has_displacements: bool,
+    /// `(N, 3) f64` when has_spreads, else `(0, 3)`.
+    spreads: ndarray::ArcArray2<f64>,
+    has_spreads: bool,
 
     metadata: BTreeMap<String, serde_json::Value>,
 }
@@ -1149,6 +1188,8 @@ impl Default for ConFrameBuilder {
             has_magmoms: false,
             displacements: ndarray::ArcArray2::<f64>::zeros((0, 3)),
             has_displacements: false,
+            spreads: ndarray::ArcArray2::<f64>::zeros((0, 3)),
+            has_spreads: false,
             metadata: BTreeMap::new(),
         }
     }
@@ -1361,6 +1402,9 @@ impl ConFrameBuilder {
         if self.has_displacements {
             arc_push_row(&mut self.displacements, array![0.0, 0.0, 0.0].view());
         }
+        if self.has_spreads {
+            arc_push_row(&mut self.spreads, array![0.0, 0.0, 0.0].view());
+        }
         self
     }
 
@@ -1477,6 +1521,24 @@ impl ConFrameBuilder {
         row[0] = displacement[0];
         row[1] = displacement[1];
         row[2] = displacement[2];
+        self
+    }
+
+    /// Attaches a per-atom root-mean-square spread (Angstrom) to the most
+    /// recently added atom.
+    pub fn with_spread(&mut self, spread: [f64; 3]) -> &mut Self {
+        let n = self.symbols.len();
+        if n == 0 {
+            return self;
+        }
+        if !self.has_spreads {
+            self.spreads = ndarray::ArcArray2::<f64>::zeros((n, 3));
+            self.has_spreads = true;
+        }
+        let mut row = self.spreads.row_mut(n - 1);
+        row[0] = spread[0];
+        row[1] = spread[1];
+        row[2] = spread[2];
         self
     }
 
@@ -2347,6 +2409,7 @@ impl ConFrameBuilder {
         let has_spn = self.has_spins;
         let has_mag = self.has_magmoms;
         let has_dsp = self.has_displacements;
+        let has_spr = self.has_spreads;
 
         let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(n);
         let mut insertion_to_grouped = vec![0usize; n];
@@ -2386,6 +2449,12 @@ impl ConFrameBuilder {
                 } else {
                     None
                 };
+                let spread = if has_spr {
+                    let r = self.spreads.row(i);
+                    Some([r[0], r[1], r[2]])
+                } else {
+                    None
+                };
                 atom_data.push(AtomDatum {
                     symbol: Arc::clone(symbol),
                     x: pos[0],
@@ -2400,6 +2469,7 @@ impl ConFrameBuilder {
                     spin,
                     magmom,
                     displacement,
+                    spread,
                 });
             }
         }
@@ -2426,6 +2496,9 @@ impl ConFrameBuilder {
         if has_dsp {
             sections.push(SECTION_DISPLACEMENTS.into());
         }
+        if has_spr {
+            sections.push(SECTION_SPREADS.into());
+        }
 
         let strict_validation = matches!(
             self.metadata.get(meta::VALIDATE),
@@ -2448,6 +2521,7 @@ impl ConFrameBuilder {
         let mut spn = FloatArray1::zeros(dt.energies, if has_spn { n } else { 0 });
         let mut mag = FloatArray2::zeros(dt.forces, if has_mag { n } else { 0 }, 3);
         let mut dsp = FloatArray2::zeros(dt.forces, if has_dsp { n } else { 0 }, 3);
+        let mut spr = FloatArray2::zeros(dt.forces, if has_spr { n } else { 0 }, 3);
         let mut masses_arr = FloatArray1::zeros(dt.masses, n);
         let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
         if dt != StorageDtypes::all_f64() {
@@ -2482,6 +2556,9 @@ impl ConFrameBuilder {
             }
             if has_dsp && let Some(d) = a.displacement {
                 dsp.set_f64_row(i, d);
+            }
+            if has_spr && let Some(d) = a.spread {
+                spr.set_f64_row(i, d);
             }
         }
         let mut off = 0usize;
@@ -2522,6 +2599,7 @@ impl ConFrameBuilder {
                 spins: spn,
                 magmoms: mag,
                 displacements: dsp,
+                spreads: spr,
                 masses: masses_arr,
                 atom_ids: ids_arr,
             },
@@ -2601,6 +2679,7 @@ pub fn con_frame_coords_only(
         spins: FloatArray1::zeros(dt.energies, 0),
         magmoms: FloatArray2::zeros(dt.forces, 0, 3),
         displacements: FloatArray2::zeros(dt.forces, 0, 3),
+        spreads: FloatArray2::zeros(dt.forces, 0, 3),
         masses: masses_arr,
         atom_ids: ids_arr,
     }
@@ -2621,7 +2700,8 @@ pub fn con_frame_from_atom_data_with_positions(
     let has_spn = atom_data.first().is_some_and(|a| a.has_spin());
     let has_mm = atom_data.first().is_some_and(|a| a.has_magmom());
     let has_dsp = atom_data.first().is_some_and(|a| a.has_displacement());
-    if !has_vel && !has_frc && !has_eng && !has_chg && !has_spn && !has_mm && !has_dsp {
+    let has_spr = atom_data.first().is_some_and(|a| a.has_spread());
+    if !has_vel && !has_frc && !has_eng && !has_chg && !has_spn && !has_mm && !has_dsp && !has_spr {
         return con_frame_coords_only(header, atom_data, positions);
     }
     let n = atom_data.len();
@@ -2636,6 +2716,7 @@ pub fn con_frame_from_atom_data_with_positions(
     let mut spn = FloatArray1::zeros(dt.energies, if has_spn { n } else { 0 });
     let mut mm = FloatArray2::zeros(dt.forces, if has_mm { n } else { 0 }, 3);
     let mut dsp = FloatArray2::zeros(dt.forces, if has_dsp { n } else { 0 }, 3);
+    let mut spr = FloatArray2::zeros(dt.forces, if has_spr { n } else { 0 }, 3);
     let mut masses_arr = FloatArray1::zeros(dt.masses, n);
     let mut ids_arr = ndarray::ArcArray1::<u64>::zeros(n);
     let mut off = 0usize;
@@ -2677,6 +2758,9 @@ pub fn con_frame_from_atom_data_with_positions(
         if has_dsp && let Some(d) = a.displacement {
             dsp.set_f64_row(i, d);
         }
+        if has_spr && let Some(d) = a.spread {
+            spr.set_f64_row(i, d);
+        }
     }
     let mut header = header;
     if dt != crate::storage_dtype::StorageDtypes::all_f64() {
@@ -2693,6 +2777,7 @@ pub fn con_frame_from_atom_data_with_positions(
         spins: spn,
         magmoms: mm,
         displacements: dsp,
+        spreads: spr,
         masses: masses_arr,
         atom_ids: ids_arr,
     }

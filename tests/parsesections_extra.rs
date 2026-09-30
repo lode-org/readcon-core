@@ -1,4 +1,4 @@
-//! Parse/write optional charges, spins, magmoms, displacements sections on the v2 surface.
+//! Parse/write optional charges, spins, magmoms, displacements, spreads sections on the v2 surface.
 mod common;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::writer::ConFrameWriter;
@@ -68,6 +68,7 @@ fn coords_only_still_ok_without_new_sections() {
     assert!(!f.has_spins());
     assert!(!f.has_magmoms());
     assert!(!f.has_displacements());
+    assert!(!f.has_spreads());
     assert!(f.atom_data.iter().all(|a| a.charge.is_none()));
 }
 
@@ -180,6 +181,86 @@ fn short_magmoms_and_displacements_sections_reject_alike() {
 }
 
 #[test]
+fn parse_spreads() {
+    let fdat = fs::read_to_string(test_case!("tiny_cuh2_spreads.con")).expect("fixture");
+    let frames: Vec<_> = ConFrameIterator::new(&fdat)
+        .map(|r| r.expect("parse"))
+        .collect();
+    assert_eq!(frames.len(), 1);
+    let frame = &frames[0];
+    assert!(!frame.has_magmoms());
+    assert!(frame.has_spreads());
+    assert_eq!(frame.header.sections, vec!["spreads"]);
+    assert_eq!(frame.atom_data[0].spread, Some([0.0, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[2].spread, Some([0.125, 0.25, 0.0]));
+    assert_eq!(frame.atom_data[3].spread, Some([0.125, 0.25, 0.0625]));
+    assert!(frame.atom_data.iter().all(|a| a.magmom.is_none()));
+    // SoA sync on iterator path
+    assert_eq!(frame.spreads.nrows(), 4);
+    assert_eq!(frame.spreads.as_f64_row(2), [0.125, 0.25, 0.0]);
+}
+
+#[test]
+fn spreads_roundtrip() {
+    let fdat = fs::read_to_string(test_case!("tiny_cuh2_spreads.con")).expect("fixture");
+    let original: Vec<_> = ConFrameIterator::new(&fdat)
+        .map(|r| r.expect("parse"))
+        .collect();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    {
+        let mut writer = ConFrameWriter::with_precision(&mut buffer, 17);
+        writer.extend(original.iter()).expect("write");
+    }
+    let rt = String::from_utf8(buffer).unwrap();
+    assert!(rt.contains("Spreads of Component 2"));
+    let round: Vec<_> = ConFrameIterator::new(&rt)
+        .map(|r| r.expect("reparse"))
+        .collect();
+    assert_eq!(original.len(), round.len());
+    assert_eq!(original, round);
+}
+
+#[test]
+fn builder_authors_spreads_after_magmoms() {
+    use readcon_core::types::ConFrameBuilder;
+    let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546)
+        .with_magmom([0.0, 0.0, 1.0])
+        .with_spread([0.1, 0.2, 0.3]);
+    b.add_atom("Cu", 1.0, 0.0, 0.0, [false; 3], 1, 63.546);
+    let frame = b.build().expect("build");
+    assert!(frame.has_magmoms());
+    assert!(frame.has_spreads());
+    assert_eq!(frame.header.sections, vec!["magmoms", "spreads"]);
+    assert_eq!(frame.atom_data[0].spread, Some([0.1, 0.2, 0.3]));
+    // Later atoms are zero-filled so the section stays length-coherent.
+    assert_eq!(frame.atom_data[1].spread, Some([0.0, 0.0, 0.0]));
+}
+
+#[test]
+fn short_spreads_section_rejects_like_displacements() {
+    for (fixture, section) in [
+        ("tiny_cuh2_displacements.con", "displacements"),
+        ("tiny_cuh2_spreads.con", "spreads"),
+    ] {
+        let fdat = fs::read_to_string(test_case!(fixture)).expect("fixture");
+        let short = drop_last_row(&fdat);
+        let err = ConFrameIterator::new(&short)
+            .next()
+            .expect("one result")
+            .expect_err("short section must be rejected");
+        assert!(
+            matches!(
+                &err,
+                readcon_core::error::ParseError::IncompleteSection(name) if name == section
+            ),
+            "{fixture}: got {err:?}"
+        );
+    }
+}
+
+#[test]
 fn unknown_section_still_errors() {
     let bad = r#"Random Number Seed
 {"con_spec_version":2,"sections":["not_a_real_section"]}
@@ -202,5 +283,23 @@ Coordinates of Component 1
         err.to_string().contains("unknown section")
             || err.to_string().contains("not_a_real_section"),
         "got: {err}"
+    );
+}
+
+#[test]
+fn negative_spread_is_rejected() {
+    let fdat = fs::read_to_string(test_case!("tiny_cuh2_spreads.con")).expect("fixture");
+    let bad = fdat.replace(
+        "0.125000    0.250000    0.062500",
+        "0.125000   -0.250000    0.062500",
+    );
+    assert_ne!(bad, fdat);
+    let err = ConFrameIterator::new(&bad)
+        .next()
+        .expect("one result")
+        .expect_err("negative spread must be rejected");
+    assert!(
+        matches!(&err, readcon_core::error::ParseError::ValidationError(m) if m.contains("spreads")),
+        "got {err:?}"
     );
 }

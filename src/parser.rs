@@ -2,8 +2,8 @@ use crate::error::ParseError;
 use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
     AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_DISPLACEMENTS,
-    SECTION_ENERGIES, SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_VELOCITIES,
-    decode_fixed_bitmask_for_spec, meta,
+    SECTION_ENERGIES, SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS,
+    SECTION_VELOCITIES, decode_fixed_bitmask_for_spec, meta,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -698,6 +698,7 @@ pub fn parse_single_frame<'a>(
                 spin: None,
                 magmom: None,
                 displacement: None,
+                spread: None,
             });
             global_atom_idx += 1;
             atom_i += 1;
@@ -1162,6 +1163,13 @@ pub fn parse_declared_sections<'a>(
                     }
                     applied += 1;
                 }
+                SECTION_SPREADS => {
+                    let found = parse_spread_section(lines, header, atom_data)?;
+                    if !found {
+                        return Err(ParseError::IncompleteSection(SECTION_SPREADS.into()));
+                    }
+                    applied += 1;
+                }
                 other => return Err(ParseError::UnknownSection(other.to_string())),
             }
         }
@@ -1388,6 +1396,78 @@ pub fn parse_displacement_section<'a>(
             }
             if atom_idx < atom_data.len() {
                 atom_data[atom_idx].displacement = Some([vals[0], vals[1], vals[2]]);
+            }
+            atom_idx += 1;
+        }
+    }
+    Ok(true)
+}
+
+/// Spreads: per-atom root-mean-square spread `[sx, sy, sz]` (Angstrom, each
+/// non-negative), same layout as velocities/forces.
+pub fn parse_spread_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    match lines.peek_line() {
+        Some(line) if line.trim().is_empty() => {
+            lines.next_line();
+        }
+        _ => return Ok(false),
+    }
+
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?
+            .trim();
+
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?;
+        if !comp_line.contains("Spreads of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_SPREADS.into()));
+        }
+        if validate {
+            validate_section_component(
+                "Spreads", type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+        }
+
+        for _ in 0..num_atoms {
+            let spr_line = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?;
+            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
+            let mut vals = [0.0f64; 5];
+            parse_line_of_range_f64_stack(spr_line, 4, 5, &defaults, &mut vals)?;
+            if vals[..3].iter().any(|v| !v.is_finite() || *v < 0.0) {
+                return Err(ParseError::ValidationError(format!(
+                    "spreads: atom {atom_idx} has a negative or non-finite spread"
+                )));
+            }
+            if validate {
+                let (fixed, atom_id) = parse_identity_columns(
+                    spr_line,
+                    SECTION_SPREADS,
+                    3,
+                    4,
+                    5,
+                    header.spec_version,
+                )?;
+                validate_section_atom_identity(
+                    SECTION_SPREADS,
+                    atom_idx,
+                    fixed,
+                    atom_id,
+                    atom_data,
+                )?;
+            }
+            if atom_idx < atom_data.len() {
+                atom_data[atom_idx].spread = Some([vals[0], vals[1], vals[2]]);
             }
             atom_idx += 1;
         }
