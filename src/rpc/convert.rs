@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use super::read_con_capnp::con_frame_data;
 use crate::types::{
-    con_frame_from_atom_data, decode_fixed_bitmask_for_spec, encode_fixed_bitmask, AtomDatum, ConFrame,
-    FrameHeader, PreboxHeader,
+    AtomDatum, ConFrame, FrameHeader, PreboxHeader, con_frame_from_atom_data,
+    decode_fixed_bitmask_for_spec, encode_fixed_bitmask,
 };
 
 /// Fill one `ConFrameData` builder from a [`ConFrame`].
@@ -59,8 +59,8 @@ pub fn fill_frame_builder(
         sections.set(i as u32, s.as_str());
     }
 
-    let meta_json = serde_json::to_string(&frame.header.metadata)
-        .map_err(|e| format!("metadata json: {e}"))?;
+    let meta_json =
+        serde_json::to_string(&frame.header.metadata).map_err(|e| format!("metadata json: {e}"))?;
     fb.set_metadata_json(&meta_json);
     fb.set_strict_validation(frame.header.strict_validation);
     fb.set_sections_declared(frame.header.sections_declared);
@@ -185,9 +185,8 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
     ];
 
     let masses_list = fd.get_masses_per_type().map_err(|e| e.to_string())?;
-    let mut masses_per_type: Vec<f64> = (0..masses_list.len())
-        .map(|i| masses_list.get(i))
-        .collect();
+    let mut masses_per_type: Vec<f64> =
+        (0..masses_list.len()).map(|i| masses_list.get(i)).collect();
     let counts_list = fd.get_natms_per_type().map_err(|e| e.to_string())?;
     let mut natms_per_type: Vec<usize> = (0..counts_list.len())
         .map(|i| counts_list.get(i) as usize)

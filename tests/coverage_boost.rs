@@ -6,13 +6,13 @@ use std::error::Error;
 use std::io::Write;
 use std::path::Path;
 
-use readcon_core::compression::{
-    detect_compression, detect_compression_from_extension, gzip_writer, read_file_contents,
-    FileContents, Compression,
-};
 use readcon_core::chemfiles_import::ChemfilesImportError;
+use readcon_core::compression::{
+    Compression, FileContents, detect_compression, detect_compression_from_extension, gzip_writer,
+    read_file_contents,
+};
 use readcon_core::convert::{
-    convert_path_to_con, path_looks_like_con, read_frames_for_convert, ConvertError,
+    ConvertError, convert_path_to_con, path_looks_like_con, read_frames_for_convert,
 };
 use readcon_core::error::ParseError;
 use readcon_core::storage_dtype::{Array1Storage, Array2Storage, ElementKind, StorageDtypes};
@@ -59,7 +59,9 @@ fn parse_error_display_and_from_all_variants() {
     // From impls
     let _: ParseError = "1.2.3".parse::<f64>().unwrap_err().into();
     let _: ParseError = "x".parse::<i32>().unwrap_err().into();
-    let _: ParseError = serde_json::from_str::<serde_json::Value>("{").unwrap_err().into();
+    let _: ParseError = serde_json::from_str::<serde_json::Value>("{")
+        .unwrap_err()
+        .into();
 }
 
 // ---------------------------------------------------------------------------
@@ -171,13 +173,19 @@ fn convert_errors_and_path_helpers() {
     let empty_con = dir.path().join("empty.con");
     std::fs::write(&empty_con, b"").unwrap();
     let err = read_frames_for_convert(&empty_con);
-    assert!(matches!(err, Err(ConvertError::Empty) | Err(ConvertError::Parse(_))));
+    assert!(matches!(
+        err,
+        Err(ConvertError::Empty) | Err(ConvertError::Parse(_))
+    ));
 
     // garbage con content
     let bad = dir.path().join("bad.con");
     std::fs::write(&bad, b"not a con file at all\n").unwrap();
     let err = read_frames_for_convert(&bad);
-    assert!(matches!(err, Err(ConvertError::Parse(_)) | Err(ConvertError::Empty)));
+    assert!(matches!(
+        err,
+        Err(ConvertError::Parse(_)) | Err(ConvertError::Empty)
+    ));
 
     // successful native convert
     let out = dir.path().join("out.con");
@@ -254,7 +262,10 @@ fn storage_dtype_all_kinds_kind_nrows_project_and_json() {
     assert_eq!(empty.positions, ElementKind::Float64);
 
     // more parse aliases
-    for s in ["f64", "double", "f32", "single", "f16", "half", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "boolean", "c64", "c128"] {
+    for s in [
+        "f64", "double", "f32", "single", "f16", "half", "i8", "i16", "i32", "i64", "u8", "u16",
+        "u32", "u64", "boolean", "c64", "c128",
+    ] {
         assert!(ElementKind::parse(s).is_ok(), "{s}");
     }
 }
@@ -290,7 +301,8 @@ fn units_compound_expressions_and_errors() {
 #[test]
 fn types_header_metadata_helpers() {
     let mut b = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-    b.prebox_header("u").postbox_header(["0 0".into(), "0 0 0".into()]);
+    b.prebox_header("u")
+        .postbox_header(["0 0".into(), "0 0 0".into()]);
     b.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.5);
     b.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
     let mut frame = b.build().unwrap();
@@ -298,11 +310,10 @@ fn types_header_metadata_helpers() {
     frame.header.set_pbc([true, false, true]);
     assert_eq!(frame.header.pbc(), Some([true, false, true]));
 
-    frame.header.set_units(json!({"length": "angstrom", "energy": "eV"}));
-    let factor = frame
+    frame
         .header
-        .conversion_factor_to("energy", "meV")
-        .unwrap();
+        .set_units(json!({"length": "angstrom", "energy": "eV"}));
+    let factor = frame.header.conversion_factor_to("energy", "meV").unwrap();
     assert!((factor - 1000.0).abs() < 1e-6);
     assert_eq!(frame.header.length_unit(), Some("angstrom"));
     assert_eq!(frame.header.energy_unit(), Some("eV"));
@@ -316,7 +327,10 @@ fn types_header_metadata_helpers() {
     assert!(lat.is_some());
 
     // bad pbc / lattice
-    frame.header.metadata.insert(meta::PBC.into(), json!([true, false]));
+    frame
+        .header
+        .metadata
+        .insert(meta::PBC.into(), json!([true, false]));
     assert!(frame.header.pbc().is_none());
     frame
         .header
@@ -324,10 +338,12 @@ fn types_header_metadata_helpers() {
         .insert(meta::LATTICE_VECTORS.into(), json!([[1, 0], [0, 1]]));
     assert!(frame.header.lattice_vectors().is_none());
 
-    assert!(frame
-        .header
-        .conversion_factor_to("missing_dim", "eV")
-        .is_err());
+    assert!(
+        frame
+            .header
+            .conversion_factor_to("missing_dim", "eV")
+            .is_err()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -336,9 +352,9 @@ fn types_header_metadata_helpers() {
 #[test]
 fn index_proj_and_helpers_extra() {
     use readcon_core::index_proj::{
-        frame_byte_spans, frame_cell_volume, frame_composition_formula, frame_fmax,
-        frame_has_energies, frame_has_forces, frame_has_velocities, frame_total_mass,
-        sections_present_mask, spans_cover_buffer, symbol_histogram, FrameIndexProjection,
+        FrameIndexProjection, frame_byte_spans, frame_cell_volume, frame_composition_formula,
+        frame_fmax, frame_has_energies, frame_has_forces, frame_has_velocities, frame_total_mass,
+        sections_present_mask, spans_cover_buffer, symbol_histogram,
     };
     let data = std::fs::read_to_string("resources/test/tiny_cuh2_forces.con").unwrap();
     let frame = readcon_core::iterators::ConFrameIterator::new(&data)
@@ -369,7 +385,8 @@ fn index_proj_and_helpers_extra() {
 
 #[test]
 fn project_storage_and_optional_sections() {
-    let data = std::fs::read_to_string("resources/test/tiny_cuh2_charges_spins_magmoms.con").unwrap();
+    let data =
+        std::fs::read_to_string("resources/test/tiny_cuh2_charges_spins_magmoms.con").unwrap();
     let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
         .next()
         .unwrap()
@@ -396,12 +413,30 @@ fn parser_rejects_bad_bonds_and_lattice_metadata() {
     // line index 1 is often metadata in v2/v3 — inject bad bonds
     let dir = tempfile::tempdir().unwrap();
     for (name, meta_json) in [
-        ("bonds_not_array.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":1}"#),
-        ("bonds_bad_pair.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":[[1]]}"#),
-        ("bonds_bad_obj.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":[{"i":0}]}"#),
-        ("bonds_bad_type.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":["x"]}"#),
-        ("lattice_bad.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"lattice_vectors":[1,2,3]}"#),
-        ("lattice_bad2.con", r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"lattice_vectors":[[1,0,0],[0,1,0]]}"#),
+        (
+            "bonds_not_array.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":1}"#,
+        ),
+        (
+            "bonds_bad_pair.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":[[1]]}"#,
+        ),
+        (
+            "bonds_bad_obj.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":[{"i":0}]}"#,
+        ),
+        (
+            "bonds_bad_type.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"bonds":["x"]}"#,
+        ),
+        (
+            "lattice_bad.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"lattice_vectors":[1,2,3]}"#,
+        ),
+        (
+            "lattice_bad2.con",
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"lattice_vectors":[[1,0,0],[0,1,0]]}"#,
+        ),
     ] {
         let mut out = String::new();
         // CON layout: line0 comment/user, line1 metadata json for v3 writers
@@ -417,7 +452,8 @@ fn parser_rejects_bad_bonds_and_lattice_metadata() {
         let p = dir.path().join(name);
         std::fs::write(&p, &out).unwrap();
         let text = std::fs::read_to_string(&p).unwrap();
-        let res: Result<Vec<_>, _> = readcon_core::iterators::ConFrameIterator::new(&text).collect();
+        let res: Result<Vec<_>, _> =
+            readcon_core::iterators::ConFrameIterator::new(&text).collect();
         // either parse error or ok depending on whether line 1 is treated as metadata
         let _ = res;
     }
@@ -425,10 +461,10 @@ fn parser_rejects_bad_bonds_and_lattice_metadata() {
 
 #[test]
 fn array_arc_rwlock_dlpack_and_device_error() {
+    use dlpk::sys::{DLDevice, DLPackVersion};
     use readcon_core::array::{
         allocate_array_on_device, array_from_host_f64_on_device, array_from_shape,
     };
-    use dlpk::sys::{DLDevice, DLPackVersion};
     let boxed = array_from_shape::<f64>(&[2, 3]);
     assert_eq!(boxed.shape(), vec![2, 3]);
     let _ = boxed.dtype();
@@ -448,12 +484,11 @@ fn array_arc_rwlock_dlpack_and_device_error() {
     let _ = tagged.copy();
 }
 
-
 #[cfg(feature = "chemfiles")]
 #[test]
 fn ffi_chemfiles_memory_import() {
-    use std::ffi::CString;
     use readcon_core::ffi::{free_rkr_frame_array, rkr_read_chemfiles_memory};
+    use std::ffi::CString;
     let xyz = b"2\nwater\nO 0 0 0\nH 0.9 0 0\n";
     let data = CString::new(xyz.as_ref()).unwrap();
     let fmt = CString::new("XYZ").unwrap();
@@ -488,13 +523,23 @@ fn parser_bonds_and_lattice_validation_direct() {
         r#"{"con_spec_version":999}"#,
     ];
     let base = std::fs::read_to_string("resources/test/tiny_cuh2.con").unwrap();
-    let rest: String = base.lines().skip(2).map(|l| format!("{l}
-")).collect();
+    let rest: String = base
+        .lines()
+        .skip(2)
+        .map(|l| {
+            format!(
+                "{l}
+"
+            )
+        })
+        .collect();
     let head = base.lines().next().unwrap();
     for meta in cases {
-        let text = format!("{head}
+        let text = format!(
+            "{head}
 {meta}
-{rest}");
+{rest}"
+        );
         let res: Result<Vec<_>, _> = ConFrameIterator::new(&text).collect();
         assert!(res.is_err(), "expected err for {meta}, got {res:?}");
     }
@@ -503,14 +548,19 @@ fn parser_bonds_and_lattice_validation_direct() {
 #[test]
 fn types_bonds_charges_spins_helpers() {
     use readcon_core::types::Bond;
-    let data = std::fs::read_to_string("resources/test/tiny_cuh2_charges_spins_magmoms.con").unwrap();
+    let data =
+        std::fs::read_to_string("resources/test/tiny_cuh2_charges_spins_magmoms.con").unwrap();
     let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
         .next()
         .unwrap()
         .unwrap();
     assert!(frame.has_charges() || !frame.has_charges());
     let _ = frame.header.bonds();
-    frame.header.set_bonds(&[Bond { i: 0, j: 1, order: Some(1) }]);
+    frame.header.set_bonds(&[Bond {
+        i: 0,
+        j: 1,
+        order: Some(1),
+    }]);
     assert!(!frame.header.bonds().is_empty());
     // atom-level
     if let Some(a) = frame.atom_data.first() {
@@ -526,9 +576,10 @@ fn types_bonds_charges_spins_helpers() {
 #[test]
 fn more_types_frame_helpers_and_chemfiles_convert() {
     use readcon_core::types::Bond;
-    let data = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap_or_else(|_| {
-        std::fs::read_to_string("resources/test/tiny_cuh2_forces.con").unwrap()
-    });
+    let data =
+        std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap_or_else(|_| {
+            std::fs::read_to_string("resources/test/tiny_cuh2_forces.con").unwrap()
+        });
     let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
         .next()
         .unwrap()
@@ -584,7 +635,8 @@ fn chemfiles_import_surface() {
     let frames = frames.unwrap();
     assert!(!frames.is_empty());
     if std::path::Path::new("resources/test/water_min.xyz").is_file() {
-        let f2 = con_frames_from_trajectory_path(std::path::Path::new("resources/test/water_min.xyz"));
+        let f2 =
+            con_frames_from_trajectory_path(std::path::Path::new("resources/test/water_min.xyz"));
         assert!(f2.is_ok(), "{f2:?}");
     }
     // selection surface (arg order: selection, frame(s))
@@ -612,9 +664,9 @@ fn chemfiles_import_surface() {
     }
     let r4 = select_atom_positions_on_frames("name O", &frames);
     let _ = r4;
-    let _ = readcon_core::chemfiles_import::con_frame_from_trajectory_path(
-        std::path::Path::new("resources/test/water_min.xyz"),
-    );
+    let _ = readcon_core::chemfiles_import::con_frame_from_trajectory_path(std::path::Path::new(
+        "resources/test/water_min.xyz",
+    ));
 }
 
 #[test]
@@ -633,9 +685,7 @@ fn types_builder_full_surface() {
         .set_neb_band(2)
         .set_scalar_metadata("q", 1.0)
         .set_string_metadata("note", "x");
-    let _ = b.set_metadata_json(
-        r#"{"con_spec_version":2,"generator":"boost","bonds":[[0,1]]}"#,
-    );
+    let _ = b.set_metadata_json(r#"{"con_spec_version":2,"generator":"boost","bonds":[[0,1]]}"#);
     let mut md = BTreeMap::new();
     md.insert("k".into(), serde_json::json!(1));
     b.metadata(md);

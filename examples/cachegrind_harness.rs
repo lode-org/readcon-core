@@ -96,9 +96,7 @@ fn scenario_float_std() {
 
 fn scenario_write_100() {
     let large = gen_frames(100);
-    let frames: Vec<_> = ConFrameIterator::new(&large)
-        .map(|r| r.unwrap())
-        .collect();
+    let frames: Vec<_> = ConFrameIterator::new(&large).map(|r| r.unwrap()).collect();
     for _ in 0..10 {
         let mut buffer: Vec<u8> = Vec::with_capacity(large.len());
         {

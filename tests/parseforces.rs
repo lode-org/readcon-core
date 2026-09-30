@@ -187,8 +187,8 @@ fn test_energies_roundtrip() {
             .expect("Failed to write energies frame.");
     }
 
-    let frames_rt = readcon_core::iterators::read_all_frames(&path)
-        .expect("Failed to read energies frame.");
+    let frames_rt =
+        readcon_core::iterators::read_all_frames(&path).expect("Failed to read energies frame.");
     assert_eq!(frames_rt.len(), 1);
     let rt = &frames_rt[0];
     assert!(rt.has_energies());

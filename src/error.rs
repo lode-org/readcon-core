@@ -6,7 +6,10 @@ pub enum ParseError {
     IncompleteHeader,
     IncompleteFrame,
     IncompleteVelocitySection,
-    InvalidVectorLength { expected: usize, found: usize },
+    InvalidVectorLength {
+        expected: usize,
+        found: usize,
+    },
     InvalidNumberFormat(String),
     MissingSpecVersion,
     UnsupportedSpecVersion(u32),
@@ -23,7 +26,10 @@ pub enum ParseError {
     /// `set_atom_mass` / clear_*) was called with an atom index past
     /// the current length. Surfaces as `IndexError` in PyO3 and as
     /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` over the C ABI.
-    IndexOutOfBounds { index: usize, len: usize },
+    IndexOutOfBounds {
+        index: usize,
+        len: usize,
+    },
     /// Two atoms share a CON type (symbol) but their masses differ
     /// beyond [`crate::types::ConFrameBuilder::TYPE_MASS_ABS_TOL`].
     /// CON line 9 stores one mass per type, so the builder cannot

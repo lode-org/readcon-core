@@ -94,7 +94,10 @@ fn emit_metatensor_sys_metadata() {
     println!("cargo:rerun-if-changed=build.rs");
 
     if let Some(ref inc) = include_dir {
-        println!("cargo:rustc-env=READCON_METATENSOR_INCLUDE={}", inc.display());
+        println!(
+            "cargo:rustc-env=READCON_METATENSOR_INCLUDE={}",
+            inc.display()
+        );
         println!("cargo:INCLUDE={}", inc.display());
         // For dependents that read DEP_READCON_CORE_INCLUDE (links = not set; informational)
         println!("cargo:root={}", manifest_dir.display());
@@ -102,7 +105,10 @@ fn emit_metatensor_sys_metadata() {
     if let Some(ref lib) = lib_dir {
         println!("cargo:rustc-link-search=native={}", lib.display());
         println!("cargo:rustc-link-lib=dylib=metatensor");
-        println!("cargo:rustc-env=READCON_METATENSOR_LIB_DIR={}", lib.display());
+        println!(
+            "cargo:rustc-env=READCON_METATENSOR_LIB_DIR={}",
+            lib.display()
+        );
         println!("cargo:LIB={}", lib.display());
         // rpath so tests/cdylib resolve libmetatensor without LD_LIBRARY_PATH (Unix)
         if env::var("CARGO_CFG_TARGET_FAMILY").as_deref() == Ok("unix") {
@@ -120,7 +126,10 @@ fn emit_metatensor_sys_metadata() {
         );
         let _ = fs::create_dir_all(env_path.parent().unwrap());
         let _ = fs::write(&env_path, body);
-        println!("cargo:rustc-env=READCON_METATENSOR_ENV_FILE={}", env_path.display());
+        println!(
+            "cargo:rustc-env=READCON_METATENSOR_ENV_FILE={}",
+            env_path.display()
+        );
     }
 }
 

@@ -2182,16 +2182,8 @@ impl ConFrameBuilder {
                 } else {
                     None
                 };
-                let charge = if has_chg {
-                    Some(self.charges[i])
-                } else {
-                    None
-                };
-                let spin = if has_spn {
-                    Some(self.spins[i])
-                } else {
-                    None
-                };
+                let charge = if has_chg { Some(self.charges[i]) } else { None };
+                let spin = if has_spn { Some(self.spins[i]) } else { None };
                 let magmom = if has_mag {
                     let r = self.magmoms.row(i);
                     Some([r[0], r[1], r[2]])
@@ -2823,10 +2815,12 @@ mod tests {
         assert_eq!(frame.forces.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.atom_energies.kind(), FloatStorageKind::Float32);
         assert_eq!(frame.masses.kind(), FloatStorageKind::Float32);
-        assert!(frame
-            .velocities_as_dlpack(dlpk::sys::DLDevice::cpu())
-            .unwrap()
-            .is_some());
+        assert!(
+            frame
+                .velocities_as_dlpack(dlpk::sys::DLDevice::cpu())
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]
@@ -3198,10 +3192,11 @@ mod tests {
         let b = three_atom_builder();
         assert!(b.velocities_dlpack().expect("velocities_dlpack").is_none());
         assert!(b.forces_dlpack().expect("forces_dlpack").is_none());
-        assert!(b
-            .atom_energies_dlpack()
-            .expect("atom_energies_dlpack")
-            .is_none());
+        assert!(
+            b.atom_energies_dlpack()
+                .expect("atom_energies_dlpack")
+                .is_none()
+        );
     }
 
     #[test]

@@ -10,8 +10,8 @@
 //! Writes JSON with host, date, commit, ncpus. Does not invent numbers.
 
 use readcon_core::iterators::{
-    frame_start_offsets, frames_from_text, parse_frames_parallel_with_threads,
-    read_nth_frame_from_text, ConFrameIterator,
+    ConFrameIterator, frame_start_offsets, frames_from_text, parse_frames_parallel_with_threads,
+    read_nth_frame_from_text,
 };
 use readcon_core::writer::ConFrameWriter;
 use std::env;
@@ -84,9 +84,7 @@ fn main() {
     let n_frames = 100usize;
     let one = fixture_text("cuh2.con");
     let text = repeat_text(&one, n_frames);
-    let n_atoms = frames_from_text(&one, Some(1))
-        .expect("parse one")
-        [0]
+    let n_atoms = frames_from_text(&one, Some(1)).expect("parse one")[0]
         .atom_data
         .len();
 

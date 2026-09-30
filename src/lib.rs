@@ -1,20 +1,20 @@
 pub mod array;
+pub mod compression;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
-pub mod compression;
 pub mod error;
 pub mod ffi;
+#[cfg(feature = "grammar")]
+pub mod grammar;
 pub mod helpers;
 /// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
 pub mod index_proj;
-/// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
-pub mod rcso;
 pub mod iterators;
 pub mod parser;
-#[cfg(feature = "grammar")]
-pub mod grammar;
-pub mod types;
+/// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
+pub mod rcso;
 pub mod storage_dtype;
+pub mod types;
 pub mod units;
 pub mod writer;
 

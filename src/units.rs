@@ -517,14 +517,14 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
 pub fn canonicalize_units_object(
     units: &serde_json::Value,
 ) -> Result<serde_json::Value, ParseError> {
-    let obj = units.as_object().ok_or_else(|| {
-        ParseError::ValidationError("units must be a JSON object".into())
-    })?;
+    let obj = units
+        .as_object()
+        .ok_or_else(|| ParseError::ValidationError("units must be a JSON object".into()))?;
     let mut out = serde_json::Map::new();
     for (k, v) in obj {
-        let s = v.as_str().ok_or_else(|| {
-            ParseError::ValidationError(format!("units.{k} must be a string"))
-        })?;
+        let s = v
+            .as_str()
+            .ok_or_else(|| ParseError::ValidationError(format!("units.{k} must be a string")))?;
         out.insert(
             k.clone(),
             serde_json::Value::String(canonicalize_unit_expression(s)?),

@@ -4663,9 +4663,8 @@ mod tests {
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
         assert_eq!(natoms, unsafe { rkr_frame_atom_count(frame) } as u32);
         let mut xyz = vec![0.0f64; natoms as usize * 3];
-        let st = unsafe {
-            rkr_unpack_rcso_positions(buf.as_ptr(), buf.len(), xyz.as_mut_ptr(), natoms)
-        };
+        let st =
+            unsafe { rkr_unpack_rcso_positions(buf.as_ptr(), buf.len(), xyz.as_mut_ptr(), natoms) };
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
         let mut frc = vec![0.0f64; natoms as usize * 3];
         let st =

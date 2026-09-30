@@ -7,8 +7,8 @@ use std::path::Path;
 
 #[test]
 fn parse_charges_spins_magmoms() {
-    let fdat = fs::read_to_string(test_case!("tiny_cuh2_charges_spins_magmoms.con"))
-        .expect("fixture");
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2_charges_spins_magmoms.con")).expect("fixture");
     let frames: Vec<_> = ConFrameIterator::new(&fdat)
         .map(|r| r.expect("parse"))
         .collect();
@@ -20,10 +20,7 @@ fn parse_charges_spins_magmoms() {
     assert!(frame.has_charges());
     assert!(frame.has_spins());
     assert!(frame.has_magmoms());
-    assert_eq!(
-        frame.header.sections,
-        vec!["charges", "spins", "magmoms"]
-    );
+    assert_eq!(frame.header.sections, vec!["charges", "spins", "magmoms"]);
     assert_eq!(frame.atom_data[0].charge, Some(0.5));
     assert_eq!(frame.atom_data[1].charge, Some(-0.25));
     assert_eq!(frame.atom_data[2].charge, Some(0.1));
@@ -40,8 +37,8 @@ fn parse_charges_spins_magmoms() {
 
 #[test]
 fn charges_spins_magmoms_roundtrip() {
-    let fdat = fs::read_to_string(test_case!("tiny_cuh2_charges_spins_magmoms.con"))
-        .expect("fixture");
+    let fdat =
+        fs::read_to_string(test_case!("tiny_cuh2_charges_spins_magmoms.con")).expect("fixture");
     let original: Vec<_> = ConFrameIterator::new(&fdat)
         .map(|r| r.expect("parse"))
         .collect();

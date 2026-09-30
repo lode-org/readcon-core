@@ -458,80 +458,80 @@ pub fn parse_frame_header<'a>(
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
     let trimmed = prebox2_raw.trim();
-    let (spec_version, metadata, sections, validate, sections_declared) = if trimmed.starts_with('{') {
-        let json_val: serde_json::Value = serde_json::from_str(trimmed)
-            .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
-        let json_obj = json_val
-            .as_object()
-            .ok_or_else(|| ParseError::InvalidMetadataJson("expected a JSON object".to_string()))?;
-        let ver = json_obj
-            .get(meta::CON_SPEC_VERSION)
-            .and_then(|v| v.as_u64())
-            .ok_or(ParseError::MissingSpecVersion)? as u32;
-        if ver > crate::CON_SPEC_VERSION {
-            return Err(ParseError::UnsupportedSpecVersion(ver));
-        }
-        if ver >= 3 {
-            match json_obj.get(meta::UNITS) {
-                Some(u) => crate::units::validate_v3_units_metadata(u).map_err(|e| {
-                    ParseError::ValidationError(format!("v3 units: {e}"))
-                })?,
-                None => {
-                    return Err(ParseError::ValidationError(
+    let (spec_version, metadata, sections, validate, sections_declared) =
+        if trimmed.starts_with('{') {
+            let json_val: serde_json::Value = serde_json::from_str(trimmed)
+                .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
+            let json_obj = json_val.as_object().ok_or_else(|| {
+                ParseError::InvalidMetadataJson("expected a JSON object".to_string())
+            })?;
+            let ver = json_obj
+                .get(meta::CON_SPEC_VERSION)
+                .and_then(|v| v.as_u64())
+                .ok_or(ParseError::MissingSpecVersion)? as u32;
+            if ver > crate::CON_SPEC_VERSION {
+                return Err(ParseError::UnsupportedSpecVersion(ver));
+            }
+            if ver >= 3 {
+                match json_obj.get(meta::UNITS) {
+                    Some(u) => crate::units::validate_v3_units_metadata(u)
+                        .map_err(|e| ParseError::ValidationError(format!("v3 units: {e}")))?,
+                    None => {
+                        return Err(ParseError::ValidationError(
                         "con_spec_version >= 3 requires metadata \"units\" with length and energy"
                             .into(),
                     ));
-                }
-            }
-        }
-
-        // Single pass over the JSON object: collect sections, capture the
-        // validate flag, copy the rest into metadata. Folds the previous
-        // pre-extract get(validate) + re-iterate pattern into one walk.
-        let mut sections: Vec<String> = Vec::new();
-        let mut metadata = BTreeMap::new();
-        let mut sections_declared = false;
-        let mut validate = false;
-        for (k, v) in json_obj {
-            match k.as_str() {
-                meta::CON_SPEC_VERSION => {}
-                meta::SECTIONS => {
-                    sections_declared = true;
-                    let arr = v.as_array().ok_or_else(|| {
-                        metadata_json_error("sections must be an array of strings")
-                    })?;
-                    sections.reserve(arr.len());
-                    for entry in arr {
-                        let s = entry.as_str().ok_or_else(|| {
-                            metadata_json_error("sections must be an array of strings")
-                        })?;
-                        sections.push(s.to_string());
                     }
                 }
-                meta::VALIDATE => {
-                    validate = match v {
-                        Value::Bool(b) => *b,
-                        _ => return Err(metadata_json_error("validate must be a boolean")),
-                    };
-                    metadata.insert(k.clone(), v.clone());
-                }
-                _ => {
-                    metadata.insert(k.clone(), v.clone());
+            }
+
+            // Single pass over the JSON object: collect sections, capture the
+            // validate flag, copy the rest into metadata. Folds the previous
+            // pre-extract get(validate) + re-iterate pattern into one walk.
+            let mut sections: Vec<String> = Vec::new();
+            let mut metadata = BTreeMap::new();
+            let mut sections_declared = false;
+            let mut validate = false;
+            for (k, v) in json_obj {
+                match k.as_str() {
+                    meta::CON_SPEC_VERSION => {}
+                    meta::SECTIONS => {
+                        sections_declared = true;
+                        let arr = v.as_array().ok_or_else(|| {
+                            metadata_json_error("sections must be an array of strings")
+                        })?;
+                        sections.reserve(arr.len());
+                        for entry in arr {
+                            let s = entry.as_str().ok_or_else(|| {
+                                metadata_json_error("sections must be an array of strings")
+                            })?;
+                            sections.push(s.to_string());
+                        }
+                    }
+                    meta::VALIDATE => {
+                        validate = match v {
+                            Value::Bool(b) => *b,
+                            _ => return Err(metadata_json_error("validate must be a boolean")),
+                        };
+                        metadata.insert(k.clone(), v.clone());
+                    }
+                    _ => {
+                        metadata.insert(k.clone(), v.clone());
+                    }
                 }
             }
-        }
 
-        // Strict-mode schema check fires only when the file requested
-        // it. Hot-path parses (validate=false) skip the per-key match.
-        if validate {
-            validate_metadata_schema(json_obj)?;
-        }
+            // Strict-mode schema check fires only when the file requested
+            // it. Hot-path parses (validate=false) skip the per-key match.
+            if validate {
+                validate_metadata_schema(json_obj)?;
+            }
 
-        (ver, metadata, sections, validate, sections_declared)
-    } else {
-        // Legacy file: no JSON metadata line.
-        (1_u32, BTreeMap::new(), Vec::new(), false, false)
-    };
+            (ver, metadata, sections, validate, sections_declared)
+        } else {
+            // Legacy file: no JSON metadata line.
+            (1_u32, BTreeMap::new(), Vec::new(), false, false)
+        };
     let prebox2 = prebox2_raw.to_string();
 
     let boxl_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
@@ -667,14 +667,7 @@ pub fn parse_single_frame<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(coord_line, 4, 5, &defaults, &mut vals)?;
             let (fixed, atom_id) = if validate {
-                parse_identity_columns(
-                    coord_line,
-                    "coordinate",
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?
+                parse_identity_columns(coord_line, "coordinate", 3, 4, 5, header.spec_version)?
             } else {
                 (
                     decode_fixed_bitmask_for_spec(vals[3] as u8, header.spec_version),
@@ -726,7 +719,9 @@ fn validate_header_geometry(
     natm_types: usize,
     natms_per_type: &[usize],
 ) -> Result<(), ParseError> {
-    if boxl.iter().any(|length| !length.is_finite() || *length <= 0.0)
+    if boxl
+        .iter()
+        .any(|length| !length.is_finite() || *length <= 0.0)
         || angles
             .iter()
             .any(|angle| !angle.is_finite() || *angle <= 0.0 || *angle >= 180.0)
@@ -814,9 +809,11 @@ fn parse_identity_columns(
     let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
         ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
     })?;
-    Ok((decode_fixed_bitmask_for_spec(fixed_flag, spec_version), atom_id))
+    Ok((
+        decode_fixed_bitmask_for_spec(fixed_flag, spec_version),
+        atom_id,
+    ))
 }
-
 
 fn validate_section_component(
     section: &str,
@@ -922,7 +919,9 @@ pub fn parse_velocity_section<'a>(
             .trim();
 
         // "Velocities of Component N" line
-        let comp_line = lines.next_line().ok_or(ParseError::IncompleteVelocitySection)?;
+        let comp_line = lines
+            .next_line()
+            .ok_or(ParseError::IncompleteVelocitySection)?;
         // Validate it looks like a velocity header (optional strictness)
         if !comp_line.contains("Velocities of Component") {
             return Err(ParseError::IncompleteVelocitySection);
@@ -940,20 +939,16 @@ pub fn parse_velocity_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let vel_line = lines.next_line().ok_or(ParseError::IncompleteVelocitySection)?;
+            let vel_line = lines
+                .next_line()
+                .ok_or(ParseError::IncompleteVelocitySection)?;
             // Column 5 (atom_index) is optional in velocity lines too.
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(vel_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    vel_line,
-                    "velocities",
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(vel_line, "velocities", 3, 4, 5, header.spec_version)?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -994,7 +989,9 @@ pub fn parse_force_section<'a>(
             .ok_or(ParseError::IncompleteForceSection)?
             .trim();
 
-        let comp_line = lines.next_line().ok_or(ParseError::IncompleteForceSection)?;
+        let comp_line = lines
+            .next_line()
+            .ok_or(ParseError::IncompleteForceSection)?;
         if !comp_line.contains("Forces of Component") {
             return Err(ParseError::IncompleteForceSection);
         }
@@ -1005,19 +1002,15 @@ pub fn parse_force_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let force_line = lines.next_line().ok_or(ParseError::IncompleteForceSection)?;
+            let force_line = lines
+                .next_line()
+                .ok_or(ParseError::IncompleteForceSection)?;
             let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(force_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    force_line,
-                    "forces",
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(force_line, "forces", 3, 4, 5, header.spec_version)?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1062,7 +1055,9 @@ pub fn parse_energy_section<'a>(
             .ok_or(ParseError::IncompleteEnergySection)?
             .trim();
 
-        let comp_line = lines.next_line().ok_or(ParseError::IncompleteEnergySection)?;
+        let comp_line = lines
+            .next_line()
+            .ok_or(ParseError::IncompleteEnergySection)?;
         if !comp_line.contains("Energies of Component") {
             return Err(ParseError::IncompleteEnergySection);
         }
@@ -1073,20 +1068,16 @@ pub fn parse_energy_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let energy_line = lines.next_line().ok_or(ParseError::IncompleteEnergySection)?;
+            let energy_line = lines
+                .next_line()
+                .ok_or(ParseError::IncompleteEnergySection)?;
             // Single energy column, plus optional fixed flag and atom_id
             // for round-trip identity checks.
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    energy_line,
-                    "energies",
-                    1,
-                    2,
-                    3,
-                    header.spec_version,
-                )?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(energy_line, "energies", 1, 2, 3, header.spec_version)?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1221,14 +1212,8 @@ fn parse_scalar_atom_section<'a>(
             let defaults = [0.0, 0.0, atom_idx as f64];
             let vals = parse_line_of_range_f64(data_line, 1, 3, &defaults)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    data_line,
-                    section_name,
-                    1,
-                    2,
-                    3,
-                    header.spec_version,
-                )?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(data_line, section_name, 1, 2, 3, header.spec_version)?;
                 validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
@@ -1299,13 +1284,7 @@ pub fn parse_magmom_section<'a>(
         }
         if validate {
             validate_section_component(
-                "Magmoms",
-                type_idx,
-                atom_idx,
-                symbol,
-                comp_line,
-                header,
-                atom_data,
+                "Magmoms", type_idx, atom_idx, symbol, comp_line, header, atom_data,
             )?;
         }
 
@@ -1317,14 +1296,8 @@ pub fn parse_magmom_section<'a>(
             let mut vals = [0.0f64; 5];
             parse_line_of_range_f64_stack(mm_line, 4, 5, &defaults, &mut vals)?;
             if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    mm_line,
-                    SECTION_MAGMOMS,
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?;
+                let (fixed, atom_id) =
+                    parse_identity_columns(mm_line, SECTION_MAGMOMS, 3, 4, 5, header.spec_version)?;
                 validate_section_atom_identity(
                     SECTION_MAGMOMS,
                     atom_idx,
@@ -2207,7 +2180,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_bonds_metadata_round_trip_in_header() {
-        use crate::types::{meta, Bond};
+        use crate::types::{Bond, meta};
         let lines = vec![
             "PREBOX1",
             "{\"con_spec_version\":2,\"bonds\":[[0,1],{\"i\":0,\"j\":2,\"order\":1}]}",

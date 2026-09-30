@@ -32,8 +32,7 @@ fn codecov_multi_flag_config_is_wired() {
 
 #[test]
 fn codecov_yml_declares_binding_flags() {
-    let yml = std::fs::read_to_string(repo_root().join("codecov.yml"))
-        .expect("read codecov.yml");
+    let yml = std::fs::read_to_string(repo_root().join("codecov.yml")).expect("read codecov.yml");
     for flag in ["rust", "python", "julia", "fortran"] {
         assert!(
             yml.contains(&format!("name: {flag}")) || yml.contains(&format!("name: {flag}\n")),
@@ -53,7 +52,8 @@ fn coverage_workflow_uploads_each_flag_soft_fail() {
     for flag in ["rust", "python", "julia", "fortran"] {
         let needle = format!("flags: {flag}");
         assert!(
-            wf.lines().any(|l| l.contains(&needle) && !l.trim_start().starts_with('#')),
+            wf.lines()
+                .any(|l| l.contains(&needle) && !l.trim_start().starts_with('#')),
             "coverage.yml missing active upload flags: {flag}"
         );
     }

@@ -271,11 +271,17 @@ fn getting_started_scope() {
         "getting-started must point at migration how-to"
     );
     assert!(
-        t.contains("Diátaxis") || t.contains("Diataxis") || t.contains("How-to") || t.contains("howto"),
+        t.contains("Diátaxis")
+            || t.contains("Diataxis")
+            || t.contains("How-to")
+            || t.contains("howto"),
         "getting-started should map Diátaxis destinations"
     );
     assert!(
-        t.contains("chemfiles") || t.contains("hourglass") || t.contains("rkr_") || t.contains("readcon-db"),
+        t.contains("chemfiles")
+            || t.contains("hourglass")
+            || t.contains("rkr_")
+            || t.contains("readcon-db"),
         "getting-started should mention more of the stack than bare I/O"
     );
     assert_no_ai_tells(&t, "getting-started.org");
@@ -285,7 +291,9 @@ fn getting_started_scope() {
 fn one_good_tutorial_is_learning_oriented() {
     let t = read("tutorial.org");
     assert!(
-        t.contains("learning-oriented") || t.contains("Diátaxis *tutorial*") || t.contains("One Good"),
+        t.contains("learning-oriented")
+            || t.contains("Diátaxis *tutorial*")
+            || t.contains("One Good"),
         "tutorial.org must declare tutorial role"
     );
     assert!(
@@ -296,9 +304,14 @@ fn one_good_tutorial_is_learning_oriented() {
         t.contains("tiny_multi_cuh2.con") || t.contains("resources/test/"),
         "tutorial must use in-repo fixtures"
     );
-    assert!(!t.contains("iter_frames"), "Python API is iter_con, not iter_frames");
     assert!(
-        t.contains("run-tutorial-core") || t.contains("tutorial_core.py") || t.contains("org-babel"),
+        !t.contains("iter_frames"),
+        "Python API is iter_con, not iter_frames"
+    );
+    assert!(
+        t.contains("run-tutorial-core")
+            || t.contains("tutorial_core.py")
+            || t.contains("org-babel"),
         "tutorial.org must point at the Org Babel CI runner"
     );
     assert_no_ai_tells(&t, "tutorial.org");
@@ -396,7 +409,9 @@ fn benchmarks_what_we_measure() {
 fn index_and_readme_src() {
     let index = read("index.org");
     assert!(index.contains("CON") || index.contains(".con"));
-    assert!(index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language"));
+    assert!(
+        index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language")
+    );
     assert!(
         index.contains("Put CON") || index.contains("put CON") || index.contains("everywhere"),
         "index must state CON-everywhere ambition"
@@ -489,12 +504,11 @@ fn has_orgmode_md_href(t: &str) -> bool {
         && t.lines().any(|line| {
             line.contains("docs/orgmode/")
                 && line.contains(".md")
-                && line
-                    .split("docs/orgmode/")
-                    .skip(1)
-                    .any(|rest| rest.split(|c: char| c == ')' || c == '"' || c.is_whitespace())
+                && line.split("docs/orgmode/").skip(1).any(|rest| {
+                    rest.split(|c: char| c == ')' || c == '"' || c.is_whitespace())
                         .next()
-                        .is_some_and(|p| p.ends_with(".md")))
+                        .is_some_and(|p| p.ends_with(".md"))
+                })
         })
 }
 
@@ -503,10 +517,7 @@ fn docs_custom_css_single_frame_chrome() {
     let css = read_repo("docs/source/_static/custom.css");
     // registered
     let conf = read_repo("docs/source/conf.py");
-    assert!(
-        conf.contains("custom.css"),
-        "conf.py must load custom.css"
-    );
+    assert!(conf.contains("custom.css"), "conf.py must load custom.css");
     // no second admonition left-bar (theme already paints one)
     assert!(
         !css.contains("border-left: 4px solid var(--rc-indigo)"),
