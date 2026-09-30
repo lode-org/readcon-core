@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.16.1 - 2026-09-30
+#### Bug Fixes
+- reject a negative or non-finite spread - (a8778e6) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (c874d06) - github-actions[bot]
+
+- - -
+
 ## v0.16.0 - 2026-09-30
 #### Features
 - (**ffi**) spreads through the C and C++ API, with a C++ round trip - (a626b86) - *HaoZeke*
@@ -32,15 +40,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 - - -
 
-## Unreleased
-#### Features
-- (**sections**) add the optional per-atom `displacements` section (3-vector dx dy dz in Angstrom, same layout as `magmoms`) across the parser, writer, builder, PEG grammar, and Cap'n Proto schema (`ConAtom` @24-@27, `ConFrameData` @19)
-- (**python**) `Atom.dx` / `dy` / `dz`, `Atom.has_displacement`, and `ConFrame.has_displacements`
-- (**sections**) add the optional per-atom `spreads` section (root-mean-square spread sx sy sz in Angstrom about the written coordinates, a non-negative standard deviation per axis, 0 for a classical point; same layout as `displacements`) across the parser, writer, builder, PEG grammar, and Cap'n Proto schema (`ConAtom` @28-@31, `ConFrameData` @20)
-- (**ffi**) `rkr_*spread*` builder and frame accessors in the C and C++ API
-- (**python**) `Atom.sx` / `sy` / `sz`, `Atom.has_spread`, `ConFrame.has_spreads`, and the `[N, 3]` array `ConFrame.spread`
-
-- - -
 ## v0.14.11 - 2026-09-27
 #### Features
 - (**writer**) add an exact round-trip float format - (a75b176) - *HaoZeke*
