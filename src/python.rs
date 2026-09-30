@@ -67,12 +67,20 @@ pub struct PyAtomDatum {
     pub dy: Option<f64>,
     #[pyo3(get, set)]
     pub dz: Option<f64>,
+    /// Root-mean-square spread components (Angstrom) about `x`, `y`, `z`; populated when the file
+    /// declares a `"spreads"` section.
+    #[pyo3(get, set)]
+    pub sx: Option<f64>,
+    #[pyo3(get, set)]
+    pub sy: Option<f64>,
+    #[pyo3(get, set)]
+    pub sz: Option<f64>,
 }
 
 #[pymethods]
 impl PyAtomDatum {
     #[new]
-    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None, charge=None, spin=None, mx=None, my=None, mz=None, dx=None, dy=None, dz=None))]
+    #[pyo3(signature = (symbol, x, y, z, fixed=None, atom_id=0, mass=None, vx=None, vy=None, vz=None, fx=None, fy=None, fz=None, energy=None, charge=None, spin=None, mx=None, my=None, mz=None, dx=None, dy=None, dz=None, sx=None, sy=None, sz=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         symbol: String,
@@ -97,6 +105,9 @@ impl PyAtomDatum {
         dx: Option<f64>,
         dy: Option<f64>,
         dz: Option<f64>,
+        sx: Option<f64>,
+        sy: Option<f64>,
+        sz: Option<f64>,
     ) -> Self {
         PyAtomDatum {
             symbol,
@@ -121,6 +132,9 @@ impl PyAtomDatum {
             dx,
             dy,
             dz,
+            sx,
+            sy,
+            sz,
         }
     }
 
@@ -150,6 +164,11 @@ impl PyAtomDatum {
         self.dx.is_some() && self.dy.is_some() && self.dz.is_some()
     }
 
+    #[getter]
+    fn has_spread(&self) -> bool {
+        self.sx.is_some() && self.sy.is_some() && self.sz.is_some()
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Atom(symbol='{}', x={}, y={}, z={}, atom_id={})",
@@ -176,6 +195,10 @@ impl PyAtomDatum {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
+        let (sx, sy, sz) = match atom.spread {
+            Some([x, y, z]) => (Some(x), Some(y), Some(z)),
+            None => (None, None, None),
+        };
         PyAtomDatum {
             symbol: atom.symbol.to_string(),
             x: atom.x,
@@ -199,6 +222,9 @@ impl PyAtomDatum {
             dx,
             dy,
             dz,
+            sx,
+            sy,
+            sz,
         }
     }
 }
@@ -416,6 +442,14 @@ impl PyConFrame {
             .py_atoms(py)?
             .first()
             .is_some_and(PyAtomDatum::has_displacement))
+    }
+
+    #[getter]
+    fn has_spreads(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self
+            .py_atoms(py)?
+            .first()
+            .is_some_and(PyAtomDatum::has_spread))
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -1109,6 +1143,13 @@ impl PyConFrame {
                     py_atom.dz.unwrap_or(0.0),
                 ]);
             }
+            if py_atom.has_spread() {
+                builder.with_spread([
+                    py_atom.sx.unwrap_or(0.0),
+                    py_atom.sy.unwrap_or(0.0),
+                    py_atom.sz.unwrap_or(0.0),
+                ]);
+            }
         }
 
         builder
@@ -1737,6 +1778,9 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 dx: None,
                 dy: None,
                 dz: None,
+                sx: None,
+                sy: None,
+                sz: None,
             }
         })
         .collect();

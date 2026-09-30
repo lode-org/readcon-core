@@ -546,6 +546,39 @@ class TestConFrameConstructor:
         assert reread.atoms[0].dy == pytest.approx(-0.2)
         assert reread.atoms[0].dz == pytest.approx(0.3)
 
+    def test_spreads_write_roundtrip(self):
+        frames = readcon.read_con(_resource("tiny_cuh2_spreads.con"))
+        assert frames[0].has_spreads
+        assert frames[0].atoms[2].has_spread
+        assert frames[0].atoms[2].sx == pytest.approx(0.125)
+        assert frames[0].atoms[0].mz is None
+        text = readcon.write_con_string(frames)
+        assert "Spreads of Component 2" in text
+        reread = readcon.read_con_string(text)[0]
+        assert reread.has_spreads
+        assert reread.atoms[2].sx == pytest.approx(0.125)
+        assert reread.atoms[2].sy == pytest.approx(0.25)
+        assert reread.atoms[3].sz == pytest.approx(0.0625)
+        assert reread.atoms[0].sz == pytest.approx(0.0)
+
+    def test_spreads_authored_from_python(self):
+        atoms = [
+            readcon.Atom(
+                symbol="H", x=0.0, y=0.0, z=0.0, mass=1.008, sx=0.1, sy=0.2, sz=0.3
+            ),
+        ]
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=atoms,
+        )
+        assert frame.has_spreads
+        reread = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+        assert reread.has_spreads
+        assert reread.atoms[0].sx == pytest.approx(0.1)
+        assert reread.atoms[0].sy == pytest.approx(0.2)
+        assert reread.atoms[0].sz == pytest.approx(0.3)
+
 
 class TestMass:
     def test_mass_from_file(self):
