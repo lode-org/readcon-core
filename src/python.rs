@@ -630,6 +630,32 @@ impl PyConFrame {
         self.displacements_array(py)
     }
 
+    /// Returns the per-atom root-mean-square spreads (Angstrom) about the
+    /// written coordinates as a contiguous numpy `[N, 3] float64` array,
+    /// or `None` when the frame declares no `"spreads"` section.
+    fn spreads_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        let atoms = self.py_atoms(py)?;
+        if !atoms.first().is_some_and(PyAtomDatum::has_spread) {
+            return Ok(None);
+        }
+        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            data.push(atom.sx.unwrap_or(0.0));
+            data.push(atom.sy.unwrap_or(0.0));
+            data.push(atom.sz.unwrap_or(0.0));
+        }
+        let array = Array2::from_shape_vec((atoms.len(), 3), data)
+            .map_err(|e| PyValueError::new_err(format!("spreads_array shape error: {e}")))?;
+        Ok(Some(array.into_pyarray(py)))
+    }
+
+    /// `[N, 3]` spreads, or `None`; the same array as
+    /// `spreads_array()`.
+    #[getter]
+    fn spread<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        self.spreads_array(py)
+    }
+
     /// Returns the per-atom energy contributions as a contiguous
     /// numpy `[N] float64` array. Returns `None` if the frame has no
     /// per-atom energies (only a frame-total energy in metadata).
