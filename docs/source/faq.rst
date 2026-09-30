@@ -19,21 +19,21 @@ lose the mask or the identity on the first rewrite.
 
 .. table::
 
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | On disk                  | Role                                                                                      |
-    +==========================+===========================================================================================+
-    | Cell + angles            | Periodic box                                                                              |
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | Type-grouped coordinates | Stable ``head``-able layout                                                               |
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | Column 4 fixed mask      | Per-direction constraints (bitmask 0-7)                                                   |
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching                                      |
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | Optional sections        | Velocities, forces, energies, charges, spins, magmoms, displacements (v2/v3 ``sections``) |
-    +--------------------------+-------------------------------------------------------------------------------------------+
-    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …                              |
-    +--------------------------+-------------------------------------------------------------------------------------------+
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | On disk                  | Role                                                                                               |
+    +==========================+====================================================================================================+
+    | Cell + angles            | Periodic box                                                                                       |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | Type-grouped coordinates | Stable ``head``-able layout                                                                        |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | Column 4 fixed mask      | Per-direction constraints (bitmask 0-7)                                                            |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | Column 5 ``atom_id``     | Pre-group index for NEB / dimer / reference matching                                               |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | Optional sections        | Velocities, forces, energies, charges, spins, magmoms, displacements, spreads (v2/v3 ``sections``) |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
+    | Line-2 JSON              | ``con_spec_version``, ``energy``, ``neb_bead``, ``units``, …                                       |
+    +--------------------------+----------------------------------------------------------------------------------------------------+
 
 Saddle, dimer, and NEB pipelines already depend on that payload.
 ``readcon-core`` is the spec v2-v3 reader/writer and the hourglass
@@ -148,20 +148,20 @@ and their order. Known names on the v2/v3 surface:
 
 .. table::
 
-    +------------------------------------------------------------+--------------------------------+
-    | Name                                                       | Layout                         |
-    +============================================================+================================+
-    | ``velocities``, ``forces``, ``magmoms``, ``displacements`` | 3-vector + fixed + ``atom_id`` |
-    +------------------------------------------------------------+--------------------------------+
-    | ``energies``, ``charges``, ``spins``                       | scalar + fixed + ``atom_id``   |
-    +------------------------------------------------------------+--------------------------------+
+    +-------------------------------------------------------------------------+--------------------------------+
+    | Name                                                                    | Layout                         |
+    +=========================================================================+================================+
+    | ``velocities``, ``forces``, ``magmoms``, ``displacements``, ``spreads`` | 3-vector + fixed + ``atom_id`` |
+    +-------------------------------------------------------------------------+--------------------------------+
+    | ``energies``, ``charges``, ``spins``                                    | scalar + fixed + ``atom_id``   |
+    +-------------------------------------------------------------------------+--------------------------------+
 
 ::
 
     {"con_spec_version":2,"sections":["velocities","forces","charges"]}
 
 Optional physics blocks such as ``charges`` / ``spins`` / ``magmoms`` /
-``displacements`` use the same
+``displacements`` / ``spreads`` use the same
 declared-section channel; they do not require a new ``con_spec_version``.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
@@ -198,7 +198,7 @@ integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
-Can I store forces, energies, charges, spins, magmoms, displacements?
+Can I store forces, energies, charges, spins, magmoms, displacements, spreads?
 ---------------------------------------------------------------------
 
 Yes. Per-frame total energy lives in JSON under the ``energy`` key.
@@ -214,6 +214,9 @@ Per-atom data uses declared ``sections``:
 
 - **Displacement vectors** (3-vector, Angstrom, e.g. a normal mode):
   ``displacements``
+- **Spreads** (3-vector, Angstrom): ``spreads``, the root-mean-square
+  spread of each atom along x, y, z about its written coordinates; a
+  standard deviation, 0 for a classical point
 
 ::
 
@@ -226,11 +229,12 @@ contributions, declare ``energies`` alongside ``forces``:
 
     {"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
 
-Charges, spins, magmoms, and displacements use the same wire format: list
+Charges, spins, magmoms, displacements, and spreads use the same wire format: list
 them in ``sections`` and emit the matching component blocks (see
 :doc:`spec`). Example fixtures:
 ``resources/test/tiny_cuh2_charges_spins_magmoms.con``,
-``resources/test/tiny_cuh2_displacements.con``.
+``resources/test/tiny_cuh2_displacements.con``,
+``resources/test/tiny_cuh2_spreads.con``.
 
 The per-frame ``energy`` metadata key SHOULD equal the sum of the
 per-atom ``energies`` section when both are present. Frames with forces
