@@ -11,14 +11,14 @@
 
 * Install
 
-Pick *one* language. Version pins match this tree (=0.15.0=).
+Pick *one* language. Version pins match this tree (=0.16.0=).
 
 | Package | Install | Destination |
 |---------+---------+-------------|
-| Python CON I/O | =pip install 'readcon==0.15.0'=  | [[https://pypi.org/project/readcon/][PyPI]] |
-| Python + chemfiles | =pip install 'readcon-chemfiles==0.15.0'=  | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] (do not mix with lean =readcon= in the same venv) |
-| Rust CON I/O | =cargo add readcon-core@0.15.0=  | [[https://docs.rs/readcon-core][docs.rs]] |
-| Rust + chemfiles | =cargo add readcon-core@0.15.0 --features chemfiles=  | same crate |
+| Python CON I/O | =pip install 'readcon==0.16.0'=  | [[https://pypi.org/project/readcon/][PyPI]] |
+| Python + chemfiles | =pip install 'readcon-chemfiles==0.16.0'=  | [[https://pypi.org/project/readcon-chemfiles/][PyPI]] (do not mix with lean =readcon= in the same venv) |
+| Rust CON I/O | =cargo add readcon-core@0.16.0=  | [[https://docs.rs/readcon-core][docs.rs]] |
+| Rust + chemfiles | =cargo add readcon-core@0.16.0 --features chemfiles=  | same crate |
 | readcon-db | =cargo add readcon-db= / =pip install readcon-db= | [[https://lode-org.github.io/readcon-db/docs/][docs]] · [[https://pypi.org/project/readcon-db/][PyPI]] |
 | Julia | from this repo: =julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'= | [[file:bindings.org][bindings]] |
 | C / C++ / Fortran | CMake FetchContent, Meson wrap, or =pkg-config readcon-core= | [[file:bindings.org][bindings]] |
@@ -27,26 +27,26 @@ Pick *one* language. Version pins match this tree (=0.15.0=).
 ** Python: CON I/O
 
 #+begin_src shell
-pip install 'readcon==0.15.0'
+pip install 'readcon==0.16.0'
 #+end_src
 
 ** Python: CON I/O plus format conversion
 
 #+begin_src shell
-pip install 'readcon-chemfiles==0.15.0'
+pip install 'readcon-chemfiles==0.16.0'
 # do not also install lean readcon in the same venv
 #+end_src
 
 ** Rust: CON I/O
 
 #+begin_src shell
-cargo add readcon-core@0.15.0
+cargo add readcon-core@0.16.0
 #+end_src
 
 ** Rust: with conversion
 
 #+begin_src shell
-cargo add readcon-core@0.15.0 --features chemfiles
+cargo add readcon-core@0.16.0 --features chemfiles
 #+end_src
 
 ** readcon-db
@@ -81,15 +81,15 @@ after a prefix install. The cxx tarball on the GitHub Release is
 include(FetchContent)
 FetchContent_Declare(
   readcon-core
-  URL https://github.com/lode-org/readcon-core/releases/download/v0.15.0/readcon-core-cxx-0.15.0.tar.gz
+  URL https://github.com/lode-org/readcon-core/releases/download/v0.16.0/readcon-core-cxx-0.16.0.tar.gz
   URL_HASH SHA256=94df61bccfe2518a95b76041cf9042ef9f331d781ca400de2bfef5c070e1309a
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(app PRIVATE readcon-core::shared)
 #+end_src
 
-The slim cxx tarball on the =v0.15.0= GitHub Release is the FetchContent
-URL. A vendor tarball (=readcon-core-cxx-0.15.0-vendor.tar.gz=) ships
+The slim cxx tarball on the =v0.16.0= GitHub Release is the FetchContent
+URL. A vendor tarball (=readcon-core-cxx-0.16.0-vendor.tar.gz=) ships
 crates for offline builds. The Meson wrap file is
 =packaging/wrapdb/readcon-core.wrap= on that same release.
 

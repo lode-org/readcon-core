@@ -2,6 +2,19 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.16.0 - 2026-09-30
+#### Features
+- (**ffi**) spreads through the C and C++ API, with a C++ round trip - (a626b86) - *HaoZeke*
+- (**python**) spreads as an [N, 3] array through ConFrame.spread - (1c46a80) - *HaoZeke*
+- (**python**) expose spreads on Atom and ConFrame - (4b58c7e) - *HaoZeke*
+- (**sections**) add optional per-atom spreads section - (94029bc) - *HaoZeke*
+#### Documentation
+- (**spec**) document the spreads section - (aa8a2d9) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (ecf6552) - github-actions[bot]
+
+- - -
+
 ## v0.15.0 - 2026-09-30
 #### Features
 - (**ffi**) displacements through the C and C++ API, with a C++ round trip - (1384f87) - *HaoZeke*

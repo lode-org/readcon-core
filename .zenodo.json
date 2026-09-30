@@ -1,6 +1,6 @@
 {
   "title": "readcon-core: a CON/convel reader/writer with FFI bindings",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "upload_type": "software",
   "publication_date": "2026-08-24",
   "creators": [
@@ -21,10 +21,10 @@
   "license": "MIT",
   "related_identifiers": [
     {
-      "identifier": "https://github.com/lode-org/readcon-core/tree/v0.15.0",
+      "identifier": "https://github.com/lode-org/readcon-core/tree/v0.16.0",
       "relation": "isSupplementTo",
       "scheme": "url"
     }
   ],
-  "notes": "Deposit the v0.15.0 software tag only. Do not attach the manuscript, cover letters, or reviewer correspondence. Do not mint a new version for prose edits."
+  "notes": "Deposit the v0.16.0 software tag only. Do not attach the manuscript, cover letters, or reviewer correspondence. Do not mint a new version for prose edits."
 }
