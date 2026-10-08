@@ -17,13 +17,13 @@
      - 7,471,060
      - coords + velocities (50×)
    * - ``parse_100_frames``
-     - 30,197,866
+     - 30,197,888
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
      - 6,564,648
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
-     - 12,577,795
+     - 12,577,835
      - 218-atom frame (20×)
    * - ``float_fast_float2``
      - 19,500,744
@@ -32,7 +32,7 @@
      - 32,891,229
      - 5-col str::parse (10k)
    * - ``write_100_frames``
-     - 17,046,232
+     - 17,046,234
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
      - 9,664,427
@@ -44,7 +44,7 @@
      - 6,072,905
      - selection ``name O`` (50×)
 
-Generated **2026-10-05T11:38:14Z** from commit ``228d12b``
+Generated **2026-10-08T10:09:23Z** from commit ``4bb5e3e``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
