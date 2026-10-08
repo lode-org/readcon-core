@@ -98,7 +98,7 @@ namespace readcon {
 /**
  * Additive-change minor for the public C ABI.
  */
-#define RKR_ABI_VERSION_MINOR 0
+#define RKR_ABI_VERSION_MINOR 1
 
 /**
  * Layout revision for opaque handles and exported records.
@@ -803,6 +803,13 @@ void rkr_free_string(char *s);
  * filename_c must be valid. The caller takes ownership of the returned writer.
  */
 struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
+
+/** Preserves every finite binary64 value. Free with free_rkr_writer. */
+struct RKRConFrameWriter *create_writer_from_path_round_trip_c(const char *filename_c);
+
+/** Flush buffered CON data. Returns RKR_STATUS_IO_ERROR on write failure. */
+enum RKRStatus rkr_writer_flush(struct RKRConFrameWriter *writer_handle);
+
 
 /**
  * Frees the memory for an `RKRConFrameWriter`, closing the associated file.

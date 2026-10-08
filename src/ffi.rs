@@ -12,7 +12,7 @@ use std::ptr;
 /// Breaking-change major for the public C ABI.
 pub const RKR_ABI_VERSION_MAJOR: u32 = 1;
 /// Additive-change minor for the public C ABI.
-pub const RKR_ABI_VERSION_MINOR: u32 = 0;
+pub const RKR_ABI_VERSION_MINOR: u32 = 1;
 /// Layout revision for opaque handles and exported records.
 pub const RKR_ABI_LAYOUT_REVISION: u32 = 1;
 
@@ -37,7 +37,7 @@ pub extern "C" fn rkr_abi_layout_revision() -> u32 {
 /// Returns the stable human-readable ABI negotiation stamp.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_abi_stamp() -> *const c_char {
-    const STAMP: &[u8] = b"readcon-core/abi-1.0/layout-1\0";
+    const STAMP: &[u8] = b"readcon-core/abi-1.1/layout-1\0";
     STAMP.as_ptr() as *const c_char
 }
 
@@ -1046,6 +1046,49 @@ pub unsafe extern "C" fn create_writer_from_path_c(
         Err(_) => ptr::null_mut(),
     }
 }
+/// Creates a CON writer that preserves every finite binary64 value.
+/// The caller owns the handle and must call `free_rkr_writer`.
+///
+/// # Safety
+/// filename_c must be a valid NUL-terminated path or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
+    filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
+    let filename = match unsafe { cstr_path(filename_c) } {
+        Some(s) => s,
+        None => return ptr::null_mut(),
+    };
+    match File::create(filename) {
+        Ok(file) => {
+            let writer: RkrWriter = ConFrameWriter::with_float_format(
+                Box::new(file),
+                crate::writer::FloatFormat::RoundTrip,
+            );
+            Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter
+        }
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Flushes buffered CON data and reports write errors.
+///
+/// # Safety
+/// writer_handle must be a live writer handle or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_flush(
+    writer_handle: *mut RKRConFrameWriter,
+) -> RKRStatus {
+    let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
+        Some(w) => w,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    match writer.flush() {
+        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(_) => RKRStatus::RKR_STATUS_IO_ERROR,
+    }
+}
+
 /// Frees the memory for an `RKRConFrameWriter`, closing the associated file.
 ///
 /// # Safety
