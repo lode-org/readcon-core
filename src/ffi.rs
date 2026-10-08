@@ -1076,9 +1076,7 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
 /// # Safety
 /// writer_handle must be a live writer handle or null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rkr_writer_flush(
-    writer_handle: *mut RKRConFrameWriter,
-) -> RKRStatus {
+pub unsafe extern "C" fn rkr_writer_flush(writer_handle: *mut RKRConFrameWriter) -> RKRStatus {
     let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
         Some(w) => w,
         None => return RKRStatus::RKR_STATUS_NULL_POINTER,
