@@ -104,9 +104,11 @@ impl MetadataCacheEntry {
             && self.has_displacements == has_displacements
             && self.has_spreads == has_spreads
             && self.metadata.len() == metadata.len()
-            && self.metadata.iter().zip(metadata).all(|((ka, a), (kb, b))| {
-                ka == kb && metadata_value_eq(a, b)
-            })
+            && self
+                .metadata
+                .iter()
+                .zip(metadata)
+                .all(|((ka, a), (kb, b))| ka == kb && metadata_value_eq(a, b))
     }
 }
 
@@ -123,7 +125,8 @@ fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
         }
         (Value::Object(a), Value::Object(b)) => {
             a.len() == b.len()
-                && a.iter().all(|(key, a)| b.get(key).is_some_and(|b| metadata_value_eq(a, b)))
+                && a.iter()
+                    .all(|(key, a)| b.get(key).is_some_and(|b| metadata_value_eq(a, b)))
         }
         _ => a == b,
     }
