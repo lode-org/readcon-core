@@ -553,6 +553,11 @@ impl<W: Write> ConFrameWriter<W> {
         self.writer.write_all(&self.scratch)
     }
 
+    /// Flushes buffered data to the underlying writer and reports errors.
+    pub fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+
     /// Writes all frames from an iterator to the output stream.
     ///
     /// This is the most convenient way to write a multi-frame file.
