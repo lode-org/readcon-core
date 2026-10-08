@@ -103,7 +103,29 @@ impl MetadataCacheEntry {
             && self.has_magmoms == has_magmoms
             && self.has_displacements == has_displacements
             && self.has_spreads == has_spreads
-            && &self.metadata == metadata
+            && self.metadata.len() == metadata.len()
+            && self.metadata.iter().zip(metadata).all(|((ka, a), (kb, b))| {
+                ka == kb && metadata_value_eq(a, b)
+            })
+    }
+}
+
+// Cache equality preserves the numeric representation, including signed zero,
+// throughout nested JSON values.
+fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (a, b) {
+        (Value::Number(a), Value::Number(b)) if a.is_f64() && b.is_f64() => {
+            a.as_f64().map(f64::to_bits) == b.as_f64().map(f64::to_bits)
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| metadata_value_eq(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter().all(|(key, a)| b.get(key).is_some_and(|b| metadata_value_eq(a, b)))
+        }
+        _ => a == b,
     }
 }
 
