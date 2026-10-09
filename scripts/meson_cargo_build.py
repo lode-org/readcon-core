@@ -97,10 +97,18 @@ def main(argv: list[str]) -> int:
         crate_cmd = cmd + ["--crate-type", crate_type]
         if extra:
             crate_cmd += ["--", *extra]
-        subprocess.check_call(crate_cmd, cwd=src_root, env=env)
-    built = Path(target_dir) / profile
-    _copy_artifact(built, shared_name, out_shared, _SHARED_ALIASES)
-    _copy_artifact(built, static_name, out_static, _STATIC_ALIASES)
+        crate_env = env.copy()
+        if crate_type == "staticlib":
+            # Keep runtime object boundaries so a consumer can link several
+            # Rust archives without duplicate symbols from merged LTO units.
+            cargo_profile = "RELEASE" if profile == "release" else "DEV"
+            crate_env[f"CARGO_PROFILE_{cargo_profile}_LTO"] = "off"
+        subprocess.check_call(crate_cmd, cwd=src_root, env=crate_env)
+        built = Path(target_dir) / profile
+        if crate_type == "cdylib":
+            _copy_artifact(built, shared_name, out_shared, _SHARED_ALIASES)
+        else:
+            _copy_artifact(built, static_name, out_static, _STATIC_ALIASES)
     return 0
 
 

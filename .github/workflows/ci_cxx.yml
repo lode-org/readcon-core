@@ -74,8 +74,9 @@ jobs:
           meson setup build/meson-dist \
             --prefix="$GITHUB_WORKSPACE/meson-prefix" \
             --libdir=lib \
-            --buildtype=release
+            --buildtype=release -Dwith_tests=true
           meson compile -C build/meson-dist
+          meson test -C build/meson-dist --no-rebuild --print-errorlogs runtime-dependency shared-library-identity
           meson install -C build/meson-dist
           test -f meson-prefix/include/readcon-core.h
           test -f meson-prefix/lib/pkgconfig/readcon-core.pc
