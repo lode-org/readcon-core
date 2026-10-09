@@ -581,7 +581,7 @@ executable('my_app', 'main.c', dependencies: readcon_dep)
 include(FetchContent)
 FetchContent_Declare(
   readcon-core
-  URL https://github.com/lode-org/readcon-core/releases/download/v0.16.1/readcon-core-cxx-0.16.1.tar.gz
+  URL https://github.com/lode-org/readcon-core/releases/download/v0.16.2/readcon-core-cxx-0.16.2.tar.gz
   URL_HASH SHA256=94df61bccfe2518a95b76041cf9042ef9f331d781ca400de2bfef5c070e1309a
 )
 FetchContent_MakeAvailable(readcon-core)

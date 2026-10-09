@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.16.2 - 2026-10-09
+
+### Fixed
+
+- Keep shared-library identity when building both C library forms.
+- Preserve runtime object boundaries in static archives linked with other Rust libraries.
+- Preserve signed zero in cached metadata.
+
+### Added
+
+- Expose exact CON output and checked flushing through the C API.
+
 ## v0.16.1 - 2026-09-30
 #### Bug Fixes
 - reject a negative or non-finite spread - (a8778e6) - *HaoZeke*

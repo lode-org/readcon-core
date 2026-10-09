@@ -129,7 +129,7 @@ assert!(report.n_atoms_last > 0);
 Chemfiles-linked install for foreign formats:
 
 #+begin_src shell
-pip install 'readcon-chemfiles==0.16.1'   # or: maturin develop --features python,chemfiles
+pip install 'readcon-chemfiles==0.16.2'   # or: maturin develop --features python,chemfiles
 #+end_src
 
 #+begin_src python

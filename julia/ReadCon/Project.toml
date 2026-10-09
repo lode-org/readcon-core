@@ -1,6 +1,6 @@
 name = "ReadCon"
 uuid = "db9801e4-4fe9-4ef2-a903-b9b3faaab74b"
-version = "0.16.1"
+version = "0.16.2"
 
 [compat]
 julia = "1.10"
