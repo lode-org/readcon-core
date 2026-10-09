@@ -58,7 +58,9 @@ fn edited_mode_and_spread_sections_survive_a_trajectory() {
     builder.clear_atom_displacement(1).unwrap();
     builder.clear_atom_spread(0).unwrap();
     frames.push(builder.clone().build().unwrap());
-    builder.clear_displacements_section().clear_spreads_section();
+    builder
+        .clear_displacements_section()
+        .clear_spreads_section();
     frames.push(builder.clone().build().unwrap());
     builder.set_atom_displacement(0, displacement).unwrap();
     builder.set_atom_spread(1, spread).unwrap();
@@ -74,10 +76,19 @@ fn edited_mode_and_spread_sections_survive_a_trajectory() {
             }
         }
         for (index, mode_atom, spread_atom) in [(1, 1, 0), (4, 0, 1)] {
-            assert_eq!(decoded[index].atom_data[mode_atom].displacement, Some(displacement));
-            assert_eq!(decoded[index].atom_data[1 - mode_atom].displacement, Some([0.0; 3]));
+            assert_eq!(
+                decoded[index].atom_data[mode_atom].displacement,
+                Some(displacement)
+            );
+            assert_eq!(
+                decoded[index].atom_data[1 - mode_atom].displacement,
+                Some([0.0; 3])
+            );
             assert_eq!(decoded[index].atom_data[spread_atom].spread, Some(spread));
-            assert_eq!(decoded[index].atom_data[1 - spread_atom].spread, Some([0.0; 3]));
+            assert_eq!(
+                decoded[index].atom_data[1 - spread_atom].spread,
+                Some([0.0; 3])
+            );
         }
         for atom in &decoded[2].atom_data {
             assert_eq!(atom.displacement, Some([0.0; 3]));
