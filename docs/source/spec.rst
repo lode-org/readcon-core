@@ -1018,12 +1018,13 @@ The reference implementation surface lands in v0.11.0:
   ``readcon::ConFrameBuilder``, with ``std::optional`` return for
   optional-vector getters).
 
-- Python: ``readcon.Atom`` already exposes per-atom fields with
-  ``#[pyo3(get, set)]`` so Python users have always been able to do
-  ``frame.atoms[i].x = ...`` /  ``.fx = ...`` /  ``.energy = ...`` for
-  in-place mutation. This is the recommended Python pattern; no
-  separate ``readcon.ConFrameBuilder`` class is exposed because the
-  Python module is value-based rather than handle-based.
+- Python: ``frame[i]`` and ``frame.atoms[i]`` are views onto the
+  frame's columns, with the same fields as ``readcon.Atom``.
+  ``frame.atoms[i].x = ...`` / ``.fx = ...`` / ``.energy = ...``
+  writes those columns. ``xyz`` and ``coords_array()`` return a fresh
+  copy of the same store. No separate ``readcon.ConFrameBuilder``
+  class is exposed because the Python module is value-based rather
+  than handle-based.
 
 - Julia: equivalently, ``ReadCon.Atom`` fields are mutable Julia
   struct fields; mutate directly and call ``write_con(path, frame)``.
