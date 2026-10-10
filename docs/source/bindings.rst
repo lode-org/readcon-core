@@ -308,7 +308,14 @@ forces.
 ``readcon.iter_con(path)``
     Return a Python iterator over frames.
     The iterator API avoids indexing into ``read_con(path)`` for
-    first-frame and loop-based workflows.
+    first-frame and loop-based workflows. Each frame's ``source_text``
+    (also ``raw``) is the exact substring of the file for that frame,
+    including separator whitespace that preceded it. Concatenating
+    ``source_text`` over the iterator reproduces the file.
+    ``read_con`` and ``read_all_frames`` leave ``source_text`` as
+    ``None``. An atom edit, a sequence edit, or a metadata setter sets
+    it back to ``None``. Assigning ``frame.metadata[key]`` does not,
+    because that writes the live dict. ``==`` does not compare this text.
 
 ``readcon.symbol_to_atomic_number(symbol)``
     Atomic number for a
