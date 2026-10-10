@@ -221,12 +221,13 @@ Header-only RAII wrappers with lazy caching:
 Python wrapper (python.rs)
 --------------------------
 
-The PyO3 layer stores ``ConFrame.atoms`` as a live Python list and
-``ConFrame.metadata`` as a live Python dict. Writers validate metadata
-as JSON-compatible values and convert the live atom list into a Rust
-``ConFrame`` at write time. ``read_first_frame(path)`` uses the Rust
-first-frame reader; ``iter_con(path)`` exposes a Python iterator for
-loop-oriented frame processing.
+The PyO3 layer keeps one atom store: the Rust columns on ``ConFrame``,
+plus the symbol and fixed-flag rows. ``frame[i]`` and ``frame.atoms``
+are views over that store. ``ConFrame.metadata`` is a live Python dict.
+Writers validate metadata as JSON-compatible values and rebuild a Rust
+``ConFrame`` from the columns at write time. ``read_first_frame(path)``
+uses the Rust first-frame reader; ``iter_con(path)`` exposes a Python
+iterator for loop-oriented frame processing.
 
 ASE conversion maps all-fixed atoms to ``FixAtoms`` and partial masks to
 ``FixCartesian``, preserving ``atom_id`` through a named ASE array.
