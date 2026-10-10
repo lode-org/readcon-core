@@ -32,7 +32,7 @@ task.
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Count frames (skip walk)                                       | ``iterators::count_frames``                    | ``readcon.count_frames``                                           | n/a                                                                | ``count_frames``                                                 | ``rkr_count_frames``                                              | ``count_frames``                           |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Coordinates on a loaded frame                                  | SoA on ``ConFrame``                            | ``frame.xyz`` (SoA copy); ``coords_array()`` walks ``.atoms``      | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
+    | Coordinates on a loaded frame                                  | SoA on ``ConFrame``                            | one column store; ``frame[i]`` writes, ``xyz`` copies              | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Parallel multi-frame parse                                     | yes (``parallel``; 48 KiB gate; ``n_threads``) | yes (``n_threads``; wheels enable ``parallel``)                    | no (iterator walk)                                                 | yes (optional ``n_threads``; needs a ``parallel`` lib)           | yes (``rkr_read_all_frames_n_threads``)                           | yes (``read_all_frames(path, n)``)         |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
@@ -257,7 +257,7 @@ Types
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live list), has\_velocities, has\_forces, has\_energies
+    atoms (live sequence of views), has\_velocities, has\_forces, has\_energies
     (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
     energy, frame\_index, time, timestep, neb\_bead, neb\_band.
@@ -268,6 +268,38 @@ Types
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
+    Sequence methods: ``__iter__``, ``__reversed__``, integer and slice
+    ``__getitem__`` / ``__setitem__`` / ``__delitem__``, ``__contains__``,
+    ``__eq__``, ``append``, ``insert``, ``extend``. ``len(frame)`` is the
+    atom count, and ``bool(frame)`` follows that length.
+
+One atom store
+~~~~~~~~~~~~~~
+
+Positions, velocities, forces, masses, ids, and the optional sections live
+in the Rust columns. ``frame[i]`` and ``frame.atoms[i]`` are views that
+read and write those columns, so ``frame[0].x = 12.5`` and the next
+``frame.xyz[0, 0]`` or ``coords_array()[0, 0]`` are the same number.
+``xyz``, ``vel``, ``frc``, and the ``*_array()`` methods return a fresh
+copy. Changing that copy does not write back.
+
+``append``, ``insert``, ``extend``, and slice or item replacement rebuild
+the frame in CON type-group order, the order ``write_con`` emits. A symbol
+that is already present joins that group. A view's index is a position in
+that order, not a stable identity: after a structural edit it names
+whatever atom is now at that index.
+
+Two atoms of the same symbol whose masses disagree can still be
+constructed. They stay in insertion order, and ``write_con`` reports
+``inconsistent masses``.
+
+``frame == other`` is exact equality of physical content: cell, angles,
+symbols, positions, velocities, forces, masses, and fixed flags, in stored
+order. Floats use ``==``, so NaN is not equal to NaN, and a missing
+velocity is not equal to a zero velocity. The comparison does not use the
+original file text (a corpus store such as readcon-db keeps that substring
+separately), metadata, atom ids, or sections other than velocities and
+forces.
 
 ``readcon.read_first_frame(path)``
     Parse and return only the first
