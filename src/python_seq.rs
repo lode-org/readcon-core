@@ -571,8 +571,10 @@ impl PyConFrame {
         self.inner.atom_data.len()
     }
 
-    /// Hook for edits that make a cached source substring stale.
-    fn note_mutated(&mut self) {}
+    /// Drop the iterator's source substring. A later write would not emit it.
+    fn note_mutated(&mut self) {
+        self.source_text = None;
+    }
 
     fn ensure_index(&self, index: usize) -> PyResult<()> {
         if index >= self.n_atoms() {
@@ -667,6 +669,7 @@ impl PyConFrame {
             spec_version: self.spec_version,
             metadata,
             inner,
+            source_text: None,
         })
     }
 
