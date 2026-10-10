@@ -151,6 +151,21 @@ class TestAtomConstructor:
 
 
 class TestConFrameConstructor:
+    def test_frame_iterates_its_atoms(self):
+        atoms = [
+            readcon.Atom(symbol="Cu", x=0.25, y=1.5, z=2.5, atom_id=0),
+            readcon.Atom(symbol="H", x=3.0, y=4.0, z=5.0, atom_id=1),
+        ]
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=atoms,
+        )
+        assert [atom.symbol for atom in frame] == ["Cu", "H"]
+        assert frame[0].x == pytest.approx(0.25)
+        assert frame[-1].symbol == "H"
+        assert len(frame) == 2
+
     def test_build_frame(self):
         atoms = [
             readcon.Atom(

@@ -1,17 +1,17 @@
 use ndarray::Array2;
 use numpy::{IntoPyArray, PyArray1, PyArray2};
-use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
+use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::iterators::ConFrameIterator;
-use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
+use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -464,6 +464,23 @@ impl PyConFrame {
 
     fn __len__(&self, py: Python<'_>) -> usize {
         self.atoms.bind(py).len()
+    }
+
+    /// Atoms in file order. The file cursor is `iter_con`, not this.
+    fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
+        self.atoms.bind(py).try_iter()
+    }
+
+    fn __getitem__<'py>(&self, py: Python<'py>, index: isize) -> PyResult<Bound<'py, PyAny>> {
+        let atoms = self.atoms.bind(py);
+        let n = atoms.len() as isize;
+        let resolved = if index < 0 { n + index } else { index };
+        if resolved < 0 || resolved >= n {
+            return Err(pyo3::exceptions::PyIndexError::new_err(
+                "atom index out of range",
+            ));
+        }
+        atoms.get_item(resolved as usize)
     }
 
     // --- NumPy array views ---
