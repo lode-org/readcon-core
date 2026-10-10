@@ -316,6 +316,9 @@ pub struct PyConFrame {
     /// `atom_data` holds symbols and fixed flags and is kept in step with
     /// the columns on every write.
     inner: ConFrame,
+    /// Exact source substring from `iter_con`. `None` for constructed
+    /// frames, batch reads, and after a mutation that would rewrite the frame.
+    source_text: Option<String>,
 }
 
 include!("python_seq.rs");
@@ -350,6 +353,7 @@ impl PyConFrame {
             spec_version: crate::CON_SPEC_VERSION,
             metadata,
             inner,
+            source_text: None,
         })
     }
 
@@ -361,7 +365,28 @@ impl PyConFrame {
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
         self.metadata = json_map_to_py_dict(py, &py_metadata_to_json_map(metadata)?)?;
+        self.note_mutated();
         Ok(())
+    }
+
+    /// Exact substring `iter_con` consumed for this frame, including the
+    /// separator whitespace that preceded it and, on the last frame, any
+    /// trailing separator whitespace. `None` when the frame was not produced
+    /// by `iter_con`, and `None` again after a mutation. `raw` is the same
+    /// string.
+    ///
+    /// Assigning an item on the live `metadata` dict does not clear this.
+    /// That path is the dict itself. Use a metadata setter, or edit an atom,
+    /// when the stored text should be dropped.
+    #[getter]
+    fn source_text(&self) -> Option<&str> {
+        self.source_text.as_deref()
+    }
+
+    /// Alias of `source_text`.
+    #[getter]
+    fn raw(&self) -> Option<&str> {
+        self.source_text.as_deref()
     }
 
     #[getter]
@@ -798,6 +823,7 @@ impl PyConFrame {
             metadata.insert(key, value);
         }
         self.metadata = json_map_to_py_dict(py, &metadata)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -808,12 +834,14 @@ impl PyConFrame {
         self.metadata
             .bind(py)
             .set_item(key, json_value_to_py(py, &Value::Number(number))?)?;
+        self.note_mutated();
         Ok(())
     }
 
     /// Set a string metadata key.
     fn set_string_metadata(&mut self, py: Python<'_>, key: &str, value: &str) -> PyResult<()> {
         self.metadata.bind(py).set_item(key, value)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -825,6 +853,7 @@ impl PyConFrame {
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, py: Python<'_>, idx: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::FRAME_INDEX, idx)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -841,12 +870,14 @@ impl PyConFrame {
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, py: Python<'_>, bead: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::NEB_BEAD, bead)?;
+        self.note_mutated();
         Ok(())
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, py: Python<'_>, band: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::NEB_BAND, band)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -1018,7 +1049,18 @@ impl PyConFrame {
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
             inner: frame.clone(),
+            source_text: None,
         })
+    }
+
+    fn from_con_frame_with_source(
+        py: Python<'_>,
+        frame: &ConFrame,
+        source_text: Option<String>,
+    ) -> PyResult<Self> {
+        let mut out = Self::from_con_frame(py, frame)?;
+        out.source_text = source_text;
+        Ok(out)
     }
 
     fn py_atoms(&self, _py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
@@ -1136,6 +1178,10 @@ struct PyConFrameIterator {
     pos: usize,
 }
 
+fn is_frame_separator(byte: u8) -> bool {
+    byte == b'\n' || byte == b'\r' || byte == b' '
+}
+
 #[pymethods]
 impl PyConFrameIterator {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -1146,11 +1192,12 @@ impl PyConFrameIterator {
         if self.pos >= self.contents.len() {
             return Ok(None);
         }
-        // Skip leading blank lines between frames.
+        // Separator bytes (space, CR, LF) between frames are not a new user
+        // line. Keep them on the following frame's source text. Tabs stay in
+        // the slice so the parser sees the same bytes as before.
+        let lead = self.pos;
         let bytes = self.contents.as_bytes();
-        while self.pos < bytes.len()
-            && (bytes[self.pos] == b'\n' || bytes[self.pos] == b'\r' || bytes[self.pos] == b' ')
-        {
+        while self.pos < bytes.len() && is_frame_separator(bytes[self.pos]) {
             self.pos += 1;
         }
         if self.pos >= self.contents.len() {
@@ -1160,10 +1207,18 @@ impl PyConFrameIterator {
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
-                self.pos += consumed;
-                Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
+                let span_off = (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize);
+                let mut raw_end = self.pos + span_off + span.len();
+                if self.contents[raw_end..].bytes().all(is_frame_separator) {
+                    raw_end = self.contents.len();
+                }
+                let raw = self.contents[lead..raw_end].to_owned();
+                self.pos = raw_end;
+                Ok(Some(PyConFrame::from_con_frame_with_source(
+                    py,
+                    &frame,
+                    Some(raw),
+                )?))
             }
             Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
             None => {
@@ -1704,6 +1759,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         spec_version: crate::CON_SPEC_VERSION,
         metadata,
         inner,
+        source_text: None,
     })
 }
 

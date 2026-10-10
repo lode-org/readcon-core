@@ -1,6 +1,7 @@
 """One atom store on ConFrame, plus the sequence protocol."""
 
 import os
+import tempfile
 
 import pytest
 
@@ -245,3 +246,93 @@ class TestSequence:
         assert symbols(frame) == ["Cu", "Cu", "H"]
         assert view.symbol == "Cu"
         assert view.x == 2.0
+
+
+def _file_text(name):
+    with open(_resource(name), encoding="utf-8") as handle:
+        return handle.read()
+
+
+class TestSourceText:
+    def test_iterator_text_matches_the_file(self):
+        for name in ("tiny_cuh2.con", "tiny_multi_cuh2.con", "tiny_cuh2_forces.con"):
+            file_text = _file_text(name)
+            frames = list(readcon.iter_con(_resource(name)))
+            assert frames
+            pieces = [frame.source_text for frame in frames]
+            assert all(piece is not None for piece in pieces)
+            assert "".join(pieces) == file_text
+            assert [frame.raw for frame in frames] == pieces
+            cursor = 0
+            for piece in pieces:
+                assert file_text[cursor : cursor + len(piece)] == piece
+                cursor += len(piece)
+
+    def test_odd_whitespace_is_kept_verbatim(self):
+        # A blank line after coordinates starts a legacy velocity section, so
+        # the extra whitespace here is leading separator bytes, spaces inside
+        # lines, and trailing spaces on the last coordinate line.
+        base = _file_text("tiny_cuh2.con")
+        first = base.replace("Random Number Seed\n", "Random Number Seed  \n", 1)
+        first = first.replace("    0.9045", "      0.9045", 1)
+        first = first[:-1] + "   \n"
+        second = base[:-1] + "  \n"
+        odd = "\n \n" + first + second
+        with tempfile.NamedTemporaryFile("w", suffix=".con", delete=False) as handle:
+            handle.write(odd)
+            temp_path = handle.name
+        frames = list(readcon.iter_con(temp_path))
+        os.unlink(temp_path)
+        assert len(frames) == 2
+        assert "".join(frame.source_text for frame in frames) == odd
+        assert frames[0].source_text.startswith("\n \n")
+        assert "Random Number Seed  \n" in frames[0].source_text
+        assert "      0.9045" in frames[0].source_text
+        assert frames[0].source_text.endswith("   \n")
+        assert frames[1].source_text.startswith("Random Number Seed\n")
+        assert frames[1].source_text.endswith("  \n")
+
+    def test_batch_reads_have_no_source_text(self):
+        path = _resource("tiny_cuh2.con")
+        assert readcon.read_first_frame(path).source_text is None
+        assert readcon.read_con(path)[0].raw is None
+        built = make_frame(atom("H", 0.0))
+        assert built.source_text is None
+        assert built[0:1].raw is None
+
+    def test_mutation_drops_source_text(self):
+        frame = next(readcon.iter_con(_resource("tiny_cuh2.con")))
+        assert frame.source_text
+        frame[0].x = 12.5
+        assert frame.source_text is None
+        assert frame.raw is None
+
+        again = next(readcon.iter_con(_resource("tiny_cuh2.con")))
+        kept = again.source_text
+        again.metadata["note"] = "item assignment"
+        assert again.source_text == kept
+        again.set_energy(1.5)
+        assert again.source_text is None
+
+    def test_equality_ignores_source_text(self):
+        src = next(readcon.iter_con(_resource("tiny_cuh2.con")))
+        copied = [
+            readcon.Atom(
+                symbol=item.symbol,
+                x=item.x,
+                y=item.y,
+                z=item.z,
+                fixed=list(item.fixed),
+                mass=item.mass,
+                atom_id=item.atom_id,
+            )
+            for item in src
+        ]
+        built = readcon.ConFrame(
+            cell=list(src.cell),
+            angles=list(src.angles),
+            atoms=copied,
+        )
+        assert built == src
+        assert built.source_text is None
+        assert src.raw
