@@ -136,3 +136,58 @@ fn v3_0_velocities_stay_in_the_natural_unit() {
     assert!((scale - 10.180505710759414).abs() < 1e-9, "{scale}");
     assert!((velocity_scale_to_natural(NATURAL_TIME_UNIT).unwrap() - 1.0).abs() < 1e-12);
 }
+
+#[test]
+fn class_names_and_write_errors_cover_every_variant() {
+    use readcon_core::error::{LocatedParseError, ParseError};
+    use readcon_core::writer::WriteError;
+    use std::error::Error;
+    use std::io;
+
+    let cases = [
+        (
+            ParseError::IncompleteVelocitySection,
+            "IncompleteVelocitySection",
+        ),
+        (ParseError::IncompleteForceSection, "IncompleteForceSection"),
+        (
+            ParseError::IncompleteEnergySection,
+            "IncompleteEnergySection",
+        ),
+        (ParseError::UnsupportedVersion(0), "UnsupportedVersion"),
+        (
+            ParseError::IndexOutOfBounds { index: 3, len: 1 },
+            "IndexOutOfBounds",
+        ),
+        (
+            ParseError::MassMismatch {
+                symbol: "H".into(),
+                first_mass: 1.0,
+                found_mass: 2.0,
+                atom_index: 1,
+            },
+            "MassMismatch",
+        ),
+    ];
+    for (err, name) in cases {
+        assert_eq!(err.class_name(), name);
+        let located = LocatedParseError::new(err.clone(), 0, 0);
+        assert_eq!(located.line, err.line());
+        assert!(!located.to_string().is_empty());
+        assert!(Error::source(&located).is_some());
+    }
+    assert_eq!(ParseError::UnsupportedVersion(0).line(), 2);
+    assert_eq!(ParseError::IncompleteVelocitySection.line(), 0);
+
+    let write_io = WriteError::from(io::Error::new(io::ErrorKind::Other, "disk"));
+    assert!(write_io.to_string().contains("disk"));
+    assert!(std::error::Error::source(&write_io).is_some());
+    let write_fmt = WriteError::Format(ParseError::InvalidCount("x".into()));
+    assert!(write_fmt.to_string().contains("invalid count"));
+    assert!(std::error::Error::source(&write_fmt).is_some());
+    let back: io::Error = WriteError::Format(ParseError::InvalidUnits("t".into())).into();
+    assert_eq!(back.kind(), io::ErrorKind::InvalidData);
+    let back_io: io::Error =
+        WriteError::from(io::Error::new(io::ErrorKind::NotFound, "gone")).into();
+    assert_eq!(back_io.kind(), io::ErrorKind::NotFound);
+}
