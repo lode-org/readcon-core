@@ -733,23 +733,27 @@ class ConFrameWriter {
     /**
      * @brief Constructs a writer and opens the specified file for writing.
      * @param path The path to the output .con file.
-     * @param precision Number of decimal places for floating-point output (default 6).
      * @throws std::runtime_error if the file cannot be created.
+     *
+     * The default numeric text is binary64 round-trip. Pass `precision`
+     * for a fixed number of digits after the decimal.
      */
-    explicit ConFrameWriter(const std::filesystem::path &path,
-                            uint8_t precision = 6);
+    explicit ConFrameWriter(const std::filesystem::path &path);
+    explicit ConFrameWriter(const std::filesystem::path &path, uint8_t precision);
 
     /**
      * @brief Constructs a writer that compresses the output stream.
      * @param path The path to the output .con file.
      * @param compression Compression codec for the output stream.
-     * @param precision Number of decimal places for floating-point output (default 6).
+     * @param precision Digits after the decimal. Omit it for round-trip text.
      * @throws std::runtime_error if the writer cannot be created, including
      *         when `Compression::Zstd` is requested but the library was built
      *         without the `zstd` feature (`READCON_CORE_HAS_ZSTD` undefined).
      */
     explicit ConFrameWriter(const std::filesystem::path &path,
-                            Compression compression, uint8_t precision = 6);
+                            Compression compression);
+    explicit ConFrameWriter(const std::filesystem::path &path,
+                            Compression compression, uint8_t precision);
 
     /**
      * @brief Picks a compression codec from a path's file extension.
@@ -1534,17 +1538,49 @@ inline bool ConFrame::has_bonds() const {
 
 // --- Implementation of ConFrameWriter methods ---
 
-inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
-                                      uint8_t precision) {
-    if (precision == 6) {
-        writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
-    } else {
-        writer_handle_.reset(
-            create_writer_from_path_with_precision_c(path.string().c_str(), precision));
-    }
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
+    writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
     if (!writer_handle_) {
         throw std::runtime_error("Failed to create writer for file: " +
                                  path.string());
+    }
+}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      uint8_t precision) {
+    writer_handle_.reset(
+        create_writer_from_path_with_precision_c(path.string().c_str(), precision));
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " +
+                                 path.string());
+    }
+}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      Compression compression) {
+    const std::string p = path.string();
+    RKRConFrameWriter *raw = nullptr;
+    switch (compression) {
+    case Compression::None:
+        raw = create_writer_from_path_c(p.c_str());
+        break;
+    case Compression::Gzip:
+        raw = create_writer_gzip_c(p.c_str());
+        break;
+    case Compression::Zstd:
+#if defined(READCON_CORE_HAS_ZSTD)
+        raw = create_writer_zstd_c(p.c_str());
+        break;
+#else
+        throw std::runtime_error(
+            "Zstd compression requires readcon-core built with the zstd "
+            "feature (READCON_CORE_HAS_ZSTD undefined): " +
+            p);
+#endif
+    }
+    writer_handle_.reset(raw);
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " + p);
     }
 }
 
@@ -1555,21 +1591,14 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     RKRConFrameWriter *raw = nullptr;
     switch (compression) {
     case Compression::None:
-        raw = (precision == 6)
-                  ? create_writer_from_path_c(p.c_str())
-                  : create_writer_from_path_with_precision_c(p.c_str(),
-                                                             precision);
+        raw = create_writer_from_path_with_precision_c(p.c_str(), precision);
         break;
     case Compression::Gzip:
-        raw = (precision == 6)
-                  ? create_writer_gzip_c(p.c_str())
-                  : create_writer_gzip_with_precision_c(p.c_str(), precision);
+        raw = create_writer_gzip_with_precision_c(p.c_str(), precision);
         break;
     case Compression::Zstd:
 #if defined(READCON_CORE_HAS_ZSTD)
-        raw = (precision == 6)
-                  ? create_writer_zstd_c(p.c_str())
-                  : create_writer_zstd_with_precision_c(p.c_str(), precision);
+        raw = create_writer_zstd_with_precision_c(p.c_str(), precision);
         break;
 #else
         throw std::runtime_error(

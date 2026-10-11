@@ -617,9 +617,11 @@ class TestPrecision:
             atoms=atoms,
         )
         output = readcon.write_con_string([frame])
-        # Default precision=6, so only 6 decimal places
         frames2 = readcon.read_con_string(output)
-        assert frames2[0].atoms[0].x == pytest.approx(1.234568, abs=1e-6)
+        assert frames2[0].atoms[0].x == pytest.approx(1.23456789012345, abs=1e-15)
+        rounded = readcon.write_con_string([frame], precision=6)
+        frames6 = readcon.read_con_string(rounded)
+        assert frames6[0].atoms[0].x == pytest.approx(1.234568, abs=1e-6)
 
     def test_high_precision_17(self):
         atoms = [

@@ -6,8 +6,13 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lints:
@@ -15,6 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
       - name: Run prek
         run: uvx prek run -a -vvv

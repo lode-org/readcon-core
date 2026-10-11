@@ -8,8 +8,46 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-/// Default floating-point precision used for writing coordinates, cell dimensions, and masses.
-const DEFAULT_FLOAT_PRECISION: usize = 6;
+/// Failure from [`ConFrameWriter`]. I/O stays distinct from format errors
+/// so `InvalidUnits` and `InvalidCount` remain distinguishable (CON-error.1).
+#[derive(Debug)]
+pub enum WriteError {
+    Io(io::Error),
+    Format(crate::error::ParseError),
+}
+
+impl std::fmt::Display for WriteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WriteError::Io(e) => write!(f, "{e}"),
+            WriteError::Format(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for WriteError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            WriteError::Io(e) => Some(e),
+            WriteError::Format(e) => Some(e),
+        }
+    }
+}
+
+impl From<io::Error> for WriteError {
+    fn from(e: io::Error) -> Self {
+        WriteError::Io(e)
+    }
+}
+
+impl From<WriteError> for io::Error {
+    fn from(e: WriteError) -> Self {
+        match e {
+            WriteError::Io(e) => e,
+            WriteError::Format(err) => io::Error::new(io::ErrorKind::InvalidData, err.to_string()),
+        }
+    }
+}
 
 /// Numeric text representation for CON frame fields.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,7 +61,8 @@ pub enum FloatFormat {
 
 impl Default for FloatFormat {
     fn default() -> Self {
-        Self::DecimalPlaces(DEFAULT_FLOAT_PRECISION)
+        // CON-num.6 (D13): the default writer round-trips binary64.
+        Self::RoundTrip
     }
 }
 
@@ -44,10 +83,9 @@ impl Default for FloatFormat {
 pub struct ConFrameWriter<W: Write> {
     writer: BufWriter<W>,
     float_format: FloatFormat,
-    /// When true: sort metadata keys in JSON, emit sections in canonical
-    /// order (velocities, forces, energies), fixed precision suitable for
-    /// content-stable corpus writes / semantic-ish dedup. Opt-in so default
-    /// writes keep historical float formatting.
+    /// When true: sort metadata keys in JSON and emit sections in canonical
+    /// order (velocities, forces, energies). Opt-in. Float text follows
+    /// `float_format` (round-trip unless the caller asked for decimals).
     canonical: bool,
     /// Cache for the JSON metadata line: when consecutive frames share
     /// the same (spec_version, sections-set, metadata) triple the
@@ -132,6 +170,37 @@ fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
     }
 }
 
+/// CON-section.16. Minor 2 and later must list, in `section_arity`, every
+/// emitted section that minor 1 does not reserve.
+fn require_minor2_section_arity(
+    minor: u64,
+    sections: &[serde_json::Value],
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), WriteError> {
+    if minor < 2 {
+        return Ok(());
+    }
+    for name in sections.iter().filter_map(|value| value.as_str()) {
+        if crate::types::reserved_section_value_arity(name).is_some() {
+            continue;
+        }
+        let listed = metadata
+            .get(meta::SECTION_ARITY)
+            .and_then(|value| value.as_object())
+            .and_then(|obj| obj.get(name))
+            .and_then(|value| value.as_u64())
+            .is_some_and(|n| n >= 1);
+        if !listed {
+            return Err(WriteError::Format(
+                crate::error::ParseError::ValidationError(format!(
+                    "minor >= 2 must list {name} in section_arity"
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
+
 // General implementation for any type that implements `Write`.
 impl<W: Write> ConFrameWriter<W> {
     /// Creates a new `ConFrameWriter` that wraps a given writer.
@@ -168,7 +237,7 @@ impl<W: Write> ConFrameWriter<W> {
     }
 
     /// Opt-in **canonical** serialization: BTree-ordered metadata keys in JSON,
-    /// fixed section order, stable float precision (default 6). Use for corpus
+    /// fixed section order. Use for corpus
     /// materialization and content-stable hashes; not required for on-disk fidelity
     /// of spans preserved from `next_with_raw_span`.
     pub fn canonical(mut self, on: bool) -> Self {
@@ -189,7 +258,7 @@ impl<W: Write> ConFrameWriter<W> {
         self.canonical
     }
 
-    fn refresh_metadata_cache(&mut self, frame: &ConFrame) {
+    fn refresh_metadata_cache(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
         let spec_version = frame.header.spec_version;
         let has_vel = frame.has_velocities();
         let has_frc = frame.has_forces();
@@ -216,7 +285,7 @@ impl<W: Write> ConFrameWriter<W> {
                 )
             });
         if cache_hit {
-            return;
+            return Ok(());
         }
 
         let mut meta_obj = serde_json::Map::new();
@@ -262,19 +331,47 @@ impl<W: Write> ConFrameWriter<W> {
             meta_obj.insert(k.clone(), v.clone());
         }
         if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
-            if let Ok(c) = crate::units::canonicalize_units_object(&u) {
-                meta_obj.insert(meta::UNITS.into(), c);
-            }
+            // D11: an invalid unit fails the write. Do not substitute a default.
+            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
+                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+            })?;
+            meta_obj.insert(meta::UNITS.into(), c);
         }
         if spec_version >= 3 {
-            let need_default = match meta_obj.get(meta::UNITS) {
-                None => true,
-                Some(u) => crate::units::validate_v3_units_metadata(u).is_err(),
-            };
-            if need_default {
-                meta_obj.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
+            match meta_obj.get(meta::UNITS) {
+                None => {
+                    return Err(WriteError::Format(crate::error::ParseError::InvalidUnits(
+                        "con_spec_version >= 3 requires units.length and units.energy".into(),
+                    )));
+                }
+                Some(u) => {
+                    crate::units::validate_v3_units_metadata(u).map_err(|e| {
+                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+                    })?;
+                }
             }
         }
+        let minor = frame
+            .header
+            .metadata
+            .get(meta::CON_SPEC_MINOR)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if spec_version >= 3 && minor >= 1 && has_vel {
+            let time_ok = meta_obj
+                .get(meta::UNITS)
+                .and_then(|u| u.get("time"))
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty());
+            if !time_ok {
+                return Err(WriteError::Format(crate::error::ParseError::InvalidUnits(
+                    "minor >= 1 requires units.time when a velocities section is present".into(),
+                )));
+            }
+        }
+        // A minor of 2 or later lists every section minor 1 does not reserve
+        // (CON-section.16). Reserved names need no entry.
+        require_minor2_section_arity(minor, &sections, &meta_obj)?;
         let serialized = serde_json::Value::Object(meta_obj).to_string();
         self.metadata_cache = Some(MetadataCacheEntry {
             spec_version,
@@ -289,18 +386,58 @@ impl<W: Write> ConFrameWriter<W> {
             metadata: frame.header.metadata.clone(),
             serialized,
         });
+        Ok(())
     }
 
     /// Writes a single `ConFrame` to the output stream.
-    pub fn write_frame(&mut self, frame: &ConFrame) -> io::Result<()> {
+    pub fn write_frame(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
+        let zero_frame = frame.header.natm_types == 0
+            && frame.atom_data.is_empty()
+            && frame.header.natms_per_type.is_empty()
+            && frame.header.masses_per_type.is_empty();
+        if zero_frame && !frame.header.sections.is_empty() {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                "a zero-atom frame cannot declare sections".into(),
+            )));
+        }
+        if !zero_frame
+            && (frame.header.natm_types == 0
+                || frame.atom_data.is_empty()
+                || frame.header.natms_per_type.iter().any(|n| *n == 0))
+        {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                "each per-type count must be >= 1".into(),
+            )));
+        }
+        // Writers emit ids that are unique within the frame (CON-id.3, D9).
+        // Readers accept repeats (CON-id.4) and may keep file order (CON-id.8).
+        let mut seen_ids = std::collections::HashSet::with_capacity(frame.atom_data.len());
+        for atom in &frame.atom_data {
+            if !seen_ids.insert(atom.atom_id) {
+                return Err(WriteError::Format(
+                    crate::error::ParseError::ValidationError(format!(
+                        "atom id {} is repeated in the frame",
+                        atom.atom_id
+                    )),
+                ));
+            }
+        }
         let prec = self.float_format;
-        self.refresh_metadata_cache(frame);
-        let meta_line = self
-            .metadata_cache
-            .as_ref()
-            .expect("metadata_cache populated above")
-            .serialized
-            .clone();
+        let meta_line = if frame.header.spec_version < 2 {
+            // Spec 1 line 2 is free text. Do not re-emit JSON major 0 or 1 (D15).
+            frame.header.prebox_header.metadata_line().to_string()
+        } else {
+            self.refresh_metadata_cache(frame)?;
+            self.metadata_cache
+                .as_ref()
+                .expect("metadata_cache populated above")
+                .serialized
+                .clone()
+        };
+        let (boxl, angles) = match frame.header.lattice_vectors() {
+            Some(vecs) => crate::types::lengths_and_angles(vecs),
+            None => (frame.header.boxl, frame.header.angles),
+        };
         self.scratch.clear();
         {
             let buf = &mut self.scratch;
@@ -308,17 +445,17 @@ impl<W: Write> ConFrameWriter<W> {
             // --- Write the 9-line Header ---
             let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
             let _ = writeln!(buf, "{meta_line}");
-            push_f64(buf, frame.header.boxl[0], prec);
+            push_f64(buf, boxl[0], prec);
             buf.push(b' ');
-            push_f64(buf, frame.header.boxl[1], prec);
+            push_f64(buf, boxl[1], prec);
             buf.push(b' ');
-            push_f64(buf, frame.header.boxl[2], prec);
+            push_f64(buf, boxl[2], prec);
             buf.push(b'\n');
-            push_f64(buf, frame.header.angles[0], prec);
+            push_f64(buf, angles[0], prec);
             buf.push(b' ');
-            push_f64(buf, frame.header.angles[1], prec);
+            push_f64(buf, angles[1], prec);
             buf.push(b' ');
-            push_f64(buf, frame.header.angles[2], prec);
+            push_f64(buf, angles[2], prec);
             buf.push(b'\n');
             let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
             let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
@@ -355,7 +492,7 @@ impl<W: Write> ConFrameWriter<W> {
                         atom.y,
                         atom.z,
                         prec,
-                        encode_fixed_bitmask(atom.fixed),
+                        written_fixed_flag(atom.fixed, frame.header.spec_version),
                         atom.atom_id,
                     );
                 }
@@ -382,7 +519,7 @@ impl<W: Write> ConFrameWriter<W> {
                             vy,
                             vz,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -410,7 +547,7 @@ impl<W: Write> ConFrameWriter<W> {
                             fy,
                             fz,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -436,7 +573,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             e,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -459,7 +596,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             q,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -482,7 +619,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             s,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -507,7 +644,7 @@ impl<W: Write> ConFrameWriter<W> {
                             my,
                             mz,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -532,7 +669,7 @@ impl<W: Write> ConFrameWriter<W> {
                             dy,
                             dz,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -552,13 +689,15 @@ impl<W: Write> ConFrameWriter<W> {
                         let atom = &frame.atom_data[off + i];
                         let [sx, sy, sz] = atom.spread.unwrap_or([0.0; 3]);
                         if !crate::types::spread_row_ok([sx, sy, sz]) {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::InvalidInput,
-                                format!(
-                                    "spreads: atom {} has a negative or non-finite spread",
+                            let err = if sx.is_finite() && sy.is_finite() && sz.is_finite() {
+                                crate::types::invalid_spread(off + i)
+                            } else {
+                                crate::error::ParseError::NonFiniteValue(format!(
+                                    "spreads atom {}",
                                     off + i
-                                ),
-                            ));
+                                ))
+                            };
+                            return Err(WriteError::Format(err));
                         }
                         push_xyz_line(
                             buf,
@@ -566,7 +705,7 @@ impl<W: Write> ConFrameWriter<W> {
                             sy,
                             sz,
                             prec,
-                            encode_fixed_bitmask(atom.fixed),
+                            written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
                         );
                     }
@@ -575,7 +714,8 @@ impl<W: Write> ConFrameWriter<W> {
             }
         }
 
-        self.writer.write_all(&self.scratch)
+        self.writer.write_all(&self.scratch)?;
+        Ok(())
     }
 
     /// Flushes buffered data to the underlying writer and reports errors.
@@ -586,11 +726,22 @@ impl<W: Write> ConFrameWriter<W> {
     /// Writes all frames from an iterator to the output stream.
     ///
     /// This is the most convenient way to write a multi-frame file.
-    pub fn extend<'a>(&mut self, frames: impl Iterator<Item = &'a ConFrame>) -> io::Result<()> {
+    pub fn extend<'a>(
+        &mut self,
+        frames: impl Iterator<Item = &'a ConFrame>,
+    ) -> Result<(), WriteError> {
         for frame in frames {
             self.write_frame(frame)?;
         }
         Ok(())
+    }
+}
+
+fn written_fixed_flag(fixed: [bool; 3], spec_version: u32) -> u8 {
+    if spec_version < 2 {
+        if fixed.iter().any(|axis| *axis) { 1 } else { 0 }
+    } else {
+        encode_fixed_bitmask(fixed)
     }
 }
 
@@ -776,5 +927,27 @@ mod float_format_tests {
                 assert_eq!(got, exp, "v={v:?} prec={prec}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod section_arity_tests {
+    use super::require_minor2_section_arity;
+    use serde_json::json;
+
+    #[test]
+    fn minor2_lists_a_new_section_in_section_arity() {
+        let widgets = vec![json!("widgets")];
+        let err = require_minor2_section_arity(2, &widgets, &serde_json::Map::new()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("section_arity"), "{msg}");
+
+        let mut listed = serde_json::Map::new();
+        listed.insert("section_arity".into(), json!({"widgets": 3}));
+        require_minor2_section_arity(2, &widgets, &listed).unwrap();
+
+        let reserved = vec![json!("velocities"), json!("energies")];
+        require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
+        require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
     }
 }
