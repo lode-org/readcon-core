@@ -7,7 +7,6 @@ kept in the CSV and omitted from the ratio interval.
 
 import csv
 import math
-import os
 import platform
 import random
 import statistics
@@ -58,9 +57,8 @@ def norm_ppf(p: float) -> float:
     phigh = 1 - plow
     if p < plow:
         q = math.sqrt(-2 * math.log(p))
-        return (
-            (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-            / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
         )
     if p > phigh:
         q = math.sqrt(-2 * math.log(1 - p))
@@ -71,7 +69,8 @@ def norm_ppf(p: float) -> float:
     q = p - 0.5
     r = q * q
     return (
-        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
         / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
     )
 
@@ -151,7 +150,9 @@ def main():
     cpu = cpu_model()
     day = date.today().isoformat()
     rustc = subprocess.check_output(["rustc", "--version"], text=True).strip()
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     rows = []
     workloads = ["cuh2x100", "atoms10000"]
     for name in workloads:
@@ -210,7 +211,9 @@ def main():
                 continue
             base_t = got["base"]["seconds"]
             branch_t = got["branch"]["seconds"]
-            pairs.append((got["base"]["bytes"] / branch_t) / (got["base"]["bytes"] / base_t))
+            pairs.append(
+                (got["base"]["bytes"] / branch_t) / (got["base"]["bytes"] / base_t)
+            )
         median, lo, hi = bca_median(pairs)
         print(
             f"{name}: n={len(pairs)} censored={censored} "

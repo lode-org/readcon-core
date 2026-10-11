@@ -2,7 +2,11 @@ name: Python ReadCon
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
     paths:
       - 'src/**'
       - 'tests/python/**'
