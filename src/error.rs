@@ -30,7 +30,9 @@ pub enum ParseError {
     /// Clauses CON-count.1 and CON-error.3 (D4).
     InvalidCount(String),
     /// A unit expression is missing, mistyped, or the wrong dimension.
-    /// Clauses CON-units.9 and CON-units.10 (D11).
+    /// A minor of 1 or later with velocities and no `units.time` is this
+    /// class on read and on write.
+    /// Clauses CON-units.11, CON-units.12, CON-units.13, and CON-units.14 (D11).
     InvalidUnits(String),
     /// Unknown major, or JSON `con_spec_version` 0 or 1.
     /// Clause CON-line2.5 (D15).

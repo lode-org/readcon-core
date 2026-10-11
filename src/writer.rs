@@ -61,7 +61,7 @@ pub enum FloatFormat {
 
 impl Default for FloatFormat {
     fn default() -> Self {
-        // CON-num.5 (D13): the default writer round-trips binary64.
+        // CON-num.6 (D13): the default writer round-trips binary64.
         Self::RoundTrip
     }
 }
@@ -168,6 +168,37 @@ fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
         }
         _ => a == b,
     }
+}
+
+/// CON-section.16. Minor 2 and later must list, in `section_arity`, every
+/// emitted section that minor 1 does not reserve.
+fn require_minor2_section_arity(
+    minor: u64,
+    sections: &[serde_json::Value],
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), WriteError> {
+    if minor < 2 {
+        return Ok(());
+    }
+    for name in sections.iter().filter_map(|value| value.as_str()) {
+        if crate::types::reserved_section_value_arity(name).is_some() {
+            continue;
+        }
+        let listed = metadata
+            .get(meta::SECTION_ARITY)
+            .and_then(|value| value.as_object())
+            .and_then(|obj| obj.get(name))
+            .and_then(|value| value.as_u64())
+            .is_some_and(|n| n >= 1);
+        if !listed {
+            return Err(WriteError::Format(
+                crate::error::ParseError::ValidationError(format!(
+                    "minor >= 2 must list {name} in section_arity"
+                )),
+            ));
+        }
+    }
+    Ok(())
 }
 
 // General implementation for any type that implements `Write`.
@@ -338,6 +369,9 @@ impl<W: Write> ConFrameWriter<W> {
                 )));
             }
         }
+        // A minor of 2 or later lists every section minor 1 does not reserve
+        // (CON-section.16). Reserved names need no entry.
+        require_minor2_section_arity(minor, &sections, &meta_obj)?;
         let serialized = serde_json::Value::Object(meta_obj).to_string();
         self.metadata_cache = Some(MetadataCacheEntry {
             spec_version,
@@ -375,8 +409,8 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
-        // Writers emit ids that are unique within the frame (CON-id.4, D9).
-        // Readers still accept repeats and keep file order.
+        // Writers emit ids that are unique within the frame (CON-id.3, D9).
+        // Readers accept repeats (CON-id.4) and may keep file order (CON-id.8).
         let mut seen_ids = std::collections::HashSet::with_capacity(frame.atom_data.len());
         for atom in &frame.atom_data {
             if !seen_ids.insert(atom.atom_id) {
@@ -893,5 +927,27 @@ mod float_format_tests {
                 assert_eq!(got, exp, "v={v:?} prec={prec}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod section_arity_tests {
+    use super::require_minor2_section_arity;
+    use serde_json::json;
+
+    #[test]
+    fn minor2_lists_a_new_section_in_section_arity() {
+        let widgets = vec![json!("widgets")];
+        let err = require_minor2_section_arity(2, &widgets, &serde_json::Map::new()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("section_arity"), "{msg}");
+
+        let mut listed = serde_json::Map::new();
+        listed.insert("section_arity".into(), json!({"widgets": 3}));
+        require_minor2_section_arity(2, &widgets, &listed).unwrap();
+
+        let reserved = vec![json!("velocities"), json!("energies")];
+        require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
+        require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
     }
 }

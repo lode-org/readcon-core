@@ -112,7 +112,7 @@ fn test_writer_precision_default_vs_high() {
     );
     let frame = builder.build().unwrap();
 
-    // Default is RoundTrip (CON-num.5, D13): the binary64 value comes back.
+    // Default is RoundTrip (CON-num.6, D13): the binary64 value comes back.
     let mut buf6: Vec<u8> = Vec::new();
     {
         let mut w = ConFrameWriter::new(&mut buf6);

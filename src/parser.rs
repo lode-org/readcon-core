@@ -275,8 +275,8 @@ fn parse_atom_id_token(token: &str) -> Result<u64, ParseError> {
 }
 
 /// Coordinate row: three finite floats, an integer flag, and an optional id.
-/// Four columns take `default_id` (CON-id.7). Any other width is
-/// `InvalidVectorLength` (CON-num.8).
+/// Four columns take `default_id`, the 0-based position in the frame
+/// (CON-id.9). Any other width is `InvalidVectorLength` (CON-num.9).
 fn parse_coord_row(
     line: &str,
     spec_version: u32,
@@ -412,7 +412,7 @@ fn looks_like_nonfinite(bytes: &[u8], i: usize) -> bool {
     !b.is_ascii_digit() && b != b'.'
 }
 
-/// Case-insensitive, after collapsing each run of spaces (CON-file.4, D17).
+/// Case-insensitive, after collapsing each run of spaces (CON-file.5, D17).
 fn labels_equal(found: &str, expected: &str) -> bool {
     let mut found_words = found.split_ascii_whitespace();
     let mut expected_words = expected.split_ascii_whitespace();
@@ -462,6 +462,15 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
                 "section_arity.{name} must be >= 1"
             )));
         }
+        // Reserved names have a fixed value-field count (CON-section.13).
+        if let Some(expect) = crate::types::reserved_section_value_arity(name)
+            && n != expect
+        {
+            return Err(ParseError::InvalidVectorLength {
+                expected: usize::try_from(expect).unwrap_or(usize::MAX),
+                found: usize::try_from(n).unwrap_or(usize::MAX),
+            });
+        }
     }
     Ok(())
 }
@@ -503,7 +512,8 @@ pub(crate) fn line_is_whitespace(line: &str) -> bool {
 /// Lines 8 and 9 of a type count of 0.
 ///
 /// A token on either line is `InvalidCount`. At end of file, a missing
-/// line is empty (CON-count.4). Mid-file, both lines are required.
+/// line is empty (CON-count.4), and that frame is not `IncompleteHeader`
+/// (CON-frame.3). Mid-file, both lines are required.
 pub(crate) fn read_zero_atom_tail<'a>(
     mut next_line: impl FnMut() -> Option<&'a str>,
 ) -> Result<(), ParseError> {
@@ -801,7 +811,7 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    // CON-file.6: a leading BOM is rejected. It would sit on line 1.
+    // CON-file.2: a leading BOM is rejected. It would sit on line 1.
     if prebox1.starts_with('\u{feff}') {
         return Err(ParseError::ValidationError(
             "file begins with a byte-order mark".into(),
@@ -833,8 +843,9 @@ pub fn parse_frame_header<'a>(
                 return Err(ParseError::UnsupportedVersion(u32::MAX));
             }
             let ver = ver as u32;
-            // JSON majors 0 and 1 are invalid. Unknown majors are refused.
-            // Unknown minors of a known major are accepted (CON-line2.5, D15).
+            // JSON majors 0 and 1 are UnsupportedVersion (CON-line2.5).
+            // An unknown major is UnsupportedVersion (CON-line2.6).
+            // Unknown minors of a known major are accepted (CON-line2.7, CON-status.1).
             if ver == 0 || ver == 1 || ver > crate::CON_SPEC_VERSION {
                 return Err(ParseError::UnsupportedVersion(ver));
             }
@@ -1054,7 +1065,7 @@ pub fn parse_single_frame<'a>(
         for _ in 0..*num_atoms {
             let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
             // Column 5 is optional and defaults to the 0-based position
-            // in the frame (CON-id.7). Flag and id are integer tokens (D8, D9).
+            // in the frame (CON-id.9). Flag and id are integer tokens (D8, D9).
             let (xyz, fixed, atom_id) =
                 parse_coord_row(coord_line, header.spec_version, global_atom_idx)?;
             if f64_positions {
@@ -1230,8 +1241,12 @@ fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
     if n >= 1 { Some(n as usize) } else { None }
 }
 
-/// Skip one unknown section of a newer minor. Each data row must have
-/// exactly `arity` tokens (CON-section.8, CON-section.11).
+/// Skip one unknown section of a newer minor.
+///
+/// `arity` is the value-field count (CON-section.12). Each data row holds
+/// that many values, then the flag, and an optional id, so the row has
+/// `arity + 1` or `arity + 2` tokens (CON-section.14). The label is the
+/// section name under CON-file.5, then `of Component N` (CON-section.15).
 fn skip_unknown_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
@@ -1241,8 +1256,17 @@ fn skip_unknown_section<'a>(
     if !open_section(lines)? {
         return Err(ParseError::IncompleteSection(name.to_string()));
     }
-    for &num_atoms in &header.natms_per_type {
-        if lines.next_line().is_none() || lines.next_line().is_none() {
+    let with_flag = arity.saturating_add(1);
+    let with_id = arity.saturating_add(2);
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        if lines.next_line().is_none() {
+            return Err(ParseError::IncompleteSection(name.to_string()));
+        }
+        let label = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(name.to_string()))?;
+        let expected = format!("{name} of Component {}", type_idx + 1);
+        if !labels_equal(label, &expected) {
             return Err(ParseError::IncompleteSection(name.to_string()));
         }
         for _ in 0..num_atoms {
@@ -1250,11 +1274,13 @@ fn skip_unknown_section<'a>(
                 .next_line()
                 .ok_or_else(|| ParseError::IncompleteSection(name.to_string()))?;
             let found = token_count(row);
-            if found != arity {
-                return Err(ParseError::InvalidVectorLength {
-                    expected: arity,
-                    found,
-                });
+            if found != with_flag && found != with_id {
+                let expected = if found < with_flag {
+                    with_flag
+                } else {
+                    with_id
+                };
+                return Err(ParseError::InvalidVectorLength { expected, found });
             }
         }
     }
@@ -1564,7 +1590,37 @@ pub fn parse_declared_sections<'a>(
         }
         header.sections = sections;
     }
+    reject_velocities_without_time(header)?;
     Ok(applied)
+}
+
+/// CON-units.11. Versions 1, 2, and 3.0 do not require `units.time`
+/// (CON-units.8, CON-units.9). From minor 1 the key is required when a
+/// velocities section is present.
+fn reject_velocities_without_time(header: &FrameHeader) -> Result<(), ParseError> {
+    if header.spec_version < 3 || frame_minor(header) < 1 {
+        return Ok(());
+    }
+    if !header
+        .sections
+        .iter()
+        .any(|name| name == SECTION_VELOCITIES)
+    {
+        return Ok(());
+    }
+    let time_ok = header
+        .metadata
+        .get(meta::UNITS)
+        .and_then(|units| units.get("time"))
+        .and_then(|value| value.as_str())
+        .is_some_and(|unit| !unit.trim().is_empty());
+    if time_ok {
+        Ok(())
+    } else {
+        Err(ParseError::InvalidUnits(
+            "minor >= 1 requires units.time when a velocities section is present".into(),
+        ))
+    }
 }
 
 /// Scalar per-atom section: blank separator + per-type blocks

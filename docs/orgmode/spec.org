@@ -361,14 +361,14 @@ the reference implementation stay in sync.
 | ~NonFiniteValue~ | NaN, Inf, Infinity, or a signed or mixed-case spelling, in every mode. |
 | ~InvalidFixedFlag~ | Column 4 is not a legal integer flag, in every mode. |
 | ~InvalidCount~ | A count field is not an unsigned integer, or a per-type count of 0 is InvalidCount when the type count is 1 or more. A type count of 0 is a legal zero-atom frame. |
-| ~InvalidUnits~ | A unit expression is missing, mistyped, or the wrong dimension. |
+| ~InvalidUnits~ | A unit expression is missing, mistyped, or the wrong dimension. A minor of 1 or later with a velocities section and no =units.time= is this class on read and on write. |
 | ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, section component symbol, section label, or per-row identity columns mismatch. It does not relax ~NonFiniteValue~ or ~InvalidFixedFlag~. A legal zero-atom frame is accepted. |
 | ~UnknownSection(name)~ | A section name is not known and cannot be skipped by ~section_arity~. |
 | ~IncompleteHeader~ | A started frame has too few header lines, other than a type count of 0 at end of file whose lines 8 and 9 are absent. |
 | ~IncompleteFrame~ | Coordinate block ends short. |
 | ~IncompleteSection(name)~ | A declared section is missing or short. |
 | ~InvalidNumberFormat~ | Column 5 or another non-count field is not a decimal number. |
-| ~InvalidVectorLength~ | A row has the wrong number of fields. |
+| ~InvalidVectorLength~ | A row has the wrong number of fields. A reserved =section_arity= entry that is not 3 for a vector or 1 for a scalar is the same class. An unknown-section row holds that many value fields, then a flag, and an optional id. |
 
 Line numbers count from 1. Metadata failures are line 2.
 
@@ -633,8 +633,8 @@ SHALL likewise be dimensionally valid for those quantities.
 
 =default_v3_units_json= supplies =length=, =energy=, and =mass= only.
 It does not supply =time: fs=. A spec 3 frame at minor 1 or newer that
-has a velocities section and no =units.time= is =InvalidUnits=. The
-writer must not invent =time: fs= to fill that gap (D10).
+has a velocities section and no =units.time= is =InvalidUnits= on read
+and on write. The writer must not invent =time: fs= to fill that gap (D10).
 
 Unit expressions follow the same lexical conventions as metatomic-style
 host unit strings: case-insensitive names, =*= / =/= / =^=, and parentheses.
