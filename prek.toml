@@ -23,7 +23,9 @@ exclude = """(?x)(
 repo = "builtin"
 hooks = [
   { id = "trailing-whitespace" },
-  { id = "end-of-file-fixer" },
+  # The natural-unit golden is byte-exact and has no trailing newline.
+  # The zero-atom fixture keeps the two blank lines after the type count.
+  { id = "end-of-file-fixer", exclude = "(?x)(^resources/conformance/natural_time_unit\\.txt$|^resources/conformance/valid/zero_atom\\.con$)" },
   { id = "check-yaml" },
   { id = "check-toml" },
   { id = "check-merge-conflict" },

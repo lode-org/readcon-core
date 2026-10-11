@@ -2,7 +2,11 @@ name: C/C++ distribution
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
   workflow_dispatch:
 

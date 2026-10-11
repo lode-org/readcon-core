@@ -23,6 +23,12 @@ fn round_trip_preserves_every_numeric_section() {
                 [10.001_527_890_189_283, 20.0, 30.0],
                 [89.123_456_789_012_35, 90.0, 90.0],
             );
+            builder
+                .set_metadata_json(&format!(
+                    r#"{{"units":{{"length":"angstrom","energy":"eV","mass":"amu","time":"{}"}}}}"#,
+                    readcon_core::units::NATURAL_TIME_UNIT
+                ))
+                .unwrap();
             builder.set_energy(value);
             builder
                 .add_atom(
