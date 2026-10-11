@@ -123,6 +123,7 @@ ASE =cellpar_to_cell= uses the same orientation by default (=ase/geometry/cell.p
 A type count of 0 is a frame with no atoms.
 Lines 8 and 9 are whitespace only, no coordinate block and no section follow, =sections= is absent or empty, and the legacy velocity fallback does not apply.
 That frame is legal with =validate= true.
+A per-type count of 0 is InvalidCount when the type count is 1 or more.
 ASE 3.29.0 =write_eon(Atoms())= writes type count 0, an empty line 8, and an unterminated empty line 9 (=ase/io/eon.py:277-307=).
 =ase.io.eon.read_eon= then raises =IndexError= at =images[0]= (=ase/io/eon.py:188=). The =StopIteration= from the ninth =next()= is caught inside that function (=:177-179=).
 =ase.io.read(path, format="eon")= raises =StopIteration= from =ase/io/formats.py:821= (=next(_iread(...))= on a read that yields no image).
@@ -333,20 +334,22 @@ Line numbers count from 1. Metadata failures are line 2.
 =IncompleteSection= carries the section name.
 A reader that stops at the first error uses the lowest line number, so threads cannot change which error is reported.
 
-| Class                     | When                                                                 |
-|---------------------------+----------------------------------------------------------------------|
-| =NonFiniteValue=          | NaN, Inf, or a spelling of either, any mode                          |
-| =InvalidFixedFlag=        | Column 4 is not a legal integer flag, any mode                       |
-| =InvalidCount=            | A count field is not an unsigned integer, or a per-type count is 0   |
-| =InvalidUnits=            | Unit expression is missing, mistyped, or the wrong dimension         |
-| =IncompleteHeader=        | A started frame has too few header lines, other than =CON-count.4=   |
-| =IncompleteFrame=         | A coordinate block is shorter than declared                          |
-| =IncompleteSection(name)= | A declared section is missing or short                               |
-| =InvalidNumberFormat=     | Column 5 or another field is not a decimal number                    |
-| =InvalidVectorLength=     | A row has the wrong number of fields, or a reserved arity mismatches |
-| =UnknownSection=          | A section name is not known and cannot be skipped                    |
-| =UnsupportedVersion=      | Unknown major, or JSON major 0 or 1                                  |
-| =ValidationError=         | A =validate= true check failed                                       |
+| Class                     | When                                                                                                                                                          |
+|---------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =MissingSpecVersion=      | Line 2 starts with ={= but omits =con_spec_version=.                                                                                                          |
+| =InvalidMetadataJson=     | Line 2 is malformed JSON, a reserved key has the wrong type, or =validate= true omits =sections=.                                                             |
+| =NonFiniteValue=          | NaN, Inf, or a spelling of either, any mode.                                                                                                                  |
+| =InvalidFixedFlag=        | Column 4 is not a legal integer flag, any mode.                                                                                                               |
+| =InvalidCount=            | A count field is not an unsigned integer, or a per-type count is 0 when the type count is 1 or more. A type count of 0 is a legal zero-atom frame.           |
+| =InvalidUnits=            | A unit expression is missing, mistyped, or the wrong dimension. A minor of 1 or later with velocities and no =units.time= is this class on read and on write. |
+| =IncompleteHeader=        | A started frame has too few header lines, other than =CON-count.4=.                                                                                           |
+| =IncompleteFrame=         | A coordinate block is shorter than declared.                                                                                                                   |
+| =IncompleteSection(name)= | A declared section is missing or short.                                                                                                                        |
+| =InvalidNumberFormat=     | Column 5 or another field is not a decimal number.                                                                                                             |
+| =InvalidVectorLength=     | A row has the wrong number of fields, or a reserved arity is not 3 for a vector or 1 for a scalar. An unknown-section row has that many value fields, then a flag, and an optional id. |
+| =UnknownSection=          | A section name is not known and cannot be skipped.                                                                                                             |
+| =UnsupportedVersion=      | Unknown major, or JSON major 0 or 1.                                                                                                                            |
+| =ValidationError=         | A =validate= true check failed. It does not relax =NonFiniteValue= or =InvalidFixedFlag=. A legal zero-atom frame is accepted.                                  |
 
 - CON-error.1 :: MUST :: Each class in the table MUST be distinguishable by a caller.
 - CON-error.2 :: MUST :: Reported line numbers MUST count from 1, with metadata on line 2.
@@ -381,6 +384,8 @@ Normative changes on 2026-10-11, by decision:
 - The major stays 3. =con_spec_minor= is 1. A same-major reader accepts every minor's version number (=D15=).
 - Gzip members and zstd frames are normative envelopes (=D16=).
 - Line 2 is one JSON line. Trailing space is ignored. Labels collapse spaces (=D17=).
+
+=con_spec_minor= is the minor of that major. =ConFrameBuilder= stamps =con_spec_minor= 1 on every spec 3 frame it builds when the caller has not set the key. =set_con_spec_minor= (Rust, =rkr_frame_builder_set_con_spec_minor=, and the C++ method of the same name) overrides that value before =build=. The writer does not invent or replace =con_spec_minor= (D15).
 
 The media type =chemical/x-con= is informative, as is =text/plain; charset=utf-8=.
 CON has no magic bytes. Identify a file by extension and by this header.

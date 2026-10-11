@@ -540,7 +540,7 @@ Constraints and limits
 
 - Component numbering starts at 1.
 
-- Total atom count equals the sum of line 8 values.
+- A type count of 0 is a legal zero-atom frame. Lines 8 and 9 are whitespace, and they may be absent at end of file. A per-type count of 0 is an error when the type count is at least 1. A sign or a decimal point in a count field is InvalidCount.
 
 - Symbol strings SHOULD match `IUPAC <https://iupac.org>`_ element symbols.
 
@@ -661,7 +661,7 @@ expressions: named bases combined with ``\*`` / ``/`` / ``^``).
     +--------------+----------------+-----------------------------------+
     | ``mass``     | amu            | ``amu``, ``kg``                   |
     +--------------+----------------+-----------------------------------+
-    | ``time``     | fs             | ``fs``, ``ps``, ``ns``            |
+    | ``time``     | (none)         | ``fs``, ``(amu*angstrom^2/eV)^0.5`` |
     +--------------+----------------+-----------------------------------+
     | ``energy``   | eV             | ``eV``, ``hartree``, ``kcal/mol`` |
     +--------------+----------------+-----------------------------------+
@@ -750,6 +750,12 @@ Version 3 (normative)
 A file with ``con_spec_version`` equal to 3 SHALL satisfy all Version 2
 requirements and the following additional requirements.
 
+``con_spec_minor`` is the minor of that major. ``ConFrameBuilder`` stamps
+``con_spec_minor`` 1 on every spec 3 frame it builds when the caller has
+not set the key. ``set_con_spec_minor`` (Rust, ``rkr_frame_builder_set_con_spec_minor``,
+and the C++ method of the same name) overrides that value before
+``build``. The writer does not invent or replace ``con_spec_minor`` (D15).
+
 Units (required)
 ~~~~~~~~~~~~~~~~
 
@@ -760,10 +766,19 @@ named quantity (length and energy respectively). Implementations SHALL
 reject Version 3 inputs that omit ``units`` or supply dimensionally invalid
 strings for those members. A conforming writer SHALL emit preferred unit
 names on line 2 (``angstrom`` not ``A``, ``eV`` not ``ev``, ``fs`` not
-``femtosecond``).
+``femtosecond``). The natural time unit is written byte for byte as
+``(amu*angstrom^2/eV)^0.5``. ``canonicalize_unit_expression`` returns that
+spelling for any whitespace or case variant of the same expression.
+``set_units``, ``set_metadata_json``, and ``from_ase`` all go through that
+function on write, so the file contains those exact bytes (D10).
 
 Optional members ``mass``, ``time``, ``velocity``, and ``force``, when present,
 SHALL likewise be dimensionally valid for those quantities.
+
+``default_v3_units_json`` supplies ``length``, ``energy``, and ``mass`` only.
+It does not supply ``time: fs``. A spec 3 frame at minor 1 or newer that
+has a velocities section and no ``units.time`` is ``InvalidUnits`` on read
+and on write. The writer must not invent ``time: fs`` to fill that gap (D10).
 
 Unit expressions follow the same lexical conventions as metatomic-style
 host unit strings: case-insensitive names, ``\*`` / ``/`` / ``^``, and parentheses.

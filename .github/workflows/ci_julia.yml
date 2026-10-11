@@ -2,7 +2,11 @@ name: Julia ReadCon
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
     paths:
       - 'julia/**'
       - 'src/ffi.rs'
