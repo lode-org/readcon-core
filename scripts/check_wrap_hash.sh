@@ -73,10 +73,8 @@ else
 fi
 
 DOC_FILES=(
-  "docs/source/getting-started.rst"
-  "docs/source/bindings.rst"
-  "docs/orgmode/getting-started.org"
-  "docs/orgmode/bindings.org"
+  "docs/orgmode/tutorials/getting-started.org"
+  "docs/orgmode/reference/bindings.org"
 )
 for rel in "${DOC_FILES[@]}"; do
   f="$ROOT/$rel"

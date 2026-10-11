@@ -4,13 +4,18 @@ compile_commands.json
 addl/referenceImpls/eon_cpp/bench_con_reader
 uv.lock
 
-# Documentation build artifacts (keep source RST + figures tracked for
-# GitHub Pages reproducibility and Shibuya "Edit this page" links)
+# Documentation build artifacts. Org is the source; ox-rst writes rst at
+# build time. The Cachegrind include under _generated stays tracked.
+# The committed figure copy is docs/orgmode/img/.
 docs/build/
 docs/doctrees/
-# Transient rustdocgen-only trees if regenerated outside source/
+docs/source/**/*.rst
+!docs/source/_generated/
+!docs/source/_generated/**
 docs/source/api/
-# Benchmark plot SVGs are tracked under docs/source/img/ when present
+docs/source/crates/
+docs/source/img/
+docs/source/_static/figures/
 
 # Julia package test resolution
 julia/ReadCon/Manifest.toml

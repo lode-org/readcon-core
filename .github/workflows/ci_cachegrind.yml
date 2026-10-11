@@ -11,8 +11,7 @@ on:
       - "Cargo.lock"
       - "scripts/run_cachegrind_bench.sh"
       - "resources/test/**"
-      - "docs/orgmode/benchmarks.org"
-      - "docs/source/benchmarks.rst"
+      - "docs/orgmode/explanation/benchmarks.org"
       - ".github/workflows/ci_cachegrind.yml"
   schedule:
     # Weekly refresh even if no code paths matched (tooling drift)

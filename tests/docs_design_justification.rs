@@ -12,8 +12,28 @@ fn repo_root() -> PathBuf {
 }
 
 fn read(name: &str) -> String {
-    let p = docs_root().join(name);
-    fs::read_to_string(&p).unwrap_or_else(|e| panic!("missing {}: {e}", p.display()))
+    let root = docs_root();
+    let direct = root.join(name);
+    if direct.is_file() {
+        return fs::read_to_string(&direct)
+            .unwrap_or_else(|e| panic!("missing {}: {e}", direct.display()));
+    }
+    let mut hits = Vec::new();
+    for ent in fs::read_dir(&root).unwrap() {
+        let ent = ent.unwrap();
+        if ent.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            let p = ent.path().join(name);
+            if p.is_file() {
+                hits.push(p);
+            }
+        }
+    }
+    assert!(
+        hits.len() == 1,
+        "expected one {name} under {}, found {hits:?}",
+        root.display()
+    );
+    fs::read_to_string(&hits[0]).unwrap()
 }
 
 fn read_repo(rel: &str) -> String {
@@ -164,7 +184,7 @@ fn product_docs_ban_anti_product_carveouts() {
     ] {
         assert_no_ai_tells(&read(name), name);
     }
-    assert_no_ai_tells(&read_repo("readme_src.org"), "readme_src.org");
+    assert_no_ai_tells(&read_repo("README.md"), "README.md");
 }
 
 #[test]
@@ -177,7 +197,7 @@ fn readcon_db_surface_has_hosted_docs() {
         ("migrate.org", read("migrate.org")),
         ("getting-started.org", read("getting-started.org")),
         ("index.org", read("index.org")),
-        ("readme_src.org", read_repo("readme_src.org")),
+        ("README.md", read_repo("README.md")),
         ("docs/source/conf.py", read_repo("docs/source/conf.py")),
     ] {
         assert!(
@@ -236,11 +256,7 @@ fn readcon_db_surface_has_hosted_docs() {
     // Landing page: no # campaigns product label, no docs.rs rustdoc twin
     // in the toctree / left nav. Ecosystem stays sibling hosted docs.
     let index_org = read("index.org");
-    let index_rst = read_repo("docs/source/index.rst");
-    for (label, text) in [
-        ("index.org", &index_org),
-        ("docs/source/index.rst", &index_rst),
-    ] {
+    for (label, text) in [("index.org", &index_org)] {
         assert!(
             !text.contains("# campaigns"),
             "{label} must not comment the hero readcon-db install as campaigns"
@@ -339,17 +355,18 @@ fn tutorial_runners_exist_in_repo() {
         root.join("scripts/run-chemfiles-notebook.sh").is_file(),
         "missing Org Babel chemfiles notebook script"
     );
-    let org = fs::read_to_string(root.join("docs/orgmode/tutorial.org")).unwrap();
+    let org = fs::read_to_string(root.join("docs/orgmode/tutorials/tutorial.org")).unwrap();
     assert!(
-        org.contains(":tangle ../notebooks/tutorial_core.py"),
+        org.contains(":tangle ../../notebooks/tutorial_core.py"),
         "tutorial.org must tangle Python blocks"
     );
     assert!(
         org.contains("run-tutorial-core.sh") || org.contains("org-babel"),
         "tutorial.org must document Babel CI path"
     );
-    let nb = fs::read_to_string(root.join("docs/orgmode/chemfiles-notebook.org")).unwrap();
-    assert!(nb.contains(":tangle ../notebooks/chemfiles_ingress.py"));
+    let nb =
+        fs::read_to_string(root.join("docs/orgmode/tutorials/chemfiles-notebook.org")).unwrap();
+    assert!(nb.contains(":tangle ../../notebooks/chemfiles_ingress.py"));
     let wf = fs::read_to_string(root.join(".github/workflows/ci_python.yml")).unwrap();
     assert!(
         wf.contains("run-tutorial-core.sh") && wf.contains("run-chemfiles-notebook.sh"),
@@ -441,7 +458,7 @@ fn index_and_readme_src() {
     assert!(!index.contains("Related work (H5MD"));
     assert_no_ai_tells(&index, "index.org");
 
-    let readme = read_repo("readme_src.org");
+    let readme = read_repo("README.md");
     assert!(readme.contains("hourglass") || readme.contains("rkr_"));
     assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
     assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
@@ -489,7 +506,7 @@ fn index_and_readme_src() {
     );
     assert!(!readme.contains("H5MD"));
     assert!(!readme.contains("XTC"));
-    assert_no_ai_tells(&readme, "readme_src.org");
+    assert_no_ai_tells(&readme, "README.md");
 
     // GitHub README must link on-disk org sources (ox-md rewrites file:…org → .md)
     let readme_md = read_repo("README.md");
@@ -499,8 +516,8 @@ fn index_and_readme_src() {
     );
     for needle in [
         "docs/orgmode/spec.org",
-        "docs/orgmode/benchmarks.org",
-        "docs/orgmode/tutorial.org",
+        "docs/orgmode/explanation/benchmarks.org",
+        "docs/orgmode/tutorials/tutorial.org",
     ] {
         assert!(
             readme_md.contains(needle),
@@ -589,10 +606,71 @@ fn docs_nav_uses_compact_nav_logos() {
         !index.contains("rc-hero-pills"),
         "index hero must not use pill badges"
     );
-    let rst = read_repo("docs/source/index.rst");
+    let hero = read("index.org");
     assert!(
-        rst.lines()
+        hero.lines()
             .any(|l| l.contains("rc-hero-conline") && l.contains("</pre>")),
         "hero CON line must be one raw-html line so Sphinx cannot leak </pre>"
     );
+}
+
+#[test]
+fn org_layout_is_diataxis_and_readme_states_the_doi() {
+    let root = docs_root();
+    for (dir, name) in [
+        ("tutorials", "tutorial.org"),
+        ("howto", "migrate.org"),
+        ("explanation", "benchmarks.org"),
+        ("reference", "bindings.org"),
+    ] {
+        assert!(
+            root.join(dir).join(name).is_file(),
+            "missing docs/orgmode/{dir}/{name}"
+        );
+    }
+    assert!(root.join("spec.org").is_file());
+    assert!(root.join("implementation-notes.org").is_file());
+    assert!(root.join("clauses.tsv").is_file());
+    assert!(root.join("reference/citations.org").is_file());
+    assert!(!root.join("tutorial.org").exists());
+    let readme = read_repo("README.md");
+    assert!(readme.contains("10.5281/zenodo.18753567"));
+    assert!(!readme.to_ascii_lowercase().contains("<table"));
+    let tracked = std::process::Command::new("git")
+        .args(["ls-files", "docs"])
+        .current_dir(repo_root())
+        .output()
+        .expect("git ls-files");
+    let listed = String::from_utf8(tracked.stdout).unwrap();
+    assert!(
+        !listed.lines().any(|l| l.starts_with("docs/source/")
+            && l.ends_with(".rst")
+            && !l.contains("/_generated/")),
+        "generated rst must not be tracked"
+    );
+    assert!(
+        !listed
+            .lines()
+            .any(|l| l.starts_with("docs/source/img/")
+                || l.starts_with("docs/source/_static/figures/")),
+        "figure copies under docs/source must not be tracked"
+    );
+}
+
+#[test]
+fn bindings_document_rust_and_the_error_channel() {
+    let t = read("bindings.org");
+    assert!(
+        t.contains("\n* Rust\n"),
+        "bindings.org needs a Rust section"
+    );
+    assert!(
+        !t.contains("** Fortran"),
+        "Fortran must not be nested under Compression formats"
+    );
+    assert!(t.contains("\n* Fortran (fpm ReadCon"));
+    assert!(t.contains("rkr_last_error()"));
+    assert!(t.contains("f == NULL"));
+    assert!(t.contains("ConError") && t.contains("NonFiniteValue") && t.contains("InvalidUnits"));
+    assert!(t.contains("ReadConError") && t.contains("frame_index"));
 }

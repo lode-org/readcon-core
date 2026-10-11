@@ -92,28 +92,28 @@ html_theme_options = {
     "light_logo": "_static/logo-nav-light.svg",
     "dark_logo": "_static/logo-nav-dark.svg",
     "nav_links": [
-        {"title": "Start", "url": "getting-started"},
+        {"title": "Start", "url": "tutorials/getting-started"},
         {
             "title": "Learn",
             "children": [
                 {
                     "title": "Tutorial — first CON checkpoint",
-                    "url": "tutorial",
+                    "url": "tutorials/tutorial",
                     "summary": "One Good Tutorial: read, inspect, write, build",
                 },
                 {
                     "title": "How-to — migrate onto CON",
-                    "url": "migrate",
+                    "url": "howto/migrate",
                     "summary": "API, convert CLI, readcon-db, plotting path",
                 },
                 {
                     "title": "How-to — CON I/O by language",
-                    "url": "howto",
+                    "url": "howto/howto",
                     "summary": "Task recipes for every binding",
                 },
                 {
                     "title": "Tutorial — XYZ/PDB/GRO → CON",
-                    "url": "chemfiles-tutorial",
+                    "url": "tutorials/chemfiles-tutorial",
                     "summary": "Convert foreign formats into CON",
                 },
             ],
@@ -123,27 +123,27 @@ html_theme_options = {
             "children": [
                 {
                     "title": "Tutorial — XYZ/PDB/GRO → CON",
-                    "url": "chemfiles-tutorial",
+                    "url": "tutorials/chemfiles-tutorial",
                     "summary": "End-to-end format conversion",
                 },
                 {
                     "title": "Executable conversion notebook",
-                    "url": "chemfiles-notebook",
+                    "url": "tutorials/chemfiles-notebook",
                     "summary": "Org Babel: scripts/run-chemfiles-notebook.sh",
                 },
                 {
                     "title": "How-to recipes",
-                    "url": "chemfiles-howto",
+                    "url": "howto/chemfiles-howto",
                     "summary": "Batch convert, C API, install choices",
                 },
                 {
                     "title": "Explain — why conversion is optional",
-                    "url": "chemfiles-explain",
+                    "url": "explanation/chemfiles-explain",
                     "summary": "Bonds, indices, two install flavours",
                 },
                 {
                     "title": "Reference",
-                    "url": "chemfiles-reference",
+                    "url": "reference/chemfiles-reference",
                     "summary": "APIs, grammar, install matrix",
                 },
             ],
@@ -204,7 +204,8 @@ html_theme_options = {
             ],
         },
         {"title": "Spec", "url": "spec"},
-        {"title": "Benchmarks", "url": "benchmarks"},
+        {"title": "Citation", "url": "reference/citations"},
+        {"title": "Benchmarks", "url": "explanation/benchmarks"},
     ],
 }
 

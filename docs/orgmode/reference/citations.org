@@ -1,0 +1,19 @@
+#+title: Citation
+#+options: toc:nil num:nil ^:nil
+
+* Software
+
+Concept DOI https://doi.org/10.5281/zenodo.18753567.
+The citation metadata is =CITATION.cff=.
+
+* Papers
+
+- R. Goswami, MethodsX 2026, https://doi.org/10.1016/j.mex.2026.103899
+- R. Goswami, MethodsX 2026, https://doi.org/10.1016/j.mex.2026.103851
+- R. Goswami et al., J. Chem. Theory Comput. 2025, https://doi.org/10.1021/acs.jctc.5c00866
+- Chill et al. 2014, https://doi.org/10.1088/0965-0393/22/5/055002
+
+#+begin_export rst
+.. bibliography::
+   :filter: key in {"goswamiNEBOrchestration2026", "goswamiRMSDProjections2026", "goswamiGaussianProcessSaddle2025", "chillEONSoftwareLong2014"}
+#+end_export

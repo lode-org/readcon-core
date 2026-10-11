@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Org Babel One Good Tutorial runner (docs/orgmode/tutorial.org).
+# Org Babel One Good Tutorial runner (docs/orgmode/tutorials/tutorial.org).
 #
 # Authoritative path (no soft-fail theater):
 #   1) org-babel-tangle → docs/notebooks/tutorial_core.py
@@ -37,7 +37,7 @@ EMACS_BIN="$(resolve_emacs)" || {
   exit 1
 }
 
-ORG="${ROOT}/docs/orgmode/tutorial.org"
+ORG="${ROOT}/docs/orgmode/tutorials/tutorial.org"
 TANGLE_PY="${ROOT}/docs/notebooks/tutorial_core.py"
 OUT_DIR="${ROOT}/docs/notebooks/out/tutorial_core"
 mkdir -p "$OUT_DIR" "$(dirname "$TANGLE_PY")"

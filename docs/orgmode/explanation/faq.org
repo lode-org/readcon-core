@@ -1,0 +1,367 @@
+#+title: Frequently Asked Questions
+#+options: toc:nil num:nil ^:nil
+
+#+begin_export rst
+.. note::
+
+   Explanation (why the format looks like this). Learning path:
+   :doc:`/tutorials/tutorial`. Task recipes: :doc:`/howto/howto`.
+#+end_export
+
+* What CON is for
+
+CON stores one atomic configuration that rare-event codes already
+depend on. A frame keeps the cell, type-grouped coordinates, a
+per-direction constraint mask, a pre-group =atom_id=, optional
+per-atom sections, and line-2 JSON. Tools that invent a private dump
+lose the mask or the identity on the first rewrite.
+
+| On disk | Role |
+|---------+------|
+| Cell + angles | Periodic box |
+| Type-grouped coordinates | Stable =head=-able layout |
+| Column 4 fixed mask | Per-direction constraints (bitmask 0-7) |
+| Column 5 =atom_id= | Pre-group index for NEB / dimer / reference matching |
+| Optional sections | Velocities, forces, energies, charges, spins, magmoms, displacements, spreads (v2/v3 =sections=) |
+| Line-2 JSON | =con_spec_version=, =energy=, =neb_bead=, =units=, … |
+
+Saddle, dimer, and NEB pipelines already depend on that payload.
+=readcon-core= is the spec v2-v3 reader/writer and the hourglass
+=rkr_*= ABI in each language. Chemfiles converts *into* CON; DLPack
+and metatensor export *out* of it.
+[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][index_proj]]
+and =readcon-db= index corpora that stay CON text. Spec:
+[[file:../spec.org][spec.org]]. Design history: [[file:evolution.org][evolution.org]].
+
+* Is frame topology (=bonds=) required?
+
+No. =bonds= is an optional v2 metadata key (not a =sections= block and
+not a CON spec v3 change). Legacy files omit it. When present, each
+entry is a 0-based =atom_data= index pair (optionally with chemfiles-style
+order). It enables tools such as chemfiles selection (=bonds:= / =angles:= /
+=is_bonded=) when the library is built with =--features chemfiles=.
+
+* How do I select atoms (and optional bonds) on a CON frame?
+
+Selection is a CON API: strings such as =name H= or =bonds: all= return
+=atom_data= indices (or structured matches) via =select_on_frame= /
+=select_atom_indices= / =rkr_frame_select= and language wrappers. =name= /
+=type= / =all= need only symbols. Topology selectors need =metadata["bonds"]=
+(hand-authored or filled when converting *into* CON). All languages share one
+evaluator.
+
+The ~con~ format has no residue table, stores pair =bonds= only, and keeps a
+thin optional property subset after foreign-format import. So =resname=, most
+external property maps, impropers, and geometry-threshold minidialects are not
+on the selection surface: there is simply no data for them. Detail:
+=chemfiles-explain.org= (*What selection cannot see on CON*).
+
+Foreign formats (XYZ, PDB, …) enter through an *optional* conversion feature
+(Cargo =chemfiles=, PyPI =readcon-chemfiles=). Lean builds still expose the
+selection *symbols* but error clearly until that feature is linked. Docs for
+conversion live under =docs/orgmode/chemfiles-*.org=; language APIs in
+=bindings.org=; on-disk =bonds= in =spec.org=.
+
+On *import* only, display names such as =H1= versus types such as =H= may be
+kept in sidecars (=chemfiles_atom_names= / =chemfiles_atom_types=); the on-disk
+column remains a single =symbol=. Hand-built frames without sidecars use
+=symbol= for both.
+
+* What problems does atom_id solve?
+
+The ~con~ format groups atoms by element type. A structure with atoms
+C, C, C, O, C, C (indices 0-5) gets written as five C atoms followed
+by one O atom. Without a persistent identity field, the original
+ordering vanishes after one read-write cycle.
+
+This matters for:
+- *NEB calculations*: interpolated images must maintain consistent
+  atom ordering across the band. If atom ordering drifts, the
+  interpolation produces nonsense.
+- *Dimer searches*: the displacement vector references specific atom
+  indices. Reordering atoms invalidates the mode.
+- *Reference comparisons*: comparing a relaxed structure against a
+  reference (e.g., Baker test set) requires matching atoms by index.
+
+The =atom_id= field (column 5) stores the pre-grouping index,
+allowing exact reconstruction of the original ordering after any
+number of read-write cycles.
+
+* Why JSON on line 2?
+
+Line 2 was historically unused ("Time" or empty in eOn files). JSON
+provides:
+
+- *Forward compatibility*: new keys can be added without format
+  changes. Unknown keys are preserved through round-trips.
+- *Machine readability*: no custom parser needed. Every language has
+  a JSON library.
+- *Section declaration*: the =sections= key tells the parser exactly
+  what per-atom data to expect, eliminating ambiguity.
+- *Provenance*: =potential=, =energy=, =generator= keys make files
+  self-documenting.
+- *Backward compatibility*: pre-v2 files have non-JSON on line 2.
+  The parser detects this (line 2 does not start with ={=) and falls
+  back to legacy mode (=spec_version = 1=).
+
+* How fast is readcon-core?
+
+CON parse uses fast-float2, zero-copy line views, header-sized vectors,
+optional mmap, and =forward= / =forward_fast= when you only need counts.
+CI: Cachegrind I-refs (=ci_cachegrind.yml=). PRs: Python ASV + spyglass
+(=ci_benchmark.yml=, suite in =benchmarks/=). Local peer scripts:
+=benches/compare_readers.py=, =multiformat_traj.py=, =ase_traj_vs_con.py=,
+=h5md_vs_con.py=. How to re-run and what each gate means:
+[[file:benchmarks.org][benchmarks.org]].
+
+
+* What is the sections mechanism?
+
+Version 2+ files can include per-atom data beyond coordinates. Each
+additional section follows the same block structure as coordinates:
+blank separator, symbol line, label line, data lines.
+
+The =sections= key in the JSON metadata declares which sections exist
+and their order. Known names on the v2/v3 surface:
+
+| Name | Layout |
+|------+--------|
+| =velocities=, =forces=, =magmoms=, =displacements=, =spreads= | 3-vector + fixed + =atom_id= |
+| =energies=, =charges=, =spins= | scalar + fixed + =atom_id= |
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities","forces","charges"]}
+#+end_example
+
+Optional physics blocks such as =charges= / =spins= / =magmoms= /
+=displacements= / =spreads= use the same
+declared-section channel; they do not require a new =con_spec_version=.
+
+Compared with the legacy approach (detecting velocities by peeking for a blank
+separator):
+- Declared sections fix what the reader must consume
+- New section names need no positional guesswork once reserved in the spec
+- Section order is explicit
+
+Declared sections must be present at the declared position. Use an
+empty =sections= array (=[]=) to state that no additional per-atom
+sections follow.
+When the key is absent, the reader keeps the blank-separator fallback
+for existing =.convel= files.
+
+Legacy =.convel= files without a =sections= key still work: the
+parser falls back to blank-separator velocity detection.
+
+* What does validate=true do?
+
+The =validate= metadata key asks v2 readers to reject frames that do
+not satisfy strict ordering and schema invariants:
+
+#+begin_example
+{"con_spec_version":2,"sections":["velocities"],"validate":true}
+#+end_example
+
+In this mode, =sections= must be present. Readers verify the
+declared section order, exact component labels, component symbols,
+integer identity columns, matching fixed masks and atom ids across
+sections, finite numeric values, physical cell geometry, positive
+counts and masses, and the JSON types of reserved metadata keys.
+
+* Can I store forces, energies, charges, spins, magmoms, displacements, spreads?
+
+Yes. Per-frame total energy lives in JSON under the =energy= key.
+Per-atom data uses declared =sections=:
+
+- *Forces* (3-vector): =sections= includes =forces=
+- *Per-atom energies* (scalar): =energies=
+- *Charges* / *spins* (scalar): =charges=, =spins=
+- *Magnetic moments* (3-vector): =magmoms=
+- *Displacement vectors* (3-vector, Angstrom, e.g. a normal mode):
+  =displacements=
+- *Spreads* (3-vector, Angstrom): =spreads=, the root-mean-square
+  spread of each atom along x, y, z about its written coordinates; a
+  standard deviation, 0 for a classical point
+
+#+begin_example
+{"con_spec_version":2,"sections":["forces"],"energy":-42.5,"potential":{"type":"EMT","params":{"cutoff":6.0}}}
+#+end_example
+
+For ML potentials that decompose total energy into per-atom
+contributions, declare =energies= alongside =forces=:
+
+#+begin_example
+{"con_spec_version":2,"sections":["forces","energies"],"energy":-42.5}
+#+end_example
+
+Charges, spins, magmoms, displacements, and spreads use the same wire format: list
+them in =sections= and emit the matching component blocks (see
+[[file:../spec.org][spec.org]]). Example fixtures:
+=resources/test/tiny_cuh2_charges_spins_magmoms.con=,
+=resources/test/tiny_cuh2_displacements.con=,
+=resources/test/tiny_cuh2_spreads.con=.
+
+The per-frame =energy= metadata key SHOULD equal the sum of the
+per-atom =energies= section when both are present. Frames with forces
+SHOULD identify the potential (=potential= key) so downstream tools
+know how to interpret the values.
+
+* Does readcon-core support compression?
+
+Yes. Two formats are detected automatically by magic bytes:
+
+- *gzip*: =.con.gz= extension or =0x1f 0x8b= magic; always available.
+- *zstd*: =.con.zst= extension or =0x28 0xb5 0x2f 0xfd= magic; opt-in
+  behind the =zstd= Cargo feature. Builds without the feature still
+  detect zstd input and return a clear error pointing at the feature
+  flag rather than producing a corrupt parse.
+
+Writing through =ConFrameWriter::from_path_gzip= /
+=from_path_gzip_with_precision= or (with the =zstd= feature) the
+matching =from_path_zstd= constructors compresses output transparently.
+
+Force data adds three floats per atom (roughly 3× the coordinate payload
+alone). Gzip and (with the =zstd= feature) zstd reduce on-disk size; measure
+on your trajectories rather than treating a single ratio as fixed.
+
+* How do I look up an atom by its =atom_id=?
+
+readcon-core preserves =atom_id= (column 5) through every read-write
+cycle, but the in-memory atom order follows the file's type-grouped
+layout, not the =atom_id= ordering. Two convenience APIs lift the
+gap:
+
+- One-shot: =frame.atom_index_by_id(id)= scans the atom list and
+  returns =Option<usize>=. O(N) per call.
+- Repeated: =frame.build_atom_id_index()= returns an =FxHashMap<u64,
+  usize>= (Rust) / dict (Python) / Dict{UInt64, Int} (Julia) for O(1)
+  reverse lookup. Build once and reuse for every lookup against the
+  same frame.
+
+Both APIs mirror across every supported binding (Rust, C ABI, C++,
+Python, Julia).
+
+* What languages are supported?
+
+| Language | Mechanism | Installation |
+|----------+--------------+-----------------------|
+| Rust | Native crate | =cargo add readcon-core= |
+| Python | PyO3 bindings | =pip install readcon= |
+| C | FFI (cdylib) | link =libreadcon_core= |
+| C++ | RAII header | =#include "readcon-core.hpp"= |
+| Julia | ccall wrapper | =using ReadCon= |
+
+All bindings share the same Rust core, ensuring identical parsing
+behavior across languages.
+
+* How do I convert between ASE and ~con~?
+
+#+begin_src python
+import readcon
+
+# con -> ASE Atoms (preserves atom_id, velocities, forces, masses)
+frames = readcon.read_con("input.con")
+ase_atoms = frames[0].to_ase()
+
+# ASE Atoms -> con
+frame = readcon.ConFrame.from_ase(ase_atoms)
+readcon.write_con("output.con", [frame])
+
+# Direct read to ASE list
+ase_list = readcon.read_con_as_ase("trajectory.con")
+#+end_src
+
+The conversion preserves =atom_id= (via a custom per-atom array),
+velocities, forces (via SinglePointCalculator), masses, and
+constraints (FixAtoms).
+
+
+* Why both =readcon-core.h= and =metatensor.h= / =readcon-metatensor.h=?
+
+readcon's cbindgen surface and metatensor-sys's cbindgen surface are separate
+crates. We hand off opaque =mts_block_t *=; values and labels use metatensor's
+C API. Prefer =include/readcon-metatensor.h= (=metatensor.h= first). Lean builds
+still export metatensor entry points that return =RKR_STATUS_FEATURE_DISABLED=
+(=-11=), distinct from internal error (=-7=).
+
+* Lean vs fat =libreadcon_core= for C/Fortran?
+
+Same symbol names either way. Without =--features metatensor=, blocks return
+=-11=. Without =--features zstd=, =create_writer_zstd_*= returns a null writer.
+gzip writers and DLPack (=ArcArray= share via dlpk; no fake =_borrowed= C aliases) are
+always present. After a metatensor-enabled build, =target/<profile>/readcon-metatensor.env=
+lists include/lib paths for =libmetatensor=.
+
+* What is the stack for?
+
+One on-disk checkpoint and one =rkr_*= ABI, instead of each code
+hand-rolling XYZ and its own atoms type. Migration guide:
+[[file:../howto/migrate.org][migrate.org]] (=readcon-core convert=,
+=readcon.convert_to_con=).
+
+| Component | Job |
+|-----------+-----|
+| CON on disk | The checkpoint format (text, optional gzip/zstd) |
+| =readcon-core= | Frame API + hourglass ABI + chemfiles in + selection + compression + DLPack/metatensor ([[https://docs.rs/readcon-core][docs.rs]]) |
+| =readcon-db= | LMDB corpus: energy / formula / section indexes, dedup, multi-reader ([[https://lode-org.github.io/readcon-db/docs/][docs]]) |
+| Chemfiles | Land foreign structures *as* CON |
+| ASE adapters | Calculators without abandoning CON interchange |
+| [[https://chemparseplot.rgoswami.me][chemparseplot]] / [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] | Plotting and analysis on CON checkpoints |
+| [[https://omnipotentrpc.github.io/rgpot/][rgpot]] / [[https://eondocs.org][eOn]] | Optimizers and potentials on the same CON files |
+
+One on-disk format. One library API. Campaigns, selection, and plotting share it.
+Campaign field projection helpers live in
+[[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
+(same meanings =readcon-db= indexes).
+
+* Are ASE adapters the primary API?
+
+No. Optional =to_ase= / =from_ase= support calculator hand-off. Interchange
+and multi-reader campaign storage use =readcon= / =readcon-db= with CON text
+authoritative.
+
+* What is authoritative: CON text, cooked SoA, or DLPack?
+
+UTF-8 CON text is authoritative for files and for =readcon-db= =frames= (hash,
+dedup, join/split, =reindex=). Cooked RCSO / SoA / DLPack buffers accelerate
+extract and device hand-off and are discardable or ephemeral.
+
+* Why is readcon-db a separate package?
+
+=readcon-core= is the shared decoder/writer. =readcon-db= owns LMDB indexes and
+SWMR corpus access. That split is a *migration benefit*: once structures are
+CON text, the same files plug into corpus query (energy / formula / section
+indexes, dedup) without rewriting the optimizer or potential. Install
+=readcon-db= separately (=cargo add readcon-db=, =pip install readcon-db=).
+Package docs: [[https://lode-org.github.io/readcon-db/docs/][lode-org.github.io/readcon-db/docs]].
+Source: [[https://github.com/lode-org/readcon-db][github.com/lode-org/readcon-db]].
+
+* Where do large campaigns and many frames go?
+
+In this stack: *CON text* remains the structure contract; =readcon-db= is the
+LMDB corpus on top of it (indexes for energy / formula / section
+presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
+(optionally gzip/zstd) and =iter_con= / =forward= cover trajectory-style loads
+in =readcon-core= itself. Large corpora stay CON text; =readcon-db=
+indexes them. Do not switch the on-disk structure to another dialect
+for screening.
+
+Install: =cargo add readcon-db= / =pip install readcon-db=.
+Package docs: [[https://lode-org.github.io/readcon-db/docs/][lode-org.github.io/readcon-db/docs]].
+
+* How do XYZ, PDB, GRO, and chemfiles fit in?
+
+They are *ingress*. Chemfiles (Cargo =chemfiles=, PyPI =readcon-chemfiles=)
+maps foreign structures into =ConFrame= / CON so the rest of the stack speaks
+one format. The durable interchange is CON (constraints, =atom_id=, sections,
+JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
+keep CON for optimizers, campaigns (=readcon-db=), selection, and plotting.
+How-to: [[file:../howto/migrate.org][migrate.org]], [[file:../tutorials/chemfiles-tutorial.org][chemfiles-tutorial]].
+
+* Why an hourglass C ABI?
+
+Optimizers and drivers are often Fortran or C++. A single =rkr_*= surface
+gives those codes the same CON semantics as Python and Julia without embedding
+a Python interpreter on the I/O path. The 0.14.x stability contract
+(ownership, sentinels, no-abort errors, Z=1..92 helpers) is on the
+architecture page. A =1.0.0= cut is the production classifier, not a
+silent ABI rewrite.

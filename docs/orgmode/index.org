@@ -28,8 +28,8 @@ XYZ, PDB, and GRO in; DLPack and metatensor export the same arrays out.
 `readcon-db <https://lode-org.github.io/readcon-db/docs/>`_ indexes
 CON corpora.
 
-:doc:`getting-started` · :doc:`tutorial` · :doc:`migrate` · :doc:`spec` ·
-:doc:`faq` · :doc:`benchmarks`
+:doc:`/tutorials/getting-started` · :doc:`/tutorials/tutorial` · :doc:`/howto/migrate` · :doc:`/spec` ·
+:doc:`/explanation/faq` · :doc:`/explanation/benchmarks`
 
 .. code-block:: shell
 
@@ -38,18 +38,18 @@ CON corpora.
    cargo add readcon-core@0.16.2          # Rust
    # cargo add readcon-db / pip install readcon-db
 
-Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
+Full matrix (Julia, C/Fortran, packages): :doc:`/tutorials/getting-started`.
 
 .. important::
 
-   *New here?* :doc:`getting-started` then :doc:`tutorial`
+   *New here?* :doc:`/tutorials/getting-started` then :doc:`/tutorials/tutorial`
 
-   *Migrate a stack onto CON?* :doc:`migrate`
+   *Migrate a stack onto CON?* :doc:`/howto/migrate`
 
-   *Import into CON?* :doc:`chemfiles-tutorial`
-   · Org notebook :doc:`chemfiles-notebook`
+   *Import into CON?* :doc:`/tutorials/chemfiles-tutorial`
+   · Org notebook :doc:`/tutorials/chemfiles-notebook`
 
-   *Format rules?* :doc:`spec` · *APIs?* :doc:`bindings`
+   *Format rules?* :doc:`/spec` · *APIs?* :doc:`/reference/bindings`
 
 .. figure:: /_static/figures/conversion-pipeline.svg
    :alt: Convert XYZ, PDB, or GRO into a CON frame
@@ -62,19 +62,19 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    :gutter: 2
 
    .. grid-item-card:: Tutorial: first CON checkpoint
-      :link: tutorial
+      :link: tutorials/tutorial
       :link-type: doc
 
       Read a fixture, inspect the cell, write a frame (Python).
 
    .. grid-item-card:: How-to by language
-      :link: howto
+      :link: howto/howto
       :link-type: doc
 
       Task recipes for Rust, Python, C, C++, Julia, Fortran.
 
    .. grid-item-card:: Convert formats
-      :link: chemfiles-tutorial
+      :link: tutorials/chemfiles-tutorial
       :link-type: doc
 
       XYZ, PDB, GRO to CON without writing a reader per format.
@@ -93,28 +93,28 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    :maxdepth: 1
    :caption: Tutorials
 
-   getting-started
-   tutorial
-   chemfiles-tutorial
-   chemfiles-notebook
+   tutorials/getting-started
+   tutorials/tutorial
+   tutorials/chemfiles-tutorial
+   tutorials/chemfiles-notebook
 
 .. toctree::
    :maxdepth: 1
    :caption: How-to guides
 
-   howto
-   migrate
-   chemfiles-howto
+   howto/howto
+   howto/migrate
+   howto/chemfiles-howto
 
 .. toctree::
    :maxdepth: 1
    :caption: Explanation
 
-   faq
-   evolution
-   architecture
-   benchmarks
-   chemfiles-explain
+   explanation/faq
+   explanation/evolution
+   explanation/architecture
+   explanation/benchmarks
+   explanation/chemfiles-explain
 
 .. toctree::
    :maxdepth: 1
@@ -122,9 +122,10 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
 
    spec
    implementation-notes
-   bindings
-   chemfiles-reference
-   rpc
+   reference/bindings
+   reference/chemfiles-reference
+   reference/rpc
+   reference/citations
 
 .. toctree::
    :maxdepth: 1

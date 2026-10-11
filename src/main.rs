@@ -33,7 +33,7 @@ Usage:
 
 Why CON: per-direction constraints, atom_id, optional sections (forces,
 velocities, charges, …), multi-language hourglass ABI, campaign-storeable text.
-See docs/orgmode/migrate.org.
+See docs/orgmode/howto/migrate.org.
 "
     );
 }
