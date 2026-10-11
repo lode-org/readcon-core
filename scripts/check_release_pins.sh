@@ -24,6 +24,9 @@ unpinned=0
 while IFS= read -r line; do
   if [[ "$line" =~ uses:[[:space:]]*([^[:space:]#]+) ]]; then
     ref="${BASH_REMATCH[1]}"
+    if [[ "$ref" == ./* ]]; then
+      continue
+    fi
     if [[ ! "$ref" =~ @[0-9a-fA-F]{40}$ ]]; then
       die "unpinned uses: $ref"
       unpinned=1

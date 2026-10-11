@@ -18,7 +18,8 @@ sed -i -E "s/assert_eq!\(VERSION, \"$o\"\)/assert_eq!(VERSION, \"$v\")/" src/lib
 sed -i -E "s/^release = \"[^\"]*\"/release = \"$v\"/" docs/source/conf.py
 sed -i -E "s/^VER=.*/VER=$v/" julia/ReadCon/README.md fortran/README.md
 # The wrapdb wrap names the release's cxx tarball. Its source_hash stays until
-# that tarball is published; scripts/check_wrap_hash.sh accepts the gap.
+# that tarball is published. A missing checksum is allowed only while the
+# version tag does not exist. Once the tag exists, a missing checksum fails.
 sed -i -E "s/readcon-core-cxx-$o\b/readcon-core-cxx-$v/g; s#releases/download/v$o/#releases/download/v$v/#" \
     packaging/wrapdb/readcon-core.wrap
 # Install pins, cxx tarball names and version statements in the docs. The

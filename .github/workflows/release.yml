@@ -294,6 +294,28 @@ jobs:
 
           gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
+  # A release created with GITHUB_TOKEN does not start other workflows.
+  # Call the tarball workflows from here so a tag attach actually happens.
+  attach-cxx-tarball:
+    needs:
+      - plan
+      - host
+    if: ${{ needs.host.result == 'success' }}
+    uses: ./.github/workflows/cxx_tarball.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+    secrets: inherit
+
+  attach-clib-tarball:
+    needs:
+      - plan
+      - host
+    if: ${{ needs.host.result == 'success' }}
+    uses: ./.github/workflows/c_lib_tarball.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+    secrets: inherit
+
   announce:
     needs:
       - plan
