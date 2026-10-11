@@ -1334,6 +1334,19 @@ impl ConFrameBuilder {
         Ok(())
     }
 
+    /// Sets `metadata["units"]` from a JSON object.
+    ///
+    /// Aliases are rewritten to preferred names. The natural time spelling
+    /// `(amu*angstrom^2/eV)^0.5` is kept byte for byte (CON-units.5, D10).
+    /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
+    /// is the same contract on a frame that already exists.
+    pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {
+        let stored = crate::units::canonicalize_units_object(&units)
+            .map_err(|err| crate::error::ParseError::InvalidUnits(err.to_string()))?;
+        self.metadata.insert(meta::UNITS.into(), stored);
+        Ok(())
+    }
+
     /// Sets a numeric metadata key.
     pub fn set_scalar_metadata(&mut self, key: &str, value: f64) -> &mut Self {
         self.metadata

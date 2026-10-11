@@ -2904,6 +2904,37 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
         Err(_) => RKRStatus::RKR_STATUS_INVALID_JSON,
     }
 }
+/// Sets the units object on an existing frame builder.
+/// `units_json` is a JSON object, for example
+/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+/// Returns `RKR_STATUS_SUCCESS` on success, `RKR_STATUS_INVALID_JSON` when
+/// the text is not a JSON object, or `RKR_STATUS_VALIDATION_ERROR` when a
+/// unit expression is not valid.
+///
+/// # Safety
+/// builder_handle and units_json must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_units(
+    builder_handle: *mut RKRConFrameBuilder,
+    units_json: *const c_char,
+) -> RKRStatus {
+    if builder_handle.is_null() || units_json.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let units_json = match unsafe { CStr::from_ptr(units_json).to_str() } {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+    };
+    let units: serde_json::Value = match serde_json::from_str(units_json) {
+        Ok(value) => value,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_JSON,
+    };
+    match builder.set_units(units) {
+        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    }
+}
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -5276,6 +5307,35 @@ mod tests {
     }
     fn c_string(s: &str) -> CString {
         CString::new(s).unwrap()
+    }
+    #[test]
+    fn builder_set_units_c_abi_stores_the_object() {
+        let builder = test_builder_handle();
+        let units = c_string(
+            r#"{"length":"A","energy":"ev","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}"#,
+        );
+        let status = unsafe { rkr_frame_builder_set_units(builder, units.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        assert!(!frame.is_null());
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        assert!(!json.is_null());
+        let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
+        assert!(text.contains(r#""length":"angstrom""#), "{text}");
+        assert!(text.contains(r#""energy":"eV""#), "{text}");
+        assert!(
+            text.contains(r#""time":"(amu*angstrom^2/eV)^0.5""#),
+            "{text}"
+        );
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
     }
     unsafe fn assert_single_atom(
         frame: *mut RKRConFrame,

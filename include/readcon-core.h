@@ -1461,6 +1461,20 @@ enum RKRStatus rkr_frame_builder_set_metadata_json(struct RKRConFrameBuilder *bu
                                                    const char *metadata_json);
 
 /**
+ * Sets the units object on an existing frame builder.
+ * `units_json` is a JSON object, for example
+ * `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+ * Returns `RKR_STATUS_SUCCESS` on success, `RKR_STATUS_INVALID_JSON` when
+ * the text is not a JSON object, or `RKR_STATUS_VALIDATION_ERROR` when a
+ * unit expression is not valid.
+ *
+ * # Safety
+ * builder_handle and units_json must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_units(struct RKRConFrameBuilder *builder_handle,
+                                           const char *units_json);
+
+/**
  * Sets a numeric metadata key on an existing frame builder.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
