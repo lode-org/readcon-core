@@ -1112,8 +1112,15 @@ impl PyConFrame {
     }
 
     fn to_con_frame(&self, py: Python<'_>) -> PyResult<ConFrame> {
-        let meta = self.metadata_map(py)?;
+        let mut meta = self.metadata_map(py)?;
         let atoms = self.py_atoms(py)?;
+        // v1 and v2 velocities are in the natural time unit (CON-units.8).
+        // The builder writes minor 1, which requires units.time (CON-units.11).
+        stamp_legacy_velocity_time(
+            &mut meta,
+            self.spec_version,
+            atoms.iter().any(PyAtomDatum::has_velocity),
+        );
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles);
         builder
@@ -1181,6 +1188,42 @@ impl PyConFrame {
         builder
             .build()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+}
+
+/// Record `units.time` for a v1 or v2 frame that carries velocities.
+///
+/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
+/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
+/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
+/// A v3 frame is left alone so a caller who omitted time still fails.
+fn stamp_legacy_velocity_time(
+    meta: &mut BTreeMap<String, Value>,
+    spec_version: u32,
+    has_velocity: bool,
+) {
+    if spec_version >= 3 || !has_velocity {
+        return;
+    }
+    let time_ok = meta
+        .get(meta::UNITS)
+        .and_then(|units| units.get("time"))
+        .and_then(|value| value.as_str())
+        .is_some_and(|text| !text.trim().is_empty());
+    if time_ok {
+        return;
+    }
+    let mut units = match meta.get(meta::UNITS).cloned() {
+        Some(Value::Object(map)) => Value::Object(map),
+        Some(_) => return,
+        None => crate::units::default_v3_units_json(),
+    };
+    if let Some(object) = units.as_object_mut() {
+        object.insert(
+            "time".to_string(),
+            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+        );
+        meta.insert(meta::UNITS.to_string(), units);
     }
 }
 
