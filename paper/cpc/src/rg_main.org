@@ -127,22 +127,26 @@ The same fixtures are exercised from the Rust core and from the C, Python, Julia
 :END:
 
 Thermally activated events set the rates of diffusion, reactions and structural change, and they are rare on the clock of a direct molecular dynamics run.
-Harmonic transition state theory estimates such a rate from the barrier height and from the curvatures at the minimum and at a first-order saddle \cite{vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990}.
-The practical task is to find those stationary points and the path that joins two known minima.
+Harmonic transition state theory estimates such a rate from the barrier height and from the curvatures at the minimum and at a first-order saddle \cite{eyringActivatedComplexChemical1935,vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990}.
+The practical task is to find those stationary points and the path that joins two known minima \cite{walesExploringEnergyLandscapes2018}.
 The searches that do that work fall into a double-ended family and a single-ended family.
 A double-ended search, the nudged elastic band and its climbing-image form, discretizes the path into a chain of images and relaxes that chain until the highest image sits near the saddle \cite{jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,sheppardOptimizationMethodsFinding2008}.
+The relaxation of the chain is commonly a limited-memory quasi-Newton step, which stores a short gradient history rather than a full Hessian \cite{nocedalUpdatingQuasinewtonMatrices1980}.
 A single-ended search, the dimer method, rotates a pair of replicas until the lowest curvature points uphill and then walks toward the saddle from one basin \cite{henkelmanDimerMethodFinding1999}.
-Adaptive kinetic Monte Carlo accepts an escape, advances a physical clock by the waiting time of that escape, and repeats the search from the new minimum \cite{henkelmanLongTimeScale2001,goswamiEfficientExplorationChemical2025}.
+Adaptive kinetic Monte Carlo accepts an escape, advances a physical clock by the waiting time of that escape, and repeats the search from the new minimum \cite{voterIntroductionKineticMonte2007,henkelmanLongTimeScale2001,goswamiEfficientExplorationChemical2025}.
 Energy-weighted springs, together with eigenvector following, keep a molecular band from cutting the corner of a sharply curved path \cite{asgeirssonNudgedElasticBand2021}.
 An improved estimate of the tangent keeps the elastic band from forming kinks at places where the path bends sharply \cite{henkelmanImprovedTangentEstimate2000}.
 The image-dependent pair potential starts the chain of images closer to the minimum energy path the band will converge to \cite{smidstrupImprovedInitialGuess2014}.
 The string method was introduced for the sampling of rare events as a curve that is evolved between two known states \cite{eStringMethodStudy2002}.
 A later form of that method finds a minimum energy path by evolving the curve rather than by relaxing a chain of springs \cite{eSimplifiedImprovedString2007}.
+A growing string builds that curve from the reactant outward, instead of laying down a complete chain between two known ends \cite{petersGrowingStringMethod2004}.
 A comparison of those single-ended searches showed that a saddle can still be found when the product state is unknown \cite{olsenComparisonMethodsFinding2004}.
 A later dimer method converges faster than the original rotation because it uses a better estimate of the curvature \cite{kastnerSuperlinearlyConvergingDimer2008}.
+An improved dimer and a partitioned rational-function step have been compared as two ways to reach that same saddle \cite{heydenEfficientMethodsFinding2005}.
 
 These campaigns spend most of their effort on force calls, and they spend the rest on moving the current geometry from one program to another and on starting again after a stop.
 A reproducible band optimization calls a potential for every image at every iteration, and the checkpoint is what lets that run resume \cite{goswamiReproducibleOrchestrationBest2026}.
+A model fitted to earlier force calls can propose the next saddle step and so spare some evaluations of the potential \cite{petersonAccelerationSaddlepointSearches2016}.
 A tutorial review of Gaussian-process searches shows how a surrogate can cut the number of force evaluations on a stationary-point problem \cite{goswamiTutorialReviewBayesian2026}.
 The same idea has been implemented for molecular saddle searches, where the surrogate still has to land on a force evaluator \cite{goswamiEfficientImplementationGaussian2025}.
 Adaptive pruning then drops training points that no longer change the next step, which keeps a long search from storing every geometry \cite{goswamiAdaptivePruningIncreased2026}.
@@ -153,19 +157,21 @@ The same files are read again when a path is projected onto two dimensions and c
 A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, and that file has to be readable after the job has stopped \cite{henkelmanLongTimeScale2001}.
 Distributed adaptive kinetic Monte Carlo farms the saddle searches across ranks, so each rank has to read the checkpoint the search will continue from \cite{pedersenDistributedImplementationAdaptive2010}.
 Between those reads the file may sit on disk for hours while a queue waits, or it may be copied onto another machine that has a different build of the force code.
-Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock, which is the setting in which this checkpoint is reread \cite{voterExtendingTimeScale2002}.
+Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock, which is the setting in which this checkpoint is reread \cite{voterHyperdynamicsAcceleratedMolecular1997,voterExtendingTimeScale2002}.
 The older eOn paper is the reference for the code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEonSoftwareLong2014,goswamiEon2026}.
 
 The checkpoint has to carry a per-axis mask, an atom id, and a time unit for any velocities.
 The mask has one bit for x, one for y and one for z, so a buried atom carries 7, a free surface atom carries 0, and an adsorbate whose height is held carries 4.
 The id has to survive grouping by chemical type, so that image \(i\) of a band still names the same atom as image \(i+1\) when the frames are compared \cite{gundeIraShapeMatching2021}.
 A velocity is stored with its time unit, because the kinetic energy scales with the square of that unit.
+A velocity Verlet step and a velocity-rescaling thermostat both advance those components, so the clock has to travel with them \cite{swopeComputerSimulationMethod1982,bussiCanonicalSamplingThrough2007}.
 The natural unit used by eOn and by ASE is \(({\rm amu}\cdot{\rm angstrom}^{2}/{\rm eV})^{0.5}\), which equals \(\timeFac\,\text{fs}\), and \(1\,\text{fs} = 10^{-15}\,\text{s}\).
 The conversion of that natural unit into femtoseconds uses the constants that define the electronvolt and the atomic mass unit \cite{tiesingaCodataRecommendedValues2021}.
 
 CON is the text form of that checkpoint, written so that a failed search can be inspected without a decoder.
 It grew up inside eOn, which writes one frame per minimum, saddle or band image and reads it back on the next cycle \cite{chillEonSoftwareLong2014,goswamiEon2026}.
-The Atomic Simulation Environment reads and writes the same text, which is how a geometry moves from the saddle search into a Python workflow \cite{larsenAtomicSimulationEnvironmenta2017}.
+The Atomic Simulation Environment began as a scripting interface to an electronic-structure code \cite{bahnObjectorientedScriptingInterface2002}.
+It reads and writes the same text, which is how a geometry moves from the saddle search into a Python workflow \cite{larsenAtomicSimulationEnvironmenta2017}.
 A band file is therefore a sequence of frames that several programs already agree to exchange.
 
 Neighbouring formats store a trajectory or a structure, and the fields that differ from this checkpoint are the integer mask, the id that survives grouping inside the frame, and the versioned time label.
@@ -184,7 +190,7 @@ d-SEAMS rereads a saved trajectory in order to identify the structure that forme
 A protein structure is often stored as a PDB file, and atom identity there comes from the residue and the atom name \cite{bermanProteinDataBank2000}.
 mmCIF is the macromolecular archive form of that structure, with the same residue and atom-name identity \cite{westbrookStarmmcifOntologyMacromolecular2000}.
 A small-molecule crystal structure travels as a CIF, which archives the published cell and the published coordinates \cite{hallCrystallographicInformationFile1991}.
-A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates that VASP will relax \cite{kresseEfficiencyAbinitioTotal1996}.
+A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates that VASP will relax \cite{kresseEfficientIterativeSchemes1996,kresseEfficiencyAbinitioTotal1996}.
 pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still one geometry \cite{ongPythonMaterialsGenomics2013}.
 Atomsk converts among the files used for defects and for classical potentials, which is how a geometry changes dialect before a run \cite{hirelAtomskToolManipulating2015}.
 Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues \cite{oboyleOpenBabelOpen2011}.
@@ -192,7 +198,8 @@ OVITO displays atomistic snapshots and can read several of these files when the 
 i-PI drives a calculation by passing coordinates to a client and reading forces back, one geometry at a time \cite{kapilIpi20Universal2019,litmanIpi30Flexible2024}.
 That coordinate exchange began as a path-integral client, which sent positions out and received forces back \cite{ceriottiIpiPythonInterface2014}.
 A liquid or a mixture is often packed into a cell before the first minimization, and that packed geometry is what the checkpoint then stores \cite{martinezPackmolPackageBuilding2009}.
-Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry a search writes \cite{bigiMetatensorMetatomicFoundational2026}.
+Machine-learning potentials exchange atomic features as tensors, including a universal potential written on that interface, and a tensor of features is a different object from the geometry a search writes \cite{bigiMetatensorMetatomicFoundational2026,mazitovPetmadLightweightUniversal2025}.
+A repository API and a materials archive keep a geometry findable after it leaves this file, which is what the data principles ask \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wilkinsonFairGuidingPrinciples2016}.
 Table \ref{tab:compat} puts the checkpoint next to those files, after the layout of one frame has been described.
 
 Here we present readcon-core, a reader and writer for the CON checkpoint used by saddle searches.
@@ -258,10 +265,11 @@ A count of zero chemical types is a legal empty frame, with no coordinate block 
 A header that stops early, or a section with fewer rows than the header declared, is rejected, and the partial frame is not returned.
 The remaining reader rules, including unknown section names, non-finite numbers and a gzip archive with several members, are the rows of \ref{sec:appendix-rules}.
 
-Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabyte2021}.
-The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleHowPrintFloatingpoint1990}.
+Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,goldbergWhatEveryComputer1991,clingerHowReadFloating1990,clingerHowReadFloating2004}.
+The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleHowPrintFloatingpoint1990,steeleHowPrintFloatingpoint2004}.
 Grisu prints a floating-point value using only integer arithmetic so that the decimal form is short and correctly rounded \cite{loitschPrintingFloatingpointNumbers2010}.
 Ryu prints a floating-point value by a table-driven procedure so that the decimal form is short and correctly rounded \cite{adamsRyFastFloattostring2018}.
+Burger and Errol are two further correctly rounded printers, and each reaches the short decimal form by a different integer conversion \cite{burgerPrintingFloatingpointNumbers1996,andryscoPrintingFloatingpointNumbers2016}.
 The metadata line is JSON, and a scanner for that kind of text has been shown to run at a very high rate on such input \cite{langdaleParsingGigabytesJson2019}.
 A caller may ask for a fixed number of digits after the decimal point, and that mode is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
 gzip and zstd are envelopes around the same bytes, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}.
@@ -273,11 +281,12 @@ gzip and zstd are envelopes around the same bytes, and the bytes that come out o
 
 The core is a Rust library with a single parser, and file reads, string reads and the bindings all go through that parser, so a change in the grammar shows up once.
 The parser walks the header, checks the counts, reads each coordinate row as an integer flag and an integer id, and then reads the sections named in the metadata.
-Decimal fields in that parser go through a fast correctly rounded conversion, the same contract the writer relies on \cite{lemireNumberParsingGigabyte2021}.
+Decimal fields in that parser go through a fast correctly rounded conversion, the same contract the writer relies on, and a later form of that conversion drops the fallback path \cite{lemireNumberParsingGigabyte2021,mushtakFastNumberParsing2023}.
 Keeping one parser is what makes the conformance story possible, because a second implementation in each language would be a second place for a mask or a time label to drift.
 The C header owns the frame on the far side of the call and returns a status code, and the caller frees what it was given.
-C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding.
+C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding \cite{bezansonJuliaFreshApproach2017}.
 Python uses the same parse, so a file that is legal in one binding is legal in the others, and a file that is rejected is rejected for the same reason.
+That binding can return coordinates and velocities as arrays, so the caller is not handed one object per atom \cite{harrisArrayProgrammingNumpy2020}.
 The status code is the whole of the error report on the C side, and Section \ref{sec:scope} states that boundary as part of the release.
 Every language maps one integer, and none of them invents a second message for the same failure.
 
@@ -350,7 +359,7 @@ Table \ref{tab:hcn} shows one buried atom, one surface atom and the adsorbate fr
 :CUSTOM_ID: sec:velocity
 :END:
 
-The velocities on that slab are a Maxwell-Boltzmann sample at 300 K, drawn with ASE on a NumPy Generator and seed 20261011, and the kinetic energy is computed from those components.
+The velocities on that slab are a Maxwell-Boltzmann sample at 300 K, drawn with ASE on a NumPy Generator and seed 20261011, and the kinetic energy is computed from those components \cite{harrisArrayProgrammingNumpy2020}.
 The energy is one half the sum of mass times speed squared, with the speeds in the natural unit, and on this frame it is \(\keNat\,\text{eV}\).
 Reading those same numbers as though they were angstrom per femtosecond multiplies the energy by \(\timeFacSq\) and gives \(\keFs\,\text{eV}\).
 The two energies differ by \(\timeFacSq\), the square of that factor, because kinetic energy depends on the square of each velocity component.
@@ -383,7 +392,7 @@ We compare the Python binding of readcon-core, at one worker, with four Python r
 The peers are the ASE eon reader on the same CON text, a chemfiles read of an XYZ file with the same coordinates, an MDAnalysis read of an H5MD file with those coordinates, and an h5py read of that file's position array \cite{larsenAtomicSimulationEnvironmenta2017,frauxChemfiles2023,michaudagrawalMdanalysisToolkitAnalysis2011,gowersMdanalysisPythonPackage2016,jakupovicMpiparallelMolecularDynamics2021}.
 OpenMP, BLAS and the related math libraries are held at one thread for the whole run, and that limit is set before any of those libraries is imported.
 The payloads are 1, 100 and @@latex:10\,000@@ frames of a 218-atom copper-hydrogen geometry, and the platinum slab of Section \ref{sec:validation}.
-Each cell is 30 paired repeats, interleaved so that a slow drift hits both sides of the pair, and the ratio is the readcon-core time divided by the peer time.
+Each cell is 30 paired repeats, interleaved so that a slow drift hits both sides of the pair, and the ratio is the readcon-core time divided by the peer time \cite{kaliberaRigorousBenchmarkingReasonable2013,mytkowiczProducingWrongData2009}.
 We report the median and a bias-corrected and accelerated 95 percent interval, and we apply a Holm adjustment across the cells that produced a ratio \cite{efronBetterBootstrapConfidence1987,holmStepdown1979}.
 The full protocol, including the bootstrap seed and the Holm adjustment, is in \ref{sec:appendix-bench}, and Figure \ref{fig:ratios} shows the intervals.
 
@@ -421,7 +430,7 @@ Right: parallel efficiency.
 \end{figure}
 #+END_EXPORT
 
-Figure \ref{fig:threads} is a separate run, and the speedup in that figure uses only the pairs recorded by the scaling loop.
+Figure \ref{fig:threads} is a separate run, and the speedup in that figure uses only the pairs recorded by the scaling loop \cite{hoeflerScientificBenchmarkingParallel2015}.
 For each of 2, 4 and 8 workers the loop times one worker, then that worker count, thirty times, and the speedup is the ratio of those paired times.
 Two workers give a speedup of \thrTwo{} (interval \thrTwoLo{} to \thrTwoHi{}), four give \thrFour{} (\thrFourLo{} to \thrFourHi{}), and eight give \thrEight{} (\thrEightLo{} to \thrEightHi{}).
 Each of those speedups lies below the ideal line.
@@ -561,4 +570,6 @@ gzip archive with several members & Every member is read, in order. \\
 #+END_EXPORT
 
 #+LATEX: \bibliographystyle{elsarticle-num}
+#+LATEX: \begingroup\catcode`\&=12
 #+LATEX: \bibliography{rg_main,holm}
+#+LATEX: \endgroup
