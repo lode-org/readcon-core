@@ -268,3 +268,59 @@ class TestAseConstraints:
             [False, True, False],
             [True, True, True],
         ]
+
+
+class TestAseCellAndVelocityUnits:
+    def test_to_ase_prefers_lattice_and_honours_pbc(self):
+        atoms = [
+            readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, atom_id=0),
+        ]
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=atoms,
+            metadata={
+                "pbc": [False, True, False],
+                "lattice_vectors": [[2.0, 0.0, 0.0], [0.5, 3.0, 0.0], [0.0, 0.0, 4.0]],
+            },
+        )
+        ase_atoms = frame.to_ase()
+        assert list(ase_atoms.pbc) == [False, True, False]
+        cell = ase_atoms.get_cell()
+        assert cell[0, 0] == pytest.approx(2.0)
+        assert cell[1, 0] == pytest.approx(0.5)
+        assert cell[2, 2] == pytest.approx(4.0)
+
+    def test_v31_fs_velocities_scale_into_the_natural_unit(self):
+        atoms = [
+            readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, vx=1.0, vy=0.0, vz=0.0, atom_id=0),
+        ]
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=atoms,
+            metadata={
+                "con_spec_minor": 1,
+                "units": {
+                    "length": "angstrom",
+                    "energy": "eV",
+                    "mass": "amu",
+                    "time": "fs",
+                },
+            },
+        )
+        ase_atoms = frame.to_ase()
+        assert ase_atoms.get_velocities()[0, 0] == pytest.approx(10.180505710759414)
+        overridden = frame.to_ase(velocity_time_unit="(amu*angstrom^2/eV)^0.5")
+        assert overridden.get_velocities()[0, 0] == pytest.approx(1.0)
+
+    def test_from_ase_stamps_the_natural_time_unit(self):
+        atoms = ase.Atoms("H", positions=[[0, 0, 0]], cell=[5, 6, 7], pbc=[True, False, True])
+        atoms.set_velocities([[0.2, 0.0, 0.0]])
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert frame.metadata["units"]["time"] == "(amu*angstrom^2/eV)^0.5"
+        assert frame.metadata["con_spec_minor"] == 1
+        assert list(frame.metadata["pbc"]) == [True, False, True]
+        assert frame.atoms[0].vx == pytest.approx(0.2)
+        assert frame.cell[0] == pytest.approx(5.0)
+        assert frame.cell[2] == pytest.approx(7.0)
