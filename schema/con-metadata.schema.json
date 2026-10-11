@@ -10,7 +10,17 @@
       "type": "integer",
       "minimum": 2,
       "maximum": 3,
-      "description": "Spec version of this frame. Files without JSON metadata are implicit version 1."
+      "description": "Spec major of this frame. Files without JSON metadata are implicit version 1. JSON majors 0 and 1 are invalid."
+    },
+    "con_spec_minor": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Spec minor. Absent or 0 is v3.0. Minor 1 is v3.1. Unknown minors of major 3 are accepted."
+    },
+    "section_arity": {
+      "type": "object",
+      "description": "Token count of each data row, used to skip an unknown section when con_spec_minor is newer than the reader.",
+      "additionalProperties": { "type": "integer", "minimum": 1 }
     },
     "sections": {
       "type": "array",
@@ -28,7 +38,7 @@
     },
     "units": {
       "type": "object",
-      "description": "Line-2 unit system, metatomic-style expressions. Required at version 3 with length and energy. Writers store canonical names (angstrom, eV, fs).",
+      "description": "Line-2 unit system. Required at major 3 with length and energy. The natural time unit spelling is (amu*angstrom^2/eV)^0.5.",
       "properties": {
         "length": { "type": "string", "minLength": 1 },
         "energy": { "type": "string", "minLength": 1 },
