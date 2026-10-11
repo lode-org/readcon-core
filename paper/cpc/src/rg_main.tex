@@ -146,7 +146,7 @@ Table~\ref{tab:requirements} puts the six requirements against the failure each 
 \toprule
 Requirement & Failure & What changes \\
 \midrule
-R1 per-axis mask & Nonzero column 4 becomes a full freeze & Free modes of the prefactor, and whether a hop exists \\
+R1 per-axis mask & Nonzero column 4 becomes a full freeze & The saddle mode, and thus the prefactor \\
 R2 persistent id & Type grouping pairs atoms by row & Which atom is aligned with its image \\
 R3 declared time unit & Natural-unit velocities labelled fs & Kinetic energy on restart, by \(103.64\) \\
 R4 float round trip & Six fixed decimals & Coordinates, by up to \(5.0\times10^{-7}\,\text{\AA}\) \\
@@ -170,8 +170,10 @@ Section~\ref{sec:validation} shows the factor on a 28-atom slab at 300\,K, and i
 
 A surface calculation freezes buried atoms on every axis and often holds only the height of an adsorbate, which is a different constraint from a full freeze \cite{jonssonSimulationSurfaceProcesses2011,larsenAtomicSimulationEnvironmenta2017}.
 Harmonic transition-state theory builds the prefactor from the free modes at the minimum and at the saddle, so an axis that was meant to move and is instead frozen removes a mode, and an axis that was meant to be held and is instead free adds one.
-On the slab of Section~\ref{sec:validation} the bottom nine atoms carry mask 7 and the adatom carries mask 4, meaning \(z\) only.
-ASE 3.29.0 reads every nonzero mask as a full freeze, which pins the adatom on \(x\) and \(y\) as well, so the band cannot represent a hollow-to-hollow hop and the free-mode count of the prefactor changes with it.
+On the EMT Pt(100) slab of Section~\ref{sec:validation}, a \(3\times3\times3\) cell plus one adatom, the bottom nine atoms carry mask 7 and the adatom carries mask 4, so only \(z\) is held.
+With the endpoints relaxed under that constraint, a climbing-image band gives a barrier of \(0.3666\,\mathrm{eV}\) and a Vineyard prefactor of \(3.24\times10^{10}\,\mathrm{Hz}\).
+ASE 3.29.0 reads every nonzero mask as a full freeze, which pins the adatom on \(x\) and \(y\) as well.
+The middle image of that frozen band is still \(0.3666\,\mathrm{eV}\) above the reactant, because the straight line of this symmetric hop passes through the saddle, yet the image has no imaginary mode, so the harmonic prefactor is undefined.
 % CITE-NEEDED: ASE 3.29.0 as a software release has no DOI in the citation list.
 The same optimiser state is a separate loss: limited-memory quasi-Newton, the optimisers surveyed for saddle searches, and damped molecular dynamics such as FIRE all keep a short history that a geometry frame does not store \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008,bitzekStructuralRelaxationMade2006}.
 A resume can therefore match the coordinates and still take a different next step, which is the L-BFGS control in Section~\ref{sec:validation}.
@@ -529,13 +531,29 @@ The eOn checkpoint written by the default printer in the restart below reads bac
 The 218-atom frames of the timing set in Section~\ref{sec:performance} likewise match after a default rewrite, and the ASE reading of that producer file agrees on the coordinates.
 The cross-reader check also includes the public HCN and HNC endpoints of the hydrogen cyanide isomerisation \cite{mourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
 
-Mask and identity are where the ASE reader and this library part company.
-On the 28-atom Pt(100) slab, bottom layer mask 7 plus an adatom at mask 4, ASE 3.29.0 reports \texttt{FixAtoms} on indices 0 through 8 and 27, which freezes the adatom on every axis.
-The adatom then cannot move laterally, so a band built from that reading cannot represent the hollow-to-hollow hop, and the frozen components change which modes enter the prefactor.
-A quantitative ASE band on the two readings would require endpoints relaxed under each constraint set and an optimiser run to convergence, and that rerun is not what is reported here.
-% CHECK: the ASE mask comparison stays qualitative until a converged rerun with endpoints relaxed under each constraint set.
+For the EMT Pt(100) hop, the bottom layer is fixed and the adatom is fixed in \(z\) only.
+ASE 3.29.0 reads that frame as \texttt{FixAtoms} on indices 0 through 8 and 27, so the adatom is frozen on every axis.
+% CITE-NEEDED: ASE 3.29.0 as a software release has no DOI in the citation list.
+Each pair of endpoints was relaxed with BFGS to \(0.0028\,\mathrm{eV}/\text{\AA}\), and a climbing-image band of seven images with the improved tangent was converged to \(0.01\,\mathrm{eV}/\text{\AA}\) \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000}.
+With the height held, the barrier is \(0.3666\,\mathrm{eV}\) on a path of \(2.900\,\text{\AA}\), and at the saddle the adatom has moved \(1.386\,\text{\AA}\) laterally, half of the \(2.772\,\text{\AA}\) hop.
+One imaginary mode, \(-4.08\,\mathrm{meV}\), carries weight \(0.987\) on that lateral motion, and the Vineyard prefactor is \(3.24\times10^{10}\,\mathrm{Hz}\) \cite{vineyardFrequencyFactorsIsotope1957}.
+The frozen reading's default interpolation raises an error, because the constraint changes the path.
+With the constraints ignored during interpolation the band converges, and the adatom stays on the straight line between the hollows.
+The middle image lies \(0.3666\,\mathrm{eV}\) above the reactant only because this symmetric hop's straight line passes through the saddle, and with no imaginary mode it is not a saddle, so the harmonic prefactor is undefined.
+The energy survives by symmetry, while the saddle characterisation that harmonic transition-state theory needs does not, and a less symmetric hop would leave that line.
+Writing a per-axis \texttt{FixCartesian} through ASE's eon writer raises a \texttt{TypeError} on ASE 3.29.0.
 Column 5 is kept by this library, so a caller pairs atoms by id after the file has grouped them by element, instead of by row.
 The bindings return that id on the file-order atom, which is the surface Listing~\ref{lst:py} shows.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
+\caption{Climbing-image bands for a Pt adatom hop on a Pt(100) slab with EMT, after the endpoints were relaxed under each constraint set.
+Left: the adatom is held in \(z\) only, and the barrier is \(0.3666\,\mathrm{eV}\).
+Right: the ASE eon reader freezes the adatom on every axis.
+The middle image matches that energy because the straight line passes through the saddle, and the image has no imaginary mode.}
+\label{fig:asemask}
+\end{figure}
 
 \subsection{An interrupted eOn band}
 We restart an eOn 3.6.0 client with the Morse Pt potential and ASE 3.29.0, on a Pt(100) \(3\times3\times3\) slab plus one adatom (28 atoms, the bottom 9 at mask 7) \cite{goswamiEonV3602026,goswamiEnhancedClimbingImage2026}.
