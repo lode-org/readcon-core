@@ -18,9 +18,9 @@ ingress path from XYZ, PDB, and GRO. Corpora use
 
 | Language | Command |
 | --- | --- |
-| Python | `pip install 'readcon==0.16.2'` |
-| Python + chemfiles | `pip install 'readcon-chemfiles==0.16.2'` |
-| Rust | `cargo add readcon-core@0.16.2` |
+| Python | `pip install 'readcon==0.17.0'` |
+| Python + chemfiles | `pip install 'readcon-chemfiles==0.17.0'` |
+| Rust | `cargo add readcon-core@0.17.0` |
 
 The full matrix is
 [docs/orgmode/tutorials/getting-started.org](docs/orgmode/tutorials/getting-started.org).
