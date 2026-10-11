@@ -1,0 +1,2 @@
+The reader compatibility table now describes readcon 0.17.0.
+Gzip input is every member, and an out-of-range mask is rejected in every mode.

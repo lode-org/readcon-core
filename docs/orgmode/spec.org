@@ -278,7 +278,7 @@ That expression is a time. =units.rs= parses it as about 10.180505710759414 fs.
 eOn hard-codes 10.1805055 fs (=include/eon/ParametersOptions.h:26=).
 The relative difference is about 2e-8.
 A writer that canonicalises the expression by inserting spaces is not using the pinned spelling.
-Names below are the ones =src/units.rs= at f09b1af accepts for length, energy, mass, and time, compared case-insensitively.
+Names below are the ones =src/units.rs= in readcon 0.17.0 accepts for length, energy, mass, and time, compared case-insensitively.
 
 - CON-units.1 :: MUST :: Major 3 MUST include =units.length= and =units.energy= as non-empty strings of the matching dimension.
 - CON-units.2 :: MUST :: Optional =mass=, =time=, =velocity=, and =force= strings, when present, MUST have the matching dimension.
@@ -394,16 +394,16 @@ CON has no magic bytes. Identify a file by extension and by this header.
 
 Version 1 is the text of the pre-readcon eOn writer (=svn-Dec16_2020= =client/Matter.cpp:748=).
 The eOn 2.17-3.4 column calls readcon.
-Cells cite =file:line= at eOn v3.6.0, v3.4.0, and v2.17.10, ASE 3.29.0, and readcon f09b1af.
+Cells cite =file:line= at eOn v3.6.0, v3.4.0, and v2.17.10, ASE 3.29.0, and readcon 0.17.0.
 
-| Feature | eOn >= 3.5 | eOn 2.17-3.4 | ASE 3.29.0 =ase/io/eon.py= | chemfiles | OVITO 3.16.1 | readcon f09b1af |
+| Feature | eOn >= 3.5 | eOn 2.17-3.4 | ASE 3.29.0 =ase/io/eon.py= | chemfiles | OVITO 3.16.1 | readcon 0.17.0 |
 |---------+------------+--------------+----------------------------+-----------+--------------+-----------------|
-| JSON line 2 | v3.6.0 =client/ConFileIO.cpp:586= =read_all_frames=, =:463= =frame_from_matter=. | v3.4.0 =client/ConFileIO.cpp:573=. v2.17.10 =client/ConFileIO.cpp:294=. | =:72= stores line 2 as text. =:255= writes =preBox_header_2=. | No CON reader (=src/formats=). | No CON reader. The input list has no CON entry. | =src/parser.rs:458=. |
-| Masks 1-6 | v3.6.0 =client/ConFileIO.cpp:386= =getFixedMask=, =:714= =setFixedMask=. | v3.4.0 =client/ConFileIO.cpp:386= and =:701=. v2.17.10 =:144-146= writes one boolean on all axes and =:384-385= collapses any fixed bit to 1. | =:139= =bool(int(tokens[3]))=. Writer emits 0 or 1. | No CON reader. | No CON reader. | =src/types.rs:644=. Outside 0-7 is not =InvalidFixedFlag= unless =validate= is true. |
-| Sections | v3.6.0 =client/ConFileIO.cpp:422-424= leaves forces off. | v3.4.0 =client/ConFileIO.cpp:422=. v2.17.10 has velocities only (=:174=). | =:177= reads the next line as a header, so a section blank does not parse. | No CON reader. | No CON reader. | =src/parser.rs:1100=. |
-| 4-column lines | v3.6.0 =client/ConFileIO.cpp:586= via readcon. | v3.4.0 =client/ConFileIO.cpp:573=. v2.17.10 =client/ConFileIO.cpp:294=. | =:138-139= reads xyz and column 4, not column 5. | No CON reader. | No CON reader. | =src/parser.rs:665= defaults column 5 to the 0-based index. |
-| Gzip | v3.6.0 =client/ConFileIO.cpp:577-578= one gzip member. | v3.4.0 =client/ConFileIO.cpp:564-565=. v2.17.10 =:118= =compression_from_extension=. | =:177= reads text lines. No gzip decoder in this module. | No CON reader. | No CON reader. | =src/compression.rs:85= =GzDecoder= reads the first member. |
-| Velocities | v3.6.0 =client/ConFileIO.cpp:43= precision 6, =:444= =set_atom_velocity=, =include/eon/ParametersOptions.h:26= =timeUnit= 10.1805055 fs. | v3.4.0 =client/ConFileIO.cpp:43= and =:431=, same =ParametersOptions.h:26=. v2.17.10 =client/ConFileIO.cpp:174=. | =:303= writes xyz, flag, and id. No velocity block. | No CON reader. | No CON reader. | =src/parser.rs:1117= parses the numbers and does not apply =units.time=. =src/writer.rs:269= can still insert =time: fs=. |
+| JSON line 2 | v3.6.0 =client/ConFileIO.cpp:586= =read_all_frames=, =:463= =frame_from_matter=. | v3.4.0 =client/ConFileIO.cpp:573=. v2.17.10 =client/ConFileIO.cpp:294=. | =:72= stores line 2 as text. =:255= writes =preBox_header_2=. | No CON reader (=src/formats=). | No CON reader. The input list has no CON entry. | =src/parser.rs:822= reads a JSON line 2. A non-JSON line 2 is version 1. |
+| Masks 1-6 | v3.6.0 =client/ConFileIO.cpp:386= =getFixedMask=, =:714= =setFixedMask=. | v3.4.0 =client/ConFileIO.cpp:386= and =:701=. v2.17.10 =:144-146= writes one boolean on all axes and =:384-385= collapses any fixed bit to 1. | =:139= =bool(int(tokens[3]))=. Writer emits 0 or 1. | No CON reader. | No CON reader. | =src/parser.rs:238= =parse_fixed_flag=. Outside 0-7 is =InvalidFixedFlag= in every mode. |
+| Sections | v3.6.0 =client/ConFileIO.cpp:422-424= leaves forces off. | v3.4.0 =client/ConFileIO.cpp:422=. v2.17.10 has velocities only (=:174=). | =:177= reads the next line as a header, so a section blank does not parse. | No CON reader. | No CON reader. | =src/parser.rs:1497= =parse_declared_sections=. |
+| 4-column lines | v3.6.0 =client/ConFileIO.cpp:586= via readcon. | v3.4.0 =client/ConFileIO.cpp:573=. v2.17.10 =client/ConFileIO.cpp:294=. | =:138-139= reads xyz and column 4, not column 5. | No CON reader. | No CON reader. | =src/parser.rs:278= defaults a missing column 5 to the 0-based index. |
+| Gzip | v3.6.0 =client/ConFileIO.cpp:577-578= one gzip member. | v3.4.0 =client/ConFileIO.cpp:564-565=. v2.17.10 =:118= =compression_from_extension=. | =:177= reads text lines. No gzip decoder in this module. | No CON reader. | No CON reader. | =src/compression.rs:86= =MultiGzDecoder= reads every gzip member, in order. |
+| Velocities | v3.6.0 =client/ConFileIO.cpp:43= precision 6, =:444= =set_atom_velocity=, =include/eon/ParametersOptions.h:26= =timeUnit= 10.1805055 fs. | v3.4.0 =client/ConFileIO.cpp:43= and =:431=, same =ParametersOptions.h:26=. v2.17.10 =client/ConFileIO.cpp:174=. | =:303= writes xyz, flag, and id. No velocity block. | No CON reader. | No CON reader. | =src/parser.rs:1600= rejects minor 1 velocities with no =units.time= as =InvalidUnits=. =src/units.rs:376= reads versions 1, 2, and 3.0 as the natural time unit. =src/writer.rs:360= does not insert =time: fs=. |
 
 * Examples
 
