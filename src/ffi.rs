@@ -152,7 +152,7 @@ pub extern "C" fn rkr_frame_spec_version(frame_handle: *const RKRConFrame) -> u3
 pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFrame) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     let mut obj = serde_json::Map::new();
     obj.insert(
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFram
     let json_str = serde_json::Value::Object(obj).to_string();
     match CString::new(json_str) {
         Ok(cs) => cs.into_raw(),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Returns the per-frame energy from metadata, or NaN if absent.
@@ -194,12 +194,12 @@ pub unsafe extern "C" fn rkr_frame_composition_formula(
 ) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     let s = crate::index_proj::frame_composition_formula(frame);
     match CString::new(s) {
         Ok(cs) => cs.into_raw(),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn rkr_frame_index_projection_json(
 ) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     let p = crate::index_proj::FrameIndexProjection::from_frame(frame);
     let v = serde_json::json!({
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn rkr_frame_index_projection_json(
     });
     match CString::new(v.to_string()) {
         Ok(cs) => cs.into_raw(),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Returns the potential type string from metadata as a heap-allocated
@@ -295,14 +295,14 @@ pub unsafe extern "C" fn rkr_frame_index_projection_json(
 pub unsafe extern "C" fn rkr_frame_potential_type(frame_handle: *const RKRConFrame) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match frame.header.potential_type() {
         Some(pot_type) => match CString::new(pot_type) {
             Ok(cs) => cs.into_raw(),
-            Err(_) => ptr::null_mut(),
+            Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
         },
-        None => ptr::null_mut(),
+        None => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Returns the zero-based frame index from metadata, or UINT64_MAX if absent.
@@ -351,7 +351,7 @@ pub extern "C" fn rkr_frame_neb_band(frame_handle: *const RKRConFrame) -> u64 {
 /// Error codes for RKR functions.
 #[repr(C)]
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RKRStatus {
     /// Function completed successfully.
     RKR_STATUS_SUCCESS = 0,
@@ -383,6 +383,9 @@ pub enum RKRStatus {
     RKR_STATUS_DEVICE_MISMATCH = -12,
     /// Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
     RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
+    /// A CON text parse failed. The thread-local [`rkr_last_error`] message
+    /// names the class (`NonFiniteValue`, `InvalidCount`, ...).
+    RKR_STATUS_PARSE_ERROR = -14,
 }
 /// Number of optional frame topology bonds (`metadata["bonds"]`), or 0 if absent.
 ///
@@ -418,14 +421,14 @@ pub unsafe extern "C" fn rkr_frame_bond_at(
         || out_has_order.is_null()
         || out_order.is_null()
     {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let bonds = frame.bonds();
     let Some(bond) = bonds.get(index as usize) else {
-        return RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS;
+        return note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS);
     };
     unsafe {
         *out_i = bond.i;
@@ -438,22 +441,8 @@ pub unsafe extern "C" fn rkr_frame_bond_at(
             *out_order = 0;
         }
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
-thread_local! {
-    static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
-}
-
-fn set_last_error(message: &str) {
-    let stored = CString::new(message.replace('\0', ""))
-        .unwrap_or_else(|_| c"unrepresentable error".to_owned());
-    LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(stored));
-}
-
-fn clear_last_error() {
-    LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
-}
-
 /// Returns a stable, static message for a status code.
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
 #[unsafe(no_mangle)]
@@ -475,24 +464,186 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
         RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED => {
             c"device allocation unsupported in this build".as_ptr()
         }
+        RKRStatus::RKR_STATUS_PARSE_ERROR => c"parse error".as_ptr(),
     }
 }
 
-/// Detailed message from the most recent failing `rkr_writer_extend` or
-/// `rkr_writer_flush` on this thread.
+/// Thread-local parse or status failure. `message` is valid until the next
+/// error on this thread or until [`rkr_clear_error`].
+#[repr(C)]
+pub struct rkr_error {
+    pub code: i32,
+    pub message: *const c_char,
+    pub line: u32,
+    pub frame_index: u64,
+}
+
+struct LastErrorSlot {
+    message: CString,
+    view: rkr_error,
+}
+
+thread_local! {
+    static LAST_ERROR: RefCell<Option<LastErrorSlot>> = const { RefCell::new(None) };
+}
+
+fn set_last_error(code: i32, message: &str, line: u32, frame_index: u64) {
+    let cleaned = message.replace('\0', "");
+    let message = CString::new(cleaned).unwrap_or_else(|_| CString::new("error").unwrap());
+    LAST_ERROR.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        *slot = Some(LastErrorSlot {
+            message,
+            view: rkr_error {
+                code,
+                message: std::ptr::null(),
+                line,
+                frame_index,
+            },
+        });
+        if let Some(stored) = slot.as_mut() {
+            stored.view.message = stored.message.as_ptr();
+        }
+    });
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
+}
+
+fn static_status_message(status: RKRStatus) -> String {
+    let ptr = rkr_status_message(status);
+    if ptr.is_null() {
+        return "error".to_string();
+    }
+    unsafe { CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Record a negative status. Success leaves the previous error in place.
+fn note(status: RKRStatus) -> RKRStatus {
+    let code = status as i32;
+    if code < 0 {
+        let message = static_status_message(status);
+        set_last_error(code, &message, 0, 0);
+    }
+    status
+}
+
+fn null_err<T>(status: RKRStatus) -> *mut T {
+    note(status);
+    ptr::null_mut()
+}
+
+fn status_for_parse(err: &crate::error::ParseError) -> RKRStatus {
+    use crate::error::ParseError;
+    match err {
+        ParseError::IndexOutOfBounds { .. } => note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
+        ParseError::InvalidMetadataJson(_) | ParseError::MissingSpecVersion => {
+            note(RKRStatus::RKR_STATUS_INVALID_JSON)
+        }
+        _ => note(RKRStatus::RKR_STATUS_PARSE_ERROR),
+    }
+}
+
+fn note_located(err: &crate::error::LocatedParseError) -> RKRStatus {
+    let status = status_for_parse(&err.error);
+    let message = format!("{}: {}", err.error.class_name(), err.error);
+    set_last_error(status as i32, &message, err.line, err.frame_index);
+    status
+}
+
+fn null_located<T>(err: &crate::error::LocatedParseError) -> *mut T {
+    note_located(err);
+    ptr::null_mut()
+}
+
+fn note_load(err: crate::iterators::LoadError) {
+    match err {
+        crate::iterators::LoadError::Io(e) => {
+            set_last_error(RKRStatus::RKR_STATUS_IO_ERROR as i32, &e.to_string(), 0, 0);
+        }
+        crate::iterators::LoadError::Utf8(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+        }
+        crate::iterators::LoadError::Parse(located) => {
+            note_located(&located);
+        }
+        crate::iterators::LoadError::Empty => {
+            let located = crate::error::LocatedParseError::new(
+                crate::error::ParseError::IncompleteHeader,
+                1,
+                0,
+            );
+            note_located(&located);
+        }
+    }
+}
+
+fn null_load<T>(err: crate::iterators::LoadError) -> *mut T {
+    note_load(err);
+    ptr::null_mut()
+}
+
+fn note_boxed(err: Box<dyn std::error::Error>) {
+    if let Some(io) = err.downcast_ref::<std::io::Error>() {
+        set_last_error(RKRStatus::RKR_STATUS_IO_ERROR as i32, &io.to_string(), 0, 0);
+        return;
+    }
+    if let Some(parse) = err.downcast_ref::<crate::error::ParseError>() {
+        let located = crate::error::LocatedParseError::new(parse.clone(), parse.line(), 0);
+        note_located(&located);
+        return;
+    }
+    set_last_error(
+        RKRStatus::RKR_STATUS_INTERNAL_ERROR as i32,
+        &err.to_string(),
+        0,
+        0,
+    );
+}
+
+/// Detailed message from the most recent failure on this thread.
 ///
-/// `rkr_status_message` stays a fixed string per status code. This pointer
-/// carries the underlying I/O or format text, for example
-/// `CON validation failed: atom id 1 is repeated in the frame`.
-/// Returns NULL when that call succeeded or no such failure has been
-/// recorded. The pointer is valid until the next call on this thread that
-/// records or clears the message. Do NOT free it.
+/// This is the `message` field of [`rkr_last_error`]. Writer failures store
+/// the underlying I/O or format text. Returns NULL when nothing is stored.
+/// Do NOT free it.
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_last_error_message() -> *const c_char {
-    LAST_ERROR.with(|slot| match slot.borrow().as_ref() {
-        Some(message) => message.as_ptr(),
-        None => ptr::null(),
+    LAST_ERROR.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map(|slot| slot.view.message)
+            .unwrap_or(std::ptr::null())
     })
+}
+
+/// The error most recently set on this thread, or NULL if none is set.
+///
+/// The pointer and its `message` stay valid until the next failing call on
+/// this thread or [`rkr_clear_error`]. Do not free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_last_error() -> *const rkr_error {
+    LAST_ERROR.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map(|slot| &slot.view as *const rkr_error)
+            .unwrap_or(std::ptr::null())
+    })
+}
+
+/// Drop the thread-local error. A later success does not do this.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_clear_error() {
+    clear_last_error();
 }
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
@@ -641,18 +792,37 @@ pub unsafe extern "C" fn read_con_file_iterator(
     filename_c: *const c_char,
 ) -> *mut CConFrameIterator {
     if filename_c.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
     let owned = match crate::compression::read_file_contents(Path::new(filename)) {
         Ok(fc) => match fc.as_str() {
             Ok(s) => s.to_owned(),
-            Err(_) => return ptr::null_mut(),
+            Err(e) => {
+                set_last_error(
+                    RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                    &e.to_string(),
+                    0,
+                    0,
+                );
+                return ptr::null_mut();
+            }
         },
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            note_boxed(e);
+            return ptr::null_mut();
+        }
     };
     c_iterator_from_owned_string(owned)
 }
@@ -669,11 +839,19 @@ pub unsafe extern "C" fn read_con_string_iterator(
     contents_c: *const c_char,
 ) -> *mut CConFrameIterator {
     if contents_c.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let contents = match unsafe { CStr::from_ptr(contents_c).to_str() } {
         Ok(s) => s.to_owned(),
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
     c_iterator_from_owned_string(contents)
 }
@@ -690,7 +868,7 @@ pub unsafe extern "C" fn read_con_buffer_iterator(
     len: usize,
 ) -> *mut CConFrameIterator {
     if data.is_null() && len > 0 {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     if len == 0 {
         return c_iterator_from_owned_string(String::new());
@@ -698,7 +876,7 @@ pub unsafe extern "C" fn read_con_buffer_iterator(
     let slice = unsafe { std::slice::from_raw_parts(data, len) };
     let contents = match std::str::from_utf8(slice) {
         Ok(s) => s.to_owned(),
-        Err(_) => return ptr::null_mut(),
+        Err(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     c_iterator_from_owned_string(contents)
 }
@@ -712,12 +890,16 @@ pub unsafe extern "C" fn con_frame_iterator_next(
     iterator: *mut CConFrameIterator,
 ) -> *mut RKRConFrame {
     if iterator.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let iter = unsafe { &mut *(*iterator).iterator };
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        _ => ptr::null_mut(),
+        Some(Err(e)) => {
+            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            null_located(&located)
+        }
+        None => ptr::null_mut(),
     }
 }
 
@@ -726,13 +908,16 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIterator) -> RKRStatus {
     if iterator.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let iter = unsafe { &mut *(*iterator).iterator };
     match iter.forward() {
         Some(Ok(())) => RKRStatus::RKR_STATUS_SUCCESS,
-        Some(Err(_)) => RKRStatus::RKR_STATUS_IO_ERROR,
-        None => RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS,
+        Some(Err(e)) => {
+            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            note_located(&located)
+        }
+        None => note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
     }
 }
 
@@ -744,10 +929,18 @@ pub unsafe extern "C" fn con_frame_iterator_skip(
     n: usize,
 ) -> usize {
     if iterator.is_null() {
+        note(RKRStatus::RKR_STATUS_NULL_POINTER);
         return usize::MAX;
     }
     let iter = unsafe { &mut *(*iterator).iterator };
-    iter.skip_frames(n).unwrap_or(usize::MAX)
+    match iter.skip_frames(n) {
+        Ok(skipped) => skipped,
+        Err(e) => {
+            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            note_located(&located);
+            usize::MAX
+        }
+    }
 }
 
 /// Skip `index` frames, then parse the next. NULL at EOF or on error.
@@ -757,16 +950,26 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
     index: usize,
 ) -> *mut RKRConFrame {
     if iterator.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let iter = unsafe { &mut *(*iterator).iterator };
     match iter.skip_frames(index) {
         Ok(skipped) if skipped == index => {}
-        _ => return ptr::null_mut(),
+        Ok(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
+        Err(e) => {
+            let located =
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), index as u64);
+            return null_located(&located);
+        }
     }
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        _ => ptr::null_mut(),
+        Some(Err(e)) => {
+            let located =
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), index as u64);
+            null_located(&located)
+        }
+        None => null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
     }
 }
 
@@ -774,13 +977,28 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_count_frames(filename_c: *const c_char) -> usize {
     if filename_c.is_null() {
+        note(RKRStatus::RKR_STATUS_NULL_POINTER);
         return usize::MAX;
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return usize::MAX,
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return usize::MAX;
+        }
     };
-    crate::iterators::count_frames(Path::new(filename)).unwrap_or(usize::MAX)
+    match crate::iterators::count_frames(Path::new(filename)) {
+        Ok(n) => n,
+        Err(e) => {
+            note_boxed(e);
+            usize::MAX
+        }
+    }
 }
 
 /// Skip `index` frames on a path, then parse one. Caller frees with `free_rkr_frame`.
@@ -790,15 +1008,23 @@ pub unsafe extern "C" fn rkr_read_nth_frame(
     index: usize,
 ) -> *mut RKRConFrame {
     if filename_c.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
-    match crate::iterators::read_nth_frame(Path::new(filename), index) {
+    match crate::iterators::read_nth_frame_located(Path::new(filename), index) {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => ptr::null_mut(),
+        Err(e) => null_load(e),
     }
 }
 /// Frees the memory for an opaque `RKRConFrame` handle.
@@ -838,7 +1064,7 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) -> *mut CFrame {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     let masses_iter = frame
         .header
@@ -936,13 +1162,13 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
 ) -> RKRStatus {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+        None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
     };
     if buffer.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     if buffer_len == 0 {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let line_to_copy: Option<&str> = if is_prebox {
         match line_index {
@@ -964,9 +1190,9 @@ pub unsafe extern "C" fn rkr_frame_get_header_line(
             ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, len_to_copy);
             *buffer.add(len_to_copy) = 0;
         }
-        RKRStatus::RKR_STATUS_SUCCESS
+        note(RKRStatus::RKR_STATUS_SUCCESS)
     } else {
-        RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS
+        note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS)
     }
 }
 /// Gets a header string line as a newly allocated, null-terminated C string.
@@ -989,7 +1215,7 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
 ) -> *mut c_char {
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     let line_to_copy: Option<&str> = if is_prebox {
         match line_index {
@@ -1008,7 +1234,7 @@ pub unsafe extern "C" fn rkr_frame_get_header_line_cpp(
         // Convert the Rust string slice to a C-compatible, heap-allocated string.
         match CString::new(line) {
             Ok(c_string) => c_string.into_raw(), // Give ownership to the C caller
-            Err(_) => ptr::null_mut(),           // In case the string contains a null byte
+            Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR), // In case the string contains a null byte
         }
     } else {
         ptr::null_mut() // Index out of bounds
@@ -1071,11 +1297,11 @@ pub unsafe extern "C" fn create_writer_from_path_c(
 ) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match File::create(filename) {
         Ok(file) => into_rkr_writer(Box::new(file), None),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_IO_ERROR),
     }
 }
 /// Creates a CON writer that preserves every finite binary64 value.
@@ -1089,7 +1315,7 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
 ) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match File::create(filename) {
         Ok(file) => {
@@ -1099,7 +1325,7 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
             );
             Box::into_raw(Box::new(writer)) as *mut RKRConFrameWriter
         }
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_IO_ERROR),
     }
 }
 
@@ -1114,7 +1340,7 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
 pub unsafe extern "C" fn rkr_writer_flush(writer_handle: *mut RKRConFrameWriter) -> RKRStatus {
     let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
         Some(w) => w,
-        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+        None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
     };
     match writer.flush() {
         Ok(()) => {
@@ -1122,7 +1348,12 @@ pub unsafe extern "C" fn rkr_writer_flush(writer_handle: *mut RKRConFrameWriter)
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Err(err) => {
-            set_last_error(&err.to_string());
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                &err.to_string(),
+                0,
+                0,
+            );
             RKRStatus::RKR_STATUS_IO_ERROR
         }
     }
@@ -1176,24 +1407,24 @@ pub unsafe extern "C" fn rkr_writer_extend(
 ) -> RKRStatus {
     let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
         Some(w) => w,
-        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+        None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
     };
     if frame_handles.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let handles_slice = unsafe { std::slice::from_raw_parts(frame_handles, num_frames) };
     let mut rust_frames: Vec<&ConFrame> = Vec::with_capacity(num_frames);
     if handles_slice.iter().any(|&handle| handle.is_null()) {
         // Fail fast if any handle is null, as this indicates a bug on the
         // caller's side.
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     for &handle in handles_slice.iter() {
         // Assume the handle is valid.
         match unsafe { (handle as *const ConFrame).as_ref() } {
             Some(frame) => rust_frames.push(frame),
             // This case should be unreachable if the handle is not null, but we handle it for safety.
-            None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+            None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
         }
     }
     match writer.extend(rust_frames.into_iter()) {
@@ -1202,7 +1433,12 @@ pub unsafe extern "C" fn rkr_writer_extend(
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Err(err) => {
-            set_last_error(&err.to_string());
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                &err.to_string(),
+                0,
+                0,
+            );
             RKRStatus::RKR_STATUS_IO_ERROR
         }
     }
@@ -1220,10 +1456,10 @@ pub unsafe extern "C" fn rkr_writer_set_canonical(
 ) -> RKRStatus {
     let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
         Some(w) => w,
-        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+        None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
     };
     writer.set_canonical(canonical != 0);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 /// Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
@@ -1306,13 +1542,13 @@ mod index_proj_ffi_tests {
             assert!(!w.is_null());
             assert_eq!(
                 unsafe { rkr_writer_set_canonical(w, 1) },
-                RKRStatus::RKR_STATUS_SUCCESS
+                note(RKRStatus::RKR_STATUS_SUCCESS)
             );
             assert_eq!(unsafe { rkr_writer_is_canonical(w) }, 1);
             let handles = [fr as *const ConFrame as *const RKRConFrame];
             assert_eq!(
                 unsafe { rkr_writer_extend(w, handles.as_ptr(), 1) },
-                RKRStatus::RKR_STATUS_SUCCESS
+                note(RKRStatus::RKR_STATUS_SUCCESS)
             );
             unsafe { free_rkr_writer(w) };
         }
@@ -1337,11 +1573,11 @@ pub unsafe extern "C" fn create_writer_from_path_with_precision_c(
 ) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match File::create(filename) {
         Ok(file) => into_rkr_writer(Box::new(file), Some(precision)),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_IO_ERROR),
     }
 }
 //=============================================================================
@@ -1367,12 +1603,12 @@ unsafe fn add_builder_atom(
     forces: Option<[f64; 3]>,
 ) -> RKRStatus {
     if builder_handle.is_null() || symbol.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let sym = match unsafe { CStr::from_ptr(symbol).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     builder.add_atom(sym, x, y, z, fixed, atom_id, mass);
     if let Some(v) = velocity {
@@ -1381,7 +1617,7 @@ unsafe fn add_builder_atom(
     if let Some(f) = forces {
         builder.with_force(f);
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Attaches a velocity vector to the most recently added atom on a builder.
 /// No-op if no atom has been added yet.
@@ -1394,12 +1630,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_velocity(
     velocity: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || velocity.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let v = unsafe { [*velocity, *velocity.add(1), *velocity.add(2)] };
     builder.with_velocity(v);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Attaches a force vector to the most recently added atom on a builder.
 /// No-op if no atom has been added yet.
@@ -1412,12 +1648,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_force(
     force: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || force.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let f = unsafe { [*force, *force.add(1), *force.add(2)] };
     builder.with_force(f);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Attaches a displacement vector (Angstrom) to the most recently added
 /// atom on a builder. No-op if no atom has been added yet.
@@ -1431,12 +1667,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_displacement(
     displacement: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || displacement.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let d = unsafe { [*displacement, *displacement.add(1), *displacement.add(2)] };
     builder.with_displacement(d);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Attaches a spread vector (Angstrom) to the most recently added
 /// atom on a builder. No-op if no atom has been added yet.
@@ -1450,12 +1686,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_spread(
     spread: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || spread.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let d = unsafe { [*spread, *spread.add(1), *spread.add(2)] };
     builder.with_spread(d);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Attaches a per-atom energy to the most recently added atom on a
 /// builder. No-op if no atom has been added yet.
@@ -1472,11 +1708,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_energy(
     energy: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.with_energy(energy);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 // ----- v0.11.0 in-place mutation FFI ---------------------------------------
 //
@@ -1495,12 +1731,12 @@ fn map_builder_err(e: crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match e {
         ParseError::IndexOutOfBounds { .. } | ParseError::InvalidVectorLength { .. } => {
-            RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS
+            note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS)
         }
         ParseError::MassMismatch { .. } | ParseError::ValidationError(_) => {
-            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+            note(RKRStatus::RKR_STATUS_VALIDATION_ERROR)
         }
-        _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        _ => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Returns the number of atoms currently held in the builder.
@@ -1531,11 +1767,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_position(
     z: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.set_atom_position(index, x, y, z) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1549,12 +1785,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_velocity(
     velocity: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || velocity.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let v = unsafe { [*velocity, *velocity.add(1), *velocity.add(2)] };
     match builder.set_atom_velocity(index, v) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1568,12 +1804,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_force(
     force: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || force.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let f = unsafe { [*force, *force.add(1), *force.add(2)] };
     match builder.set_atom_force(index, f) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1588,12 +1824,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_displacement(
     displacement: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || displacement.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let d = unsafe { [*displacement, *displacement.add(1), *displacement.add(2)] };
     match builder.set_atom_displacement(index, d) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1608,12 +1844,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_spread(
     spread: *const f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || spread.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let d = unsafe { [*spread, *spread.add(1), *spread.add(2)] };
     match builder.set_atom_spread(index, d) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1627,11 +1863,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energy(
     energy: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.set_atom_energy(index, energy) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1647,11 +1883,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_fixed(
     fixed_z: bool,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.set_atom_fixed(index, [fixed_x, fixed_y, fixed_z]) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1665,11 +1901,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_mass(
     mass: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.set_atom_mass(index, mass) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1686,11 +1922,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_id(
     atom_id: u64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.set_atom_id(index, atom_id) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1703,11 +1939,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_velocity(
     index: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.clear_atom_velocity(index) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1719,11 +1955,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_force(
     index: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.clear_atom_force(index) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1735,11 +1971,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_displacement(
     index: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.clear_atom_displacement(index) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1751,11 +1987,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_spread(
     index: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.clear_atom_spread(index) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1767,11 +2003,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clear_atom_energy(
     index: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     match builder.clear_atom_energy(index) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1786,12 +2022,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_positions_from_flat(
     len: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() || positions.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(positions, len) };
     match builder.set_positions_from_flat(slice) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1805,12 +2041,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_forces_from_flat(
     len: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() || forces.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(forces, len) };
     match builder.set_forces_from_flat(slice) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1825,12 +2061,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_displacements_from_flat(
     len: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() || displacements.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(displacements, len) };
     match builder.set_displacements_from_flat(slice) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1845,12 +2081,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_spreads_from_flat(
     len: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() || spreads.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(spreads, len) };
     match builder.set_spreads_from_flat(slice) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1864,12 +2100,12 @@ pub unsafe extern "C" fn rkr_frame_builder_set_atom_energies_from_flat(
     len: usize,
 ) -> RKRStatus {
     if builder_handle.is_null() || energies.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = unsafe { std::slice::from_raw_parts(energies, len) };
     match builder.set_atom_energies_from_flat(slice) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
+        Ok(_) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(e) => map_builder_err(e),
     }
 }
@@ -1883,7 +2119,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_position(
     out_xyz: *mut f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_xyz.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_position(index) {
@@ -1891,7 +2127,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_position(
             *out_xyz = x;
             *out_xyz.add(1) = y;
             *out_xyz.add(2) = z;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -1910,7 +2146,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_velocity(
     has_value: *mut bool,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_velocity(index) {
@@ -1919,11 +2155,11 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_velocity(
             *out_xyz.add(1) = v[1];
             *out_xyz.add(2) = v[2];
             *has_value = true;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Ok(None) => unsafe {
             *has_value = false;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -1938,7 +2174,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
     has_value: *mut bool,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_force(index) {
@@ -1947,11 +2183,11 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_force(
             *out_xyz.add(1) = f[1];
             *out_xyz.add(2) = f[2];
             *has_value = true;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Ok(None) => unsafe {
             *has_value = false;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -1969,7 +2205,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_displacement(
     has_value: *mut bool,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_displacement(index) {
@@ -1978,11 +2214,11 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_displacement(
             *out_xyz.add(1) = d[1];
             *out_xyz.add(2) = d[2];
             *has_value = true;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Ok(None) => unsafe {
             *has_value = false;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -2000,7 +2236,7 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_spread(
     has_value: *mut bool,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_xyz.is_null() || has_value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_spread(index) {
@@ -2009,11 +2245,11 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_spread(
             *out_xyz.add(1) = d[1];
             *out_xyz.add(2) = d[2];
             *has_value = true;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Ok(None) => unsafe {
             *has_value = false;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -2031,18 +2267,18 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_energy(
     has_value: *mut bool,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_value.is_null() || has_value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_energy(index) {
         Ok(Some(e)) => unsafe {
             *out_value = e;
             *has_value = true;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Ok(None) => unsafe {
             *has_value = false;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -2057,13 +2293,13 @@ pub unsafe extern "C" fn rkr_frame_builder_get_atom_mass(
     out_mass: *mut f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_mass.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     match builder.get_atom_mass(index) {
         Ok(m) => unsafe {
             *out_mass = m;
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         },
         Err(e) => map_builder_err(e),
     }
@@ -2095,15 +2331,15 @@ fn map_dlpack_err(e: crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match e {
         ParseError::ValidationError(ref msg) if msg.contains("device mismatch") => {
-            RKRStatus::RKR_STATUS_DEVICE_MISMATCH
+            note(RKRStatus::RKR_STATUS_DEVICE_MISMATCH)
         }
         ParseError::ValidationError(ref msg)
             if msg.contains("no device allocator") || msg.contains("allocator") =>
         {
-            RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED
+            note(RKRStatus::RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED)
         }
-        ParseError::ValidationError(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
-        _ => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        ParseError::ValidationError(_) => note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
+        _ => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// DLPack `DLDataTypeCode` values (same numerics as `dlpack.h` / dlpk).
@@ -2229,7 +2465,7 @@ fn finish_dlpack_tensor<E: std::fmt::Display>(
             unsafe {
                 *out_tensor = raw.as_ptr();
             }
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
         Err(e) => map_dlpack_err(crate::error::ParseError::ValidationError(format!(
             "DLPack export failed: {e}"
@@ -2247,7 +2483,7 @@ fn export_f64_slice_as_dlpack(
 ) -> RKRStatus {
     use rkr_dl_type_code::*;
     if dtype.lanes != 1 {
-        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     macro_rules! arc_export {
         ($ty:ty, $map:expr) => {{
@@ -2255,10 +2491,10 @@ fn export_f64_slice_as_dlpack(
             match *shape {
                 [r, c] => match ndarray::ArcArray2::from_shape_vec((r, c), v) {
                     Ok(a) => dlpk::DLPackTensor::try_from(a),
-                    Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                    Err(_) => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
                 },
                 [_] => dlpk::DLPackTensor::try_from(ndarray::ArcArray1::from_vec(v)),
-                _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                _ => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
             }
         }};
     }
@@ -2279,7 +2515,7 @@ fn export_f64_slice_as_dlpack(
             return finish_dlpack_tensor(dlpk::DLPackTensor::try_from(v), out_tensor);
         }
         // Complex / bfloat / float8 / opaque: not hosted from CON f64 yet
-        _ => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        _ => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     };
     finish_dlpack_tensor(tensor, out_tensor)
 }
@@ -2296,7 +2532,7 @@ fn export_owned_array2_dlpack_opts(
         {
             // H2D into real device memory (f64 only for CUDA path here).
             if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
-                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+                return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
             }
             return finish_dlpack_tensor(
                 crate::cuda_array::export_host_f64_as_cuda_dlpack(
@@ -2309,7 +2545,7 @@ fn export_owned_array2_dlpack_opts(
         }
         #[cfg(not(feature = "cuda"))]
         {
-            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+            return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
         }
     }
     export_f64_slice_as_dlpack(&flat, &[r, c], opts.dtype, out_tensor)
@@ -2326,7 +2562,7 @@ fn export_owned_array1_f64_dlpack_opts(
         #[cfg(feature = "cuda")]
         {
             if opts.dtype.code != rkr_dl_type_code::RKR_DL_FLOAT || opts.dtype.bits != 64 {
-                return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+                return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
             }
             return finish_dlpack_tensor(
                 crate::cuda_array::export_host_f64_as_cuda_dlpack(
@@ -2339,7 +2575,7 @@ fn export_owned_array1_f64_dlpack_opts(
         }
         #[cfg(not(feature = "cuda"))]
         {
-            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+            return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
         }
     }
     export_f64_slice_as_dlpack(&flat, &[n], opts.dtype, out_tensor)
@@ -2397,7 +2633,7 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2431,7 +2667,7 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2439,7 +2675,7 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_ex(
     };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_velocities_section() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     export_owned_array2_dlpack_opts(builder.velocities_2d_ref(), &o, out_tensor)
 }
@@ -2467,7 +2703,7 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2475,7 +2711,7 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
     };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_forces_section() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     export_owned_array2_dlpack_opts(builder.forces_2d_ref(), &o, out_tensor)
 }
@@ -2511,7 +2747,7 @@ pub unsafe extern "C" fn rkr_frame_builder_displacements_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2519,7 +2755,7 @@ pub unsafe extern "C" fn rkr_frame_builder_displacements_dlpack_ex(
     };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_displacements_section() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     export_owned_array2_dlpack_opts(builder.displacements_2d_ref(), &o, out_tensor)
 }
@@ -2553,7 +2789,7 @@ pub unsafe extern "C" fn rkr_frame_builder_spreads_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2561,7 +2797,7 @@ pub unsafe extern "C" fn rkr_frame_builder_spreads_dlpack_ex(
     };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_spreads_section() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     export_owned_array2_dlpack_opts(builder.spreads_2d_ref(), &o, out_tensor)
 }
@@ -2591,7 +2827,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2599,7 +2835,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_ex(
     };
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     if !builder.has_energies_section() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     export_owned_array1_f64_dlpack_opts(builder.atom_energies_1d_ref(), &o, out_tensor)
 }
@@ -2624,7 +2860,7 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2653,7 +2889,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if builder_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let o = match resolve_dlpack_opts(opts) {
         Ok(o) => o,
@@ -2690,7 +2926,7 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder
@@ -2710,11 +2946,11 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     if !builder.has_velocities_section() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let slice = builder.velocities_mut();
     if slice.is_empty() {
@@ -2733,11 +2969,11 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     if !builder.has_forces_section() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let slice = builder.forces_mut();
     if slice.is_empty() {
@@ -2756,11 +2992,11 @@ pub unsafe extern "C" fn rkr_frame_builder_displacements_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     if !builder.has_displacements_section() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let slice = builder.displacements_mut();
     if slice.is_empty() {
@@ -2779,11 +3015,11 @@ pub unsafe extern "C" fn rkr_frame_builder_spreads_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     if !builder.has_spreads_section() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let slice = builder.spreads_mut();
     if slice.is_empty() {
@@ -2802,11 +3038,11 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     if !builder.has_energies_section() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let slice = builder.atom_energies_mut();
     if slice.is_empty() {
@@ -2824,7 +3060,7 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_data(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut f64 {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let slice = builder.masses_mut();
@@ -2930,7 +3166,7 @@ pub unsafe extern "C" fn rkr_frame_new(
     postbox1: *const c_char,
 ) -> *mut RKRConFrameBuilder {
     if cell.is_null() || angles.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let cell_arr = unsafe { [*cell, *cell.add(1), *cell.add(2)] };
     let angles_arr = unsafe { [*angles, *angles.add(1), *angles.add(2)] };
@@ -2964,16 +3200,16 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
     metadata_json: *const c_char,
 ) -> RKRStatus {
     if builder_handle.is_null() || metadata_json.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let metadata_json = match unsafe { CStr::from_ptr(metadata_json).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     match builder.set_metadata_json(metadata_json) {
-        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
-        Err(_) => RKRStatus::RKR_STATUS_INVALID_JSON,
+        Ok(()) => note(RKRStatus::RKR_STATUS_SUCCESS),
+        Err(_) => note(RKRStatus::RKR_STATUS_INVALID_JSON),
     }
 }
 /// Sets the units object on an existing frame builder.
@@ -3037,15 +3273,15 @@ pub unsafe extern "C" fn rkr_frame_builder_set_scalar_metadata(
     value: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() || key.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let key = match unsafe { CStr::from_ptr(key).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     builder.set_scalar_metadata(key, value);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets a string metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3059,19 +3295,19 @@ pub unsafe extern "C" fn rkr_frame_builder_set_string_metadata(
     value: *const c_char,
 ) -> RKRStatus {
     if builder_handle.is_null() || key.is_null() || value.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let key = match unsafe { CStr::from_ptr(key).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     let value = match unsafe { CStr::from_ptr(value).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     builder.set_string_metadata(key, value);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the per-frame total energy metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3084,11 +3320,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_energy(
     energy: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_energy(energy);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the zero-based frame index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3101,11 +3337,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_frame_index(
     idx: u64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_frame_index(idx);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the simulation time metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3118,11 +3354,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_time(
     time: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_time(time);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the timestep metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3135,11 +3371,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_timestep(
     dt: f64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_timestep(dt);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the NEB bead index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3152,11 +3388,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_bead(
     bead: u64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_neb_bead(bead);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets the NEB band index metadata on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
@@ -3169,11 +3405,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_neb_band(
     band: u64,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_neb_band(band);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 // -----------------------------------------------------------------------------
 // Legacy add_atom variants (kept for source compatibility)
@@ -3486,12 +3722,12 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
     builder_handle: *mut RKRConFrameBuilder,
 ) -> *mut RKRConFrame {
     if builder_handle.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { *Box::from_raw(builder_handle as *mut ConFrameBuilder) };
     match builder.build() {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }
 /// Frees a frame builder without building.
@@ -3525,7 +3761,7 @@ pub unsafe extern "C" fn rkr_frame_builder_clone(
     builder_handle: *const RKRConFrameBuilder,
 ) -> *mut RKRConFrameBuilder {
     if builder_handle.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
     let cloned = builder.clone();
@@ -3540,11 +3776,11 @@ pub unsafe extern "C" fn rkr_frame_builder_clone(
 pub unsafe extern "C" fn create_writer_gzip_c(filename_c: *const c_char) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match crate::compression::gzip_writer(Path::new(filename)) {
         Ok(encoder) => into_rkr_writer(Box::new(encoder), None),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Creates a gzip-compressed frame writer with a custom floating-point
@@ -3560,11 +3796,11 @@ pub unsafe extern "C" fn create_writer_gzip_with_precision_c(
 ) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match crate::compression::gzip_writer(Path::new(filename)) {
         Ok(encoder) => into_rkr_writer(Box::new(encoder), Some(precision)),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Creates a new zstd-compressed frame writer for the specified file.
@@ -3581,11 +3817,11 @@ pub unsafe extern "C" fn create_writer_gzip_with_precision_c(
 pub unsafe extern "C" fn create_writer_zstd_c(filename_c: *const c_char) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match crate::compression::zstd_writer(Path::new(filename)) {
         Ok(encoder) => into_rkr_writer(Box::new(encoder), None),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Creates a zstd-compressed frame writer with a custom floating-point
@@ -3606,11 +3842,11 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 ) -> *mut RKRConFrameWriter {
     let filename = match unsafe { cstr_path(filename_c) } {
         Some(s) => s,
-        None => return ptr::null_mut(),
+        None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
     match crate::compression::zstd_writer(Path::new(filename)) {
         Ok(encoder) => into_rkr_writer(Box::new(encoder), Some(precision)),
-        Err(_) => ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 //=============================================================================
@@ -3627,15 +3863,23 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_read_first_frame(filename_c: *const c_char) -> *mut RKRConFrame {
     if filename_c.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
-    match iterators::read_first_frame(Path::new(filename)) {
+    match iterators::read_first_frame_located(Path::new(filename)) {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => ptr::null_mut(),
+        Err(e) => null_load(e),
     }
 }
 /// Reads all frames from a .con file using mmap.
@@ -3652,15 +3896,23 @@ pub unsafe extern "C" fn rkr_read_all_frames(
     num_frames: *mut usize,
 ) -> *mut *mut RKRConFrame {
     if filename_c.is_null() || num_frames.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
-    match iterators::read_all_frames(Path::new(filename)) {
+    match iterators::read_all_frames_located(Path::new(filename), None) {
         Ok(frames) => pack_frame_handles(frames, num_frames),
-        Err(_) => ptr::null_mut(),
+        Err(e) => null_load(e),
     }
 }
 
@@ -3680,20 +3932,28 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
     n_threads: usize,
 ) -> *mut *mut RKRConFrame {
     if filename_c.is_null() || num_frames.is_null() {
-        return ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
         Ok(s) => s,
-        Err(_) => return ptr::null_mut(),
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
     };
     let threads = if n_threads == 0 {
         None
     } else {
         Some(n_threads)
     };
-    match iterators::read_all_frames_with_threads(Path::new(filename), threads) {
+    match iterators::read_all_frames_located(Path::new(filename), threads) {
         Ok(frames) => pack_frame_handles(frames, num_frames),
-        Err(_) => ptr::null_mut(),
+        Err(e) => null_load(e),
     }
 }
 
@@ -3778,20 +4038,20 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
     out_block: *mut *mut metatensor::c_api::mts_block_t,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_block.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_block = std::ptr::null_mut() };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::metatensor_export::frame_positions_block(frame)
     })) {
         Ok(Ok(b)) => {
             unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Err(_)) | Err(_) => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 #[cfg(feature = "metatensor")]
@@ -3801,21 +4061,21 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
     out_block: *mut *mut metatensor::c_api::mts_block_t,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_block.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_block = std::ptr::null_mut() };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::metatensor_export::frame_velocities_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
             unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => note(RKRStatus::RKR_STATUS_SECTION_ABSENT),
+        Ok(Err(_)) | Err(_) => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 #[cfg(feature = "metatensor")]
@@ -3825,21 +4085,21 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
     out_block: *mut *mut metatensor::c_api::mts_block_t,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_block.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_block = std::ptr::null_mut() };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::metatensor_export::frame_forces_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
             unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => note(RKRStatus::RKR_STATUS_SECTION_ABSENT),
+        Ok(Err(_)) | Err(_) => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 #[cfg(feature = "metatensor")]
@@ -3849,21 +4109,21 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
     out_block: *mut *mut metatensor::c_api::mts_block_t,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_block.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_block = std::ptr::null_mut() };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::metatensor_export::frame_energies_block(frame)
     })) {
         Ok(Ok(Some(b))) => {
             unsafe { *out_block = crate::metatensor_export::tensor_block_into_raw_mts(b) };
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Ok(Ok(None)) => RKRStatus::RKR_STATUS_SECTION_ABSENT,
-        Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+        Ok(Ok(None)) => note(RKRStatus::RKR_STATUS_SECTION_ABSENT),
+        Ok(Err(_)) | Err(_) => note(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 #[cfg(not(feature = "zstd"))]
@@ -3902,7 +4162,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
     if !out_block.is_null() {
         unsafe { *out_block = std::ptr::null_mut() };
     }
-    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+    note(RKRStatus::RKR_STATUS_FEATURE_DISABLED)
 }
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
@@ -3913,7 +4173,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
     if !out_block.is_null() {
         unsafe { *out_block = std::ptr::null_mut() };
     }
-    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+    note(RKRStatus::RKR_STATUS_FEATURE_DISABLED)
 }
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
@@ -3924,7 +4184,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
     if !out_block.is_null() {
         unsafe { *out_block = std::ptr::null_mut() };
     }
-    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+    note(RKRStatus::RKR_STATUS_FEATURE_DISABLED)
 }
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
@@ -3935,7 +4195,7 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
     if !out_block.is_null() {
         unsafe { *out_block = std::ptr::null_mut() };
     }
-    RKRStatus::RKR_STATUS_FEATURE_DISABLED
+    note(RKRStatus::RKR_STATUS_FEATURE_DISABLED)
 }
 // ----- Frame section buffers (no CFrame AoS required) -------------------------
 /// Number of atoms on the frame (atom_data order).
@@ -4048,10 +4308,10 @@ pub unsafe extern "C" fn rkr_frame_atom_ids_view(
     out: *mut RKRArrayView,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let slice = frame.atom_ids.as_slice_memory_order();
     unsafe {
@@ -4065,7 +4325,7 @@ pub unsafe extern "C" fn rkr_frame_atom_ids_view(
             dtype_bits: 64,
         };
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 /// Row-major f64 xyz pointer, or NULL if storage is not float64.
@@ -4127,18 +4387,18 @@ fn fill_array2_view(
     section: bool,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
     if section && arr.nrows() == 0 {
         unsafe { *out = RKRArrayView::empty() };
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     unsafe { *out = RKRArrayView::from_array2(arr) };
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 fn fill_array1_view(
@@ -4148,18 +4408,18 @@ fn fill_array1_view(
     section: bool,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
     if section && arr.len() == 0 {
         unsafe { *out = RKRArrayView::empty() };
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     unsafe { *out = RKRArrayView::from_array1(arr) };
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 fn f64_col_ptr(
@@ -4207,10 +4467,10 @@ fn copy_array2_f64(
     section: bool,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
     let n = if arr.nrows() > 0 {
@@ -4219,17 +4479,17 @@ fn copy_array2_f64(
         frame.atom_data.len()
     };
     if section && arr.nrows() == 0 {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let need = n.saturating_mul(3);
     if out_len < need {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, need) };
     if arr.nrows() == n {
         if let Some(src) = arr.f64_slice() {
             dest.copy_from_slice(&src[..need.min(src.len())]);
-            return RKRStatus::RKR_STATUS_SUCCESS;
+            return note(RKRStatus::RKR_STATUS_SUCCESS);
         }
         for i in 0..n {
             let row = arr.as_f64_row(i);
@@ -4237,14 +4497,14 @@ fn copy_array2_f64(
             dest[i * 3 + 1] = row[1];
             dest[i * 3 + 2] = row[2];
         }
-        return RKRStatus::RKR_STATUS_SUCCESS;
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     for (i, a) in frame.atom_data.iter().enumerate() {
         dest[i * 3] = a.x;
         dest[i * 3 + 1] = a.y;
         dest[i * 3 + 2] = a.z;
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 fn copy_array1_f64(
@@ -4255,10 +4515,10 @@ fn copy_array1_f64(
     section: bool,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
     let n = if arr.len() > 0 {
@@ -4267,20 +4527,20 @@ fn copy_array1_f64(
         frame.atom_data.len()
     };
     if section && arr.len() == 0 {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     if out_len < n {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
     if let Some(src) = arr.f64_slice() {
         dest.copy_from_slice(&src[..n.min(src.len())]);
-        return RKRStatus::RKR_STATUS_SUCCESS;
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     for i in 0..n {
         dest[i] = arr.get_f64(i);
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 #[unsafe(no_mangle)]
@@ -4348,24 +4608,24 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     out_len: usize,
 ) -> RKRStatus {
     if frame_handle.is_null() || out.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let n = frame.atom_ids.len().max(frame.atom_data.len());
     if out_len < n {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
     if let Some(src) = frame.atom_ids.as_slice_memory_order() {
         dest[..src.len().min(n)].copy_from_slice(&src[..src.len().min(n)]);
-        return RKRStatus::RKR_STATUS_SUCCESS;
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     for (i, a) in frame.atom_data.iter().enumerate() {
         dest[i] = a.atom_id;
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
     let n = frame.atom_data.len();
@@ -4397,7 +4657,7 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let dl_device = if device_type == rkr_dl_device_type::RKR_DL_CPU {
@@ -4410,13 +4670,13 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
         #[cfg(not(feature = "cuda"))]
         {
             let _ = device_id;
-            return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+            return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
         }
     } else {
-        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     // Opaque SoA storage → DLPack; CUDA requests H2D via storage_dtype / cuda_array.
     match frame.positions_as_dlpack(dl_device) {
@@ -4425,7 +4685,7 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
             unsafe {
                 *out_tensor = raw.as_ptr();
             }
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
         Err(e) => map_dlpack_err(e),
     }
@@ -4442,18 +4702,18 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     tensor: *const RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let frame = unsafe { &mut *(frame_handle as *mut ConFrame) };
     let dl = unsafe { &(*tensor).dl_tensor };
     if dl.device.device_type != dlpk::sys::DLDeviceType::kDLCPU {
-        return RKRStatus::RKR_STATUS_FEATURE_DISABLED;
+        return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
     }
     let n = frame.atom_data.len();
     let need = n.saturating_mul(3);
     let ndim = dl.ndim as usize;
     let shape = if dl.shape.is_null() {
-        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     } else {
         unsafe { std::slice::from_raw_parts(dl.shape, ndim) }
     };
@@ -4462,12 +4722,12 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     } else if ndim == 1 && shape[0] == need as i64 {
         need
     } else {
-        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     };
     let code = dl.dtype.code as u8;
     let bits = dl.dtype.bits;
     if dl.data.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let vals: Vec<f64> = if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 64 {
         let s = unsafe { std::slice::from_raw_parts(dl.data as *const f64, nelem) };
@@ -4476,10 +4736,10 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         let s = unsafe { std::slice::from_raw_parts(dl.data as *const f32, nelem) };
         s.iter().map(|&x| x as f64).collect()
     } else {
-        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     };
     if frame.positions.nrows() != n {
-        return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     for i in 0..n {
         frame
@@ -4487,7 +4747,7 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
             .set_f64_row(i, [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]]);
     }
     frame.sync_atom_data_from_arrays();
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 /// DLPack positions from a frame (default float64 / CPU). Prefer
@@ -4521,7 +4781,7 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4529,7 +4789,7 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = frame_positions_arc(frame);
     export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
@@ -4551,7 +4811,7 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4559,10 +4819,10 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     if !frame.has_velocities() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
@@ -4591,7 +4851,7 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4599,10 +4859,10 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     if !frame.has_forces() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
@@ -4642,7 +4902,7 @@ pub unsafe extern "C" fn rkr_frame_displacements_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4650,10 +4910,10 @@ pub unsafe extern "C" fn rkr_frame_displacements_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     if !frame.has_displacements() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
@@ -4693,7 +4953,7 @@ pub unsafe extern "C" fn rkr_frame_spreads_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4701,10 +4961,10 @@ pub unsafe extern "C" fn rkr_frame_spreads_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     if !frame.has_spreads() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
@@ -4733,7 +4993,7 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
     if frame_handle.is_null() || out_tensor.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     unsafe { *out_tensor = std::ptr::null_mut() };
     let o = match resolve_dlpack_opts(opts) {
@@ -4741,10 +5001,10 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
         Err(st) => return st,
     };
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     if !frame.has_energies() {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let data: Vec<f64> = frame
         .atom_data
@@ -4776,12 +5036,12 @@ pub unsafe extern "C" fn rkr_frame_select(
     out_result: *mut *mut RKRSelectionResult,
 ) -> RKRStatus {
     if frame_handle.is_null() || selection.is_null() || out_result.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let frame = unsafe { &*(frame_handle as *const ConFrame) };
     let sel_str = match unsafe { CStr::from_ptr(selection) }.to_str() {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     match crate::chemfiles_selection::evaluate_selection_on_con_frame(sel_str, frame) {
         Ok(result) => {
@@ -4789,9 +5049,9 @@ pub unsafe extern "C" fn rkr_frame_select(
             unsafe {
                 *out_result = Box::into_raw(boxed) as *mut RKRSelectionResult;
             }
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Err(_) => RKRStatus::RKR_STATUS_SELECTION_ERROR,
+        Err(_) => note(RKRStatus::RKR_STATUS_SELECTION_ERROR),
     }
 }
 /// Number of matches in a selection result.
@@ -4835,12 +5095,12 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
     out_size: *mut u32,
 ) -> RKRStatus {
     if result_handle.is_null() || out_atoms.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     let idx = match_index as usize;
     if idx >= result.matches.len() {
-        return RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS;
+        return note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS);
     }
     let m = &result.matches[idx];
     unsafe {
@@ -4855,7 +5115,7 @@ pub unsafe extern "C" fn rkr_selection_result_match_at(
             *out_size = m.size as u32;
         }
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Fill `out_indices` with primary atom indices for each match (length =
 /// match count). Returns `RKR_STATUS_BUFFER_TOO_SMALL` if `capacity` is too small.
@@ -4870,7 +5130,7 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
     out_written: *mut u64,
 ) -> RKRStatus {
     if result_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let result = unsafe { &*(result_handle as *const crate::chemfiles_selection::SelectionResult) };
     let n = result.matches.len() as u64;
@@ -4880,20 +5140,20 @@ pub unsafe extern "C" fn rkr_selection_result_primary_indices(
         }
     }
     if n == 0 {
-        return RKRStatus::RKR_STATUS_SUCCESS;
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     if out_indices.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     if capacity < n {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     unsafe {
         for (i, m) in result.matches.iter().enumerate() {
             *out_indices.add(i) = m.atoms[0] as u64;
         }
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Free a selection result from [`rkr_frame_select`]. Safe with NULL.
 ///
@@ -4943,14 +5203,14 @@ pub extern "C" fn rkr_has_parallel_support() -> u8 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_read_chemfiles_first(path_c: *const c_char) -> *mut RKRConFrame {
     if path_c.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match crate::chemfiles_import::con_frame_from_trajectory_path(path_str) {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => std::ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }
 
@@ -4965,14 +5225,14 @@ pub unsafe extern "C" fn rkr_read_chemfiles(
     num_frames: *mut usize,
 ) -> *mut *mut RKRConFrame {
     if path_c.is_null() || num_frames.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match crate::chemfiles_import::con_frames_from_trajectory_path(path_str) {
         Ok(frames) => pack_frame_handles(frames, num_frames),
-        Err(_) => std::ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }
 
@@ -4987,14 +5247,14 @@ pub unsafe extern "C" fn rkr_read_chemfiles_nth(
     index: usize,
 ) -> *mut RKRConFrame {
     if path_c.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match crate::chemfiles_import::con_frame_from_trajectory_path_nth(path_str, index) {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => std::ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }
 
@@ -5032,17 +5292,17 @@ pub unsafe extern "C" fn rkr_read_chemfiles_range(
     num_frames: *mut usize,
 ) -> *mut *mut RKRConFrame {
     if path_c.is_null() || num_frames.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Ok(path_str) = unsafe { CStr::from_ptr(path_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let topology = if topology_c.is_null() {
         None
     } else {
         match unsafe { CStr::from_ptr(topology_c) }.to_str() {
             Ok(s) if !s.is_empty() => Some(std::path::PathBuf::from(s)),
-            _ => return std::ptr::null_mut(),
+            _ => return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
         }
     };
     let opts = crate::chemfiles_import::ChemfilesReadOpts {
@@ -5056,7 +5316,7 @@ pub unsafe extern "C" fn rkr_read_chemfiles_range(
     };
     match crate::chemfiles_import::con_frames_from_trajectory_path_with(path_str, &opts) {
         Ok(frames) => pack_frame_handles(frames, num_frames),
-        Err(_) => std::ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Read all frames from memory with chemfiles `format` (e.g. `"XYZ"`).
@@ -5072,13 +5332,13 @@ pub unsafe extern "C" fn rkr_read_chemfiles_memory(
     num_frames: *mut usize,
 ) -> *mut *mut RKRConFrame {
     if data_c.is_null() || format_c.is_null() || num_frames.is_null() {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let Ok(data) = unsafe { CStr::from_ptr(data_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let Ok(format) = unsafe { CStr::from_ptr(format_c) }.to_str() else {
-        return std::ptr::null_mut();
+        return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     match crate::chemfiles_import::con_frames_from_memory(data, format) {
         Ok(frames) => {
@@ -5092,7 +5352,7 @@ pub unsafe extern "C" fn rkr_read_chemfiles_memory(
             std::mem::forget(ptrs);
             p
         }
-        Err(_) => std::ptr::null_mut(),
+        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     }
 }
 /// Free a DLPack tensor from `rkr_frame_builder_*_dlpack` (calls deleter). Safe with NULL.
@@ -5129,27 +5389,27 @@ pub unsafe extern "C" fn rkr_pack_rcso(
     out_len: *mut usize,
 ) -> RKRStatus {
     if out_len.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
         Some(f) => f,
-        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+        None => return note(RKRStatus::RKR_STATUS_NULL_POINTER),
     };
     let bytes = match crate::rcso::Rcso::encode_frame(frame) {
         Ok(b) => b,
-        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        Err(_) => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     };
     unsafe { *out_len = bytes.len() };
     if buf.is_null() {
-        return RKRStatus::RKR_STATUS_SUCCESS;
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     if buflen < bytes.len() {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     unsafe {
         ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 /// Read `natoms` from an RCSO blob. No MPI.
@@ -5163,15 +5423,15 @@ pub unsafe extern "C" fn rkr_unpack_rcso_natoms(
     out_natoms: *mut u32,
 ) -> RKRStatus {
     if buf.is_null() || out_natoms.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
     match crate::rcso::Rcso::decode(bytes) {
         Ok(s) => {
             unsafe { *out_natoms = s.natoms };
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         }
-        Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        Err(_) => note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     }
 }
 
@@ -5187,15 +5447,15 @@ pub unsafe extern "C" fn rkr_unpack_rcso_positions(
     dest_natoms: u32,
 ) -> RKRStatus {
     if buf.is_null() || dest.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
     let soa = match crate::rcso::Rcso::decode(bytes) {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        Err(_) => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     };
     if soa.natoms != dest_natoms {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let out = unsafe { std::slice::from_raw_parts_mut(dest, dest_natoms as usize * 3) };
     for (i, p) in soa.positions.iter().enumerate() {
@@ -5203,7 +5463,7 @@ pub unsafe extern "C" fn rkr_unpack_rcso_positions(
         out[i * 3 + 1] = p[1];
         out[i * 3 + 2] = p[2];
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 /// Copy RCSO forces into row-major `dest`. `SECTION_ABSENT` if the blob
@@ -5219,18 +5479,18 @@ pub unsafe extern "C" fn rkr_unpack_rcso_forces(
     dest_natoms: u32,
 ) -> RKRStatus {
     if buf.is_null() || dest.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let bytes = unsafe { std::slice::from_raw_parts(buf, buflen) };
     let soa = match crate::rcso::Rcso::decode(bytes) {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        Err(_) => return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     };
     let Some(forces) = soa.forces else {
-        return RKRStatus::RKR_STATUS_SECTION_ABSENT;
+        return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     };
     if soa.natoms != dest_natoms {
-        return RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL;
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let out = unsafe { std::slice::from_raw_parts_mut(dest, dest_natoms as usize * 3) };
     for (i, f) in forces.iter().enumerate() {
@@ -5238,7 +5498,7 @@ pub unsafe extern "C" fn rkr_unpack_rcso_forces(
         out[i * 3 + 1] = f[1];
         out[i * 3 + 2] = f[2];
     }
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
 #[cfg(test)]
@@ -5253,18 +5513,18 @@ mod tests {
         let mut buf = vec![0.0f64; n * 3];
         assert_eq!(
             unsafe { rkr_frame_copy_positions(handle, buf.as_mut_ptr(), buf.len()) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         let mut tensor: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack(handle, &mut tensor) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         assert!(!tensor.is_null());
         unsafe { rkr_dlpack_delete(tensor) };
         assert_eq!(
             unsafe { rkr_frame_copy_velocities(handle, buf.as_mut_ptr(), buf.len()) },
-            RKRStatus::RKR_STATUS_SECTION_ABSENT
+            note(RKRStatus::RKR_STATUS_SECTION_ABSENT)
         );
         unsafe { free_rkr_frame(handle) };
     }
@@ -5279,7 +5539,7 @@ mod tests {
         let mut buf = vec![0.0f64; nat * 3];
         assert_eq!(
             unsafe { rkr_frame_copy_positions(first, buf.as_mut_ptr(), buf.len()) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe { free_rkr_frame_array(arr, n) };
     }
@@ -5703,16 +5963,16 @@ mod tests {
         let mut t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_velocities_dlpack(handle, &mut t) },
-            RKRStatus::RKR_STATUS_SECTION_ABSENT
+            note(RKRStatus::RKR_STATUS_SECTION_ABSENT)
         );
         assert!(t.is_null());
         assert_eq!(
             unsafe { rkr_frame_forces_dlpack(handle, &mut t) },
-            RKRStatus::RKR_STATUS_SECTION_ABSENT
+            note(RKRStatus::RKR_STATUS_SECTION_ABSENT)
         );
         assert_eq!(
             unsafe { rkr_frame_atom_energies_dlpack(handle, &mut t) },
-            RKRStatus::RKR_STATUS_SECTION_ABSENT
+            note(RKRStatus::RKR_STATUS_SECTION_ABSENT)
         );
         unsafe { free_rkr_frame(handle) };
 
@@ -5774,12 +6034,12 @@ mod tests {
         let mut eng: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_forces_dlpack(built, &mut frc) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe { assert_dlpack_cpu_float(frc, 2, &[n_built, 3], 64) };
         assert_eq!(
             unsafe { rkr_frame_atom_energies_dlpack(built, &mut eng) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe { assert_dlpack_cpu_float(eng, 1, &[n_built], 64) };
         // Explicit f32 via DLPack-shaped DLDataType (code=kDLFloat=2, bits=32)
@@ -5797,7 +6057,7 @@ mod tests {
         let mut pos32: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack_ex(built, &opts32, &mut pos32) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe {
             assert_dlpack_cpu_float(pos32, 2, &[n_built, 3], 32);
@@ -5820,13 +6080,13 @@ mod tests {
         #[cfg(not(feature = "cuda"))]
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
-            RKRStatus::RKR_STATUS_FEATURE_DISABLED
+            note(RKRStatus::RKR_STATUS_FEATURE_DISABLED)
         );
         #[cfg(feature = "cuda")]
         {
             assert_eq!(
                 unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
-                RKRStatus::RKR_STATUS_SUCCESS
+                note(RKRStatus::RKR_STATUS_SUCCESS)
             );
             assert!(!junk.is_null());
             let dl = unsafe { &(*junk).dl_tensor };
@@ -5847,7 +6107,7 @@ mod tests {
                         &mut as_cuda,
                     )
                 },
-                RKRStatus::RKR_STATUS_SUCCESS
+                note(RKRStatus::RKR_STATUS_SUCCESS)
             );
             assert!(!as_cuda.is_null());
             unsafe {
@@ -5872,7 +6132,7 @@ mod tests {
         };
         assert_eq!(
             unsafe { rkr_frame_positions_dlpack_ex(built, &bad_bits, &mut junk) },
-            RKRStatus::RKR_STATUS_VALIDATION_ERROR
+            note(RKRStatus::RKR_STATUS_VALIDATION_ERROR)
         );
         // Metatensor-style as_dlpack reflects storage (f64 CPU), not a cast target
         let mut as_t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
@@ -5888,7 +6148,7 @@ mod tests {
                     &mut as_t,
                 )
             },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe {
             assert_dlpack_cpu_float(as_t, 2, &[n_built, 3], 64);
@@ -5904,7 +6164,7 @@ mod tests {
         }
         assert_eq!(
             unsafe { rkr_frame_positions_from_dlpack(built, as_t) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         {
             let fr = unsafe { &*(built as *const ConFrame) };
@@ -5926,7 +6186,7 @@ mod tests {
                     &mut again,
                 )
             },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         unsafe {
             let dl = &(*again).dl_tensor;
@@ -6175,28 +6435,28 @@ mod tests {
         let mut pos: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_positions_block(handle, &mut pos) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         assert_mts_block_shape(pos, 2, 3);
         unsafe { rkr_mts_block_free(pos) };
         let mut vel: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_velocities_block(handle, &mut vel) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         assert_mts_block_shape(vel, 2, 3);
         unsafe { rkr_mts_block_free(vel) };
         let mut frc: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_forces_block(handle, &mut frc) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         assert_mts_block_shape(frc, 2, 3);
         unsafe { rkr_mts_block_free(frc) };
         let mut eng: *mut metatensor::c_api::mts_block_t = std::ptr::null_mut();
         assert_eq!(
             unsafe { rkr_frame_metatensor_atom_energies_block(handle, &mut eng) },
-            RKRStatus::RKR_STATUS_SUCCESS
+            note(RKRStatus::RKR_STATUS_SUCCESS)
         );
         assert_mts_block_shape(eng, 2, 1);
         unsafe { rkr_mts_block_free(eng) };
