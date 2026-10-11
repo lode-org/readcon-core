@@ -202,6 +202,29 @@ def scaling() -> None:
     plt.close(fig)
 
 
+def ase_mask() -> None:
+    """Two EMT bands from the converged mask comparison, in the paper palette."""
+    correct_path = [0.0, 0.481128, 0.970489, 1.450201, 1.929912, 2.419274, 2.900402]
+    correct_energy = [0.0, 0.108638, 0.286212, 0.366598, 0.286212, 0.108638, 0.0]
+    collapsed_path = [0.0, 0.500396, 0.997861, 1.479777, 1.961694, 2.459159, 2.959555]
+    collapsed_energy = [0.0, 0.109109, 0.287736, 0.366584, 0.287736, 0.109109, 0.0]
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.15), sharey=True)
+    panels = (
+        (axes[0], correct_path, correct_energy, BLUE, "Height held, z only", True),
+        (axes[1], collapsed_path, collapsed_energy, VERMILLION, "Adatom frozen", False),
+    )
+    for ax, path, energy, color, title, is_saddle in panels:
+        ax.plot(path, energy, "-o", color=color, ms=5, lw=1.2)
+        ax.plot(path[3], energy[3], "o", color=ORANGE if is_saddle else BLACK, ms=7, zorder=3)
+        ax.axhline(0.0, color=BLACK, lw=0.4)
+        ax.set_title(title, fontsize=9)
+        ax.set_xlabel("path length (Å)")
+    axes[0].set_ylabel("energy relative to reactant (eV)")
+    fig.tight_layout()
+    fig.savefig(OUT / "ase_mask.pdf")
+    plt.close(fig)
+
+
 def abnf_placeholder() -> None:
     path = OUT / "con_abnf.tex"
     path.write_text(
@@ -214,6 +237,7 @@ def main() -> None:
     workflow()
     architecture()
     restart()
+    ase_mask()
     layers()
     scaling()
     abnf_placeholder()
