@@ -250,6 +250,10 @@ typedef enum RKRStatus {
      * Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
      */
     RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
+    /**
+     * A CON text parse failed. `rkr_last_error` names the class.
+     */
+    RKR_STATUS_PARSE_ERROR = -14,
 } RKRStatus;
 
 /**
@@ -634,17 +638,26 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Detailed message from the most recent failing `rkr_writer_extend` or
- * `rkr_writer_flush` on this thread.
+ * Thread-local failure from the most recent NULL or negative status on this
+ * thread. `message` is valid until the next such failure or `rkr_clear_error`.
+ * Do not free the struct or the message. NULL when no error is stored.
+ * `line` is 1-based. `frame_index` is 0-based.
  *
- * `rkr_status_message` stays a fixed string per status code. This pointer
- * carries the underlying I/O or format text, for example
+ * `rkr_last_error_message` is that same `message` pointer. Writer failures
+ * store the underlying I/O or format text there, for example
  * `CON validation failed: atom id 1 is repeated in the frame`.
- * Returns NULL when that call succeeded or no such failure has been
- * recorded. The pointer is valid until the next call on this thread that
- * records or clears the message. Do NOT free it.
+ * `rkr_status_message` stays a fixed string per status code.
  */
+typedef struct rkr_error {
+    int32_t code;
+    const char *message;
+    uint32_t line;
+    uint64_t frame_index;
+} rkr_error;
+
 const char *rkr_last_error_message(void);
+const struct rkr_error *rkr_last_error(void);
+void rkr_clear_error(void);
 
 /**
  * Creates a new iterator for a .con / .convel path, including transparent
