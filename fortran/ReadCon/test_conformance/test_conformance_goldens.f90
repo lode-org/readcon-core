@@ -218,6 +218,9 @@ contains
       print *, "FAIL ", trim(c%id), ": invalid fixture parsed"
       nfail = nfail + 1
       call fr%free()
+    else if (len_trim(last_error_message()) == 0) then
+      print *, "FAIL ", trim(c%id), ": invalid fixture left the error channel empty"
+      nfail = nfail + 1
     end if
   end function
 

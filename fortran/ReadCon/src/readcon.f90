@@ -18,6 +18,7 @@ module readcon
   public :: frame_metatensor_forces_block, frame_metatensor_atom_energies_block
   public :: mts_block_free_rkr
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
+  public :: last_error_code, last_error_line, last_error_frame, last_error_message, clear_error
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, read_all_frames, read_nth_frame, count_frames
@@ -39,6 +40,14 @@ module readcon
   integer(c_int), parameter :: rkr_status_validation_error = -9
   integer(c_int), parameter :: rkr_status_selection_error = -10
   integer(c_int), parameter :: rkr_status_feature_disabled = -11
+  integer(c_int), parameter :: rkr_status_parse_error = -14
+
+  type, bind(C) :: rkr_error
+    integer(c_int32_t) :: code
+    type(c_ptr) :: message
+    integer(c_int32_t) :: line
+    integer(c_int64_t) :: frame_index
+  end type rkr_error
 
   type, bind(C), public :: catom_t
     integer(c_int64_t) :: atomic_number = 0_c_int64_t
@@ -211,6 +220,12 @@ module readcon
       integer(c_int), value :: st
       type(c_ptr) :: c_rkr_status_message
     end function
+    function c_rkr_last_error() bind(C, name="rkr_last_error")
+      import :: c_ptr
+      type(c_ptr) :: c_rkr_last_error
+    end function
+    subroutine c_rkr_clear_error() bind(C, name="rkr_clear_error")
+    end subroutine
     function c_rkr_read_first_frame(fn) bind(C, name="rkr_read_first_frame")
       import :: c_char, c_ptr
       character(kind=c_char), intent(in) :: fn(*)
@@ -746,6 +761,45 @@ contains
     character(len=:), allocatable :: s
     s = from_c(c_rkr_status_message(int(st, c_int)), .false.)
   end function
+
+  integer function last_error_code()
+    type(rkr_error), pointer :: err
+    last_error_code = 0
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_code = int(err%code)
+  end function
+
+  integer function last_error_line()
+    type(rkr_error), pointer :: err
+    last_error_line = 0
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_line = int(err%line)
+  end function
+
+  integer(int64) function last_error_frame()
+    type(rkr_error), pointer :: err
+    last_error_frame = 0_int64
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_frame = int(err%frame_index, int64)
+  end function
+
+  function last_error_message() result(s)
+    character(len=:), allocatable :: s
+    type(rkr_error), pointer :: err
+    if (.not. c_associated(c_rkr_last_error())) then
+      s = ""
+      return
+    end if
+    call c_f_pointer(c_rkr_last_error(), err)
+    s = from_c(err%message, .false.)
+  end function
+
+  subroutine clear_error()
+    call c_rkr_clear_error()
+  end subroutine
 
   integer(int64) function symbol_to_z(sym)
     character(len=*), intent(in) :: sym
