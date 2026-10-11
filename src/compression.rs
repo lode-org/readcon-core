@@ -82,7 +82,8 @@ pub fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::erro
         Compression::Gzip => {
             // Re-open and decompress the entire file
             let file = std::fs::File::open(path)?;
-            let mut decoder = flate2::read::GzDecoder::new(file);
+            // Every gzip member, in order (CON-compress.1, D16).
+            let mut decoder = flate2::read::MultiGzDecoder::new(file);
             let mut contents = String::new();
             decoder.read_to_string(&mut contents)?;
             Ok(FileContents::Owned(contents))
