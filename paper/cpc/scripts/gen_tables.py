@@ -28,6 +28,27 @@ PEER = {
 }
 
 
+def _cpu_family_model() -> tuple[str | None, str | None]:
+    """Family and model from /proc/cpuinfo, which is what lscpu reports."""
+    family = model = None
+    try:
+        lines = Path("/proc/cpuinfo").read_text().splitlines()
+    except OSError:
+        return None, None
+    for line in lines:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        if key == "cpu family" and family is None:
+            family = value.strip()
+        elif key == "model" and model is None:
+            model = value.strip()
+        if family and model:
+            break
+    return family, model
+
+
 def tex(text: str) -> str:
     return (
         text.replace("\\", r"\textbackslash{}")
@@ -259,6 +280,9 @@ def gen_macros(
 
     cpu = host.get("cpu_model", "unknown").replace("(R)", "").replace("(TM)", "")
     cpu = " ".join(cpu.split())
+    family, model = _cpu_family_model()
+    if family and model and "family" not in cpu.lower():
+        cpu = f"{cpu}, family {family}, model {model}"
     add("cpuName", cpu.replace("&", r"\&"))
     add("nCores", host.get("nproc", ""))
     add("nValid", corpus["n_valid"])
