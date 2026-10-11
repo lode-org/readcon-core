@@ -842,6 +842,16 @@ class ConFrameBuilder {
      */
     ConFrameBuilder &set_metadata_json(const std::string &metadata_json);
 
+    /**
+     * @brief Sets the units object from a JSON object.
+     *
+     * Example:
+     * `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+     * Aliases are rewritten. The natural time spelling is kept byte for byte.
+     * @throws readcon::Error when the JSON or a unit expression is invalid.
+     */
+    ConFrameBuilder &set_units(const std::string &units_json);
+
     /// Sets a numeric metadata key.
     ConFrameBuilder &set_scalar_metadata(const std::string &key, double value);
     /// Sets a string metadata key.
@@ -2045,6 +2055,13 @@ ConFrameBuilder::set_metadata_json(const std::string &metadata_json) {
     throw_on_error(rkr_frame_builder_set_metadata_json(builder_handle_,
                                                        metadata_json.c_str()),
                    "Failed to set builder metadata JSON");
+    return *this;
+}
+
+inline ConFrameBuilder &
+ConFrameBuilder::set_units(const std::string &units_json) {
+    throw_on_error(rkr_frame_builder_set_units(builder_handle_, units_json.c_str()),
+                   "Failed to set builder units");
     return *this;
 }
 

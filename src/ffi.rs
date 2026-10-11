@@ -3157,20 +3157,20 @@ pub unsafe extern "C" fn rkr_frame_builder_set_units(
     units_json: *const c_char,
 ) -> RKRStatus {
     if builder_handle.is_null() || units_json.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     let units_json = match unsafe { CStr::from_ptr(units_json).to_str() } {
         Ok(s) => s,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_UTF8),
     };
     let units: serde_json::Value = match serde_json::from_str(units_json) {
         Ok(value) => value,
-        Err(_) => return RKRStatus::RKR_STATUS_INVALID_JSON,
+        Err(_) => return note(RKRStatus::RKR_STATUS_INVALID_JSON),
     };
     match builder.set_units(units) {
-        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
-        Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+        Ok(()) => note(RKRStatus::RKR_STATUS_SUCCESS),
+        Err(_) => note(RKRStatus::RKR_STATUS_VALIDATION_ERROR),
     }
 }
 /// Sets `con_spec_minor` on an existing frame builder.
