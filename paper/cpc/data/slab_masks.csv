@@ -1,0 +1,4 @@
+role,symbol,mask_xyz,atom_id,velocity
+bottom Pt,Pt,111,0,present
+surface Pt,Pt,000,9000,present
+adsorbate H,H,001,10000,present

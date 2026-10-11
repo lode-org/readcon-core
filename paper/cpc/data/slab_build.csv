@@ -1,0 +1,2 @@
+builder,symbol,size_a,size_b,layers,vacuum_angstrom,orthogonal,adsorbate,adsorbate_height_angstrom,adsorbate_site,n_atoms,bottom_mask,surface_mask,adsorbate_mask,temperature_K,velocity_seed,ase_version
+ase.build.fcc111,Pt,50,20,10,8.0,yes,H,1.5,ontop,10001,7,0,4,300.0,20261011,3.29.0

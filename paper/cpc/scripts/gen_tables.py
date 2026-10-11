@@ -18,8 +18,7 @@ PAYLOAD = {
     "frames-1": "1 frame",
     "frames-100": "100 frames",
     "frames-10000": "10000 frames",
-    "atoms-10000": "10000 atoms",
-    "sectioned-neb": "sectioned band",
+    "slab": "Pt slab",
 }
 PEER = {
     "ase_eon": "ASE eon",
@@ -73,6 +72,8 @@ def gen_ratios(rows: list[dict[str, str]]) -> str:
             r"Failures stay in the table and are not converted into times.}"
         ),
         r"\label{tab:ratios}",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{4pt}",
         r"\begin{tabular}{llrrrr}",
         r"\toprule",
         r"Payload & Peer & OK & Fail & Ratio & Interval \\",
@@ -107,7 +108,12 @@ def gen_compat(rows: list[dict[str, str]]) -> str:
             r"The CON column is what readcon-core keeps.}"
         ),
         r"\label{tab:compat}",
-        r"\begin{tabular}{llllll}",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{3pt}",
+        r"\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.45cm}"
+        r">{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X"
+        r">{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X"
+        r">{\raggedright\arraybackslash}X@{}}",
         r"\toprule",
         r"Item & CON & ASE eon & ext.\ XYZ & H5MD & LAMMPS dump \\",
         r"\midrule",
@@ -117,7 +123,7 @@ def gen_compat(rows: list[dict[str, str]]) -> str:
             rf"{tex(row['feature'])} & {tex(row['readcon'])} & {tex(row['ase'])} & "
             rf"{tex(row['xyz'])} & {tex(row['h5md'])} & {tex(row['lammps'])} \\"
         )
-    body += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    body += [r"\bottomrule", r"\end{tabularx}", r"\end{table}", ""]
     return "\n".join(body)
 
 
@@ -135,57 +141,47 @@ def _ase_bits(detail: str) -> tuple[str, str, str]:
     return fixed, ident, vel
 
 
-def gen_hcn(rows: list[dict[str, str]]) -> str:
+def gen_hcn(rows: list[dict[str, str]], slab_rows: list[dict[str, str]]) -> str:
     body = [
         r"\begin{table}[ht]",
         r"\centering",
         r"\small",
         (
-            r"\caption{Mask, atom id and velocity returned for the rewritten "
-            r"HCN and HNC endpoints. "
+            r"\caption{Per-atom mask, id and velocity. "
             r"A mask is three bits in order xyz. "
-            r"The probe frame fixes hydrogen on x only and stores ids 2, 0 and 1.}"
+            r"The probe stores ids 2, 0 and 1 and fixes hydrogen on x only. "
+            r"The slab rows are one buried atom, one surface atom and the adsorbate.}"
         ),
         r"\label{tab:hcn}",
         r"\begin{tabular}{lllll}",
         r"\toprule",
-        r"Frame & Reader & Mask & Id & Velocity \\",
+        r"Atom & Reader & Mask & Id & Velocity \\",
         r"\midrule",
     ]
+    symbols = ("C", "N", "H")
     names = {"0": "HCN", "1": "HNC", "2": "probe"}
     for row in rows:
         if row["reader"] == "readcon-core" and row["frame"] in names:
-            vel = "present" if "0.01" in row["velocities"] or row["velocities"] else "absent"
-            # published frames have a velocity on H; coords file is separate
-            if row["velocities"] in ("", "None None None"):
-                vel = "absent"
-            else:
-                vel = "present"
-            body.append(
-                rf"{names[row['frame']]} & readcon-core & "
-                rf"{tex(row['masks_xyz'])} & {tex(row['ids'])} & {vel} \\"
-            )
-        elif row["reader"] == "ASE eon" and (
-            row["frame"].startswith("velocities") or row["frame"].startswith("coords")
-        ):
-            label = {
-                "velocities-0": "HCN",
-                "velocities-1": "HNC",
-                "velocities-2": "probe",
-                "coords-0": "probe, coordinates",
-            }.get(row["frame"])
-            if label is None:
-                continue
-            if row["status"] != "ok":
-                shown = "sectioned file" if row["frame"].startswith("velocities") else label
+            masks = row["masks_xyz"].split()
+            idents = row["ids"].split()
+            vel = "absent" if row["velocities"] in ("", "None None None") else "present"
+            for symbol, mask, ident in zip(symbols, masks, idents, strict=True):
                 body.append(
-                    rf"{tex(shown)} & ASE eon & \multicolumn{{3}}{{l}}{{{tex(row['status'])}}} \\"
+                    rf"{names[row['frame']]} {symbol} & readcon-core & "
+                    rf"{tex(mask)} & {tex(ident)} & {vel} \\"
                 )
-                continue
+        elif row["reader"] == "ASE eon" and row["frame"] == "coords-0" and row["status"] == "ok":
             fixed, ident, vel = _ase_bits(row["detail"])
-            body.append(
-                rf"{tex(label)} & ASE eon & {tex(fixed)} & {tex(ident)} & {tex(vel)} \\"
-            )
+            flags = fixed.split()
+            for symbol, flag in zip(symbols, flags, strict=True):
+                body.append(
+                    rf"probe {symbol} & ASE eon & {tex(flag)} & {tex(ident)} & {tex(vel)} \\"
+                )
+    for row in slab_rows:
+        body.append(
+            rf"slab {tex(row['role'])} & readcon-core & {tex(row['mask_xyz'])} & "
+            rf"{tex(row['atom_id'])} & {tex(row['velocity'])} \\"
+        )
     body += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
     return "\n".join(body)
 
@@ -213,6 +209,9 @@ def gen_macros(
     threads: list[dict[str, str]],
     velocity: list[dict[str, str]],
     host: dict[str, str],
+    corpus: dict[str, str],
+    roundtrip: dict[str, str],
+    slab: dict[str, str],
 ) -> str:
     lines = []
 
@@ -244,8 +243,8 @@ def gen_macros(
     speed_macro("spBandChem", "frames-10000", "chemfiles_xyz")
     speed_macro("spBandMda", "frames-10000", "mda_h5md")
     ratio_macro("ratBandHpy", "frames-10000", "h5py")
-    speed_macro("spSlabAse", "atoms-10000", "ase_eon")
-    ratio_macro("ratSlabHpy", "atoms-10000", "h5py")
+    speed_macro("spSlabAse", "slab", "ase_eon")
+    ratio_macro("ratSlabHpy", "slab", "h5py")
     speed_macro("spOneHpy", "frames-1", "h5py")
 
     by_thr = {int(row["threads"]): row for row in threads}
@@ -261,18 +260,31 @@ def gen_macros(
     cpu = " ".join(cpu.split())
     add("cpuName", cpu.replace("&", r"\&"))
     add("nCores", host.get("nproc", ""))
+    add("nValid", corpus["n_valid"])
+    add("nInvalid", corpus["n_invalid"])
+    add("nBind", corpus["n_bindings"])
+    add("nRound", roundtrip["n_atoms"])
+    add("nSlab", slab["n_atoms"])
     vel = velocity[0]
-    add("keNat", vel["ke_natural_eV"])
+    add("keNat", f"{float(vel['ke_natural_eV']):.1f}")
     ke_fs = float(vel["ke_if_read_as_fs_eV"])
     add("keFs", f"{ke_fs:.1f}")
-    add("timeFac", vel["eon_fs"])
+    add("timeFac", f"{float(vel['readcon_natural_fs']):.7f}")
     add("timeFacSq", f"{float(vel['factor2']):.2f}")
-    fails = [
-        row
-        for row in ratios
-        if row["payload"] == "sectioned-neb" and row["peer"] == "ase_eon"
-    ]
-    add("nFailBand", fails[0]["n_failure"] if fails else "0")
+    by_thr = {int(row["threads"]): row for row in threads}
+
+    def add_ci(name: str, threads_n: int) -> None:
+        row = by_thr.get(threads_n)
+        if row and row.get("speedup_low"):
+            add(name + "Lo", sig(float(row["speedup_low"]), 2))
+            add(name + "Hi", sig(float(row["speedup_high"]), 2))
+        else:
+            add(name + "Lo", "?")
+            add(name + "Hi", "?")
+
+    add_ci("thrTwo", 2)
+    add_ci("thrFour", 4)
+    add_ci("thrEight", 8)
     lines.append("")
     return "\n".join(lines)
 
@@ -284,6 +296,10 @@ def main() -> None:
         RESULTS / "hcn_loss.csv",
         RESULTS / "velocity_case.csv",
         DATA / "compatibility.csv",
+        DATA / "corpus_counts.csv",
+        DATA / "roundtrip.csv",
+        DATA / "slab_build.csv",
+        DATA / "slab_masks.csv",
     ):
         require(path)
     ratios = read_csv(RESULTS / "ratios.csv")
@@ -292,10 +308,13 @@ def main() -> None:
     velocity = read_csv(RESULTS / "velocity_case.csv")
     compat = read_csv(DATA / "compatibility.csv")
     host = read_csv(RESULTS / "repeats.csv")[0]
-    write("macros.tex", gen_macros(ratios, threads, velocity, host))
+    corpus = read_csv(DATA / "corpus_counts.csv")[0]
+    roundtrip = read_csv(DATA / "roundtrip.csv")[0]
+    slab = read_csv(DATA / "slab_build.csv")[0]
+    write("macros.tex", gen_macros(ratios, threads, velocity, host, corpus, roundtrip, slab))
     write("ratio_table.tex", gen_ratios(ratios))
     write("compat_table.tex", gen_compat(compat))
-    write("hcn_table.tex", gen_hcn(loss))
+    write("hcn_table.tex", gen_hcn(loss, read_csv(DATA / "slab_masks.csv")))
     subprocess.check_call([sys.executable, str(CPC / "scripts" / "gen_figures.py")])
     print(f"wrote tables under {OUT}")
 

@@ -161,31 +161,61 @@ def analyze_threads() -> None:
     by_threads: dict[int, list[dict[str, str]]] = {}
     for row in rows:
         by_threads.setdefault(int(row["threads"]), []).append(row)
-    medians = {}
-    out = []
-    hashes = {}
-    for threads, group in sorted(by_threads.items()):
-        ok = [
-            float(r["seconds"]) for r in group if r["status"] == "ok" and r["seconds"]
-        ]
-        digest = {r["field_hash"] for r in group if r["field_hash"]}
-        hashes[threads] = digest
-        medians[threads] = float(np.median(ok)) if ok else float("nan")
-    t1 = medians.get(1, float("nan"))
     hash_rows = [r for r in _rows("threads.csv") if r["payload"] == "frames-10000-hash"]
-    hash_set = {r["field_hash"] for r in hash_rows if r["status"] == "ok"}
+    hash_set = {r["field_hash"] for r in hash_rows if r["status"] == "ok" and r["field_hash"]}
     identical = len(hash_set) == 1 and bool(hash_set)
-    for threads, median in medians.items():
-        speedup = t1 / median if np.isfinite(median) and median > 0 else float("nan")
-        efficiency = speedup / threads if np.isfinite(speedup) else float("nan")
+    out = []
+    # The one-worker point is the reference. Its speedup is 1 by construction.
+    baselines = [
+        float(r["seconds"])
+        for r in rows
+        if r.get("role") == "baseline" and r["status"] == "ok" and r["seconds"]
+    ]
+    t1 = float(np.median(baselines)) if baselines else float("nan")
+    out.append(
+        {
+            "payload": "frames-10000",
+            "threads": 1,
+            "n_ok": len(baselines),
+            "median_s": f"{t1:.6g}" if np.isfinite(t1) else "",
+            "speedup": "1",
+            "speedup_low": "1",
+            "speedup_high": "1",
+            "efficiency": "1",
+            "hashes_identical_1_2_3_4_8": "yes" if identical else "no",
+            "n_distinct_hashes": len(hash_set),
+        }
+    )
+    for threads, group in sorted(by_threads.items()):
+        base = {int(r["repeat"]): r for r in group if r.get("role") == "baseline"}
+        scaled = {int(r["repeat"]): r for r in group if r.get("role") == "scaled"}
+        ratios = []
+        scaled_times = []
+        for repeat, srow in sorted(scaled.items()):
+            brow = base.get(repeat)
+            if brow is None or brow["status"] != "ok" or srow["status"] != "ok":
+                continue
+            bt = float(brow["seconds"])
+            st = float(srow["seconds"])
+            if bt <= 0 or st <= 0:
+                continue
+            scaled_times.append(st)
+            ratios.append(bt / st)
+        if len(ratios) < 2:
+            continue
+        arr = np.array(ratios)
+        theta, lo, hi = bca_median(arr)
+        median_s = float(np.median(scaled_times))
         out.append(
             {
                 "payload": "frames-10000",
                 "threads": threads,
-                "n_ok": sum(1 for r in by_threads[threads] if r["status"] == "ok"),
-                "median_s": f"{median:.6g}",
-                "speedup": f"{speedup:.6g}" if np.isfinite(speedup) else "",
-                "efficiency": f"{efficiency:.6g}" if np.isfinite(efficiency) else "",
+                "n_ok": len(ratios),
+                "median_s": f"{median_s:.6g}",
+                "speedup": f"{theta:.6g}",
+                "speedup_low": f"{lo:.6g}",
+                "speedup_high": f"{hi:.6g}",
+                "efficiency": f"{theta / threads:.6g}",
                 "hashes_identical_1_2_3_4_8": "yes" if identical else "no",
                 "n_distinct_hashes": len(hash_set),
             }

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Paired, interleaved CPC benchmarks.
+"""Paired, interleaved one-thread Python benchmarks, plus thread scaling.
 
-Sequence for each payload and peer: baseline, peer, baseline, peer, ...
-for 30 repeats. Timeouts stay in the CSV with status timeout.
-Reader failures stay with status failure and are not stored as times.
+Comparison: readcon-core through its Python binding at one worker,
+then ASE, chemfiles, MDAnalysis, or h5py, thirty times.
+OpenMP and BLAS thread counts are 1 for the whole process.
+Scaling is a separate interleaved run: a fresh one-worker baseline,
+then the same file at 2, 4, or 8 workers.
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
 import os
 import platform
-import re
 import signal
 import subprocess
 import sys
@@ -19,16 +21,23 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Peer libraries and this process stay at one BLAS/OpenMP thread.
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[3]
 BENCH = Path(__file__).resolve().parent
 WORK = BENCH / "work"
 RESULTS = BENCH / "results"
-CRATE = BENCH / "readcon-bench"
-CUH2 = ROOT / "resources" / "test" / "cuh2.con"
-NEB = ROOT / "resources" / "examples" / "neb_band.con"
+CUH2_REL = Path("resources/test/cuh2.con")
 REPEATS = 30
 TIMEOUT_S = 240
-THREAD_COUNTS = (1, 2, 4, 8)
+THREAD_COUNTS = (2, 4, 8)
 HASH_THREADS = (1, 2, 3, 4, 8)
 PEERS = ("ase_eon", "chemfiles_xyz", "mda_h5md", "h5py")
 
@@ -47,6 +56,7 @@ RAW_FIELDS = [
     "peer",
     "repeat",
     "role",
+    "n_threads",
     "seconds",
     "status",
     "detail",
@@ -102,63 +112,12 @@ def meta(src: Path) -> dict[str, str]:
     }
 
 
-def build_binary(src: Path) -> Path:
-    manifest = CRATE / "Cargo.toml"
-    original = manifest.read_text()
-    lock_path = CRATE / "Cargo.lock"
-    lock_original = lock_path.read_text() if lock_path.is_file() else None
-    patched = re.sub(
-        r'readcon-core = \{ path = "[^"]+"',
-        f'readcon-core = {{ path = "{src}"',
-        original,
-        count=1,
-    )
-    if patched == original:
-        raise SystemExit("could not retarget the readcon-core path")
-    manifest.write_text(patched)
-    try:
-        subprocess.check_call(
-            ["cargo", "build", "--release", "--manifest-path", str(manifest)],
-            cwd=ROOT,
-        )
-    finally:
-        manifest.write_text(original)
-        if lock_original is not None:
-            lock_path.write_text(lock_original)
-    return CRATE / "target" / "release" / "readcon-bench"
-
-
-def frame_text() -> str:
-    return CUH2.read_text()
+def frame_text(src: Path) -> str:
+    return (src / CUH2_REL).read_text()
 
 
 def write_repeat(text: str, n: int, path: Path) -> None:
     path.write_text(text * n)
-
-
-def write_big_frame(text: str, path: Path) -> None:
-    """One frame with 10000 atoms, using the first coordinate line tiled."""
-    lines = text.splitlines()
-    coord = lines[11].split()
-    coord[3] = "0"
-    mass = lines[8].split()[0]
-    body = [
-        lines[0],
-        lines[1],
-        lines[2],
-        lines[3],
-        lines[4],
-        lines[5],
-        "1",
-        "10000",
-        mass,
-        lines[9],
-        lines[10],
-    ]
-    for i in range(10000):
-        coord[4] = str(i)
-        body.append(" ".join(coord))
-    path.write_text("\n".join(body) + "\n")
 
 
 def write_xyz(con_text: str, n_frames: int, path: Path) -> None:
@@ -166,15 +125,7 @@ def write_xyz(con_text: str, n_frames: int, path: Path) -> None:
     block = [str(len(one)), "lean xyz"]
     for sym, x, y, z in one:
         block.append(f"{sym} {x} {y} {z}")
-    chunk = "\n".join(block) + "\n"
-    path.write_text(chunk * n_frames)
-
-
-def write_xyz_atoms(rows: list[tuple[str, str, str, str]], path: Path) -> None:
-    lines = [str(len(rows)), "lean xyz"]
-    for sym, x, y, z in rows:
-        lines.append(f"{sym} {x} {y} {z}")
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text(("\n".join(block) + "\n") * n_frames)
 
 
 def _coords_from_con(text: str) -> list[tuple[str, str, str, str]]:
@@ -207,24 +158,23 @@ def _is_float(token: str) -> bool:
 
 def write_h5(rows: list[list[tuple[str, str, str, str]]], path: Path) -> None:
     import h5py
-    import numpy as np
 
     n_frames = len(rows)
     n_atoms = len(rows[0])
     pos = np.zeros((n_frames, n_atoms, 3), dtype=np.float64)
-    for f, frame in enumerate(rows):
-        for a, (_s, x, y, z) in enumerate(frame):
-            pos[f, a, 0] = float(x)
-            pos[f, a, 1] = float(y)
-            pos[f, a, 2] = float(z)
-    species = np.array([r[0].encode() for r in rows[0]])
+    for frame_index, frame in enumerate(rows):
+        for atom_index, (_s, x, y, z) in enumerate(frame):
+            pos[frame_index, atom_index, 0] = float(x)
+            pos[frame_index, atom_index, 1] = float(y)
+            pos[frame_index, atom_index, 2] = float(z)
+    species = np.array([row[0].encode() for row in rows[0]])
     with h5py.File(path, "w") as handle:
         h5md = handle.create_group("h5md")
         h5md.attrs["version"] = np.array([1, 1], dtype=np.int32)
         author = h5md.create_group("author")
         author.attrs["name"] = "readcon-core"
         creator = h5md.create_group("creator")
-        creator.attrs["name"] = "paper/cpc/bench/run_bench.py"
+        creator.attrs["name"] = "bench"
         creator.attrs["version"] = "0"
         part = handle.create_group("particles/trajectory")
         box = part.create_group("box")
@@ -251,12 +201,15 @@ def write_h5(rows: list[list[tuple[str, str, str, str]]], path: Path) -> None:
         part.create_dataset("species", data=species)
 
 
-def prepare_payloads() -> dict[str, dict[str, Path]]:
+def prepare_payloads(src: Path) -> dict[str, dict[str, Path]]:
+    sys.path.insert(0, str(ROOT / "paper" / "cpc" / "scripts"))
+    import cases
+
     WORK.mkdir(parents=True, exist_ok=True)
-    text = frame_text()
+    text = frame_text(src)
     one = _coords_from_con(text)
     if len(one) != 218:
-        raise SystemExit(f"cuh2 coordinate count is {len(one)}, expected 218")
+        raise SystemExit(f"copper-hydrogen frame has {len(one)} atoms, expected 218")
     payloads: dict[str, dict[str, Path]] = {}
     for name, n in (("frames-1", 1), ("frames-100", 100), ("frames-10000", 10000)):
         con = WORK / f"{name}.con"
@@ -272,68 +225,34 @@ def prepare_payloads() -> dict[str, dict[str, Path]]:
             "mda_h5md": h5,
             "h5py": h5,
         }
-    big = WORK / "atoms-10000.con"
-    write_big_frame(text, big)
-    big_rows = []
-    # The tiled frame is Cu-only; rebuild rows from the file's coordinate lines.
-    for line in big.read_text().splitlines()[11:]:
-        bits = line.split()
-        big_rows.append(("Cu", bits[0], bits[1], bits[2]))
-    if len(big_rows) != 10000:
-        raise SystemExit(f"atoms-10000 has {len(big_rows)} atoms")
-    xyz = WORK / "atoms-10000.xyz"
-    h5 = WORK / "atoms-10000.h5md"
-    write_xyz_atoms(big_rows, xyz)
-    write_h5([big_rows], h5)
-    payloads["atoms-10000"] = {
-        "readcon": big,
-        "ase_eon": big,
-        "chemfiles_xyz": xyz,
-        "mda_h5md": h5,
-        "h5py": h5,
-    }
-    sec = NEB
-    # Equivalent geometry files are not required for the failure column.
-    # Peers that are not CON readers get the same sectioned path and may fail.
-    payloads["sectioned-neb"] = {
-        "readcon": sec,
-        "ase_eon": sec,
-        "chemfiles_xyz": sec,
-        "mda_h5md": sec,
-        "h5py": sec,
+    slab = cases.write_cases(WORK, src)
+    payloads["slab"] = {
+        "readcon": slab["readcon"],
+        "ase_eon": slab["readcon"],
+        "chemfiles_xyz": slab["xyz"],
+        "mda_h5md": slab["h5"],
+        "h5py": slab["h5"],
     }
     return payloads
 
 
-class Readcon:
-    def __init__(self, binary: Path):
-        self.proc = subprocess.Popen(
-            [str(binary), "serve"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
+def read_frames(path: Path, n_threads: int):
+    import readcon
 
-    def call(self, kind: str, path: Path, threads: int) -> tuple[str, str, str]:
-        assert self.proc.stdin and self.proc.stdout
-        self.proc.stdin.write(f"{kind}\t{path}\t{threads}\n")
-        self.proc.stdin.flush()
-        line = self.proc.stdout.readline().rstrip("\n")
-        if not line:
-            raise RuntimeError("readcon-bench closed the pipe")
-        parts = line.split("\t")
-        status = parts[0]
-        if status == "ok" and kind == "time":
-            return "ok", parts[1], parts[2] if len(parts) > 2 else ""
-        if status == "ok":
-            return "ok", parts[1], ""
-        return "failure", "", line
+    return readcon.read_con(str(path), n_threads=n_threads)
 
-    def close(self) -> None:
-        if self.proc.stdin:
-            self.proc.stdin.close()
-        self.proc.wait(timeout=10)
+
+def field_hash(frames) -> str:
+    digest = hashlib.sha256()
+    for frame in frames:
+        digest.update(np.ascontiguousarray(frame.xyz, dtype=np.float64).tobytes())
+        vel = frame.vel
+        if vel is not None:
+            digest.update(np.ascontiguousarray(vel, dtype=np.float64).tobytes())
+        for atom in frame.atoms:
+            digest.update(bytes(1 if flag else 0 for flag in atom.fixed))
+            digest.update(int(atom.atom_id).to_bytes(8, "little", signed=False))
+    return digest.hexdigest()
 
 
 def time_call(fn) -> tuple[str, str, str]:
@@ -356,13 +275,22 @@ def time_call(fn) -> tuple[str, str, str]:
     return "ok", f"{time.perf_counter() - t0:.9f}", detail or ""
 
 
+def baseline_fn(path: Path):
+    def run() -> str:
+        frames = read_frames(path, 1)
+        return f"n={len(frames)}"
+
+    return run
+
+
 def peer_fn(peer: str, path: Path):
     def run() -> str:
         if peer == "ase_eon":
             import ase.io
 
             images = ase.io.read(path, index=":", format="eon")
-            return f"n={len(images)}"
+            n = len(images) if isinstance(images, list) else 1
+            return f"n={n}"
         if peer == "chemfiles_xyz":
             import chemfiles
 
@@ -401,101 +329,117 @@ def main() -> None:
     src = readcon_src()
     info = meta(src)
     RESULTS.mkdir(parents=True, exist_ok=True)
-    binary = build_binary(src)
-    payloads = prepare_payloads()
-    reader = Readcon(binary)
+    payloads = prepare_payloads(src)
     raw_path = RESULTS / "repeats.csv"
-    try:
-        with raw_path.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS)
-            writer.writeheader()
-            for payload, paths in payloads.items():
-                for peer in PEERS:
-                    for repeat in range(1, REPEATS + 1):
-                        status, seconds, detail = reader.call(
-                            "time", paths["readcon"], 0
-                        )
-                        append_row(
-                            writer,
-                            info,
-                            payload=payload,
-                            peer=peer,
-                            repeat=repeat,
-                            role="baseline",
-                            seconds=seconds if status == "ok" else "",
-                            status=status,
-                            detail=detail,
-                        )
-                        status, seconds, detail = time_call(peer_fn(peer, paths[peer]))
-                        append_row(
-                            writer,
-                            info,
-                            payload=payload,
-                            peer=peer,
-                            repeat=repeat,
-                            role="peer",
-                            seconds=seconds if status == "ok" else "",
-                            status=status,
-                            detail=detail[:500],
-                        )
-                        handle.flush()
-                        print(f"{payload} {peer} {repeat} {status}", flush=True)
-        thread_path = RESULTS / "threads.csv"
-        with thread_path.open("w", newline="") as handle:
-            fields = RAW_FIELDS[:-2] + ["threads", "seconds", "status", "field_hash"]
-            # RAW_FIELDS has role, seconds, status, detail. Build an explicit header.
-            fields = [
-                "host",
-                "cpu_model",
-                "nproc",
-                "commit",
-                "readcon_sha",
-                "script_commit",
-                "base_sha",
-                "rustc",
-                "python",
-                "date_utc",
-                "payload",
-                "threads",
-                "repeat",
-                "seconds",
-                "status",
-                "field_hash",
-            ]
-            writer = csv.DictWriter(handle, fieldnames=fields)
-            writer.writeheader()
-            target = payloads["frames-10000"]["readcon"]
-            for threads in THREAD_COUNTS:
+    with raw_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS)
+        writer.writeheader()
+        for payload, paths in payloads.items():
+            for peer in PEERS:
+                # One untimed call so the thirty repeats are not the import.
+                baseline_fn(paths["readcon"])()
+                peer_fn(peer, paths[peer])()
                 for repeat in range(1, REPEATS + 1):
-                    status, seconds, _detail = reader.call("time", target, threads)
-                    hstatus, digest, _ = reader.call("hash", target, threads)
-                    thread_row = {
+                    status, seconds, detail = time_call(baseline_fn(paths["readcon"]))
+                    append_row(
+                        writer,
+                        info,
+                        payload=payload,
+                        peer=peer,
+                        repeat=repeat,
+                        role="baseline",
+                        n_threads="1",
+                        seconds=seconds if status == "ok" else "",
+                        status=status,
+                        detail=detail[:500],
+                    )
+                    status, seconds, detail = time_call(peer_fn(peer, paths[peer]))
+                    append_row(
+                        writer,
+                        info,
+                        payload=payload,
+                        peer=peer,
+                        repeat=repeat,
+                        role="peer",
+                        n_threads="1",
+                        seconds=seconds if status == "ok" else "",
+                        status=status,
+                        detail=detail[:500],
+                    )
+                    handle.flush()
+                    print(f"{payload} {peer} {repeat} {status}", flush=True)
+    thread_path = RESULTS / "threads.csv"
+    fields = [
+        "host",
+        "cpu_model",
+        "nproc",
+        "commit",
+        "readcon_sha",
+        "script_commit",
+        "base_sha",
+        "rustc",
+        "python",
+        "date_utc",
+        "payload",
+        "threads",
+        "repeat",
+        "role",
+        "seconds",
+        "status",
+        "field_hash",
+    ]
+    target = payloads["frames-10000"]["readcon"]
+    with thread_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for threads in THREAD_COUNTS:
+            read_frames(target, 1)
+            read_frames(target, threads)
+            for repeat in range(1, REPEATS + 1):
+                status, seconds, detail = time_call(baseline_fn(target))
+                writer.writerow(
+                    {
                         **info,
                         "payload": "frames-10000",
                         "threads": threads,
                         "repeat": repeat,
+                        "role": "baseline",
                         "seconds": seconds if status == "ok" else "",
-                        "status": status if hstatus == "ok" else hstatus,
-                        "field_hash": digest if hstatus == "ok" else "",
+                        "status": status,
+                        "field_hash": "",
                     }
-                    writer.writerow(thread_row)
-                    handle.flush()
-            # Extra hash rows at 3 threads (byte-identity set includes 3).
-            for threads in HASH_THREADS:
-                hstatus, digest, err = reader.call("hash", target, threads)
+                )
+                status, seconds, detail = time_call(
+                    lambda n=threads: f"n={len(read_frames(target, n))}"
+                )
                 writer.writerow(
                     {
                         **info,
-                        "payload": "frames-10000-hash",
+                        "payload": "frames-10000",
                         "threads": threads,
-                        "repeat": 0,
-                        "seconds": "",
-                        "status": hstatus,
-                        "field_hash": digest if hstatus == "ok" else err,
+                        "repeat": repeat,
+                        "role": "scaled",
+                        "seconds": seconds if status == "ok" else "",
+                        "status": status,
+                        "field_hash": "",
                     }
                 )
-    finally:
-        reader.close()
+                handle.flush()
+                print(f"scale {threads} {repeat} {status}", flush=True)
+        for threads in HASH_THREADS:
+            frames = read_frames(target, threads)
+            writer.writerow(
+                {
+                    **info,
+                    "payload": "frames-10000-hash",
+                    "threads": threads,
+                    "repeat": 0,
+                    "role": "hash",
+                    "seconds": "",
+                    "status": "ok",
+                    "field_hash": field_hash(frames),
+                }
+            )
     print(f"wrote {raw_path}")
 
 
