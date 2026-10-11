@@ -49,6 +49,11 @@ fn parse_error_display_and_from_all_variants() {
             found_mass: 2.014,
             atom_index: 1,
         },
+        ParseError::NonFiniteValue("nan".into()),
+        ParseError::InvalidFixedFlag("8".into()),
+        ParseError::InvalidCount("0".into()),
+        ParseError::InvalidUnits("time".into()),
+        ParseError::UnsupportedVersion(0),
     ];
     for e in &variants {
         let s = e.to_string();
