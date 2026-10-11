@@ -219,7 +219,6 @@ fn readcon_db_surface_has_hosted_docs() {
         "https://rgpycrumbs.rgoswami.me",
         "https://lode-org.github.io/minimage",
         "https://docs.rs/linkcell",
-        "https://lode-org.github.io/readcon-core",
         "https://lode-org.github.io/readcon-db",
         "https://github.com/lode-org/readcon-ops",
     ] {

@@ -10,11 +10,11 @@ Nothing here changes a byte a conforming reader must accept.
 
 * Absent values in the C ABI
 
-Several =rkr_*= getters return a IEEE NaN when a number is absent.
+Several =rkr_*= getters return an IEEE NaN when a number is absent.
 =rkr_frame_energy= does this when the frame has no =energy= key.
 That NaN is an API sentinel.
 It is not a CON number, and it is not written to a file.
-The format clauses are =CON-num.1= and =CON-num.3=.
+The format clauses are =CON-num.1= and =CON-num.4=.
 
 * Clearing a section
 

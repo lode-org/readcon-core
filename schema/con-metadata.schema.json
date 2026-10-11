@@ -19,7 +19,7 @@
     },
     "section_arity": {
       "type": "object",
-      "description": "Token count of each data row, used to skip an unknown section when con_spec_minor is newer than the reader.",
+      "description": "Value-field count of each data row, excluding the flag and the optional id (1 scalar, 3 vector). A reserved name must use that table arity. A reader skips an unknown section of a newer minor when the count is present.",
       "additionalProperties": { "type": "integer", "minimum": 1 }
     },
     "sections": {
