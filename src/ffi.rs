@@ -3185,11 +3185,11 @@ pub unsafe extern "C" fn rkr_frame_builder_set_con_spec_minor(
     minor: u32,
 ) -> RKRStatus {
     if builder_handle.is_null() {
-        return RKRStatus::RKR_STATUS_NULL_POINTER;
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_con_spec_minor(minor);
-    RKRStatus::RKR_STATUS_SUCCESS
+    note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
