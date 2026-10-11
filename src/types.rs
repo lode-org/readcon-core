@@ -42,6 +42,10 @@ use std::sync::Arc;
 pub mod meta {
     /// Required JSON key carrying the spec version (unsigned integer).
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
+    /// Minor of a known major. Absent or 0 means minor 0 (CON-line2.10).
+    pub const CON_SPEC_MINOR: &str = "con_spec_minor";
+    /// Row token counts for sections this reader may skip (CON-section.11).
+    pub const SECTION_ARITY: &str = "section_arity";
     /// Array of declared section names (strings). Required when
     /// `validate=true`; absent triggers the legacy blank-separator
     /// velocity detection.
@@ -406,7 +410,14 @@ impl FrameHeader {
         Some([row(0)?, row(1)?, row(2)?])
     }
 
-    /// Sets the exact lattice vector matrix.
+    /// Periodic boundary conditions. A missing `pbc` key is fully periodic
+    /// (CON-cell.3, D12).
+    pub fn pbc_effective(&self) -> [bool; 3] {
+        self.pbc().unwrap_or([true, true, true])
+    }
+
+    /// Sets the exact lattice vector matrix and keeps lines 3-4 consistent
+    /// with that matrix (CON-cell.2, D12).
     pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
         self.metadata.insert(
             meta::LATTICE_VECTORS.into(),
@@ -416,6 +427,11 @@ impl FrameHeader {
                 [vecs[2][0], vecs[2][1], vecs[2][2]],
             ]),
         );
+        let (boxl, angles) = lengths_and_angles(vecs);
+        if boxl.iter().all(|v| v.is_finite()) && angles.iter().all(|v| v.is_finite()) {
+            self.boxl = boxl;
+            self.angles = angles;
+        }
     }
 
     /// NEB bead (image) index.
@@ -625,6 +641,34 @@ impl AtomDatum {
     pub fn has_spread(&self) -> bool {
         self.spread.is_some()
     }
+}
+
+/// Lengths `|a| |b| |c|` and angles `alpha beta gamma` in degrees.
+/// `alpha` is the angle between b and c, `beta` between a and c,
+/// `gamma` between a and b (CON-cell, D12).
+pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
+    fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+        a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    }
+    fn len(v: [f64; 3]) -> f64 {
+        dot(v, v).sqrt()
+    }
+    fn angle_deg(a: [f64; 3], b: [f64; 3]) -> f64 {
+        let la = len(a);
+        let lb = len(b);
+        if la == 0.0 || lb == 0.0 {
+            return f64::NAN;
+        }
+        let cosine = (dot(a, b) / (la * lb)).clamp(-1.0, 1.0);
+        cosine.acos().to_degrees()
+    }
+    let a = vecs[0];
+    let b = vecs[1];
+    let c = vecs[2];
+    (
+        [len(a), len(b), len(c)],
+        [angle_deg(b, c), angle_deg(a, c), angle_deg(a, b)],
+    )
 }
 
 /// Decode a column-4 bitmask as a spec-2 value.
@@ -2657,6 +2701,13 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
+        // New frames are minor 1. Do not invent units.time (CON-units.4, D10).
+        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+            metadata.insert(
+                meta::CON_SPEC_MINOR.into(),
+                serde_json::Value::from(crate::CON_SPEC_MINOR),
+            );
+        }
         use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
         let dt = StorageDtypes::from_metadata(&metadata).unwrap_or_default();
         // Allocate SoA in the requested storage dtypes (not f64-then-cast).
@@ -3686,22 +3737,33 @@ mod tests {
         use std::io::Cursor;
         let mut frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         frame.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
-        let mut fr = frame.build().unwrap();
+        let mut fr = frame.clone().build().unwrap();
         // Strip units to simulate hand-built non-compliant header still claiming v3
         fr.header.metadata.remove(meta::UNITS);
         fr.header.spec_version = 3;
         let mut buf = Cursor::new(Vec::new());
         {
             let mut w = ConFrameWriter::new(&mut buf);
-            w.write_frame(&fr).unwrap();
+            let err = w.write_frame(&fr).unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    crate::writer::WriteError::Format(crate::error::ParseError::InvalidUnits(_))
+                ),
+                "D11: writer must not replace missing v3 units, got {err}"
+            );
+        }
+        // A frame that still carries the builder units does write them.
+        let fr_ok = frame.build().unwrap();
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut w = ConFrameWriter::new(&mut buf);
+            w.write_frame(&fr_ok).unwrap();
         }
         let s = String::from_utf8(buf.into_inner()).unwrap();
-        assert!(
-            s.contains("\"units\""),
-            "writer must emit units for v3: {s}"
-        );
+        assert!(s.contains("\"units\""), "builder frames carry units: {s}");
         assert!(s.contains("angstrom") || s.contains("length"), "{s}");
-        // Round-trip parse must succeed as v3
+        assert!(!s.contains("\"time\""), "builder must not inject time: {s}");
         let parsed = crate::iterators::ConFrameIterator::new(&s)
             .next()
             .unwrap()

@@ -382,12 +382,13 @@ function _get_headers(frame_handle, is_prebox::Bool)
 end
 
 """
-    write_con(path::String, frames::Vector{ConFrame}; precision=6)
+    write_con(path::String, frames::Vector{ConFrame}; precision=nothing)
 
-Write frames to a .con file.
+Write frames to a .con file. The default numeric text round-trips binary64.
+`precision` is a fixed number of digits after the decimal.
 """
-function write_con(path::String, frames::Vector{ConFrame}; precision::Integer=6)
-    writer = if precision == 6
+function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Nothing,Integer}=nothing)
+    writer = if precision === nothing
         ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
     else
         ccall(

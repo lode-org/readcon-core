@@ -436,12 +436,14 @@ pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), Parse
 }
 
 /// Default LODE units object for new v3 frames.
+/// Pinned spelling of the eOn/ASE natural time unit (CON-units.5, D10).
+pub const NATURAL_TIME_UNIT: &str = "(amu*angstrom^2/eV)^0.5";
+
 pub fn default_v3_units_json() -> serde_json::Value {
     serde_json::json!({
         "length": "angstrom",
         "energy": "eV",
-        "mass": "amu",
-        "time": "fs"
+        "mass": "amu"
     })
 }
 
@@ -477,6 +479,9 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
     }
     let _ = unit_conversion_factor(trimmed, trimmed)?;
     let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
+    if compact == NATURAL_TIME_UNIT {
+        return Ok(NATURAL_TIME_UNIT.to_string());
+    }
     let mut out = String::new();
     let bytes = compact.as_bytes();
     let mut i = 0;
@@ -603,5 +608,17 @@ mod tests {
         assert_eq!(u["length"], "angstrom");
         assert_eq!(u["energy"], "eV");
         assert_eq!(u["time"], "fs");
+    }
+
+    #[test]
+    fn natural_time_spelling_is_pinned() {
+        let spaced = "( amu * angstrom ^ 2 / eV ) ^ 0.5";
+        assert_eq!(
+            canonicalize_unit_expression(spaced).unwrap(),
+            NATURAL_TIME_UNIT
+        );
+        assert!(!NATURAL_TIME_UNIT.contains(' '));
+        let factor = unit_conversion_factor(NATURAL_TIME_UNIT, "fs").unwrap();
+        assert!((factor - 10.180_505_710_759_414).abs() < 1e-9, "{factor}");
     }
 }
