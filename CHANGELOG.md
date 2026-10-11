@@ -73,6 +73,9 @@ All notable changes to this project will be documented in this file. See [conven
 - set_lattice_vectors keeps lines 3 and 4 consistent with the lattice matrix.
 - ConFrameBuilder stamps con_spec_minor 1 on a v3 frame when the caller does not set it. set_con_spec_minor and rkr_frame_builder_set_con_spec_minor override that value. The writer does not invent or replace the minor.
 - ConFrameBuilder::set_units and rkr_frame_builder_set_units set the units object from C and C++.
+- The C ABI stores the last NULL or negative status in thread-local rkr_last_error, with a class message, a 1-based line and a frame index.
+- Python parse failures raise readcon.ConError, a ValueError, with one subclass per error class. OSError is reserved for I/O.
+- to_ase prefers lattice_vectors, honours pbc, and converts velocities into the natural time unit. from_ase stamps that unit.
 
 ## v0.16.2 - 2026-10-09
 
