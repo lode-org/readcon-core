@@ -1,0 +1,6 @@
+file,frame,reader,status,masks_xyz,ids,velocities,time_unit,detail
+hcn_v31.con,0,readcon-core,ok,000 000 000,0 1 2,"[0.0, 0.0, 0.0] [0.0, 0.0, 0.0] [0.01, 0.0, 0.0]",(amu*angstrom^2/eV)^0.5,
+hcn_v31.con,1,readcon-core,ok,000 000 000,0 1 2,"[0.0, 0.0, 0.0] [0.0, 0.0, 0.0] [0.01, 0.0, 0.0]",(amu*angstrom^2/eV)^0.5,
+hcn_v31.con,2,readcon-core,ok,000 000 100,2 0 1,"[0.0, 0.0, 0.0] [0.0, 0.0, 0.0] [0.01, 0.0, 0.0]",(amu*angstrom^2/eV)^0.5,
+hcn_v31.con,velocities-0,ASE eon,failure,,,,,ValueError: could not convert string to float: 'Velocities'
+hcn_v31_coords.con,coords-0,ASE eon,ok,,,,,"fixed=free,free,all-fixed;id=False;velocity=False;symbols=C,N,H"

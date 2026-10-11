@@ -1,0 +1,3 @@
+quantity,value,unit,source
+eon_time_unit,10.1805055,fs,eOn natural time unit in femtoseconds
+ke_natural,12.386,eV,336-atom Pt slab at 300 K in the natural unit

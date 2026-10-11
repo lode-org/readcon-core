@@ -1,0 +1,5 @@
+- readcon-core reads and writes the CON checkpoint for saddle searches.
+- Per-axis masks, atom ids, and a velocity time unit are kept.
+- One C interface serves C++, Python, Julia, and Fortran.
+- A ten thousand frame band is read about 34 times faster than ASE.
+- The public HCN to HNC endpoints keep mask, id, and velocity.

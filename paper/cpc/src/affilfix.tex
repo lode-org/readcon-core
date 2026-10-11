@@ -1,0 +1,7 @@
+% elsarticle 3.3 expands affiliation fields and breaks the accent in authors.tex.
+\ExplSyntaxOn
+\DeclareDocumentCommand \ca_aff_city { O{,} m }
+  {
+    \csgappto { ca_affiliation_values } { \unexpanded{#2} #1\ca_affitem_postskip }
+  }
+\ExplSyntaxOff

@@ -1,0 +1,18 @@
+% Written by paper/cpc/scripts/gen_tables.py.
+\begin{table}[ht]
+\centering
+\small
+\caption{What a restarted rare-event calculation needs, and what each file actually stores. The CON column is what readcon-core keeps.}
+\label{tab:compat}
+\begin{tabular}{llllll}
+\toprule
+Item & CON & ASE eon & ext.\ XYZ & H5MD & LAMMPS dump \\
+\midrule
+mask & per-axis bits & one boolean & no standard mask & not specified & not in the dump \\
+id & kept & not kept & optional column & optional & atom id \\
+velocity unit & declared & not read & not required & time attribute & outside the file \\
+sections & named blocks & coordinates only & property columns & particle groups & optional columns \\
+version & major and minor & not read & none & format version & none \\
+\bottomrule
+\end{tabular}
+\end{table}
