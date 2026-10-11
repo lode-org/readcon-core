@@ -12,7 +12,13 @@ spec = "docs/orgmode/spec.org"
 id = "v2-minimal"
 path = "valid/v2_minimal.con"
 clause = "Line 2: Metadata"
-clauses = ["CON-status.2", "CON-line2.1", "CON-line2.4", "CON-line2.10", "CON-header.1"]
+clauses = [
+  "CON-status.2",
+  "CON-line2.1",
+  "CON-line2.4",
+  "CON-line2.10",
+  "CON-header.1",
+]
 notes = "Minimal v2 JSON metadata with con_spec_version."
 
 [[valid]]
@@ -256,7 +262,16 @@ notes = "A leading dot and an exponent are finite decimals."
 id = "two-types"
 path = "valid/two_types.con"
 clause = "CON-count.6"
-clauses = ["CON-count.6", "CON-count.7", "CON-count.8", "CON-id.3", "CON-id.7", "CON-mask.4", "CON-mask.6", "CON-mask.7"]
+clauses = [
+  "CON-count.6",
+  "CON-count.7",
+  "CON-count.8",
+  "CON-id.3",
+  "CON-id.7",
+  "CON-mask.4",
+  "CON-mask.6",
+  "CON-mask.7",
+]
 notes = "Two types, unique ids, masks 0, 3, and 7."
 [[valid]]
 id = "energies"
@@ -268,7 +283,19 @@ notes = "The energies section, with a matching total."
 id = "v31-velocities"
 path = "valid/v31_velocities.con"
 clause = "CON-units.5"
-clauses = ["CON-units.2", "CON-units.3", "CON-units.4", "CON-units.5", "CON-units.10", "CON-units.12", "CON-units.13", "CON-units.14", "CON-units.15", "CON-num.6", "CON-num.7"]
+clauses = [
+  "CON-units.2",
+  "CON-units.3",
+  "CON-units.4",
+  "CON-units.5",
+  "CON-units.10",
+  "CON-units.12",
+  "CON-units.13",
+  "CON-units.14",
+  "CON-units.15",
+  "CON-num.6",
+  "CON-num.7",
+]
 notes = "Minor 1 velocities use the natural time spelling."
 [[valid]]
 id = "v30-fs-label"
@@ -298,7 +325,17 @@ notes = "metre, joule, dalton, and fs are accepted names."
 id = "unknown-minor-skip"
 path = "valid/unknown_minor_skip.con"
 clause = "CON-section.8"
-clauses = ["CON-status.1", "CON-line2.7", "CON-section.8", "CON-section.10", "CON-section.11", "CON-section.12", "CON-section.14", "CON-section.16", "CON-token.4"]
+clauses = [
+  "CON-status.1",
+  "CON-line2.7",
+  "CON-section.8",
+  "CON-section.10",
+  "CON-section.11",
+  "CON-section.12",
+  "CON-section.14",
+  "CON-section.16",
+  "CON-token.4",
+]
 notes = "A newer minor may skip a section declared in section_arity."
 [[valid]]
 id = "bonds-preserved"

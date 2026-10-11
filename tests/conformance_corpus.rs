@@ -109,12 +109,42 @@ fn parse_bool3(raw: &str) -> [bool; 3] {
     [vals[0], vals[1], vals[2]]
 }
 
+/// Join a multiline array (`key = [` then one element per line) into
+/// one `[...]` string. A value that already ends in `]` is left as-is.
+fn join_array(lines: &[&str], start: usize, first: &str) -> (String, usize) {
+    let mut acc = first.to_string();
+    if acc.trim_end().ends_with(']') {
+        return (acc, start);
+    }
+    let mut i = start;
+    while i + 1 < lines.len() {
+        i += 1;
+        let cont = lines[i].trim();
+        if cont.is_empty() || cont.starts_with('#') {
+            continue;
+        }
+        if cont == "[[valid]]" || cont == "[[invalid]]" || cont.contains('=') {
+            panic!("manifest line {}: unclosed array", i + 1);
+        }
+        acc.push(' ');
+        acc.push_str(cont);
+        if cont.ends_with(']') {
+            return (acc, i);
+        }
+    }
+    panic!("manifest: unclosed array starting with {first}");
+}
+
 fn parse_manifest(text: &str) -> Vec<Case> {
+    let lines: Vec<&str> = text.lines().collect();
     let mut cases = Vec::new();
     let mut current: Option<Case> = None;
-    for (idx, raw) in text.lines().enumerate() {
-        let line = raw.trim();
+    let mut i = 0;
+    while i < lines.len() {
+        let line_no = i + 1;
+        let line = lines[i].trim();
         if line.is_empty() || line.starts_with('#') {
+            i += 1;
             continue;
         }
         if line == "[[valid]]" || line == "[[invalid]]" {
@@ -135,36 +165,44 @@ fn parse_manifest(text: &str) -> Vec<Case> {
                 clauses: Vec::new(),
                 frames: None,
             });
+            i += 1;
             continue;
         }
         let Some((key, val)) = line.split_once('=') else {
-            panic!(
-                "manifest line {}: expected key = value, got {line}",
-                idx + 1
-            );
+            panic!("manifest line {line_no}: expected key = value, got {line}");
         };
         let key = key.trim();
-        let val = val.trim();
+        let mut val = val.trim().to_string();
+        if (key == "clauses" || key == "expect_fixed")
+            && val.starts_with('[')
+            && !val.ends_with(']')
+        {
+            let (joined, end) = join_array(&lines, i, &val);
+            val = joined;
+            i = end;
+        }
         let Some(case) = current.as_mut() else {
             // Top-level keys (phase, spec) are documentary.
+            i += 1;
             continue;
         };
         match key {
-            "id" => case.id = unquote(val),
-            "path" => case.path = unquote(val),
-            "clause" => case.clause = unquote(val),
-            "error" => case.error = Some(unquote(val)),
+            "id" => case.id = unquote(&val),
+            "path" => case.path = unquote(&val),
+            "clause" => case.clause = unquote(&val),
+            "error" => case.error = Some(unquote(&val)),
             "notes" => {}
-            "expect_fixed" => case.expect_fixed = Some(parse_bool3(val)),
-            "clauses" => case.clauses = parse_str_array(val),
+            "expect_fixed" => case.expect_fixed = Some(parse_bool3(&val)),
+            "clauses" => case.clauses = parse_str_array(&val),
             "frames" => {
                 case.frames = Some(val.parse().unwrap_or_else(|_| {
-                    panic!("manifest line {}: frames is not an integer", idx + 1)
+                    panic!("manifest line {line_no}: frames is not an integer")
                 }));
             }
             "ase" => {}
-            other => panic!("manifest line {}: unknown key {other}", idx + 1),
+            other => panic!("manifest line {line_no}: unknown key {other}"),
         }
+        i += 1;
     }
     if let Some(case) = current {
         cases.push(finish_case(case));
