@@ -14,7 +14,8 @@ All notable changes to this project will be documented in this file. See [conven
 - The default writer float format is binary64 round-trip. Fixed decimals remain available when requested.
 - A v3 frame with a missing or invalid units object fails the write with InvalidUnits.
 - A minor 1 frame with velocities and no units.time fails the write. The builder no longer injects time: fs.
-- The written spelling of the eOn and ASE natural time unit is (amu*angstrom^2/eV)^0.5.
+- The written spelling of the eOn and ASE natural time unit is (amu*angstrom^2/eV)^0.5. The writer does not replace that spelling with spaces.
+- default_v3_units_json supplies length, energy, and mass only. It does not supply time: fs.
 - Trailing whitespace after the last complete frame is ignored and does not open a velocity section.
 - Section rows have a fixed width. Labels compare case-insensitively after collapsing runs of spaces.
 - An unknown section is skipped only for a newer minor that declares section_arity. Otherwise it is UnknownSection.
