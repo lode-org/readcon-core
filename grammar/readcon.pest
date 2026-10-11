@@ -1,47 +1,84 @@
 // CON / convel surface syntax (PEG / Pest).
 //
-// Aligns with docs/orgmode/spec.org (CON v2–v3). This grammar defines the
+// Aligns with docs/orgmode/spec.org (CON v3.1). This grammar defines the
 // *syntactic* shape of one or more concatenated frames. Semantic rules
-// (atom counts matching header N_i, Component index order, JSON metadata
-// keys, fixed-mask values, validate=true geometry) are enforced by the
-// reference implementation in src/parser.rs — not by this PEG alone.
+// (atom counts matching header N_i, fixed-mask legal sets, validate=true
+// geometry, section_arity skips) are enforced by src/parser.rs.
+// Where this PEG and the specification disagree, the specification wins
+// (CON-token.4).
 //
-// Hot-path I/O does not depend on Pest; this file is the formal grammar
-// artifact shipped with the repo, validated in tests via the optional
-// `grammar` feature / dev-dependencies.
+// Hot-path I/O does not depend on Pest. gzip and zstd envelopes are not
+// grammar (CON-compress): readers detect them by magic bytes.
 //
-// Section row arities (spec §sections):
-//   vector: velocities, forces, magmoms, displacements, spreads  →  v0 v1 v2 fixed [atom_id]
-//   scalar: energies, charges, spins     →  value fixed [atom_id]
+// Section row arities (spec sections):
+//   vector: velocities, forces, magmoms, displacements, spreads
+//           -> v0 v1 v2 fixed atom_id
+//   scalar: energies, charges, spins -> value fixed atom_id
+//   unknown: a newer minor may skip a block whose data rows have the
+//           token count declared by section_arity (semantic; the PEG
+//           accepts the generic block shape).
 
-/// One or more frames, no inter-frame marker (frames are concatenated).
-file = { SOI ~ frame+ ~ EOI }
+/// One or more frames. No leading BOM. Trailing whitespace-only lines
+/// after the last frame are ignored (CON-file.6, CON-frame.1).
+file = { SOI ~ !bom ~ frame+ ~ (ws* ~ NL)* ~ EOI }
+
+bom = { "\u{FEFF}" }
 
 /// Header + per-type coordinate blocks + optional section blocks.
 frame = { header ~ type_block+ ~ section* }
 
-/// Nine-line header (lines 1–9 of the specification).
+/// Nine-line header (lines 1-9 of the specification).
 header = {
     free_line ~ NL
-    ~ free_line ~ NL
+    ~ metadata_line ~ NL
     ~ float3_line
     ~ float3_line
     ~ free_line ~ NL
     ~ free_line ~ NL
-    ~ integer_line
-    ~ integer_list_line
+    ~ count_line
+    ~ count_list_line
     ~ float_list_line
 }
 
-/// Free-form line (generator comment, JSON metadata, or reserved text).
-/// Does not consume the trailing newline.
+/// Free-form line. Does not consume the trailing newline.
 free_line = { (!NL ~ ANY)* }
+
+/// Line 2 is one JSON object when it starts with `{`, otherwise legacy text.
+metadata_line = { ws* ~ json_object | legacy_metadata }
+legacy_metadata = { ws* ~ !"{" ~ free_line }
+
+json_object = {
+    "{" ~ ws*
+    ~ (json_pair ~ (ws* ~ "," ~ ws* ~ json_pair)*)?
+    ~ ws* ~ "}" ~ ws*
+}
+json_pair = { json_string ~ ws* ~ ":" ~ ws* ~ json_value }
+json_value = {
+    json_string | json_number | json_object | json_array | "true" | "false" | "null"
+}
+json_array = {
+    "[" ~ ws*
+    ~ (json_value ~ (ws* ~ "," ~ ws* ~ json_value)*)?
+    ~ ws* ~ "]"
+}
+json_string = @{ "\"" ~ json_char* ~ "\"" }
+json_char = _{
+    "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t"
+    | "\\u" ~ ASCII_HEX_DIGIT{4}
+    | (!("\"" | "\\") ~ ANY)
+}
+json_number = @{
+    "-"? ~ ASCII_DIGIT+
+    ~ ("." ~ ASCII_DIGIT+)?
+    ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
 
 float3_line = { ws* ~ float ~ ws+ ~ float ~ ws+ ~ float ~ ws* ~ NL }
 
-integer_line = { ws* ~ integer ~ ws* ~ NL }
+/// Type count and per-type counts are integers >= 1 (CON-count.1).
+count_line = { ws* ~ positive_integer ~ ws* ~ NL }
 
-integer_list_line = { ws* ~ integer ~ (ws+ ~ integer)* ~ ws* ~ NL }
+count_list_line = { ws* ~ positive_integer ~ (ws+ ~ positive_integer)* ~ ws* ~ NL }
 
 float_list_line = { ws* ~ float ~ (ws+ ~ float)* ~ ws* ~ NL }
 
@@ -58,13 +95,13 @@ symbol_line = { ws* ~ symbol ~ ws* }
 /// Element / type symbol (letters, optional trailing digits/underscore).
 symbol = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-/// Wire labels may use legacy "component" casing (e.g. eOn sulfolene fixtures).
-/// Pest ^string is case-insensitive ASCII.
+/// Labels are case-insensitive. Runs of spaces are `ws+` (CON-file.4).
 coord_label = {
-    ws* ~ ^"Coordinates of Component" ~ ws+ ~ integer ~ ws*
+    ws* ~ ^"Coordinates of Component" ~ ws+ ~ positive_integer ~ ws*
 }
 
-/// Coordinate / 3-vector section row: v0 v1 v2 fixed_mask [atom_id]
+/// Coordinate row: v0 v1 v2 fixed_mask [atom_id]. Column 4 and 5 are
+/// unsigned integer tokens (no sign, no decimal point).
 vector_atom_line = {
     ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
     ~ ws+ ~ integer
@@ -72,29 +109,27 @@ vector_atom_line = {
     ~ ws*
 }
 
-/// Scalar section row: value fixed_mask [atom_id]
+/// Scalar section row: value fixed_mask atom_id. Identity columns required.
 scalar_atom_line = {
     ws* ~ float
     ~ ws+ ~ integer
-    ~ (ws+ ~ integer)?
+    ~ ws+ ~ integer
     ~ ws*
 }
 
 /// Backward-compatible alias used by tests and older notes.
 atom_line = { vector_atom_line }
 
-/// Optional section: blank separator + homogeneous type blocks (vector or scalar).
-/// After a type_block's trailing newline, one more newline is the blank line
-/// required by the specification before a section.
+/// Optional section: one blank line, then homogeneous type blocks.
 section = {
     ws* ~ NL
-    ~ (section_type_block_vector+ | section_type_block_scalar+)
+    ~ (section_type_block_vector+ | section_type_block_scalar+ | generic_type_block+)
 }
 
 section_type_block_vector = {
     symbol_line ~ NL
     ~ section_label_vector ~ NL
-    ~ vector_atom_line ~ (NL ~ vector_atom_line)*
+    ~ vector_section_line ~ (NL ~ vector_section_line)*
     ~ NL?
 }
 
@@ -105,6 +140,27 @@ section_type_block_scalar = {
     ~ NL?
 }
 
+/// Unknown section shape. The hand parser skips it only for a newer minor
+/// whose `section_arity` names the exact token count (CON-section.8).
+generic_type_block = {
+    symbol_line ~ NL
+    ~ generic_label ~ NL
+    ~ token_line ~ (NL ~ token_line)*
+    ~ NL?
+}
+
+generic_label = { ws* ~ symbol ~ (ws+ ~ (symbol | positive_integer))* ~ ws* }
+
+token_line = { ws* ~ (float | integer) ~ (ws+ ~ (float | integer))* ~ ws* }
+
+/// Vector section rows require the flag and the id (exact five tokens).
+vector_section_line = {
+    ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
+    ~ ws+ ~ integer
+    ~ ws+ ~ integer
+    ~ ws*
+}
+
 section_kind_vector = { ^"Velocities" | ^"Forces" | ^"Magmoms" | ^"Displacements" | ^"Spreads" }
 section_kind_scalar = { ^"Energies" | ^"Charges" | ^"Spins" }
 
@@ -112,22 +168,32 @@ section_kind_scalar = { ^"Energies" | ^"Charges" | ^"Spins" }
 section_kind = { section_kind_vector | section_kind_scalar }
 
 section_label_vector = {
-    ws* ~ section_kind_vector ~ ws+ ~ ^"of Component" ~ ws+ ~ integer ~ ws*
+    ws* ~ section_kind_vector ~ ws+ ~ ^"of Component" ~ ws+ ~ positive_integer ~ ws*
 }
 
 section_label_scalar = {
-    ws* ~ section_kind_scalar ~ ws+ ~ ^"of Component" ~ ws+ ~ integer ~ ws*
+    ws* ~ section_kind_scalar ~ ws+ ~ ^"of Component" ~ ws+ ~ positive_integer ~ ws*
 }
 
-/// ASCII decimal float (optional sign, fraction, scientific exponent).
-float = @{
-    "-"?
-    ~ ASCII_DIGIT+
-    ~ ("." ~ ASCII_DIGIT*)?
+/// Finite decimal, or a non-finite spelling the semantic layer rejects
+/// as NonFiniteValue (CON-num.1, CON-token.2). A leading sign, a leading
+/// dot, and an exponent are allowed.
+float = _{ finite_float | non_finite }
+
+finite_float = @{
+    ("+" | "-")?
+    ~ (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? | "." ~ ASCII_DIGIT+)
     ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
 }
 
-integer = @{ "-"? ~ ASCII_DIGIT+ }
+non_finite = @{
+    ("+" | "-")? ~ (^"infinity" | ^"nan" | ^"inf")
+}
+
+/// Unsigned digit token. No sign and no decimal point (CON-token.1).
+integer = @{ ASCII_DIGIT+ }
+
+positive_integer = @{ ("1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") ~ ASCII_DIGIT* }
 
 ws = _{ " " | "\t" }
 NL = _{ "\r\n" | "\n" }

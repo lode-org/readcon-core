@@ -227,4 +227,105 @@ Spreads of Component 1
             parse_surface(spread).err()
         );
     }
+
+    fn hand_class(text: &str) -> String {
+        use crate::iterators::ConFrameIterator;
+        match ConFrameIterator::new(text).next() {
+            Some(Ok(_)) => "ok".into(),
+            Some(Err(err)) => err.class_name().into(),
+            None => "empty".into(),
+        }
+    }
+
+    /// Syntactic cases the PEG and the hand parser both accept or both reject.
+    /// Non-finite tokens and unknown sections are semantic: the PEG accepts
+    /// the shape and the hand parser names the error (CON-token.4).
+    #[test]
+    fn grammar_and_hand_parser_share_an_accept_reject_list() {
+        let ok_float = "\
+PRE
+{\"con_spec_version\":2}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+coordinates of component   1
++1.5 .25 1e-1 0 3
+   \n";
+        assert!(accepts(ok_float), "{:?}", parse_surface(ok_float).err());
+        assert_eq!(hand_class(ok_float), "ok");
+
+        let cases = [
+            (
+                "\u{feff}PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n1\n1\n1\nH\nCoordinates of Component 1\n0 0 0 0 0\n",
+                false,
+            ),
+            (
+                "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n1\n1\n1\nH\nCoordinates of Component 1\n0 0 0 -1 0\n",
+                false,
+            ),
+            (
+                "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n1\n1\n1\nH\nCoordinates of Component 1\n0 0 0 0.0 0\n",
+                false,
+            ),
+            (
+                "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n0\n\n",
+                false,
+            ),
+            (
+                "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n-1\n1\n1\n",
+                false,
+            ),
+            ("", false),
+        ];
+        for (text, want) in cases {
+            assert_eq!(accepts(text), want, "PEG {text:?}");
+            assert_eq!(hand_class(text) == "ok", want, "hand {text:?}");
+        }
+
+        let nan = "\
+PRE
+{\"con_spec_version\":2}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+Coordinates of Component 1
+nan 0 0 0 0
+";
+        assert!(
+            accepts(nan),
+            "PEG keeps the non-finite token for the semantic layer"
+        );
+        assert_eq!(hand_class(nan), "NonFiniteValue");
+
+        let unknown = "\
+PRE
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"widgets\"]}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+Coordinates of Component 1
+0 0 0 0 0
+
+H
+Widgets of Component 1
+1 2 3 0 0
+";
+        assert!(accepts(unknown), "{:?}", parse_surface(unknown).err());
+        assert_eq!(hand_class(unknown), "UnknownSection");
+    }
 }
