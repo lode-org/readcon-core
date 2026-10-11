@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Org Babel chemfiles conversion runner (docs/orgmode/chemfiles-notebook.org).
+# Org Babel chemfiles conversion runner (docs/orgmode/tutorials/chemfiles-notebook.org).
 #
 # Authoritative path (no soft-fail theater):
 #   1) org-babel-tangle → docs/notebooks/chemfiles_ingress.py
@@ -37,7 +37,7 @@ EMACS_BIN="$(resolve_emacs)" || {
   exit 1
 }
 
-ORG="${ROOT}/docs/orgmode/chemfiles-notebook.org"
+ORG="${ROOT}/docs/orgmode/tutorials/chemfiles-notebook.org"
 OUT_DIR="${ROOT}/docs/notebooks/out"
 WORK="${OUT_DIR}/work"
 TANGLE_PY="${ROOT}/docs/notebooks/chemfiles_ingress.py"

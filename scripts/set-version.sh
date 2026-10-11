@@ -25,7 +25,8 @@ sed -i -E "s/readcon-core-cxx-$o\b/readcon-core-cxx-$v/g; s#releases/download/v$
 # FetchContent URL_HASH stays with the wrap's source_hash.
 # Grid-table rows keep their column borders: a longer version takes its
 # extra characters out of the padding before the next cell border.
-python3 - "$old" "$v" docs/source/*.rst docs/orgmode/*.org <<'PY'
+mapfile -t doc_files < <(find docs/orgmode docs/source \( -name '*.org' -o -name '*.rst' \) -print | sort)
+python3 - "$old" "$v" "${doc_files[@]}" <<'PY'
 import re
 import sys
 

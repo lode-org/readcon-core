@@ -35,7 +35,7 @@
         ("sphinx-static"
          :base-directory "./docs/orgmode/img/"
          :base-extension "svg\\|png\\|jpg\\|jpeg\\|gif"
-         :publishing-directory "./docs/source/img/"
+         :publishing-directory "./docs/source/_static/figures/"
          :publishing-function org-publish-attachment
          :recursive t)
         ("sphinx-all" :components ("sphinx-rst" "sphinx-static"))))

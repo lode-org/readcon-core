@@ -9,6 +9,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "docs" / "source"
 
+# Stem of an org page -> Sphinx docname after the Diátaxis move.
+DOCNAMES = {
+    "getting-started": "tutorials/getting-started",
+    "tutorial": "tutorials/tutorial",
+    "chemfiles-tutorial": "tutorials/chemfiles-tutorial",
+    "chemfiles-notebook": "tutorials/chemfiles-notebook",
+    "howto": "howto/howto",
+    "migrate": "howto/migrate",
+    "chemfiles-howto": "howto/chemfiles-howto",
+    "faq": "explanation/faq",
+    "evolution": "explanation/evolution",
+    "architecture": "explanation/architecture",
+    "benchmarks": "explanation/benchmarks",
+    "chemfiles-explain": "explanation/chemfiles-explain",
+    "bindings": "reference/bindings",
+    "chemfiles-reference": "reference/chemfiles-reference",
+    "rpc": "reference/rpc",
+    "spec": "spec",
+    "implementation-notes": "implementation-notes",
+    "contributing": "contributing",
+    "changelog": "changelog",
+    "issue-status": "issue-status",
+    "citations": "reference/citations",
+    "index": "index",
+}
+
 
 def pad_grid_tables(text: str) -> str:
     """Pad org-export grid tables so every row matches the widest cells."""
@@ -79,7 +105,7 @@ def pad_grid_tables(text: str) -> str:
 def fix_text(t: str) -> str:
     def repl(m: re.Match[str]) -> str:
         stem = Path(m.group(2)).stem
-        return f":doc:`{stem}`"
+        return f":doc:`/{DOCNAMES.get(stem, stem)}`"
 
     # Relative targets only: absolute URLs (https://.../foo.org) are real links
     t = re.sub(

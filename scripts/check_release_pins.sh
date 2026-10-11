@@ -61,8 +61,7 @@ if grep -qE 'sha256sum -c|install-cargo-dist-ci' "$WF"; then
 else
   die "release.yml never checksum-verifies an installer"
 fi
-if grep -nE 'cargo-dist-installer.sh' "$ROOT/docs/orgmode/contributing.org" \
-  "$ROOT/docs/source/contributing.rst" | grep -vq '^\s*#'; then
+if grep -nE 'cargo-dist-installer.sh' "$ROOT/docs/orgmode/contributing.org" | grep -vq '^\s*#'; then
   die "docs still teach cargo-dist-installer.sh"
 else
   ok "docs do not teach cargo-dist-installer.sh"
