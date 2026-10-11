@@ -1475,6 +1475,17 @@ enum RKRStatus rkr_frame_builder_set_units(struct RKRConFrameBuilder *builder_ha
                                            const char *units_json);
 
 /**
+ * Sets `con_spec_minor` on an existing frame builder.
+ * A v3 frame built without this call carries minor 1.
+ * Returns `RKR_STATUS_SUCCESS` on success.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_con_spec_minor(struct RKRConFrameBuilder *builder_handle,
+                                                    uint32_t minor);
+
+/**
  * Sets a numeric metadata key on an existing frame builder.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
