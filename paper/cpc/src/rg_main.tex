@@ -105,7 +105,7 @@ Long-timescale work makes the same demand, because an accelerated trajectory or 
 
 CON carries minima, saddles, images of a band and the restart of a search.
 The Atomic Simulation Environment, which began as a scripting interface to an electronic-structure code, reads and writes the same text \cite{bahnObjectorientedScriptingInterface2002}.
-The older eOn paper describes the code, not the file, and the file was never specified, so the eOn reader and the ASE reader diverged.
+The older eOn paper describes the code, not the file, and the file was never specified, so the eOn reader and the ASE reader diverged \cite{goswamiEonV3602026,chillEonSoftwareLong2014}.
 Six fixed decimals move a coordinate by up to \(5.0\times10^{-7}\,\text{\AA}\) on a write, while a shortest round-trip printer returns the same binary64 value.
 Velocities in eOn and in ASE are stored in the natural unit \((\mathrm{amu}\cdot\text{\AA}^{2}/\mathrm{eV})^{0.5}=10.1805\,\mathrm{fs}\), and producers of the 3.0 era labelled that unit fs, so a trusting reader scales the kinetic energy by 103.64.
 ASE turns any nonzero fourth-column mask into a full freeze and ignores the fifth-column identity, so a height constraint becomes a frozen atom and atoms that the file grouped by element are paired by row.
@@ -116,9 +116,9 @@ Chemical markup, the Protein Data Bank, package-independent parsers and molecula
 
 We present four contributions.
 (i) CON 3.1 is a versioned specification with compatibility rules, a parsing-expression grammar and a JSON schema.
-(ii) readcon-core 0.17.0 is a reference implementation with one C ABI and five bindings, and eOn 3.6.0 reads CON through it.
+(ii) readcon-core 0.17.0 is a reference implementation with one C ABI and five bindings, and eOn 3.6.0 reads CON through it \cite{goswamiEonV3602026}.
 (iii) One conformance corpus is run by every binding, so a legal frame and an illegal frame are decided in common.
-(iv) We compare an interrupted eOn band, resumed from both printers, with the uninterrupted run, and we place the cost of the read next to a force call.
+(iv) We compare an interrupted eOn band, resumed from both printers, with the uninterrupted run \cite{goswamiEonV3602026,goswamiEnhancedClimbingImage2026}, and we place the cost of the read next to a force call.
 Six requirements follow, and Section~\ref{sec:requirements} ties each one to a failure: a per-axis constraint (R1), a persistent atom identity (R2), a declared velocity time unit (R3), an exact floating-point round trip unless the caller asks for fixed decimals (R4), metadata a later minor can extend (R5), and text a person can inspect after a job has stopped (R6).
 Section~\ref{sec:format} specifies the frame, Section~\ref{sec:implementation} describes the library, Section~\ref{sec:validation} reports the corpus and the eOn restarts, and Section~\ref{sec:performance} reports that cost.
 Figure~\ref{fig:workflow} is the path.
@@ -419,10 +419,10 @@ That pace is why the compatibility promise, rather than another quick edit, is t
 
 \section{Reference implementation}
 \label{sec:implementation}
-We release readcon-core 0.17.0 as the reference reader and writer for the specification above \cite{goswamiReadconcoreV0170Conconvel2026,goswamiEon2026}.
+We release readcon-core 0.17.0 as the reference reader and writer for the specification above \cite{goswamiReadconcoreV0170Conconvel2026,goswamiEonV3602026,goswamiEon2026}.
 Figure~\ref{fig:architecture} is the layering.
 We put one Rust core behind a C ABI, and C, C++, Python, Julia and Fortran callers sit on that waist.
-eOn's C++ reader is the C++ wrapper, not a second parser.
+eOn's C++ reader is the C++ wrapper, not a second parser \cite{goswamiEonV3602026}.
 The core is written in Rust so that ownership of a frame can be stated at the boundary the other languages call \cite{jungRustbeltSecuringFoundations2018,perkelWhyScientistsAre2020}.
 Decimal fields go through a correctly rounded conversion on that path \cite{lemireNumberParsingGigabyte2021,mushtakFastNumberParsing2023}.
 
@@ -538,7 +538,7 @@ Column 5 is kept by this library, so a caller pairs atoms by id after the file h
 The bindings return that id on the file-order atom, which is the surface Listing~\ref{lst:py} shows.
 
 \subsection{An interrupted eOn band}
-We restart an eOn 3.6.0 client with the Morse Pt potential and ASE 3.29.0, on a Pt(100) \(3\times3\times3\) slab plus one adatom (28 atoms, the bottom 9 at mask 7).
+We restart an eOn 3.6.0 client with the Morse Pt potential and ASE 3.29.0, on a Pt(100) \(3\times3\times3\) slab plus one adatom (28 atoms, the bottom 9 at mask 7) \cite{goswamiEonV3602026,goswamiEnhancedClimbingImage2026}.
 The event is a hollow-to-hollow hop, the band has five movable images, the optimiser is steepest descent, and both the uninterrupted run and each resume take five steepest-descent steps.\footnote{Giving the resume the same iteration cap as the uninterrupted job leaves it one step short, because iteration 0 writes the loaded band and does not step.
 The \(0.0068\,\mathrm{eV}\) gap of that unmatched pair is the step count.}
 Minimisations, the band and the dimer reported below all stop at an iteration cap.
@@ -556,7 +556,7 @@ No point on that figure is missing.
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{Interrupted eOn nudged elastic band on a 28-atom Pt(100) slab with a Morse potential, five movable images and steepest descent.
+\caption{Interrupted eOn nudged elastic band on a 28-atom Pt(100) slab with a Morse potential, five movable images and steepest descent \cite{goswamiEonV3602026,goswamiEnhancedClimbingImage2026}.}
 Both the uninterrupted run and each resume take five steepest-descent steps, and the search stops at an iteration cap.
 Left and centre: max force and highest-image energy for the uninterrupted run and for resumes from a round-trip checkpoint and from a six-decimal checkpoint.
 The three series coincide at printed precision.
@@ -565,9 +565,9 @@ The round-trip barrier at that band is \(0.63493\,\mathrm{eV}\), with difference
 \label{fig:restart}
 \end{figure}
 
-An L-BFGS control, which is eOn's default band optimiser, does not show the same split.
+An L-BFGS control, which is eOn's default band optimiser, does not show the same split \cite{goswamiEonV3602026,goswamiEnhancedClimbingImage2026}.
 Both checkpoints resume to \(0.6707\,\mathrm{eV}\) against \(0.6336\,\mathrm{eV}\) for the uninterrupted ending, since the limited-memory history is not in a geometry checkpoint and the two files therefore lose the same thing.
-A dimer started from the round-trip geometry gives a saddle energy of \(-112.618941\,\mathrm{eV}\) and a curvature of \(-10.613681\), identical to the plain run.
+A dimer started from the round-trip geometry gives a saddle energy of \(-112.618941\,\mathrm{eV}\) and a curvature of \(-10.613681\), identical to the plain run \cite{goswamiEonV3602026,goswamiEfficientExplorationChemical2025}.
 Six decimals shift that saddle by \(-3.0\times10^{-6}\,\mathrm{eV}\), to a curvature of \(-10.613677\), with a positional RMSD of \(5.4\times10^{-7}\,\text{\AA}\).
 The dimer, like the band, stops at its iteration cap.
 
