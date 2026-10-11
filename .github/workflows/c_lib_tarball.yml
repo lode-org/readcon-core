@@ -7,9 +7,15 @@ name: C ABI library tarball
 # an already-published tag (v0.14.7) can receive clib assets later.
 # The packager (scripts/package-clib.sh) comes from the *workflow ref*
 # (the branch selected in Actions). Sources and the Release tag come from
-# inputs.tag (dispatch) or github.ref (release published). That split is
+# inputs.tag when a caller or a dispatch supplies one, otherwise github.ref. That split is
 # required because v0.14.7 does not contain package-clib.sh.
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach clib tarballs to
+        required: true
+        type: string
   release:
     types: [published]
   workflow_dispatch:
@@ -64,7 +70,7 @@ jobs:
       - name: Checkout tag sources
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.ref }}
           path: src
 
       - name: Install Rust toolchain
@@ -146,10 +152,20 @@ jobs:
             "${feat_args[@]}"
           ls -lh dist-clib
 
+      - name: Refuse to replace an existing release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(dist-clib/readcon-core-clib-*.tar.gz dist-clib/readcon-core-clib-*.tar.gz.sha256 dist-clib/Artifacts-*.toml)
+          tag="${{ inputs.tag || github.ref_name }}"
+          bash packager/scripts/reject_existing_release_assets.sh "$tag" "${files[@]}"
+
       - name: Upload tarball to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             dist-clib/readcon-core-clib-*.tar.gz
             dist-clib/readcon-core-clib-*.tar.gz.sha256

@@ -4,6 +4,12 @@ name: cxx source tarball
 # GitHub Release. Slim URL is the FetchContent / wrapdb default.
 # cbindgen is not installed and not invoked.
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Git tag to checkout and attach cxx tarballs to
+        required: true
+        type: string
   release:
     types: [published]
   workflow_dispatch:
@@ -22,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -34,10 +40,19 @@ jobs:
           bash scripts/package-cxx.sh dist-cxx --vendor
           ls -lh dist-cxx
 
+      - name: Refuse to replace an existing release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(dist-cxx/readcon-core-cxx-*.tar.gz dist-cxx/readcon-core-cxx-*.tar.gz.sha256)
+          tag="${{ inputs.tag || github.ref_name }}"
+          bash scripts/reject_existing_release_assets.sh "$tag" "${files[@]}"
+
       - name: Upload tarballs to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             dist-cxx/readcon-core-cxx-*.tar.gz
             dist-cxx/readcon-core-cxx-*.tar.gz.sha256

@@ -33,6 +33,16 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -1)"
+
+# Timestamp of the commit being packaged (the tag commit when the checkout is a tag).
+if [[ -z "${SOURCE_DATE_EPOCH:-}" ]]; then
+    if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        SOURCE_DATE_EPOCH="$(git -C "$ROOT_DIR" log -1 --format=%ct HEAD)"
+    else
+        SOURCE_DATE_EPOCH=0
+    fi
+    export SOURCE_DATE_EPOCH
+fi
 if [[ "$VENDOR" -eq 1 ]]; then
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}-vendor"
 else
@@ -153,8 +163,15 @@ mkdir -p "$DEST/tests"
 cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
 cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
 
-tar -C "$TMP_DIR" -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
-gzip -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
+tar -C "$TMP_DIR" \
+    --sort=name \
+    --mtime="@${SOURCE_DATE_EPOCH}" \
+    --owner=0 \
+    --group=0 \
+    --numeric-owner \
+    -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" \
+    "$ARCHIVE_NAME"
+gzip -n -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
 SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"

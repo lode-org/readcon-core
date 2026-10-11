@@ -54,14 +54,71 @@ else
   die "wrap source_hash '${source_hash_raw}' is not a 64-char sha256"
 fi
 
+release_tag="v${cargo_ver}"
+tag_exists=0
 if command -v curl >/dev/null 2>&1; then
-  live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
-  if [[ -z "$live" ]]; then
-    ok "GitHub Release .sha256 not published yet (tag tarball)"
-  elif [[ "$live" == "$source_hash" ]]; then
-    ok "GitHub Release .sha256 matches wrap source_hash"
+  tag_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/lode-org/readcon-core/releases/tags/${release_tag}" || true)"
+  if [[ "$tag_code" == "200" ]]; then
+    tag_exists=1
+    ok "GitHub Release tag ${release_tag} exists"
+  elif [[ "$tag_code" == "404" ]]; then
+    ok "GitHub Release tag ${release_tag} is not published"
   else
-    die "live ${source_url}.sha256 is '${live}', wrap has '${source_hash}'"
+    die "could not read GitHub Release tag ${release_tag} (HTTP ${tag_code})"
+  fi
+
+  fetch_sha() {
+    local url="$1"
+    curl -fsSL "$url" 2>/dev/null | awk 'NF { print $1; exit }' || true
+  }
+
+  # A published tag with no checksum file is a failure. Before the tag
+  # exists, a missing file is the not-yet-published gap.
+  note_sha_asset() {
+    local url="$1"
+    local live="$2"
+    if [[ -z "$live" ]]; then
+      if [[ "$tag_exists" -eq 1 ]]; then
+        die "tag ${release_tag} exists but checksum asset is missing: ${url}"
+      else
+        ok "checksum not published yet: ${url}"
+      fi
+      return 1
+    fi
+    if [[ ! "$live" =~ ^[0-9a-f]{64}$ ]]; then
+      die "checksum asset ${url} is not a 64-char sha256 ('${live}')"
+      return 1
+    fi
+    return 0
+  }
+
+  if [[ "$tag_code" == "200" || "$tag_code" == "404" ]]; then
+    live="$(fetch_sha "${source_url}.sha256")"
+    if note_sha_asset "${source_url}.sha256" "$live"; then
+      if [[ "$live" == "$source_hash" ]]; then
+        ok "GitHub Release .sha256 matches wrap source_hash"
+      else
+        die "live ${source_url}.sha256 is '${live}', wrap has '${source_hash}'"
+      fi
+    fi
+
+    # Same rule for each prebuilt C library tarball the release workflow attaches.
+    clib_targets=(
+      x86_64-unknown-linux-gnu
+      aarch64-unknown-linux-gnu
+      x86_64-pc-windows-msvc
+      x86_64-apple-darwin
+      aarch64-apple-darwin
+    )
+    for target in "${clib_targets[@]}"; do
+      clib_url="https://github.com/lode-org/readcon-core/releases/download/${release_tag}/readcon-core-clib-${cargo_ver}-${target}.tar.gz.sha256"
+      clib_sha="$(fetch_sha "$clib_url")"
+      if note_sha_asset "$clib_url" "$clib_sha"; then
+        ok "clib checksum present for ${target}"
+      fi
+    done
   fi
 fi
 
