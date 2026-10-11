@@ -1,0 +1,5 @@
+- CON 3.1 states masks, atom ids, and a velocity time unit.
+- readcon-core 0.16.2 reads and writes that checkpoint.
+- ASE eon.py drops per-axis masks and pre-grouping ids.
+- Paired ratios use BCa intervals and a Holm correction.
+- A public HCN to HNC path is rewritten as CON 3.1.

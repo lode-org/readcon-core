@@ -1,0 +1,248 @@
+#+TITLE: Claims ledger for the CPC manuscript
+
+Status is spec when the sentence states the specification.
+Status is holds when the sentence matches readcon-core 0.16.2 on base bce95758.
+A sentence that names a missing check is holds, because that is the state of this tree.
+Unmerged branches fix/v3.1-conformance and feat/error-channel-bindings are not part of this tree.
+
+* Draft claims from the input list
+
+| id | draft | disposition | status |
+|----+-------+--------------+--------|
+| 1 | Version 0.14.9 and a frozen 0.14 C ABI. | Replaced with crate 0.16.2. No rkr_last_error on this tree. | fixed |
+| 2 | Neither stack has a units object, and archived eOn does a boolean decode. | eOn 3.5 and later writes a v3 units object. v3.0 velocities are natural-unit numbers under an fs label. | fixed |
+| 3 | Spec 3 requires units, with velocities living only in a sections entry and no time unit. | Specification 3.1 defines units.time. The 0.16.2 parser does not apply it. | fixed |
+| 4 | Column 4 is a bitmask 0 to 7 in the library. | That is the specification. The lax reader casts through f64. | fixed |
+| 5 | Four-column lines default the id, and the spec is silent on uniqueness and base. | The specification states the id rules. The lax reader still uses f64. | fixed |
+| 6 | gzip and zstd both decompress every member and then parse. | The gzip reader returns the first member. | fixed |
+| 7 | The builder returns NULL and does not abort, with no missing channel noted. | NULL is true. This tree has no last-error channel. | fixed |
+| 8 | ASE adapters round-trip lattice and pbc. | to_ase ignores lattice_vectors and passes pbc true. | fixed |
+| 9 | Rust, the C ABI, and Python share one parser and the grammar matches it. | They share the hand parser. The Pest grammar is optional and disagrees on column 4. | fixed |
+| 10 | The 0.14 contract freezes a NaN sentinel as a file value. | The sentinel is an API value and is not a CON number. The file rule is rejection, which this tree does not implement. | fixed |
+| 11 | The corpus locks unknown section names for every future minor. | Phase A rejects unknown names. section_arity skip is specified and not implemented. | fixed |
+| 12 | Program Summary tells the author not to invent a DOI or a second paper. | Those sentences are removed. | fixed |
+| 13 | Program Title names readcon-db as a companion program. | The title is readcon-core. readcon-db is one paragraph. | fixed |
+| 14 | Performance quotes one host in August 2026 without intervals. | Tables now come from the paired protocol and the committed CSVs. | fixed |
+| 15 | The paper is silent on precision. | The default writer uses six decimal places. The natural-unit KE loss is in the velocity table. | fixed |
+| 16 | Applications cite the amsel campaign stack. | The application is the public HCN to HNC campaign, doi:10.1016/j.mex.2026.103899. | fixed |
+| 17 | Atomsk and OVITO are dismissed without a version and a source. | Both cells cite a manual retrieved on 2026-10-11 and a paper. | fixed |
+| 18 | No paper by Rohit is cited where CON workflows are described. | The orchestration, RMSD, and JCTC papers are cited before Chill et al. | fixed |
+| 19 | No data statement, CRediT, competing interests, funding, acknowledgements, or highlights. | Those sections and highlights.txt are present. There is no AI-use section. | fixed |
+
+* Behavioural sentences
+
+| sentence | clause | test | status |
+|----------+--------+------+--------|
+| Rare-event methods store an atomic geometry many times while they search for a saddle or a path. | TBD-S1 | TBD-T1 | holds |
+| The eOn family writes that checkpoint as CON text. | TBD-S1 | TBD-T1 | holds |
+| A restart needs a per-axis constraint, the atom order from before type grouping, and a velocity time unit. | TBD-S1 | TBD-T1 | holds |
+| Specification 3.1 states that contract. | TBD-S1 | TBD-T1 | holds |
+| readcon-core 0.16.2 is a Rust reader and writer for CON versions 1, 2, and 3, with a C ABI and bindings for C++, Python, Julia, and Fortran. | TBD-S1 | TBD-T1 | holds |
+| This paper summarises the specification and records where the 0.16.2 code does not yet implement a clause. | TBD-S1 | TBD-T1 | holds |
+| The public HCN to HNC endpoints of an eOn nudged elastic band workflow are rewritten as CON 3.1. | TBD-S1 | TBD-T1 | holds |
+| readcon-core returns the mask, the id, and the velocity numbers from that file and stores the time-unit string. | TBD-S1 | TBD-T1 | holds |
+| The ASE eon reader does not keep the mask or the id. | TBD-S1 | TBD-T1 | holds |
+| Paired timings against ASE, a chemfiles XYZ read, MDAnalysis H5MD, and h5py are reported with bootstrap intervals. | TBD-S1 | TBD-T1 | holds |
+| specification \texttt{docs/orgmode/spec.org}; clause index \texttt{docs/orgmode/clauses.tsv}; Phase A corpus \texttt{resources/conformance/}; benchmark scripts \texttt{paper/cpc/bench/}; HCN and HNC endpoints \texttt{paper/cpc/data/}; printers \texttt{scripts/print\_neb\_band.py}, \texttt{examples/print\_neb\_band.cpp}, \texttt{examples/print\_neb\_band.f90}. | TBD-S1 | tests/spec_v31.rs::clause_index_matches_spec | holds |
+| Saddle searches, adaptive kinetic Monte Carlo, and nudged elastic band calculations store a geometry after many potential calls. | TBD-S1 | TBD-T1 | holds |
+| The checkpoint has to carry the cell, the masses, a constraint on each Cartesian axis, the atom order from before the file groups atoms by type, and, when a trajectory is restarted, the velocities in a declared time unit. | TBD-S1 | TBD-T1 | holds |
+| eOn writes this state as CON text. | TBD-S1 | TBD-T1 | holds |
+| Independent readers do not agree on column 4. | TBD-S1 | TBD-T1 | holds |
+| The ASE eon reader treats a nonzero flag as a fully fixed atom and does not keep column 5. | TBD-S1 | TBD-T1 | holds |
+| A force section after the coordinates does not parse in that reader. | TBD-S1 | TBD-T1 | holds |
+| Files from specification 3.0, including those written by eOn 3.5 and later through this library, can carry natural-unit velocities under a time label of fs. | TBD-S1 | TBD-T1 | holds |
+| A reader that trusts the label fs scales the kinetic energy by the square of the time-unit factor. | TBD-S1 | TBD-T1 | holds |
+| A campaign that mixes eOn, ASE, and readcon-core needs one reading of the mask, the id, and the time unit. | TBD-S1 | TBD-T1 | holds |
+| Specification 3.1 is the contract, and the normative text is \texttt{docs/orgmode/spec.org}. | TBD-S1 | TBD-T1 | holds |
+| Line 2 is one JSON object. | TBD-S1 | TBD-T1 | holds |
+| Column 4 is an integer flag. | TBD-S1 | TBD-T1 | holds |
+| In spec 1 the value 1 means fixed on all three axes, and from spec 2 the value is a bitmask with bit 0 for x, bit 1 for y, and bit 2 for z. | TBD-S1 | TBD-T1 | holds |
+| Column 5 is an integer atom id from 0 through $2^{64}-1$, parsed as an integer. | TBD-S1 | TBD-T1 | holds |
+| From minor 1, a velocities section requires \texttt{units.time}, and the natural unit is written \texttt{(amu*angstrom\^{}2/eV)\^{}0.5}. | TBD-S1 | TBD-T1 | holds |
+| readcon-core is a Rust reader and writer for this text. | TBD-S1 | TBD-T1 | holds |
+| The shipped C header \texttt{include/readcon-core.h} is the language-neutral surface. | TBD-S1 | TBD-T1 | holds |
+| Python, Julia, and Fortran call that surface, and the Python extension can also call the Rust parser. | TBD-S1 | TBD-T1 | holds |
+| Text CON remains the file that other codes have to read. | TBD-S1 | TBD-T1 | holds |
+| gzip and zstd are compression envelopes around that text. | TBD-S1 | TBD-T1 | holds |
+| The crate on this tree is 0.16.2. | TBD-S1 | TBD-T1 | holds |
+| The C ABI is not described as a frozen 0.14 series. | TBD-S1 | TBD-T1 | holds |
+| The default writer prints six digits after the decimal point. | TBD-S1 | TBD-T1 | holds |
+| A binary64 round-trip mode exists as \texttt{FloatFormat::RoundTrip} and is not the default. | TBD-S1 | TBD-T1 | holds |
+| The gzip reader returns the first member of a multi-member file, while the specification requires every member. | TBD-S1 | TBD-T1 | holds |
+| The Python extension uses pyo3 0.28 with the extension-module feature and is not a free-threaded 3.13t or 3.14t build. | TBD-S1 | TBD-T1 | holds |
+| Cite the software through \texttt{CITATION.cff} and the concept DOI \texttt{10.5281/zenodo.18753567}. | TBD-S1 | TBD-T1 | holds |
+| S. T. Chill et al., Modelling Simul. Mater. Sci. Eng. 2014, doi:10.1088/0965-0393/22/5/055002. | TBD-S1 | TBD-T1 | holds |
+| Saddle searches, adaptive kinetic Monte Carlo, and the nudged elastic band build a path or a rate from many atomic geometries. | TBD-S1 | TBD-T1 | holds |
+| Each geometry is a checkpoint: the cell, the masses, which Cartesian axes are held fixed, the order the atoms had before they were grouped by chemical type, and sometimes the velocities. | TBD-S1 | TBD-T1 | holds |
+| A surface atom that is fixed in one direction and free in the others cannot be described by a single boolean. | TBD-S1 | TBD-T1 | holds |
+| Type grouping reorders the atoms, so an image of a path cannot be compared with the next image unless the pre-grouping id is kept. | TBD-S1 | TBD-T1 | holds |
+| Velocities are useless for a restart if two readers apply different time units to the same numbers. | TBD-S1 | TBD-T1 | holds |
+| This paper states specification 3.1, compares that text with readcon-core 0.16.2, and runs one public path through the file. | TBD-S1 | TBD-T1 | holds |
+| The significance for a campaign is that the mask, the id, and the time unit then have one reading. | TBD-S1 | TBD-T1 | holds |
+| The normative text is =docs/orgmode/spec.org=, dated 2026-10-11, major 3 and minor 1. | TBD-S1 | TBD-T1 | spec |
+| This section is a summary. | TBD-S1 | TBD-T1 | spec |
+| Where this summary and the specification disagree, the specification wins. | TBD-S1 | TBD-T1 | spec |
+| A file is a concatenation of frames. | TBD-S1 | TBD-T1 | spec |
+| The extensions are =.con=, =.convel=, and the envelopes =.con.gz=, =.convel.gz=, =.con.zst=, and =.convel.zst=. | TBD-S1 | TBD-T1 | spec |
+| Figure \ref{fig:layout} shows one frame and the fields a spec 1 reader does not use. | TBD-S1 | TBD-T1 | spec |
+| Line 2 of a version 2 or 3 frame is one UTF-8 JSON object, with no byte-order mark. | TBD-S1 | TBD-T1 | spec |
+| =con_spec_version= is a JSON number, the major version. | TBD-S1 | TBD-T1 | spec |
+| A missing =con_spec_minor=, or an explicit 0, means minor 0. | TBD-S1 | TBD-T1 | spec |
+| Readers accept unknown minors of a known major and reject an unknown major. | TBD-S1 | TBD-T1 | spec |
+| JSON with major 0 or 1 is invalid (CON-line2.5). | CON-line2.5 | TBD-T1 | spec |
+| Unknown line-2 keys are preserved on rewrite (CON-line2.8, D14, D15, D17). | CON-line2.8 | TBD-T1 | spec |
+| Line 3 is the lengths of a, b, and c. | TBD-S1 | TBD-T1 | spec |
+| Line 4 is alpha, beta, and gamma in degrees, with alpha the angle between b and c, beta the angle between a and c, and gamma the angle between a and b. | TBD-S1 | TBD-T1 | spec |
+| The vector a lies along x and b lies in the xy plane (CON-cell.6, D12). | CON-cell.6 | TBD-T1 | spec |
+| When =lattice_vectors= is present, a reader prefers those three row vectors, and a writer keeps lines 3 and 4 consistent with them at the precision it is using (CON-cell.1, CON-cell.2). | CON-cell.1 | TBD-T1 | spec |
+| A missing =pbc= key means periodic in all three directions (CON-cell.3). | CON-cell.3 | TBD-T1 | spec |
+| A type count of 0 is a legal zero-atom frame: lines 8 and 9 are empty, no coordinate or section block follows, and the legacy velocity fallback does not apply (CON-count.1, D4). | CON-count.1 | tests/spec_v31.rs::zero_atom_frame_parses | spec |
+| When the type count is at least 1, each per-type count is at least 1 (CON-count.3). | CON-count.3 | TBD-T1 | spec |
+| Column 4 is an unsigned integer token. | TBD-S1 | TBD-T1 | spec |
+| In spec 1, 0 is free and 1 is fixed on all three axes. | TBD-S1 | TBD-T1 | spec |
+| From spec 2, values 0 through 7 are a bitmask, bit 0 for x, bit 1 for y, and bit 2 for z, and a writer emits 7 for an atom fixed on all three axes (CON-mask.1 through CON-mask.7, D8). | CON-mask.1 | TBD-T1 | spec |
+| A float spelling, a sign, or any other value is =InvalidFixedFlag= in every mode (CON-mask.5). | CON-mask.5 | TBD-T1 | spec |
+| Column 5 is an integer id from 0 through $2^{64}-1$, parsed as an integer and not through binary64 (CON-id.1, D9). | CON-id.1 | TBD-T1 | spec |
+| No base is implied. | TBD-S1 | TBD-T1 | spec |
+| Writers emit ids that are unique within the frame. | TBD-S1 | TBD-T1 | spec |
+| Readers accept repeated ids and keep file order in that case. | TBD-S1 | TBD-T1 | spec |
+| When the ids are unique, ascending id is the pre-grouping order. | TBD-S1 | TBD-T1 | spec |
+| A line with four columns takes the 0-based position of the atom in the frame (CON-id.9). | CON-id.9 | TBD-T1 | spec |
+| A section is present exactly when its name is in =sections= (CON-section.1, D3). | CON-section.1 | TBD-T1 | spec |
+| Exactly one blank line precedes each section block, and the component blocks inside a section are not separated by a blank line (CON-section.2, CON-section.3, D5). | CON-section.2 | TBD-T1 | spec |
+| The per-atom energy section is named =energies= (CON-section.5, D6). | CON-section.5 | TBD-T1 | spec |
+| An unknown section name is an error when the frame minor is not newer than the reader. | TBD-S1 | TBD-T1 | spec |
+| A newer minor may skip an unknown section whose value-field count is given by =section_arity= (CON-section.7, CON-section.8, D14). | CON-section.7 | TBD-T1 | spec |
+| =bonds= is optional topology on major 3 and is not a section (CON-bonds.1, D7). | CON-bonds.1 | TBD-T1 | spec |
+| Version 3 requires =units.length= and =units.energy=. | TBD-S1 | TBD-T1 | spec |
+| Velocity is length divided by time. | TBD-S1 | TBD-T1 | spec |
+| Versions 1, 2, and 3.0 read velocities in the natural unit, and a =units.time= label on those versions is not trusted (CON-units.8, CON-units.9, D10). | CON-units.8 | TBD-T1 | spec |
+| From minor 1, =units.time= is authoritative, a velocities section requires it, and the natural unit is written exactly =(amu*angstrom^2/eV)^0.5= (CON-units.3, CON-units.5, CON-units.10). | CON-units.3 | TBD-T1 | spec |
+| A writer that is given an invalid unit fails with =InvalidUnits= and does not substitute a default (CON-units.13, CON-units.14, D11). | CON-units.13 | TBD-T1 | spec |
+| Readers reject NaN, Inf, and the spellings of those words in every numeric field and in every mode, as =NonFiniteValue= (CON-num.1, D1). | CON-num.1 | TBD-T1 | spec |
+| =validate= true adds checks and does not relax that rule (CON-validate.2, D1). | CON-validate.2 | TBD-T1 | spec |
+| The C ABI uses a NaN return for some absent numeric getters. | TBD-S1 | TBD-T1 | spec |
+| That NaN is an API sentinel, it is documented in =docs/orgmode/implementation-notes.org=, and it is not written to a file (CON-num.4). | CON-num.4 | TBD-T1 | spec |
+| A conforming writer in its default mode writes each finite float so that it parses back to the same binary64 (CON-num.6, D13). | CON-num.6 | TBD-T1 | spec |
+| Fixed-decimal text is allowed only when the caller asks for it. | TBD-S1 | TBD-T1 | spec |
+| Trailing whitespace after the last complete frame is ignored. | TBD-S1 | TBD-T1 | spec |
+| Any other partial frame is =IncompleteHeader=, =IncompleteFrame=, or =IncompleteSection= (CON-frame.1 through CON-frame.6, D2). | CON-frame.1 | TBD-T1 | spec |
+| A blank line followed only by whitespace to end of file is not a legacy velocity block (CON-frame.5). | CON-frame.5 | TBD-T1 | spec |
+| gzip exposes every member of a multi-member file, and zstd exposes every frame (CON-compress.1, CON-compress.2, D16). | CON-compress.1 | TBD-T1 | spec |
+| Labels are compared without regard to case after runs of spaces are collapsed (CON-file.5, D17). | CON-file.5 | TBD-T1 | spec |
+| Table \ref{tab:clauses} counts the clause index emitted from the specification. | TBD-S1 | tests/spec_v31.rs::clause_index_matches_spec | holds |
+| The index on this tree has \nMust{} MUST clauses, \nMustNot{} MUST NOT clauses, \nShould{} SHOULD clauses, \nShouldNot{} SHOULD NOT clauses, and \nMay{} MAY clauses. | TBD-S1 | TBD-T1 | holds |
+| The Phase A corpus under =resources/conformance/= has \nPhaseValid{} valid fixtures and \nPhaseInvalid{} invalid fixtures (Table \ref{tab:phase-a}). | TBD-S1 | tests/conformance_corpus.rs | holds |
+| =tests/conformance_corpus.rs= and the Python, C, Fortran, and Julia golden tests read that manifest. | TBD-S1 | tests/conformance_corpus.rs | holds |
+| =tests/spec_v31.rs= checks that the clause index matches =spec.org=, and it parses the specification's minor-1 example, the same bytes read as spec 1, and the zero-atom example. | TBD-S1 | tests/spec_v31.rs::clause_index_matches_spec | holds |
+| That file does not reject a partial frame, a non-finite token, a bad column-4 spelling, or a second gzip member. | TBD-S1 | TBD-T1 | holds |
+| Those checks are not in this tree. | TBD-S1 | TBD-T1 | holds |
+| The manifest entry =column-4-out-of-range= records =ValidationError= and its note says =validate= true rejects the value 8. | TBD-S1 | TBD-T1 | holds |
+| The specification requires =InvalidFixedFlag= in every mode, including when =validate= is absent (CON-mask.5). | CON-mask.5 | TBD-T1 | holds |
+| The Phase A corpus is therefore not a T1 lock of specification 3.1. | TBD-S1 | tests/conformance_corpus.rs | holds |
+| Table \ref{tab:features} and Table \ref{tab:features-other} compare the fields that the checkpoint needs. | TBD-S1 | TBD-T1 | holds |
+| Figure \ref{fig:matrix} is the same codes. | TBD-S1 | TBD-T1 | holds |
+| Each cell is sourced in Table \ref{tab:feature-sources}. | TBD-S1 | TBD-T1 | holds |
+| readcon-core 0.16.2 keeps a declared forces section and the spec major. | TBD-S1 | TBD-T1 | holds |
+| Its mask and id paths are partial because the lax reader parses those columns through binary64. | TBD-S1 | TBD-T1 | holds |
+| Its velocity time unit and its gzip reader do not implement CON-units.10 and CON-compress.1. | CON-units.10 | TBD-T1 | holds |
+| ASE 3.29.0 =ase/io/eon.py= drops the per-axis mask, the pre-grouping id, and a following section. | TBD-S1 | TBD-T1 | holds |
+| The crate on this tree is readcon-core 0.16.2. | TBD-S1 | TBD-T1 | holds |
+| The Rust types =ConFrame= and =ConFrameBuilder= own the frame. | TBD-S1 | TBD-T1 | holds |
+| The hot path is the hand-written parser in =src/parser.rs=. | TBD-S1 | TBD-T1 | holds |
+| The optional Pest grammar in =grammar/readcon.pest= is not used on that path. | TBD-S1 | TBD-T1 | holds |
+| That grammar accepts a signed integer in column 4. | TBD-S1 | TBD-T1 | holds |
+| The lax parser reads column 4 and column 5 as binary64 and then casts them (=src/parser.rs:668-676=). | TBD-S1 | TBD-T1 | holds |
+| With =validate= true, column 4 is parsed as an integer and values above 7 become =ValidationError=, which is not the =InvalidFixedFlag= result the specification names for every mode. | TBD-S1 | TBD-T1 | holds |
+| The error enum in =src/error.rs= has no =NonFiniteValue=, =InvalidFixedFlag=, =InvalidCount=, or =InvalidUnits= variant. | TBD-S1 | TBD-T1 | holds |
+| =src/ffi.rs= generates the shipped header =include/readcon-core.h=. | TBD-S1 | TBD-T1 | holds |
+| C++ uses that header. | TBD-S1 | TBD-T1 | holds |
+| Python, Julia, and Fortran call the C ABI, and the Python extension can also call the Rust parser. | TBD-S1 | TBD-T1 | holds |
+| =rkr_frame_builder_build= returns a null pointer when =ConFrameBuilder::build= returns an error, and it discards the error (=src/ffi.rs:3371-3373=). | TBD-S1 | TBD-T1 | holds |
+| This tree does not define =rkr_last_error=. | TBD-S1 | TBD-T1 | holds |
+| Fortran and Julia therefore cannot read a builder failure. | TBD-S1 | TBD-T1 | holds |
+| Several numeric getters return an IEEE NaN when the value is absent. | TBD-S1 | TBD-T1 | holds |
+| That sentinel is the C API described in =docs/orgmode/implementation-notes.org=. | TBD-S1 | TBD-T1 | holds |
+| The writer default is six digits after the decimal point (=src/writer.rs= =DEFAULT_FLOAT_PRECISION=). | TBD-S1 | TBD-T1 | holds |
+| =FloatFormat::RoundTrip= is available when the caller selects it, and =Default= for =FloatFormat= is the six-digit mode. | TBD-S1 | TBD-T1 | holds |
+| For a major-3 frame whose units are missing or fail validation, the writer inserts =units= with =time= set to =fs= (=src/writer.rs:269-277= and =src/units.rs:439-445=). | TBD-S1 | TBD-T1 | holds |
+| The specification forbids that substitution (CON-units.14). | CON-units.14 | TBD-T1 | holds |
+| =src/units.rs= parses the natural spelling =(amu*angstrom^2/eV)^0.5= as a time. | TBD-S1 | TBD-T1 | holds |
+| =canonicalize_unit_expression= rewrites that spelling with spaces, so a rewrite does not keep the pinned characters (CON-units.5). | CON-units.5 | TBD-T1 | holds |
+| The gzip path uses =GzDecoder=, which stops after the first member (=src/compression.rs:82-88=). | TBD-S1 | TBD-T1 | holds |
+| zstd is an optional Cargo feature and is not part of a default build. | TBD-S1 | TBD-T1 | holds |
+| =read_all_frames= parses sequentially unless the crate is built with =parallel= and the buffer is at least 48 KiB. | TBD-S1 | TBD-T1 | holds |
+| =read_all_frames_with_threads= takes =Some(1)= for one thread and =Some(n)= for a pool of =n= workers when =n= is at least 2. | TBD-S1 | TBD-T1 | holds |
+| The frame boundaries are computed before that pool runs, so the partition depends on the input and not on the worker count. | TBD-S1 | TBD-T1 | holds |
+| The Python package enables =parallel=. | TBD-S1 | TBD-T1 | holds |
+| Its pyo3 dependency is version 0.28 with the feature =extension-module=. | TBD-S1 | TBD-T1 | holds |
+| The manifest does not select a free-threaded build, and this paper does not claim a 3.13t or 3.14t wheel. | TBD-S1 | TBD-T1 | holds |
+| =to_ase= builds the cell from lines 3 and 4 and passes =pbc= true (=src/python.rs:1498-1516=). | TBD-S1 | TBD-T1 | holds |
+| It does not read =lattice_vectors=, and it does not read a =pbc= array from the metadata. | TBD-S1 | TBD-T1 | holds |
+| readcon-db is a separate LMDB index of energy, formula, and section presence over the same CON text. | TBD-S1 | TBD-T1 | holds |
+| It is not a second program in this paper. | TBD-S1 | TBD-T1 | holds |
+| A Cap'n Proto schema in the repository is an in-process RPC encoding. | TBD-S1 | TBD-T1 | holds |
+| It is not the on-disk CON file. | TBD-S1 | TBD-T1 | holds |
+| The checks that ship on this tree are the Phase A goldens, =tests/spec_v31.rs=, and writer round trips in =tests/roundtrip_writer.rs= and =tests/ffi_writer_roundtrip.rs=. | TBD-S1 | tests/spec_v31.rs::clause_index_matches_spec | holds |
+| This tree has no property-test suite and no fuzzer. | TBD-S1 | TBD-T1 | holds |
+| A T1 corpus that locks the 3.1 error classes is not merged here. | TBD-S1 | TBD-T1 | holds |
+| Table \ref{tab:velocity} is the velocity-unit example. | TBD-S1 | TBD-T1 | holds |
+| eOn writes =.convel= velocities in the natural unit and labels the time column with the constant 10.1805055 fs (=include/eon/ParametersOptions.h:26=). | TBD-S1 | TBD-T1 | holds |
+| readcon-core 0.16.2 parses the pinned spelling to the factor in the table. | TBD-S1 | TBD-T1 | holds |
+| The relative difference between those two factors is the relative-difference row. | TBD-S1 | TBD-T1 | holds |
+| The kinetic energies are the measurements recorded with the specification for one 336-atom Pt slab at 300 K. | TBD-S1 | TBD-T1 | holds |
+| They are not recomputed in this archive. | TBD-S1 | TBD-T1 | holds |
+| Reading the natural-unit numbers as angstrom per fs multiplies the kinetic energy by the square of the eOn factor. | TBD-S1 | TBD-T1 | holds |
+| Six digits after the decimal, which is eOn's =kConvelPrecision= (=client/ConFileIO.cpp:43=) and also the readcon-core default, changes that kinetic energy by the relative loss in the table. | TBD-S1 | TBD-T1 | holds |
+| Version 3.0 files that carry =time: fs= while storing natural-unit numbers are the files this factor applies to (CON-units.9). | CON-units.9 | TBD-T1 | holds |
+| From minor 1 the label has to be the unit the numbers are in (CON-units.10). | CON-units.10 | TBD-T1 | holds |
+| The timings below were measured with =paper/cpc/bench/run_bench.py= on the host recorded in =paper/cpc/bench/results/repeats.csv=. | TBD-S1 | TBD-T1 | holds |
+| readcon-core runs in one long-lived process started from paper/cpc/bench/readcon-bench. | TBD-S1 | TBD-T1 | holds |
+| Each peer runs in the Python process. | TBD-S1 | TBD-T1 | holds |
+| The library sources are the sources of the base SHA in that CSV. | TBD-S1 | TBD-T1 | holds |
+| The commit column is the git revision that contains these scripts. | TBD-S1 | TBD-T1 | holds |
+| Each cell is 30 repeats in the order baseline, peer, baseline, peer. | TBD-S1 | TBD-T1 | holds |
+| The ratio is the readcon-core time divided by the peer time. | TBD-S1 | TBD-T1 | holds |
+| The interval is a BCa 95 percent interval of the median of that ratio. | TBD-S1 | TBD-T1 | holds |
+| A timeout remains in the raw CSV and is not a time. | TBD-S1 | TBD-T1 | holds |
+| A reader that raises remains in the failure column and is not a time. | TBD-S1 | TBD-T1 | holds |
+| The payloads are 1, 100, and 10000 frames of the 218-atom file =resources/test/cuh2.con=, one frame of 10000 atoms built by tiling that file, and the sectioned file =resources/examples/neb_band.con=. | TBD-S1 | TBD-T1 | holds |
+| ASE is =ase.io.read= with =format="eon"=. | TBD-S1 | TBD-T1 | holds |
+| chemfiles reads a lean XYZ file of the same coordinates. | TBD-S1 | TBD-T1 | holds |
+| On the sectioned file those three peers are given the CON path, so a failure there is a failure to read CON. | TBD-S1 | TBD-T1 | holds |
+| Cachegrind instruction counts are one whole-process run of the 1-frame payload, with cache simulation turned off. | TBD-S1 | TBD-T1 | holds |
+| Figure \ref{fig:ratios} shows the intervals that exist. | TBD-S1 | TBD-T1 | holds |
+| Figure \ref{fig:threads} shows speedup and efficiency at 1, 2, 4, and 8 threads on the 10000-frame file. | TBD-S1 | TBD-T1 | holds |
+| The field hash at 1, 2, 3, 4, and 8 threads is the hash column of Table \ref{tab:threads}. | TBD-S1 | TBD-T1 | holds |
+| Holm adjustment is applied to the cells that have a ratio, across that payload and peer grid. | TBD-S1 | TBD-T1 | holds |
+| The sentence above is that result. | TBD-S1 | TBD-T1 | holds |
+| Copies are =paper/cpc/data/hcn.con= and =paper/cpc/data/hnc.con=. | TBD-S1 | TBD-T1 | holds |
+| Those files are spec 1 text written by ASE: column 4 is 0, the ids are 0, 1, and 2, and there is no velocity block. | TBD-S1 | TBD-T1 | holds |
+| =paper/cpc/scripts/hcn_case.py= rewrites them as specification 3.1 with =units.time= set to the natural spelling and a velocities section. | TBD-S1 | TBD-T1 | holds |
+| A third frame keeps the HCN coordinates, sets column 4 of H to 1, and stores the ids 2, 0, and 1 in file order. | TBD-S1 | TBD-T1 | holds |
+| Under spec 2 and later, column 4 equal to 1 is fixed on x only (CON-mask.4). | CON-mask.4 | TBD-T1 | holds |
+| The published endpoints themselves use column 4 equal to 0. | TBD-S1 | TBD-T1 | holds |
+| The third frame is a reader probe on those coordinates, not a claim that the published path fixed an axis. | TBD-S1 | TBD-T1 | holds |
+| Table \ref{tab:loss} is the result. | TBD-S1 | TBD-T1 | holds |
+| readcon-core 0.16.2 returns the masks, the ids, and the velocity numbers, and it keeps the time string on the metadata. | TBD-S1 | TBD-T1 | holds |
+| It does not convert the velocities into femtoseconds. | TBD-S1 | TBD-T1 | holds |
+| ASE =format="eon"= fails on the file that contains the velocities section. | TBD-S1 | TBD-T1 | holds |
+| On the coordinates-only probe it returns an all-fixed constraint on H and does not return column 5. | TBD-S1 | TBD-T1 | holds |
+| No eOn binary was run in this archive. | TBD-S1 | TBD-T1 | holds |
+| eOn 3.6.0 reads masks through =getFixedMask= (=client/ConFileIO.cpp:386=) and writes velocities at six decimals in the natural unit. | TBD-S1 | TBD-T1 | holds |
+| eOn 2.17.10 collapses any fixed bit to 1 (=client/ConFileIO.cpp:384-385=). | TBD-S1 | TBD-T1 | holds |
+| The same repository ships a short printer for a four-bead file, =resources/examples/neb_band.con=. | TBD-S1 | TBD-T1 | holds |
+| =scripts/print_neb_band.py=, =examples/print_neb_band.cpp=, and =examples/print_neb_band.f90= print the bead index, the energy, and =fmax= from line 2. | TBD-S1 | TBD-T1 | holds |
+| The Julia binding exposes =neb_bead= and =neb_band= through the C ABI and does not contain a fourth printer program. | TBD-S1 | TBD-T1 | holds |
+| Table \ref{tab:neb} is the declared metadata. | TBD-S1 | TBD-T1 | holds |
+| The energies are the line-2 values. | TBD-S1 | TBD-T1 | holds |
+| They are not a production barrier. | TBD-S1 | TBD-T1 | holds |
+| The declared difference between bead 1 and bead 0 is \nebBarrierEv{} eV. | TBD-S1 | TBD-T1 | holds |
+| Source, the C header, and the language bindings are in \url{https://github.com/lode-org/readcon-core}. | TBD-S1 | TBD-T1 | holds |
+| The crate version on this tree is 0.16.2. | TBD-S1 | TBD-T1 | holds |
+| Python wheels are published as =readcon= and =readcon-chemfiles=. | TBD-S1 | TBD-T1 | holds |
+| Julia and Fortran bind =libreadcon_core= from this repository and are not separate registry releases in this paper. | TBD-S1 | TBD-T1 | holds |
+| CMake and Meson consume the cxx source tarball attached to a GitHub release. | TBD-S1 | TBD-T1 | holds |
+| The software archive is the Zenodo concept DOI 10.5281/zenodo.18753567, and the program files will also be deposited in the CPC Program Library. | TBD-S1 | TBD-T1 | holds |
+| The benchmark CSVs and the scripts that wrote them are in this archive under =paper/cpc/bench/= and =paper/cpc/data/=. | TBD-S1 | TBD-T1 | holds |
+| The author declares no competing interests. | TBD-S1 | TBD-T1 | holds |

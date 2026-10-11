@@ -71,6 +71,17 @@
 
 (hz-export-org-files argv)
 
+(let ((root (locate-dominating-file default-directory "pixi.toml")))
+  (unless root
+    (setq root (expand-file-name default-directory)))
+  (unless (zerop (shell-command
+                  (format "python3 %spaper/cpc/scripts/check_manuscript.py" root)))
+    (kill-emacs 1))
+  (unless (zerop (shell-command
+                  (format "cd %spaper/cpc/src && latexmk -pdf -interaction=nonstopmode -halt-on-error rg_main.tex"
+                          root)))
+    (kill-emacs 1)))
+
 ;; Local Variables:
 ;; mode: emacs-lisp
 ;; End:
