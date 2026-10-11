@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file. See [conven
 - An unknown section is skipped only for a newer minor that declares section_arity. Otherwise it is UnknownSection.
 - gzip and zstd envelopes yield every member and every frame.
 - set_lattice_vectors keeps lines 3 and 4 consistent with the lattice matrix.
+- ConFrameBuilder stamps con_spec_minor 1 on a v3 frame when the caller does not set it. set_con_spec_minor and rkr_frame_builder_set_con_spec_minor override that value. The writer does not invent or replace the minor.
+- ConFrameBuilder::set_units and rkr_frame_builder_set_units set the units object from C and C++.
 
 ## v0.16.2 - 2026-10-09
 

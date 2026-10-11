@@ -2935,6 +2935,24 @@ pub unsafe extern "C" fn rkr_frame_builder_set_units(
         Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
     }
 }
+/// Sets `con_spec_minor` on an existing frame builder.
+/// A v3 frame built without this call carries minor 1.
+/// Returns `RKR_STATUS_SUCCESS` on success.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_con_spec_minor(
+    builder_handle: *mut RKRConFrameBuilder,
+    minor: u32,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_con_spec_minor(minor);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -5332,6 +5350,48 @@ mod tests {
             text.contains(r#""time":"(amu*angstrom^2/eV)^0.5""#),
             "{text}"
         );
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
+    }
+    #[test]
+    fn builder_stamps_con_spec_minor_one_unless_set() {
+        let builder = test_builder_handle();
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        let text = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains(r#""con_spec_minor":1"#), "{text}");
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
+
+        let builder = test_builder_handle();
+        assert_eq!(
+            unsafe { rkr_frame_builder_set_con_spec_minor(builder, 4) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        let text = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains(r#""con_spec_minor":4"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);

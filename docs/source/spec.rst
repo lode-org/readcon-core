@@ -750,6 +750,12 @@ Version 3 (normative)
 A file with ``con_spec_version`` equal to 3 SHALL satisfy all Version 2
 requirements and the following additional requirements.
 
+``con_spec_minor`` is the minor of that major. ``ConFrameBuilder`` stamps
+``con_spec_minor`` 1 on every spec 3 frame it builds when the caller has
+not set the key. ``set_con_spec_minor`` (Rust, ``rkr_frame_builder_set_con_spec_minor``,
+and the C++ method of the same name) overrides that value before
+``build``. The writer does not invent or replace ``con_spec_minor`` (D15).
+
 Units (required)
 ~~~~~~~~~~~~~~~~
 

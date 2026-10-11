@@ -1347,6 +1347,17 @@ impl ConFrameBuilder {
         Ok(())
     }
 
+    /// Sets `con_spec_minor` for the frame this builder will write.
+    ///
+    /// [`Self::build`] stamps [`crate::CON_SPEC_MINOR`] (1) when this has
+    /// not been called and the key is absent. The writer does not invent
+    /// or replace the minor (D15).
+    pub fn set_con_spec_minor(&mut self, minor: u32) -> &mut Self {
+        self.metadata
+            .insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
+        self
+    }
+
     /// Sets a numeric metadata key.
     pub fn set_scalar_metadata(&mut self, key: &str, value: f64) -> &mut Self {
         self.metadata
@@ -2714,7 +2725,8 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
-        // New frames are minor 1. Do not invent units.time (CON-units.4, D10).
+        // The builder, not the writer, stamps minor 1 on a v3 frame when
+        // the caller did not call set_con_spec_minor (D15).
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
             metadata.insert(
                 meta::CON_SPEC_MINOR.into(),
