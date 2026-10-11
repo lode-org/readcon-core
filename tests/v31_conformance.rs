@@ -12,6 +12,7 @@ use readcon_core::iterators::{frame_start_offsets, frames_from_text};
 use readcon_core::types::{ConFrame, ConFrameBuilder, cell_vectors, lengths_and_angles};
 use readcon_core::units::{
     NATURAL_TIME_UNIT, parse_unit_expression, validate_unit_for_quantity, velocity_file_time_unit,
+    velocity_scale_to_natural,
 };
 use readcon_core::writer::{ConFrameWriter, FloatFormat};
 #[cfg(feature = "parallel")]
@@ -938,6 +939,39 @@ fn coordinates_and_masses_use_declared_units() {
     assert_eq!(v3.header.coordinate_length_unit(), "nm");
     assert_eq!(v3.header.mass_unit(), "u");
     assert_eq!(v3.atom_data[0].x, 2.5);
+}
+
+fn close_rel(got: f64, want: f64) -> bool {
+    (got - want).abs() <= want.abs() * 1e-12
+}
+
+/// File velocities in fs and ps scale into the natural time unit.
+#[test]
+fn fs_and_ps_velocities_scale_into_the_natural_unit() {
+    let root =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/conformance/valid");
+    let cases = [
+        ("v31_velocity_fs.con", 10.180505710759414_f64),
+        ("v31_velocity_ps.con", 0.010180505710759414_f64),
+    ];
+    for (name, factor) in cases {
+        let text = std::fs::read_to_string(root.join(name)).unwrap();
+        let frame = parse_one(&text).unwrap();
+        let mut map = serde_json::Map::new();
+        for (key, value) in &frame.header.metadata {
+            map.insert(key.clone(), value.clone());
+        }
+        let unit = velocity_file_time_unit(frame.header.spec_version, &map, None).unwrap();
+        let scale = velocity_scale_to_natural(&unit).unwrap();
+        assert!(
+            close_rel(scale, factor),
+            "{name}: scale {scale} vs {factor}"
+        );
+        let velocity = frame.atom_data[0].velocity.unwrap();
+        assert!(close_rel(velocity[0] * scale, factor), "{name}: vx");
+        assert!(close_rel(velocity[1] * scale, 2.0 * factor), "{name}: vy");
+        assert!(close_rel(velocity[2] * scale, -3.0 * factor), "{name}: vz");
+    }
 }
 
 /// CON-units.8, CON-units.9, CON-units.10, CON-units.11.

@@ -21,6 +21,18 @@ clause = "Units (required)"
 notes = "v3 with required length and energy units."
 
 [[valid]]
+id = "v31-velocity-fs"
+path = "valid/v31_velocity_fs.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time fs."
+
+[[valid]]
+id = "v31-velocity-ps"
+path = "valid/v31_velocity_ps.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time ps."
+
+[[valid]]
 id = "column-4-spec2-x-only"
 path = "valid/column4_spec2_x_only.con"
 clause = "Per-direction constraints (column 4)"

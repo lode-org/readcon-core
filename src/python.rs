@@ -998,6 +998,9 @@ impl PyConFrame {
     }
 
     /// Convert this frame to an ASE Atoms object (requires ase package).
+    ///
+    /// Velocities are scaled into ASE's natural time unit, angstrom times
+    /// the square root of amu over eV.
     fn to_ase(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         ase_from_pyconframe(py, self)
     }
@@ -1587,15 +1590,16 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
-    // Set velocities if present
+    // Set velocities if present, in ASE's natural time unit.
     if frame.has_velocities(py)? {
+        let scale = ase_velocity_scale(frame, py)?;
         let velocities: Vec<[f64; 3]> = frame_atoms
             .iter()
             .map(|a| {
                 [
-                    a.vx.unwrap_or(0.0),
-                    a.vy.unwrap_or(0.0),
-                    a.vz.unwrap_or(0.0),
+                    a.vx.unwrap_or(0.0) * scale,
+                    a.vy.unwrap_or(0.0) * scale,
+                    a.vz.unwrap_or(0.0) * scale,
                 ]
             })
             .collect();
@@ -1875,6 +1879,19 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         metadata: PyDict::new(py).unbind(),
         inner: None,
     })
+}
+
+/// Scale file velocities into the natural time unit ASE stores.
+fn ase_velocity_scale(frame: &PyConFrame, py: Python<'_>) -> PyResult<f64> {
+    let meta = frame.metadata_map(py)?;
+    let mut map = serde_json::Map::new();
+    for (key, value) in meta {
+        map.insert(key, value);
+    }
+    let unit = crate::units::velocity_file_time_unit(frame.spec_version, &map, None)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    crate::units::velocity_scale_to_natural(&unit)
+        .map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.

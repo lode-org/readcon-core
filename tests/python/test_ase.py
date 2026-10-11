@@ -149,6 +149,17 @@ class TestAseVelocities:
         assert not frame.has_velocities
         assert frame.atoms[0].vx is None
 
+    def test_to_ase_scales_fs_and_ps_into_the_natural_unit(self):
+        corpus = os.path.join(
+            os.path.dirname(__file__), "..", "..", "resources", "conformance", "valid"
+        )
+        fs = readcon.read_con(os.path.join(corpus, "v31_velocity_fs.con"))[0].to_ase()
+        want_fs = np.array([1.0, 2.0, -3.0]) * 10.180505710759414
+        assert fs.get_velocities()[0] == pytest.approx(want_fs, rel=1e-12)
+        ps = readcon.read_con(os.path.join(corpus, "v31_velocity_ps.con"))[0].to_ase()
+        want_ps = np.array([1.0, 2.0, -3.0]) * 0.010180505710759414
+        assert ps.get_velocities()[0] == pytest.approx(want_ps, rel=1e-12)
+
 
 class TestAseMasses:
     """Mass roundtrip through ASE Atoms."""
