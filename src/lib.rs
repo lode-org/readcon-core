@@ -48,10 +48,17 @@ pub mod python;
 ///   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
 /// - Version 3: same as v2 plus **required** `units` object on JSON **line 2**
 ///   with non-empty `length` and `energy`. Writers emit canonical names
-///   (`angstrom`, `eV`, `fs`); see `units::canonicalize_unit_expression`.
+///   (`angstrom`, `eV`). A velocities section on minor 1 also requires
+///   `units.time`. See `units::canonicalize_unit_expression`.
 ///
 /// See `docs/orgmode/spec.org` for the full specification.
 pub const CON_SPEC_VERSION: u32 = 3;
+
+/// Minor implemented by this reader. Newer minors of major 3 are accepted.
+/// An unknown section is skipped only when the frame minor is greater than
+/// this value and `section_arity` gives the value-field count
+/// (CON-section.8, CON-section.12, D14).
+pub const CON_SPEC_MINOR: u32 = 1;
 
 /// Library version string, injected from Cargo.toml at compile time.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -68,6 +75,6 @@ mod tests {
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.16.2");
+        assert_eq!(VERSION, "0.17.0");
     }
 }

@@ -112,7 +112,7 @@ fn test_writer_precision_default_vs_high() {
     );
     let frame = builder.build().unwrap();
 
-    // Default precision (6)
+    // Default is RoundTrip (CON-num.6, D13): the binary64 value comes back.
     let mut buf6: Vec<u8> = Vec::new();
     {
         let mut w = ConFrameWriter::new(&mut buf6);
@@ -120,8 +120,10 @@ fn test_writer_precision_default_vs_high() {
     }
     let s6 = String::from_utf8(buf6).unwrap();
     let frames6: Vec<_> = ConFrameIterator::new(&s6).map(|r| r.unwrap()).collect();
-    // 6 decimal places means ~1e-6 precision loss
-    assert!((frames6[0].atom_data[0].x - 1.234568).abs() < 1e-5);
+    assert_eq!(
+        frames6[0].atom_data[0].x.to_bits(),
+        1.234_567_890_123_456_7_f64.to_bits()
+    );
 
     // High precision (17)
     let mut buf17: Vec<u8> = Vec::new();
@@ -144,6 +146,12 @@ fn test_builder_velocity_roundtrip() {
     builder
         .add_atom("H", 4.0, 5.0, 6.0, [false, false, false], 1, 1.008)
         .with_velocity([0.4, 0.5, 0.6]);
+    builder
+        .set_metadata_json(&format!(
+            r#"{{"units":{{"length":"angstrom","energy":"eV","mass":"amu","time":"{}"}}}}"#,
+            readcon_core::units::NATURAL_TIME_UNIT
+        ))
+        .unwrap();
     let frame = builder.build().unwrap();
 
     assert!(frame.has_velocities());
