@@ -11,7 +11,7 @@
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{array}
-\usepackage{url}
+\usepackage{xurl}
 \usepackage{listings}
 \usepackage{hyperref}
 \input{affilfix}
@@ -621,7 +621,7 @@ Python full objects take \(1.369\,\mathrm{s}\) (\(122.5\,\mathrm{MB/s}\)) agains
 Object construction is about \(0.826\,\mathrm{s}\), interval \([0.725, 0.851]\), roughly 60 percent of the Python time.
 That estimate subtracts the one-thread Rust parse from the Python read at the same repeat index, and the two blocks were sequential, so the difference is index-aligned rather than an interleaved pair.
 
-Speedup at 1, 2, 4 and 8 threads is \(1.00/1.61/2.73/3.78\) for Rust, \(1.00/1.39/2.36/3.26\) for C++ and \(1.00/1.15/1.22/1.08\) for Python.
+Speedup at 1, 2, 4 and 8 threads is 1.00, 1.61, 2.73, 3.78 for Rust, 1.00, 1.39, 2.36, 3.26 for C++, and 1.00, 1.15, 1.22, 1.08 for Python.
 The Python curve flattens because object construction holds the interpreter lock, not because the boundary scan has run out of work, and the measurement stops at 8 threads because that is the hardware.
 Figure~\ref{fig:scaling} in Appendix~\ref{sec:appendix-bench} draws the three curves.
 A force-call framing, in the style of the i-PI 3.0 measurements, puts the same file next to the evaluator it is waiting on \cite{litmanIpi30Flexible2024}.
