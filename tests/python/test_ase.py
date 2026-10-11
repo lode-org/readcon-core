@@ -293,7 +293,9 @@ class TestAseCellAndVelocityUnits:
 
     def test_v31_fs_velocities_scale_into_the_natural_unit(self):
         atoms = [
-            readcon.Atom(symbol="H", x=0.0, y=0.0, z=0.0, vx=1.0, vy=0.0, vz=0.0, atom_id=0),
+            readcon.Atom(
+                symbol="H", x=0.0, y=0.0, z=0.0, vx=1.0, vy=0.0, vz=0.0, atom_id=0
+            ),
         ]
         frame = readcon.ConFrame(
             cell=[10.0, 10.0, 10.0],
@@ -315,7 +317,9 @@ class TestAseCellAndVelocityUnits:
         assert overridden.get_velocities()[0, 0] == pytest.approx(1.0)
 
     def test_from_ase_stamps_the_natural_time_unit(self):
-        atoms = ase.Atoms("H", positions=[[0, 0, 0]], cell=[5, 6, 7], pbc=[True, False, True])
+        atoms = ase.Atoms(
+            "H", positions=[[0, 0, 0]], cell=[5, 6, 7], pbc=[True, False, True]
+        )
         atoms.set_velocities([[0.2, 0.0, 0.0]])
         frame = readcon.ConFrame.from_ase(atoms)
         assert frame.metadata["units"]["time"] == "(amu*angstrom^2/eV)^0.5"
