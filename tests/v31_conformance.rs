@@ -488,6 +488,91 @@ fn v31_writer_requires_time_when_velocities_are_present() {
     assert!(!text.contains("\"time\":\"fs\"") && !text.contains("\"time\": \"fs\""));
 }
 
+fn natural_time_golden() -> Vec<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/conformance/natural_time_unit.txt");
+    std::fs::read(path).unwrap()
+}
+
+fn assert_written_time_is_golden(bytes: &[u8], golden: &[u8]) {
+    assert!(
+        bytes.windows(golden.len()).any(|window| window == golden),
+        "missing pinned spelling in {}",
+        String::from_utf8_lossy(bytes)
+    );
+    let spaced = b"(amu * angstrom^2 / eV) ^0.5";
+    assert!(
+        !bytes.windows(spaced.len()).any(|window| window == spaced),
+        "spaced spelling leaked into {}",
+        String::from_utf8_lossy(bytes)
+    );
+}
+
+fn velocity_frame() -> ConFrameBuilder {
+    let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    builder
+        .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+        .with_velocity([0.1, 0.0, 0.0]);
+    builder
+}
+
+#[test]
+fn natural_time_spelling_is_byte_exact_on_write() {
+    let golden = natural_time_golden();
+    assert_eq!(golden, NATURAL_TIME_UNIT.as_bytes());
+    let spaced = "( amu * angstrom ^ 2 / eV ) ^ 0.5";
+
+    let mut via_set_units = velocity_frame();
+    via_set_units
+        .set_units(serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "mass": "amu",
+            "time": spaced
+        }))
+        .unwrap();
+    let mut buf = Vec::new();
+    ConFrameWriter::new(&mut buf)
+        .write_frame(&via_set_units.build().unwrap())
+        .unwrap();
+    assert_written_time_is_golden(&buf, &golden);
+
+    let mut via_metadata = velocity_frame();
+    via_metadata
+        .set_metadata_json(&format!(
+            r#"{{"units":{{"length":"angstrom","energy":"eV","mass":"amu","time":"{spaced}"}}}}"#
+        ))
+        .unwrap();
+    buf.clear();
+    ConFrameWriter::new(&mut buf)
+        .write_frame(&via_metadata.build().unwrap())
+        .unwrap();
+    assert_written_time_is_golden(&buf, &golden);
+
+    // from_ase stores this object and the writer canonicalises it.
+    let mut via_from_ase = velocity_frame();
+    let mut meta = std::collections::BTreeMap::new();
+    meta.insert(
+        "units".into(),
+        serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "mass": "amu",
+            "time": spaced
+        }),
+    );
+    meta.insert(
+        "con_spec_minor".into(),
+        serde_json::json!(readcon_core::CON_SPEC_MINOR),
+    );
+    via_from_ase.metadata(meta);
+    buf.clear();
+    ConFrameWriter::new(&mut buf)
+        .write_frame(&via_from_ase.build().unwrap())
+        .unwrap();
+    assert_written_time_is_golden(&buf, &golden);
+}
+
 #[cfg(feature = "parallel")]
 fn digest(frames: &[ConFrame]) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();

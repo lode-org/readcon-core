@@ -515,7 +515,12 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
         let atom = &compact[start..i];
         out.push_str(preferred_atom(atom).unwrap_or(atom));
     }
-    Ok(out.split_whitespace().collect::<Vec<_>>().join(" "))
+    let rendered = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    let rendered_compact: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
+    if rendered_compact == NATURAL_TIME_UNIT {
+        return Ok(NATURAL_TIME_UNIT.to_string());
+    }
+    Ok(rendered)
 }
 
 /// Rewrite every string member. Does not require v3 `length`+`energy`.
@@ -620,5 +625,10 @@ mod tests {
         assert!(!NATURAL_TIME_UNIT.contains(' '));
         let factor = unit_conversion_factor(NATURAL_TIME_UNIT, "fs").unwrap();
         assert!((factor - 10.180_505_710_759_414).abs() < 1e-9, "{factor}");
+        let mixed = "(AMU * angstrom^2 / ev)^0.5";
+        assert_eq!(
+            canonicalize_unit_expression(mixed).unwrap(),
+            NATURAL_TIME_UNIT
+        );
     }
 }

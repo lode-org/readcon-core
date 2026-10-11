@@ -621,7 +621,11 @@ named quantity (length and energy respectively). Implementations SHALL
 reject Version 3 inputs that omit =units= or supply dimensionally invalid
 strings for those members. A conforming writer SHALL emit preferred unit
 names on line 2 (=angstrom= not =A=, =eV= not =ev=, =fs= not
-=femtosecond=).
+=femtosecond=). The natural time unit is written byte for byte as
+=(amu*angstrom^2/eV)^0.5=. =canonicalize_unit_expression= returns that
+spelling for any whitespace or case variant of the same expression.
+=set_units=, =set_metadata_json=, and =from_ase= all go through that
+function on write, so the file contains those exact bytes (D10).
 
 Optional members =mass=, =time=, =velocity=, and =force=, when present,
 SHALL likewise be dimensionally valid for those quantities.
