@@ -852,6 +852,14 @@ class ConFrameBuilder {
      */
     ConFrameBuilder &set_units(const std::string &units_json);
 
+    /**
+     * @brief Sets con_spec_minor before build.
+     *
+     * A v3 frame built without this call carries minor 1.
+     * The writer does not invent or replace the minor.
+     */
+    ConFrameBuilder &set_con_spec_minor(uint32_t minor);
+
     /// Sets a numeric metadata key.
     ConFrameBuilder &set_scalar_metadata(const std::string &key, double value);
     /// Sets a string metadata key.
@@ -2062,6 +2070,12 @@ inline ConFrameBuilder &
 ConFrameBuilder::set_units(const std::string &units_json) {
     throw_on_error(rkr_frame_builder_set_units(builder_handle_, units_json.c_str()),
                    "Failed to set builder units");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_con_spec_minor(uint32_t minor) {
+    throw_on_error(rkr_frame_builder_set_con_spec_minor(builder_handle_, minor),
+                   "Failed to set con_spec_minor");
     return *this;
 }
 
