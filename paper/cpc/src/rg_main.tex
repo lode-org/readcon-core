@@ -1,9 +1,11 @@
-% Created 2026-10-11 Sun 16:17
+% Created 2026-10-11 Sun 16:21
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
 \usepackage{rotating}
 \journal{Computer Physics Communications}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage{amssymb,amsmath}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -56,8 +58,8 @@ CON \sep checkpoint \sep nudged elastic band \sep saddle search \sep rare events
 \textit{Programming language:} Rust for the core, with a C header, a C++ header, and bindings for Python, Julia and Fortran 2008\\
 \textit{Supplementary material:} the format specification, the conformance corpus, and the benchmark scripts and timing tables\\
 \textit{Nature of problem:}
-Harmonic transition state theory estimates a rare-event rate from the barrier and the curvatures at a minimum and at a first-order saddle \cite{vineyardHTST1957,hanggiRateTheory1990}.
-Finding those points, and the path that connects two minima, is the work of the nudged elastic band, its climbing-image form, the dimer method, and adaptive kinetic Monte Carlo \cite{jonssonNEB1998,henkelmanCINEB2000,henkelmanDimer1999,henkelmanAKMC2001}.
+Harmonic transition state theory estimates a rare-event rate from the barrier and the curvatures at a minimum and at a first-order saddle \cite{vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990}.
+Finding those points, and the path that connects two minima, is the work of the nudged elastic band, its climbing-image form, the dimer method, and adaptive kinetic Monte Carlo \cite{jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,henkelmanDimerMethodFinding1999,henkelmanLongTimeScale2001}.
 A campaign of that kind calls a force code thousands of times, writes a geometry after many of those calls, and starts again from the last good frame.
 The frame has to remember which Cartesian axes are held fixed, because a slab or a surface is rarely frozen in every direction.
 It has to remember which atom is which after the file groups atoms by chemical type, because images of a path are compared atom by atom.
@@ -93,72 +95,72 @@ The same fixtures are exercised from the Rust core and from the C, Python, Julia
 \section{Introduction}
 \label{sec:introduction}
 Thermally activated events set the rates of diffusion, reactions and structural change, and they are rare on the clock of a direct molecular dynamics run.
-Harmonic transition state theory estimates such a rate from the barrier height and from the curvatures at the minimum and at a first-order saddle \cite{vineyardHTST1957,hanggiRateTheory1990}.
+Harmonic transition state theory estimates such a rate from the barrier height and from the curvatures at the minimum and at a first-order saddle \cite{vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990}.
 The practical task is to find those stationary points and the path that joins two known minima.
 The searches that do that work fall into a double-ended family and a single-ended family.
-A double-ended search, the nudged elastic band and its climbing-image form, discretizes the path into a chain of images and relaxes that chain until the highest image sits near the saddle \cite{jonssonNEB1998,henkelmanCINEB2000,sheppardNEB2008}.
-A single-ended search, the dimer method, rotates a pair of replicas until the lowest curvature points uphill and then walks toward the saddle from one basin \cite{henkelmanDimer1999}.
-Adaptive kinetic Monte Carlo accepts an escape, advances a physical clock by the waiting time of that escape, and repeats the search from the new minimum \cite{henkelmanAKMC2001,goswamiKinetics2025}.
-Energy-weighted springs, together with eigenvector following, keep a molecular band from cutting the corner of a sharply curved path \cite{asgeirssonNEB2021}.
-An improved estimate of the tangent keeps the elastic band from forming kinks at places where the path bends sharply \cite{henkelmanTangent2000}.
-The image-dependent pair potential starts the chain of images closer to the minimum energy path the band will converge to \cite{smidstrupIDPP2014}.
-The string method was introduced for the sampling of rare events as a curve that is evolved between two known states \cite{eString2002}.
-A later form of that method finds a minimum energy path by evolving the curve rather than by relaxing a chain of springs \cite{eString2007}.
-A comparison of those single-ended searches showed that a saddle can still be found when the product state is unknown \cite{olsenSaddle2004}.
-A later dimer method converges faster than the original rotation because it uses a better estimate of the curvature \cite{kastnerDimer2008}.
+A double-ended search, the nudged elastic band and its climbing-image form, discretizes the path into a chain of images and relaxes that chain until the highest image sits near the saddle \cite{jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,sheppardOptimizationMethodsFinding2008}.
+A single-ended search, the dimer method, rotates a pair of replicas until the lowest curvature points uphill and then walks toward the saddle from one basin \cite{henkelmanDimerMethodFinding1999}.
+Adaptive kinetic Monte Carlo accepts an escape, advances a physical clock by the waiting time of that escape, and repeats the search from the new minimum \cite{henkelmanLongTimeScale2001,goswamiEfficientExplorationChemical2025}.
+Energy-weighted springs, together with eigenvector following, keep a molecular band from cutting the corner of a sharply curved path \cite{asgeirssonNudgedElasticBand2021}.
+An improved estimate of the tangent keeps the elastic band from forming kinks at places where the path bends sharply \cite{henkelmanImprovedTangentEstimate2000}.
+The image-dependent pair potential starts the chain of images closer to the minimum energy path the band will converge to \cite{smidstrupImprovedInitialGuess2014}.
+The string method was introduced for the sampling of rare events as a curve that is evolved between two known states \cite{eStringMethodStudy2002}.
+A later form of that method finds a minimum energy path by evolving the curve rather than by relaxing a chain of springs.
+A comparison of those single-ended searches showed that a saddle can still be found when the product state is unknown \cite{olsenComparisonMethodsFinding2004}.
+A later dimer method converges faster than the original rotation because it uses a better estimate of the curvature \cite{kastnerSuperlinearlyConvergingDimer2008}.
 
 These campaigns spend most of their effort on force calls, and they spend the rest on moving the current geometry from one program to another and on starting again after a stop.
-A reproducible band optimization calls a potential for every image at every iteration, and the checkpoint is what lets that run resume \cite{goswamiNEBOrchestration2026}.
-A tutorial review of Gaussian-process searches shows how a surrogate can cut the number of force evaluations on a stationary-point problem \cite{goswamiGPTutorial2026}.
-The same idea has been implemented for molecular saddle searches, where the surrogate still has to land on a force evaluator \cite{goswamiGaussianProcessSaddle2025}.
-Adaptive pruning then drops training points that no longer change the next step, which keeps a long search from storing every geometry \cite{goswamiAdaptivePruning2025}.
-An earlier Gaussian-process band uses inverse interatomic distances so that a nudged elastic band needs fewer calls to the potential \cite{koistinenGPRNEB2019}.
-A Gaussian-process minimum-mode search uses the same kind of covariance to rotate a dimer toward a saddle from one basin \cite{koistinenMinMode2019}.
-Eigenmode alignment of the climbing image keeps the highest bead on the softest mode of the Hessian while the band relaxes \cite{goswamiEciNeb2026}.
-The same files are read again when a path is projected onto two dimensions and compared with the band that produced it \cite{goswamiRMSDProjections2026}.
-A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, and that file has to be readable after the job has stopped \cite{henkelmanAKMC2001}.
-Distributed adaptive kinetic Monte Carlo farms the saddle searches across ranks, so each rank has to read the checkpoint the search will continue from \cite{pedersenDistributedAKMC2010}.
+A reproducible band optimization calls a potential for every image at every iteration, and the checkpoint is what lets that run resume \cite{goswamiReproducibleOrchestrationBest2026}.
+A tutorial review of Gaussian-process searches shows how a surrogate can cut the number of force evaluations on a stationary-point problem.
+The same idea has been implemented for molecular saddle searches, where the surrogate still has to land on a force evaluator \cite{goswamiEfficientImplementationGaussian2025}.
+Adaptive pruning then drops training points that no longer change the next step, which keeps a long search from storing every geometry \cite{goswamiAdaptivePruningIncreased2026}.
+An earlier Gaussian-process band uses inverse interatomic distances so that a nudged elastic band needs fewer calls to the potential \cite{koistinenNudgedElasticBand2019}.
+A Gaussian-process minimum-mode search uses the same kind of covariance to rotate a dimer toward a saddle from one basin \cite{koistinenMinimumModeSaddle2020}.
+Eigenmode alignment of the climbing image keeps the highest bead on the softest mode of the Hessian while the band relaxes \cite{goswamiEnhancedClimbingImage2026}.
+The same files are read again when a path is projected onto two dimensions and compared with the band that produced it \cite{goswamiTwodimensionalRmsdProjections2026}.
+A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, and that file has to be readable after the job has stopped \cite{henkelmanLongTimeScale2001}.
+Distributed adaptive kinetic Monte Carlo farms the saddle searches across ranks, so each rank has to read the checkpoint the search will continue from \cite{pedersenDistributedImplementationAdaptive2010}.
 Between those reads the file may sit on disk for hours while a queue waits, or it may be copied onto another machine that has a different build of the force code.
-Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock, which is the setting in which this checkpoint is reread \cite{voterLongTimescale2002}.
-The older eOn paper is the reference for the code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEONSoftwareLong2014}.
+Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock, which is the setting in which this checkpoint is reread \cite{voterExtendingTimeScale2002}.
+The older eOn paper is the reference for the code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEonSoftwareLong2014}.
 
 The checkpoint has to carry a per-axis mask, an atom id, and a time unit for any velocities.
 The mask has one bit for x, one for y and one for z, so a buried atom carries 7, a free surface atom carries 0, and an adsorbate whose height is held carries 4.
-The id has to survive grouping by chemical type, so that image \(i\) of a band still names the same atom as image \(i+1\) when the frames are compared \cite{gundeIRA2021}.
+The id has to survive grouping by chemical type, so that image \(i\) of a band still names the same atom as image \(i+1\) when the frames are compared \cite{gundeIraShapeMatching2021}.
 A velocity is stored with its time unit, because the kinetic energy scales with the square of that unit.
 The natural unit used by eOn and by ASE is \(({\rm amu}\cdot{\rm angstrom}^{2}/{\rm eV})^{0.5}\), which equals \(\timeFac\,\text{fs}\), and \(1\,\text{fs} = 10^{-15}\,\text{s}\).
-The conversion of that natural unit into femtoseconds uses the constants that define the electronvolt and the atomic mass unit \cite{tiesingaCODATA2018}.
+The conversion of that natural unit into femtoseconds uses the constants that define the electronvolt and the atomic mass unit \cite{tiesingaCodataRecommendedValues2021}.
 
 CON is the text form of that checkpoint, written so that a failed search can be inspected without a decoder.
-It grew up inside eOn, which writes one frame per minimum, saddle or band image and reads it back on the next cycle \cite{chillEONSoftwareLong2014,goswamiEonZenodo2026}.
-The Atomic Simulation Environment reads and writes the same text, which is how a geometry moves from the saddle search into a Python workflow \cite{larsenAtomicSimulationEnvironment2017}.
+It grew up inside eOn, which writes one frame per minimum, saddle or band image and reads it back on the next cycle \cite{chillEonSoftwareLong2014,goswamiEon2026}.
+The Atomic Simulation Environment reads and writes the same text, which is how a geometry moves from the saddle search into a Python workflow \cite{larsenAtomicSimulationEnvironmenta2017}.
 A band file is therefore a sequence of frames that several programs already agree to exchange.
 
 Neighbouring formats store a trajectory or a structure, and the fields that differ from this checkpoint are the integer mask, the id that survives grouping inside the frame, and the versioned time label.
-H5MD stores positions and optional velocities in HDF5, defines an id element for each particle, and can attach a time unit as a dataset attribute \cite{deBuylH5MD2014,folkHdf52011}.
+H5MD stores positions and optional velocities in HDF5, defines an id element for each particle, and can attach a time unit as a dataset attribute \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011}.
 That id and that attribute cover identity and the clock for a molecular trajectory, while the integer mask and the versioned time label stay with this checkpoint.
-NetCDF is an array container, so any checkpoint convention built on it has to be agreed by the programs that share the file \cite{rewNetCDF1990}.
-The TNG format stores coordinates, velocities, forces and a box, and it takes atom identity from the molecular topology \cite{lundborgTNG2014}.
-ASE's extended XYZ writer stores a per-axis move\_mask, one boolean for each Cartesian axis, which records a constraint in a different encoding from the integer mask in this file \cite{larsenAtomicSimulationEnvironment2017}.
-A LAMMPS dump can carry an atom id and, when the dump style asks for them, velocities and forces, while the unit style of the run stays outside the frame \cite{thompsonLammps2022}.
-The LAMMPS data file holds the starting geometry and the dump holds the trajectory, so neither file is the band of images this checkpoint exchanges \cite{thompsonLammps2022}.
-Zarr is a chunked array store, and its community standard defines how those chunks are laid out on disk \cite{ogcZarrSpec}.
-CHARMM writes a DCD trajectory of coordinates and of the box, which is the record of a finished dynamics run \cite{brooksCharmm2009}.
-GROMACS writes XTC and TRR trajectories, so a reader of those files gets positions and sometimes velocities from a molecular run \cite{abrahamGromacs2015}.
-MDTraj reads DCD and XTC when the task is analysis of a finished trajectory \cite{mcgibbonMDTraj2015}.
-d-SEAMS rereads a saved trajectory in order to identify the structure that formed in the frames a simulation stored \cite{goswamiDseams2020}.
-A protein structure is often stored as a PDB file, and atom identity there comes from the residue and the atom name \cite{bermanPDB2000}.
-mmCIF is the macromolecular archive form of that structure, with the same residue and atom-name identity \cite{westbrookMmcif2000}.
-A small-molecule crystal structure travels as a CIF, which archives the published cell and the published coordinates \cite{hallCIF1991}.
-A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates that VASP will relax \cite{kresseVasp1996}.
-pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still one geometry \cite{ongPymatgen2013}.
-Atomsk converts among the files used for defects and for classical potentials, which is how a geometry changes dialect before a run \cite{hirelAtomsk2015}.
-Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues \cite{oboyleOpenBabel2011}.
-OVITO displays atomistic snapshots and can read several of these files when the task is to look at a geometry \cite{stukowskiOVITO2010}.
-i-PI drives a calculation by passing coordinates to a client and reading forces back, one geometry at a time \cite{kapilIPI2019}.
-That coordinate exchange began as a path-integral client, which sent positions out and received forces back \cite{ceriottiIPI2014}.
-A liquid or a mixture is often packed into a cell before the first minimization, and that packed geometry is what the checkpoint then stores \cite{martinezPackmol2009}.
-Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry a search writes \cite{bigiMetatensor2026}.
+NetCDF is an array container, so any checkpoint convention built on it has to be agreed by the programs that share the file \cite{rewNetcdfInterfaceScientific1990}.
+The TNG format stores coordinates, velocities, forces and a box, and it takes atom identity from the molecular topology \cite{lundborgEfficientExtensibleFormat2014}.
+ASE's extended XYZ writer stores a per-axis move\_mask, one boolean for each Cartesian axis, which records a constraint in a different encoding from the integer mask in this file \cite{larsenAtomicSimulationEnvironmenta2017}.
+A LAMMPS dump can carry an atom id and, when the dump style asks for them, velocities and forces, while the unit style of the run stays outside the frame \cite{thompsonLammpsFlexibleSimulation2022}.
+The LAMMPS data file holds the starting geometry and the dump holds the trajectory, so neither file is the band of images this checkpoint exchanges \cite{thompsonLammpsFlexibleSimulation2022}.
+Zarr is a chunked array store, and its community standard defines how those chunks are laid out on disk.
+CHARMM writes a DCD trajectory of coordinates and of the box, which is the record of a finished dynamics run.
+GROMACS writes XTC and TRR trajectories, so a reader of those files gets positions and sometimes velocities from a molecular run \cite{abrahamGromacsHighPerformance2015}.
+MDTraj reads DCD and XTC when the task is analysis of a finished trajectory \cite{mcgibbonMdtrajModernOpen2015}.
+d-SEAMS rereads a saved trajectory in order to identify the structure that formed in the frames a simulation stored \cite{goswamiDseamsDeferredStructural2020}.
+A protein structure is often stored as a PDB file, and atom identity there comes from the residue and the atom name \cite{bermanProteinDataBank2000}.
+mmCIF is the macromolecular archive form of that structure, with the same residue and atom-name identity.
+A small-molecule crystal structure travels as a CIF, which archives the published cell and the published coordinates \cite{hallCrystallographicInformationFile1991}.
+A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates that VASP will relax.
+pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still one geometry \cite{ongPythonMaterialsGenomics2013}.
+Atomsk converts among the files used for defects and for classical potentials, which is how a geometry changes dialect before a run.
+Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues.
+OVITO displays atomistic snapshots and can read several of these files when the task is to look at a geometry.
+i-PI drives a calculation by passing coordinates to a client and reading forces back, one geometry at a time.
+That coordinate exchange began as a path-integral client, which sent positions out and received forces back.
+A liquid or a mixture is often packed into a cell before the first minimization, and that packed geometry is what the checkpoint then stores.
+Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry a search writes \cite{bigiMetatensorMetatomicFoundational2025}.
 Table \ref{tab:compat} puts the checkpoint next to those files, after the layout of one frame has been described.
 
 Here we present readcon-core, a reader and writer for the CON checkpoint used by saddle searches.
@@ -192,7 +194,7 @@ Blue marks the header, orange the coordinate group, and green the section that f
 
 The cell is three lengths and three angles in degrees, which is enough to rebuild the box once the angle convention is fixed.
 The angle on line 4 between \(b\) and \(c\) is \(\alpha\), the angle between \(a\) and \(c\) is \(\beta\), and the angle between \(a\) and \(b\) is \(\gamma\).
-The convention puts \(a\) along \(x\) and \(b\) in the \(xy\) plane, which is how both eOn and ASE turn those six numbers back into vectors \cite{chillEONSoftwareLong2014,larsenAtomicSimulationEnvironment2017}.
+The convention puts \(a\) along \(x\) and \(b\) in the \(xy\) plane, which is how both eOn and ASE turn those six numbers back into vectors \cite{chillEonSoftwareLong2014,larsenAtomicSimulationEnvironmenta2017}.
 When the metadata also carries lattice vectors, those vectors are three rows of the cell matrix and they take priority on read, and the writer keeps lines 3 and 4 consistent with them.
 A missing periodicity flag means the cell is periodic in all three directions, which is the usual case for a bulk crystal and for a slab that is periodic in the plane.
 Column 4 is the mask from the introduction, stored as an integer token, and column 5 is the id.
@@ -202,7 +204,7 @@ The id is read as an integer up to \(2^{64}-1\), so a large identity is not roun
 When the ids inside a frame are unique, sorting them recovers the order the atoms had before the file grouped them by chemical type.
 That order is what a distance or a projection expects when it compares one image of a band with the next.
 
-Line 2 of a current file is one line of JSON, without a byte-order mark, and it records the major version, the minor version, the units and the section names \cite{brayRFC8259json2017}.
+Line 2 of a current file is one line of JSON, without a byte-order mark, and it records the major version, the minor version, the units and the section names \cite{unknownJavascriptObjectNotation2017}.
 A reader accepts an unknown minor of a major it knows, and it refuses an unknown major, so a later clarification can travel in a file that an older program of the same major still opens.
 Unknown keys on that line are kept when the frame is written again, so a campaign can attach an energy, a bead index or a potential name without waiting for every reader to learn the key.
 The time unit on the metadata line is the label already stated in the introduction, and the writer copies that spelling.
@@ -219,19 +221,19 @@ A count of zero chemical types is a legal empty frame, with no coordinate block 
 A header that stops early, or a section with fewer rows than the header declared, is rejected, and the partial frame is not returned.
 The remaining reader rules, including unknown section names, non-finite numbers and a gzip archive with several members, are the rows of \ref{sec:appendix-rules}.
 
-Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{ieee7542019,clinger1990,lemire2021}.
-The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleWhite1990}.
-Grisu prints a floating-point value using only integer arithmetic so that the decimal form is short and correctly rounded \cite{loitschGrisu2010}.
-Ryu prints a floating-point value by a table-driven procedure so that the decimal form is short and correctly rounded \cite{adamsRyu2018}.
-The metadata line is JSON, and a scanner for that kind of text has been shown to run at a very high rate on such input \cite{langdaleSimdjson2019}.
+Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{unknownIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabyte2021}.
+The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleHowPrintFloatingpoint1990}.
+Grisu prints a floating-point value using only integer arithmetic so that the decimal form is short and correctly rounded \cite{loitschPrintingFloatingpointNumbers2010}.
+Ryu prints a floating-point value by a table-driven procedure so that the decimal form is short and correctly rounded \cite{adamsRyFastFloattostring2018}.
+The metadata line is JSON, and a scanner for that kind of text has been shown to run at a very high rate on such input \cite{langdaleParsingGigabytesJson2019}.
 A caller may ask for a fixed number of digits after the decimal point, and that mode is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
-gzip and zstd are envelopes around the same bytes, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file \cite{deutschRFC1952gzip1996,colletRFC8878zstd2021}.
+gzip and zstd are envelopes around the same bytes, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}.
 
 \section{Implementation}
 \label{sec:implementation}
 The core is a Rust library with a single parser, and file reads, string reads and the bindings all go through that parser, so a change in the grammar shows up once.
 The parser walks the header, checks the counts, reads each coordinate row as an integer flag and an integer id, and then reads the sections named in the metadata.
-Decimal fields in that parser go through a fast correctly rounded conversion, the same contract the writer relies on \cite{lemire2021}.
+Decimal fields in that parser go through a fast correctly rounded conversion, the same contract the writer relies on \cite{lemireNumberParsingGigabyte2021}.
 Keeping one parser is what makes the conformance story possible, because a second implementation in each language would be a second place for a mask or a time label to drift.
 The C header owns the frame on the far side of the call and returns a status code, and the caller frees what it was given.
 C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding.
@@ -285,7 +287,7 @@ The conformance corpus has \nValid{} legal files and \nInvalid{} files that must
 The same files are read from \nBind{} bindings, the Rust core and the C, Python, Julia and Fortran bindings, so a binding cannot quietly accept a file the core rejects.
 A legal file that one binding dropped, or an illegal file that one binding accepted, would show up as a different status on that binding.
 Table \ref{tab:compat} places this checkpoint next to the ASE eon reader, extended XYZ, H5MD and a LAMMPS dump.
-What differs, once the extended XYZ move\_mask and the H5MD id element are taken into account, is the integer mask in this file, the id that survives grouping inside the frame, and the versioned time label \cite{larsenAtomicSimulationEnvironment2017,deBuylH5MD2014}.
+What differs, once the extended XYZ move\_mask and the H5MD id element are taken into account, is the integer mask in this file, the id that survives grouping inside the frame, and the versioned time label \cite{larsenAtomicSimulationEnvironmenta2017,buylH5mdStructuredEfficient2014}.
 The ASE eon reader follows the original eOn layout: a comment on the second line, a single fixed flag, and no velocity section.
 
 \input{figures/generated/compat_table}
@@ -293,7 +295,7 @@ The ASE eon reader follows the original eOn layout: a comment on the second line
 A \nRound{}-atom copper-hydrogen frame from the eOn tests is read, written with the default printer, and read again, and every coordinate bit matches the value that was stored.
 The same coordinates match the ASE eon reading of that file, bit for bit, so the two programs agree on the positions of a producer file.
 The single-frame geometry used below and in Section \ref{sec:performance} is a platinum (111) slab of \nSlab{} atoms, built with ASE rather than by repeating one coordinate row.
-Platinum surface diffusion, including exchange on Pt(001), is the kind of event a masked slab is meant to describe \cite{kelloggPt0011990}.
+Platinum surface diffusion, including exchange on Pt(001), is the kind of event a masked slab is meant to describe \cite{kelloggSurfaceSelfdiffusionPt0011990}.
 The cell is an orthogonal fcc111 slab of 50 by 20 by 10 layers, with 8 angstrom of vacuum, plus one hydrogen placed 1.5 angstrom above an on-top site.
 The bottom two layers are fixed on every axis, the other platinum atoms are free, and the adsorbate is fixed on z, which is the mask case a surface calculation actually writes.
 Table \ref{tab:hcn} shows one buried atom, one surface atom and the adsorbate from that slab, each with its own mask and its own id.
@@ -308,7 +310,7 @@ From the minor version that stores the time unit, the label selects the clock, a
 
 \subsection{HCN to HNC}
 \label{sec:hcn}
-The public HCN and HNC endpoints of an eOn nudged elastic band are the hydrogen cyanide isomerization used to illustrate a reproducible path optimization \cite{vanMourikHCN2001,goswamiNEBOrchestration2026}.
+The public HCN and HNC endpoints of an eOn nudged elastic band are the hydrogen cyanide isomerization used to illustrate a reproducible path optimization \cite{mourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
 Those endpoints are rewritten here as current CON, with the natural time unit declared and a velocities section added.
 A third frame keeps the HCN coordinates, fixes hydrogen on x only, and stores the ids 2, 0 and 1 in file order.
 The file still groups the atoms as carbon, then nitrogen, then hydrogen, so the third row is hydrogen even though its id is 1 and the carbon in the first row carries id 2.
@@ -322,11 +324,11 @@ On the coordinate form of the probe, which has no velocity section, the ASE eon 
 \section{Performance}
 \label{sec:performance}
 We compare the Python binding of readcon-core, at one worker, with four Python readers, each also at one thread, on one \cpuName{} with \nCores{} hardware threads.
-The peers are the ASE eon reader on the same CON text, a chemfiles read of an XYZ file with the same coordinates, an MDAnalysis read of an H5MD file with those coordinates, and an h5py read of that file's position array \cite{larsenAtomicSimulationEnvironment2017,frauxChemfiles2023,michaudAgrawalMDAnalysis2011,gowersMDAnalysis2016,jakupovicMDAnalysisH5MD2021}.
+The peers are the ASE eon reader on the same CON text, a chemfiles read of an XYZ file with the same coordinates, an MDAnalysis read of an H5MD file with those coordinates, and an h5py read of that file's position array \cite{larsenAtomicSimulationEnvironmenta2017,frauxChemfiles2023,michaudagrawalMdanalysisToolkitAnalysis2011,gowersMdanalysisPythonPackage2016,jakupovicMpiparallelMolecularDynamics2021}.
 OpenMP, BLAS and the related math libraries are held at one thread for the whole run, and that limit is set before any of those libraries is imported.
 The payloads are 1, 100 and 10\,000 frames of a 218-atom copper-hydrogen geometry, and the platinum slab of Section \ref{sec:validation}.
 Each cell is 30 paired repeats, interleaved so that a slow drift hits both sides of the pair, and the ratio is the readcon-core time divided by the peer time.
-We report the median and a bias-corrected and accelerated 95 percent interval, and we apply a Holm adjustment across the cells that produced a ratio \cite{efronBCa1987,holmStepdown1979}.
+We report the median and a bias-corrected and accelerated 95 percent interval, and we apply a Holm adjustment across the cells that produced a ratio \cite{efronBetterBootstrapConfidence1987,holmStepdown1979}.
 The full protocol, including the bootstrap seed and the Holm adjustment, is in \ref{sec:appendix-bench}, and Figure \ref{fig:ratios} shows the intervals.
 
 \begin{figure}[ht]
@@ -387,13 +389,13 @@ readcon-db is a downstream store that indexes this text for a search over many c
 
 \section*{Data availability}
 \label{sec:data}
-The software archive is \url{https://doi.org/10.5281/zenodo.18753567}, and the program will be deposited in the CPC Program Library \cite{goswamiReadconcore2026}.
-A numbered release of the library is archived beside the concept record, so one version can be cited as well as the series \cite{goswamiReadconRelease2026}.
-The archive is the software object that the FAIR principles for research software ask an author to identify and to describe \cite{barkerFAIR4RS2022}.
-A citation to research software is owed to the archived record, which is why the concept DOI appears in this paper \cite{smithSoftwareCitation2016}.
+The software archive is \url{https://doi.org/10.5281/zenodo.18753567}, and the program will be deposited in the CPC Program Library \cite{goswamiReadconcoreConConvel2026}.
+A numbered release of the library is archived beside the concept record, so one version can be cited as well as the series.
+The archive is the software object that the FAIR principles for research software ask an author to identify and to describe.
+A citation to research software is owed to the archived record, which is why the concept DOI appears in this paper \cite{smithSoftwareCitationPrinciples2016}.
 The benchmark scripts and the per-repeat timing tables are part of the submission archive.
-The HCN and HNC endpoints are the public files of the nudged elastic band study \cite{goswamiNEBOrchestration2026}.
-The public endpoints are written by the orchestrator that drives the band, and the file it stores is the checkpoint this library reads \cite{goswamiEonOrchestrator2026}.
+The HCN and HNC endpoints are the public files of the nudged elastic band study \cite{goswamiReproducibleOrchestrationBest2026}.
+The public endpoints are written by the orchestrator that drives the band, and the file it stores is the checkpoint this library reads.
 
 \section*{CRediT authorship contribution statement}
 \label{sec:credit}
@@ -426,7 +428,7 @@ Velocities for the kinetic-energy check are a Maxwell-Boltzmann sample at 300 K 
 XYZ and H5MD peers receive the coordinates of the same frames, written beside the CON text before the timed loop starts.
 For each payload and each peer the loop is one-worker readcon-core, then the peer, thirty times, after one untimed call of each side.
 A repeat that exceeds 240 seconds is recorded as a timeout, and a peer that raises is recorded as a failure, and neither of those outcomes is turned into a time.
-The ratio uses only pairs in which both sides returned a time, and the interval is a bias-corrected and accelerated bootstrap of the median, with 9999 draws and seed 20261011 \cite{efronBCa1987}.
+The ratio uses only pairs in which both sides returned a time, and the interval is a bias-corrected and accelerated bootstrap of the median, with 9999 draws and seed 20261011 \cite{efronBetterBootstrapConfidence1987}.
 A two-sided bootstrap probability for the median ratio equalling 1 is adjusted by the Holm step-down across those cells \cite{holmStepdown1979}.
 Thread scaling is a second loop on the 10\,000-frame file, and for 2, 4 and 8 workers each repeat times one worker and then that worker count.
 The field hash of the stored coordinates, masks and ids is taken at 1, 2, 3, 4 and 8 workers.
@@ -465,5 +467,5 @@ gzip archive with several members & Every member is read, in order. \\
 \end{table}
 
 \bibliographystyle{elsarticle-num}
-\bibliography{rg_main}
+\bibliography{rg_main,holm}
 \end{document}
