@@ -679,20 +679,6 @@ class SelectionResult {
 
 inline bool has_chemfiles_support() { return rkr_has_chemfiles_support() != 0; }
 
-inline SelectionResult ConFrame::select(std::string_view selection) const {
-    if (!has_chemfiles_support()) {
-        throw std::runtime_error(
-            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
-    }
-    std::string sel(selection);
-    RKRSelectionResult *raw = nullptr;
-    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
-    if (st != RKR_STATUS_SUCCESS) {
-        throw Error::from_last("rkr_frame_select");
-    }
-    return SelectionResult(raw);
-}
-
 inline std::vector<size_t> ConFrame::select_atom_indices(std::string_view selection) const {
     SelectionResult res = select(selection);
     if (res.context_size() != 1) {
@@ -756,6 +742,16 @@ class ConFrameWriter {
                             Compression compression, uint8_t precision);
 
     /**
+     * @brief Opens a writer through create_writer_from_path_round_trip_c.
+     *
+     * Finite binary64 values round-trip. The default path constructor
+     * uses the same text. Call this when the round-trip entry point
+     * must be named.
+     * @throws readcon::Error if the file cannot be created.
+     */
+    static ConFrameWriter round_trip(const std::filesystem::path &path);
+
+    /**
      * @brief Picks a compression codec from a path's file extension.
      * @param path The output path to inspect.
      * @return `Compression::Gzip` for `.gz`, `Compression::Zstd` for `.zst`,
@@ -788,6 +784,8 @@ class ConFrameWriter {
                 free_rkr_writer(ptr);
         }
     };
+    explicit ConFrameWriter(RKRConFrameWriter *raw);
+
     std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
 };
 
@@ -1100,6 +1098,20 @@ inline void throw_on_error(RKRStatus status, const std::string &operation) {
     if (status != RKRStatus::RKR_STATUS_SUCCESS) {
         throw Error::from_last(operation);
     }
+}
+
+inline SelectionResult ConFrame::select(std::string_view selection) const {
+    if (!has_chemfiles_support()) {
+        throw std::runtime_error(
+            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
+    }
+    std::string sel(selection);
+    RKRSelectionResult *raw = nullptr;
+    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
+    if (st != RKR_STATUS_SUCCESS) {
+        throw Error::from_last("rkr_frame_select");
+    }
+    return SelectionResult(raw);
 }
 
 /**
@@ -1573,6 +1585,21 @@ inline bool ConFrame::has_bonds() const {
 }
 
 // --- Implementation of ConFrameWriter methods ---
+
+inline ConFrameWriter::ConFrameWriter(RKRConFrameWriter *raw) {
+    writer_handle_.reset(raw);
+}
+
+inline ConFrameWriter
+ConFrameWriter::round_trip(const std::filesystem::path &path) {
+    RKRConFrameWriter *raw =
+        create_writer_from_path_round_trip_c(path.string().c_str());
+    if (!raw) {
+        throw Error::from_last(
+            "Failed to create round-trip writer for file: " + path.string());
+    }
+    return ConFrameWriter(raw);
+}
 
 inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
     writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
