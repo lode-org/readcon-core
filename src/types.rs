@@ -245,7 +245,8 @@ pub struct FrameHeader {
     /// CON spec version parsed from the JSON metadata line.
     pub spec_version: u32,
     /// Additional key-value metadata from the JSON metadata line.
-    /// Keys other than `con_spec_version` are preserved here for round-tripping.
+    /// `con_spec_version` is kept here, and `spec_version` stores the same major.
+    /// `sections` stays on the `sections` field.
     pub metadata: BTreeMap<String, serde_json::Value>,
     /// Declared data sections from JSON metadata or detected from data presence. (e.g. `["velocities", "forces"]`).
     /// Empty for legacy files (parser falls back to blank-separator velocity detection).
@@ -2806,6 +2807,12 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
+        // The parsed major lives in metadata as well as spec_version, so a
+        // built frame reports the same key a re-read of its file will.
+        metadata.insert(
+            meta::CON_SPEC_VERSION.into(),
+            serde_json::Value::from(crate::CON_SPEC_VERSION),
+        );
         // The builder, not the writer, stamps minor 1 on a v3 frame when
         // the caller did not call set_con_spec_minor (D15).
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {

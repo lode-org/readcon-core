@@ -183,6 +183,35 @@ if get_option('with_tests')
         },
         timeout: 120,
     )
+    c_spec = executable(
+        'test_con_spec_version',
+        files('tests/c/test_con_spec_version.c'),
+        dependencies: readcon_dep,
+        include_directories: _incdir,
+        build_rpath: meson.project_build_root(),
+    )
+    test(
+        'c-con-spec-version',
+        c_spec,
+        env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+        timeout: 60,
+    )
+    if add_languages('cpp', required: false)
+        cxx_spec = executable(
+            'test_con_spec_version_cxx',
+            files('tests/cxx/test_con_spec_version.cpp'),
+            dependencies: readcon_dep,
+            include_directories: _incdir,
+            build_rpath: meson.project_build_root(),
+            cpp_args: ['-std=c++17'],
+        )
+        test(
+            'cxx-con-spec-version',
+            cxx_spec,
+            env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+            timeout: 60,
+        )
+    endif
 endif
 
 if get_option('with_examples')
