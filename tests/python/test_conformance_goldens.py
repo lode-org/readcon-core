@@ -89,3 +89,9 @@ def test_python_matches_golden_or_rejects(case):
         assert atom.x == pytest.approx(want[0])
         assert atom.y == pytest.approx(want[1])
         assert atom.z == pytest.approx(want[2])
+    if "velocities" in golden:
+        assert frame.has_velocities
+        for atom, want in zip(atoms, golden["velocities"]):
+            assert atom.vx == pytest.approx(want[0])
+            assert atom.vy == pytest.approx(want[1])
+            assert atom.vz == pytest.approx(want[2])

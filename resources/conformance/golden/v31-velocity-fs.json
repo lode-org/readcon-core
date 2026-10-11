@@ -1,0 +1,11 @@
+{
+  "id": "v31-velocity-fs",
+  "n_atoms": 1,
+  "spec_version": 3,
+  "fixed": [[false, false, false]],
+  "positions": [[0.0, 0.0, 0.0]],
+  "atom_ids": [0],
+  "symbols": ["H"],
+  "velocities": [[1.0, 2.0, -3.0]],
+  "velocity_time": "fs"
+}

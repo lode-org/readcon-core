@@ -319,6 +319,28 @@ fn assert_matches_golden(case_id: &str, frame: &ConFrame, golden: &serde_json::V
     assert_eq!(got_positions, positions, "{case_id}: positions");
     assert_eq!(got_ids, atom_ids, "{case_id}: atom_ids");
     assert_eq!(got_symbols, symbols, "{case_id}: symbols");
+
+    if let Some(want_vel) = obj.get("velocities") {
+        let velocities = json_f64_3_rows(want_vel, &format!("{case_id}.velocities"));
+        assert_eq!(velocities.len(), n_atoms, "{case_id}: velocities length");
+        for (i, (atom, want)) in frame.atom_data.iter().zip(velocities).enumerate() {
+            let got = atom
+                .velocity
+                .unwrap_or_else(|| panic!("{case_id}: atom {i} has no velocity"));
+            assert_eq!(got, want, "{case_id}: velocities[{i}]");
+        }
+    }
+    if let Some(want_time) = obj.get("velocity_time") {
+        let want = json_str(want_time, &format!("{case_id}.velocity_time"));
+        let mut map = serde_json::Map::new();
+        for (key, value) in &frame.header.metadata {
+            map.insert(key.clone(), value.clone());
+        }
+        let got =
+            readcon_core::units::velocity_file_time_unit(frame.header.spec_version, &map, None)
+                .unwrap_or_else(|err| panic!("{case_id}: velocity time unit: {err}"));
+        assert_eq!(got, want, "{case_id}: velocity_time");
+    }
 }
 
 #[test]
