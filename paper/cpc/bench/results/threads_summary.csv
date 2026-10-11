@@ -1,5 +1,5 @@
-payload,threads,n_ok,median_s,speedup,efficiency,hashes_identical_1_2_3_4_8,n_distinct_hashes
-frames-10000,1,30,0.528907,1,1,yes,1
-frames-10000,2,30,0.218319,2.42264,1.21132,yes,1
-frames-10000,4,30,0.149563,3.53636,0.88409,yes,1
-frames-10000,8,30,0.11215,4.71606,0.589507,yes,1
+payload,threads,n_ok,median_s,speedup,speedup_low,speedup_high,efficiency,hashes_identical_1_2_3_4_8,n_distinct_hashes
+frames-10000,1,90,1.35258,1,1,1,1,yes,1
+frames-10000,2,30,1.15588,1.1476,1.12586,1.15689,0.573798,yes,1
+frames-10000,4,30,1.0865,1.2091,1.19359,1.22343,0.302276,yes,1
+frames-10000,8,30,1.10452,1.28399,1.26255,1.31306,0.160499,yes,1

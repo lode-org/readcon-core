@@ -241,6 +241,7 @@ def gen_macros(
 
     speed_macro("spBandAse", "frames-10000", "ase_eon")
     speed_macro("spBandChem", "frames-10000", "chemfiles_xyz")
+    ratio_macro("ratBandChem", "frames-10000", "chemfiles_xyz")
     speed_macro("spBandMda", "frames-10000", "mda_h5md")
     ratio_macro("ratBandHpy", "frames-10000", "h5py")
     speed_macro("spSlabAse", "slab", "ase_eon")
@@ -248,9 +249,9 @@ def gen_macros(
     speed_macro("spOneHpy", "frames-1", "h5py")
 
     by_thr = {int(row["threads"]): row for row in threads}
-    add("thrTwo", sig(float(by_thr[2]["speedup"]), 2) if 2 in by_thr else "?")
-    add("thrFour", sig(float(by_thr[4]["speedup"]), 2) if 4 in by_thr else "?")
-    add("thrEight", sig(float(by_thr[8]["speedup"]), 2) if 8 in by_thr else "?")
+    add("thrTwo", sig(float(by_thr[2]["speedup"]), 3) if 2 in by_thr else "?")
+    add("thrFour", sig(float(by_thr[4]["speedup"]), 3) if 4 in by_thr else "?")
+    add("thrEight", sig(float(by_thr[8]["speedup"]), 3) if 8 in by_thr else "?")
     if threads and threads[0].get("hashes_identical_1_2_3_4_8") == "yes":
         add("hashSentence", "The field hash is the same at 1, 2, 3, 4 and 8 threads.")
     else:
@@ -276,8 +277,8 @@ def gen_macros(
     def add_ci(name: str, threads_n: int) -> None:
         row = by_thr.get(threads_n)
         if row and row.get("speedup_low"):
-            add(name + "Lo", sig(float(row["speedup_low"]), 2))
-            add(name + "Hi", sig(float(row["speedup_high"]), 2))
+            add(name + "Lo", sig(float(row["speedup_low"]), 3))
+            add(name + "Hi", sig(float(row["speedup_high"]), 3))
         else:
             add(name + "Lo", "?")
             add(name + "Hi", "?")
