@@ -308,7 +308,11 @@ def time_call(fn) -> tuple[str, str, str]:
     except Alarm:
         signal.alarm(0)
         return "timeout", "", f"timeout {TIMEOUT_S}s"
-    except Exception as exc:  # noqa: BLE001
+    except (KeyboardInterrupt, SystemExit):
+        signal.alarm(0)
+        raise
+    except BaseException as exc:  # noqa: BLE001
+        # chemfiles.ChemfilesError subclasses BaseException, not Exception.
         signal.alarm(0)
         return "failure", "", f"{type(exc).__name__}: {exc}"
     signal.alarm(0)
