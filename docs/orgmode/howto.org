@@ -499,16 +499,21 @@ assert [a.atom_id for a in frame_back.atoms] == [3, 0, 1, 4, 2]
 #+end_src
 
 When converting from an ASE =Atoms= object that was not created by
-readcon, =from_ase()= checks for the =atom_id= array first, then
-falls back to =tags= (if any are non-zero), and finally uses
-sequential indices.
+readcon, =from_ase()= reads ids from the first per-atom array among
+=readcon_id=, =id=, and =atom_id=. Tags are never used as ids.
+=ase.build.fcc111= stores layer numbers in tags, and those numbers
+repeat, so treating them as ids makes the writer reject the frame.
+With none of those arrays, ids are 0 through N-1.
 
 *** Velocities and masses in ASE roundtrips
 
 Velocities from =.convel= files are transferred via
-=set_velocities()= / =get_velocities()=.  Custom masses (when present
-on the =ConFrame=) override ASE's atomic-number defaults via
-=set_masses()=.
+=set_velocities()= / =get_velocities()=. ASE stores velocities in
+angstrom times the square root of amu over eV. =from_ase()= records
+that natural time unit as =units.time= =(amu*angstrom^2/eV)^0.5=.
+=to_ase()= scales file velocities back into that unit.
+Custom masses (when present on the =ConFrame=) override ASE's
+atomic-number defaults via =set_masses()=.
 
 #+begin_src python
 import readcon
