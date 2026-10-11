@@ -32,6 +32,11 @@ if get_option('with_cpp')
             'cpp_trajectory.cpp',
             f'@_msproot@/resources/test/tiny_multi_cuh2.con',
         ],
+        [
+            'cpp_v31_units_roundtrip',
+            'cpp_v31_units_roundtrip.cpp',
+            meson.current_build_dir() / 'cpp_v31_units_roundtrip.con',
+        ],
     ]
 endif
 foreach exmpl : examples_array
