@@ -1,5 +1,5 @@
-- readcon-core reads and writes the CON checkpoint for saddle searches.
-- Per-axis masks, atom ids, and a velocity time unit are kept.
-- One C interface serves C++, Python, Julia, and Fortran.
-- A ten thousand frame band is read about 3 times faster than ASE.
-- The public HCN to HNC endpoints keep mask, id, and velocity.
+CON 3.1 specifies the text checkpoint that eOn and ASE exchange
+Frames keep per-axis constraints, atom ids and a declared velocity time unit
+An interrupted eOn band resumes to 1e-14 Å; six decimals drift by 5e-7 Å
+One Rust core and C ABI serve C++, Python, Julia and Fortran
+A shared conformance corpus checks every language binding

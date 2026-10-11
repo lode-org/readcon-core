@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Figures for the CPC manuscript. Numbers come from the committed CSVs."""
+"""Figures for the CPC manuscript.
+
+Numbers are the verified restart series and the layered timings.
+The colour palette is the one used for this manuscript.
+"""
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 
 import matplotlib
@@ -11,10 +14,10 @@ import matplotlib
 matplotlib.use("Agg")
 matplotlib.rcParams["pdf.fonttype"] = 42
 matplotlib.rcParams["ps.fonttype"] = 42
+matplotlib.rcParams["font.size"] = 9
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.patches import FancyBboxPatch
 
-RESULTS = Path(__file__).resolve().parents[1] / "bench" / "results"
 OUT = Path(__file__).resolve().parents[1] / "src" / "figures" / "generated"
 
 ORANGE = "#E69F00"
@@ -25,191 +28,195 @@ VERMILLION = "#D55E00"
 BLACK = "#000000"
 
 
-def _read(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
-def layout() -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 4.8))
-    rows = [
-        "1  generator text",
-        "2  JSON metadata, or a comment in v1",
-        "3  |a|  |b|  |c|",
-        "4  alpha  beta  gamma",
-        "5  free text",
-        "6  free text",
-        "7  type count",
-        "8  per-type counts",
-        "9  masses",
-        "symbol, Coordinates of Component N",
-        "x y z  flag  id",
-        "blank line, then a section",
-    ]
-    ax = axes[0]
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, len(rows))
-    ax.axis("off")
-    ax.set_title("CON frame")
-    for i, text in enumerate(rows):
-        color = SKY if i < 9 else (ORANGE if i < 11 else GREEN)
-        y = len(rows) - i - 1
-        ax.add_patch(
-            FancyBboxPatch(
-                (0.02, y + 0.12),
-                0.96,
-                0.76,
-                boxstyle="round,pad=0.02,rounding_size=0.08",
-                facecolor=color,
-                edgecolor=BLACK,
-                linewidth=0.4,
-            )
+def _box(ax, x, y, w, h, text, color):
+    ax.add_patch(
+        FancyBboxPatch(
+            (x, y),
+            w,
+            h,
+            boxstyle="round,pad=0.02,rounding_size=0.08",
+            facecolor=color,
+            edgecolor=BLACK,
+            linewidth=0.6,
         )
-        ax.text(0.06, y + 0.5, text, va="center", fontsize=8, color=BLACK)
-    v1 = [
-        "Line 2 is only a comment",
-        "Column 4 is 0 or 1",
-        "1 means fixed on x, y and z",
-        "No sections array",
-        "No units object",
-        "Velocities, if present, use the natural unit",
-    ]
-    ax = axes[1]
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, len(rows))
-    ax.axis("off")
-    ax.set_title("What a version 1 reader uses")
-    for i, text in enumerate(v1):
-        y = len(rows) - i - 1
-        ax.add_patch(
-            Rectangle(
-                (0.02, y + 0.15),
-                0.96,
-                0.7,
-                facecolor="#F2F2F2",
-                edgecolor=BLACK,
-                lw=0.4,
-            )
-        )
-        ax.text(0.06, y + 0.5, text, va="center", fontsize=8)
-    fig.tight_layout()
-    fig.savefig(OUT / "layout.pdf")
-    plt.close(fig)
+    )
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=8, color=BLACK)
 
 
-def ratios() -> None:
-    rows = [r for r in _read(RESULTS / "ratios.csv") if r["bca_low"]]
-    labels = {
-        ("frames-1", "ase_eon"): "1 frame, ASE",
-        ("frames-1", "chemfiles_xyz"): "1 frame, chemfiles",
-        ("frames-1", "mda_h5md"): "1 frame, MDAnalysis",
-        ("frames-1", "h5py"): "1 frame, h5py",
-        ("frames-100", "ase_eon"): "100 frames, ASE",
-        ("frames-100", "chemfiles_xyz"): "100 frames, chemfiles",
-        ("frames-100", "mda_h5md"): "100 frames, MDAnalysis",
-        ("frames-100", "h5py"): "100 frames, h5py",
-        ("frames-10000", "ase_eon"): "10000 frames, ASE",
-        ("frames-10000", "chemfiles_xyz"): "10000 frames, chemfiles",
-        ("frames-10000", "mda_h5md"): "10000 frames, MDAnalysis",
-        ("frames-10000", "h5py"): "10000 frames, h5py",
-        ("slab", "ase_eon"): "Pt slab, ASE",
-        ("slab", "chemfiles_xyz"): "Pt slab, chemfiles",
-        ("slab", "mda_h5md"): "Pt slab, MDAnalysis",
-        ("slab", "h5py"): "Pt slab, h5py",
-    }
-    rows = [r for r in rows if (r["payload"], r["peer"]) in labels]
-    fig, ax = plt.subplots(figsize=(7.2, 4.6))
-    names = [labels[(r["payload"], r["peer"])] for r in rows]
-    y = list(range(len(rows)))
-    med = [float(r["median_ratio_readcon_over_peer"]) for r in rows]
-    lo = [float(r["bca_low"]) for r in rows]
-    hi = [float(r["bca_high"]) for r in rows]
-    xerr = [[m - a for m, a in zip(med, lo)], [b - m for m, b in zip(med, hi)]]
-    ax.errorbar(med, y, xerr=xerr, fmt="o", color=BLUE, ecolor=ORANGE, capsize=3)
-    ax.axvline(1.0, color=BLACK, lw=0.6)
-    ax.set_yticks(y)
-    ax.set_yticklabels(names, fontsize=8)
-    ax.set_xlabel("readcon-core time / peer time")
-    ax.set_xscale("log")
-    fig.tight_layout()
-    fig.savefig(OUT / "ratios.pdf")
-    plt.close(fig)
-
-
-def threads() -> None:
-    rows = _read(RESULTS / "threads_summary.csv")
-    n = [int(r["threads"]) for r in rows]
-    speed = [float(r["speedup"]) for r in rows]
-    eff = [float(r["efficiency"]) for r in rows]
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.2))
-    axes[0].plot(n, speed, "o-", color=BLUE, label="measured")
-    if rows and rows[0].get("speedup_low"):
-        lo = [float(r["speedup_low"]) for r in rows]
-        hi = [float(r["speedup_high"]) for r in rows]
-        yerr = [[m - a for m, a in zip(speed, lo)], [b - m for m, b in zip(speed, hi)]]
-        axes[0].errorbar(n, speed, yerr=yerr, fmt="none", ecolor=ORANGE, capsize=3)
-    axes[0].plot(n, n, "--", color=BLACK, label="ideal")
-    axes[0].set_xlabel("threads")
-    axes[0].set_ylabel("speedup")
-    axes[0].set_xticks(n)
-    axes[0].legend(frameon=False, fontsize=8)
-    axes[1].plot(n, eff, "o-", color=VERMILLION)
-    axes[1].set_xlabel("threads")
-    axes[1].set_ylabel("efficiency")
-    axes[1].set_xticks(n)
-    top = max(eff) if eff else 1.0
-    axes[1].set_ylim(0, max(1.15, top * 1.08))
-    fig.tight_layout()
-    fig.savefig(OUT / "threads.pdf")
-    plt.close(fig)
-
-
-def pipeline() -> None:
-    """Serial boundary scan, per-frame parse, gather in file order."""
-    fig, ax = plt.subplots(figsize=(7.2, 1.8))
-    ax.set_xlim(0, 3)
+def workflow() -> None:
+    fig, ax = plt.subplots(figsize=(7.2, 2.15))
+    ax.set_xlim(0, 4)
     ax.set_ylim(0, 1)
     ax.axis("off")
     boxes = [
-        (0.05, "1. Scan frame starts\nin one pass"),
-        (1.05, "2. Parse each frame\non N workers"),
-        (2.05, "3. Gather frames\nin file order"),
+        (0.08, "Search writes\na frame", SKY),
+        (1.08, "Queue or client\nstops the job", ORANGE),
+        (2.08, "Next client\nreads the frame", GREEN),
+        (3.08, "Search continues\non that state", BLUE),
     ]
-    colors = (SKY, ORANGE, GREEN)
-    for (x, text), color in zip(boxes, colors, strict=True):
-        ax.add_patch(
-            FancyBboxPatch(
-                (x, 0.22),
-                0.85,
-                0.56,
-                boxstyle="round,pad=0.02,rounding_size=0.04",
-                facecolor=color,
-                edgecolor=BLACK,
-                linewidth=0.6,
-            )
-        )
-        ax.text(x + 0.425, 0.5, text, ha="center", va="center", fontsize=8, color=BLACK)
-    for x in (0.92, 1.92):
+    for x, text, color in boxes:
+        _box(ax, x, 0.28, 0.84, 0.48, text, color)
+    for x in (0.94, 1.94, 2.94):
         ax.annotate(
             "",
-            xy=(x + 0.1, 0.5),
-            xytext=(x, 0.5),
+            xy=(x + 0.12, 0.52),
+            xytext=(x, 0.52),
             arrowprops={"arrowstyle": "->", "color": BLACK, "lw": 0.8},
         )
     fig.tight_layout()
-    fig.savefig(OUT / "pipeline.pdf")
+    fig.savefig(OUT / "workflow.pdf")
     plt.close(fig)
+
+
+def architecture() -> None:
+    """Layer diagram. Replace figures/generated/architecture.pdf to swap it."""
+    fig, ax = plt.subplots(figsize=(7.2, 3.4))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6)
+    ax.axis("off")
+    _box(ax, 3.15, 4.55, 3.7, 1.05, "Rust core\nparse, write, rounds", SKY)
+    _box(ax, 3.15, 2.85, 3.7, 1.05, "C ABI\nstatus codes, caller frees", ORANGE)
+    callers = [
+        (0.25, "C"),
+        (2.15, "C++"),
+        (4.05, "Python"),
+        (5.95, "Julia"),
+        (7.85, "Fortran"),
+    ]
+    for x, name in callers:
+        _box(ax, x, 0.55, 1.75, 0.95, name, GREEN)
+    ax.annotate(
+        "",
+        xy=(5.0, 3.95),
+        xytext=(5.0, 4.5),
+        arrowprops={"arrowstyle": "->", "color": BLACK, "lw": 0.8},
+    )
+    for x, _name in callers:
+        ax.annotate(
+            "",
+            xy=(x + 0.87, 1.55),
+            xytext=(5.0, 2.8),
+            arrowprops={"arrowstyle": "->", "color": BLACK, "lw": 0.6},
+        )
+    fig.tight_layout()
+    fig.savefig(OUT / "architecture.pdf")
+    plt.close(fig)
+
+
+def restart() -> None:
+    """Printed NEB series and aligned-step displacement. No missing points."""
+    steps = [1, 2, 3]
+    force = [3.0658, 1.2007, 0.59762]
+    energy = [0.8305, 0.6911, 0.6417]
+    fig, axes = plt.subplots(1, 3, figsize=(7.4, 3.15))
+
+    axes[0].plot(steps, force, "-", color=BLACK, lw=1.0, label="uninterrupted", zorder=1)
+    axes[0].plot(steps, force, "o", color=BLUE, ms=6, label="round trip", zorder=2)
+    axes[0].plot(
+        [s + 0.08 for s in steps],
+        force,
+        "s",
+        color=VERMILLION,
+        ms=5,
+        label="six decimals",
+        zorder=3,
+    )
+    axes[0].set_ylabel("max force (eV/Å)")
+    axes[0].set_xlabel("aligned iteration")
+    axes[0].set_xticks(steps)
+    axes[0].legend(frameon=False, fontsize=7)
+
+    axes[1].plot(steps, energy, "-", color=BLACK, lw=1.0, zorder=1)
+    axes[1].plot(steps, energy, "o", color=BLUE, ms=6, zorder=2)
+    axes[1].plot(
+        [s + 0.08 for s in steps],
+        energy,
+        "s",
+        color=VERMILLION,
+        ms=5,
+        zorder=3,
+    )
+    axes[1].set_ylabel("highest image (eV)")
+    axes[1].set_xlabel("aligned iteration")
+    axes[1].set_xticks(steps)
+
+    labels = ["round trip\nmax", "round trip\nRMSD", "six decimals\nmax", "six decimals\nRMSD"]
+    values = [8.9e-15, 6.7e-16, 4.9e-7, 1.9e-7]
+    colors = [BLUE, SKY, VERMILLION, ORANGE]
+    axes[2].bar(range(4), values, color=colors, edgecolor=BLACK, linewidth=0.4)
+    axes[2].set_yscale("log")
+    axes[2].set_xticks(range(4))
+    axes[2].set_xticklabels(labels, fontsize=7)
+    axes[2].set_ylabel("displacement (Å)")
+    axes[2].set_xlabel("against the aligned band")
+
+    fig.tight_layout()
+    fig.savefig(OUT / "restart.pdf")
+    plt.close(fig)
+
+
+def layers() -> None:
+    names = ["Rust core", "C++ wrapper", "Python objects"]
+    mbps = [1090, 1078, 122.5]
+    colors = [BLUE, GREEN, ORANGE]
+    fig, ax = plt.subplots(figsize=(7.2, 2.6))
+    y = list(range(len(names)))
+    ax.barh(y, mbps, color=colors, edgecolor=BLACK, linewidth=0.4)
+    ax.set_yticks(y)
+    ax.set_yticklabels(names)
+    ax.set_xlabel("throughput (MB/s)")
+    ax.set_xlim(0, 1400)
+    for yi, value in zip(y, mbps):
+        ax.text(value + 20, yi, f"{value:g}", va="center", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "layers.pdf")
+    plt.close(fig)
+
+
+def scaling() -> None:
+    threads = [1, 2, 4, 8]
+    series = {
+        "Rust": [1.00, 1.61, 2.73, 3.78],
+        "C++": [1.00, 1.39, 2.36, 3.26],
+        "Python": [1.00, 1.15, 1.22, 1.08],
+    }
+    colors = {"Rust": BLUE, "C++": GREEN, "Python": VERMILLION}
+    markers = {"Rust": "o", "C++": "s", "Python": "D"}
+    fig, ax = plt.subplots(figsize=(4.6, 3.3))
+    ax.plot(threads, threads, "--", color=BLACK, lw=0.8, label="ideal")
+    for name, speed in series.items():
+        ax.plot(
+            threads,
+            speed,
+            marker=markers[name],
+            color=colors[name],
+            label=name,
+        )
+    ax.set_xlabel("threads")
+    ax.set_ylabel("speedup")
+    ax.set_xticks(threads)
+    ax.set_ylim(0, 9)
+    ax.legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "scaling.pdf")
+    plt.close(fig)
+
+
+def abnf_placeholder() -> None:
+    path = OUT / "con_abnf.tex"
+    path.write_text(
+        "% Author inserts the 49-rule non-normative ABNF.\n"
+    )
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    layout()
-    pipeline()
-    if (RESULTS / "ratios.csv").is_file():
-        ratios()
-    if (RESULTS / "threads_summary.csv").is_file():
-        threads()
-    print(f"wrote figures under {OUT}")
+    workflow()
+    architecture()
+    restart()
+    layers()
+    scaling()
+    abnf_placeholder()
 
 
 if __name__ == "__main__":
