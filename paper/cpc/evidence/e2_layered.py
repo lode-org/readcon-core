@@ -15,6 +15,7 @@ import json
 import os
 import platform
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -148,6 +149,13 @@ def ase_positions(path: str) -> tuple[int, int]:
     return len(frames), total
 
 
+def io_floor_seconds(path: str) -> float:
+    """Read the file and discard it. This is the hot-cache I/O floor."""
+    start = time.perf_counter()
+    subprocess.run(["cat", path], stdout=subprocess.DEVNULL, check=True)
+    return time.perf_counter() - start
+
+
 def time_call(fn, *args) -> tuple[float, str]:
     start = time.perf_counter()
     try:
@@ -233,7 +241,7 @@ def main() -> None:
         )
 
     # Native paired block. Order is shuffled inside each repeat.
-    native_readers = ("rust_parse_auto", "cpp_auto", "rust_parse_1", "cpp_1", "scan")
+    native_readers = ("rust_parse_auto", "cpp_auto", "rust_parse_1", "cpp_1", "scan", "io_floor")
     for repeat in range(N_NATIVE):
         order = list(native_readers)
         rng.shuffle(order)
@@ -242,6 +250,9 @@ def main() -> None:
                 row = run_json([str(RUST_BIN), "scan", path])
                 add(repeat, "stages", "file_read", 1, float(row["read_seconds"]), "ok")
                 add(repeat, "stages", "boundary_scan", 1, float(row["scan_seconds"]), "ok")
+            elif reader == "io_floor":
+                seconds = io_floor_seconds(path)
+                add(repeat, "stages", "io_floor", 1, seconds, "ok")
             elif reader == "rust_parse_auto":
                 row = run_json([str(RUST_BIN), "parse", path, "0"])
                 add(repeat, "native", "rust_auto", 0, float(row["seconds"]), "ok")
@@ -323,8 +334,12 @@ def main() -> None:
         stats.update(rate(stats["median_s"]))
         native_summary[reader] = stats
     stage_summary = {}
-    for reader in ("file_read", "boundary_scan"):
+    for reader in ("file_read", "boundary_scan", "io_floor"):
         stage_summary[reader] = summarize(rows_where("stages", reader), "seconds")
+    if stage_summary.get("io_floor", {}).get("median_s"):
+        floor = stage_summary["io_floor"]["median_s"]
+        stage_summary["io_floor"].update(rate(floor))
+        stage_summary["io_floor"]["method"] = "cat PATH >/dev/null, hot page cache"
     object_stats = {}
     if object_build:
         median, low, high = bca_median(np.array(object_build))
@@ -455,5 +470,64 @@ def main() -> None:
     }, indent=2))
 
 
+def record_io_floor() -> None:
+    """Add 15 cat-to-/dev/null repeats to the existing layered timing files.
+
+    The parse repeats stay as they were. This block is the read floor those
+    repeats can be set against.
+    """
+    path = str(BENCH_CON)
+    nbytes = BENCH_CON.stat().st_size
+    samples = [io_floor_seconds(path) for _ in range(N_NATIVE)]
+    median, low, high = bca_median(np.array(samples))
+    summary = json.loads((RESULTS / "e2_layered.json").read_text())
+    nframes = int(summary["file"]["frames"])
+    summary["stages"]["io_floor"] = {
+        "n": N_NATIVE,
+        "median_s": median,
+        "bca_low_s": low,
+        "bca_high_s": high,
+        "MB_per_s": (nbytes / 1e6) / median,
+        "frames_per_s": nframes / median,
+        "method": "cat PATH >/dev/null",
+        "cache": "hot page cache, same file as the parse repeats",
+        "placement": (
+            "Fifteen repeats after the parse block. "
+            "A later full run of this script shuffles cat into each native repeat."
+        ),
+    }
+    floor = median
+    against = {}
+    for reader, threads in (("rust", "1"), ("rust", "8"), ("cpp", "1"), ("cpp", "8")):
+        med = summary["scaling"][reader][threads]["median_s"]
+        against[f"{reader}_{threads}_over_floor"] = med / floor
+    summary["scaling_against_io_floor"] = against
+    (RESULTS / "e2_layered.json").write_text(json.dumps(summary, indent=2) + "\n")
+    repeat_path = RESULTS / "e2_repeats.csv"
+    with repeat_path.open("a", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["repeat", "group", "reader", "threads", "seconds", "status", "bytes", "frames"],
+        )
+        for i, seconds in enumerate(samples):
+            writer.writerow(
+                {
+                    "repeat": i,
+                    "group": "stages",
+                    "reader": "io_floor",
+                    "threads": 1,
+                    "seconds": f"{seconds:.9f}",
+                    "status": "ok",
+                    "bytes": nbytes,
+                    "frames": nframes,
+                }
+            )
+    print(json.dumps(summary["stages"]["io_floor"], indent=2))
+    print(json.dumps(summary["scaling_against_io_floor"], indent=2))
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--floor-only":
+        record_io_floor()
+    else:
+        main()

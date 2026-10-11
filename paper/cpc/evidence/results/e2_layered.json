@@ -107,6 +107,17 @@
       "median_s": 0.035637875,
       "bca_low_s": 0.035277814,
       "bca_high_s": 0.036037725
+    },
+    "io_floor": {
+      "n": 15,
+      "median_s": 0.021173340999666834,
+      "bca_low_s": 0.020028754999657394,
+      "bca_high_s": 0.022011257999110967,
+      "MB_per_s": 7920.809474642616,
+      "frames_per_s": 472292.020430661,
+      "method": "cat PATH >/dev/null",
+      "cache": "Repeat 0 took 0.0725 s. The other fourteen sit near 0.021 s, a hot page cache on this file.",
+      "placement": "Fifteen repeats after the parse block. A later full run of this script shuffles cat into each native repeat."
     }
   },
   "python_object_build_estimate": {
@@ -293,5 +304,11 @@
         "speedup_vs_1": 1.0776671341877067
       }
     }
+  },
+  "scaling_against_io_floor": {
+    "rust_1_over_floor": 29.14339191957044,
+    "rust_8_over_floor": 7.707920304243342,
+    "cpp_1_over_floor": 26.108916869033497,
+    "cpp_8_over_floor": 8.01144231336326
   }
 }
