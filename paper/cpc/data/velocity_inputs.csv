@@ -1,0 +1,4 @@
+quantity,value,unit,source
+eon_time_unit,10.1805055,fs,"eOn 3.6.0 include/eon/ParametersOptions.h:26"
+ke_natural,12.386,eV,"CON specification v3.1, one 336-atom Pt slab at 300 K, one Maxwell-Boltzmann draw"
+ke_relative_loss_6dp,5.8e-7,1,"CON specification v3.1, eOn kConvelPrecision 6, client/ConFileIO.cpp:43"

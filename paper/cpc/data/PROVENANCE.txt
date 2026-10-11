@@ -1,0 +1,7 @@
+hcn.con and hnc.con are the public HCN and HNC endpoints.
+Source repository: https://github.com/HaoZeke/eon_orchestrator
+Commit: 669a58efc3b193286e9318cc258127cd65e06a63
+Paths: examples/hcn_isom/hcn.con and examples/hcn_isom/hnc.con
+Cited paper: doi:10.1016/j.mex.2026.103899
+Retrieved: 2026-10-11
+The files are copied unchanged.
