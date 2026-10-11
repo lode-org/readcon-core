@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{LineStream, parse_declared_sections};
+use crate::parser::{parse_declared_sections, LineStream};
 use crate::{error, types};
 use std::path::Path;
 
@@ -24,7 +24,10 @@ pub struct MemchrLines<'a> {
     /// `None` keeps the per-line `memchr` path used by a full parse.
     newlines: Option<Vec<usize>>,
     /// Index of the line that starts at `pos` when `newlines` is in use.
-    line_no: usize,
+    index_line: usize,
+    /// 1-based index of the last line produced by [`Self::read_one`], including
+    /// a line rejected as UTF-8. 0 before that.
+    line_no: u32,
 }
 
 impl<'a> MemchrLines<'a> {
@@ -49,8 +52,15 @@ impl<'a> MemchrLines<'a> {
             check_utf8,
             utf8_bad: false,
             newlines: None,
+            index_line: 0,
             line_no: 0,
         }
+    }
+
+    /// 1-based index of the last line read, including a line that is only peeked.
+    #[inline]
+    pub fn line_no(&self) -> u32 {
+        self.line_no
     }
 
     #[inline]
@@ -74,21 +84,29 @@ impl<'a> MemchrLines<'a> {
         if self.check_utf8 {
             match std::str::from_utf8(trimmed) {
                 Ok(s) => {
-                    self.pos += advance;
+                    self.accept_line(advance);
                     Some(s)
                 }
                 Err(_) => {
                     // Stay on the rejected line. Moving past it makes a
                     // whitespace tail look like a clean end of file.
+                    // The line number still names this line.
+                    self.line_no = self.line_no.saturating_add(1);
                     self.utf8_bad = true;
                     None
                 }
             }
         } else {
-            self.pos += advance;
+            self.accept_line(advance);
             // SAFETY: source was `&str`; line is a UTF-8 prefix cut on ASCII `\n`/`\r`.
             Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
+    }
+
+    #[inline]
+    fn accept_line(&mut self, advance: usize) {
+        self.pos += advance;
+        self.line_no = self.line_no.saturating_add(1);
     }
 
     #[inline]
@@ -113,8 +131,12 @@ impl<'a> MemchrLines<'a> {
             // Rewind pos to the start of the peeked line.
             let start = p.as_ptr() as usize - self.bytes.as_ptr() as usize;
             self.pos = start;
+            // A peek already counted this line. Rewinding must drop that
+            // count so the next read names it once, and must put the
+            // newline index back on the line `pos` now starts.
+            self.line_no = self.line_no.saturating_sub(1);
             if let Some(nl) = self.newlines.as_deref() {
-                self.line_no = line_no_for_pos(nl, self.bytes.len(), start);
+                self.index_line = line_no_for_pos(nl, self.bytes.len(), start);
             }
         }
     }
@@ -131,8 +153,8 @@ impl<'a> MemchrLines<'a> {
         let len = self.bytes.len();
         let line_no = {
             let nl = self.newlines.as_deref().unwrap();
-            if self.pos == line_start_pos(nl, len, self.line_no) {
-                self.line_no
+            if self.pos == line_start_pos(nl, len, self.index_line) {
+                self.index_line
             } else {
                 line_no_for_pos(nl, len, self.pos)
             }
@@ -143,18 +165,23 @@ impl<'a> MemchrLines<'a> {
             match std::str::from_utf8(trimmed) {
                 Ok(s) => {
                     self.pos = span.next_pos;
-                    self.line_no = line_no + 1;
+                    self.index_line = line_no + 1;
+                    self.line_no = self.index_line as u32;
                     Some(s)
                 }
                 Err(_) => {
                     self.utf8_bad = true;
-                    self.line_no = line_no;
+                    self.index_line = line_no;
+                    // The rejected line is 1-based `line_no + 1`. The index
+                    // stays on that line so a later read does not skip it.
+                    self.line_no = (line_no as u32).saturating_add(1);
                     None
                 }
             }
         } else {
             self.pos = span.next_pos;
-            self.line_no = line_no + 1;
+            self.index_line = line_no + 1;
+            self.line_no = self.index_line as u32;
             // SAFETY: source was `&str`; the span is a UTF-8 line cut on ASCII `\n`/`\r`.
             Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
@@ -166,7 +193,11 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad { invalid_utf8() } else { err }
+        if self.utf8_bad {
+            invalid_utf8()
+        } else {
+            err
+        }
     }
 }
 
@@ -200,6 +231,9 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             return crate::parser::parse_coord_row_at(p.as_bytes(), 0, spec_version, default_id)
                 .map(|(row, _)| row);
         }
+        // The failing row is this line even when the numeric scan returns Err
+        // before the cursor moves.
+        self.line_no = self.line_no.saturating_add(1);
         let (row, pos) =
             crate::parser::parse_coord_row_at(self.bytes, self.pos, spec_version, default_id)?;
         self.pos = pos;
@@ -369,12 +403,19 @@ impl<'a> ConFrameIterator<'a> {
         for i in 0..n {
             let rest = &self.lines.bytes[self.lines.pos..];
             match memchr::memchr(b'\n', rest) {
-                Some(pos) => self.lines.pos += pos + 1,
+                Some(pos) => {
+                    self.lines.pos += pos + 1;
+                    self.lines.line_no = self.lines.line_no.saturating_add(1);
+                }
                 None => {
                     if rest.is_empty() {
                         return Err(error::ParseError::IncompleteFrame);
                     }
                     self.lines.pos = self.lines.bytes.len();
+                    // Count the unterminated line so a later located error
+                    // names it. It satisfies this skip only when it is the
+                    // last line still required; the full parser accepts it.
+                    self.lines.line_no = self.lines.line_no.saturating_add(1);
                     if i + 1 == n {
                         return Ok(());
                     }
@@ -406,6 +447,12 @@ impl<'a> ConFrameIterator<'a> {
             && memchr::memchr_iter(b'\n', &bytes[pos..end]).count() == n
         {
             self.lines.pos = end;
+            // The per-line walk would count each of these lines. The
+            // vectorized jump has to keep the same 1-based line.
+            self.lines.line_no = self
+                .lines
+                .line_no
+                .saturating_add(u32::try_from(n).unwrap_or(u32::MAX));
             return Ok(());
         }
         self.advance_lines(n)
@@ -420,8 +467,8 @@ impl<'a> ConFrameIterator<'a> {
         let step = {
             let nl = self.lines.newlines.as_deref().unwrap();
             let nlines = line_count(nl, len);
-            let line_no = if self.lines.pos == line_start_pos(nl, len, self.lines.line_no) {
-                self.lines.line_no
+            let line_no = if self.lines.pos == line_start_pos(nl, len, self.lines.index_line) {
+                self.lines.index_line
             } else {
                 line_no_for_pos(nl, len, self.lines.pos)
             };
@@ -445,20 +492,24 @@ impl<'a> ConFrameIterator<'a> {
         };
         match step {
             IndexStep::Stay(line_no) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 Ok(())
             }
             IndexStep::Missing(line_no) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 Err(error::ParseError::IncompleteFrame)
             }
             IndexStep::Landed(line_no, pos) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 self.lines.pos = pos;
                 Ok(())
             }
             IndexStep::Short(line_no, pos) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 self.lines.pos = pos;
                 Err(error::ParseError::IncompleteFrame)
             }
@@ -1098,7 +1149,11 @@ fn sample_llc_misses() -> i64 {
     unsafe {
         libc::close(fd);
     }
-    if n == 8 { value as i64 } else { -1 }
+    if n == 8 {
+        value as i64
+    } else {
+        -1
+    }
 }
 
 /// Pages that do not sit on node 0.
@@ -1439,8 +1494,8 @@ fn recycle_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache()
--> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache(
+) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -1486,7 +1541,11 @@ pub fn process_minflt() -> i64 {
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
     let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if raw > 0 { raw as usize } else { 4096 }
+    if raw > 0 {
+        raw as usize
+    } else {
+        4096
+    }
 }
 
 /// Fault one word on each page of `values`.
@@ -1705,7 +1764,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
                     // a second set of workers. The header walk stays serial:
                     // unequal frames do not share a span to split on.
                     scanner.lines.newlines = Some(newline_positions(bytes, threads));
-                    scanner.lines.line_no = 0;
+                    scanner.lines.index_line = 0;
                     SCAN_INDEXED
                 } else {
                     SCAN_SERIAL
@@ -2012,7 +2071,158 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 { 1 } else { requested }
+    if len < 2 {
+        1
+    } else {
+        requested
+    }
+}
+
+/// I/O, UTF-8, or a located parse failure while loading a path.
+#[derive(Debug)]
+pub enum LoadError {
+    Io(std::io::Error),
+    Utf8(std::str::Utf8Error),
+    Parse(error::LocatedParseError),
+    /// The path opened and decoded, and it held no frame.
+    Empty,
+}
+
+impl std::fmt::Display for LoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoadError::Io(e) => write!(f, "{e}"),
+            LoadError::Utf8(e) => write!(f, "{e}"),
+            LoadError::Parse(e) => write!(f, "{e}"),
+            LoadError::Empty => write!(f, "no frames found in file"),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
+fn load_error_from_box(err: Box<dyn std::error::Error>) -> LoadError {
+    if let Some(io) = err.downcast_ref::<std::io::Error>() {
+        return LoadError::Io(std::io::Error::new(io.kind(), io.to_string()));
+    }
+    LoadError::Io(std::io::Error::other(err.to_string()))
+}
+
+fn load_text(path: &Path) -> Result<crate::compression::FileContents, LoadError> {
+    crate::compression::read_file_contents(path).map_err(load_error_from_box)
+}
+
+/// 1-based line number of the line that contains `byte`.
+#[cfg(feature = "parallel")]
+fn file_line_at(text: &str, byte: usize) -> u32 {
+    let end = byte.min(text.len());
+    1 + text.as_bytes()[..end]
+        .iter()
+        .filter(|&&b| b == b'\n')
+        .count() as u32
+}
+
+/// Collect every frame, keeping the line and frame index of the first error.
+pub fn frames_from_text_located(
+    text: &str,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    #[cfg(feature = "parallel")]
+    {
+        // A caller that does not ask for a pool stays on this thread.
+        // Starting the global pool for a long file made a one-frame read slower.
+        let use_parallel = matches!(num_threads, Some(n) if n >= 2);
+        if use_parallel {
+            let pool = num_threads.filter(|&n| n >= 2);
+            return collect_parallel_located(text, pool);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    let mut frames = Vec::new();
+    let mut iter = ConFrameIterator::new(text);
+    let mut index = 0u64;
+    while let Some(item) = iter.next() {
+        match item {
+            Ok(frame) => {
+                frames.push(frame);
+                index += 1;
+            }
+            Err(e) => {
+                return Err(error::LocatedParseError::new(
+                    e,
+                    iter.lines.line_no(),
+                    index,
+                ));
+            }
+        }
+    }
+    Ok(frames)
+}
+
+/// Read every frame from `path`, with the line and frame index of the first error.
+pub fn read_all_frames_located(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    frames_from_text_located(text, num_threads).map_err(LoadError::Parse)
+}
+
+/// Read the first frame from `path`, with a line number on failure.
+pub fn read_first_frame_located(path: &Path) -> Result<types::ConFrame, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let mut iter = ConFrameIterator::new(text);
+    match iter.next() {
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(e)) => Err(LoadError::Parse(error::LocatedParseError::new(
+            e,
+            iter.lines.line_no(),
+            0,
+        ))),
+        None => Err(LoadError::Empty),
+    }
+}
+
+/// Skip `index` frames, then parse one, with a line number on failure.
+pub fn read_nth_frame_located(path: &Path, index: usize) -> Result<types::ConFrame, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let mut iter = ConFrameIterator::new(text);
+    match iter.skip_frames(index) {
+        Ok(skipped) if skipped == index => {}
+        Ok(skipped) => {
+            return Err(LoadError::Parse(error::LocatedParseError::new(
+                error::ParseError::IncompleteFrame,
+                iter.lines.line_no(),
+                skipped as u64,
+            )));
+        }
+        Err(e) => {
+            return Err(LoadError::Parse(error::LocatedParseError::new(
+                e,
+                iter.lines.line_no(),
+                index as u64,
+            )));
+        }
+    }
+    match iter.next() {
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(e)) => Err(LoadError::Parse(error::LocatedParseError::new(
+            e,
+            iter.lines.line_no(),
+            index as u64,
+        ))),
+        None => Err(LoadError::Parse(error::LocatedParseError::new(
+            error::ParseError::IncompleteFrame,
+            iter.lines.line_no(),
+            index as u64,
+        ))),
+    }
 }
 
 fn collect_frame_starts(
@@ -2049,7 +2259,7 @@ pub fn frame_start_offsets_serial(file_contents: &str) -> Vec<usize> {
 #[cfg(feature = "parallel")]
 fn scanner_with_newlines<'a>(text: &'a str, newlines: Vec<usize>) -> ConFrameIterator<'a> {
     let mut scanner = ConFrameIterator::new(text);
-    scanner.lines.line_no = 0;
+    scanner.lines.index_line = 0;
     scanner.lines.newlines = Some(newlines);
     scanner
 }
@@ -2788,6 +2998,63 @@ pub fn measure_newline_scan(text: &str, threads: usize, chunked: bool) -> (Vec<u
     (offsets, t_scan.elapsed().as_secs_f64())
 }
 
+/// Parallel parse that keeps the file line of the first error.
+/// Workers return the error. They do not write thread-local error state.
+#[cfg(feature = "parallel")]
+fn collect_parallel_located(
+    file_contents: &str,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    use rayon::prelude::*;
+
+    let boundaries = frame_start_offsets(file_contents);
+    let parse_chunks = || -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+        let num_frames = boundaries.len();
+        let parts: Vec<Result<types::ConFrame, error::LocatedParseError>> = (0..num_frames)
+            .into_par_iter()
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < num_frames {
+                    boundaries[i + 1]
+                } else {
+                    file_contents.len()
+                };
+                let chunk = &file_contents[start..end];
+                let mut iter = ConFrameIterator::new(chunk);
+                match iter.next() {
+                    Some(Ok(frame)) => Ok(frame),
+                    Some(Err(e)) => {
+                        let local = iter.lines.line_no();
+                        let base = file_line_at(file_contents, start);
+                        let cursor = if local == 0 { base } else { base + local - 1 };
+                        Err(error::LocatedParseError::new(e, cursor, i as u64))
+                    }
+                    None => Err(error::LocatedParseError::new(
+                        error::ParseError::IncompleteFrame,
+                        file_line_at(file_contents, start),
+                        i as u64,
+                    )),
+                }
+            })
+            .collect();
+        let mut frames = Vec::with_capacity(parts.len());
+        for part in parts {
+            frames.push(part?);
+        }
+        Ok(frames)
+    };
+    match num_threads {
+        None => parse_chunks(),
+        Some(n) => {
+            let n = n.max(1);
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => pool.install(parse_chunks),
+                Err(_) => parse_chunks(),
+            }
+        }
+    }
+}
+
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_strong_scale_tests {
     use super::*;
@@ -2988,13 +3255,10 @@ mod parallel_header_scan_tests {
             }
         }
         let tailed = format!("{text}\n   \n\t\n");
-        assert_cuts_match(&tailed, &[
-            0,
-            3,
-            tailed.len() / 2,
-            tailed.len() - 1,
-            tailed.len(),
-        ]);
+        assert_cuts_match(
+            &tailed,
+            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
+        );
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
         assert_crlf_gap_cut(&crlf);
