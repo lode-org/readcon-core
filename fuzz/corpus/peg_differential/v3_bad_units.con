@@ -1,0 +1,12 @@
+conformance: v3-bad-units; spec.org: Units (required)
+{"con_spec_version":3,"units":{"length":"eV","energy":"angstrom"}}
+10.000000 10.000000 10.000000
+90.000000 90.000000 90.000000
+
+
+1
+1
+63.546000
+Cu
+Coordinates of Component 1
+0.000000 0.000000 0.000000 7 0

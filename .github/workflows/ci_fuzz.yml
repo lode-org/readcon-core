@@ -1,0 +1,52 @@
+name: Fuzz
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+      - "test/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - con_iterator
+          - compression
+          - peg_differential
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install a C++ toolchain for libFuzzer
+        run: |
+          sudo apt-get update && sudo apt-get install -y g++
+          ver=$(g++ -dumpversion | cut -d. -f1)
+          echo "CPLUS_INCLUDE_PATH=/usr/include/c++/${ver}:/usr/include/x86_64-linux-gnu/c++/${ver}" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=-C link-arg=-L/usr/lib/gcc/x86_64-linux-gnu/${ver}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "fuzz -> fuzz/target"
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: cargo-fuzz@0.13.2
+
+      - name: Run target for 10 minutes
+        working-directory: fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=600 -rss_limit_mb=2048

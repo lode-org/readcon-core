@@ -1,0 +1,37 @@
+{
+  "atom_ids": [
+    0,
+    1
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ],
+    [
+      true,
+      false,
+      false
+    ]
+  ],
+  "id": "four-column",
+  "n_atoms": 2,
+  "positions": [
+    [
+      1.0,
+      2.0,
+      3.0
+    ],
+    [
+      4.0,
+      5.0,
+      6.0
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Cu",
+    "Cu"
+  ]
+}

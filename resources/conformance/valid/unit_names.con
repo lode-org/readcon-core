@@ -1,0 +1,12 @@
+conformance
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"metre","energy":"joule","mass":"dalton","time":"fs"}}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+1
+1
+63.546000
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 0 0

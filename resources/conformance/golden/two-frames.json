@@ -1,0 +1,25 @@
+{
+  "atom_ids": [
+    0
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ]
+  ],
+  "id": "two-frames",
+  "n_atoms": 1,
+  "positions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Cu"
+  ]
+}

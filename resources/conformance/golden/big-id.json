@@ -1,0 +1,25 @@
+{
+  "atom_ids": [
+    9007199254740993
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ]
+  ],
+  "id": "big-id",
+  "n_atoms": 1,
+  "positions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Cu"
+  ]
+}

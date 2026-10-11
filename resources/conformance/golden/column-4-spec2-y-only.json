@@ -1,9 +1,25 @@
 {
+  "atom_ids": [
+    0
+  ],
+  "fixed": [
+    [
+      false,
+      true,
+      false
+    ]
+  ],
   "id": "column-4-spec2-y-only",
   "n_atoms": 1,
+  "positions": [
+    [
+      1.0,
+      2.0,
+      3.0
+    ]
+  ],
   "spec_version": 2,
-  "fixed": [[false, true, false]],
-  "positions": [[1.0, 2.0, 3.0]],
-  "atom_ids": [0],
-  "symbols": ["Cu"]
+  "symbols": [
+    "Cu"
+  ]
 }

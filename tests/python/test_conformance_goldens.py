@@ -63,18 +63,27 @@ def test_manifest_and_goldens_exist():
         assert not (CORPUS / "golden" / f"{case['id']}.json").exists()
 
 
+def _read(path):
+    try:
+        return readcon.read_con(str(path))
+    except Exception as exc:
+        if path.name.endswith(".zst") and "zstd" in str(exc).lower():
+            pytest.skip(f"library built without zstd: {exc}")
+        raise
+
+
 @pytest.mark.parametrize(
     "case",
     parse_manifest(MANIFEST.read_text()),
     ids=lambda c: c["id"],
 )
 def test_python_matches_golden_or_rejects(case):
-    body = (CORPUS / case["path"]).read_text()
+    path = CORPUS / case["path"]
     if case["kind"] == "invalid":
         with pytest.raises(Exception):
-            readcon.read_con_string(body)
+            _read(path)
         return
-    frames = readcon.read_con_string(body)
+    frames = _read(path)
     assert len(frames) >= 1
     frame = frames[0]
     golden = json.loads((CORPUS / "golden" / f"{case['id']}.json").read_text())

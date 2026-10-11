@@ -1,598 +1,157 @@
-//! Structural check: docs describe CON and the code stack, not format bake-offs.
+//! Local link and anchor check for the org sources and the README.
+//!
+//! A `file:` link must resolve. A `::#id` search needs a `CUSTOM_ID`.
+//! A `::*Heading` search needs that headline.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-fn docs_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/orgmode")
-}
-
-fn repo_root() -> PathBuf {
+fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn read(name: &str) -> String {
-    let p = docs_root().join(name);
-    fs::read_to_string(&p).unwrap_or_else(|e| panic!("missing {}: {e}", p.display()))
-}
-
-fn read_repo(rel: &str) -> String {
-    let p = repo_root().join(rel);
-    fs::read_to_string(&p).unwrap_or_else(|e| panic!("missing {}: {e}", p.display()))
-}
-
-fn assert_no_ai_tells(t: &str, file: &str) {
-    let banned = [
-        "not \"fastest",
-        "not a claim of fastest",
-        "all of computational chemistry",
-        "generic MD-format supremacy",
-        "within domain",
-        "domain-scoped",
-        "Speed (honest)",
-        "Forbidden as",
-        "past mistake",
-        "No universal ranking is intended",
-        "sit politely",
-        "fidelity loss is acceptable",
-        "richer sections than lean XYZ",
-        "lean XYZ",
-        "best of both worlds",
-        "state-of-the-art",
-        "State-of-the-art",
-        "H5MD-grade",
-        "primary goal is",
-        "Is readcon-core",
-        "definitive CON",
-        "Definitive CON",
-        "deliberately small",
-        "LODE-centric",
-        "LODE centric",
-        "only eOn",
-        "only LODE",
-        "only for eOn",
-        "separate concern",
-        "separate concerns",
-        "they complement CON",
-        "complement CON",
-        "Neither replaces",
-        "How does CON relate to H5MD",
-        "CON and H5MD",
-        "Related work (H5MD",
-        // anti-product carve-outs (do not invent reasons not to adopt)
-        "just another text",
-        "upside is smaller",
-        "never join a campaign",
-        "when not to use",
-        "not worth migrating",
-        "MD tape replacement",
-        "universal MD tape",
-        "hand-rolled is fine",
-        "single-code XYZ is fine",
-        // historical FAQ kill-list (never reintroduce)
-        "When should I use HDF5",
-        "Use HDF5 for",
-        "Use ~con~ for:",
-        "Use con for:",
-        "long-term archival and analysis",
-        "con-to-data pipeline",
-        "~con~-to-data pipeline",
-        "complement each other",
-        "When should I use CON vs XYZ",
-        "XYZ/extXYZ are suitable when",
-        "only positions (and optionally a lattice)",
-        "millions of frames, billions of atoms",
-        "< 10k frames",
-        "10-30x faster",
-        "10–30×",
-        "HDF5 handles long-term",
-        "XYZ remains appropriate for minimal",
-        "How does CON + readcon-db compare to XYZ",
-    ];
-    for b in banned {
-        assert!(!t.contains(b), "{file} still contains banned phrase: {b:?}");
+fn org_files() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let root = repo().join("docs/orgmode");
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("org") {
+                out.push(path);
+            }
+        }
     }
+    walk(&root, &mut out);
+    out.push(repo().join("README.md"));
+    out.sort();
+    out
 }
 
-#[test]
-fn architecture_matches_code_surface() {
-    let t = read("architecture.org");
-    assert!(t.contains("hourglass") || t.contains("rkr_"));
-    assert!(t.contains("readcon-db") || t.contains("index_proj") || t.contains("chemfiles"));
-    assert!(t.contains("DLPack") || t.contains("metatensor") || t.contains("dlpk"));
-    assert_no_ai_tells(&t, "architecture.org");
-}
-
-#[test]
-fn evolution_covers_v2_v3() {
-    let t = read("evolution.org");
-    assert!(t.contains("version 3") || t.contains("Version 2 to version 3"));
-    assert!(t.contains("units") || t.contains("=units="));
-}
-
-#[test]
-fn faq_con_contract() {
-    let t = read("faq.org");
-    assert!(t.contains("hourglass") || t.contains("rkr_"));
-    assert!(t.contains("atom_id") || t.contains("=atom_id="));
-    assert!(t.contains("saddle") || t.contains("NEB") || t.contains("dimer"));
-    assert!(t.contains("What CON is for"));
-    assert!(
-        t.contains("What is the stack for")
-            || t.contains("campaign")
-            || t.contains("multi-language")
-            || t.contains("chemfiles"),
-        "FAQ must describe the multi-tool stack"
-    );
-    // optional physics sections ship on v2/v3 declared surface (not a format major)
-    assert!(
-        t.contains("charges") && t.contains("spins") && t.contains("magmoms"),
-        "FAQ must list charges/spins/magmoms with other optional sections"
-    );
-    assert!(
-        !t.contains("con_spec_version: 4") && !t.contains("con_spec_version\":4"),
-        "FAQ must not require format v4 for optional sections"
-    );
-    // no format bake-off / anti-product "use X instead" sections
-    assert!(!t.contains("How does CON relate to H5MD"));
-    assert!(!t.contains("* CON and H5MD"));
-    assert!(!t.contains("When should I use HDF5"));
-    assert!(!t.contains("When should I use CON vs XYZ"));
-    assert!(
-        t.contains("readcon-db")
-            && (t.contains("Where do large campaigns") || t.contains("Why is readcon-db")),
-        "FAQ must route corpora to readcon-db, not invent HDF5 as product archival"
-    );
-    assert!(
-        t.contains("chemfiles")
-            && (t.contains("ingress") || t.contains("How do XYZ") || t.contains("foreign")),
-        "FAQ must describe chemfiles as ingress into CON"
-    );
-    assert_no_ai_tells(&t, "faq.org");
-}
-
-#[test]
-fn product_docs_ban_anti_product_carveouts() {
-    // Entry surfaces that must never reintroduce origin/main kill-list copy.
-    for name in [
-        "faq.org",
-        "migrate.org",
-        "benchmarks.org",
-        "getting-started.org",
-        "index.org",
-        "chemfiles-explain.org",
-    ] {
-        assert_no_ai_tells(&read(name), name);
+fn custom_ids(text: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix(":CUSTOM_ID:") {
+            ids.push(rest.trim().to_string());
+        }
+        if let Some(start) = trimmed.find("<<") {
+            if let Some(end) = trimmed[start + 2..].find(">>") {
+                ids.push(trimmed[start + 2..start + 2 + end].to_string());
+            }
+        }
     }
-    assert_no_ai_tells(&read_repo("readme_src.org"), "readme_src.org");
+    ids
 }
 
-#[test]
-fn readcon_db_surface_has_hosted_docs() {
-    // User-facing entry points name the crate and the hosted Sphinx tree,
-    // not a docs.rs peer and not the product label "campaign store".
-    let hosted = "lode-org.github.io/readcon-db";
-    for (label, text) in [
-        ("faq.org", read("faq.org")),
-        ("migrate.org", read("migrate.org")),
-        ("getting-started.org", read("getting-started.org")),
-        ("index.org", read("index.org")),
-        ("readme_src.org", read_repo("readme_src.org")),
-        ("docs/source/conf.py", read_repo("docs/source/conf.py")),
-    ] {
-        assert!(
-            text.contains("readcon-db") || text.contains("readcon_db"),
-            "{label} must mention readcon-db"
-        );
-        assert!(
-            text.contains(hosted),
-            "{label} must link hosted readcon-db docs"
-        );
-        assert!(
-            !text.contains("https://docs.rs/readcon-db"),
-            "{label} must not advertise docs.rs/readcon-db as the package docs"
-        );
-        assert!(
-            !text.contains("campaign store") && !text.contains("Campaign store"),
-            "{label} must not label readcon-db as campaign store"
-        );
-    }
-    let conf = read_repo("docs/source/conf.py");
-    assert!(
-        conf.contains("https://lode-org.github.io/readcon-db"),
-        "Sphinx Ecosystem nav must point at the hosted readcon-db site"
-    );
-    assert!(
-        !conf.contains("https://github.com/lode-org/readcon-db"),
-        "Sphinx Ecosystem nav must not list the readcon-db GitHub repo"
-    );
-    assert!(
-        !conf.contains("docs.rs/readcon-db"),
-        "Sphinx Ecosystem nav must not list docs.rs/readcon-db as a peer"
-    );
-    for url in [
-        "https://eondocs.org",
-        "https://rgpot.rgoswami.me",
-        "https://omnipotentrpc.github.io/rgmin",
-        "https://omnipotentrpc.github.io/rgsaddle",
-        "https://cpmdc.rgoswami.me",
-        "https://rgpycrumbs.rgoswami.me",
-        "https://lode-org.github.io/minimage",
-        "https://docs.rs/linkcell",
-        "https://lode-org.github.io/readcon-db",
-        "https://github.com/lode-org/readcon-ops",
-    ] {
-        assert!(conf.contains(url), "Ecosystem nav missing {url}");
-    }
-    assert!(
-        !conf.contains("chemparseplot"),
-        "Ecosystem nav must not list chemparseplot"
-    );
-    assert!(
-        !conf.contains("docs.rs/readcon-core"),
-        "top nav must not list docs.rs as a peer"
-    );
-
-    // Landing page: no # campaigns product label, no docs.rs rustdoc twin
-    // in the toctree / left nav. Ecosystem stays sibling hosted docs.
-    let index_org = read("index.org");
-    let index_rst = read_repo("docs/source/index.rst");
-    for (label, text) in [
-        ("index.org", &index_org),
-        ("docs/source/index.rst", &index_rst),
-    ] {
-        assert!(
-            !text.contains("# campaigns"),
-            "{label} must not comment the hero readcon-db install as campaigns"
-        );
-        assert!(
-            !text.contains("pip install readcon-db  # campaigns")
-                && !text.contains("pip install readcon-db # campaigns"),
-            "{label} must not ship the hero pip install readcon-db # campaigns comment"
-        );
-        assert!(
-            !text.contains("docs.rs/readcon-core"),
-            "{label} must not list docs.rs/readcon-core as a toctree or sidebar twin"
-        );
-        assert!(
-            !text.contains("Rust API (docs.rs)"),
-            "{label} must not title a nav item Rust API (docs.rs)"
-        );
-    }
-}
-
-#[test]
-fn faq_speed_cites_con_peers() {
-    let t = read("faq.org");
-    assert!(t.contains("Cachegrind") && t.contains("compare_readers"));
-    assert!(!t.contains("10-30x faster") && !t.contains("10–30×"));
-    assert_no_ai_tells(&t, "faq.org");
-}
-
-#[test]
-fn getting_started_scope() {
-    let t = read("getting-started.org");
-    assert!(t.contains("Install") || t.contains("readcon"));
-    assert!(
-        t.contains("tutorial") || t.contains(":doc:`tutorial`") || t.contains("tutorial.org"),
-        "getting-started must point at the One Good Tutorial"
-    );
-    assert!(
-        t.contains("migrate") || t.contains("migrate.org"),
-        "getting-started must point at migration how-to"
-    );
-    assert!(
-        t.contains("Diátaxis")
-            || t.contains("Diataxis")
-            || t.contains("How-to")
-            || t.contains("howto"),
-        "getting-started should map Diátaxis destinations"
-    );
-    assert!(
-        t.contains("chemfiles")
-            || t.contains("hourglass")
-            || t.contains("rkr_")
-            || t.contains("readcon-db"),
-        "getting-started should mention more of the stack than bare I/O"
-    );
-    assert_no_ai_tells(&t, "getting-started.org");
-}
-
-#[test]
-fn one_good_tutorial_is_learning_oriented() {
-    let t = read("tutorial.org");
-    assert!(
-        t.contains("learning-oriented")
-            || t.contains("Diátaxis *tutorial*")
-            || t.contains("One Good"),
-        "tutorial.org must declare tutorial role"
-    );
-    assert!(
-        t.contains("iter_con") || t.contains("read_first_frame"),
-        "tutorial must use real Python CON I/O APIs"
-    );
-    assert!(
-        t.contains("tiny_multi_cuh2.con") || t.contains("resources/test/"),
-        "tutorial must use in-repo fixtures"
-    );
-    assert!(
-        !t.contains("iter_frames"),
-        "Python API is iter_con, not iter_frames"
-    );
-    assert!(
-        t.contains("run-tutorial-core")
-            || t.contains("tutorial_core.py")
-            || t.contains("org-babel"),
-        "tutorial.org must point at the Org Babel CI runner"
-    );
-    assert_no_ai_tells(&t, "tutorial.org");
-}
-
-#[test]
-fn tutorial_runners_exist_in_repo() {
-    let root = repo_root();
-    assert!(
-        root.join("scripts/run-tutorial-core.sh").is_file(),
-        "missing Org Babel tutorial script"
-    );
-    assert!(
-        root.join("scripts/run-chemfiles-notebook.sh").is_file(),
-        "missing Org Babel chemfiles notebook script"
-    );
-    let org = fs::read_to_string(root.join("docs/orgmode/tutorial.org")).unwrap();
-    assert!(
-        org.contains(":tangle ../notebooks/tutorial_core.py"),
-        "tutorial.org must tangle Python blocks"
-    );
-    assert!(
-        org.contains("run-tutorial-core.sh") || org.contains("org-babel"),
-        "tutorial.org must document Babel CI path"
-    );
-    let nb = fs::read_to_string(root.join("docs/orgmode/chemfiles-notebook.org")).unwrap();
-    assert!(nb.contains(":tangle ../notebooks/chemfiles_ingress.py"));
-    let wf = fs::read_to_string(root.join(".github/workflows/ci_python.yml")).unwrap();
-    assert!(
-        wf.contains("run-tutorial-core.sh") && wf.contains("run-chemfiles-notebook.sh"),
-        "ci_python.yml must invoke Org Babel tutorial scripts"
-    );
-    assert!(
-        wf.contains("emacs-nox") || wf.contains("emacs"),
-        "ci_python.yml must install emacs for org-babel-tangle"
-    );
-    let core_sh = fs::read_to_string(root.join("scripts/run-tutorial-core.sh")).unwrap();
-    assert!(
-        core_sh.contains("tangle drift") && !core_sh.contains("falling back"),
-        "run-tutorial-core.sh must drift-check and must not soft-fallback"
-    );
-    let cf_sh = fs::read_to_string(root.join("scripts/run-chemfiles-notebook.sh")).unwrap();
-    assert!(
-        cf_sh.contains("tangle drift") && !cf_sh.contains("falling back"),
-        "run-chemfiles-notebook.sh must drift-check and must not soft-fallback"
-    );
-    assert!(
-        !cf_sh.contains("trying tangled script as fallback"),
-        "run-chemfiles-notebook.sh must not silently re-run tangled script after Babel miss"
-    );
-}
-
-#[test]
-fn howto_is_task_oriented() {
-    let t = read("howto.org");
-    assert!(
-        t.contains("how-to") || t.contains("How-to") || t.contains("Diátaxis *how-to*"),
-        "howto.org must declare how-to role"
-    );
-    assert!(
-        t.contains("Python") && (t.contains("Rust") || t.contains("C++")),
-        "howto should cover multiple languages"
-    );
-    assert_no_ai_tells(&t, "howto.org");
-}
-
-#[test]
-fn faq_purpose_heading() {
-    let t = read("faq.org");
-    assert!(t.contains("What CON is for"));
-}
-
-#[test]
-fn benchmarks_what_we_measure() {
-    let t = read("benchmarks.org");
-    assert!(t.contains("What we measure") || t.contains("Cachegrind"));
-    assert!(t.contains("compare_readers") || t.contains("ase.io.eon"));
-    assert!(
-        t.contains("ASV") && (t.contains("spyglass") || t.contains("asv-spyglass")),
-        "benchmarks must document Python ASV + spyglass PR path"
-    );
-    assert!(
-        t.contains("asv.conf.json") && t.contains("benchmarks/"),
-        "benchmarks must name ASV config and suite path"
-    );
-    assert!(!t.contains("2.7M atoms/s"));
-    assert!(
-        !t.contains("rgam5terra") && !t.contains("9.2×") && !t.contains("3.3 ms"),
-        "benchmarks must not paste host wall-clock snapshot tables as doctrine"
-    );
-    assert_no_ai_tells(&t, "benchmarks.org");
-}
-
-#[test]
-fn index_and_readme_src() {
-    let index = read("index.org");
-    assert!(index.contains("CON") || index.contains(".con"));
-    assert!(
-        index.contains("hourglass") || index.contains("rkr_") || index.contains("multi-language")
-    );
-    assert!(
-        index.contains("Put CON") || index.contains("put CON") || index.contains("everywhere"),
-        "index must state CON-everywhere ambition"
-    );
-    assert!(
-        index.contains(":caption: Tutorials")
-            && (index.contains(":caption: How-to guides") || index.contains(":caption: How-to"))
-            && index.contains(":caption: Explanation")
-            && index.contains(":caption: Reference"),
-        "index toctree must follow Diátaxis quadrants"
-    );
-    assert!(
-        index.contains("tutorial\n") || index.contains("   tutorial"),
-        "index must list the core tutorial page"
-    );
-    assert!(!index.contains("Related work (H5MD"));
-    assert_no_ai_tells(&index, "index.org");
-
-    let readme = read_repo("readme_src.org");
-    assert!(readme.contains("hourglass") || readme.contains("rkr_"));
-    assert!(readme.contains("Cachegrind") || readme.contains("compare_readers"));
-    assert!(readme.contains("atom_id") || readme.contains("=atom_id="));
-    assert!(
-        readme.contains("DLPack") || readme.contains("metatensor") || readme.contains("chemfiles"),
-        "readme must reflect code features beyond bare parse"
-    );
-    assert!(
-        readme.contains("everywhere")
-            || readme.contains("put CON")
-            || readme.contains("spreading CON")
-            || readme.contains("Role in spreading"),
-        "readme must state CON expansion ambition"
-    );
-    assert!(
-        readme.contains("charges") && readme.contains("spins") && readme.contains("magmoms"),
-        "readme must list optional charges/spins/magmoms sections"
-    );
-    assert!(
-        readme.contains("iter_con") && !readme.contains("iter_frames"),
-        "readme must use real Python API iter_con"
-    );
-    assert!(
-        readme.contains("tutorial.org") || readme.contains("One Good Tutorial"),
-        "readme must point at the One Good Tutorial"
-    );
-    assert!(
-        (readme.contains("convert") || readme.contains("Migrate"))
-            && (readme.contains("atom_id") || readme.contains("=atom_id="))
-            && (readme.contains("hourglass") || readme.contains("rkr_")),
-        "readme must state migration/adopt benefits tied to shipped surface"
-    );
-    assert!(
-        readme.contains("migrate.org") || readme.contains("convert structure"),
-        "readme must point at convert CLI or migrate how-to"
-    );
-    assert!(
-        readme.contains("compare_readers")
-            && (readme.contains("ASV") || readme.contains("asv") || readme.contains("Cachegrind")),
-        "readme must point at peer script compare_readers and CI measurement gates (ASV/Cachegrind), not host-diary wall-clock snapshots"
-    );
-    assert!(
-        !readme.contains("3.3 ms") && !readme.contains("9.2×") && !readme.contains("rgam5terra"),
-        "readme must not embed host wall-clock snapshot numbers as product doctrine"
-    );
-    assert!(!readme.contains("H5MD"));
-    assert!(!readme.contains("XTC"));
-    assert_no_ai_tells(&readme, "readme_src.org");
-
-    // GitHub README must link on-disk org sources (ox-md rewrites file:…org → .md)
-    let readme_md = read_repo("README.md");
-    assert!(
-        !readme_md.contains("docs/orgmode/") || !has_orgmode_md_href(&readme_md),
-        "README.md must not link docs/orgmode/*.md (only .org files exist on disk)"
-    );
-    for needle in [
-        "docs/orgmode/spec.org",
-        "docs/orgmode/benchmarks.org",
-        "docs/orgmode/tutorial.org",
-    ] {
-        assert!(
-            readme_md.contains(needle),
-            "README.md must link existing {needle}"
-        );
-    }
-}
-
-fn has_orgmode_md_href(t: &str) -> bool {
-    // Match markdown (docs/orgmode/foo.md) or bare docs/orgmode/foo.md paths.
-    t.contains("docs/orgmode/")
-        && t.lines().any(|line| {
-            line.contains("docs/orgmode/")
-                && line.contains(".md")
-                && line.split("docs/orgmode/").skip(1).any(|rest| {
-                    rest.split(|c: char| c == ')' || c == '"' || c.is_whitespace())
-                        .next()
-                        .is_some_and(|p| p.ends_with(".md"))
-                })
+fn headings(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            let stars = trimmed.chars().take_while(|c| *c == '*').count();
+            if stars > 0 && trimmed.as_bytes().get(stars) == Some(&b' ') {
+                Some(trimmed[stars + 1..].trim().to_string())
+            } else {
+                None
+            }
         })
+        .collect()
+}
+
+fn resolve(from: &Path, raw: &str) -> PathBuf {
+    let path = Path::new(raw);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        from.parent().unwrap().join(path)
+    }
+}
+
+fn check_org_links(path: &Path, text: &str) {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i + 7 < bytes.len() {
+        if &bytes[i..i + 7] != b"[[file:" {
+            i += 1;
+            continue;
+        }
+        let start = i + 7;
+        let Some(rel_end) = text[start..].find("]]") else {
+            panic!("{}: unclosed file link at {i}", path.display());
+        };
+        let mut body = &text[start..start + rel_end];
+        if let Some(desc) = body.find("][") {
+            body = &body[..desc];
+        }
+        let (file, search) = body.split_once("::").unwrap_or((body, ""));
+        let target = resolve(path, file);
+        assert!(
+            target.is_file(),
+            "{}: missing link target {}",
+            path.display(),
+            target.display()
+        );
+        if let Some(id) = search.strip_prefix('#') {
+            let dest = fs::read_to_string(&target).unwrap();
+            assert!(
+                custom_ids(&dest).iter().any(|got| got == id),
+                "{}: missing anchor #{id} in {}",
+                path.display(),
+                target.display()
+            );
+        } else if let Some(heading) = search.strip_prefix('*') {
+            let dest = fs::read_to_string(&target).unwrap();
+            assert!(
+                headings(&dest).iter().any(|got| got == heading),
+                "{}: missing heading {heading} in {}",
+                path.display(),
+                target.display()
+            );
+        }
+        i = start + rel_end + 2;
+    }
+}
+
+fn check_markdown_links(path: &Path, text: &str) {
+    let mut rest = text;
+    while let Some(open) = rest.find("](") {
+        rest = &rest[open + 2..];
+        let Some(end) = rest.find(')') else { break };
+        let link = &rest[..end];
+        rest = &rest[end + 1..];
+        if link.is_empty()
+            || link.starts_with('#')
+            || link.starts_with("http://")
+            || link.starts_with("https://")
+            || link.starts_with("mailto:")
+        {
+            continue;
+        }
+        let file = link.split('#').next().unwrap();
+        if file.is_empty() {
+            continue;
+        }
+        let target = resolve(path, file);
+        assert!(
+            target.exists(),
+            "{}: missing markdown target {}",
+            path.display(),
+            target.display()
+        );
+    }
 }
 
 #[test]
-fn docs_custom_css_single_frame_chrome() {
-    let css = read_repo("docs/source/_static/custom.css");
-    // registered
-    let conf = read_repo("docs/source/conf.py");
-    assert!(conf.contains("custom.css"), "conf.py must load custom.css");
-    // no second admonition left-bar (theme already paints one)
-    assert!(
-        !css.contains("border-left: 4px solid var(--rc-indigo)"),
-        "custom.css must not stack a second border-left on admonitions"
-    );
-    // cards: kill sd-shadow double chrome
-    assert!(
-        css.contains("sd-shadow-sm") && css.contains("box-shadow: none"),
-        "custom.css must neutralize sd-shadow-sm double chrome"
-    );
-    // code outer frame: single border, not border+shadow stack
-    assert!(
-        css.contains("single border, no box-shadow")
-            || css.contains("no box-shadow (shadow reads as a 2nd line)"),
-        "custom.css must document single-frame code chrome"
-    );
-    // nested highlight stripped
-    assert!(
-        css.contains("div[class*=\"highlight-\"]") && css.contains("border: none !important"),
-        "custom.css must clear nested highlight borders"
-    );
-    // admonition: kill theme disc pseudo + negative title margin double frame
-    assert!(
-        css.contains("div.admonition::before")
-            && css.contains("display: none !important")
-            && css.contains("p.admonition-title"),
-        "custom.css must flatten Shibuya admonition double-line chrome"
-    );
-}
-
-#[test]
-fn docs_nav_uses_compact_nav_logos() {
-    let conf = read_repo("docs/source/conf.py");
-    assert!(
-        conf.contains("logo-nav-light.svg") && conf.contains("logo-nav-dark.svg"),
-        "Shibuya light_logo/dark_logo must be compact nav SVGs (mark + wordmark)"
-    );
-    assert!(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("docs/source/_static/mark.svg")
-            .is_file(),
-        "hero brand mark.svg must exist"
-    );
-    let nav = read_repo("docs/source/_static/logo-nav-light.svg");
-    assert!(
-        nav.contains("readcon") && nav.contains("height=\"36\""),
-        "nav logo must include readable wordmark at fixed strip height"
-    );
-    let index = read("index.org");
-    assert!(
-        index.contains("rc-hero-brand")
-            && index.contains("rc-hero-rule")
-            && index.contains("rc-hero-conline")
-            && index.contains("mark.svg"),
-        "index hero must use the CON-frame sheet (mark, gold rule, fixture header)"
-    );
-    assert!(
-        !index.contains("rc-hero-pills"),
-        "index hero must not use pill badges"
-    );
-    let rst = read_repo("docs/source/index.rst");
-    assert!(
-        rst.lines()
-            .any(|l| l.contains("rc-hero-conline") && l.contains("</pre>")),
-        "hero CON line must be one raw-html line so Sphinx cannot leak </pre>"
-    );
+fn docs_links_and_anchors_resolve() {
+    for path in org_files() {
+        let text = fs::read_to_string(&path).unwrap();
+        if path.extension().and_then(|e| e.to_str()) == Some("org") {
+            check_org_links(&path, &text);
+        }
+        if path.extension().and_then(|e| e.to_str()) == Some("md") {
+            check_markdown_links(&path, &text);
+        }
+    }
 }

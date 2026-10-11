@@ -1,0 +1,49 @@
+{
+  "atom_ids": [
+    2,
+    0,
+    1
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ],
+    [
+      true,
+      true,
+      false
+    ],
+    [
+      true,
+      true,
+      true
+    ]
+  ],
+  "id": "two-types",
+  "n_atoms": 3,
+  "positions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      2.0
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Pt",
+    "Pt",
+    "H"
+  ]
+}

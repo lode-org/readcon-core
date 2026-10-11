@@ -19,6 +19,7 @@ on:
       - "fix/**"
       - "feat/**"
       - "ci/**"
+      - "test/**"
   pull_request:
   workflow_dispatch:
 
@@ -132,7 +133,7 @@ jobs:
       - name: Generate python binding coverage (src/python.rs LCOV)
         id: coverage
         env:
-          READCON_PY_FEATURES: python,chemfiles-from-sources
+          READCON_PY_FEATURES: python,chemfiles-from-sources,zstd
           READCON_PY_VENV: ${{ github.workspace }}/.venv-coverage-python
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
@@ -161,7 +162,7 @@ jobs:
           version: '1.10'
 
       - name: Build libreadcon_core
-        run: cargo build --release --features chemfiles-from-sources
+        run: cargo build --release --features chemfiles-from-sources,zstd
 
       - name: Julia tests with Coverage.jl
         env:
@@ -215,7 +216,7 @@ jobs:
       - name: Build libreadcon_core (chemfiles)
         run: |
           for attempt in 1 2 3; do
-            if cargo build --release --features chemfiles-from-sources; then
+            if cargo build --release --features chemfiles-from-sources,zstd; then
               break
             fi
             if [[ "$attempt" -eq 3 ]]; then

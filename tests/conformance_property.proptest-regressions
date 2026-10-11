@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8518a0a911388d90c0a5b90a69fbb51e8db1f1f99876daa89714ceb479610621 # shrinks to n_h = 0, n_cu = 1, length = 6.0, angle = 40.0, mask_bits = [0, 0, 0, 0], ids = [0, 275, 13142478599949015653, 10124979479794356587], with_velocity = false, with_force = true, with_energy = true, with_charge = true, with_spin = true, with_magmom = true, with_displacement = false, with_spread = false, with_lattice = true, coords = [0.4863732788134467, -2.3702049183033744, -1.8565419647517465, -3.3090298423033184, -0.7158419283319208, 3.7737112133564006, -0.8294797954934993, 1.1002428194760843, 2.0180559542360235, 0.020765366555233096, -0.7284906745178157, 1.1254272171945823]

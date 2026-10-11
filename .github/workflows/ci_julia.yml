@@ -7,6 +7,7 @@ on:
       - "fix/**"
       - "feat/**"
       - "ci/**"
+      - "test/**"
     paths:
       - 'julia/**'
       - 'src/ffi.rs'
@@ -35,7 +36,7 @@ jobs:
         with:
           version: '1.10'
       - name: Build libreadcon_core
-        run: cargo build --release --features chemfiles-from-sources
+        run: cargo build --release --features chemfiles-from-sources,zstd
       - name: Julia tests
         env:
           READCON_CORE_LIB: ${{ github.workspace }}/target/release/libreadcon_core.so

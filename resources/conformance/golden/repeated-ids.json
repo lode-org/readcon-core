@@ -1,0 +1,37 @@
+{
+  "atom_ids": [
+    5,
+    5
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ],
+    [
+      false,
+      false,
+      false
+    ]
+  ],
+  "id": "repeated-ids",
+  "n_atoms": 2,
+  "positions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Cu",
+    "Cu"
+  ]
+}

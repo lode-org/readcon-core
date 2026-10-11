@@ -1,9 +1,9 @@
 {
+  "atom_ids": [],
+  "fixed": [],
   "id": "zero-atom-then-frame",
   "n_atoms": 0,
-  "spec_version": 2,
-  "fixed": [],
   "positions": [],
-  "atom_ids": [],
+  "spec_version": 2,
   "symbols": []
 }
