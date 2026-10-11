@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import norm
 
-RESULTS = Path(__file__).resolve().parents[1] / "results"
+RESULTS = Path(__file__).resolve().parent / "results"
 N_BOOT = 9999
 SEED = 20261011
 ALPHA = 0.05

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-BENCH = Path(__file__).resolve().parents[1]
+BENCH = Path(__file__).resolve().parent
 WORK = BENCH / "work"
 RESULTS = BENCH / "results"
 CRATE = BENCH / "readcon-bench"
