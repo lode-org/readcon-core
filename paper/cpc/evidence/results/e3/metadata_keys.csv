@@ -1,0 +1,26 @@
+key,type,source
+con_spec_version,integer,schema/con-metadata.schema.json
+con_spec_minor,integer,schema/con-metadata.schema.json
+section_arity,object,schema/con-metadata.schema.json
+sections,array,schema/con-metadata.schema.json
+validate,boolean,schema/con-metadata.schema.json
+generator,string,schema/con-metadata.schema.json
+units,object,schema/con-metadata.schema.json
+pbc,array,schema/con-metadata.schema.json
+lattice_vectors,array,schema/con-metadata.schema.json
+energy,number,schema/con-metadata.schema.json
+potential,object,schema/con-metadata.schema.json
+frame_index,integer,schema/con-metadata.schema.json
+time,number,schema/con-metadata.schema.json
+timestep,number,schema/con-metadata.schema.json
+neb_bead,integer,schema/con-metadata.schema.json
+neb_band,integer,schema/con-metadata.schema.json
+convergence_fmax,number,schema/con-metadata.schema.json
+convergence_energy,number,schema/con-metadata.schema.json
+converged,boolean,schema/con-metadata.schema.json
+fmax,number,schema/con-metadata.schema.json
+bonds,array,schema/con-metadata.schema.json
+storage_dtypes,object,schema/con-metadata.schema.json
+chemfiles_atom_names,array,schema/con-metadata.schema.json
+chemfiles_atom_types,array,schema/con-metadata.schema.json
+chemfiles_atom_properties,['array', 'object'],schema/con-metadata.schema.json

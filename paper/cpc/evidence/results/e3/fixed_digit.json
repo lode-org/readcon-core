@@ -1,0 +1,9 @@
+{
+  "round_trip_bit_identical": true,
+  "fixed6_max_abs_A": 4.1774873382749433e-07,
+  "fixed6_rmsd_A": 2.1694123307432802e-07,
+  "emt_energy_exact_eV": 4.021379284263574,
+  "emt_energy_fixed6_eV": 4.021379725365381,
+  "emt_energy_delta_eV": 4.411018066363681e-07,
+  "writer": "readcon.write_con precision=6 against the default round-trip printer"
+}

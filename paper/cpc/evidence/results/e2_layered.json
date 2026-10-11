@@ -1,0 +1,297 @@
+{
+  "cpu": "Intel(R) Xeon(R) Processor, family 6, model 207, 8 hardware threads",
+  "physical_cores_reported": 8,
+  "thread_limits": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "unset; automatic policy uses the default Rayon pool",
+    "explicit_pools": "1, 2, 4 and 8"
+  },
+  "versions": {
+    "rustc": "rustc 1.88.0 (6b00bc388 2025-06-23)",
+    "gxx": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "python": "3.12.3",
+    "readcon_file": "/home/ubuntu/.local/lib/python3.12/site-packages/readcon/__init__.py",
+    "ase": "3.29.0"
+  },
+  "file": {
+    "path_note": "paper/cpc/bench/work/frames-10000.con",
+    "bytes": 167710000,
+    "frames": 10000,
+    "atoms_per_frame": 218,
+    "atom_fields_note": "full_objects builds a Python or ASE frame per image; positions_only then walks coordinates"
+  },
+  "reader_note": "eOn 3.6.0 client/ConFileIO.cpp calls readcon::read_all_frames. cpp_auto times that C++ wrapper. There is no separate C++ CON parser in that release. rust_auto is read_all_frames_with_threads with the automatic policy on the same file.",
+  "bootstrap": {
+    "n_boot": 9999,
+    "seed": 20261011,
+    "alpha": 0.05,
+    "estimator": "BCa median"
+  },
+  "n_native_repeats": 15,
+  "n_python_repeats": 9,
+  "n_scale_repeats": 5,
+  "force_call": {
+    "emt_seconds_median": 5.929200051468797e-05,
+    "morse_in_process": {
+      "source": "e1 NEB results.dat time_seconds / total_force_calls",
+      "total_force_calls": 32.0,
+      "time_seconds": 0.009715642,
+      "seconds_per_call": 0.0003036138125
+    }
+  },
+  "native": {
+    "rust_auto": {
+      "n": 15,
+      "median_s": 0.153919746,
+      "bca_low_s": 0.149327878,
+      "bca_high_s": 0.160300509,
+      "MB_per_s": 1089.5937938982827,
+      "frames_per_s": 64968.92218104362,
+      "emt_force_calls": 2595.961422517201,
+      "morse_force_calls": 506.9589711107099
+    },
+    "cpp_auto": {
+      "n": 15,
+      "median_s": 0.155623,
+      "bca_low_s": 0.150705,
+      "bca_high_s": 0.161547,
+      "MB_per_s": 1077.6684680285048,
+      "frames_per_s": 64257.8539161949,
+      "emt_force_calls": 2624.6879621045787,
+      "morse_force_calls": 512.5689069234952
+    },
+    "rust_1": {
+      "n": 15,
+      "median_s": 0.551372764,
+      "bca_low_s": 0.514259719,
+      "bca_high_s": 0.608879147,
+      "MB_per_s": 304.16808908609784,
+      "frames_per_s": 18136.550538793024,
+      "emt_force_calls": 9299.277460935265,
+      "morse_force_calls": 1816.0332017173955
+    },
+    "cpp_1": {
+      "n": 15,
+      "median_s": 0.527396,
+      "bca_low_s": 0.510176,
+      "bca_high_s": 0.570567,
+      "MB_per_s": 317.99634430295265,
+      "frames_per_s": 18961.084270642932,
+      "emt_force_calls": 8894.89299436527,
+      "morse_force_calls": 1737.061946086527
+    },
+    "ratio_rust_over_cpp_auto": {
+      "n": 15,
+      "median": 0.9876559357748423,
+      "bca_low": 0.9421712238355647,
+      "bca_high": 0.9888744213152433
+    },
+    "ratio_rust_over_cpp_1": {
+      "n": 15,
+      "median": 1.0156315774271443,
+      "bca_low": 0.9651277894677248,
+      "bca_high": 1.142196354848254
+    }
+  },
+  "stages": {
+    "file_read": {
+      "n": 15,
+      "median_s": 0.100224696,
+      "bca_low_s": 0.098979713,
+      "bca_high_s": 0.10300504
+    },
+    "boundary_scan": {
+      "n": 15,
+      "median_s": 0.035637875,
+      "bca_low_s": 0.035277814,
+      "bca_high_s": 0.036037725
+    }
+  },
+  "python_object_build_estimate": {
+    "note": "Each sample is a Python full-object read minus the 1-thread Rust parse at the same repeat index. Those two blocks ran one after the other, so this difference is index-aligned and not an interleaved pair.",
+    "n": 9,
+    "median_s": 0.8261525000000001,
+    "bca_low_s": 0.725244189,
+    "bca_high_s": 0.850738602,
+    "MB_per_s": 203.0012618735645,
+    "frames_per_s": 12104.302777029663,
+    "emt_force_calls": 13933.624988675216,
+    "morse_force_calls": 2721.063620911516
+  },
+  "python": {
+    "full_objects": {
+      "readcon_python": {
+        "n": 9,
+        "median_s": 1.368986687,
+        "bca_low_s": 1.319701926,
+        "bca_high_s": 1.444656958,
+        "MB_per_s": 122.50666978180774,
+        "frames_per_s": 7304.672934339499,
+        "emt_force_calls": 23088.893528914934,
+        "morse_force_calls": 4508.973671940567
+      },
+      "ase_eon": {
+        "n": 9,
+        "median_s": 3.856366954,
+        "bca_low_s": 3.810821965,
+        "bca_high_s": 3.940356848,
+        "MB_per_s": 43.48911864469836,
+        "frames_per_s": 2593.114223641903,
+        "emt_force_calls": 65040.25704183637,
+        "morse_force_calls": 12701.553075751453
+      },
+      "ratio_readcon_over_ase": {
+        "n": 9,
+        "median": 0.3512658064334196,
+        "bca_low": 0.33506231049019414,
+        "bca_high": 0.3790932694490229
+      }
+    },
+    "positions_only": {
+      "readcon_python": {
+        "n": 9,
+        "median_s": 1.376779246,
+        "bca_low_s": 1.342881178,
+        "bca_high_s": 1.401179622,
+        "MB_per_s": 121.81328305699927,
+        "frames_per_s": 7263.328546717504,
+        "emt_force_calls": 23220.32034758113,
+        "morse_force_calls": 4534.639694628518
+      },
+      "ase_eon": {
+        "n": 9,
+        "median_s": 3.971989242,
+        "bca_low_s": 3.913969518,
+        "bca_high_s": 3.994052164,
+        "MB_per_s": 42.22317578975961,
+        "frames_per_s": 2517.63018244348,
+        "emt_force_calls": 66990.30573299763,
+        "morse_force_calls": 13082.373325818304
+      },
+      "ratio_readcon_over_ase": {
+        "n": 9,
+        "median": 0.3421300422041778,
+        "bca_low": 0.3346732184875891,
+        "bca_high": 0.3569848431383939
+      }
+    }
+  },
+  "scaling": {
+    "rust": {
+      "1": {
+        "n": 5,
+        "median_s": 0.617062975,
+        "bca_low_s": 0.519923089,
+        "bca_high_s": 0.618929903,
+        "MB_per_s": 271.787494623219,
+        "frames_per_s": 16205.801360874068,
+        "speedup_vs_1": 1.0
+      },
+      "2": {
+        "n": 5,
+        "median_s": 0.382115575,
+        "bca_low_s": 0.33702669,
+        "bca_high_s": 0.411556242,
+        "MB_per_s": 438.89862379988045,
+        "frames_per_s": 26170.092648016245,
+        "speedup_vs_1": 1.6148595225410531
+      },
+      "4": {
+        "n": 5,
+        "median_s": 0.225695991,
+        "bca_low_s": 0.211577302,
+        "bca_high_s": 0.243896813,
+        "MB_per_s": 743.0792157934254,
+        "frames_per_s": 44307.388694378715,
+        "speedup_vs_1": 2.7340449082234692
+      },
+      "8": {
+        "n": 5,
+        "median_s": 0.163202425,
+        "bca_low_s": 0.150677041,
+        "bca_high_s": 0.167018472,
+        "MB_per_s": 1027.6195344523833,
+        "frames_per_s": 61273.59933530399,
+        "speedup_vs_1": 3.78096694948007
+      }
+    },
+    "cpp": {
+      "1": {
+        "n": 5,
+        "median_s": 0.552813,
+        "bca_low_s": 0.528574,
+        "bca_high_s": 0.564665,
+        "MB_per_s": 303.37564420518333,
+        "frames_per_s": 18089.29963658597,
+        "speedup_vs_1": 1.0
+      },
+      "2": {
+        "n": 5,
+        "median_s": 0.396405,
+        "bca_low_s": 0.348276,
+        "bca_high_s": 0.407922,
+        "MB_per_s": 423.0774082062537,
+        "frames_per_s": 25226.725192669113,
+        "speedup_vs_1": 1.3945661633934991
+      },
+      "4": {
+        "n": 5,
+        "median_s": 0.233881,
+        "bca_low_s": 0.223494,
+        "bca_high_s": 0.234717,
+        "MB_per_s": 717.0740675813769,
+        "frames_per_s": 42756.786570948476,
+        "speedup_vs_1": 2.363650745464574
+      },
+      "8": {
+        "n": 5,
+        "median_s": 0.169629,
+        "bca_low_s": 0.163761,
+        "bca_high_s": 0.18455,
+        "MB_per_s": 988.6870759127272,
+        "frames_per_s": 58952.18388365197,
+        "speedup_vs_1": 3.2589533629273295
+      }
+    },
+    "python_full": {
+      "1": {
+        "n": 5,
+        "median_s": 1.3188158790017042,
+        "bca_low_s": 1.2898678410001594,
+        "bca_high_s": 1.3346383549996972,
+        "MB_per_s": 127.16710700128239,
+        "frames_per_s": 7582.559596999725,
+        "speedup_vs_1": 1.0
+      },
+      "2": {
+        "n": 5,
+        "median_s": 1.1459218139989389,
+        "bca_low_s": 1.108008429999245,
+        "bca_high_s": 1.147582075000173,
+        "MB_per_s": 146.35378954410524,
+        "frames_per_s": 8726.598863759182,
+        "speedup_vs_1": 1.1508777151203837
+      },
+      "4": {
+        "n": 5,
+        "median_s": 1.0800169479989563,
+        "bca_low_s": 1.055729980000251,
+        "bca_high_s": 1.1107822209996812,
+        "MB_per_s": 155.28460021921995,
+        "frames_per_s": 9259.113959765067,
+        "speedup_vs_1": 1.2211066515624518
+      },
+      "8": {
+        "n": 5,
+        "median_s": 1.223769230000471,
+        "bca_low_s": 1.1130570450004598,
+        "bca_high_s": 1.3291773129985813,
+        "MB_per_s": 137.04381176501346,
+        "frames_per_s": 8171.475270706186,
+        "speedup_vs_1": 1.0776671341877067
+      }
+    }
+  }
+}

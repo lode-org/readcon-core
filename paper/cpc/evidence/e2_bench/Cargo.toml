@@ -1,0 +1,12 @@
+[package]
+name = "e2-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "e2-bench"
+path = "src/main.rs"
+
+[dependencies]
+readcon-core = { path = "../../../..", features = ["parallel"] }
