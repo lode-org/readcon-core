@@ -998,11 +998,22 @@ impl PyConFrame {
     }
 
     /// Convert this frame to an ASE Atoms object (requires ase package).
+    ///
+    /// Velocities are scaled into ASE's natural time unit,
+    /// angstrom * sqrt(amu / eV). CON writes that unit as
+    /// `(amu*angstrom^2/eV)^0.5`. Atom ids are stored on the `atom_id`
+    /// array. Tags are not modified.
     fn to_ase(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         ase_from_pyconframe(py, self)
     }
 
     /// Create a ConFrame from an ASE Atoms object.
+    ///
+    /// Atom ids come from the first per-atom array among `readcon_id`,
+    /// `id`, and `atom_id`. Tags are never read as ids. With none of
+    /// those arrays, ids are 0 through N-1.
+    /// ASE velocities are already in the natural time unit, so a frame
+    /// that has them records `units.time` as `(amu*angstrom^2/eV)^0.5`.
     #[staticmethod]
     fn from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult<Self> {
         pyconframe_from_ase(py, ase_atoms)
@@ -1587,15 +1598,16 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
-    // Set velocities if present
+    // Set velocities if present, in ASE's natural time unit.
     if frame.has_velocities(py)? {
+        let scale = ase_velocity_scale(frame, py)?;
         let velocities: Vec<[f64; 3]> = frame_atoms
             .iter()
             .map(|a| {
                 [
-                    a.vx.unwrap_or(0.0),
-                    a.vy.unwrap_or(0.0),
-                    a.vz.unwrap_or(0.0),
+                    a.vx.unwrap_or(0.0) * scale,
+                    a.vy.unwrap_or(0.0) * scale,
+                    a.vz.unwrap_or(0.0) * scale,
                 ]
             })
             .collect();
@@ -1764,27 +1776,9 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .and_then(|m| m.call_method0("tolist").ok())
         .and_then(|m| m.extract().ok());
 
-    // Extract atom_id: prefer custom array, fall back to tags, then sequential
-    let atom_ids: Vec<u64> = if let Ok(arr) = ase_atoms.call_method1("get_array", ("atom_id",)) {
-        arr.call_method0("tolist")?
-            .extract::<Vec<i64>>()?
-            .into_iter()
-            .map(|v| v as u64)
-            .collect()
-    } else if let Ok(tags_obj) = ase_atoms.call_method0("get_tags") {
-        let tags: Vec<i64> = tags_obj
-            .call_method0("tolist")
-            .ok()
-            .and_then(|t| t.extract().ok())
-            .unwrap_or_default();
-        if tags.iter().any(|&t| t != 0) {
-            tags.into_iter().map(|t| t as u64).collect()
-        } else {
-            (0..n_atoms).map(|i| i as u64).collect()
-        }
-    } else {
-        (0..n_atoms).map(|i| i as u64).collect()
-    };
+    // Explicit per-atom id arrays only. ASE tags are layer numbers on
+    // slabs such as fcc111, so they are not atom ids.
+    let atom_ids = ase_explicit_atom_ids(ase_atoms, n_atoms)?;
 
     // Extract velocities from ASE (None if not set or all zero)
     let velocities: Option<Vec<Vec<f64>>> = ase_atoms
@@ -1865,6 +1859,12 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         })
         .collect();
 
+    let metadata = if has_velocities {
+        ase_natural_velocity_metadata(py)?
+    } else {
+        PyDict::new(py).unbind()
+    };
+
     Ok(PyConFrame {
         cell,
         angles,
@@ -1872,9 +1872,75 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         postbox_header: Default::default(),
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
-        metadata: PyDict::new(py).unbind(),
+        metadata,
         inner: None,
     })
+}
+
+/// First explicit id array wins: `readcon_id`, then `id`, then `atom_id`.
+/// Otherwise ids are 0 through N-1. Tags are ignored.
+fn ase_explicit_atom_ids(ase_atoms: &Bound<'_, PyAny>, n_atoms: usize) -> PyResult<Vec<u64>> {
+    for name in ["readcon_id", "id", "atom_id"] {
+        if let Ok(arr) = ase_atoms.call_method1("get_array", (name,)) {
+            let list = arr.call_method0("tolist")?;
+            return ids_from_py_list(&list, name, n_atoms);
+        }
+    }
+    Ok((0..n_atoms).map(|i| i as u64).collect())
+}
+
+fn ids_from_py_list(list: &Bound<'_, PyAny>, name: &str, n_atoms: usize) -> PyResult<Vec<u64>> {
+    if let Ok(vals) = list.extract::<Vec<i64>>() {
+        if vals.len() != n_atoms {
+            return Err(PyValueError::new_err(format!(
+                "ASE array '{name}' has length {}, expected {n_atoms}",
+                vals.len()
+            )));
+        }
+        if vals.iter().any(|value| *value < 0) {
+            return Err(PyValueError::new_err(format!(
+                "ASE array '{name}' contains a negative atom id"
+            )));
+        }
+        return Ok(vals.into_iter().map(|value| value as u64).collect());
+    }
+    if let Ok(vals) = list.extract::<Vec<u64>>() {
+        if vals.len() != n_atoms {
+            return Err(PyValueError::new_err(format!(
+                "ASE array '{name}' has length {}, expected {n_atoms}",
+                vals.len()
+            )));
+        }
+        return Ok(vals);
+    }
+    Err(PyValueError::new_err(format!(
+        "ASE array '{name}' must be a per-atom integer array"
+    )))
+}
+
+/// ASE velocities use angstrom * sqrt(amu / eV). That is the CON natural time unit.
+fn ase_natural_velocity_metadata(py: Python<'_>) -> PyResult<Py<PyDict>> {
+    let units = PyDict::new(py);
+    units.set_item("length", "angstrom")?;
+    units.set_item("energy", "eV")?;
+    units.set_item("mass", "amu")?;
+    units.set_item("time", crate::units::NATURAL_TIME_UNIT)?;
+    let metadata = PyDict::new(py);
+    metadata.set_item("units", units)?;
+    Ok(metadata.unbind())
+}
+
+/// Scale file velocities into the natural time unit ASE stores.
+fn ase_velocity_scale(frame: &PyConFrame, py: Python<'_>) -> PyResult<f64> {
+    let meta = frame.metadata_map(py)?;
+    let mut map = serde_json::Map::new();
+    for (key, value) in meta {
+        map.insert(key, value);
+    }
+    let unit = crate::units::velocity_file_time_unit(frame.spec_version, &map, None)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    crate::units::velocity_scale_to_natural(&unit)
+        .map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.

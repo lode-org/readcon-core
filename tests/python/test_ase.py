@@ -39,14 +39,26 @@ class TestAseAtomId:
         roundtrip_ids = [a.atom_id for a in frame_back.atoms]
         assert roundtrip_ids == original_ids
 
-    def test_from_ase_falls_back_to_tags(self):
+    def test_from_ase_ignores_tags(self):
         atoms = ase.Atoms(
             "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
         )
         atoms.set_tags([42, 7])
         frame = readcon.ConFrame.from_ase(atoms)
-        assert frame.atoms[0].atom_id == 42
-        assert frame.atoms[1].atom_id == 7
+        assert [atom.atom_id for atom in frame.atoms] == [0, 1]
+
+    def test_from_ase_reads_readcon_id_then_id(self):
+        atoms = ase.Atoms(
+            "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
+        )
+        atoms.set_tags([4, 4])
+        atoms.set_array("atom_id", np.array([1, 2]))
+        atoms.set_array("id", np.array([8, 9]))
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert [atom.atom_id for atom in frame.atoms] == [8, 9]
+        atoms.set_array("readcon_id", np.array([3, 5]))
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert [atom.atom_id for atom in frame.atoms] == [3, 5]
 
     def test_from_ase_falls_back_to_sequential(self):
         atoms = ase.Atoms(
@@ -140,6 +152,12 @@ class TestAseVelocities:
         assert frame.has_velocities
         assert frame.atoms[0].vx == pytest.approx(0.1)
         assert frame.atoms[1].vz == pytest.approx(0.6)
+        assert frame.metadata["units"]["time"] == "(amu*angstrom^2/eV)^0.5"
+        text = readcon.write_con_string([frame])
+        assert '(amu*angstrom^2/eV)^0.5' in text
+        reread = readcon.read_con_string(text)[0]
+        assert reread.atoms[0].vx == pytest.approx(0.1)
+        assert reread.atoms[1].vz == pytest.approx(0.6)
 
     def test_from_ase_no_velocities(self):
         atoms = ase.Atoms(
@@ -268,3 +286,57 @@ class TestAseConstraints:
             [False, True, False],
             [True, True, True],
         ]
+
+
+class TestFcc111Adsorbate:
+    """fcc111 layer tags must not become atom ids."""
+
+    def _slab(self):
+        from ase.build import add_adsorbate, fcc111
+
+        slab = fcc111("Pt", size=(4, 4, 4), vacuum=8.0)
+        add_adsorbate(slab, ase.Atoms("H"), 1.5, position=(0.0, 0.0))
+        return slab
+
+    def test_roundtrip_write_read_ignores_layer_tags(self):
+        slab = self._slab()
+        tags = slab.get_tags()
+        assert len(set(int(tag) for tag in tags)) < len(slab)
+        frame = readcon.ConFrame.from_ase(slab)
+        assert [atom.atom_id for atom in frame.atoms] == list(range(len(slab)))
+        text = readcon.write_con_string([frame])
+        reread = readcon.read_con_string(text)
+        assert len(reread) == 1
+        assert sorted(atom.atom_id for atom in reread[0].atoms) == list(range(len(slab)))
+        assert sorted(atom.symbol for atom in reread[0].atoms) == sorted(
+            atom.symbol for atom in frame.atoms
+        )
+
+    def test_maxwell_boltzmann_kinetic_energy_roundtrip(self):
+        from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+
+        slab = self._slab()
+        MaxwellBoltzmannDistribution(
+            slab, temperature_K=300, rng=np.random.default_rng(7)
+        )
+        ke0 = slab.get_kinetic_energy()
+        assert ke0 > 0.0
+        frame = readcon.ConFrame.from_ase(slab)
+        assert frame.metadata["units"]["time"] == "(amu*angstrom^2/eV)^0.5"
+        text = readcon.write_con_string([frame])
+        reread = readcon.read_con_string(text)[0]
+        ke_read = _kinetic_energy(reread)
+        assert ke_read == pytest.approx(ke0, rel=0.0, abs=0.0)
+        back = reread.to_ase()
+        assert back.get_kinetic_energy() == pytest.approx(ke0, rel=0.0, abs=0.0)
+        ids = back.get_array("atom_id").astype(int)
+        restored = np.zeros_like(back.get_velocities())
+        restored[ids] = back.get_velocities()
+        assert np.array_equal(restored, slab.get_velocities())
+
+
+def _kinetic_energy(frame):
+    """Same reduction as ``Atoms.get_kinetic_energy`` (a dot product)."""
+    masses = np.array([atom.mass for atom in frame.atoms])
+    velocities = np.array([[atom.vx, atom.vy, atom.vz] for atom in frame.atoms])
+    return 0.5 * np.vdot(masses[:, None] * velocities, velocities)

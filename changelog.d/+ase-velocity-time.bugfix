@@ -1,0 +1,2 @@
+from_ase records ASE velocities with the natural time unit (amu*angstrom^2/eV)^0.5.
+to_ase scales file velocities back into that unit.

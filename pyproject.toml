@@ -45,3 +45,26 @@ module-name = "readcon"
 [tool.ruff.lint]
 # pytest.importorskip must run before the imported name is used.
 per-file-ignores = { "tests/**/*.py" = ["E402"] }
+
+[tool.towncrier]
+directory = "changelog.d"
+filename = "CHANGELOG.md"
+package = "readcon"
+title_format = "## {version} - {project_date}"
+issue_format = ""
+underlines = ["", ""]
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true

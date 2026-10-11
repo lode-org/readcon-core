@@ -1,0 +1,3 @@
+from_ase takes atom ids from an explicit per-atom array named readcon_id, id, or atom_id.
+Tags are never used as ids.
+When none of those arrays is present, ids are 0 through N-1.

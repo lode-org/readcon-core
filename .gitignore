@@ -125,6 +125,10 @@ Testing/
 # Prerequisites
 *.d
 
+# towncrier fragments. The directory name matches *.d above.
+!changelog.d/
+!changelog.d/**
+
 # Object files
 *.o
 *.ko
