@@ -152,29 +152,59 @@ html_theme_options = {
             "title": "Ecosystem",
             "children": [
                 {
-                    "title": "readcon-db",
-                    "url": "https://lode-org.github.io/readcon-db/",
-                    "summary": "mmap CON/convel corpus: indexes, xxHash3 match, multi-reader",
-                },
-                {
                     "title": "eOn",
                     "url": "https://eondocs.org",
                     "summary": "Saddle-point search on PESs",
                 },
                 {
                     "title": "rgpot",
-                    "url": "https://omnipotentrpc.github.io/rgpot/",
+                    "url": "https://rgpot.rgoswami.me",
                     "summary": "Potential evaluation toolkit",
                 },
                 {
-                    "title": "chemparseplot",
-                    "url": "https://chemparseplot.rgoswami.me",
-                    "summary": "Parsing and plotting for computational chemistry",
+                    "title": "rgmin",
+                    "url": "https://omnipotentrpc.github.io/rgmin",
+                    "summary": "Minimizers",
+                },
+                {
+                    "title": "rgsaddle",
+                    "url": "https://omnipotentrpc.github.io/rgsaddle",
+                    "summary": "Saddle searches",
+                },
+                {
+                    "title": "cpmdc",
+                    "url": "https://cpmdc.rgoswami.me",
+                    "summary": "CPMD client",
                 },
                 {
                     "title": "rgpycrumbs",
                     "url": "https://rgpycrumbs.rgoswami.me",
                     "summary": "CLI helpers for LODE / eOn workflows",
+                },
+                {
+                    "title": "minimage",
+                    "url": "https://lode-org.github.io/minimage",
+                    "summary": "Minimum-image distances",
+                },
+                {
+                    "title": "linkcell",
+                    "url": "https://docs.rs/linkcell",
+                    "summary": "Cell lists",
+                },
+                {
+                    "title": "readcon",
+                    "url": "https://lode-org.github.io/readcon-core",
+                    "summary": "CON format and the rkr ABI",
+                },
+                {
+                    "title": "readcon-db",
+                    "url": "https://lode-org.github.io/readcon-db",
+                    "summary": "mmap CON/convel corpus: indexes, xxHash3 match, multi-reader",
+                },
+                {
+                    "title": "readcon-ops",
+                    "url": "https://github.com/lode-org/readcon-ops",
+                    "summary": "CON operations",
                 },
             ],
         },

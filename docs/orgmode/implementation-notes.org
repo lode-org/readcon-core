@@ -1,0 +1,47 @@
+#+title: CON implementation notes
+#+date: 2026-10-11
+#+options: toc:nil num:nil ^:nil
+
+* Status
+
+These notes are informative for the CON format.
+The normative text is [[file:spec.org][the specification]].
+Nothing here changes a byte a conforming reader must accept.
+
+* Absent values in the C ABI
+
+Several =rkr_*= getters return a IEEE NaN when a number is absent.
+=rkr_frame_energy= does this when the frame has no =energy= key.
+That NaN is an API sentinel.
+It is not a CON number, and it is not written to a file.
+The format clauses are =CON-num.1= and =CON-num.3=.
+
+* Clearing a section
+
+One rule: clearing a section removes that section from the next build.
+The on-disk result is the format rule.
+A section is present exactly when its name is in =sections=.
+=clear_velocities_section=, =clear_forces_section=, and
+=clear_energies_section= drop the stored block so the next build omits it.
+The section name for per-atom energies is =energies=.
+
+* In-memory arrays
+
+The reference builder stores one column per field.
+Positions are shape =(N, 3)=.
+Velocities, forces, magmoms, displacements, and spreads use the same shape when the section is present.
+=energies=, charges, and spins are length =N=.
+Atom ids are integers, one per atom.
+DLPack exports report their own shape, strides, dtype, and device.
+The data pointer stays valid until a growth of the buffer reallocates it.
+Callers that keep a raw pointer across an added atom must take a new view.
+On-disk coordinates and section values stay decimal text.
+=storage_dtypes= describes the in-memory element type only.
+It is not a change to the file encoding.
+
+* Velocity time-unit override
+
+readcon bindings, readcon-db, and eOn keep an explicit
+=velocity_time_unit= override for a file that breaks the version rule
+in the specification (=CON-units.11=).
+The override does not change what a writer is allowed to emit.

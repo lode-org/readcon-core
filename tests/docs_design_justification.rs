@@ -199,7 +199,7 @@ fn readcon_db_surface_has_hosted_docs() {
     }
     let conf = read_repo("docs/source/conf.py");
     assert!(
-        conf.contains("https://lode-org.github.io/readcon-db/"),
+        conf.contains("https://lode-org.github.io/readcon-db"),
         "Sphinx Ecosystem nav must point at the hosted readcon-db site"
     );
     assert!(
@@ -210,12 +210,24 @@ fn readcon_db_surface_has_hosted_docs() {
         !conf.contains("docs.rs/readcon-db"),
         "Sphinx Ecosystem nav must not list docs.rs/readcon-db as a peer"
     );
+    for url in [
+        "https://eondocs.org",
+        "https://rgpot.rgoswami.me",
+        "https://omnipotentrpc.github.io/rgmin",
+        "https://omnipotentrpc.github.io/rgsaddle",
+        "https://cpmdc.rgoswami.me",
+        "https://rgpycrumbs.rgoswami.me",
+        "https://lode-org.github.io/minimage",
+        "https://docs.rs/linkcell",
+        "https://lode-org.github.io/readcon-core",
+        "https://lode-org.github.io/readcon-db",
+        "https://github.com/lode-org/readcon-ops",
+    ] {
+        assert!(conf.contains(url), "Ecosystem nav missing {url}");
+    }
     assert!(
-        conf.contains("eondocs.org")
-            && conf.contains("rgpot")
-            && conf.contains("chemparseplot")
-            && conf.contains("rgpycrumbs"),
-        "Ecosystem nav must keep the sibling docs sites"
+        !conf.contains("chemparseplot"),
+        "Ecosystem nav must not list chemparseplot"
     );
     assert!(
         !conf.contains("docs.rs/readcon-core"),

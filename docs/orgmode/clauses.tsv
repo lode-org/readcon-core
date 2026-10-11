@@ -1,0 +1,109 @@
+id	keyword	text
+CON-status.1	MUST	A reader MUST accept the version number of every minor of major 3, including minor 0 and unknown minors.
+CON-status.2	MUST	A new implementation MUST accept version 2 and implicit version 1.
+CON-file.1	MUST	A CON file MUST be UTF-8.
+CON-file.6	MUST NOT	A CON file MUST NOT begin with a byte-order mark.
+CON-file.2	MUST	Parsers MUST accept LF (=\n=) and CRLF (=\r\n=) line endings.
+CON-file.3	MUST	Parsers MUST ignore trailing spaces and tabs on every line.
+CON-file.4	MUST	Labels MUST be compared case-insensitively after collapsing each run of spaces to one space.
+CON-file.5	MUST NOT	Writers MUST NOT insert an extra blank line between frames.
+CON-frame.1	MUST	After the last complete frame, lines that contain only whitespace MUST be ignored.
+CON-frame.2	MUST NOT	Readers MUST NOT silently drop a partial last frame.
+CON-frame.3	MUST	One to eight header lines of a further frame MUST be reported as =IncompleteHeader=.
+CON-frame.4	MUST	Fewer coordinate rows than the header declares MUST be reported as =IncompleteFrame=.
+CON-frame.5	MUST NOT	A blank line followed only by whitespace to end of file MUST NOT be read as a legacy velocity block.
+CON-frame.6	MUST	A partial declared section MUST be reported as =IncompleteSection(name)=.
+CON-header.1	MAY	Writers MAY leave lines 5 and 6 empty.
+CON-header.2	MUST	Parsers MUST preserve line 1 and lines 5 and 6.
+CON-line2.1	MUST	A line 2 that starts with ={= MUST be one UTF-8 JSON object and nothing else.
+CON-line2.2	MUST	Malformed JSON on that line MUST be rejected.
+CON-line2.3	MUST	A JSON object that omits =con_spec_version= MUST be rejected.
+CON-line2.4	MUST	=con_spec_version= MUST be a JSON number, the major version, not a string.
+CON-line2.5	MUST	JSON =con_spec_version= 0 or 1 MUST be rejected as =UnsupportedVersion=.
+CON-line2.6	MUST	An unknown major MUST be rejected as =UnsupportedVersion=.
+CON-line2.7	MUST	A reader of a known major MUST accept the version number of every minor of that major, including minors it does not implement.
+CON-line2.8	MUST	Unknown keys MUST be preserved on rewrite.
+CON-line2.9	MUST	=con_spec_minor=, when present, MUST be a JSON integer >= 0.
+CON-line2.10	MUST	A missing =con_spec_minor=, or an explicit 0, MUST mean minor 0.
+CON-line2.11	MUST	=sections=, when present, MUST be an array of strings.
+CON-line2.12	MUST	=validate=, when present, MUST be a boolean.
+CON-line2.13	MUST	Reserved keys MUST use the types in this document.
+CON-cell.1	MUST	When =lattice_vectors= is present, readers MUST prefer it over lines 3-4.
+CON-cell.2	MUST	A writer that emits =lattice_vectors= MUST write lines 3-4 consistent with that matrix at the precision the writer is using.
+CON-cell.3	MUST	A missing =pbc= key MUST be read as periodic in all three directions.
+CON-cell.4	MUST	=pbc=, when present, MUST be a length-3 array of booleans.
+CON-cell.5	MUST	=lattice_vectors=, when present, MUST be three length-3 arrays of finite numbers.
+CON-count.1	MUST	The type count and each per-type count MUST be integer tokens >= 1.
+CON-count.2	MUST	A zero type count, a zero per-type count, or a frame with no atoms MUST be rejected as =InvalidCount= in every mode.
+CON-count.3	MUST NOT	A frame with zero atoms MUST NOT be written. It is not representable.
+CON-count.4	MUST	The coordinate blocks MUST follow header order.
+CON-count.6	MUST	The total atom count MUST equal the sum of line 8.
+CON-count.5	MUST	Component numbers in labels MUST start at 1.
+CON-mask.1	MUST	Column 4 MUST be an integer token with no sign and no decimal point.
+CON-mask.2	MUST	In spec 1, readers MUST treat 0 as free and 1 as fixed on x, y, and z.
+CON-mask.3	MUST	In spec 1, any other column-4 token MUST be =InvalidFixedFlag=.
+CON-mask.4	MUST	In spec 2 and later, values 0 through 7 MUST be read as the bitmask above.
+CON-mask.5	MUST	A float spelling, a sign, or a value outside the legal set MUST be =InvalidFixedFlag= in every mode, including when =validate= is absent or false.
+CON-mask.6	MUST NOT	A spec 2 or later writer MUST NOT emit 1 to mean all-fixed.
+CON-mask.7	MUST	A spec 2 or later writer MUST emit 7 for an atom fixed on x, y, and z.
+CON-id.1	MUST	Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, never through binary64.
+CON-id.2	MUST NOT	Readers MUST NOT assume that ids start at 0 or at 1.
+CON-id.3	MUST	Writers MUST emit ids that are unique within the frame.
+CON-id.4	MUST	Readers MUST accept repeated ids.
+CON-id.8	MUST	Readers MUST keep file order when ids repeat and when they do not.
+CON-id.5	MUST NOT	Readers MUST NOT reorder atoms by id.
+CON-id.6	MUST	When the ids in a frame are unique, those ids MUST record the pre-grouping order.
+CON-id.7	MUST	A 4-column atom line MUST use the 0-based position of that atom in the frame as its id.
+CON-section.1	MUST	On disk, a section MUST be treated as present exactly when its name is listed in =sections=, aside from the legacy velocity fallback.
+CON-section.2	MUST	Exactly one blank line MUST precede each section block.
+CON-section.3	MUST NOT	Writers MUST NOT put a blank line between the component blocks inside a section.
+CON-section.4	MUST	Each component block MUST be a symbol line, a label =<Name> of Component N=, and one data row per atom of that type.
+CON-section.5	MUST	The per-atom energy section name MUST be =energies=.
+CON-section.6	MUST NOT	=atom_energies= MUST NOT be used as a section name.
+CON-section.7	MUST	An unknown section name MUST be reported as =UnknownSection= when the frame minor is not newer than the minor this reader implements.
+CON-section.8	MAY	When the frame minor is newer than the reader implements, the reader MAY skip an unknown section whose row token count is given by =section_arity=.
+CON-section.9	MUST	If that minor is newer and =section_arity= does not give the row token count, the reader MUST report =UnknownSection=.
+CON-section.10	MUST	Adding a reserved section name MUST increase =con_spec_minor=.
+CON-section.16	MUST NOT	Adding a reserved section name MUST NOT require a new major.
+CON-section.11	MUST	=section_arity=, when present, MUST be an object mapping section names to integers >= 1, each the exact token count on a data row.
+CON-section.12	MAY	When =validate= is not true, readers MAY ignore an identity-column mismatch after the row has the right number of fields.
+CON-section.13	SHOULD	The =energy= metadata value SHOULD equal the sum of the =energies= rows.
+CON-section.14	MUST NOT	A mismatch between that sum and =energy= MUST NOT reject the frame.
+CON-section.15	MUST	Each =spreads= value MUST be finite and >= 0.
+CON-validate.1	MUST	=validate= true MUST add the checks in =CON-validate.3=.
+CON-validate.4	MUST NOT	=validate= true MUST NOT relax a check that already applies in every mode.
+CON-validate.2	MUST	When =validate= is true, =sections= MUST be present, and an empty array is legal.
+CON-validate.3	MUST	In that mode, readers MUST reject a bad reserved-key type, a non-positive cell length, an angle outside (0, 180) degrees, a non-positive mass, a coordinate label that does not match, an unrecognized symbol other than =X=, a section label or symbol mismatch, or an identity column that does not match the coordinate row, as =ValidationError=.
+CON-bonds.1	MUST NOT	=bonds= MUST NOT appear in =sections=.
+CON-bonds.2	MUST	With =validate= true, a malformed =bonds= entry MUST be rejected.
+CON-bonds.3	MUST	With =validate= false, unknown =bonds= shapes MUST be preserved.
+CON-units.1	MUST	Major 3 MUST include =units.length= and =units.energy= as non-empty strings of the matching dimension.
+CON-units.2	MUST	Optional =mass=, =time=, =velocity=, and =force= strings, when present, MUST have the matching dimension.
+CON-units.3	MUST	A writer of minor 1 or later MUST write =units.time= whenever the frame has a velocities section.
+CON-units.4	MUST NOT	A writer MUST NOT insert =time: fs= silently when the frame does not carry a time unit.
+CON-units.5	MUST	The natural unit MUST be written with the exact spelling =(amu*angstrom^2/eV)^0.5=.
+CON-units.6	MUST	Version 1 and version 2 files carry no =units=. Their velocities MUST be read in the natural unit.
+CON-units.7	MUST	A major-3 file with minor 0 MUST be read with velocities in the natural unit.
+CON-units.12	MUST NOT	A =time= label on a major-3 minor-0 file MUST NOT be trusted.
+CON-units.8	MUST	From minor 1 onward, =units.time= MUST be authoritative for velocities.
+CON-units.9	MUST	An invalid unit expression on write MUST be reported as =InvalidUnits=.
+CON-units.10	MUST NOT	Writers MUST NOT replace an invalid unit with a default.
+CON-units.11	MAY	A consumer MAY apply an explicit velocity time-unit override when a file breaks =CON-units.6= through =CON-units.8=.
+CON-num.1	MUST	Readers MUST reject NaN, Inf, Infinity, and the signed and mixed-case spellings of those words, in every numeric field and in every mode, as =NonFiniteValue=.
+CON-num.2	MUST NOT	=validate= true MUST NOT be required before a reader applies =CON-num.1=.
+CON-num.9	MUST NOT	=validate= true MUST NOT accept a non-finite value.
+CON-num.3	MUST NOT	The C ABI absent-value NaN sentinel MUST NOT be written to a file. It is specified in the implementation notes.
+CON-num.4	MUST	Readers MUST convert a finite decimal token to binary64 with correct rounding.
+CON-num.5	MUST	A conforming writer in its default mode MUST write each finite float so that parsing it returns the same binary64 (=FloatFormat::RoundTrip=).
+CON-num.6	MUST	Fixed-decimal output MUST be used only when the writer is asked for it, and it need not round-trip.
+CON-num.7	MUST	A token that is not a decimal number and not a non-finite spelling MUST be =InvalidNumberFormat=.
+CON-num.8	MUST	A row with the wrong number of fields MUST be =InvalidVectorLength=.
+CON-compress.1	MUST	A gzip envelope MUST expose every member of a multi-member file, in order, as CON text.
+CON-compress.2	MUST	A zstd envelope MUST expose every frame in the stream as CON text.
+CON-compress.3	SHOULD	Readers SHOULD detect gzip and zstd by magic bytes, not only by the extension.
+CON-error.1	MUST	Each class in the table MUST be distinguishable by a caller.
+CON-error.2	MUST	Reported line numbers MUST count from 1, with metadata on line 2.
+CON-token.1	MUST	Integer tokens MUST match one or more ASCII digits, with no sign and no decimal point.
+CON-token.2	MUST	Float tokens MUST be finite decimals. A leading sign, a leading dot, and an exponent are allowed. Non-finite spellings are =CON-num.1=, not floats.
+CON-token.3	MUST	The separators inside a line MUST be spaces or tabs.
+CON-token.4	MUST	The quoted PEG is informative surface syntax. A reader MUST follow this document when the PEG allows a token these clauses reject.
