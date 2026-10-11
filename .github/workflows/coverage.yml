@@ -86,7 +86,7 @@ jobs:
 
       - name: Upload rust coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-rust
           path: |
@@ -125,7 +125,7 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -142,7 +142,7 @@ jobs:
           grep -E '^(SF:|DA:)' python_lcov.info | head -20 || true
 
       - name: Upload python coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-python
           path: python_lcov.info
@@ -156,7 +156,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: julia-actions/setup-julia@v2
+      - uses: julia-actions/setup-julia@v3
         with:
           version: '1.10'
 
@@ -191,7 +191,7 @@ jobs:
           grep -E '^(SF:|DA:)' "$ROOT/julia_lcov.info" | head -10 || true
 
       - name: Upload julia coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-julia
           path: julia_lcov.info
@@ -253,7 +253,7 @@ jobs:
           grep -E '^(SF:|DA:)' "$ROOT/fortran_coverage.info" | head -20 || true
 
       - name: Upload fortran coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-fortran
           path: fortran_coverage.info
@@ -272,7 +272,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: coverage-*
           path: cov

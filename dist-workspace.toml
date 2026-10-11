@@ -9,6 +9,9 @@ members = ["cargo:."]
 [dist]
 cargo-dist-version = "0.28.0"
 ci = "github"
+# release.yml is hand-patched after generate (action SHA pins, the checksummed
+# dist installer, and the rustup-init pin). dist plan must not reject that.
+allow-dirty = ["ci"]
 # Run plan (and optional artifact upload) on every PR so release PRs are checked
 # before the tag is cut.
 pr-run-mode = "plan"
@@ -29,3 +32,19 @@ targets = [
 github-releases = true
 # Create GitHub releases from the tag; PR mode only plans.
 create-release = true
+
+# cargo-dist 0.28.0 defaults are ubuntu-20.04 (global and Linux), macos-13,
+# and windows-2019. GitHub retired those images, so every job and target is
+# pinned to a current runner here. `global` covers plan, build-global-artifacts,
+# host, and announce. Linux stays on 22.04 (glibc 2.35), the oldest image
+# GitHub still hosts, rather than a manylinux container: the checksummed dist
+# 0.28.0 binary needs glibc 2.29, so manylinux_2_28 cannot run it, and an
+# ubuntu:20.04 container would need extra packages the generated job does not
+# install before rustup.
+[dist.github-custom-runners]
+global = "ubuntu-22.04"
+aarch64-apple-darwin = "macos-15"
+aarch64-unknown-linux-gnu = "ubuntu-22.04-arm"
+x86_64-apple-darwin = "macos-15-intel"
+x86_64-unknown-linux-gnu = "ubuntu-22.04"
+x86_64-pc-windows-msvc = "windows-2022"
