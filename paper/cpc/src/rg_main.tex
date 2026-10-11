@@ -1,4 +1,4 @@
-% Created 2026-10-11 Sun 15:05
+% Created 2026-10-11 Sun 15:22
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -95,11 +95,24 @@ The searches that do that work fall into a double-ended family and a single-ende
 A double-ended search, the nudged elastic band and its climbing-image form, discretizes the path into a chain of images and relaxes that chain until the highest image sits near the saddle \cite{jonssonNEB1998,henkelmanCINEB2000,sheppardNEB2008}.
 A single-ended search, the dimer method, rotates a pair of replicas until the lowest curvature points uphill and then walks toward the saddle from one basin \cite{henkelmanDimer1999}.
 Adaptive kinetic Monte Carlo accepts an escape, advances a physical clock by the waiting time of that escape, and repeats the search from the new minimum \cite{henkelmanAKMC2001}.
+Energy-weighted springs, together with eigenvector following, keep a molecular band from cutting the corner of a sharply curved path \cite{asgeirssonNEB2021}.
+An improved estimate of the tangent keeps the elastic band from forming kinks at places where the path bends sharply \cite{henkelmanTangent2000}.
+The image-dependent pair potential starts the chain of images closer to the minimum energy path the band will converge to \cite{smidstrupIDPP2014}.
+The string method was introduced for the sampling of rare events as a curve that is evolved between two known states \cite{eString2002}.
+A later form of that method finds a minimum energy path by evolving the curve rather than by relaxing a chain of springs \cite{eString2007}.
+A comparison of those single-ended searches showed that a saddle can still be found when the product state is unknown \cite{olsenSaddle2004}.
+A later dimer method converges faster than the original rotation because it uses a better estimate of the curvature \cite{kastnerDimer2008}.
 
 These campaigns spend most of their effort on force calls, and they spend the rest on moving the current geometry from one program to another and on starting again after a stop.
-A band optimization may call a potential for every image at every iteration \cite{goswamiNEBOrchestration2026,goswamiEciNeb2026}.
-A Gaussian-process saddle search still has to land on a force evaluator, and a long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move \cite{goswamiGaussianProcessSaddle2025,goswamiAdaptivePruning2025}.
-The same files are then read again when a path is projected, compared or redrawn \cite{goswamiRMSDProjections2026,goswamiNEBOrchestration2026}.
+A reproducible band optimization calls a potential for every image at every iteration, and the checkpoint is what lets that run resume \cite{goswamiNEBOrchestration2026}.
+A tutorial review of Gaussian-process searches shows how a surrogate can cut the number of force evaluations on a stationary-point problem \cite{goswamiGPTutorial2026}.
+The same idea has been implemented for molecular saddle searches, where the surrogate still has to land on a force evaluator \cite{goswamiGaussianProcessSaddle2025}.
+Adaptive pruning then drops training points that no longer change the next step, which keeps a long search from storing every geometry \cite{goswamiAdaptivePruning2025}.
+An earlier Gaussian-process band uses inverse interatomic distances so that a nudged elastic band needs fewer calls to the potential \cite{koistinenGPRNEB2019}.
+A Gaussian-process minimum-mode search uses the same kind of covariance to rotate a dimer toward a saddle from one basin \cite{koistinenMinMode2019}.
+Eigenmode alignment of the climbing image keeps the highest bead on the softest mode of the Hessian while the band relaxes \cite{goswamiEciNeb2026}.
+The same files are read again when a path is projected onto two dimensions and compared with the band that produced it \cite{goswamiRMSDProjections2026}.
+A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, and that file has to be readable after the job has stopped \cite{henkelmanAKMC2001}.
 Between those reads the file may sit on disk for hours while a queue waits, or it may be copied onto another machine that has a different build of the force code.
 The older eOn paper is the reference for the long-timescale code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEONSoftwareLong2014}.
 
@@ -126,6 +139,24 @@ The TNG format stores coordinates, velocities, forces and a box for molecular si
 Extended XYZ, as used through ASE, can add columns and a comment line, and it does not reserve a three-bit mask or a versioned time unit for this checkpoint \cite{larsenAtomicSimulationEnvironment2017}.
 A LAMMPS dump can carry an atom id and, when the dump style asks for them, velocities and forces \cite{thompsonLammps2022}.
 The unit style and the fixed axes live in the input of the run rather than in the dump frame.
+The LAMMPS data file holds the starting geometry, the dump holds the trajectory, and neither of those files is the CON band of images \cite{thompsonLammps2022}.
+H5MD is stored in HDF5, and that container is what holds the arrays of positions and of optional velocities \cite{folkHdf52011}.
+Zarr is a chunked array store for the same kind of grid, and its community standard is what defines the layout of those chunks \cite{ogcZarrSpec}.
+CHARMM writes a DCD trajectory of coordinates and of the box, which is a record of a dynamics run rather than of a saddle search \cite{brooksCharmm2009}.
+GROMACS writes XTC and TRR trajectories, and a reader of those files gets positions, and sometimes velocities, without this checkpoint's mask \cite{abrahamGromacs2015}.
+MDTraj reads DCD and XTC trajectories when the task is analysis of a finished run, which is a different job from restarting a search \cite{mcgibbonMDTraj2015}.
+A protein structure is often stored as a PDB file, and atom identity there comes from the residue and the atom name \cite{bermanPDB2000}.
+mmCIF is the macromolecular archive form of that structure, and it does not carry this checkpoint's mask or its time unit \cite{westbrookMmcif2000}.
+A small-molecule crystal structure travels as a CIF, which archives the cell and the coordinates but not a velocity time unit for a restart \cite{hallCIF1991}.
+A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates for VASP, and that file is not a band of images with masks \cite{kresseVasp1996}.
+pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still a geometry \cite{ongPymatgen2013}.
+Atomsk converts among the files used for defects and for classical potentials, which is how a geometry changes dialect before a run \cite{hirelAtomsk2015}.
+Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues rather than a per-axis mask \cite{oboyleOpenBabel2011}.
+OVITO displays atomistic snapshots and can read several of these files, and the display is not the checkpoint a saddle search restarts from \cite{stukowskiOVITO2010}.
+i-PI drives a calculation by passing coordinates to a client and reading forces back, which moves a geometry without storing this checkpoint \cite{kapilIPI2019}.
+That coordinate exchange began as a path-integral client, which sent positions out and received forces back, one geometry at a time \cite{ceriottiIPI2014}.
+A liquid or a mixture is often packed into a cell before the first minimization, and that packed geometry is what the checkpoint then stores \cite{martinezPackmol2009}.
+Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry checkpoint a search writes \cite{bigiMetatensor2026}.
 Table \ref{tab:compat} puts those differences in one place, after the file itself has been described.
 
 A campaign that restarts from a lossy reading of this checkpoint loses the calculation in ways that change the answer.
@@ -231,6 +262,9 @@ A campaign that was killed while writing therefore fails the next read at the tr
 The numeric contract is stated in round-trip terms, which is the property a checkpoint needs if the same geometry will be parsed more than once.
 Readers convert decimal text to binary64 with correct rounding \cite{clinger1990,lemire2021}.
 The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleWhite1990}.
+Grisu prints a floating-point value using only integer arithmetic so that the decimal form is short and correctly rounded \cite{loitschGrisu2010}.
+Ryu prints a floating-point value by a table-driven procedure so that the decimal form is short and correctly rounded \cite{adamsRyu2018}.
+The metadata line is JSON, and a scanner for that kind of text has been shown to run at a very high rate on such input \cite{langdaleSimdjson2019}.
 A caller may instead ask for a fixed number of digits after the decimal point.
 That mode is allowed, and it is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
 Non-finite numbers, including the spellings of NaN and infinity, are rejected in every field and in every mode, so a diverged force call cannot be stored as a coordinate and read back as a number.
@@ -432,8 +466,12 @@ The frames that come back do not depend on the number of threads, so a long band
 \section*{Data availability}
 \label{sec:data}
 The software is archived at the Zenodo concept DOI 10.5281/zenodo.18753567 and will be deposited in the CPC Program Library \cite{goswamiReadconcore2026}.
+A numbered release of the library is archived beside the concept record, so one version can be cited as well as the series \cite{goswamiReadconRelease2026}.
+The archive is the software object that the FAIR principles for research software ask an author to identify and to describe \cite{barkerFAIR4RS2022}.
+A citation to research software is owed to the archived record, which is why the concept DOI appears in this paper \cite{smithSoftwareCitation2016}.
 The benchmark scripts and the per-repeat timing tables are part of the submission archive.
 The HCN and HNC endpoints are the public files of the nudged elastic band study \cite{goswamiNEBOrchestration2026}.
+The public endpoints are written by the orchestrator that drives the band, and the file it stores is the checkpoint this library reads \cite{goswamiEonOrchestrator2026}.
 
 \section*{CRediT authorship contribution statement}
 \label{sec:credit}
