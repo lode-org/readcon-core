@@ -1,6 +1,12 @@
 name: Lint
 
 on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
     branches: [main]
 jobs:
@@ -13,9 +19,13 @@ jobs:
         fetch-depth: 0
 
     - name: Conventional commits check
-      # Latest-tag range only: full history still has pre-v0.14 `docs+bench:`
-      # and untyped merges. Git default `Revert "..."` subjects after v0.14.7
-      # are accepted by the script (cocogitto rejects them).
+      # A pull request checks base.sha..head.sha.
+      # A push checks github.event.before..github.sha.
+      # An all-zero before starts at the merge-base with origin/main.
+      # The script skips merge commits.
+      env:
+        RANGE_START: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        RANGE_END: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       run: bash scripts/check_conventional_commits.sh
 
     - name: Audit for large files

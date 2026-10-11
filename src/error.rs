@@ -1,7 +1,7 @@
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParseError {
     IncompleteHeader,
     IncompleteFrame,
@@ -197,5 +197,43 @@ impl From<ParseIntError> for ParseError {
 impl From<serde_json::Error> for ParseError {
     fn from(e: serde_json::Error) -> Self {
         ParseError::InvalidMetadataJson(e.to_string())
+    }
+}
+
+/// A parse failure plus the 1-based file line and 0-based frame index.
+///
+/// The line is the cursor that produced the error. Metadata helpers that
+/// report line 2 are used only when that cursor is still 0.
+#[derive(Debug)]
+pub struct LocatedParseError {
+    pub error: ParseError,
+    pub line: u32,
+    pub frame_index: u64,
+}
+
+impl LocatedParseError {
+    pub fn new(error: ParseError, cursor_line: u32, frame_index: u64) -> Self {
+        let line = if cursor_line != 0 {
+            cursor_line
+        } else {
+            error.line()
+        };
+        Self {
+            error,
+            line,
+            frame_index,
+        }
+    }
+}
+
+impl fmt::Display for LocatedParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl std::error::Error for LocatedParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
     }
 }

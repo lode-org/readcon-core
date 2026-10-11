@@ -121,9 +121,53 @@ function _status_message(status::Cint)
     return unsafe_string(c_str)
 end
 
+struct RkrError
+    code::Int32
+    message::Ptr{UInt8}
+    line::UInt32
+    frame_index::UInt64
+end
+
+struct ReadConError <: Exception
+    operation::String
+    code::Int32
+    message::String
+    line::UInt32
+    frame_index::UInt64
+end
+
+function Base.showerror(io::IO, err::ReadConError)
+    print(io, err.operation, ": ", err.message, " (line ", err.line, ", frame ", err.frame_index, ")")
+end
+
+function last_error()
+    ptr = ccall(_lib_symbol(:rkr_last_error), Ptr{RkrError}, ())
+    ptr == C_NULL && return nothing
+    err = unsafe_load(ptr)
+    message = err.message == C_NULL ? "unknown status" : unsafe_string(err.message)
+    return (code=err.code, message=message, line=err.line, frame_index=err.frame_index)
+end
+
+function clear_error()
+    ccall(_lib_symbol(:rkr_clear_error), Cvoid, ())
+    return nothing
+end
+
+function _throw_last(operation::String)
+    err = last_error()
+    if err === nothing
+        throw(ReadConError(operation, Int32(-7), operation, UInt32(0), UInt64(0)))
+    end
+    throw(ReadConError(operation, err.code, err.message, err.line, err.frame_index))
+end
+
 function _check_status(status::Cint, operation::String)
     status == RKR_STATUS_SUCCESS && return nothing
-    error("$operation: $(_status_message(status))")
+    err = last_error()
+    if err === nothing
+        throw(ReadConError(operation, status, _status_message(status), UInt32(0), UInt64(0)))
+    end
+    throw(ReadConError(operation, err.code, err.message, err.line, err.frame_index))
 end
 
 """
@@ -166,7 +210,7 @@ function select_on_frame(frame::ConFrame, selection::String)
         )
         _check_status(status, "rkr_frame_select")
         result_handle = out[]
-        result_handle == C_NULL && error("rkr_frame_select returned null result")
+        result_handle == C_NULL && _throw_last("rkr_frame_select returned null result")
         try
             n = ccall(
                 _lib_symbol(:rkr_selection_result_match_count),
@@ -299,7 +343,7 @@ function read_con(path::String)
         _lib_symbol(:read_con_file_iterator),
         Ptr{Cvoid}, (Cstring,), path
     )
-    iter_ptr == C_NULL && error("Failed to open file: $path")
+    iter_ptr == C_NULL && _throw_last("Failed to open file: $path")
 
     frames = ConFrame[]
 
@@ -396,7 +440,7 @@ function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Noth
             Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
         )
     end
-    writer == C_NULL && error("failed to create writer for file: $path")
+    writer == C_NULL && _throw_last("failed to create writer for file: $path")
 
     handles = Ptr{Cvoid}[]
     try
@@ -478,7 +522,7 @@ function _build_frame_handle(frame::ConFrame)
         frame.prebox_header[1], frame.prebox_header[2],
         frame.postbox_header[1], frame.postbox_header[2],
     )
-    builder == C_NULL && error("failed to create frame builder")
+    builder == C_NULL && _throw_last("failed to create frame builder")
 
     try
         metadata_json, stamp_default_units = _legacy_velocity_units(frame)
@@ -507,7 +551,7 @@ function _build_frame_handle(frame::ConFrame)
 
         handle = ccall(_lib_symbol(:rkr_frame_builder_build), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
         builder = C_NULL
-        handle == C_NULL && error("failed to build frame")
+        handle == C_NULL && _throw_last("failed to build frame")
         return handle
     finally
         builder != C_NULL && ccall(_lib_symbol(:free_rkr_frame_builder), Cvoid, (Ptr{Cvoid},), builder)
