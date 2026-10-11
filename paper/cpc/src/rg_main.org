@@ -495,7 +495,9 @@ This work received no funding.
 :CUSTOM_ID: sec:acknowledgements
 :END:
 
-The people who shaped this checkpoint, and the author's family, will be named here once that list is confirmed.
+The author thanks Hannes @@latex:J{\'o}nsson@@ for long discussions on saddle searches and on what an eOn checkpoint has to carry, and Miha Gunde for discussions on matching atoms along a reaction path.
+Ruhila Goswami designed the colour palette of the figures.
+The library was written with the patience of the author's family, in the company of the turtles, the garden cats, the birds and the rest of the household.
 
 #+LATEX: \appendix
 
