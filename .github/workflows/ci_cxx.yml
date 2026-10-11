@@ -108,3 +108,15 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/cmake-tarball --parallel
           ./build/cmake-tarball/c-main "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
+
+  cxx-tarball-repro:
+    runs-on: ubuntu-22.04
+    name: C++ source tarball is reproducible
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the cxx source tarball twice and compare hashes
+        run: bash scripts/check_cxx_repro.sh

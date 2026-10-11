@@ -54,10 +54,13 @@ else
   die "wrap source_hash '${source_hash_raw}' is not a 64-char sha256"
 fi
 
-if command -v curl >/dev/null 2>&1; then
-  live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
-  if [[ -z "$live" ]]; then
-    ok "GitHub Release .sha256 not published yet (tag tarball)"
+if ! command -v curl >/dev/null 2>&1; then
+  die "curl is required to read ${source_url}.sha256"
+else
+  # A missing checksum used to pass. It is a failed release asset.
+  live="$(curl -fsSL "${source_url}.sha256" | awk 'NF { print $1; exit }')" || live=""
+  if [[ ! "$live" =~ ^[0-9a-f]{64}$ ]]; then
+    die "GitHub Release checksum is missing: ${source_url}.sha256"
   elif [[ "$live" == "$source_hash" ]]; then
     ok "GitHub Release .sha256 matches wrap source_hash"
   else
