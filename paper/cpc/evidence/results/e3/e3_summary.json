@@ -1,0 +1,60 @@
+{
+  "listing": "results/e3/v31_slab.con",
+  "n_metadata_keys": 25,
+  "versions": [
+    [
+      "Version",
+      "Date",
+      "Change"
+    ],
+    [
+      "---------+------------+------------------------------------------------------------------------"
+    ],
+    [
+      "1",
+      "original",
+      "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+    ],
+    [
+      "2",
+      "2026-03-25",
+      "JSON line 2, ids, bit masks, declared sections."
+    ],
+    [
+      "3.0",
+      "2026-06-27",
+      "units.length= and =units.energy= required. Minor absent."
+    ],
+    [
+      "3.1",
+      "2026-10-11",
+      "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+    ]
+  ],
+  "fixed_digit": {
+    "round_trip_bit_identical": true,
+    "fixed6_max_abs_A": 4.1774873382749433e-07,
+    "fixed6_rmsd_A": 2.1694123307432802e-07,
+    "emt_energy_exact_eV": 4.021379284263574,
+    "emt_energy_fixed6_eV": 4.021379725365381,
+    "emt_energy_delta_eV": 4.411018066363681e-07,
+    "writer": "readcon.write_con precision=6 against the default round-trip printer"
+  },
+  "abnf": {
+    "pest_sha256": "2a45dffca646d09e68e620fa3a529f21f0bf98093e239e0133e7e89514bc0fce",
+    "rules": 49,
+    "missing_from_draft": []
+  },
+  "runs": {
+    "c_returncode": 0,
+    "c_stdout": "library 0.17.0\nframes 1\natoms 9\nfirst_x 1.3859292911256331\nenergy absent\nstatus_ok success\n",
+    "c_stderr": "",
+    "python_returncode": 0,
+    "python_stdout": "frames 1\natoms 9\nspec None 1\ntime (amu*angstrom^2/eV)^0.5\nadsorbate Pt 8 [False, False, True] 0.003748769356553213 0.00243327727576049 -0.0013238979663774354\nround_trip_positions True\n",
+    "python_stderr": "",
+    "depends_on_issue_51": false,
+    "depends_on_ase_fix_branch": false,
+    "issue_51": "The C read returns a null handle and no error string. Issue 51 is open.",
+    "ase_branch": "fix/ase-ids-units-conformance was not on origin. E1 used ASE 3.29.0."
+  }
+}

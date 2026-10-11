@@ -1,0 +1,276 @@
+{
+  "spec_sha256": "dfa65c47581abf6272a9998b8d0acbc6b1d6f2924d02c257d2b7ce1c1a74457d",
+  "schema_sha256": "c45c287faef01f764da308cf1ddd8f5a0e496e6cbd6deade736f9a35024c84be",
+  "versions": [
+    [
+      "Version",
+      "Date",
+      "Change"
+    ],
+    [
+      "---------+------------+------------------------------------------------------------------------"
+    ],
+    [
+      "1",
+      "original",
+      "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+    ],
+    [
+      "2",
+      "2026-03-25",
+      "JSON line 2, ids, bit masks, declared sections."
+    ],
+    [
+      "3.0",
+      "2026-06-27",
+      "units.length= and =units.energy= required. Minor absent."
+    ],
+    [
+      "3.1",
+      "2026-10-11",
+      "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+    ]
+  ],
+  "sections": [
+    [
+      "velocities",
+      "Velocities of Component N",
+      "vx vy vz= flag id"
+    ],
+    [
+      "forces",
+      "Forces of Component N",
+      "fx fy fz= flag id"
+    ],
+    [
+      "energies",
+      "Energies of Component N",
+      "energy flag id"
+    ],
+    [
+      "charges",
+      "Charges of Component N",
+      "charge flag id"
+    ],
+    [
+      "spins",
+      "Spins of Component N",
+      "spin flag id"
+    ],
+    [
+      "magmoms",
+      "Magmoms of Component N",
+      "mx my mz= flag id"
+    ],
+    [
+      "displacements",
+      "Displacements of Component N",
+      "dx dy dz= flag id, =units.length"
+    ],
+    [
+      "spreads",
+      "Spreads of Component N",
+      "sx sy sz= flag id, =units.length=, each >= 0"
+    ]
+  ],
+  "metadata_keys": [
+    {
+      "key": "con_spec_version",
+      "type": "integer",
+      "description": "Spec major of this frame. Files without JSON metadata are implicit version 1. JSON majors 0 and 1 are invalid.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "con_spec_minor",
+      "type": "integer",
+      "description": "Spec minor. Absent or 0 is v3.0. Minor 1 is v3.1. Unknown minors of major 3 are accepted.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "section_arity",
+      "type": "object",
+      "description": "Value-field count of each data row, excluding the flag and the optional id (1 scalar, 3 vector). A reserved name must use that table arity. A reader skips an unknown section of a newer minor when the count is present.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "sections",
+      "type": "array",
+      "description": "Declared per-atom sections following the coordinate blocks.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "validate",
+      "type": "boolean",
+      "description": "Enable strict validation of declared sections.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "generator",
+      "type": "string",
+      "description": "Tool name and version that wrote the frame.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "units",
+      "type": "object",
+      "description": "Line-2 unit system. Required at major 3 with length and energy. The natural time unit spelling is (amu*angstrom^2/eV)^0.5.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "pbc",
+      "type": "array",
+      "description": "Periodicity of the three cell directions.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "lattice_vectors",
+      "type": "array",
+      "description": "Exact 3x3 cell matrix as row vectors.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "energy",
+      "type": "number",
+      "description": "Per-frame total energy.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "potential",
+      "type": "object",
+      "description": "Potential/calculator description.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "frame_index",
+      "type": "integer",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "time",
+      "type": "number",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "timestep",
+      "type": "number",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "neb_bead",
+      "type": "integer",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "neb_band",
+      "type": "integer",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "convergence_fmax",
+      "type": "number",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "convergence_energy",
+      "type": "number",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "converged",
+      "type": "boolean",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "fmax",
+      "type": "number",
+      "description": "",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "bonds",
+      "type": "array",
+      "description": "Optional frame topology: [i, j] index pairs (0-based atom_data order) or objects with i, j, and optional order.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "storage_dtypes",
+      "type": "object",
+      "description": "In-memory element types after parsing; does not change on-disk text encoding.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "chemfiles_atom_names",
+      "type": "array",
+      "description": "Display names sidecar from chemfiles import, chemfiles atom order.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "chemfiles_atom_types",
+      "type": "array",
+      "description": "Atomic types sidecar from chemfiles import, chemfiles atom order.",
+      "source": "schema/con-metadata.schema.json"
+    },
+    {
+      "key": "chemfiles_atom_properties",
+      "type": [
+        "array",
+        "object"
+      ],
+      "description": "Per-atom property sidecar from chemfiles import.",
+      "source": "schema/con-metadata.schema.json"
+    }
+  ],
+  "mask": [
+    {
+      "bit": 0,
+      "axis": "x",
+      "spec": "2 and later",
+      "source": "docs/orgmode/spec.org CON-mask"
+    },
+    {
+      "bit": 1,
+      "axis": "y",
+      "spec": "2 and later",
+      "source": "docs/orgmode/spec.org CON-mask"
+    },
+    {
+      "bit": 2,
+      "axis": "z",
+      "spec": "2 and later",
+      "source": "docs/orgmode/spec.org CON-mask"
+    },
+    {
+      "value": "0",
+      "meaning": "free on every axis",
+      "spec": "1, and 2 and later",
+      "source": "docs/orgmode/spec.org constraints"
+    },
+    {
+      "value": "1",
+      "meaning": "all three axes fixed in spec 1; x only in spec 2 and later",
+      "source": "docs/orgmode/spec.org constraints"
+    },
+    {
+      "value": "7",
+      "meaning": "all three axes fixed; the value a spec 2 or later writer emits",
+      "source": "docs/orgmode/spec.org CON-mask.7"
+    }
+  ],
+  "compatibility": [
+    "A reader of a known major accepts every minor of that major, including minors it does not implement (CON-line2.7).",
+    "JSON majors 0 and 1 are rejected (CON-line2.5). An unknown major is rejected (CON-line2.6).",
+    "A missing con_spec_minor, or an explicit 0, means minor 0 (CON-line2.10).",
+    "Version 1 has no JSON. Column 4 is 0 or 1 (CON-mask.2).",
+    "units.time on versions 1, 2, and 3.0 is not trusted (CON-units.9). From minor 1 it is authoritative (CON-units.10).",
+    "Unknown keys are preserved on rewrite (CON-line2.8).",
+    "Where the PEG and the specification disagree, the specification wins (CON-token.4)."
+  ]
+}
