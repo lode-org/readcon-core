@@ -74,11 +74,11 @@ def architecture() -> None:
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 6)
     ax.axis("off")
-    _box(ax, 3.15, 4.55, 3.7, 1.05, "Rust core\nparse, write, rounds", SKY)
-    _box(ax, 3.15, 2.85, 3.7, 1.05, "C ABI\nstatus codes, caller frees", ORANGE)
+    _box(ax, 3.15, 4.55, 3.7, 1.05, "Rust core\nparse and write", SKY)
+    _box(ax, 3.15, 2.85, 3.7, 1.05, "C ABI\nnull on failure, caller frees", ORANGE)
     callers = [
         (0.25, "C"),
-        (2.15, "C++"),
+        (2.15, "C++\neOn"),
         (4.05, "Python"),
         (5.95, "Julia"),
         (7.85, "Fortran"),
@@ -226,9 +226,27 @@ def ase_mask() -> None:
 
 
 def abnf_placeholder() -> None:
+    """Copy the draft rules into the appendix listing.
+
+    Comment lines in the draft name source paths, so they stay out of the listing.
+    """
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "evidence"
+        / "results"
+        / "e3"
+        / "con_abnf_draft.txt"
+    )
+    rules = [
+        line
+        for line in src.read_text().splitlines()
+        if line.strip() and not line.startswith(";")
+    ]
     path = OUT / "con_abnf.tex"
     path.write_text(
-        "% Author inserts the 49-rule non-normative ABNF.\n"
+        "\\begin{lstlisting}[caption={Non-normative ABNF for one frame.},label={lst:abnf}]\n"
+        + "\n".join(rules)
+        + "\n\\end{lstlisting}\n"
     )
 
 
