@@ -2,6 +2,25 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.17.0 - 2026-10-11
+
+### Breaking
+
+- Readers reject NaN, Inf and their spellings in every mode with NonFiniteValue.
+- Column 4 is an integer token. Float spellings, signs and out-of-range values are InvalidFixedFlag.
+- Column 5 is an integer token up to 2^64-1 and is never parsed as a float.
+- A type count or per-type count of 0 is InvalidCount. A signed count is InvalidNumberFormat.
+- JSON con_spec_version 0 or 1, and any unknown major, is UnsupportedVersion.
+- The default writer float format is binary64 round-trip. Fixed decimals remain available when requested.
+- A v3 frame with a missing or invalid units object fails the write with InvalidUnits.
+- A minor 1 frame with velocities and no units.time fails the write. The builder no longer injects time: fs.
+- The written spelling of the eOn and ASE natural time unit is (amu*angstrom^2/eV)^0.5.
+- Trailing whitespace after the last complete frame is ignored and does not open a velocity section.
+- Section rows have a fixed width. Labels compare case-insensitively after collapsing runs of spaces.
+- An unknown section is skipped only for a newer minor that declares section_arity. Otherwise it is UnknownSection.
+- gzip and zstd envelopes yield every member and every frame.
+- set_lattice_vectors keeps lines 3 and 4 consistent with the lattice matrix.
+
 ## v0.16.2 - 2026-10-09
 
 ### Fixed
