@@ -187,9 +187,10 @@ contains
         print *, "FAIL ", trim(c%id), ": atom_id", ids(i), at%atom_id
         nfail = nfail + 1
       end if
-      if (logical(at%fixed_x) .neqv. fx(1, i) .or. &
-          logical(at%fixed_y) .neqv. fx(2, i) .or. &
-          logical(at%fixed_z) .neqv. fx(3, i)) then
+      ! .or. binds tighter than .neqv., so each comparison is parenthesized.
+      if ((logical(at%fixed_x) .neqv. fx(1, i)) .or. &
+          (logical(at%fixed_y) .neqv. fx(2, i)) .or. &
+          (logical(at%fixed_z) .neqv. fx(3, i))) then
         print *, "FAIL ", trim(c%id), ": fixed atom", i
         nfail = nfail + 1
       end if
