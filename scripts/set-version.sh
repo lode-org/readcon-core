@@ -17,8 +17,9 @@ sed -i -E "s/readcon-chemfiles==$o\"/readcon-chemfiles==$v\"/" pyproject.toml
 sed -i -E "s/assert_eq!\(VERSION, \"$o\"\)/assert_eq!(VERSION, \"$v\")/" src/lib.rs
 sed -i -E "s/^release = \"[^\"]*\"/release = \"$v\"/" docs/source/conf.py
 sed -i -E "s/^VER=.*/VER=$v/" julia/ReadCon/README.md fortran/README.md
-# The wrapdb wrap names the release's cxx tarball. Its source_hash stays until
-# that tarball is published; scripts/check_wrap_hash.sh accepts the gap.
+# The wrapdb wrap names the release's cxx tarball. source_hash must be the
+# sha256 of that tarball. A missing or different checksum fails
+# scripts/check_wrap_hash.sh, and the release workflow will not publish.
 sed -i -E "s/readcon-core-cxx-$o\b/readcon-core-cxx-$v/g; s#releases/download/v$o/#releases/download/v$v/#" \
     packaging/wrapdb/readcon-core.wrap
 # Install pins, cxx tarball names and version statements in the docs. The
