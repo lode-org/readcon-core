@@ -602,5 +602,5 @@ Finding a frame by composition or energy, after it has left the campaign, is the
 
 #+LATEX: \bibliographystyle{elsarticle-num}
 #+LATEX: \begingroup\catcode`\&=12
-#+LATEX: \bibliography{rg_main,holm}
+#+LATEX: \bibliography{rg_main}
 #+LATEX: \endgroup

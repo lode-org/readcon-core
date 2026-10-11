@@ -1,4 +1,4 @@
-% Created 2026-10-11 Sun 18:41
+% Created 2026-10-11 Sun 19:00
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -6,6 +6,7 @@
 \journal{Computer Physics Communications}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{amssymb,amsmath}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -232,17 +233,19 @@ A count of zero chemical types is a legal empty frame, with no coordinate block 
 A header that stops early, or a section with fewer rows than the header declared, is rejected, and the partial frame is not returned.
 The remaining reader rules, including unknown section names, non-finite numbers and a gzip archive with several members, are the rows of \ref{sec:appendix-rules}.
 
-Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,goldbergWhatEveryComputer1991,clingerHowReadFloating1990,clingerHowReadFloating2004}.
+Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,goldbergWhatEveryComputer1991,clingerHowReadFloating1990}.
 The default writer prints each finite value with Rust's shortest formatter, in exponential form, so that reading the text back yields the same binary64 number.
-That formatter tries Grisu, an integer conversion that checks its own digits, and falls back to Dragon when the check fails \cite{loitschPrintingFloatingpointNumbers2010,burgerPrintingFloatingpointNumbers1996,steeleHowPrintFloatingpoint1990,steeleHowPrintFloatingpoint2004}.
+That formatter tries Grisu, an integer conversion that checks its own digits, and falls back to Dragon when the check fails \cite{loitschPrintingFloatingpointNumbers2010,burgerPrintingFloatingpointNumbers1996,steeleHowPrintFloatingpoint1990}.
+Errol and Ry{\=u} are later shortest printers that give the same round-trip guarantee \cite{andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}.
 A caller may ask for a fixed number of digits after the decimal point, and that mode is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
 gzip and zstd are envelopes around the same bytes, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}.
 
 \section{Implementation}
 \label{sec:implementation}
 The core is a Rust library with a single parser, and file reads, string reads and the bindings all go through that parser, so a change in the grammar shows up once.
+Rust checks ownership and borrowing at compile time outside the blocks marked unsafe, and in this library most of those blocks sit in the C interface \cite{jungRustbeltSecuringFoundations2018}.
 The parser walks the header, checks the counts, reads each coordinate row as an integer flag and an integer id, and then reads the sections named in the metadata.
-Decimal fields in that parser go through a fast correctly rounded conversion \cite{lemireNumberParsingGigabyte2021}.
+Decimal fields in that parser go through a fast correctly rounded conversion \cite{lemireNumberParsingGigabyte2021,mushtakFastNumberParsing2023}.
 Keeping one parser is what makes the conformance story possible, because a second implementation in each language would be a second place for a mask or a time label to drift.
 The C header owns the frame on the far side of the call and returns a status code, and the caller frees what it was given.
 C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding \cite{bezansonJuliaFreshApproach2017}.
@@ -308,7 +311,7 @@ The ASE eon reader follows the original eOn layout: a comment on the second line
 A \nRound{}-atom copper-hydrogen frame from the eOn tests is read, written with the default printer, and read again, and every coordinate bit matches the value that was stored.
 The same coordinates match the ASE eon reading of that file, bit for bit, so the two programs agree on the positions of a producer file.
 The single-frame geometry used below and in Section \ref{sec:performance} is a platinum (111) slab of \nSlab{} atoms, built with ASE rather than by repeating one coordinate row.
-Exchange on Pt(001) is one surface event a per-axis mask is meant to record \cite{kelloggSurfaceSelfdiffusionPt0011990}.
+Exchange diffusion is one surface event a per-axis mask is meant to record, and the case measured for that mechanism is Pt(001) \cite{kelloggSurfaceSelfdiffusionPt0011990}.
 The cell is an orthogonal fcc111 slab of 50 by 20 by 10 layers, with 8 angstrom of vacuum, plus one hydrogen placed 1.5 angstrom above an on-top site.
 The bottom two layers are fixed on every axis, the other platinum atoms are free, and the adsorbate is fixed on z, which is the mask case a surface calculation actually writes.
 Table \ref{tab:hcn} shows one buried atom, one surface atom and the adsorbate from that slab, each with its own mask and its own id.
@@ -378,7 +381,7 @@ For each of 2, 4 and 8 workers the loop times one worker, then that worker count
 Two workers give a speedup of \thrTwo{} (interval \thrTwoLo{} to \thrTwoHi{}), four give \thrFour{} (\thrFourLo{} to \thrFourHi{}), and eight give \thrEight{} (\thrEightLo{} to \thrEightHi{}).
 Each of those speedups lies below the ideal line.
 The boundary scan that finds the frame offsets is serial, and each frame is a small parse, so the extra workers share a shrinking amount of independent work as the count rises.
-\hashSentence
+\hashSentence{}
 The frames that come back are the frames that were stored, at every worker count the hash covers.
 
 \section{Scope}
@@ -502,6 +505,6 @@ Finding a frame by composition or energy, after it has left the campaign, is the
 
 \bibliographystyle{elsarticle-num}
 \begingroup\catcode`\&=12
-\bibliography{rg_main,holm}
+\bibliography{rg_main}
 \endgroup
 \end{document}
