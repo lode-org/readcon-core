@@ -154,7 +154,7 @@ class TestAseVelocities:
         assert frame.atoms[1].vz == pytest.approx(0.6)
         assert frame.metadata["units"]["time"] == "(amu*angstrom^2/eV)^0.5"
         text = readcon.write_con_string([frame])
-        assert '(amu*angstrom^2/eV)^0.5' in text
+        assert "(amu*angstrom^2/eV)^0.5" in text
         reread = readcon.read_con_string(text)[0]
         assert reread.atoms[0].vx == pytest.approx(0.1)
         assert reread.atoms[1].vz == pytest.approx(0.6)
@@ -307,7 +307,9 @@ class TestFcc111Adsorbate:
         text = readcon.write_con_string([frame])
         reread = readcon.read_con_string(text)
         assert len(reread) == 1
-        assert sorted(atom.atom_id for atom in reread[0].atoms) == list(range(len(slab)))
+        assert sorted(atom.atom_id for atom in reread[0].atoms) == list(
+            range(len(slab))
+        )
         assert sorted(atom.symbol for atom in reread[0].atoms) == sorted(
             atom.symbol for atom in frame.atoms
         )
