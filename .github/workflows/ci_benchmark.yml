@@ -39,7 +39,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.11
         with:
           version: "v0.10.0"
 
@@ -47,11 +47,11 @@ jobs:
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Install Python deps + maturin
         run: |
@@ -80,7 +80,7 @@ jobs:
             --record-samples --quick
 
       - name: Upload ASV results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: asv-${{ matrix.label }}
           path: .asv/results/
@@ -90,16 +90,16 @@ jobs:
     needs: asv-benchmark
     runs-on: ubuntu-latest
     steps:
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Download main results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: asv-main
           path: results/
 
       - name: Download PR results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: asv-pr
           path: results/
@@ -142,7 +142,7 @@ jobs:
           echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> results/metadata.txt
 
       - name: Upload combined results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-results
           path: results/
@@ -178,7 +178,7 @@ jobs:
           fi
 
       - uses: dtolnay/rust-toolchain@stable
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.11
         with:
           version: "v0.10.0"
       - name: Setup sccache
@@ -190,7 +190,7 @@ jobs:
       - name: Export Criterion results
         run: tar czf criterion-${{ matrix.label }}.tar.gz -C target criterion/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: criterion-${{ matrix.label }}
           path: criterion-${{ matrix.label }}.tar.gz
