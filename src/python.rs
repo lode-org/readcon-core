@@ -1402,12 +1402,12 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=6, compression=None, *, canonical=false))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false))]
 fn write_con(
     py: Python<'_>,
     path: &str,
     frames: &Bound<'_, PyAny>,
-    precision: usize,
+    precision: Option<usize>,
     compression: Option<&str>,
     canonical: bool,
 ) -> PyResult<()> {
@@ -1425,16 +1425,24 @@ fn write_con(
     };
 
     if use_gzip {
-        let mut writer = ConFrameWriter::from_path_gzip_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?
-            .canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
+                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
+            None => ConFrameWriter::from_path_gzip(path)
+                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
     } else {
-        let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?
-            .canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
+                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+            None => ConFrameWriter::from_path(path)
+                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -1444,18 +1452,21 @@ fn write_con(
 
 /// Write frames to a string in .con format.
 #[pyfunction]
-#[pyo3(signature = (frames, precision=6, *, canonical=false))]
+#[pyo3(signature = (frames, precision=None, *, canonical=false))]
 fn write_con_string(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
-    precision: usize,
+    precision: Option<usize>,
     canonical: bool,
 ) -> PyResult<String> {
     let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
-        let mut writer =
-            ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+            None => ConFrameWriter::new(&mut buffer),
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
