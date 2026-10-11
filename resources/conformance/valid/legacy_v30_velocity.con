@@ -1,0 +1,16 @@
+conformance: legacy-v30-velocity; spec.org: legacy velocity
+{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":["velocities"]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+1
+1
+1.00794
+H
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+
+H
+Velocities of Component 1
+1.0 2.0 -3.0 0 0

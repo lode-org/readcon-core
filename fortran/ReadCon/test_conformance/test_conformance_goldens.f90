@@ -136,6 +136,8 @@ contains
     real(real64), allocatable :: pos(:,:)
     integer(int64), allocatable :: ids(:)
     character(len=8), allocatable :: syms(:)
+    real(real64), allocatable :: vel(:,:)
+    logical :: has_vel
     character(len=128) :: gid, got_sym
     logical :: exists
     nfail = 0
@@ -154,7 +156,7 @@ contains
       return
     end if
     gtext = slurp(trim(gpath))
-    call parse_golden(gtext, gid, n_atoms, spec, fx, pos, ids, syms)
+    call parse_golden(gtext, gid, n_atoms, spec, fx, pos, ids, syms, vel, has_vel)
     if (trim(gid) /= trim(c%id)) then
       print *, "FAIL ", trim(c%id), ": golden id ", trim(gid)
       nfail = nfail + 1
@@ -195,6 +197,17 @@ contains
         print *, "FAIL ", trim(c%id), ": positions atom", i
         nfail = nfail + 1
       end if
+      if (has_vel) then
+        if (.not. logical(at%has_velocity)) then
+          print *, "FAIL ", trim(c%id), ": velocity missing atom", i
+          nfail = nfail + 1
+        else if (abs(at%vx - vel(1, i)) > 1.0e-12_real64 .or. &
+                 abs(at%vy - vel(2, i)) > 1.0e-12_real64 .or. &
+                 abs(at%vz - vel(3, i)) > 1.0e-12_real64) then
+          print *, "FAIL ", trim(c%id), ": velocities atom", i
+          nfail = nfail + 1
+        end if
+      end if
     end do
     call fr%free()
   end function
@@ -221,7 +234,7 @@ contains
     end if
   end function
 
-  subroutine parse_golden(json, gid, n_atoms, spec, fx, pos, ids, syms)
+  subroutine parse_golden(json, gid, n_atoms, spec, fx, pos, ids, syms, vel, has_vel)
     character(len=*), intent(in) :: json
     character(len=*), intent(out) :: gid
     integer, intent(out) :: n_atoms, spec
@@ -229,6 +242,8 @@ contains
     real(real64), allocatable, intent(out) :: pos(:,:)
     integer(int64), allocatable, intent(out) :: ids(:)
     character(len=8), allocatable, intent(out) :: syms(:)
+    real(real64), allocatable, intent(out) :: vel(:,:)
+    logical, intent(out) :: has_vel
     integer :: p
     gid = json_string(json, "id")
     n_atoms = json_int(json, "n_atoms")
@@ -242,6 +257,14 @@ contains
     call parse_int_list(json, p, n_atoms, ids)
     p = key_pos(json, "symbols")
     call parse_str_list(json, p, n_atoms, syms)
+    p = key_pos(json, "velocities")
+    if (p == 0) then
+      has_vel = .false.
+    else
+      has_vel = .true.
+      allocate (vel(3, n_atoms))
+      call parse_f64_rows(json, p, n_atoms, vel)
+    end if
   end subroutine
 
   integer function key_pos(json, key) result(p)

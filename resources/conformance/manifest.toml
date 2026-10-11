@@ -73,6 +73,78 @@ path = "valid/zero_atom_then_frame.con"
 clause = "legal zero-atom frame"
 notes = "A zero-atom frame with lines 8 and 9, then one normal frame."
 
+[[valid]]
+id = "v31-velocity-s"
+path = "valid/v31_velocity_s.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time s."
+
+[[valid]]
+id = "v31-velocity-second"
+path = "valid/v31_velocity_second.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time second."
+
+[[valid]]
+id = "v31-velocity-fs"
+path = "valid/v31_velocity_fs.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time fs."
+
+[[valid]]
+id = "v31-velocity-femtosecond"
+path = "valid/v31_velocity_femtosecond.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time femtosecond."
+
+[[valid]]
+id = "v31-velocity-ps"
+path = "valid/v31_velocity_ps.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time ps."
+
+[[valid]]
+id = "v31-velocity-picosecond"
+path = "valid/v31_velocity_picosecond.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time picosecond."
+
+[[valid]]
+id = "v31-velocity-ns"
+path = "valid/v31_velocity_ns.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time ns."
+
+[[valid]]
+id = "v31-velocity-nanosecond"
+path = "valid/v31_velocity_nanosecond.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with units.time nanosecond."
+
+[[valid]]
+id = "v31-velocity-natural"
+path = "valid/v31_velocity_natural.con"
+clause = "Units (required)"
+notes = "CON 3.1 velocities with the natural time unit."
+
+[[valid]]
+id = "legacy-v1-velocity"
+path = "valid/legacy_v1_velocity.con"
+clause = "legacy velocity"
+notes = "Pre-3.1 version 1 velocities are natural-unit numbers."
+
+[[valid]]
+id = "legacy-v2-velocity"
+path = "valid/legacy_v2_velocity.con"
+clause = "legacy velocity"
+notes = "Pre-3.1 version 2 velocities are natural-unit numbers."
+
+[[valid]]
+id = "legacy-v30-velocity"
+path = "valid/legacy_v30_velocity.con"
+clause = "legacy velocity"
+notes = "Version 3.0 stores an fs label but velocities stay in the natural unit."
+
 [[invalid]]
 id = "missing-spec-version"
 path = "invalid/missing_spec_version.con"
@@ -128,3 +200,10 @@ path = "invalid/per_type_zero.con"
 clause = "per-type count of 0 is InvalidCount"
 error = "InvalidCount"
 notes = "Type count 2 with a per-type count of 0."
+
+[[invalid]]
+id = "v31-velocity-missing-time"
+path = "invalid/v31_velocity_missing_time.con"
+clause = "Units (required)"
+error = "InvalidUnits"
+notes = "CON 3.1 velocities with no units.time."

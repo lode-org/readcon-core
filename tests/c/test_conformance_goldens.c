@@ -228,6 +228,8 @@ typedef struct {
     double (*positions)[3];
     unsigned long long *atom_ids;
     char (*symbols)[MAX_SYM];
+    int has_velocities;
+    double (*velocities)[3];
 } Golden;
 
 static void free_golden(Golden *g) {
@@ -235,6 +237,7 @@ static void free_golden(Golden *g) {
     free(g->positions);
     free(g->atom_ids);
     free(g->symbols);
+    free(g->velocities);
     memset(g, 0, sizeof(*g));
 }
 
@@ -390,6 +393,53 @@ static int parse_golden(const char *json, Golden *g) {
             p++;
         }
     }
+
+    p = find_key(json, "velocities");
+    if (!p) {
+        return 0;
+    }
+    g->has_velocities = 1;
+    g->velocities = (double (*)[3])calloc(n == 0 ? 1 : n, sizeof(*g->velocities));
+    if (!g->velocities) {
+        free_golden(g);
+        return -1;
+    }
+    p = skip_ws(p);
+    if (!p || *p != '[') {
+        free_golden(g);
+        return -1;
+    }
+    p = skip_ws(p + 1);
+    for (size_t i = 0; i < n; i++) {
+        p = skip_ws(p);
+        if (*p == ',') {
+            p = skip_ws(p + 1);
+        }
+        if (*p != '[') {
+            free_golden(g);
+            return -1;
+        }
+        p = skip_ws(p + 1);
+        for (int k = 0; k < 3; k++) {
+            if (k > 0) {
+                p = skip_ws(p);
+                if (*p == ',') {
+                    p = skip_ws(p + 1);
+                }
+            }
+            p = parse_json_number(p, &g->velocities[i][k]);
+            if (!p) {
+                free_golden(g);
+                return -1;
+            }
+        }
+        p = skip_ws(p);
+        if (*p != ']') {
+            free_golden(g);
+            return -1;
+        }
+        p = skip_ws(p + 1);
+    }
     return 0;
 }
 
@@ -485,6 +535,19 @@ static int check_valid(const char *root, const Case *c) {
             fprintf(stderr, "FAIL %s: positions[%zu] golden=[%g,%g,%g] got=[%g,%g,%g]\n", c->id, i,
                     g.positions[i][0], g.positions[i][1], g.positions[i][2], a->x, a->y, a->z);
             nfail++;
+        }
+        if (g.has_velocities) {
+            if (!a->has_velocity) {
+                fprintf(stderr, "FAIL %s: velocities[%zu] missing\n", c->id, i);
+                nfail++;
+            } else if (fabs(a->vx - g.velocities[i][0]) > POS_ABS_TOL ||
+                       fabs(a->vy - g.velocities[i][1]) > POS_ABS_TOL ||
+                       fabs(a->vz - g.velocities[i][2]) > POS_ABS_TOL) {
+                fprintf(stderr, "FAIL %s: velocities[%zu] golden=[%g,%g,%g] got=[%g,%g,%g]\n",
+                        c->id, i, g.velocities[i][0], g.velocities[i][1], g.velocities[i][2], a->vx,
+                        a->vy, a->vz);
+                nfail++;
+            }
         }
     }
 

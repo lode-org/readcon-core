@@ -134,15 +134,15 @@ function parse_golden(json::AbstractString)
         return rows
     end
 
-    function parse_pos_rows()
-        i = _skipws(json, _find_key(json, "positions"))
-        json[i] == '[' || error("positions: expected array")
+    function parse_pos_rows(key::AbstractString="positions")
+        i = _skipws(json, _find_key(json, key))
+        json[i] == '[' || error("$key: expected array")
         i += 1
         rows = Vector{NTuple{3,Float64}}()
         for _ in 1:n_atoms
             i = _skipws(json, i)
             json[i] == ',' && (i = _skipws(json, i + 1))
-            json[i] == '[' || error("positions row")
+            json[i] == '[' || error("$key row")
             i += 1
             nums = Float64[]
             for _k in 1:3
@@ -196,15 +196,19 @@ function parse_golden(json::AbstractString)
         return syms
     end
 
-    return Dict(
+    golden = Dict{String,Any}(
         "id" => id,
         "n_atoms" => n_atoms,
         "spec_version" => spec_version,
         "fixed" => parse_bool_rows(),
-        "positions" => parse_pos_rows(),
+        "positions" => parse_pos_rows("positions"),
         "atom_ids" => parse_ids(),
         "symbols" => parse_syms(),
     )
+    if _find_key(json, "velocities") != 0
+        golden["velocities"] = parse_pos_rows("velocities")
+    end
+    return golden
 end
 
 function _z_to_symbol(z::Integer)
@@ -252,6 +256,14 @@ end
             @test atom.x ≈ want[1] atol=1e-12
             @test atom.y ≈ want[2] atol=1e-12
             @test atom.z ≈ want[3] atol=1e-12
+        end
+        if haskey(golden, "velocities")
+            @test all(a.has_velocity for a in atoms)
+            for (atom, want) in zip(atoms, golden["velocities"])
+                @test atom.vx ≈ want[1] atol=1e-12
+                @test atom.vy ≈ want[2] atol=1e-12
+                @test atom.vz ≈ want[3] atol=1e-12
+            end
         end
     end
 end
