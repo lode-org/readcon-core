@@ -191,3 +191,13 @@ fn v31_frame_as_v1_parses() {
     assert!(frame.atom_data.iter().all(|atom| atom.velocity.is_none()));
     assert!(frame.atom_data.iter().all(|atom| atom.force.is_none()));
 }
+
+#[test]
+fn zero_atom_frame_parses() {
+    let frame = one_frame(&example("zero-atom-frame"));
+    assert_eq!(frame.header.spec_version, 3);
+    assert_eq!(frame.header.natm_types, 0);
+    assert!(frame.header.natms_per_type.is_empty());
+    assert!(frame.atom_data.is_empty());
+    assert!(frame.header.sections.is_empty());
+}

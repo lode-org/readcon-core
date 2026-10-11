@@ -192,11 +192,6 @@ html_theme_options = {
                     "summary": "Cell lists",
                 },
                 {
-                    "title": "readcon",
-                    "url": "https://lode-org.github.io/readcon-core",
-                    "summary": "CON format and the rkr ABI",
-                },
-                {
                     "title": "readcon-db",
                     "url": "https://lode-org.github.io/readcon-db",
                     "summary": "mmap CON/convel corpus: indexes, xxHash3 match, multi-reader",
