@@ -27,6 +27,10 @@ header = """
  *     rkr_frame_to_c_frame (which allocates an AoS copy).
  *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
  *     by the caller; release with free_c_frame.
+ *   - rkr_pre_grouping_indices returns a heap array of n size_t indices.
+ *     The caller owns it and must free it with rkr_free_indices(ptr, n)
+ *     using the same n. rkr_free_indices is safe on NULL. A count of 0
+ *     returns NULL, which is an empty result, not an error.
  *
  * Sentinel values for absent metadata
  *   - Floating-point getters (rkr_frame_energy, rkr_frame_time,

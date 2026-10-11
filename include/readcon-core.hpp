@@ -1381,6 +1381,34 @@ ConFrame::atom_index_by_id(uint64_t atom_id) const {
     return static_cast<size_t>(idx);
 }
 
+/// Indices that restore pre-grouping atom order from column-5 ids.
+///
+/// Unique ids sort by ascending id. A repeated id keeps the input order
+/// of the whole array. The returned vector owns the indices.
+/// `n == 0` returns an empty vector. A null `ids` pointer with `n > 0`
+/// throws `std::invalid_argument`.
+inline std::vector<std::size_t> pre_grouping_indices(const uint64_t *ids,
+                                                     std::size_t n) {
+    if (n == 0) {
+        return {};
+    }
+    if (ids == nullptr) {
+        throw std::invalid_argument("pre_grouping_indices: ids is null");
+    }
+    std::size_t *raw = rkr_pre_grouping_indices(ids, n);
+    if (raw == nullptr) {
+        throw std::runtime_error("pre_grouping_indices: allocation failed");
+    }
+    std::vector<std::size_t> out(raw, raw + n);
+    rkr_free_indices(raw, n);
+    return out;
+}
+
+inline std::vector<std::size_t>
+pre_grouping_indices(const std::vector<uint64_t> &ids) {
+    return pre_grouping_indices(ids.empty() ? nullptr : ids.data(), ids.size());
+}
+
 inline uint32_t ConFrame::spec_version() const {
     return rkr_frame_spec_version(frame_handle_.get());
 }

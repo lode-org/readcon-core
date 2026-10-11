@@ -1943,6 +1943,15 @@ fn ase_velocity_scale(frame: &PyConFrame, py: Python<'_>) -> PyResult<f64> {
         .map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
+/// Indices that restore pre-grouping atom order from column-5 ids.
+///
+/// Unique ids sort by ascending id. A repeated id keeps the input order
+/// of the whole sequence. The returned list is owned by the caller.
+#[pyfunction]
+fn pre_grouping_indices(ids: Vec<u64>) -> Vec<usize> {
+    crate::types::pre_grouping_indices(&ids)
+}
+
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.
 ///
 /// Coverage is hydrogen through uranium (Z = 92) plus the hydrogen
@@ -2002,6 +2011,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select_atom_indices, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_selection_on_frames, m)?)?;
     m.add_function(wrap_pyfunction!(select_atom_positions_on_frames, m)?)?;
+    m.add_function(wrap_pyfunction!(pre_grouping_indices, m)?)?;
     m.add_function(wrap_pyfunction!(symbol_to_atomic_number, m)?)?;
     m.add_function(wrap_pyfunction!(atomic_number_to_symbol, m)?)?;
     Ok(())

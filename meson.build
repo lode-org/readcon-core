@@ -183,6 +183,19 @@ if get_option('with_tests')
         },
         timeout: 120,
     )
+    c_pre_grouping = executable(
+        'test_pre_grouping',
+        files('tests/c/test_pre_grouping.c'),
+        dependencies: readcon_dep,
+        include_directories: _incdir,
+        build_rpath: meson.project_build_root(),
+    )
+    test(
+        'c-pre-grouping',
+        c_pre_grouping,
+        env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+        timeout: 60,
+    )
 endif
 
 if get_option('with_examples')
