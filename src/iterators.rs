@@ -317,7 +317,8 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     /// `Some(Err(ParseError::...))`.
     fn next(&mut self) -> Option<Self::Item> {
         // Trailing whitespace after the last complete frame is not a frame
-        // (CON-frame.1, D2).
+        // (CON-frame.1, D2). An empty line that is followed by more text is
+        // line 1 of the next frame (CON-frame.7).
         if self.lines.remainder_is_whitespace() {
             while self.lines.next_line().is_some() {}
             return None;

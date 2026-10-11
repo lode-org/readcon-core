@@ -13,11 +13,11 @@ All notable changes to this project will be documented in this file. See [conven
 - JSON con_spec_version 0 or 1, and any unknown major, is UnsupportedVersion.
 - The default writer float format is binary64 round-trip. Fixed decimals remain available when requested.
 - A v3 frame with a missing or invalid units object fails the write with InvalidUnits.
-- A minor 1 frame with velocities and no units.time fails the write. The builder no longer injects time: fs.
+- A minor 1 frame with velocities and no units.time is InvalidUnits on read and on write. The builder no longer injects time: fs.
 - The written spelling of the eOn and ASE natural time unit is (amu*angstrom^2/eV)^0.5. The writer does not replace that spelling with spaces.
 - default_v3_units_json supplies length, energy, and mass only. It does not supply time: fs.
 - Trailing whitespace after the last complete frame is ignored and does not open a velocity section.
-- Section rows have a fixed width. Labels compare case-insensitively after collapsing runs of spaces.
+- section_arity counts value fields. An unknown-section row has that many values, then a flag, and an optional id. A reserved entry that is not 3 for a vector or 1 for a scalar is InvalidVectorLength. Labels compare case-insensitively after collapsing runs of spaces.
 - An unknown section is skipped only for a newer minor that declares section_arity. Otherwise it is UnknownSection.
 - gzip and zstd envelopes yield every member and every frame.
 - set_lattice_vectors keeps lines 3 and 4 consistent with the lattice matrix.

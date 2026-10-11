@@ -56,7 +56,8 @@ pub const CON_SPEC_VERSION: u32 = 3;
 
 /// Minor implemented by this reader. Newer minors of major 3 are accepted.
 /// An unknown section is skipped only when the frame minor is greater than
-/// this value and `section_arity` gives the row width (CON-section.8, D14).
+/// this value and `section_arity` gives the value-field count
+/// (CON-section.8, CON-section.12, D14).
 pub const CON_SPEC_MINOR: u32 = 1;
 
 /// Library version string, injected from Cargo.toml at compile time.

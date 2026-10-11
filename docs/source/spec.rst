@@ -777,8 +777,8 @@ SHALL likewise be dimensionally valid for those quantities.
 
 ``default_v3_units_json`` supplies ``length``, ``energy``, and ``mass`` only.
 It does not supply ``time: fs``. A spec 3 frame at minor 1 or newer that
-has a velocities section and no ``units.time`` is ``InvalidUnits``. The
-writer must not invent ``time: fs`` to fill that gap (D10).
+has a velocities section and no ``units.time`` is ``InvalidUnits`` on read
+and on write. The writer must not invent ``time: fs`` to fill that gap (D10).
 
 Unit expressions follow the same lexical conventions as metatomic-style
 host unit strings: case-insensitive names, ``\*`` / ``/`` / ``^``, and parentheses.

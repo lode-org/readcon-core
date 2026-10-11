@@ -1,13 +1,18 @@
 //! v3.1 reader and writer conformance. One case per M-item that the
-//! hand parser owns (M8 and M9 are the ASE adapters). Clause ids are
-//! the ones in docs/orgmode/clauses.tsv on the spec branch.
+//! hand parser owns (M8 and M9 are the ASE adapters).
+//!
+//! Clause ids are the 124 ids in `docs/orgmode/clauses.tsv` on
+//! `docs/spec-v3.1`. The text of CON-count.4, CON-units.16, and CON-id.8
+//! is the fixup on that branch. Tests do not cite an earlier draft.
 
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
 #[cfg(feature = "parallel")]
 use readcon_core::iterators::{frame_start_offsets, frames_from_text};
-use readcon_core::types::{ConFrame, ConFrameBuilder, lengths_and_angles};
-use readcon_core::units::NATURAL_TIME_UNIT;
+use readcon_core::types::{ConFrame, ConFrameBuilder, cell_vectors, lengths_and_angles};
+use readcon_core::units::{
+    NATURAL_TIME_UNIT, parse_unit_expression, validate_unit_for_quantity, velocity_file_time_unit,
+};
 use readcon_core::writer::{ConFrameWriter, FloatFormat};
 #[cfg(feature = "parallel")]
 use std::hash::{Hash, Hasher};
@@ -37,6 +42,7 @@ fn header_only(line2: &str, counts: &str) -> String {
     format!("PRE\n{line2}\n10.0 20.0 30.0\n90.0 90.0 90.0\nPOST1\nPOST2\n{counts}")
 }
 
+/// CON-num.1, CON-num.2, CON-num.3.
 #[test]
 fn m1_non_finite_rejected_without_validate() {
     for token in ["NaN", "nan", "+NaN", "-inf", "INF", "Infinity", "+infinity"] {
@@ -56,6 +62,7 @@ fn m1_non_finite_rejected_without_validate() {
     assert_eq!(class_of(&coord), "NonFiniteValue");
 }
 
+/// CON-mask.1, CON-mask.2, CON-mask.3, CON-mask.4, CON-mask.5, CON-error.3.
 #[test]
 fn m2_column_four_is_an_integer_token() {
     let flagged = v2_frame(r#"{"con_spec_version":2}"#, "0.0 0.0 0.0 0.0 1");
@@ -91,6 +98,7 @@ Coordinates of Component 1
     assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
 }
 
+/// CON-frame.1, CON-frame.5, CON-mask.2.
 #[test]
 fn m3_trailing_whitespace_does_not_open_a_velocity_section() {
     let text = "\
@@ -115,6 +123,7 @@ Coordinates of component   1
     assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
 }
 
+/// CON-id.1, CON-id.6, CON-id.9, CON-error.3, CON-num.8.
 #[test]
 fn m4_atom_id_is_not_parsed_as_float() {
     let id = "9007199254740993";
@@ -130,8 +139,28 @@ fn m4_atom_id_is_not_parsed_as_float() {
     let missing = v2_frame(r#"{"con_spec_version":2}"#, "1.0 2.0 3.0 0");
     let frame = parse_one(&missing).unwrap();
     assert_eq!(frame.atom_data[0].atom_id, 0);
+
+    let four = "\
+PRE
+{\"con_spec_version\":2}
+10 10 10
+90 90 90
+A
+B
+1
+2
+1.0
+H
+Coordinates of Component 1
+0 0 0 0
+1 0 0 0 9
+";
+    let frame = parse_one(four).unwrap();
+    assert_eq!(frame.atom_data[0].atom_id, 0);
+    assert_eq!(frame.atom_data[1].atom_id, 9);
 }
 
+/// CON-num.9, CON-section.4.
 #[test]
 fn m5_section_rows_have_exact_width() {
     let short_vel = "\
@@ -176,6 +205,7 @@ Energies of Component 1
     assert_eq!(class_of(short_energy), "InvalidVectorLength");
 }
 
+/// CON-file.5, CON-section.15, CON-validate.1.
 #[test]
 fn m6_labels_fold_case_and_spaces() {
     let text = "\
@@ -200,6 +230,7 @@ velocities of component   1
     assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
 }
 
+/// CON-units.13, CON-units.14.
 #[test]
 fn m7_writer_rejects_invalid_units() {
     let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
@@ -219,6 +250,7 @@ fn m7_writer_rejects_invalid_units() {
     }
 }
 
+/// CON-compress.1.
 #[test]
 fn m10_gzip_reads_every_member() {
     let one = v2_frame(r#"{"con_spec_version":2}"#, "1.0 0.0 0.0 0 0");
@@ -239,6 +271,7 @@ fn m10_gzip_reads_every_member() {
     assert_eq!(frames[1].atom_data[0].x, 2.0);
 }
 
+/// CON-compress.2.
 #[cfg(feature = "zstd")]
 #[test]
 fn m10_zstd_reads_every_frame() {
@@ -253,6 +286,7 @@ fn m10_zstd_reads_every_frame() {
     assert_eq!(frames.len(), 2, "zstd must yield both concatenated frames");
 }
 
+/// CON-line2.5, CON-line2.6, CON-units.6.
 #[test]
 fn m11_json_majors_zero_and_one_are_unsupported() {
     for ver in [0, 1, 9] {
@@ -290,6 +324,7 @@ Coordinates of Component 1
     );
 }
 
+/// CON-line2.1, CON-line2.2, CON-line2.3, CON-error.2.
 #[test]
 fn m12_metadata_errors_name_line_two() {
     let missing = "\
@@ -325,6 +360,8 @@ B
     assert!(err.to_string().contains("line 2"), "{err}");
 }
 
+/// CON-count.1, CON-count.2, CON-count.3, CON-count.4, CON-frame.3,
+/// CON-error.3, CON-validate.3.
 #[test]
 fn zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count() {
     let zero = header_only(r#"{"con_spec_version":2}"#, "0\n\n\n");
@@ -366,11 +403,18 @@ fn zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count() {
         Some(true)
     );
     assert_eq!(frame.atom_data.len(), 0);
+    assert_ne!(class_of(&strict), "ValidationError");
+
+    let missing_sections = header_only(r#"{"con_spec_version":2,"validate":true}"#, "0\n\n\n");
+    assert_eq!(class_of(&missing_sections), "InvalidMetadataJson");
 
     let token = header_only(r#"{"con_spec_version":2}"#, "0\n1\n\n");
     assert_eq!(class_of(&token), "InvalidCount");
+    let eof_bare = header_only(r#"{"con_spec_version":2}"#, "0");
+    assert_ne!(class_of(&eof_bare), "IncompleteHeader");
 }
 
+/// CON-file.2.
 #[test]
 fn leading_bom_is_rejected() {
     let text = format!(
@@ -382,6 +426,7 @@ fn leading_bom_is_rejected() {
     assert!(err.to_string().contains("byte-order mark"), "{err}");
 }
 
+/// CON-token.2, CON-num.5.
 #[test]
 fn float_accepts_sign_dot_and_exponent() {
     let text = v2_frame(r#"{"con_spec_version":2}"#, "+1.5 .25 1.0e-1 0 7");
@@ -389,10 +434,12 @@ fn float_accepts_sign_dot_and_exponent() {
     let atom = &frame.atom_data[0];
     assert!((atom.x - 1.5).abs() < 1e-15);
     assert!((atom.y - 0.25).abs() < 1e-15);
-    assert!((atom.z - 0.1).abs() < 1e-15);
+    assert_eq!(atom.z.to_bits(), 0.1_f64.to_bits());
     assert_eq!(atom.atom_id, 7);
 }
 
+/// CON-section.7, CON-section.8, CON-section.9, CON-section.12,
+/// CON-section.14, CON-section.15.
 #[test]
 fn unknown_section_skips_only_a_newer_minor_with_arity() {
     let same = "\
@@ -413,7 +460,7 @@ Coordinates of Component 1
 
     let newer = "\
 PRE
-{\"con_spec_version\":3,\"con_spec_minor\":2,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"widgets\"],\"section_arity\":{\"widgets\":5}}
+{\"con_spec_version\":3,\"con_spec_minor\":2,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"widgets\"],\"section_arity\":{\"widgets\":3}}
 10 10 10
 90 90 90
 A
@@ -427,16 +474,26 @@ Coordinates of Component 1
 
 H
 Widgets of Component 1
-1 2 3 4 5
+1 2 3 0 1
 ";
     let frame = parse_one(newer).unwrap();
     assert_eq!(frame.atom_data.len(), 1);
     assert!(!frame.has_velocities());
 
-    let no_arity = newer.replace(",\"section_arity\":{\"widgets\":5}", "");
+    let flag_only = newer.replace("1 2 3 0 1", "1 2 3 0");
+    assert_eq!(class_of(&flag_only), "ok");
+    let short = newer.replace("1 2 3 0 1", "1 2 3");
+    assert_eq!(class_of(&short), "InvalidVectorLength");
+    let long = newer.replace("1 2 3 0 1", "1 2 3 0 1 9");
+    assert_eq!(class_of(&long), "InvalidVectorLength");
+    let bad_label = newer.replace("Widgets of Component 1", "Not the widgets label");
+    assert_eq!(class_of(&bad_label), "IncompleteSection");
+
+    let no_arity = newer.replace(",\"section_arity\":{\"widgets\":3}", "");
     assert_eq!(class_of(&no_arity), "UnknownSection");
 }
 
+/// CON-section.2, CON-frame.6.
 #[test]
 fn one_blank_line_opens_a_section() {
     let missing_blank = "\
@@ -459,6 +516,7 @@ Velocities of Component 1
     assert_eq!(class_of(missing_blank), "IncompleteSection");
 }
 
+/// CON-num.6, CON-num.7, CON-cell.2.
 #[test]
 fn round_trip_is_the_writer_default_and_lattice_lines_follow_vectors() {
     assert_eq!(FloatFormat::default(), FloatFormat::RoundTrip);
@@ -480,6 +538,7 @@ fn round_trip_is_the_writer_default_and_lattice_lines_follow_vectors() {
     assert!((parsed.header.boxl[2] - 4.0).abs() < 1e-12);
 }
 
+/// CON-id.3.
 #[test]
 fn writer_rejects_a_repeated_atom_id() {
     let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
@@ -498,6 +557,7 @@ fn writer_rejects_a_repeated_atom_id() {
     }
 }
 
+/// CON-units.3, CON-units.4, CON-units.12.
 #[test]
 fn v31_writer_requires_time_when_velocities_are_present() {
     let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
@@ -552,6 +612,7 @@ fn velocity_frame() -> ConFrameBuilder {
     builder
 }
 
+/// CON-units.5.
 #[test]
 fn natural_time_spelling_is_byte_exact_on_write() {
     let golden = natural_time_golden();
@@ -650,6 +711,7 @@ fn digest(frames: &[ConFrame]) -> u64 {
     hasher.finish()
 }
 
+/// CON-error.1. The class is the same at 1, 2, 3, and 8 threads.
 #[cfg(feature = "parallel")]
 #[test]
 fn thread_counts_hash_every_field_and_share_the_first_error() {
@@ -681,6 +743,7 @@ fn thread_counts_hash_every_field_and_share_the_first_error() {
     assert_eq!(first.unwrap().0, "NonFiniteValue");
 }
 
+/// CON-count.1, CON-count.4, CON-frame.7.
 #[test]
 fn zero_atom_frame_round_trips_and_keeps_the_next_frame() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -720,6 +783,7 @@ fn zero_atom_frame_round_trips_and_keeps_the_next_frame() {
     assert!(again.atom_data.is_empty());
 }
 
+/// CON-id.4, CON-id.5, CON-id.6, CON-id.8.
 #[test]
 fn pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order() {
     let unique = "\
@@ -773,6 +837,8 @@ Coordinates of Component 1
     );
 }
 
+/// CON-error.4. The earliest frame's class wins at 1, 2, 3, and 8 threads.
+/// The line number of that count token is reported by the bindings reader.
 #[cfg(feature = "parallel")]
 #[test]
 fn earliest_frame_error_wins_at_every_thread_count() {
@@ -793,5 +859,379 @@ fn earliest_frame_error_wins_at_every_thread_count() {
         assert_eq!(frames[0].atom_data.len(), 0);
         assert_eq!(frames[1].atom_data.len(), 1);
         assert_eq!(frames[1].atom_data[0].atom_id, 4);
+    }
+}
+
+fn near(got: f64, want: f64) -> bool {
+    (got - want).abs() < 1e-9
+}
+
+/// CON-cell.1, CON-cell.3, CON-cell.4, CON-cell.5, CON-cell.6.
+#[test]
+fn cell_matrix_prefers_lattice_vectors_and_builds_the_rest() {
+    let orthogonal = cell_vectors([10.0, 20.0, 30.0], [90.0, 90.0, 90.0]);
+    assert!(near(orthogonal[0][0], 10.0));
+    assert!(orthogonal[0][1].abs() < 1e-9 && orthogonal[0][2].abs() < 1e-9);
+    assert!(orthogonal[1][0].abs() < 1e-9 && near(orthogonal[1][1], 20.0));
+    assert!(orthogonal[1][2].abs() < 1e-9);
+    assert!(orthogonal[2][0].abs() < 1e-9 && orthogonal[2][1].abs() < 1e-9);
+    assert!(near(orthogonal[2][2], 30.0));
+    let (lengths, angles) = lengths_and_angles(orthogonal);
+    assert!(near(lengths[0], 10.0) && near(lengths[1], 20.0) && near(lengths[2], 30.0));
+    assert!(angles.iter().all(|angle| near(*angle, 90.0)));
+
+    let skew = cell_vectors([10.0, 10.0, 10.0], [90.0, 90.0, 60.0]);
+    assert!(near(skew[1][0], 5.0));
+    assert!(near(skew[1][1], 5.0 * 3.0_f64.sqrt()));
+    assert!(skew[1][2].abs() < 1e-9);
+    let (lengths, angles) = lengths_and_angles(skew);
+    assert!(lengths.iter().all(|length| near(*length, 10.0)));
+    assert!(near(angles[0], 90.0) && near(angles[1], 90.0) && near(angles[2], 60.0));
+
+    let frame = parse_one(&v2_frame(r#"{"con_spec_version":2}"#, "0 0 0 0 0")).unwrap();
+    assert_eq!(frame.header.pbc_effective(), [true, true, true]);
+    let from_lines = frame.header.cell_matrix();
+    assert!(near(from_lines[0][0], 10.0));
+    assert!(near(from_lines[1][1], 20.0));
+    assert!(near(from_lines[2][2], 30.0));
+
+    let mut with_lattice = frame;
+    let vecs = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]];
+    with_lattice.header.set_lattice_vectors(vecs);
+    assert_eq!(with_lattice.header.cell_matrix(), vecs);
+
+    let bad_pbc = v2_frame(
+        r#"{"con_spec_version":2,"validate":true,"sections":[],"pbc":[true,false]}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&bad_pbc), "InvalidMetadataJson");
+    let bad_lattice = v2_frame(
+        r#"{"con_spec_version":2,"validate":true,"sections":[],"lattice_vectors":[[1,0,0],[0,1]]}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&bad_lattice), "InvalidMetadataJson");
+}
+
+/// CON-header.3, CON-units.7.
+#[test]
+fn coordinates_and_masses_use_declared_units() {
+    let v2 = parse_one(&v2_frame(
+        r#"{"con_spec_version":2,"units":{"length":"nm","energy":"eV","mass":"u"}}"#,
+        "1.5 0 0 0 0",
+    ))
+    .unwrap();
+    assert_eq!(v2.header.spec_version, 2);
+    assert_eq!(v2.header.coordinate_length_unit(), "nm");
+    assert_eq!(v2.header.mass_unit(), "u");
+    assert_eq!(v2.atom_data[0].x, 1.5);
+    assert_eq!(v2.header.masses_per_type[0], 12.011);
+
+    let bare = parse_one(&v2_frame(r#"{"con_spec_version":2}"#, "1 0 0 0 0")).unwrap();
+    assert_eq!(bare.header.coordinate_length_unit(), "angstrom");
+    assert_eq!(bare.header.mass_unit(), "amu");
+
+    let v3 = parse_one(&v2_frame(
+        r#"{"con_spec_version":3,"units":{"length":"nm","energy":"eV","mass":"u"}}"#,
+        "2.5 0 0 0 0",
+    ))
+    .unwrap();
+    assert_eq!(v3.header.coordinate_length_unit(), "nm");
+    assert_eq!(v3.header.mass_unit(), "u");
+    assert_eq!(v3.atom_data[0].x, 2.5);
+}
+
+/// CON-units.8, CON-units.9, CON-units.10, CON-units.11.
+#[test]
+fn velocity_time_follows_the_minor() {
+    let mut meta = serde_json::Map::new();
+    meta.insert(
+        "units".into(),
+        serde_json::json!({"length": "angstrom", "energy": "eV", "time": "fs"}),
+    );
+    for spec in [1u32, 2, 3] {
+        assert_eq!(
+            velocity_file_time_unit(spec, &meta, None).unwrap(),
+            NATURAL_TIME_UNIT,
+            "spec {spec} ignores a time label"
+        );
+    }
+    meta.insert("con_spec_minor".into(), serde_json::json!(0));
+    assert_eq!(
+        velocity_file_time_unit(3, &meta, None).unwrap(),
+        NATURAL_TIME_UNIT
+    );
+    meta.insert("con_spec_minor".into(), serde_json::json!(1));
+    assert_eq!(velocity_file_time_unit(3, &meta, None).unwrap(), "fs");
+
+    let minor0 = "\
+PRE
+{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"},\"sections\":[\"velocities\"]}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+Coordinates of Component 1
+0 0 0 0 0
+
+H
+Velocities of Component 1
+0.1 0 0 0 0
+";
+    let frame = parse_one(minor0).unwrap();
+    assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.0, 0.0]));
+
+    let minor1_no_time = "\
+PRE
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+Coordinates of Component 1
+0 0 0 0 0
+
+H
+Velocities of Component 1
+0.1 0 0 0 0
+";
+    assert_eq!(class_of(minor1_no_time), "InvalidUnits");
+    let with_time = minor1_no_time.replace(r#""energy":"eV""#, r#""energy":"eV","time":"fs""#);
+    let frame = parse_one(&with_time).unwrap();
+    assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.0, 0.0]));
+
+    let no_velocities = "\
+PRE
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10 10 10
+90 90 90
+A
+B
+1
+1
+1.0
+H
+Coordinates of Component 1
+0 0 0 0 0
+";
+    assert_eq!(class_of(no_velocities), "ok");
+}
+
+/// CON-units.16. `mol` is a count name, so kcal/mol and kJ/mol are energy.
+#[test]
+fn unit_vocabulary_includes_mol() {
+    validate_unit_for_quantity("energy", "kcal/mol").unwrap();
+    validate_unit_for_quantity("energy", "kJ/mol").unwrap();
+    validate_unit_for_quantity("energy", "KCAL/MOL").unwrap();
+    let groups = [
+        (
+            "length",
+            &[
+                "m",
+                "meter",
+                "metre",
+                "angstrom",
+                "a",
+                "å",
+                "Å",
+                "nm",
+                "nanometer",
+                "bohr",
+                "a0",
+            ][..],
+        ),
+        (
+            "energy",
+            &["j", "joule", "ev", "mev", "hartree", "ha", "kcal", "kj"][..],
+        ),
+        ("mass", &["kg", "kilogram", "u", "amu", "dalton", "da"][..]),
+        (
+            "time",
+            &[
+                "s",
+                "second",
+                "fs",
+                "femtosecond",
+                "ps",
+                "picosecond",
+                "ns",
+                "nanosecond",
+            ][..],
+        ),
+    ];
+    for (quantity, names) in groups {
+        for name in names {
+            validate_unit_for_quantity(quantity, name)
+                .unwrap_or_else(|err| panic!("{name}: {err}"));
+            let upper = name.to_ascii_uppercase();
+            validate_unit_for_quantity(quantity, &upper)
+                .unwrap_or_else(|err| panic!("{upper}: {err}"));
+        }
+    }
+    parse_unit_expression("mol").unwrap();
+    parse_unit_expression("MOL").unwrap();
+}
+
+/// CON-frame.1, CON-frame.3, CON-frame.7.
+#[test]
+fn the_line_after_a_frame_starts_the_next_frame() {
+    // sections:[] closes the frame, so the following empty line is not a
+    // legacy velocity block. It is line 1 of the next frame.
+    let first = v2_frame(r#"{"con_spec_version":2,"sections":[]}"#, "0 0 0 0 1");
+    let second = "\
+\n{\"con_spec_version\":2}
+10.0 20.0 30.0
+90.0 90.0 90.0
+POST1
+POST2
+1
+1
+1.0
+H
+Coordinates of Component 1
+1 0 0 0 2
+";
+    let two = format!("{first}{second}");
+    let mut iter = ConFrameIterator::new(&two);
+    let leading = iter.next().unwrap().unwrap();
+    let following = iter.next().unwrap().unwrap();
+    assert!(iter.next().is_none());
+    assert_eq!(leading.atom_data[0].atom_id, 1);
+    assert_eq!(following.header.prebox_header.user, "");
+    assert_eq!(following.atom_data[0].atom_id, 2);
+
+    let trailing = format!("{first}\n   \n\n");
+    let mut iter = ConFrameIterator::new(&trailing);
+    assert!(iter.next().unwrap().is_ok());
+    assert!(iter.next().is_none());
+
+    let partial = format!("{first}ONLY\n");
+    let mut iter = ConFrameIterator::new(&partial);
+    assert!(iter.next().unwrap().is_ok());
+    assert_eq!(
+        iter.next().unwrap().unwrap_err().class_name(),
+        "IncompleteHeader"
+    );
+}
+
+/// CON-line2.1, CON-line2.7, CON-line2.8, CON-line2.9, CON-line2.10,
+/// CON-status.1, CON-file.3, CON-file.4.
+#[test]
+fn later_minors_and_line_endings_are_accepted() {
+    let later = v2_frame(
+        r#"{"con_spec_version":3,"con_spec_minor":99,"units":{"length":"angstrom","energy":"eV"},"probe":1}"#,
+        "0 0 0 0 3",
+    );
+    let frame = parse_one(&later).unwrap();
+    assert_eq!(
+        frame
+            .header
+            .metadata
+            .get("con_spec_minor")
+            .and_then(|v| v.as_u64()),
+        Some(99)
+    );
+    assert_eq!(
+        frame.header.metadata.get("probe").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+    let mut buf = Vec::new();
+    ConFrameWriter::new(&mut buf).write_frame(&frame).unwrap();
+    let written = String::from_utf8(buf).unwrap();
+    assert!(
+        written.contains("\"probe\":1") || written.contains("\"probe\": 1"),
+        "{written}"
+    );
+
+    let bad_minor = v2_frame(
+        r#"{"con_spec_version":3,"con_spec_minor":-1,"units":{"length":"angstrom","energy":"eV"}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&bad_minor), "InvalidMetadataJson");
+    let junk = v2_frame(r#"{"con_spec_version":2} trailing"#, "0 0 0 0 0");
+    assert_eq!(class_of(&junk), "InvalidMetadataJson");
+
+    let crlf = v2_frame(r#"{"con_spec_version":2}"#, "1.25 0 0 0 4").replace('\n', "\r\n");
+    let frame = parse_one(&crlf).unwrap();
+    assert_eq!(frame.atom_data[0].x, 1.25);
+    assert_eq!(frame.atom_data[0].atom_id, 4);
+
+    let spaced = v2_frame(r#"{"con_spec_version":2}"#, "1.5 2 3 0 5   \t");
+    let frame = parse_one(&spaced).unwrap();
+    assert_eq!(frame.atom_data[0].x, 1.5);
+    assert_eq!(frame.atom_data[0].atom_id, 5);
+}
+
+/// CON-section.13.
+#[test]
+fn reserved_section_arity_is_the_value_field_count() {
+    let vector = v2_frame(
+        r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"section_arity":{"velocities":2}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&vector), "InvalidVectorLength");
+    let scalar = v2_frame(
+        r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"section_arity":{"energies":3}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&scalar), "InvalidVectorLength");
+    let ok = v2_frame(
+        r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"section_arity":{"velocities":3,"energies":1}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&ok), "ok");
+}
+
+/// CON-section.16.
+#[test]
+fn minor2_writer_lists_new_sections_in_section_arity() {
+    let mut builder = velocity_frame();
+    builder.set_con_spec_minor(2);
+    builder
+        .set_units(serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "mass": "amu",
+            "time": NATURAL_TIME_UNIT
+        }))
+        .unwrap();
+    let mut buf = Vec::new();
+    ConFrameWriter::new(&mut buf)
+        .write_frame(&builder.build().unwrap())
+        .unwrap();
+    let text = String::from_utf8(buf).unwrap();
+    let line2 = text.lines().nth(1).unwrap();
+    let meta: serde_json::Value = serde_json::from_str(line2).unwrap();
+    let reserved = [
+        "velocities",
+        "forces",
+        "energies",
+        "charges",
+        "spins",
+        "magmoms",
+        "displacements",
+        "spreads",
+    ];
+    let sections = meta["sections"].as_array().unwrap();
+    assert!(sections.iter().any(|name| name == "velocities"));
+    for name in sections {
+        let name = name.as_str().unwrap();
+        if reserved.contains(&name) {
+            continue;
+        }
+        assert!(
+            meta["section_arity"]
+                .get(name)
+                .and_then(|v| v.as_u64())
+                .is_some(),
+            "{name} missing from {line2}"
+        );
     }
 }

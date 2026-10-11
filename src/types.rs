@@ -58,7 +58,8 @@ pub mod meta {
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
     /// Minor of a known major. Absent or 0 means minor 0 (CON-line2.10).
     pub const CON_SPEC_MINOR: &str = "con_spec_minor";
-    /// Row token counts for sections this reader may skip (CON-section.11).
+    /// Value-field counts for sections this reader may skip (CON-section.12).
+    /// The flag and the optional id are not part of the count.
     pub const SECTION_ARITY: &str = "section_arity";
     /// Array of declared section names (strings). Required when
     /// `validate=true`; absent triggers the legacy blank-separator
@@ -154,6 +155,22 @@ pub const SECTION_DISPLACEMENTS: &str = "displacements";
 /// written coordinates (a standard deviation per axis, each non-negative; 0
 /// is a classical point); same block shape as [`SECTION_VELOCITIES`].
 pub const SECTION_SPREADS: &str = "spreads";
+
+/// Value-field count of a section that minor 1 reserves (CON-section.13).
+///
+/// Vector rows are 3 and scalar rows are 1. `None` means the name is
+/// not reserved, so a later minor lists it in `section_arity` (CON-section.16).
+pub fn reserved_section_value_arity(name: &str) -> Option<u64> {
+    match name {
+        SECTION_VELOCITIES
+        | SECTION_FORCES
+        | SECTION_MAGMOMS
+        | SECTION_DISPLACEMENTS
+        | SECTION_SPREADS => Some(3),
+        SECTION_ENERGIES | SECTION_CHARGES | SECTION_SPINS => Some(1),
+        _ => None,
+    }
+}
 
 /// A spread row is a standard deviation per axis: finite and non-negative.
 /// Zero is a classical point.
@@ -363,6 +380,18 @@ impl FrameHeader {
         self.unit_for("length")
     }
 
+    /// Unit of line 3 and the coordinate columns.
+    /// Absent `units`, or an absent `length` key, means angstrom (CON-header.3).
+    pub fn coordinate_length_unit(&self) -> &str {
+        self.length_unit().unwrap_or("angstrom")
+    }
+
+    /// Unit of the masses on line 9.
+    /// Absent `units`, or an absent `mass` key, means amu (CON-header.3).
+    pub fn mass_unit(&self) -> &str {
+        self.unit_for("mass").unwrap_or("amu")
+    }
+
     /// `energy` unit string when present.
     pub fn energy_unit(&self) -> Option<&str> {
         self.unit_for("energy")
@@ -422,6 +451,13 @@ impl FrameHeader {
             Some([r[0].as_f64()?, r[1].as_f64()?, r[2].as_f64()?])
         };
         Some([row(0)?, row(1)?, row(2)?])
+    }
+
+    /// Cell matrix. A present `lattice_vectors` wins over lines 3-4 (CON-cell.1).
+    /// Otherwise the matrix is built from those lines (CON-cell.6).
+    pub fn cell_matrix(&self) -> [[f64; 3]; 3] {
+        self.lattice_vectors()
+            .unwrap_or_else(|| cell_vectors(self.boxl, self.angles))
     }
 
     /// Periodic boundary conditions. A missing `pbc` key is fully periodic
@@ -683,6 +719,37 @@ pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
         [len(a), len(b), len(c)],
         [angle_deg(b, c), angle_deg(a, c), angle_deg(a, b)],
     )
+}
+
+/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
+/// in degrees (CON-cell.6).
+///
+/// `a = (|a|, 0, 0)`,
+/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
+/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
+/// |c| sqrt(1 - cos^2 beta - cy^2))` where `cy` is that middle term.
+pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
+    let [a_len, b_len, c_len] = lengths;
+    let alpha = angles_deg[0].to_radians();
+    let beta = angles_deg[1].to_radians();
+    let gamma = angles_deg[2].to_radians();
+    let cos_alpha = alpha.cos();
+    let cos_beta = beta.cos();
+    let cos_gamma = gamma.cos();
+    let sin_gamma = gamma.sin();
+    let cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
+    let cz_sq = 1.0 - cos_beta * cos_beta - cy * cy;
+    // Orthogonal angles leave a rounding crumb below zero.
+    let cz = if cz_sq < 0.0 && cz_sq > -1e-12 {
+        0.0
+    } else {
+        cz_sq.sqrt()
+    };
+    [
+        [a_len, 0.0, 0.0],
+        [b_len * cos_gamma, b_len * sin_gamma, 0.0],
+        [c_len * cos_beta, c_len * cy, c_len * cz],
+    ]
 }
 
 /// Decode a column-4 bitmask as a spec-2 value.
