@@ -408,7 +408,7 @@ Grammar or schema & yes & no & grammar & no & prose & prose & prose & prose \\
 \end{sidewaystable}
 
 Text stays the default because eOn and ASE already exchange it, a diff needs no decoder, and a binary replacement would strand every frame a queue is holding.
-On the \(167.71\,\mathrm{MB}\) band the file read is \(0.10\,\mathrm{s}\) of a \(0.15\,\mathrm{s}\) parse, about 510 Morse calls on the 28-atom slab, which answers the objection that text is bulky and readable only from the first byte.
+On the \(167.71\,\mathrm{MB}\) band an eight-thread parse takes \(0.15\,\mathrm{s}\), about 510 Morse calls on the 28-atom slab, so the text is a small share of a force-bound campaign.
 
 \subsection{Governance}
 The specification is published apart from any one code.
@@ -539,28 +539,29 @@ The bindings return that id on the file-order atom, which is the surface Listing
 
 \subsection{An interrupted eOn band}
 We restart an eOn 3.6.0 client with the Morse Pt potential and ASE 3.29.0, on a Pt(100) \(3\times3\times3\) slab plus one adatom (28 atoms, the bottom 9 at mask 7).
-The event is a hollow-to-hollow hop, the band has five movable images, the optimiser is steepest descent, and the run is six iterations interrupted at three.
-Minimisations, the band and the dimer reported below all stop at an iteration cap, so we treat them as fidelity tests of the checkpoint and not as barriers.
-eOn's iteration 0 writes the loaded band without stepping, therefore \(N\) iterations take \(N-1\) steps, and a resume that is given the same iteration cap ends one step short of the uninterrupted end.
-The \(0.0068\,\mathrm{eV}\) difference between those two endings is that step count.
-The comparison that matters is the aligned step.
+The event is a hollow-to-hollow hop, the band has five movable images, the optimiser is steepest descent, and both the uninterrupted run and each resume take five steepest-descent steps.\footnote{Giving the resume the same iteration cap as the uninterrupted job leaves it one step short, because iteration 0 writes the loaded band and does not step.
+The \(0.0068\,\mathrm{eV}\) gap of that unmatched pair is the step count.}
+Minimisations, the band and the dimer reported below all stop at an iteration cap.
+The matched comparison is the primary result, and it is the band after those five steps.
 
 We find that both resumed runs reproduce the uninterrupted printed table: max force \(3.0658\), then \(1.2007\), then \(0.59762\,\mathrm{eV}/\text{\AA}\), and highest image \(0.8305\), then \(0.6911\), then \(0.6417\,\mathrm{eV}\).
-Against the uninterrupted band at that aligned step, the round-trip resume agrees to \(1\times10^{-14}\,\text{\AA}\), with a measured maximum of \(8.9\times10^{-15}\,\text{\AA}\) and an RMSD of \(6.7\times10^{-16}\,\text{\AA}\).
-The six-decimal resume agrees only to a maximum of \(4.9\times10^{-7}\,\text{\AA}\) (RMSD \(1.9\times10^{-7}\,\text{\AA}\)).
+After the five steps the round-trip resume barrier is \(0.63493\,\mathrm{eV}\), a difference of 0 from the uninterrupted band.
+On that final band the minimum-image displacement is at most \(8.9\times10^{-15}\,\text{\AA}\) (RMSD \(1.1\times10^{-15}\,\text{\AA}\)), which is agreement to \(1\times10^{-14}\,\text{\AA}\).
+The six-decimal resume shifts the same barrier by \(+1.0\times10^{-6}\,\mathrm{eV}\), with a minimum-image maximum of \(4.9\times10^{-7}\,\text{\AA}\) and an RMSD of \(2.0\times10^{-7}\,\text{\AA}\).
 The checkpoint round trip is the part that is bitwise exact.
-The resumed geometry is not described as bitwise exact, because the search has taken steps after the load.
-Figure~\ref{fig:restart} plots the shared printed series and the two displacements.
-No point on that figure is missing, and the curves stop at the aligned step rather than at an unmatched ending.
+The resumed band is not bitwise exact, because the search has taken steps after the load.
+Figure~\ref{fig:restart} plots the shared printed series and the final-band displacements.
+No point on that figure is missing.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{Interrupted eOn nudged elastic band on a 28-atom Pt(100) slab with a Morse potential, five movable images and steepest descent, stopped at an iteration cap.
+\caption{Interrupted eOn nudged elastic band on a 28-atom Pt(100) slab with a Morse potential, five movable images and steepest descent.
+Both the uninterrupted run and each resume take five steepest-descent steps, and the search stops at an iteration cap.
 Left and centre: max force and highest-image energy for the uninterrupted run and for resumes from a round-trip checkpoint and from a six-decimal checkpoint.
 The three series coincide at printed precision.
-Right: maximum displacement and RMSD of each resume against the uninterrupted band at the aligned step, on a logarithmic axis.
-These energies are not converged barriers.}
+Right: minimum-image maximum and RMSD of each final band against the uninterrupted band, on a logarithmic axis.
+The round-trip barrier at that band is \(0.63493\,\mathrm{eV}\), with difference 0.}
 \label{fig:restart}
 \end{figure}
 
@@ -616,7 +617,11 @@ The Python bar includes construction of one object per atom.}
 
 At the automatic width the Rust time is \(0.988\) of the C++ time, interval \([0.942, 0.989]\).
 On one thread that ratio is \(1.016\), interval \([0.965, 1.142]\), so the wrapper is not a large fraction of the parse in either direction.
-File read alone takes \(0.100\,\mathrm{s}\) and the boundary scan \(0.036\,\mathrm{s}\), and scaling is bounded by the read, which is \(0.10\,\mathrm{s}\) of the \(0.15\,\mathrm{s}\) parse.
+The \(0.100\,\mathrm{s}\) stage loads the bytes into a string, a copy plus a UTF-8 check, and it is not an I/O floor.
+Copying the file to the null device on a hot page cache takes \(0.0212\,\mathrm{s}\) (\(7.9\,\mathrm{GB/s}\)).
+The eight-thread parse is about \(7.7\) times that floor.
+The serial string load and the boundary scan, \(0.100\,\mathrm{s}\) and \(0.036\,\mathrm{s}\), limit scaling, which is what Amdahl's law gives for a speedup of \(3.8\) on 8 threads.
+% CHECK: confirm the serial fraction behind ``3.8 on 8 threads'' before that Amdahl clause is left as a result.
 Python full objects take \(1.369\,\mathrm{s}\) (\(122.5\,\mathrm{MB/s}\)) against \(3.856\,\mathrm{s}\) (\(43.5\,\mathrm{MB/s}\)) for the ASE reader of the same text, a ratio of \(0.351\) with interval \([0.335, 0.379]\), about \(2.8\) times, and the positions-only ratio is \(0.342\) with interval \([0.335, 0.357]\).
 Object construction is about \(0.826\,\mathrm{s}\), interval \([0.725, 0.851]\), roughly 60 percent of the Python time.
 That estimate subtracts the one-thread Rust parse from the Python read at the same repeat index, and the two blocks were sequential, so the difference is index-aligned rather than an interleaved pair.

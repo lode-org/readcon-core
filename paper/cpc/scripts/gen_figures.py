@@ -104,7 +104,7 @@ def architecture() -> None:
 
 
 def restart() -> None:
-    """Printed NEB series and aligned-step displacement. No missing points."""
+    """Printed NEB series and final-band minimum-image displacement. No missing points."""
     steps = [1, 2, 3]
     force = [3.0658, 1.2007, 0.59762]
     energy = [0.8305, 0.6911, 0.6417]
@@ -141,14 +141,14 @@ def restart() -> None:
     axes[1].set_xticks(steps)
 
     labels = ["round trip\nmax", "round trip\nRMSD", "six decimals\nmax", "six decimals\nRMSD"]
-    values = [8.9e-15, 6.7e-16, 4.9e-7, 1.9e-7]
+    values = [8.9e-15, 1.1e-15, 4.9e-7, 2.0e-7]
     colors = [BLUE, SKY, VERMILLION, ORANGE]
     axes[2].bar(range(4), values, color=colors, edgecolor=BLACK, linewidth=0.4)
     axes[2].set_yscale("log")
     axes[2].set_xticks(range(4))
     axes[2].set_xticklabels(labels, fontsize=7)
-    axes[2].set_ylabel("displacement (Å)")
-    axes[2].set_xlabel("against the aligned band")
+    axes[2].set_ylabel("minimum-image displacement (Å)")
+    axes[2].set_xlabel("against the final band")
 
     fig.tight_layout()
     fig.savefig(OUT / "restart.pdf")
