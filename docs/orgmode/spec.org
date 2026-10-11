@@ -533,7 +533,7 @@ expressions: named bases combined with =*= / =/= / =^=).
 |------------+----------------+---------------------------------|
 | =length=   | angstrom       | =angstrom=, =bohr=, =nm=       |
 | =mass=     | amu            | =amu=, =kg=                    |
-| =time=     | fs             | =fs=, =ps=, =ns=               |
+| =time=     | (none)         | =fs=, =(amu*angstrom^2/eV)^0.5= |
 | =energy=   | eV             | =eV=, =hartree=, =kcal/mol=    |
 | =velocity= | derived        | length / time                  |
 | =force=    | derived        | energy / length                |
@@ -629,6 +629,11 @@ function on write, so the file contains those exact bytes (D10).
 
 Optional members =mass=, =time=, =velocity=, and =force=, when present,
 SHALL likewise be dimensionally valid for those quantities.
+
+=default_v3_units_json= supplies =length=, =energy=, and =mass= only.
+It does not supply =time: fs=. A spec 3 frame at minor 1 or newer that
+has a velocities section and no =units.time= is =InvalidUnits=. The
+writer must not invent =time: fs= to fill that gap (D10).
 
 Unit expressions follow the same lexical conventions as metatomic-style
 host unit strings: case-insensitive names, =*= / =/= / =^=, and parentheses.

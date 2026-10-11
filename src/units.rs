@@ -596,6 +596,15 @@ mod tests {
     }
 
     #[test]
+    fn default_v3_units_do_not_invent_time_fs() {
+        let units = default_v3_units_json();
+        assert!(units.get("time").is_none(), "{units}");
+        assert_eq!(units["length"], "angstrom");
+        assert_eq!(units["energy"], "eV");
+        assert_eq!(units["mass"], "amu");
+    }
+
+    #[test]
     fn canonicalize_aliases() {
         assert_eq!(canonicalize_unit_expression("A").unwrap(), "angstrom");
         assert_eq!(canonicalize_unit_expression("ev").unwrap(), "eV");
