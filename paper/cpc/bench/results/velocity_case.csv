@@ -1,2 +1,2 @@
-readcon_natural_fs,readcon_canonical,eon_fs,relative_fs,ke_natural_eV,ke_if_read_as_fs_eV,factor2
-10.1805057108,(amu*angstrom^2/eV)^0.5,10.1805055,2.07e-08,12.386,1283.72,103.643
+readcon_natural_fs,readcon_canonical,eon_fs,relative_fs,ke_natural_eV,ke_if_read_as_fs_eV,factor2,n_atoms,temperature_K,velocity_seed,source
+10.1805056712,(amu*angstrom^2/eV)^0.5,10.1805055,1.681e-08,390.085819,40429.545793,103.642696,10001,300.0,20261011,Maxwell-Boltzmann velocities on the generated Pt(111) slab

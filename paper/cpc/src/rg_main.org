@@ -37,6 +37,8 @@
 #+LATEX_HEADER: \journal{Computer Physics Communications}
 #+LATEX_HEADER: \usepackage{amssymb,amsmath}
 #+LATEX_HEADER: \usepackage{booktabs}
+#+LATEX_HEADER: \usepackage{tabularx}
+#+LATEX_HEADER: \usepackage{array}
 #+LATEX_HEADER: \usepackage{url}
 #+LATEX_HEADER: \usepackage{hyperref}
 #+LATEX_HEADER: \input{affilfix}
@@ -115,6 +117,7 @@ The same fixtures are exercised from the Rust core and from the C, Python, Julia
 \end{enumerate}
 #+END_EXPORT
 
+
 * Introduction
 :PROPERTIES:
 :CUSTOM_ID: sec:introduction
@@ -148,68 +151,51 @@ A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, a
 Between those reads the file may sit on disk for hours while a queue waits, or it may be copied onto another machine that has a different build of the force code.
 The older eOn paper is the reference for the long-timescale code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEONSoftwareLong2014}.
 
-The checkpoint has to carry three facts that a bare list of coordinates does not.
-A slab or a surface calculation holds some Cartesian axes fixed and leaves others free.
-The constraint is therefore a mask with one bit for x, one for y and one for z, rather than a single flag for the whole atom.
-A platinum slab makes the distinction concrete.
-A buried atom that must not move carries the integer 7, because bits 0, 1 and 2 are all set, and a surface atom that must relax carries 0.
-An adsorbate that may travel in the plane while its height is held carries 4, which sets only the z bit, and that integer is a different physical constraint from either 0 or 7.
-An atom identity has to survive the moment the file groups atoms by chemical type.
-Image \(i\) of a band must still refer to the same atom as image \(i+1\), and the two endpoints of a reaction must still align before a distance is computed.
-Velocities, when the restart continues a trajectory, have to be paired with a time unit, so that the kinetic energy of the restarted system is the kinetic energy that was stored.
-A campaign that drops any one of those three facts can still produce a plot, and the stationary point it reports will not be the stationary point the constraints defined.
+The checkpoint has to carry a per-axis mask, an atom id, and a time unit for any velocities.
+The mask has one bit for x, one for y and one for z, so a buried atom carries 7, a free surface atom carries 0, and an adsorbate whose height is held carries 4.
+The id has to survive grouping by chemical type, so that image \(i\) of a band still names the same atom as image \(i+1\).
+A velocity is stored with its time unit, because the kinetic energy scales with the square of that unit.
+The natural unit used by eOn and by ASE is \(({\rm amu}\cdot{\rm angstrom}^{2}/{\rm eV})^{0.5}\), which equals \(\timeFac\,\text{fs}\), and \(1\,\text{fs} = 10^{-15}\,\text{s}\).
 
 CON is the text form of that checkpoint, written so that a failed search can be inspected without a decoder.
 It grew up inside eOn, which writes one frame per minimum, saddle or band image and reads it back on the next cycle \cite{chillEONSoftwareLong2014}.
 The Atomic Simulation Environment reads and writes the same text, which is how a geometry moves from the saddle search into a Python workflow \cite{larsenAtomicSimulationEnvironment2017}.
-A band file is therefore a sequence of frames that several programs already agree to exchange, and the agreement is only useful if each program keeps the same columns.
+A band file is therefore a sequence of frames that several programs already agree to exchange.
 
-General trajectory formats solve a neighbouring problem and leave this contract open.
-H5MD stores positions, optional velocities and a time unit as attributes on HDF5 datasets, and it does not define a per-axis constraint or a pre-grouping identity \cite{deBuylH5MD2014}.
-NetCDF is an array container, and any checkpoint convention built on it has to be agreed outside the container itself \cite{rewNetCDF1990}.
-The TNG format stores coordinates, velocities, forces and a box for molecular simulation, with atom identity taken from the topology rather than from a column that survives reordering inside the frame \cite{lundborgTNG2014}.
-Extended XYZ, as used through ASE, can add columns and a comment line, and it does not reserve a three-bit mask or a versioned time unit for this checkpoint \cite{larsenAtomicSimulationEnvironment2017}.
-A LAMMPS dump can carry an atom id and, when the dump style asks for them, velocities and forces \cite{thompsonLammps2022}.
-The unit style and the fixed axes live in the input of the run rather than in the dump frame.
-The LAMMPS data file holds the starting geometry, the dump holds the trajectory, and neither of those files is the CON band of images \cite{thompsonLammps2022}.
-H5MD is stored in HDF5, and that container is what holds the arrays of positions and of optional velocities \cite{folkHdf52011}.
-Zarr is a chunked array store for the same kind of grid, and its community standard is what defines the layout of those chunks \cite{ogcZarrSpec}.
-CHARMM writes a DCD trajectory of coordinates and of the box, which is a record of a dynamics run rather than of a saddle search \cite{brooksCharmm2009}.
-GROMACS writes XTC and TRR trajectories, and a reader of those files gets positions, and sometimes velocities, without this checkpoint's mask \cite{abrahamGromacs2015}.
-MDTraj reads DCD and XTC trajectories when the task is analysis of a finished run, which is a different job from restarting a search \cite{mcgibbonMDTraj2015}.
+Neighbouring formats store a trajectory or a structure, and the fields that differ from this checkpoint are the integer mask, the id that survives grouping inside the frame, and the versioned time label.
+H5MD stores positions and optional velocities in HDF5, defines an id element for each particle, and can attach a time unit as a dataset attribute \cite{deBuylH5MD2014,folkHdf52011}.
+That id and that attribute cover identity and the clock for a molecular trajectory, while the integer mask and the versioned time label stay with this checkpoint.
+NetCDF is an array container, so any checkpoint convention built on it has to be agreed by the programs that share the file \cite{rewNetCDF1990}.
+The TNG format stores coordinates, velocities, forces and a box, and it takes atom identity from the molecular topology \cite{lundborgTNG2014}.
+ASE's extended XYZ writer stores a per-axis move_mask, one boolean for each Cartesian axis, which records a constraint in a different encoding from the integer mask in this file \cite{larsenAtomicSimulationEnvironment2017}.
+A LAMMPS dump can carry an atom id and, when the dump style asks for them, velocities and forces, while the unit style of the run stays outside the frame \cite{thompsonLammps2022}.
+The LAMMPS data file holds the starting geometry and the dump holds the trajectory, so neither file is the band of images this checkpoint exchanges \cite{thompsonLammps2022}.
+Zarr is a chunked array store, and its community standard defines how those chunks are laid out on disk \cite{ogcZarrSpec}.
+CHARMM writes a DCD trajectory of coordinates and of the box, which is the record of a finished dynamics run \cite{brooksCharmm2009}.
+GROMACS writes XTC and TRR trajectories, so a reader of those files gets positions and sometimes velocities from a molecular run \cite{abrahamGromacs2015}.
+MDTraj reads DCD and XTC when the task is analysis of a finished trajectory \cite{mcgibbonMDTraj2015}.
 A protein structure is often stored as a PDB file, and atom identity there comes from the residue and the atom name \cite{bermanPDB2000}.
-mmCIF is the macromolecular archive form of that structure, and it does not carry this checkpoint's mask or its time unit \cite{westbrookMmcif2000}.
-A small-molecule crystal structure travels as a CIF, which archives the cell and the coordinates but not a velocity time unit for a restart \cite{hallCIF1991}.
-A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates for VASP, and that file is not a band of images with masks \cite{kresseVasp1996}.
-pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still a geometry \cite{ongPymatgen2013}.
+mmCIF is the macromolecular archive form of that structure, with the same residue and atom-name identity \cite{westbrookMmcif2000}.
+A small-molecule crystal structure travels as a CIF, which archives the published cell and the published coordinates \cite{hallCIF1991}.
+A plane-wave calculation reads a POSCAR geometry, the cell and the coordinates that VASP will relax \cite{kresseVasp1996}.
+pymatgen converts among the crystal files used in solid-state work, including POSCAR and CIF, and the result is still one geometry \cite{ongPymatgen2013}.
 Atomsk converts among the files used for defects and for classical potentials, which is how a geometry changes dialect before a run \cite{hirelAtomsk2015}.
-Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues rather than a per-axis mask \cite{oboyleOpenBabel2011}.
-OVITO displays atomistic snapshots and can read several of these files, and the display is not the checkpoint a saddle search restarts from \cite{stukowskiOVITO2010}.
-i-PI drives a calculation by passing coordinates to a client and reading forces back, which moves a geometry without storing this checkpoint \cite{kapilIPI2019}.
-That coordinate exchange began as a path-integral client, which sent positions out and received forces back, one geometry at a time \cite{ceriottiIPI2014}.
+Open Babel converts among the chemical formats used for molecules, and those formats name bonds and residues \cite{oboyleOpenBabel2011}.
+OVITO displays atomistic snapshots and can read several of these files when the task is to look at a geometry \cite{stukowskiOVITO2010}.
+i-PI drives a calculation by passing coordinates to a client and reading forces back, one geometry at a time \cite{kapilIPI2019}.
+That coordinate exchange began as a path-integral client, which sent positions out and received forces back \cite{ceriottiIPI2014}.
 A liquid or a mixture is often packed into a cell before the first minimization, and that packed geometry is what the checkpoint then stores \cite{martinezPackmol2009}.
-Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry checkpoint a search writes \cite{bigiMetatensor2026}.
-Table \ref{tab:compat} puts those differences in one place, after the file itself has been described.
+Machine-learning potentials exchange atomic features as tensors, and a tensor of features is a different object from the geometry a search writes \cite{bigiMetatensor2026}.
+Table \ref{tab:compat} puts the checkpoint next to those files, after the layout of one frame has been described.
 
-A campaign that restarts from a lossy reading of this checkpoint loses the calculation in ways that change the answer.
-A per-axis constraint that has been stored as a single boolean either freezes an atom that should still move in the plane or frees an atom that should have stayed put.
-The next force call then follows the wrong surface.
-On the platinum slab that mistake turns the adsorbate with mask 4 into a rigid spectator, so the search never samples the diffusion path the setup was written to allow.
-An identity that was dropped when atoms were grouped by element makes two images of a band impossible to compare.
-The path can then be plotted only after an extra alignment that the file was supposed to make unnecessary.
-A velocity block whose numbers are in one time unit and whose label names another multiplies the kinetic energy by the square of that mistake.
-A thermostat or a kinetic Monte Carlo acceptance then sees a different temperature from the one that was saved.
-The damage shows up later, as a rate, a barrier or a temperature, rather than as a message at the moment the file was read.
-
-Here we present readcon-core, a reader and writer for CON whose job is to keep that contract.
-The library is a Rust parser and writer, exposed through a C header so that C++, Python, Julia and Fortran share one reading of the file.
-What is new is the versioned units rule for velocities, the round-trip default for floating-point text, and the preservation of unknown metadata keys.
-The parallel ingest is new in the same sense: its frame boundaries do not depend on the number of threads.
-The same program also accepts the older files that eOn and ASE have been writing, including velocities stored in the natural unit.
-Section \ref{sec:format} explains the design of the checkpoint, and Section \ref{sec:implementation} describes the library and the bindings.
-Section \ref{sec:validation} reports the conformance checks, the unit example and the HCN to HNC path.
-Section \ref{sec:performance} reports paired timings and thread scaling, and Section \ref{sec:limitations} states the limits of the program as released.
-Section \ref{sec:conclusions} collects the result.
+Here we present readcon-core, a reader and writer for the CON checkpoint used by saddle searches.
+The library is a Rust parser and writer, exposed through one C header so that C++, Python, Julia and Fortran share one reading of the file.
+The parts a restart depends on are the versioned time label, the round-trip default for floating-point text, and the preservation of unknown metadata keys.
+The parallel read finds frame boundaries from the text alone, so the frames come back in file order at every worker count, as Figure \ref{fig:pipeline} shows.
+The same program also opens the older files that eOn and ASE have been writing, including velocities stored in the natural unit.
+Section \ref{sec:format} describes the file, Section \ref{sec:implementation} describes the parser, and Section \ref{sec:validation} reports the corpus, the round trip, the slab and the HCN path.
+Section \ref{sec:performance} reports one-thread Python timings against one-thread peers, and it reports thread scaling from a separate run.
+Section \ref{sec:scope} states what the release covers, and Section \ref{sec:conclusions} collects the result of those checks.
 
 * The CON format
 :PROPERTIES:
@@ -217,14 +203,12 @@ Section \ref{sec:conclusions} collects the result.
 :END:
 
 A CON file is a sequence of frames in plain text, so that a failed search can be inspected without a decoder, and Figure \ref{fig:layout} shows how one frame is laid out.
-The first nine lines are the header.
-They carry a generator note, a metadata line, the three cell lengths and the three cell angles, then two further text lines.
+The first nine lines are the header: a generator note, a metadata line, three cell lengths, three cell angles, and two further text lines.
 The last three of those nine lines are the number of chemical types, the count of atoms of each type, and the mass of each type.
-Coordinates follow, grouped by type, and each group is a chemical symbol, a line that names the component, and one row per atom.
-A row holds \(x\), \(y\), \(z\), a constraint flag and an atom id, five tokens on one line, and the parser treats a missing token or an extra token as a broken row rather than as a default.
-Optional sections, velocities first when they are present, repeat that grouping after a blank line.
+Coordinates follow, grouped by chemical symbol, and each group is a symbol, a line that names the component, and one row per atom.
+A coordinate row holds \(x\), \(y\), \(z\), the mask and the id, five tokens on one line, and a missing token or an extra token makes the row illegal.
+Optional sections repeat that grouping after a blank line, velocities first when a velocity block is present.
 Lengths in the files discussed here are in angstrom, \(1\,\text{\AA} = 10^{-10}\,\text{m}\), and energies are in electronvolts.
-Walking one coordinate line is enough to see the contract: the first three tokens are the Cartesian position, the fourth is the mask described below, and the fifth is the identity that has to survive the grouping by element.
 
 #+BEGIN_EXPORT latex
 \begin{figure}[ht]
@@ -238,77 +222,42 @@ Blue marks the header, orange the coordinate group, and green the section that f
 \end{figure}
 #+END_EXPORT
 
-The cell is stored as three lengths and three angles in degrees, which is enough to rebuild the box once a convention for the angles is fixed.
+The cell is three lengths and three angles in degrees, which is enough to rebuild the box once the angle convention is fixed.
 The angle on line 4 between \(b\) and \(c\) is \(\alpha\), the angle between \(a\) and \(c\) is \(\beta\), and the angle between \(a\) and \(b\) is \(\gamma\).
 The convention puts \(a\) along \(x\) and \(b\) in the \(xy\) plane, which is how both eOn and ASE turn those six numbers back into vectors \cite{chillEONSoftwareLong2014,larsenAtomicSimulationEnvironment2017}.
-When the metadata also carries lattice vectors, those vectors are three rows of the cell matrix and they take priority on read.
-The writer then keeps lines 3 and 4 consistent with the vectors at the precision it is using.
+When the metadata also carries lattice vectors, those vectors are three rows of the cell matrix and they take priority on read, and the writer keeps lines 3 and 4 consistent with them.
 A missing periodicity flag means the cell is periodic in all three directions, which is the usual case for a bulk crystal and for a slab that is periodic in the plane.
-A caller who needs a non-periodic direction sets the flag explicitly, because silence is the periodic default and not an invitation to guess.
+Column 4 is the mask from the introduction, stored as an integer token, and column 5 is the id.
+Version 1 stores 0 or 1 in the mask column, and from version 2 the column is the three-bit integer.
+The reader rules for a flag outside that range, for a missing id, and for a repeated id are in \ref{sec:appendix-rules}.
+The id is read as an integer up to \(2^{64}-1\), so a large identity is not rounded through a floating-point conversion.
+When the ids inside a frame are unique, sorting them recovers the order the atoms had before the file grouped them by chemical type.
+That order is what a distance or a projection expects when it compares one image of a band with the next.
 
-Column 4 is the constraint, stored as an integer token so that a later reader does not have to recover axes from a Boolean.
-In a version 1 file the value 0 leaves the atom free and the value 1 fixes \(x\), \(y\) and \(z\) together, which matches the files those early producers wrote.
-From version 2 onward the same column is a bitmask: bit 0 fixes \(x\), bit 1 fixes \(y\), and bit 2 fixes \(z\), so the legal values run from 0 to 7.
-A slab with a frozen substrate and a free surface is the case this bitmask is for, and the platinum example in the introduction is exactly the integers 7, 0 and 4.
-Fixing only \(z\) on an adsorbate, or only \(x\) on an atom that should still relax in the other directions, is a different physical constraint from fixing the atom outright.
-The file has to be able to say which constraint was meant.
-A decimal spelling, a minus sign or a value above 7 is rejected in every version, because a flag that is not an integer mask cannot be turned into axes without a guess.
-The rejection is the point of the check.
-A killed job that wrote a truncated row, or a converter that printed a floating-point flag, stops at that row.
-The rest of the campaign does not relax the wrong axes from a row the parser refused.
-
-Column 5 is the atom id, a non-negative integer token read as an integer up to \(2^{64}-1\), and not through a floating-point conversion that would round large values.
-The reader does not assume that ids start at 0 or at 1, writers emit ids that are unique inside the frame, and readers still accept a repeated id.
-A repeated id keeps the order of the rows in the file, which is the rule eOn uses when a file was produced with duplicates \cite{chillEONSoftwareLong2014}.
-When the ids are unique, sorting them recovers the order the atoms had before they were grouped by type, which is the order a distance or a projection expects.
-A coordinate line that has only four columns, and therefore no id, takes the zero-based position of that atom in the frame, so an older file remains readable.
-The id is what lets a band image be compared with the next image after both files have grouped carbon with carbon and hydrogen with hydrogen.
-Without that column the grouping is a silent permutation, and two frames that describe the same reaction can no longer be zipped atom by atom.
-
-Line 2 is one line of UTF-8 JSON, without a byte-order mark.
-The major version is a JSON number under the key for the specification version.
-The minor version is a second integer.
-A reader accepts an unknown minor of a major it knows, and it refuses an unknown major, so a later clarification can travel in a file that an older program still opens.
-JSON that claims major version 0 or 1 is rejected, because those generations were not JSON.
-Unknown keys on the line are preserved when the frame is written again, so a campaign can attach an energy, a bead index or a potential name without waiting for every reader to learn the key.
-A section name that the reader does not know is an error, unless the file's minor version is newer than the reader and the metadata declares how many numbers that section carries per atom.
-In that case the reader may skip the block.
-New reserved names therefore arrive with a minor bump, and a reader of the same major can still open the file.
-Line endings may be LF or CRLF.
-Trailing spaces and tabs are ignored, and labels such as the coordinate heading are compared without regard to case after runs of spaces have been collapsed.
-
-Units live in the metadata, length and energy are required once the file is major version 3, and mass is recorded as well.
-The time unit is the one that decides the meaning of a velocity, because a velocity component is a length divided by a time and the kinetic energy squares that scale.
-The natural unit used by eOn and by ASE is \(({\rm amu}\cdot{\rm angstrom}^{2}/{\rm eV})^{0.5}\), which equals \(10.1805055\,\text{fs}\) in the eOn clock, and \(1\,\text{fs} = 10^{-15}\,\text{s}\).
-The library keeps that spelling when it writes the unit, rather than rewriting it with spaces or with a different algebraically equal form, so a later textual comparison still matches.
-Version 1 and version 2 files have no units object, and their velocities, when a velocity block is present, are in the natural unit, because that is the unit those producers have written.
-A version 3 file that has no minor number is treated the same way: the time label is not trusted, and the numbers are read in the natural unit.
-The producers of those velocity sections wrote natural-unit components and labelled the time in femtoseconds, so trusting the label would scale every component by \(\timeFac\) and the kinetic energy by \(\timeFacSq\).
+Line 2 of a current file is one line of JSON, without a byte-order mark, and it records the major version, the minor version, the units and the section names.
+A reader accepts an unknown minor of a major it knows, and it refuses an unknown major, so a later clarification can travel in a file that an older program of the same major still opens.
+Unknown keys on that line are kept when the frame is written again, so a campaign can attach an energy, a bead index or a potential name without waiting for every reader to learn the key.
+The time unit on the metadata line is the label already stated in the introduction, and the writer copies that spelling.
 From the minor version that records time, the label is authoritative, and a writer that emits velocities must emit the time unit with them.
-A writer that is given a unit it cannot parse fails, rather than substituting a default, and the caller sees the failure at the moment the frame is built.
+On older files the velocities, when a velocity block is present, are in the natural unit, because that is the unit those producers wrote.
+A writer that is given a time unit it cannot parse fails at the moment the frame is built, and the library keeps the natural-unit spelling so that a later textual comparison still matches.
+Length and energy are required once the file is major version 3, and mass is recorded on the same object.
 
-Sections are named blocks after the coordinates, and the reserved name for per-atom energies is energies.
+Sections are named blocks that follow the coordinates, and each block repeats the grouping by chemical symbol.
 A velocities section, a forces section, and further blocks for charges, spins, magnetic moments, displacements and spreads follow the same pattern as the coordinates: a symbol, a heading, and one row per atom.
-Exactly one blank line stands before each section, and no blank line stands between the component blocks inside a section, which is how the reader knows that a new name is a new section rather than a new element.
-The metadata lists the names that are present, so a reader knows what to expect before it reaches the first row, and a listed name that never arrives is an incomplete frame.
-A count of zero types is a legal empty frame: the two lines after the count are blank, no coordinate block follows, and the section list is empty.
-Writers aimed at programs older than this minor version should avoid that empty frame, because those programs may not accept a header that declares no atoms.
-Trailing whitespace after the last complete frame is ignored, while a header that stops early, or a section with fewer rows than the header declared, is an error, and the partial frame is not returned as if it were complete.
-A campaign that was killed while writing therefore fails the next read at the truncated frame, instead of continuing from a geometry that was never finished.
+Exactly one blank line stands before each section, and no blank line stands between the component blocks inside a section, which is how a new name is recognized as a new section.
+The metadata lists the names that are present, so a reader knows what to expect before the first row of a section, and a listed name that never arrives is an incomplete frame.
+A count of zero chemical types is a legal empty frame, with no coordinate block and an empty section list.
+A header that stops early, or a section with fewer rows than the header declared, is rejected, and the partial frame is not returned.
+The remaining reader rules, including unknown section names, non-finite numbers and a gzip archive with several members, are the rows of \ref{sec:appendix-rules}.
 
-The numeric contract is stated in round-trip terms, which is the property a checkpoint needs if the same geometry will be parsed more than once.
-Readers convert decimal text to binary64 with correct rounding \cite{clinger1990,lemire2021}.
+Readers convert every decimal field to binary64 with correct rounding, which is the numeric contract a second parse relies on \cite{clinger1990,lemire2021}.
 The default writer prints each finite value so that reading it back yields the same binary64 number, which is the shortest-round-trip problem solved by Steele and White \cite{steeleWhite1990}.
 Grisu prints a floating-point value using only integer arithmetic so that the decimal form is short and correctly rounded \cite{loitschGrisu2010}.
 Ryu prints a floating-point value by a table-driven procedure so that the decimal form is short and correctly rounded \cite{adamsRyu2018}.
 The metadata line is JSON, and a scanner for that kind of text has been shown to run at a very high rate on such input \cite{langdaleSimdjson2019}.
-A caller may instead ask for a fixed number of digits after the decimal point.
-That mode is allowed, and it is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
-Non-finite numbers, including the spellings of NaN and infinity, are rejected in every field and in every mode, so a diverged force call cannot be stored as a coordinate and read back as a number.
-The specification distributed with the program is the normative text for these rules.
-Compression does not change that text: gzip and zstd are envelopes around the same bytes, with the usual extensions for a CON file and for a velocity file.
-A gzip file may contain more than one member, and every member is read, in order, which matters when a concatenated archive holds one frame per member.
-zstd support is present when the library is built with that feature, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file.
+A caller may ask for a fixed number of digits after the decimal point, and that mode is lossy: values that differed in the last bits can collide, and values that needed more digits no longer parse back to themselves.
+gzip and zstd are envelopes around the same bytes, and the bytes that come out of either envelope are parsed by the same reader as an uncompressed file.
 
 * Implementation
 :PROPERTIES:
@@ -317,106 +266,87 @@ zstd support is present when the library is built with that feature, and the byt
 
 The core is a Rust library with a single parser, and file reads, string reads and the bindings all go through that parser, so a change in the grammar shows up once.
 The parser walks the header, checks the counts, reads each coordinate row as an integer flag and an integer id, and then reads the sections named in the metadata.
-Decimal fields go through a fast correctly rounded conversion \cite{lemire2021}.
-The public entry points a caller needs are few.
-@@latex:read\_all\_frames@@ reads every frame from a path.
-A frame builder assembles a frame from a cell, atoms, masks and optional sections, and the writer turns that frame back into text.
-Keeping one parser is what makes the later conformance story possible, because a second implementation in each language would be a second place for a mask or a time unit to drift.
-
-The C header is the waist of the library: it owns the frame on the far side of the call, returns a status code, and expects the caller to free what it was given.
-C++ is a header over that interface, Julia and Fortran call the same symbols, and the Fortran side uses the standard C binding.
+Decimal fields in that parser go through a fast correctly rounded conversion, the same contract the writer relies on \cite{lemire2021}.
+Keeping one parser is what makes the conformance story possible, because a second implementation in each language would be a second place for a mask or a time label to drift.
+The C header owns the frame on the far side of the call and returns a status code, and the caller frees what it was given.
+C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding.
 Python uses the same parse, so a file that is legal in one binding is legal in the others, and a file that is rejected is rejected for the same reason.
-The status code is the whole of the error report on the C side, and there is no stored string that a later call can pick up, which is a limit Section \ref{sec:limitations} states again.
-That narrow report is a deliberate shape for the waist: every language maps one integer, and none of them invents a second message for the same failure.
+The status code is the whole of the error report on the C side, and Section \ref{sec:scope} states that boundary as part of the release.
+Every language maps one integer, and none of them invents a second message for the same failure.
 
-The frame builder is where a program constructs a checkpoint rather than parsing one.
-The caller sets the cell, the symbols, the coordinates, the mask and the id, and any velocities or forces it has.
-On a version 3 frame the builder writes the minor number when the caller did not set one, and it writes a units object when the caller did not supply one.
-It does not invent a femtosecond label for velocities, because that label is the historical mistake the units rule exists to stop.
-If the frame has a velocities section and the minor version requires a time unit, the build fails unless that unit was set.
-When an older frame that already contains velocities is rewritten, the natural unit is recorded on the new metadata line, so the next reader does not have to guess which clock the components used.
-The default text form of every floating-point field is the round-trip form, and fixed digits remain a separate request for a caller who wants a shorter file and accepts the loss.
+A caller builds a frame from a cell, symbols, coordinates, the mask, the id, and any velocities or forces.
+On a current frame the builder writes the minor number when the caller did not set one, and it writes a units object when the caller did not supply one.
+Velocities are written only with the time unit the caller set, which is the rule that keeps a restarted kinetic energy on the clock that was stored.
+If the frame has velocities and the minor version requires a time unit, the build fails unless that unit was set.
+When an older frame that already contains velocities is rewritten, the natural unit is recorded on the new metadata line, so the next reader sees the clock those components used.
+The default text of every floating-point field is the round-trip form, and fixed digits remain a separate request for a caller who wants a shorter file and accepts the loss.
 
-Parallel ingest is a two-step read, which matches the way a band is already a list of frames rather than one large array of atoms.
-A serial scan finds the byte offset where each frame starts, using the header counts so that it can skip a frame without building its atoms, and the pool then parses each slice.
-The offsets depend on the bytes of the file and not on how many workers are waiting, and the frames are assembled in file order.
-The automatic policy stays on the serial parser for a buffer below 48 KiB, where the cost of starting the pool is larger than the parse, and it uses the pool above that size.
+#+BEGIN_EXPORT latex
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/pipeline.pdf}
+\caption{Read of a multi-frame file.
+A serial scan records where each frame starts.
+Each frame is then parsed on one of N workers.
+The frames are returned in file order.}
+\label{fig:pipeline}
+\end{figure}
+#+END_EXPORT
+
+Figure \ref{fig:pipeline} is the parallel read of a band, which is already a list of frames rather than one array of atoms.
+A serial scan finds the byte offset where each frame starts, using the header counts, and that scan does not build the atoms.
+The pool then parses each recorded slice on its own worker, and the frames are assembled in the order the scan found them.
+The offsets depend only on the bytes of the file, so the split is the same however many workers are waiting.
+Below 48 KiB the read stays on the serial parser, because the cost of starting the pool is larger than the parse.
 A file with one frame is one task, however many atoms that frame contains, because the split is on frames and not on atoms.
-A fat single image does not become faster just because the machine has idle cores.
-@@latex:read\_all\_frames@@ takes an optional thread count: one thread forces the serial path, and two or more pin a pool of that size.
-The result is the same sequence of frames at every count, which Section \ref{sec:performance} checks by hashing every stored field, including the mask, the id, the velocities and the metadata.
-A search that farms images out to workers can therefore choose a thread count for throughput, and the frame it hands to the force code does not depend on that choice.
+The Python call can pin the worker count: one worker forces the serial path, and two or more pin a pool of that size.
+The result is the same sequence of frames at every count, which Section \ref{sec:performance} checks by hashing the stored fields, including the mask, the id and the velocities.
+The Python call releases the interpreter lock while the file is parsed, and it takes the lock back to build the objects the caller sees, so other Python work can run during a long parse.
 
-The Python surface is the one most campaigns will call, and @@latex:read\_all\_frames@@ and @@latex:read\_con@@ both return frames.
-@@latex:from\_ase@@ builds a frame from an ASE Atoms object: positions, cell lengths and angles, masses, a fully fixed atom where ASE stored that constraint, a per-axis mask where ASE stored a Cartesian constraint, and velocities when ASE has them.
-The numbers are copied as ASE holds them, so a caller who has velocities in a known unit sets that unit on the builder, and the library does not convert angstrom per femtosecond into the natural unit behind the caller's back.
-The reverse direction writes frames back out for ASE.
-chemfiles is an optional ingress for formats other than CON, and when the library is built with it, @@latex:read\_chemfiles@@ opens an XYZ file or another format chemfiles supports and returns frames through the same data structures \cite{frauxChemfiles2023}.
-The CON text remains the file that eOn and ASE have to read, and other formats are a way in rather than a second checkpoint.
-The Python call releases the interpreter lock while the file is read and parsed, and it takes the lock back to build the Python objects that the caller sees.
-Other Python work can therefore run during a long parse, and the frames that come back are still in file order.
+The Python surface can also build a frame from an ASE atoms object, copying the geometry into the frame type the parser returns.
+That copy takes positions, the cell, masses, a fully fixed atom where ASE stored that constraint, a per-axis mask where ASE stored one, and velocities when ASE has them.
+The numbers are copied as ASE holds them, so a caller who has velocities in a known unit sets that unit on the builder, and the components stay in the unit the caller already chose.
+The reverse direction writes that frame back out as the CON text the ASE eon reader expects.
+chemfiles is an optional ingress for formats other than CON, and a build that includes it can open an XYZ file into the same frame type \cite{frauxChemfiles2023}.
+The CON text remains the checkpoint that eOn and ASE exchange, and the other formats are a way in.
 
-A campaign touches the same frame more than once, which is why the rules above are checked at each touch.
+A campaign touches the same frame more than once, which is why these checks run at each touch.
 The builder records the cell, the mask and the id before the first force call, and the writer emits the text a queue will store.
 A later rank reads that text, compares the ids, and calls the potential on the free axes only.
 If that rank writes the frame again, unknown keys such as a bead index or a stored energy are still on the metadata line.
-The round-trip printer is what keeps the coordinates still on that second write, because a short fixed-digit print would move atoms by a last-bit rounding on every restart.
-The units rule is what keeps a velocity restart honest, because the kinetic energy the next step sees is the energy the previous rank stored.
-The file those steps produce is the one the existing searches already pass from rank to rank.
+The round-trip printer is what keeps the coordinates on that second write, because a short fixed-digit print would move atoms by a last-bit rounding on every restart.
 
 * Validation
 :PROPERTIES:
 :CUSTOM_ID: sec:validation
 :END:
 
-The conformance corpus is a set of small files, some legal and some not.
-The fixtures cover the header, the constraint mask in both the version 1 sense and the bitmask sense, a frame with no atoms, the units line, and files that must be rejected.
-The same fixtures are wired from the Rust core and from the C, Python, Julia and Fortran bindings, so a binding cannot quietly accept a file the core rejects.
-Table \ref{tab:compat} places the CON contract next to the neighbouring formats cited above.
-The CON column is what this library keeps, and the ASE column is what its eon reader keeps.
-Section \ref{sec:hcn} measures that ASE column on a real path.
-A legal fixture that one binding dropped, or an illegal fixture that one binding accepted, would show up as a different status on that binding, which is why the fixtures are shared rather than rewritten per language.
+The conformance corpus has \nValid{} legal files and \nInvalid{} files that must be rejected, covering the header, both meanings of the mask column, an empty frame, the units line, and files that stop early.
+The same files are read from \nBind{} bindings, the Rust core and the C, Python, Julia and Fortran bindings, so a binding cannot quietly accept a file the core rejects.
+A legal file that one binding dropped, or an illegal file that one binding accepted, would show up as a different status on that binding.
+Table \ref{tab:compat} places this checkpoint next to the ASE eon reader, extended XYZ, H5MD and a LAMMPS dump.
+What differs, once the extended XYZ move_mask and the H5MD id element are taken into account, is the integer mask in this file, the id that survives grouping inside the frame, and the versioned time label \cite{larsenAtomicSimulationEnvironment2017,deBuylH5MD2014}.
+The ASE eon reader follows the original eOn layout: a comment on the second line, a single fixed flag, and no velocity section.
 
 #+LATEX: \input{figures/generated/compat_table}
 
-Reading Table \ref{tab:compat} row by row shows where a restart would lose the calculation.
-The mask row is the sharpest split.
-CON keeps one bit for each Cartesian axis, while the ASE eon reader keeps a single boolean, and extended XYZ has no reserved mask.
-H5MD does not specify a per-axis constraint, and a LAMMPS dump leaves the fixed axes in the input of the run rather than in the frame.
-The identity row is the next place a path tool fails.
-CON keeps the pre-grouping id, and the ASE eon reader does not keep it.
-The other three formats treat an atom id as an optional column or as an index that belongs to a topology.
-A band that has been grouped by element can be compared image to image only when that id comes back with the coordinates.
-The velocity row is the kinetic-energy hazard taken up in Section \ref{sec:velocity}.
-CON declares the time unit on the metadata line, and the ASE eon reader does not read a velocity section.
-Extended XYZ does not require a time unit, while H5MD can store time as an attribute on the dataset.
-That attribute is the right idea for a molecular trajectory, and it is a different file from this checkpoint.
-A LAMMPS dump leaves the unit style outside the frame, so a reader of the dump alone cannot recover the clock the velocities used.
-The section row records the same kind of split.
-CON carries named blocks for velocities, forces and the other per-atom fields, and the ASE eon reader stops at the coordinates.
-Extended XYZ can add property columns, H5MD uses particle groups, and a LAMMPS dump can request extra columns.
-None of those choices is the named block this checkpoint already uses between eOn and ASE.
-The version row is what lets a later minor travel in a file an older reader of the same major still opens.
-CON stores a major and a minor, and the ASE eon reader does not read the JSON line.
-Extended XYZ and a LAMMPS dump have no such version, and the H5MD format version belongs to the container rather than to this mask.
-Taken together, the table maps what a restarted saddle search needs onto the file that already stores it.
-Section \ref{sec:hcn} then checks the two columns a working campaign actually meets, CON through this library and the same text through the ASE eon reader.
-
-Files written by the library are read back by the same library.
-In the default mode every finite value parses back to the binary64 number that was stored, which is the check behind the round-trip writer.
-The public endpoints used below were stored as CON text, rewritten with a current metadata line, and read again, and the benchmark files in Section \ref{sec:performance} are the same kind of text, repeated or tiled.
-Both readcon-core and the ASE eon reader are asked to open those benchmark files, so the timing comparison is a comparison of two readings of one checkpoint rather than of two unrelated containers.
+A \nRound{}-atom copper-hydrogen frame from the eOn tests is read, written with the default printer, and read again, and every coordinate bit matches the value that was stored.
+The same coordinates match the ASE eon reading of that file, bit for bit, so the two programs agree on the positions of a producer file.
+The single-frame geometry used below and in Section \ref{sec:performance} is a platinum (111) slab of \nSlab{} atoms, built with ASE rather than by repeating one coordinate row.
+The cell is an orthogonal fcc111 slab of 50 by 20 by 10 layers, with 8 angstrom of vacuum, plus one hydrogen placed 1.5 angstrom above an on-top site.
+The bottom two layers are fixed on every axis, the other platinum atoms are free, and the adsorbate is fixed on z, which is the mask case a surface calculation actually writes.
+Table \ref{tab:hcn} shows one buried atom, one surface atom and the adsorbate from that slab, each with its own mask and its own id.
 
 ** A time unit and a kinetic energy
 :PROPERTIES:
 :CUSTOM_ID: sec:velocity
 :END:
 
-The natural time unit and the femtosecond differ by a factor \(\timeFac\), and kinetic energy is quadratic in velocity, so reading natural-unit components as if they were angstrom per femtosecond multiplies the energy by \(\timeFacSq\).
-On a 336-atom platinum slab at 300 K the kinetic energy in the natural unit is \(\keNat\,\text{eV}\), and the same numbers, read as angstrom per femtosecond, give \(\keFs\,\text{eV}\).
-A restart that makes that mistake continues a much hotter trajectory than the one that was saved, and a thermostat or an acceptance step then acts on the wrong temperature.
-From the minor version that stores the time unit, the label prevents the mistake, and on older files the reader uses the natural unit, which is the unit the producers wrote.
-Squaring that scale is required because the kinetic energy depends on the square of each velocity component, which is why the two energies above differ by \(\timeFacSq\).
+The velocities on that slab are a Maxwell-Boltzmann sample at 300 K, drawn with ASE on a NumPy Generator and seed 20261011, and the kinetic energy is computed from those components.
+The energy is one half the sum of mass times speed squared, with the speeds in the natural unit, and on this frame it is \(\keNat\,\text{eV}\).
+Reading those same numbers as though they were angstrom per femtosecond multiplies the energy by \(\timeFacSq\) and gives \(\keFs\,\text{eV}\).
+The two energies differ by \(\timeFacSq\), the square of that factor, because kinetic energy depends on the square of each velocity component.
+From the minor version that stores the time unit, the label selects the clock, and on older files the reader uses the natural unit those producers wrote.
 
 ** HCN to HNC
 :PROPERTIES:
@@ -425,107 +355,92 @@ Squaring that scale is required because the kinetic energy depends on the square
 
 The public HCN and HNC endpoints of an eOn nudged elastic band are the geometries used to illustrate a reproducible path optimization \cite{goswamiNEBOrchestration2026}.
 Those endpoints are rewritten here as current CON, with the natural time unit declared and a velocities section added.
-A third frame keeps the HCN coordinates, sets the hydrogen flag to the x-only bit, and stores the ids 2, 0 and 1 in file order.
+A third frame keeps the HCN coordinates, fixes hydrogen on x only, and stores the ids 2, 0 and 1 in file order.
 The file still groups the atoms as carbon, then nitrogen, then hydrogen, so the third row is hydrogen even though its id is 1 and the carbon in the first row carries id 2.
-A caller who zips the rows in the order they appear will pair the wrong atoms once those ids have been permuted, and a caller who sorts on the id column recovers the order the path tool expects.
-Table \ref{tab:hcn} lists what readcon-core and the ASE eon reader return.
-readcon-core returns the three-bit mask, the id and the velocity components, and it records the time unit that was written.
-The ASE eon reader fails on the file that contains the velocities section, so that read returns neither the id nor the velocity components.
-On the coordinate form of the probe, which has no section, a nonzero flag becomes a fully fixed atom, so the x-only hydrogen is reported as fixed on every axis.
+A caller who sorts on the id column recovers the order the path tool expects, and a caller who zips the rows as they appear pairs the wrong atoms.
+Table \ref{tab:hcn} lists each atom of the HCN and HNC endpoints, of the probe, and of the generated slab.
+readcon-core returns the mask, the id and the velocities that were written, including the permutation 2, 0, 1 on the probe.
+On the coordinate form of the probe, which has no velocity section, the ASE eon reader reports the x-only hydrogen as fixed on every axis, which is the single flag of the original layout.
 
 #+BEGIN_EXPORT latex
 \input{figures/generated/hcn_table}
 #+END_EXPORT
-
-A path tool that aligns these endpoints by the id column can do so from the readcon-core frame, because the ids are the ones that were written, including the permutation 2, 0, 1 on the probe.
-A tool that trusts the ASE eon reader has to invent an identity after the sectioned file fails to parse, and on the coordinate form it cannot tell an x-only constraint from a fully fixed atom.
-The velocities are present so that a restarted frame has a kinetic energy in the declared time unit, and they are present only on the reader that keeps the section.
-The three-atom path is small on purpose: if the mask, the id and the time unit survive here, they are the same fields a slab of hundreds of atoms asks the reader to keep.
 
 * Performance
 :PROPERTIES:
 :CUSTOM_ID: sec:performance
 :END:
 
-We compare readcon-core with four peers on five payloads, on one \cpuName{} with \nCores{} hardware threads.
-The peers are the ASE eon reader on the same CON text and a chemfiles read of an XYZ file with the same coordinates \cite{larsenAtomicSimulationEnvironment2017,frauxChemfiles2023}.
-The other two peers are an MDAnalysis read of an H5MD file with the same coordinates, and an h5py read of that file's position array \cite{michaudAgrawalMDAnalysis2011,gowersMDAnalysis2016}.
-The payloads are 1, 100 and @@latex:10\,000@@ frames of a 218-atom geometry, one frame of @@latex:10\,000@@ atoms, and a short band file that carries sections.
-Each cell is 30 paired repeats, interleaved so that a slow drift in the machine hits both sides of the pair, and the ratio is the readcon-core time divided by the peer time.
-We report the median and a bias-corrected 95 percent interval, and we apply a Holm adjustment across the cells that produced a ratio, while timeouts and reader failures stay in the table.
-The paired baseline leaves the thread count unset, so the automatic policy uses the pool once the file is above 48 KiB, and each peer runs as its own single process.
-The single frame of @@latex:10\,000@@ atoms stays one task under that policy, because the split is on frames.
-The full protocol and the rounded ratios are in \ref{sec:appendix-bench}, and Figure \ref{fig:ratios} shows the intervals.
+We compare the Python binding of readcon-core, at one worker, with four Python readers, each also at one thread, on one \cpuName{} with \nCores{} hardware threads.
+The peers are the ASE eon reader on the same CON text, a chemfiles read of an XYZ file with the same coordinates, an MDAnalysis read of an H5MD file with those coordinates, and an h5py read of that file's position array \cite{larsenAtomicSimulationEnvironment2017,frauxChemfiles2023,michaudAgrawalMDAnalysis2011,gowersMDAnalysis2016}.
+OpenMP, BLAS and the related math libraries are held at one thread for the whole run, and that limit is set before any of those libraries is imported.
+The payloads are 1, 100 and @@latex:10\,000@@ frames of a 218-atom copper-hydrogen geometry, and the platinum slab of Section \ref{sec:validation}.
+Each cell is 30 paired repeats, interleaved so that a slow drift hits both sides of the pair, and the ratio is the readcon-core time divided by the peer time.
+We report the median and a bias-corrected 95 percent interval, and we apply a Holm adjustment across the cells that produced a ratio.
+The full protocol, including the bootstrap seed and the Holm adjustment, is in \ref{sec:appendix-bench}, and Figure \ref{fig:ratios} shows the intervals.
 
 #+BEGIN_EXPORT latex
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/generated/ratios.pdf}
-\caption{Median ratio of readcon-core time to peer time on the paired reads.
+\caption{Median ratio of one-worker readcon-core time to one-thread peer time.
 A ratio below 1 means readcon-core finished sooner.
 The bars are bias-corrected 95 percent intervals of the median.
-The vertical line is a ratio of 1.
-The ten thousand frame band and the ten thousand atom slab are the large cases.}
+The vertical line is a ratio of 1.}
 \label{fig:ratios}
 \end{figure}
 #+END_EXPORT
 
 Against the ASE eon reader the speedup, the reciprocal of the ratio, runs from \aseLo{} to \aseHi{} on the files both programs finish.
-Against chemfiles on XYZ the factor runs from \chemLo{} to \chemHi.
-Against MDAnalysis on H5MD it runs from \mdaLo{} to \mdaHi.
-The case a user actually waits on is the band of ten thousand frames.
-There readcon-core is \spBandAse{} times faster than ASE, \spBandChem{} times faster than chemfiles, and \spBandMda{} times faster than MDAnalysis.
-h5py is faster on that band: the readcon-core time is \ratBandHpy{} times the h5py time, which is the expected direction when the peer reads one dense array and readcon-core parses text.
-On a single small frame the comparison with h5py goes the other way, and readcon-core is \spOneHpy{} times faster.
-The single frame of ten thousand atoms is parsed as one task.
-There readcon-core is \spSlabAse{} times faster than ASE, and h5py is again faster, by a ratio \ratSlabHpy.
-The sectioned band is a failure for every peer, \nFailBand{} times out of 30 for the ASE reader, and those rows are kept.
-The peers are not CON section readers, and the timing table does not turn that failure into a speedup.
+Against chemfiles on the XYZ file with the same coordinates the factor runs from \chemLo{} to \chemHi, and against MDAnalysis on the H5MD file it runs from \mdaLo{} to \mdaHi.
+On the band of @@latex:10\,000@@ frames, readcon-core is \spBandAse{} times faster than ASE, \spBandChem{} times faster than chemfiles, and \spBandMda{} times faster than MDAnalysis.
+h5py is faster on that band: the readcon-core time is \ratBandHpy{} times the h5py time, which is the direction expected when the peer reads one dense array and readcon-core parses text.
+On a single small frame the comparison with h5py goes the other way, and readcon-core is \spOneHpy{} times faster, because the cost of opening the container dominates a tiny array.
+On the platinum slab, which is one frame and therefore one task, readcon-core is \spSlabAse{} times faster than ASE, and the h5py ratio on that same frame is \ratSlabHpy.
 
 #+BEGIN_EXPORT latex
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/generated/threads.pdf}
-\caption{Thread scaling on the ten thousand frame file.
-Left: speedup against the one-thread median, with the ideal line drawn dashed.
+\caption{Thread scaling on the ten thousand frame file, from an interleaved run.
+Each multi-worker time is paired with a fresh one-worker baseline.
+Left: speedup, with the ideal line dashed and the interval of the median drawn.
 Right: parallel efficiency.
-The field hash of every stored value is the same at 1, 2, 3, 4 and 8 threads.}
+\hashSentence}
 \label{fig:threads}
 \end{figure}
 #+END_EXPORT
 
-Figure \ref{fig:threads} pins the pool at 1, 2, 4 and 8 threads on the ten thousand frame file.
-Two threads give a speedup of \thrTwo, which sits above the ideal line, and four and eight threads give speedups of \thrFour{} and \thrEight.
-The boundary scan that finds the frame offsets is serial, and each frame is a small parse, so the extra workers at eight threads share a shrinking amount of independent work.
-The parsed frames do not depend on that choice.
+Figure \ref{fig:threads} is a separate run, and the speedup in that figure uses only the pairs recorded by the scaling loop.
+For each of 2, 4 and 8 workers the loop times one worker, then that worker count, thirty times, and the speedup is the ratio of those paired times.
+Two workers give a speedup of \thrTwo{} (interval \thrTwoLo{} to \thrTwoHi{}), four give \thrFour{} (\thrFourLo{} to \thrFourHi{}), and eight give \thrEight{} (\thrEightLo{} to \thrEightHi{}).
+The boundary scan that finds the frame offsets is serial, and each frame is a small parse, so the extra workers share a shrinking amount of independent work as the count rises.
 #+LATEX: \hashSentence
-A campaign can therefore use the extra cores for a long band, and the frames that the next code reads stay the ones that were stored.
+The frames that come back are the frames that were stored, at every worker count the hash covers.
 
-* Limitations
+* Scope
 :PROPERTIES:
-:CUSTOM_ID: sec:limitations
+:CUSTOM_ID: sec:scope
 :END:
 
-Two limits are part of the program as released, and both of them are visible from the interface rather than from a missing file format.
-The C interface does not store an error string, so a caller that receives a failing status has the status and not a sentence to show the user.
-The Python extension is not a free-threaded build, so a caller who shares frames across threads keeps the usual locking around the extension.
-zstd envelopes need the optional build, and a library built without that feature rejects a zstd input instead of silently treating it as text.
-A single large frame does not split across threads, because the parallel work is the set of frames and not the set of atoms, which is the same rule the ten thousand atom timing uses.
-Fixed-digit output remains available for a caller who wants a short file, and it is lossy next to the round-trip default, so a geometry that must come back unchanged should stay on the default writer.
+The release reads and writes CON text, through one parser and one C header, with bindings for C++, Python, Julia and Fortran.
+The C call reports success or failure as a status code, and the caller maps that integer in whichever language sits above the header.
+The Python extension follows ordinary interpreter locking, and the parse itself runs without holding that lock, so other Python work can proceed during a long read.
+zstd envelopes are part of a build that includes that feature, and the same text comes out of a gzip envelope on every build.
+Parallel work is the set of frames, so one large frame stays one task, which is the slab timing above.
+Fixed-digit printing is available for a caller who wants a shorter file, and a geometry that must come back unchanged stays on the default writer.
 
 * Conclusions
 :PROPERTIES:
 :CUSTOM_ID: sec:conclusions
 :END:
 
-Rare-event campaigns restart from a checkpoint that has to remember per-axis constraints, atom identity and the time unit of any velocities.
-CON is that checkpoint in the eOn and ASE workflow, and readcon-core is a reader and writer for it, with one parser behind a C header and bindings for C++, Python, Julia and Fortran.
-The versioned units rule keeps a restarted kinetic energy equal to the stored one, which on the 336-atom platinum slab is the difference between \(\keNat\,\text{eV}\) and \(\keFs\,\text{eV}\).
-The HCN to HNC endpoints show the same split on a published path.
-The library returns the mask, the id and the velocities.
-The ASE eon reader fails on the sectioned file, and it collapses a nonzero flag when the section is absent.
-On the ten thousand frame band the library is \spBandAse{} times faster than that ASE reader, while h5py remains faster at reading a dense array of positions.
-The frames that come back do not depend on the number of threads, so a long band can use the extra cores without changing the geometry the force code will see.
+readcon-core is a reader and writer for the CON checkpoint used by eOn and ASE, with one parser behind a C header and bindings for C++, Python, Julia and Fortran.
+The versioned time label keeps a restarted kinetic energy equal to the stored one, which on the generated platinum slab is the difference between \(\keNat\,\text{eV}\) and \(\keFs\,\text{eV}\).
+The HCN to HNC endpoints and the slab atoms in Table \ref{tab:hcn} come back with the mask and the id that were written, including the per-atom bits on the buried atom, the surface atom and the adsorbate.
+On the @@latex:10\,000@@ frame band, at one worker, the Python binding is \spBandAse{} times faster than the ASE eon reader, while h5py remains faster on a dense position array.
+Thread scaling is reported from its own interleaved run, and the hashed fields match across the worker counts that run covers.
+readcon-db is a downstream store that indexes this text for a search over many checkpoints.
 
 * Data availability
 :PROPERTIES:
@@ -571,10 +486,7 @@ This work received no funding.
 :CUSTOM_ID: sec:acknowledgements
 :END:
 
-Hannes @@latex:J{\'o}nsson@@ and Graeme Henkelman built the saddle-search practice that this checkpoint has to survive, and Samuel T. Chill led the eOn paper that made CON the file that practice writes.
-Miha Gunde's work on eigenmode-aligned bands made a stable atom identity part of the path, not an afterthought.
-Ruhila Goswami chose the colours used in the figures.
-The author's family stayed with the writing of the library, and so did the pets, plants, birds, garden cats and turtles.
+The people who shaped this checkpoint, and the author's family, will be named here once that list is confirmed.
 
 #+LATEX: \appendix
 
@@ -583,56 +495,57 @@ The author's family stayed with the writing of the library, and so did the pets,
 :CUSTOM_ID: sec:appendix-bench
 :END:
 
-The host label in the timing tables is bench-vm.
-The processor, the hardware-thread count, the compiler, the library revision, the script revision and the UTC date are columns of the per-repeat table.
-Payloads are built from one 218-atom frame.
-The 1-frame, 100-frame and @@latex:10\,000@@-frame files repeat that frame.
-The @@latex:10\,000@@-atom file tiles one coordinate row out to @@latex:10\,000@@ atoms in a single frame.
-The sectioned file is a four-image band with extra sections.
-XYZ and H5MD peers receive coordinates taken from the same frames.
-The sectioned file is handed to the peers as it stands, and a peer that cannot parse it is a failure.
-For each payload and each peer the loop is baseline, peer, baseline, peer, thirty times.
-A repeat that exceeds 240 seconds is a timeout.
-A peer that raises is a failure.
-Neither is dropped, and neither enters the median.
-The ratio uses only pairs in which both sides returned a time.
-The interval is a bias-corrected and accelerated bootstrap of the median, with 9999 draws.
+The host label in the timing tables is bench-vm, and the processor, the hardware-thread count, the compiler, the library revision, the script revision and the UTC date are columns of the per-repeat table.
+The comparison calls the Python binding with one worker, and ASE, chemfiles, MDAnalysis and h5py run in the same process with OpenMP and BLAS limited to one thread.
+The 1-frame, 100-frame and @@latex:10\,000@@-frame files repeat one 218-atom copper-hydrogen frame, and the slab is a separate single frame.
+The slab is built with ASE 3.29 as an orthogonal fcc111 platinum cell of size 50 by 20 by 10, vacuum 8 angstrom, plus one hydrogen adsorbate at height 1.5 angstrom on an on-top site.
+The bottom two layers are fixed on every axis, the other platinum atoms are free, and the adsorbate is fixed on z.
+Velocities for the kinetic-energy check are a Maxwell-Boltzmann sample at 300 K on that slab, drawn with a NumPy Generator and seed 20261011, and that velocity section is left out of the timing file so the ASE eon reader can finish the frame.
+XYZ and H5MD peers receive the coordinates of the same frames, written beside the CON text before the timed loop starts.
+For each payload and each peer the loop is one-worker readcon-core, then the peer, thirty times, after one untimed call of each side.
+A repeat that exceeds 240 seconds is recorded as a timeout, and a peer that raises is recorded as a failure, and neither of those outcomes is turned into a time.
+The ratio uses only pairs in which both sides returned a time, and the interval is a bias-corrected and accelerated bootstrap of the median, with 9999 draws and seed 20261011.
 A two-sided bootstrap probability for the median ratio equalling 1 is adjusted by the Holm step-down across those cells.
-Figure \ref{fig:ratios} draws the cells that have an interval.
-Table \ref{tab:ratios} lists every cell, including the failures.
-Thread timings use the @@latex:10\,000@@-frame file at 1, 2, 4 and 8 threads, thirty repeats each, and the field hash is also taken at 3 threads so that the identity check covers 1, 2, 3, 4 and 8.
+Thread scaling is a second loop on the @@latex:10\,000@@-frame file, and for 2, 4 and 8 workers each repeat times one worker and then that worker count.
+The field hash of the stored coordinates, masks and ids is taken at 1, 2, 3, 4 and 8 workers.
 
 #+LATEX: \input{figures/generated/ratio_table}
 
-* An indexed corpus of CON text
+* Reader rules
 :PROPERTIES:
-:CUSTOM_ID: sec:appendix-db
+:CUSTOM_ID: sec:appendix-rules
 :END:
 
-readcon-db stores CON text in an LMDB file and indexes it.
-The text stays the authority.
-The indexes answer the questions a campaign asks before it parses a frame: which entries have a given composition, which energies fall in a range, and which frames carry forces or velocities.
-An exact-match hash of the stored text finds duplicates.
-The library is a layer on top of readcon-core, and the note below is only the index a search needs before it opens a frame.
-Opening a corpus, appending a band and selecting on copper plus an energy window looks like this.
+The rules below are the edge cases of the reader.
+The mask, the id and the time unit themselves are stated in the introduction.
 
 #+BEGIN_EXPORT latex
-\begin{verbatim}
-use readcon_db::{ConCorpus, Select};
-let db = ConCorpus::open("corpus")?;
-db.append_trajectory_path(1, "band.con")?;
-let keys = db.select(
-    &Select::new()
-        .require_symbol("Cu")
-        .energy_range(-50.0, 0.0),
-)?;
-let digest = db.frame_hash(keys[0])?;
-\end{verbatim}
+\begin{table}[ht]
+\centering
+\small
+\caption{Reader rules for flags, versions and incomplete input.}
+\label{tab:rules}
+\begin{tabular}{p{0.42\linewidth}p{0.5\linewidth}}
+\toprule
+Input & Rule \\
+\midrule
+Mask outside the integers 0 to 7 & The row is rejected. \\
+Version 1 mask equal to 1 & \(x\), \(y\) and \(z\) are all fixed. \\
+Missing id column & The id is the zero-based row index. \\
+Repeated id & The row order in the file is kept. \\
+Unknown major version & The file is rejected. \\
+Unknown minor of a known major & The file is accepted. \\
+Unknown metadata key & The key is kept when the frame is written again. \\
+Unknown section at this minor & The file is rejected. \\
+Unknown section at a newer minor, with a declared width & The block may be skipped. \\
+Non-finite number & The field is rejected. \\
+Zero chemical types & The frame is legal and empty. \\
+Truncated header or a short section & The partial frame is not returned. \\
+gzip archive with several members & Every member is read, in order. \\
+\bottomrule
+\end{tabular}
+\end{table}
 #+END_EXPORT
-
-The selection returns keys.
-The hash returns the digest of the text stored under a key.
-Decoding a hit uses the same reader as the rest of this paper.
 
 #+LATEX: \bibliographystyle{elsarticle-num}
 #+LATEX: \bibliography{rg_main}

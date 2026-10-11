@@ -110,10 +110,10 @@ def ratios() -> None:
         ("frames-10000", "chemfiles_xyz"): "10000 frames, chemfiles",
         ("frames-10000", "mda_h5md"): "10000 frames, MDAnalysis",
         ("frames-10000", "h5py"): "10000 frames, h5py",
-        ("atoms-10000", "ase_eon"): "10000 atoms, ASE",
-        ("atoms-10000", "chemfiles_xyz"): "10000 atoms, chemfiles",
-        ("atoms-10000", "mda_h5md"): "10000 atoms, MDAnalysis",
-        ("atoms-10000", "h5py"): "10000 atoms, h5py",
+        ("slab", "ase_eon"): "Pt slab, ASE",
+        ("slab", "chemfiles_xyz"): "Pt slab, chemfiles",
+        ("slab", "mda_h5md"): "Pt slab, MDAnalysis",
+        ("slab", "h5py"): "Pt slab, h5py",
     }
     rows = [r for r in rows if (r["payload"], r["peer"]) in labels]
     fig, ax = plt.subplots(figsize=(7.2, 4.6))
@@ -141,6 +141,11 @@ def threads() -> None:
     eff = [float(r["efficiency"]) for r in rows]
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.2))
     axes[0].plot(n, speed, "o-", color=BLUE, label="measured")
+    if rows and rows[0].get("speedup_low"):
+        lo = [float(r["speedup_low"]) for r in rows]
+        hi = [float(r["speedup_high"]) for r in rows]
+        yerr = [[m - a for m, a in zip(speed, lo)], [b - m for m, b in zip(speed, hi)]]
+        axes[0].errorbar(n, speed, yerr=yerr, fmt="none", ecolor=ORANGE, capsize=3)
     axes[0].plot(n, n, "--", color=BLACK, label="ideal")
     axes[0].set_xlabel("threads")
     axes[0].set_ylabel("speedup")
@@ -157,9 +162,47 @@ def threads() -> None:
     plt.close(fig)
 
 
+def pipeline() -> None:
+    """Serial boundary scan, per-frame parse, gather in file order."""
+    fig, ax = plt.subplots(figsize=(7.2, 1.8))
+    ax.set_xlim(0, 3)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    boxes = [
+        (0.05, "1. Scan frame starts\nin one pass"),
+        (1.05, "2. Parse each frame\non N workers"),
+        (2.05, "3. Gather frames\nin file order"),
+    ]
+    colors = (SKY, ORANGE, GREEN)
+    for (x, text), color in zip(boxes, colors, strict=True):
+        ax.add_patch(
+            FancyBboxPatch(
+                (x, 0.22),
+                0.85,
+                0.56,
+                boxstyle="round,pad=0.02,rounding_size=0.04",
+                facecolor=color,
+                edgecolor=BLACK,
+                linewidth=0.6,
+            )
+        )
+        ax.text(x + 0.425, 0.5, text, ha="center", va="center", fontsize=8, color=BLACK)
+    for x in (0.92, 1.92):
+        ax.annotate(
+            "",
+            xy=(x + 0.1, 0.5),
+            xytext=(x, 0.5),
+            arrowprops={"arrowstyle": "->", "color": BLACK, "lw": 0.8},
+        )
+    fig.tight_layout()
+    fig.savefig(OUT / "pipeline.pdf")
+    plt.close(fig)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     layout()
+    pipeline()
     if (RESULTS / "ratios.csv").is_file():
         ratios()
     if (RESULTS / "threads_summary.csv").is_file():
