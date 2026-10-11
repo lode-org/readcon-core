@@ -97,7 +97,19 @@ def meta(src: Path) -> dict[str, str]:
         ["git", "merge-base", "HEAD", "origin/main"], cwd=ROOT, text=True
     ).strip()
     rustc = subprocess.check_output(["rustc", "--version"], text=True).strip()
-    nproc = subprocess.check_output(["nproc"], text=True).strip()
+    # Count processors in cpuinfo. The nproc command follows OMP_NUM_THREADS,
+    # which this process sets to 1 before the peers are imported.
+    nproc = "1"
+    try:
+        counted = sum(
+            1
+            for line in Path("/proc/cpuinfo").read_text().splitlines()
+            if line.startswith("processor")
+        )
+        if counted:
+            nproc = str(counted)
+    except OSError:
+        nproc = subprocess.check_output(["nproc", "--all"], text=True).strip()
     return {
         "host": "bench-vm",
         "cpu_model": cpu,

@@ -2,17 +2,27 @@
 \begin{table}[ht]
 \centering
 \small
-\caption{Mask, atom id and velocity returned for the rewritten HCN and HNC endpoints. A mask is three bits in order xyz. The probe frame fixes hydrogen on x only and stores ids 2, 0 and 1.}
+\caption{Per-atom mask, id and velocity. A mask is three bits in order xyz. The probe stores ids 2, 0 and 1 and fixes hydrogen on x only. The slab rows are one buried atom, one surface atom and the adsorbate.}
 \label{tab:hcn}
 \begin{tabular}{lllll}
 \toprule
-Frame & Reader & Mask & Id & Velocity \\
+Atom & Reader & Mask & Id & Velocity \\
 \midrule
-HCN & readcon-core & 000 000 000 & 0 1 2 & present \\
-HNC & readcon-core & 000 000 000 & 0 1 2 & present \\
-probe & readcon-core & 000 000 100 & 2 0 1 & present \\
-sectioned file & ASE eon & \multicolumn{3}{l}{failure} \\
-probe, coordinates & ASE eon & free free all-fixed & absent & absent \\
+HCN C & readcon-core & 000 & 0 & present \\
+HCN N & readcon-core & 000 & 1 & present \\
+HCN H & readcon-core & 000 & 2 & present \\
+HNC C & readcon-core & 000 & 0 & present \\
+HNC N & readcon-core & 000 & 1 & present \\
+HNC H & readcon-core & 000 & 2 & present \\
+probe C & readcon-core & 000 & 2 & present \\
+probe N & readcon-core & 000 & 0 & present \\
+probe H & readcon-core & 100 & 1 & present \\
+probe C & ASE eon & free & absent & absent \\
+probe N & ASE eon & free & absent & absent \\
+probe H & ASE eon & all-fixed & absent & absent \\
+slab bottom Pt & readcon-core & 111 & 0 & present \\
+slab surface Pt & readcon-core & 000 & 9000 & present \\
+slab adsorbate H & readcon-core & 001 & 10000 & present \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -107,6 +107,7 @@ zstd input is accepted only when the library is built with that feature.
 A pool of threads is used automatically only for files above 48 KiB, and a file that holds a single frame is parsed as one task even if that frame is large.
 The same fixtures are exercised from the Rust core and from the C, Python, Julia and Fortran bindings.
 \textit{References:}
+{\emergencystretch=4em
 \begin{enumerate}
 \item[{[1]}] G. H. Vineyard, J. Phys. Chem. Solids 3 (1957) 121, doi:10.1016/0022-3697(57)90059-8.
 \item[{[2]}] P. H{\"a}nggi, P. Talkner, M. Borkovec, Rev. Mod. Phys. 62 (1990) 251, doi:10.1103/RevModPhys.62.251.
@@ -114,7 +115,7 @@ The same fixtures are exercised from the Rust core and from the C, Python, Julia
 \item[{[4]}] G. Henkelman, B. P. Uberuaga, H. J{\'o}nsson, J. Chem. Phys. 113 (2000) 9901, doi:10.1063/1.1329672.
 \item[{[5]}] G. Henkelman, H. J{\'o}nsson, J. Chem. Phys. 111 (1999) 7010, doi:10.1063/1.480097.
 \item[{[6]}] G. Henkelman, H. J{\'o}nsson, J. Chem. Phys. 115 (2001) 9657, doi:10.1063/1.1415500.
-\end{enumerate}
+\end{enumerate}}
 #+END_EXPORT
 
 
@@ -392,8 +393,10 @@ The vertical line is a ratio of 1.}
 #+END_EXPORT
 
 Against the ASE eon reader the speedup, the reciprocal of the ratio, runs from \aseLo{} to \aseHi{} on the files both programs finish.
-Against chemfiles on the XYZ file with the same coordinates the factor runs from \chemLo{} to \chemHi, and against MDAnalysis on the H5MD file it runs from \mdaLo{} to \mdaHi.
-On the band of @@latex:10\,000@@ frames, readcon-core is \spBandAse{} times faster than ASE, \spBandChem{} times faster than chemfiles, and \spBandMda{} times faster than MDAnalysis.
+Against chemfiles on the XYZ file with the same coordinates the speedup runs from \chemLo{} to \chemHi{}, and a value below 1 means chemfiles finished sooner.
+Against MDAnalysis on the H5MD file the speedup runs from \mdaLo{} to \mdaHi{}.
+On the band of @@latex:10\,000@@ frames, readcon-core is \spBandAse{} times faster than ASE and \spBandMda{} times faster than MDAnalysis.
+On that same band the readcon-core time is \ratBandChem{} times the chemfiles time.
 h5py is faster on that band: the readcon-core time is \ratBandHpy{} times the h5py time, which is the direction expected when the peer reads one dense array and readcon-core parses text.
 On a single small frame the comparison with h5py goes the other way, and readcon-core is \spOneHpy{} times faster, because the cost of opening the container dominates a tiny array.
 On the platinum slab, which is one frame and therefore one task, readcon-core is \spSlabAse{} times faster than ASE, and the h5py ratio on that same frame is \ratSlabHpy.
@@ -414,6 +417,7 @@ Right: parallel efficiency.
 Figure \ref{fig:threads} is a separate run, and the speedup in that figure uses only the pairs recorded by the scaling loop.
 For each of 2, 4 and 8 workers the loop times one worker, then that worker count, thirty times, and the speedup is the ratio of those paired times.
 Two workers give a speedup of \thrTwo{} (interval \thrTwoLo{} to \thrTwoHi{}), four give \thrFour{} (\thrFourLo{} to \thrFourHi{}), and eight give \thrEight{} (\thrEightLo{} to \thrEightHi{}).
+Each of those speedups lies below the ideal line.
 The boundary scan that finds the frame offsets is serial, and each frame is a small parse, so the extra workers share a shrinking amount of independent work as the count rises.
 #+LATEX: \hashSentence
 The frames that come back are the frames that were stored, at every worker count the hash covers.
@@ -448,7 +452,7 @@ readcon-db is a downstream store that indexes this text for a search over many c
 :CUSTOM_ID: sec:data
 :END:
 
-The software is archived at the Zenodo concept DOI 10.5281/zenodo.18753567 and will be deposited in the CPC Program Library \cite{goswamiReadconcore2026}.
+The software archive is @@latex:\url{https://doi.org/10.5281/zenodo.18753567}@@, and the program will be deposited in the CPC Program Library \cite{goswamiReadconcore2026}.
 A numbered release of the library is archived beside the concept record, so one version can be cited as well as the series \cite{goswamiReadconRelease2026}.
 The archive is the software object that the FAIR principles for research software ask an author to identify and to describe \cite{barkerFAIR4RS2022}.
 A citation to research software is owed to the archived record, which is why the concept DOI appears in this paper \cite{smithSoftwareCitation2016}.
