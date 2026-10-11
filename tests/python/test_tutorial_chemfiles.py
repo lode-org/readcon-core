@@ -13,7 +13,7 @@ import readcon
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "run-chemfiles-notebook.sh"
-ORG = REPO / "docs" / "orgmode" / "chemfiles-notebook.org"
+ORG = REPO / "docs" / "orgmode" / "tutorials" / "chemfiles-notebook.org"
 TANGLE_PY = REPO / "docs" / "notebooks" / "chemfiles_ingress.py"
 
 
@@ -48,7 +48,7 @@ pytestmark = pytest.mark.skipif(
 
 def test_chemfiles_notebook_org_declares_tangle():
     org = ORG.read_text(encoding="utf-8")
-    assert ":tangle ../notebooks/chemfiles_ingress.py" in org
+    assert ":tangle ../../notebooks/chemfiles_ingress.py" in org
     script = SCRIPT.read_text(encoding="utf-8")
     assert "tangle drift" in script
     assert "falling back" not in script

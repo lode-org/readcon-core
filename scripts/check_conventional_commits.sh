@@ -23,12 +23,25 @@ fi
 
 echo "Checking commits ${start}..${end}"
 
+# A merge of main pulls subjects that already landed. Those commits are
+# not part of this branch's new work, so the subject check skips them.
+if git fetch --no-tags origin main:refs/remotes/origin/main >/dev/null 2>&1; then
+  have_main=1
+else
+  have_main=0
+  echo "note: origin/main was not fetched; main commits stay in the range" >&2
+fi
+
 fail=0
 log=$(git log --format='%H%x09%P%x09%s' "${start}..${end}")
 while IFS=$'\t' read -r sha parents subject; do
   [[ -n "$sha" ]] || continue
   if [[ "$parents" == *" "* ]]; then
     echo "OK skip merge ${sha} ${subject}"
+    continue
+  fi
+  if [[ "$have_main" == 1 ]] && git merge-base --is-ancestor "$sha" origin/main; then
+    echo "OK on main ${sha} ${subject}"
     continue
   fi
   case "$subject" in

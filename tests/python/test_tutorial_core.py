@@ -12,7 +12,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "run-tutorial-core.sh"
 TANGLE_PY = REPO / "docs" / "notebooks" / "tutorial_core.py"
-ORG = REPO / "docs" / "orgmode" / "tutorial.org"
+ORG = REPO / "docs" / "orgmode" / "tutorials" / "tutorial.org"
 
 
 def _emacs_path() -> str | None:
@@ -41,7 +41,7 @@ def _env() -> dict[str, str]:
 
 def test_org_source_declares_tangle_and_ci_script():
     org = ORG.read_text(encoding="utf-8")
-    assert ":tangle ../notebooks/tutorial_core.py" in org
+    assert ":tangle ../../notebooks/tutorial_core.py" in org
     assert "run-tutorial-core.sh" in org
     assert "drift" in org.lower() or "READCON_TANGLE_UPDATE" in org
     script = SCRIPT.read_text(encoding="utf-8")
