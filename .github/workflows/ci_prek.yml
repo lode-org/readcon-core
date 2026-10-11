@@ -6,8 +6,13 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lints:

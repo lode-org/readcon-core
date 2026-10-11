@@ -2,15 +2,20 @@ name: Documentation
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: "pages"
+  group: docs-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

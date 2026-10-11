@@ -2,7 +2,11 @@ name: Fortran (fpm)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
