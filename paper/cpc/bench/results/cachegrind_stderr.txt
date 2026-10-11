@@ -1,0 +1,7 @@
+==9820== Cachegrind, a high-precision tracing profiler
+==9820== Copyright (C) 2002-2017, and GNU GPL'd, by Nicholas Nethercote et al.
+==9820== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==9820== Command: /workspace/paper/cpc/bench/readcon-bench/target/release/readcon-bench time /workspace/paper/cpc/bench/work/frames-1.con 1
+==9820== 
+==9820== 
+==9820== I refs:        824,686

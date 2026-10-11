@@ -49,8 +49,7 @@
 (setq org-latex-src-block-backend 'listings)
 (setq org-latex-default-packages-alist
       '(("" "graphicx" t)
-        ("" "rotating" nil)
-        ("normalem" "ulem" t)))
+        ("" "rotating" nil)))
 
 (defun hz-ignore-headline (contents backend info)
   "Drop headlines tagged ignoreheading (amsel CPC exporter)."

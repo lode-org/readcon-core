@@ -199,6 +199,7 @@ Unmerged branches fix/v3.1-conformance and feat/error-channel-bindings are not p
 | The timings below were measured with =paper/cpc/bench/run_bench.py= on the host recorded in =paper/cpc/bench/results/repeats.csv=. | TBD-S1 | TBD-T1 | holds |
 | readcon-core runs in one long-lived process started from paper/cpc/bench/readcon-bench. | TBD-S1 | TBD-T1 | holds |
 | Each peer runs in the Python process. | TBD-S1 | TBD-T1 | holds |
+| The paired baseline passes thread count 0, which selects the library default. | TBD-S1 | TBD-T1 | holds |
 | The library sources are the sources of the base SHA in that CSV. | TBD-S1 | TBD-T1 | holds |
 | The commit column is the git revision that contains these scripts. | TBD-S1 | TBD-T1 | holds |
 | Each cell is 30 repeats in the order baseline, peer, baseline, peer. | TBD-S1 | TBD-T1 | holds |

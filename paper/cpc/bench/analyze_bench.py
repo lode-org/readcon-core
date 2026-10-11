@@ -66,7 +66,8 @@ def bootstrap_p(samples: np.ndarray) -> float:
         med = float(np.median(rng.choice(null, size=n, replace=True)))
         if abs(med - 1.0) >= abs(observed - 1.0) - 1e-15:
             extreme += 1
-    return extreme / N_BOOT
+    # Plus-one correction so a count of zero is not reported as p = 0.
+    return (extreme + 1) / (N_BOOT + 1)
 
 
 def holm(pvalues: list[float]) -> list[float]:

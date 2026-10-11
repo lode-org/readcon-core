@@ -28,6 +28,7 @@ def tex(text: str) -> str:
         .replace("_", r"\_")
         .replace("#", r"\#")
         .replace("$", r"\$")
+        .replace("^", r"\^{}")
     )
 
 
@@ -453,7 +454,7 @@ def main() -> None:
     write("velocity_table.tex", gen_velocity(velocity))
     write("neb_table.tex", gen_neb())
     sentence = (RESULTS / "faster_sentence.txt").read_text().strip()
-    write("faster_sentence.tex", sentence + "\n")
+    write("faster_sentence.tex", tex(sentence) + "\n")
     subprocess.check_call([sys.executable, str(CPC / "scripts" / "gen_figures.py")])
     print(f"wrote tables under {OUT}")
 
