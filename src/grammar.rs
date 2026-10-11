@@ -274,6 +274,10 @@ coordinates of component   1
             ),
             (
                 "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n0\n\n",
+                true,
+            ),
+            (
+                "PRE\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\nA\nB\n0\n1\n1\n",
                 false,
             ),
             (

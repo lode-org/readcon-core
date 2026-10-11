@@ -326,13 +326,49 @@ B
 }
 
 #[test]
-fn zero_count_is_invalid_count_and_a_sign_is_invalid_number_format() {
-    let zero = header_only(r#"{"con_spec_version":2}"#, "0\n0\n1.0\n");
-    assert_eq!(class_of(&zero), "InvalidCount");
+fn zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count() {
+    let zero = header_only(r#"{"con_spec_version":2}"#, "0\n\n\n");
+    let frame = parse_one(&zero).unwrap();
+    assert_eq!(frame.header.natm_types, 0);
+    assert!(frame.atom_data.is_empty());
+    assert!(frame.header.sections.is_empty());
+
+    let eof = header_only(r#"{"con_spec_version":2}"#, "0\n");
+    let frame = parse_one(&eof).unwrap();
+    assert_eq!(frame.header.natm_types, 0);
+    assert!(frame.atom_data.is_empty());
+
+    let line8_only = header_only(r#"{"con_spec_version":2}"#, "0\n\n");
+    assert_eq!(class_of(&line8_only), "ok");
+
     let per_type = header_only(r#"{"con_spec_version":2}"#, "1\n0\n1.0\n");
     assert_eq!(class_of(&per_type), "InvalidCount");
+    let two_and_zero = header_only(r#"{"con_spec_version":2}"#, "2\n1 0\n1.0 1.0\n");
+    assert_eq!(class_of(&two_and_zero), "InvalidCount");
     let negative = header_only(r#"{"con_spec_version":2}"#, "-1\n1\n1.0\n");
-    assert_eq!(class_of(&negative), "InvalidNumberFormat");
+    assert_eq!(class_of(&negative), "InvalidCount");
+    let decimal = header_only(r#"{"con_spec_version":2}"#, "1.0\n1\n1.0\n");
+    assert_eq!(class_of(&decimal), "InvalidCount");
+    let plus = header_only(r#"{"con_spec_version":2}"#, "+1\n1\n1.0\n");
+    assert_eq!(class_of(&plus), "InvalidCount");
+
+    let strict = header_only(
+        r#"{"con_spec_version":2,"validate":true,"sections":[]}"#,
+        "0\n\n\n",
+    );
+    let frame = parse_one(&strict).unwrap();
+    assert_eq!(
+        frame
+            .header
+            .metadata
+            .get("validate")
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(frame.atom_data.len(), 0);
+
+    let token = header_only(r#"{"con_spec_version":2}"#, "0\n1\n\n");
+    assert_eq!(class_of(&token), "InvalidCount");
 }
 
 #[test]
@@ -643,4 +679,119 @@ fn thread_counts_hash_every_field_and_share_the_first_error() {
         }
     }
     assert_eq!(first.unwrap().0, "NonFiniteValue");
+}
+
+#[test]
+fn zero_atom_frame_round_trips_and_keeps_the_next_frame() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/conformance/valid/zero_atom_then_frame.con");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let frames: Vec<_> = ConFrameIterator::new(&text)
+        .map(|r| r.expect("frame"))
+        .collect();
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0].header.natm_types, 0);
+    assert!(frames[0].atom_data.is_empty());
+    assert_eq!(frames[1].atom_data.len(), 1);
+    assert_eq!(&*frames[1].atom_data[0].symbol, "Cu");
+
+    let eof = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/conformance/valid/zero_atom_eof.con"),
+    )
+    .unwrap();
+    let frames: Vec<_> = ConFrameIterator::new(&eof)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].header.natm_types, 0);
+
+    let mut buf = Vec::new();
+    ConFrameWriter::new(&mut buf)
+        .write_frame(&frames[0])
+        .unwrap();
+    let written = String::from_utf8(buf).unwrap();
+    assert!(
+        written.ends_with("0\n\n\n"),
+        "writer emits a type count of 0 and empty lines 8 and 9: {written:?}"
+    );
+    let again = parse_one(&written).unwrap();
+    assert_eq!(again.header.natm_types, 0);
+    assert!(again.atom_data.is_empty());
+}
+
+#[test]
+fn pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order() {
+    let unique = "\
+PRE
+{\"con_spec_version\":2}
+10 10 10
+90 90 90
+A
+B
+2
+2 1
+12.0 1.0
+C
+Coordinates of Component 1
+0 0 0 0 2
+1 0 0 0 0
+H
+Coordinates of Component 2
+2 0 0 0 1
+";
+    let frame = parse_one(unique).unwrap();
+    let ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+    assert_eq!(ids, vec![2, 0, 1], "reader keeps file order");
+    assert_eq!(
+        readcon_core::types::pre_grouping_indices(&ids),
+        vec![1, 2, 0]
+    );
+
+    let repeated = "\
+PRE
+{\"con_spec_version\":2}
+10 10 10
+90 90 90
+A
+B
+1
+3
+1.0
+H
+Coordinates of Component 1
+0 0 0 0 1
+1 0 0 0 1
+2 0 0 0 0
+";
+    let frame = parse_one(repeated).unwrap();
+    let ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+    assert_eq!(ids, vec![1, 1, 0]);
+    assert_eq!(
+        readcon_core::types::pre_grouping_indices(&ids),
+        vec![0, 1, 2]
+    );
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn earliest_frame_error_wins_at_every_thread_count() {
+    let early = header_only(r#"{"con_spec_version":2}"#, "2\n1 0\n1.0 1.0\n");
+    let later = v2_frame(r#"{"con_spec_version":2}"#, "nan 0 0 0 0");
+    let text = format!("{early}{later}");
+    for threads in [1usize, 2, 3, 8] {
+        let err = frames_from_text(&text, Some(threads)).unwrap_err();
+        assert_eq!(err.class_name(), "InvalidCount", "threads {threads}: {err}");
+    }
+
+    let zero = header_only(r#"{"con_spec_version":2}"#, "0\n\n\n");
+    let good = v2_frame(r#"{"con_spec_version":2}"#, "0 0 0 0 4");
+    let text = format!("{zero}{good}");
+    for threads in [1usize, 2, 3, 8] {
+        let frames = frames_from_text(&text, Some(threads)).unwrap();
+        assert_eq!(frames.len(), 2, "threads {threads}");
+        assert_eq!(frames[0].atom_data.len(), 0);
+        assert_eq!(frames[1].atom_data.len(), 1);
+        assert_eq!(frames[1].atom_data[0].atom_id, 4);
+    }
 }

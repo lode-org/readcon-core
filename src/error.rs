@@ -25,8 +25,9 @@ pub enum ParseError {
     NonFiniteValue(String),
     /// Column 4 is not a legal integer flag. Clause CON-mask.5 (D8).
     InvalidFixedFlag(String),
-    /// A type count, per-type count, or atom count is not >= 1.
-    /// Clause CON-count.2 (D4).
+    /// A count field is not an unsigned integer, or a per-type count is 0
+    /// when the type count is 1 or more. A type count of 0 is legal.
+    /// Clauses CON-count.1 and CON-error.3 (D4).
     InvalidCount(String),
     /// A unit expression is missing, mistyped, or the wrong dimension.
     /// Clauses CON-units.9 and CON-units.10 (D11).

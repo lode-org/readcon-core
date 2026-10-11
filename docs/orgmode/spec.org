@@ -86,9 +86,9 @@ separator.
 |    4 | Cell angles       | 3 floats: alpha beta gamma     | =90.0 90.0 90.0=        |
 |    5 | Reserved          | Free-form text (round-tripped) | =0 0=                   |
 |    6 | Reserved          | Free-form text (round-tripped) | =218 0 1=               |
-|    7 | Atom type count   | 1 integer: N                   | =2=                     |
-|    8 | Atoms per type    | N integers                     | =216 2=                 |
-|    9 | Mass per type     | N floats (atomic mass units)   | =63.546 1.00793=        |
+|    7 | Atom type count   | 1 integer: N. 0 is a legal zero-atom frame | =2= or =0= |
+|    8 | Atoms per type    | N integers, or whitespace when N is 0 | =216 2=     |
+|    9 | Mass per type     | N floats, or whitespace when N is 0   | =63.546 1.00793= |
 
 ** Line 1: Generator comment
 
@@ -216,6 +216,7 @@ Version 2 requirements:
 - Writers MUST emit column 5 on every atom line.
 - Column 5 MUST contain the pre-grouping index.
 - Readers MUST parse and preserve column 5 through write-back.
+- When the ids in a frame are unique, pre-grouping order is ascending id. When any id repeats, pre-grouping order is file order. A reader may return atoms in file order and still expose the ids unchanged.
 
 Version 1 behavior:
 - Column 5 is present but its semantics are undefined.
@@ -359,14 +360,14 @@ the reference implementation stay in sync.
 | ~InvalidMetadataJson(msg)~ | Malformed JSON on line 2, ~validate~ is not a boolean, ~sections~ is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ~validate=true~ omits the ~sections~ key. |
 | ~NonFiniteValue~ | NaN, Inf, Infinity, or a signed or mixed-case spelling, in every mode. |
 | ~InvalidFixedFlag~ | Column 4 is not a legal integer flag, in every mode. |
-| ~InvalidCount~ | Type count, per-type count, or atom count is not >= 1, in every mode. |
+| ~InvalidCount~ | A count field is not an unsigned integer, or a per-type count of 0 is InvalidCount when the type count is 1 or more. A type count of 0 is a legal zero-atom frame. |
 | ~InvalidUnits~ | A unit expression is missing, mistyped, or the wrong dimension. |
-| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, section component symbol, section label, or per-row identity columns mismatch. It does not relax ~NonFiniteValue~ or ~InvalidFixedFlag~. |
+| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, section component symbol, section label, or per-row identity columns mismatch. It does not relax ~NonFiniteValue~ or ~InvalidFixedFlag~. A legal zero-atom frame is accepted. |
 | ~UnknownSection(name)~ | A section name is not known and cannot be skipped by ~section_arity~. |
-| ~IncompleteHeader~ | Fewer than 9 header lines remain. |
+| ~IncompleteHeader~ | A started frame has too few header lines, other than a type count of 0 at end of file whose lines 8 and 9 are absent. |
 | ~IncompleteFrame~ | Coordinate block ends short. |
 | ~IncompleteSection(name)~ | A declared section is missing or short. |
-| ~InvalidNumberFormat~ | A token is not a decimal number. A negative count is this class. |
+| ~InvalidNumberFormat~ | Column 5 or another non-count field is not a decimal number. |
 | ~InvalidVectorLength~ | A row has the wrong number of fields. |
 
 Line numbers count from 1. Metadata failures are line 2.
