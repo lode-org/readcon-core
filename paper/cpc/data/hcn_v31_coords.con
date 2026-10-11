@@ -1,0 +1,18 @@
+HCN coordinates with an x-only mask on H
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"},"sections":[]}
+25.0 25.0 25.0
+90.0 90.0 90.0
+postBox_header_1
+postBox_header_2
+3
+1 1 1
+12.011 14.007 1.008
+C
+Coordinates of Component 1
+0.00000000000000000 0.00000000000000000 1.06500000000000000 0 2
+N
+Coordinates of Component 2
+0.00000000000000000 0.00000000000000000 -0.42767535150000000 0 0
+H
+Coordinates of Component 3
+0.00000000000000000 0.00000000000000000 2.22000000000000000 1 1

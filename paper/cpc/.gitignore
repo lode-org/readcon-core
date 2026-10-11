@@ -6,4 +6,7 @@
 *.log
 *.out
 *.synctex.gz
+*.spl
 auto/
+bench/work/
+src/figures/generated/*.aux

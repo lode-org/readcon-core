@@ -1,0 +1,18 @@
+% Written by paper/cpc/scripts/gen_tables.py.
+\begin{table}[ht]
+\centering
+\small
+\caption{Mask, atom id and velocity returned for the rewritten HCN and HNC endpoints. A mask is three bits in order xyz. The probe frame fixes hydrogen on x only and stores ids 2, 0 and 1.}
+\label{tab:hcn}
+\begin{tabular}{lllll}
+\toprule
+Frame & Reader & Mask & Id & Velocity \\
+\midrule
+HCN & readcon-core & 000 000 000 & 0 1 2 & present \\
+HNC & readcon-core & 000 000 000 & 0 1 2 & present \\
+probe & readcon-core & 000 000 100 & 2 0 1 & present \\
+sectioned file & ASE eon & \multicolumn{3}{l}{failure} \\
+probe, coordinates & ASE eon & free free all-fixed & absent & absent \\
+\bottomrule
+\end{tabular}
+\end{table}

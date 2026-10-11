@@ -1,0 +1,6 @@
+feature,readcon,ase,xyz,h5md,lammps
+mask,per-axis bits,one boolean,no standard mask,not specified,not in the dump
+id,kept,not kept,optional column,optional,atom id
+velocity unit,declared,not read,not required,time attribute,outside the file
+sections,named blocks,coordinates only,property columns,particle groups,optional columns
+version,major and minor,not read,none,format version,none

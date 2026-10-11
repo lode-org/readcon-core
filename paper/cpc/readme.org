@@ -1,27 +1,34 @@
 #+TITLE: CPC manuscript (readcon-core)
 
-Target: Computer Physics Communications.
-
-The source of truth is =src/rg_main.org=. Do not hand-edit
-=src/rg_main.tex=. Numbers in the Performance and Applications
-tables come from =scripts/gen_tables.py=, which reads committed
-JSON / Cachegrind rst / =neb_band.con= / the companion
-=freeze/ase_fair_campaign_1.json= payload (tiny_cuh2.con
-ladder 10/50/100/200/500). That fair-campaign table is
-appendix material, not a main-claim parse. Do not invent a
-cheaper ladder or type those rates into the org.
+The source of truth is =src/rg_main.org=.
+Do not hand-edit =src/rg_main.tex=.
+Tables and figures are written by =scripts/gen_tables.py= from the CSV files under =data/= and =bench/results/=.
 
 * Build
 
+From the repository root, with the generated macros already written:
+
 #+begin_src bash
-python paper/cpc/scripts/gen_tables.py
 emacs -nl --script paper/cpc/scripts/org2tex.el paper/cpc/src/rg_main.org
-# then, in paper/cpc/src/:
-latexmk -pdf rg_main.tex
 #+end_src
 
-From the repo root, =pixi r cpc-tex= runs the table generator and
-the org export.
+=org2tex.el= checks the abstract length and =highlights.txt=, exports the org file, and runs latexmk.
+=pixi r cpc-tex= is the same sequence when pixi is available.
+Regenerate the tables first with =python3 paper/cpc/scripts/gen_tables.py=.
 
-Do not invent a DOI. Do not type a wall-clock number into the org
-that is not in a committed artifact.
+* Benchmark
+
+=paper/cpc/bench/run_bench.py= times readcon-core against ASE, chemfiles XYZ, MDAnalysis H5MD, and h5py.
+Set =READCON_SRC= to the checkout that should be timed.
+The run in this archive used that variable so the binary matches the =readcon_sha= column, while =Cargo.toml= in the bench crate still points at the workspace.
+The host column is =bench-vm=.
+Each cell is 30 repeats, interleaved baseline then peer.
+Timeouts and reader failures stay in =bench/results/repeats.csv=.
+=paper/cpc/bench/analyze_bench.py= writes medians, bias-corrected intervals, and the Holm column.
+=paper/cpc/scripts/hcn_case.py= rewrites the public HCN and HNC endpoints and records what each reader returns.
+Those endpoints are the public files of doi:10.1016/j.mex.2026.103899.
+
+* Data
+
+The software archive is the Zenodo concept DOI 10.5281/zenodo.18753567.
+The per-repeat tables record the processor, the compiler, the library revision, the script revision, and the UTC date.

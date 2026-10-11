@@ -1,0 +1,33 @@
+% Written by paper/cpc/scripts/gen_tables.py.
+\begin{table}[ht]
+\centering
+\small
+\caption{Paired time ratios. The ratio is the readcon-core time divided by the peer time, so a value below 1 means readcon-core finished sooner. The interval is a bias-corrected and accelerated 95 percent interval of the median. Failures stay in the table and are not converted into times.}
+\label{tab:ratios}
+\begin{tabular}{llrrrr}
+\toprule
+Payload & Peer & OK & Fail & Ratio & Interval \\
+\midrule
+10000 atoms & ASE eon & 30 & 0 & 0.0939 & [0.0921, 0.0958] \\
+10000 atoms & chemfiles XYZ & 30 & 0 & 0.418 & [0.403, 0.427] \\
+10000 atoms & h5py & 30 & 0 & 2.71 & [2.68, 2.74] \\
+10000 atoms & MDAnalysis H5MD & 30 & 0 & 0.201 & [0.197, 0.203] \\
+1 frame & ASE eon & 30 & 0 & 0.0684 & [0.0648, 0.0765] \\
+1 frame & chemfiles XYZ & 30 & 0 & 0.381 & [0.378, 0.384] \\
+1 frame & h5py & 30 & 0 & 0.159 & [0.149, 0.183] \\
+1 frame & MDAnalysis H5MD & 30 & 0 & 0.0105 & [0.0102, 0.0109] \\
+100 frames & ASE eon & 30 & 0 & 0.0309 & [0.0287, 0.0343] \\
+100 frames & chemfiles XYZ & 30 & 0 & 0.188 & [0.171, 0.227] \\
+100 frames & h5py & 30 & 0 & 2.41 & [2.31, 2.49] \\
+100 frames & MDAnalysis H5MD & 30 & 0 & 0.0212 & [0.019, 0.0233] \\
+10000 frames & ASE eon & 30 & 0 & 0.0294 & [0.0285, 0.0306] \\
+10000 frames & chemfiles XYZ & 30 & 0 & 0.164 & [0.161, 0.168] \\
+10000 frames & h5py & 30 & 0 & 5.67 & [5.59, 5.75] \\
+10000 frames & MDAnalysis H5MD & 30 & 0 & 0.018 & [0.0174, 0.0186] \\
+sectioned band & ASE eon & 0 & 30 &  &  \\
+sectioned band & chemfiles XYZ & 0 & 30 &  &  \\
+sectioned band & h5py & 0 & 30 &  &  \\
+sectioned band & MDAnalysis H5MD & 0 & 30 &  &  \\
+\bottomrule
+\end{tabular}
+\end{table}
