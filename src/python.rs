@@ -2,18 +2,19 @@ use ndarray::{Array2, Array3, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
 };
-use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
+use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
-use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
+use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -1059,7 +1060,7 @@ impl PyConFrame {
             .canonical(canonical);
         writer
             .write_frame(&frame)
-            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+            .map_err(|e| write_err_to_py(py, e))?;
         Ok(())
     }
 }
@@ -1312,7 +1313,7 @@ impl PyConFrame {
 
         builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+            .map_err(|e| parse_err_to_py(py, &e, e.line(), 0))
     }
 }
 
@@ -1453,9 +1454,9 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let frames = py
         .detach(|| {
             crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
-                .map_err(|err| err.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let parse_s = parse_start.elapsed().as_secs_f64();
     let convert_start = std::time::Instant::now();
     let n_frames = frames.len();
@@ -2049,15 +2050,18 @@ fn con_frame_list(
         _ => frames.into_iter().map(Some).collect(),
     });
     let t_return = std::time::Instant::now();
-    let obj = Py::new(py, ConFrameList {
-        frames: std::sync::Mutex::new(stored),
-        cache: std::sync::Mutex::new(cache),
-        slab,
-        n_atoms,
-        workers,
-        phases: std::sync::Mutex::new(record),
-        pool: std::sync::Mutex::new(pool),
-    })?;
+    let obj = Py::new(
+        py,
+        ConFrameList {
+            frames: std::sync::Mutex::new(stored),
+            cache: std::sync::Mutex::new(cache),
+            slab,
+            n_atoms,
+            workers,
+            phases: std::sync::Mutex::new(record),
+            pool: std::sync::Mutex::new(pool),
+        },
+    )?;
     let return_s = t_return.elapsed().as_secs_f64();
     let list_s = t_list.elapsed().as_secs_f64();
     let accounted = slab_s + release_s + python_build_s + return_s;
@@ -2104,9 +2108,9 @@ fn load_phased(
                         phased.share_bytes,
                     )
                 })
-                .map_err(|err| err.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let elapsed = t_enter.elapsed().as_secs_f64();
     let phases = &loaded.1;
     let named = phases.open_mmap_s
@@ -2280,9 +2284,9 @@ fn read_positions(
     let block = py
         .detach(|| {
             crate::iterators::read_positions_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(|e| e.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
         .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
     Ok(array.into_pyarray(py).unbind())
@@ -2396,10 +2400,8 @@ fn read_con_mpi(
 fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_first_frame(Path::new(&path_owned)).map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_first_frame_located(Path::new(&path_owned)))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -2418,10 +2420,15 @@ fn read_con_string(
     let n_bytes = owned.len();
     let parsed = py
         .detach(|| {
-            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads)
-                .map_err(|e| e.to_string())
+            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads).map_err(|e| {
+                CountFail::Parse {
+                    class: e.class_name(),
+                    message: e.to_string(),
+                    line: e.line(),
+                }
+            })
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let phases = crate::iterators::ReadPhaseTimes {
         open_mmap_s,
         pool_s: parsed.pool_s,
@@ -2471,11 +2478,11 @@ enum FrameSource {
     Stream(std::sync::Mutex<crate::stream::ConFrameReader<Box<dyn std::io::Read + Send>>>),
 }
 
-fn stream_error(what: &str, e: crate::stream::StreamError) -> PyErr {
-    if e.is::<crate::error::ParseError>() {
-        PyIOError::new_err(format!("{what} error: {e}"))
+fn stream_error(py: Python<'_>, what: &str, e: crate::stream::StreamError) -> PyErr {
+    if let Some(parse) = e.downcast_ref::<ParseError>() {
+        parse_err_to_py(py, parse, parse.line(), 0)
     } else {
-        PyIOError::new_err(format!("read error: {e}"))
+        PyIOError::new_err(format!("{what} error: {e}"))
     }
 }
 
@@ -2492,7 +2499,7 @@ impl PyConFrameIterator {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
                     Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
-                    Some(Err(e)) => Err(stream_error("parse", e)),
+                    Some(Err(e)) => Err(stream_error(py, "parse", e)),
                     None => Ok(None),
                 };
             }
@@ -2514,7 +2521,10 @@ impl PyConFrameIterator {
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
+            Some(Err(e)) => {
+                let line = iter.lines.line_no();
+                Err(parse_err_to_py(py, &e, line, 0))
+            }
             None => {
                 *pos = contents.as_str().len();
                 Ok(None)
@@ -2530,7 +2540,7 @@ impl PyConFrameIterator {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.forward()) {
                     Some(Ok(())) => Ok(true),
-                    Some(Err(e)) => Err(stream_error("skip", e)),
+                    Some(Err(e)) => Err(stream_error(py, "skip", e)),
                     None => Ok(false),
                 };
             }
@@ -2548,7 +2558,7 @@ impl PyConFrameIterator {
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("skip error: {e}"))),
+            Some(Err(e)) => Err(parse_err_to_py(py, &e, iter.lines.line_no(), 0)),
             None => Ok(false),
         }
     }
@@ -2618,8 +2628,32 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string()))
-        .map_err(PyIOError::new_err)
+    py.detach(|| {
+        crate::iterators::count_frames(Path::new(&path_owned)).map_err(|err| {
+            if err.downcast_ref::<std::io::Error>().is_some() {
+                CountFail::Io(err.to_string())
+            } else if let Some(parse) = err.downcast_ref::<ParseError>() {
+                CountFail::Parse {
+                    class: parse.class_name(),
+                    message: parse.to_string(),
+                    line: parse.line(),
+                }
+            } else {
+                CountFail::Other(err.to_string())
+            }
+        })
+    })
+    .map_err(|err| {
+        Python::attach(|py| match err {
+            CountFail::Io(msg) => PyIOError::new_err(msg),
+            CountFail::Parse {
+                class,
+                message,
+                line,
+            } => class_err_to_py(py, class, message, line, 0),
+            CountFail::Other(msg) => class_err_to_py(py, "ValidationError", msg, 0, 0),
+        })
+    })
 }
 
 /// Skip `index` frames (no atom parse), then return that frame.
@@ -2627,11 +2661,8 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
 fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_nth_frame(Path::new(&path_owned), index)
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_nth_frame_located(Path::new(&path_owned), index))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -2798,7 +2829,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     } else {
         let mut writer = match precision {
             Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
@@ -2809,7 +2840,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     Ok(())
 }
@@ -2876,7 +2907,7 @@ fn write_con_string(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))
 }
@@ -2993,7 +3024,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
-    // Set velocities if present
+    // Set velocities if present. ASE stores the natural time unit (D10).
     if frame.has_velocities(py)? {
         let time_unit = crate::units::velocity_file_time_unit(
             frame.spec_version,
@@ -3154,31 +3185,36 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .call_method0("tolist")?
             .extract()?;
         if cellpar.len() == 6 && cellpar.iter().all(|value| value.is_finite()) {
-            ([cellpar[0], cellpar[1], cellpar[2]], [
-                cellpar[3], cellpar[4], cellpar[5],
-            ])
+            (
+                [cellpar[0], cellpar[1], cellpar[2]],
+                [cellpar[3], cellpar[4], cellpar[5]],
+            )
         } else {
             (lengths, raw_angles)
         }
     } else {
-        (lengths, [
-            if raw_angles[0].is_finite() {
-                raw_angles[0]
-            } else {
-                90.0
-            },
-            if raw_angles[1].is_finite() {
-                raw_angles[1]
-            } else {
-                90.0
-            },
-            if raw_angles[2].is_finite() {
-                raw_angles[2]
-            } else {
-                90.0
-            },
-        ])
+        (
+            lengths,
+            [
+                if raw_angles[0].is_finite() {
+                    raw_angles[0]
+                } else {
+                    90.0
+                },
+                if raw_angles[1].is_finite() {
+                    raw_angles[1]
+                } else {
+                    90.0
+                },
+                if raw_angles[2].is_finite() {
+                    raw_angles[2]
+                } else {
+                    90.0
+                },
+            ],
+        )
     };
+    let pbc = ase_pbc(ase_atoms)?;
 
     // Extract fixed atom info from constraints
     let n_atoms = symbols.len();
@@ -3325,7 +3361,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .collect();
 
     let metadata = PyDict::new(py);
-    metadata.set_item(meta::PBC, ase_atoms.getattr("pbc")?.call_method0("tolist")?)?;
+    metadata.set_item(meta::PBC, pbc.to_vec())?;
     if angles_defined {
         metadata.set_item(meta::LATTICE_VECTORS, cell_matrix)?;
     }
@@ -3354,6 +3390,22 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         slab_index: 0,
         xyz_owned: None,
     })
+}
+
+fn ase_pbc(ase_atoms: &Bound<'_, PyAny>) -> PyResult<[bool; 3]> {
+    let pbc = ase_atoms.getattr("pbc")?;
+    if let Ok(flag) = pbc.extract::<bool>() {
+        return Ok([flag, flag, flag]);
+    }
+    let values: Vec<bool> = if let Ok(list) = pbc.call_method0("tolist") {
+        list.extract()?
+    } else {
+        pbc.extract()?
+    };
+    if values.len() != 3 {
+        return Err(PyValueError::new_err("ASE pbc must have length 3"));
+    }
+    Ok([values[0], values[1], values[2]])
 }
 
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.
@@ -3492,9 +3544,163 @@ fn write_conbin(
     Ok((header.n_frames, header.n_atoms))
 }
 
+pyo3::create_exception!(readcon, ConError, pyo3::exceptions::PyValueError);
+pyo3::create_exception!(readcon, NonFiniteValue, ConError);
+pyo3::create_exception!(readcon, InvalidFixedFlag, ConError);
+pyo3::create_exception!(readcon, InvalidCount, ConError);
+pyo3::create_exception!(readcon, InvalidUnits, ConError);
+pyo3::create_exception!(readcon, IncompleteHeader, ConError);
+pyo3::create_exception!(readcon, IncompleteFrame, ConError);
+pyo3::create_exception!(readcon, IncompleteSection, ConError);
+pyo3::create_exception!(readcon, IncompleteVelocitySection, ConError);
+pyo3::create_exception!(readcon, IncompleteForceSection, ConError);
+pyo3::create_exception!(readcon, IncompleteEnergySection, ConError);
+pyo3::create_exception!(readcon, InvalidNumberFormat, ConError);
+pyo3::create_exception!(readcon, InvalidVectorLength, ConError);
+pyo3::create_exception!(readcon, UnknownSection, ConError);
+pyo3::create_exception!(readcon, UnsupportedVersion, ConError);
+pyo3::create_exception!(readcon, ValidationError, ConError);
+pyo3::create_exception!(readcon, MissingSpecVersion, ConError);
+pyo3::create_exception!(readcon, InvalidMetadataJson, ConError);
+pyo3::create_exception!(readcon, IndexOutOfBounds, ConError);
+pyo3::create_exception!(readcon, MassMismatch, ConError);
+
+fn class_err_to_py(
+    py: Python<'_>,
+    class_name: &str,
+    message: String,
+    line: u32,
+    frame_index: u64,
+) -> PyErr {
+    let ty = match class_name {
+        "NonFiniteValue" => py.get_type::<NonFiniteValue>().into_any(),
+        "InvalidFixedFlag" => py.get_type::<InvalidFixedFlag>().into_any(),
+        "InvalidCount" => py.get_type::<InvalidCount>().into_any(),
+        "InvalidUnits" => py.get_type::<InvalidUnits>().into_any(),
+        "IncompleteHeader" => py.get_type::<IncompleteHeader>().into_any(),
+        "IncompleteFrame" => py.get_type::<IncompleteFrame>().into_any(),
+        "IncompleteSection" => py.get_type::<IncompleteSection>().into_any(),
+        "IncompleteVelocitySection" => py.get_type::<IncompleteVelocitySection>().into_any(),
+        "IncompleteForceSection" => py.get_type::<IncompleteForceSection>().into_any(),
+        "IncompleteEnergySection" => py.get_type::<IncompleteEnergySection>().into_any(),
+        "InvalidNumberFormat" => py.get_type::<InvalidNumberFormat>().into_any(),
+        "InvalidVectorLength" => py.get_type::<InvalidVectorLength>().into_any(),
+        "UnknownSection" => py.get_type::<UnknownSection>().into_any(),
+        "UnsupportedVersion" => py.get_type::<UnsupportedVersion>().into_any(),
+        "ValidationError" => py.get_type::<ValidationError>().into_any(),
+        "MissingSpecVersion" => py.get_type::<MissingSpecVersion>().into_any(),
+        "InvalidMetadataJson" => py.get_type::<InvalidMetadataJson>().into_any(),
+        "IndexOutOfBounds" => py.get_type::<IndexOutOfBounds>().into_any(),
+        "MassMismatch" => py.get_type::<MassMismatch>().into_any(),
+        _ => py.get_type::<ConError>().into_any(),
+    };
+    match ty.call1((message,)) {
+        Ok(inst) => {
+            let _ = inst.setattr("line", line);
+            let _ = inst.setattr("frame_index", frame_index);
+            PyErr::from_value(inst)
+        }
+        Err(err) => err,
+    }
+}
+
+fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
+    class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
+}
+
+fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
+    Python::attach(|py| parse_err_to_py(py, &err.error, err.line, err.frame_index))
+}
+
+fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
+    use crate::iterators::LoadError;
+    match err {
+        LoadError::Io(io) => PyIOError::new_err(io.to_string()),
+        LoadError::Utf8(utf) => Python::attach(|py| {
+            parse_err_to_py(py, &ParseError::InvalidNumberFormat(utf.to_string()), 0, 0)
+        }),
+        LoadError::Parse(located) => located_to_py(located),
+        LoadError::Empty => {
+            Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
+        }
+    }
+}
+
+enum CountFail {
+    Io(String),
+    Parse {
+        class: &'static str,
+        message: String,
+        line: u32,
+    },
+    Other(String),
+}
+
+fn count_fail_to_py(err: CountFail) -> PyErr {
+    Python::attach(|py| match err {
+        CountFail::Io(msg) | CountFail::Other(msg) => PyIOError::new_err(msg),
+        CountFail::Parse {
+            class,
+            message,
+            line,
+        } => class_err_to_py(py, class, message, line, 0),
+    })
+}
+
+fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
+    if err.downcast_ref::<std::io::Error>().is_some() {
+        CountFail::Io(err.to_string())
+    } else if let Some(parse) = err.downcast_ref::<ParseError>() {
+        CountFail::Parse {
+            class: parse.class_name(),
+            message: parse.to_string(),
+            line: parse.line(),
+        }
+    } else {
+        CountFail::Other(err.to_string())
+    }
+}
+
+fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
+    match err {
+        crate::writer::WriteError::Io(io) => PyIOError::new_err(io.to_string()),
+        crate::writer::WriteError::Format(parse) => parse_err_to_py(py, &parse, parse.line(), 0),
+    }
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    m.add("ConError", py.get_type::<ConError>())?;
+    m.add("NonFiniteValue", py.get_type::<NonFiniteValue>())?;
+    m.add("InvalidFixedFlag", py.get_type::<InvalidFixedFlag>())?;
+    m.add("InvalidCount", py.get_type::<InvalidCount>())?;
+    m.add("InvalidUnits", py.get_type::<InvalidUnits>())?;
+    m.add("IncompleteHeader", py.get_type::<IncompleteHeader>())?;
+    m.add("IncompleteFrame", py.get_type::<IncompleteFrame>())?;
+    m.add("IncompleteSection", py.get_type::<IncompleteSection>())?;
+    m.add(
+        "IncompleteVelocitySection",
+        py.get_type::<IncompleteVelocitySection>(),
+    )?;
+    m.add(
+        "IncompleteForceSection",
+        py.get_type::<IncompleteForceSection>(),
+    )?;
+    m.add(
+        "IncompleteEnergySection",
+        py.get_type::<IncompleteEnergySection>(),
+    )?;
+    m.add("InvalidNumberFormat", py.get_type::<InvalidNumberFormat>())?;
+    m.add("InvalidVectorLength", py.get_type::<InvalidVectorLength>())?;
+    m.add("UnknownSection", py.get_type::<UnknownSection>())?;
+    m.add("UnsupportedVersion", py.get_type::<UnsupportedVersion>())?;
+    m.add("ValidationError", py.get_type::<ValidationError>())?;
+    m.add("MissingSpecVersion", py.get_type::<MissingSpecVersion>())?;
+    m.add("InvalidMetadataJson", py.get_type::<InvalidMetadataJson>())?;
+    m.add("IndexOutOfBounds", py.get_type::<IndexOutOfBounds>())?;
+    m.add("MassMismatch", py.get_type::<MassMismatch>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
