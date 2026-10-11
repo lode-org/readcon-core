@@ -1,4 +1,4 @@
-% Created 2026-10-11 Sun 16:12
+% Created 2026-10-11 Sun 16:17
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -119,7 +119,7 @@ The same files are read again when a path is projected onto two dimensions and c
 A long kinetic Monte Carlo run writes a checkpoint whenever it accepts a move, and that file has to be readable after the job has stopped \cite{henkelmanAKMC2001}.
 Distributed adaptive kinetic Monte Carlo farms the saddle searches across ranks, so each rank has to read the checkpoint the search will continue from \cite{pedersenDistributedAKMC2010}.
 Between those reads the file may sit on disk for hours while a queue waits, or it may be copied onto another machine that has a different build of the force code.
-Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock \cite{voterLongTimescale2002}.
+Long-timescale atomistic methods extend a simulation until a rare event is visible on a laboratory clock, which is the setting in which this checkpoint is reread \cite{voterLongTimescale2002}.
 The older eOn paper is the reference for the code in which this checkpoint became the working file, and a restart is only as faithful as the frame that code wrote \cite{chillEONSoftwareLong2014}.
 
 The checkpoint has to carry a per-axis mask, an atom id, and a time unit for any velocities.
@@ -409,7 +409,9 @@ This work received no funding.
 
 \section*{Acknowledgements}
 \label{sec:acknowledgements}
-The people who shaped this checkpoint, and the author's family, will be named here once that list is confirmed.
+The author thanks Hannes J{\'o}nsson for long discussions on saddle searches and on what an eOn checkpoint has to carry, and Miha Gunde for discussions on matching atoms along a reaction path.
+Ruhila Goswami designed the colour palette of the figures.
+The library was written with the patience of the author's family, in the company of the turtles, the garden cats, the birds and the rest of the household.
 
 \appendix
 
