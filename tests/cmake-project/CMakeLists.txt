@@ -39,3 +39,12 @@ target_link_libraries(c-main-static PRIVATE readcon-core::static)
 add_executable(c-conformance "${CMAKE_CURRENT_SOURCE_DIR}/../c/test_conformance_goldens.c")
 target_link_libraries(c-conformance PRIVATE readcon-core::shared)
 target_link_libraries(c-conformance PRIVATE m)
+
+add_executable(c-pre-grouping "${CMAKE_CURRENT_SOURCE_DIR}/../c/test_pre_grouping.c")
+target_link_libraries(c-pre-grouping PRIVATE readcon-core::shared)
+
+enable_language(CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_executable(cxx-pre-grouping "${CMAKE_CURRENT_SOURCE_DIR}/../cxx/test_pre_grouping.cpp")
+target_link_libraries(cxx-pre-grouping PRIVATE readcon-core::shared)

@@ -22,6 +22,10 @@
  *     rkr_frame_to_c_frame (which allocates an AoS copy).
  *   - rkr_frame_to_c_frame returns a CFrame whose `atoms` array is owned
  *     by the caller; release with free_c_frame.
+ *   - rkr_pre_grouping_indices returns a heap array of n size_t indices.
+ *     The caller owns it and must free it with rkr_free_indices(ptr, n)
+ *     using the same n. rkr_free_indices is safe on NULL. A count of 0
+ *     returns NULL, which is an empty result, not an error.
  *
  * Sentinel values for absent metadata
  *   - Floating-point getters (rkr_frame_energy, rkr_frame_time,
@@ -480,6 +484,40 @@ const char *rkr_library_version(void);
  */
 uint64_t rkr_frame_atom_index_by_id(const struct RKRConFrame *frame_handle,
                                     uint64_t atom_id);
+
+/**
+ * Indices that restore pre-grouping atom order from column-5 ids.
+ *
+ * Unique ids sort by ascending id. A repeated id keeps the input order
+ * of the whole array.
+ *
+ * Returns a heap array of `n` size_t indices. The caller owns that array
+ * and must free it with `rkr_free_indices(indices, n)`, passing the same
+ * `n`. `rkr_free_indices` is safe on NULL.
+ * Returns NULL when `n` is 0 (an empty result) or when `ids` is NULL.
+ * A NULL return with `n == 0` is not an error.
+ *
+ * # Safety
+ *
+ * `ids` must be NULL or point to `n` readable uint64_t values.
+ * The returned pointer, when non-NULL, must be freed exactly once with
+ * `rkr_free_indices` and the same `n`.
+ */
+size_t *rkr_pre_grouping_indices(const uint64_t *ids, size_t n);
+
+/**
+ * Frees an index array returned by `rkr_pre_grouping_indices`.
+ *
+ * `n` must be the same count passed to that call. NULL is a no-op.
+ * A non-NULL pointer with `n == 0` is also a no-op, because a count of
+ * 0 never allocates.
+ *
+ * # Safety
+ *
+ * `indices` must be NULL or a pointer returned by
+ * `rkr_pre_grouping_indices` for this `n`. Do not free it any other way.
+ */
+void rkr_free_indices(size_t *indices, size_t n);
 
 /**
  * Returns the atomic number for a chemical symbol, or 0 if the symbol

@@ -66,6 +66,8 @@ task.
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | ``atom_id`` reverse index                                      | ``build_atom_id_index``                        | ``build_atom_id_index``                                            | ``build_atom_id_index``                                            | ``rkr_frame_atom_index_by_id``                                   | ``rkr_frame_atom_index_by_id``                                    | ``ConFrame::atom_index_by_id``             |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
+    | Pre-grouping order from ids                                    | ``pre_grouping_indices``                       | ``pre_grouping_indices``                                           | no                                                                 | no                                                               | ``rkr_pre_grouping_indices``                                      | ``readcon::pre_grouping_indices``          |
+    +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Coords / forces / velocities / energies as NumPy ndarray       | n/a (use AoS)                                  | yes (``numpy`` ndarray + DLPack via NumPy 1.22+)                   | n/a                                                                | n/a                                                              | n/a                                                               | n/a                                        |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Builder DLPack 1.0 export (owned ``DLManagedTensorVersioned``) | yes (``dlpk``)                                 | via NumPy                                                          | n/a                                                                | yes (all six sections + ``dlpack_inspect``)                      | yes (``rkr_frame_builder_*_dlpack`` + ``rkr_dlpack_delete``)      | yes (same C ABI)                           |
@@ -238,6 +240,9 @@ Usage
     ase_atoms = frame.to_ase()
     frame2 = readcon.ConFrame.from_ase(ase_atoms)
 
+    # Pre-grouping order from column-5 ids
+    readcon.pre_grouping_indices([2, 0, 1])  # [1, 2, 0]
+
     # Symbol <-> Z (H..U, ceiling Z = 92; D/T -> 1; unknown -> 0 / "X")
     readcon.symbol_to_atomic_number("Fe")   # 26
     readcon.atomic_number_to_symbol(92)     # "U"
@@ -277,6 +282,11 @@ Types
     Return a Python iterator over frames.
     The iterator API avoids indexing into ``read_con(path)`` for
     first-frame and loop-based workflows.
+
+``readcon.pre_grouping_indices(ids)``
+    Indices that restore pre-grouping atom order from column-5 ids.
+    Unique ids sort by ascending id. A repeated id keeps the input
+    order of the whole sequence.
 
 ``readcon.symbol_to_atomic_number(symbol)``
     Atomic number for a

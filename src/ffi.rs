@@ -87,6 +87,79 @@ pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
         None => u64::MAX,
     }
 }
+
+/// Indices that restore pre-grouping atom order from column-5 ids.
+///
+/// Unique ids sort by ascending id. A repeated id keeps the input order
+/// of the whole array.
+///
+/// Returns a heap array of `n` `size_t` indices. The caller owns that
+/// array and must free it with [`rkr_free_indices`], passing the same `n`.
+/// [`rkr_free_indices`] is safe on NULL.
+/// Returns NULL when `n` is 0 (an empty result) or when `ids` is NULL.
+/// A NULL return with `n == 0` is not an error.
+///
+/// # Safety
+///
+/// `ids` must be NULL or point to `n` readable `uint64_t` values.
+/// The returned pointer, when non-NULL, must be freed exactly once with
+/// `rkr_free_indices(ptr, n)` and that same `n`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_pre_grouping_indices(ids: *const u64, n: usize) -> *mut usize {
+    if n == 0 || ids.is_null() {
+        return ptr::null_mut();
+    }
+    let slice = unsafe { std::slice::from_raw_parts(ids, n) };
+    let indices = crate::types::pre_grouping_indices(slice);
+    let boxed = indices.into_boxed_slice();
+    Box::into_raw(boxed) as *mut usize
+}
+
+/// Frees an index array returned by [`rkr_pre_grouping_indices`].
+///
+/// `n` must be the same count passed to that call. NULL is a no-op.
+/// A non-NULL pointer freed with `n == 0` is also a no-op, because a
+/// count of 0 never allocates.
+///
+/// # Safety
+///
+/// `indices` must be NULL or a pointer returned by
+/// `rkr_pre_grouping_indices` for this `n`. Do not free it any other way.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_free_indices(indices: *mut usize, n: usize) {
+    if indices.is_null() || n == 0 {
+        return;
+    }
+    let _ = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(indices, n)) };
+}
+
+#[cfg(test)]
+mod pre_grouping_ffi_tests {
+    use super::{rkr_free_indices, rkr_pre_grouping_indices};
+
+    #[test]
+    fn unique_ids_sort_and_repeated_ids_keep_input_order() {
+        let unique = [2_u64, 0, 1];
+        let idx = unsafe { rkr_pre_grouping_indices(unique.as_ptr(), unique.len()) };
+        assert!(!idx.is_null());
+        let got = unsafe { std::slice::from_raw_parts(idx, 3) };
+        assert_eq!(got, &[1, 2, 0]);
+        unsafe { rkr_free_indices(idx, 3) };
+
+        let repeated = [1_u64, 1, 0];
+        let idx = unsafe { rkr_pre_grouping_indices(repeated.as_ptr(), repeated.len()) };
+        assert!(!idx.is_null());
+        let got = unsafe { std::slice::from_raw_parts(idx, 3) };
+        assert_eq!(got, &[0, 1, 2]);
+        unsafe { rkr_free_indices(idx, 3) };
+
+        assert!(unsafe { rkr_pre_grouping_indices(std::ptr::null(), 3) }.is_null());
+        assert!(unsafe { rkr_pre_grouping_indices(unique.as_ptr(), 0) }.is_null());
+        unsafe { rkr_free_indices(std::ptr::null_mut(), 0) };
+        unsafe { rkr_free_indices(std::ptr::null_mut(), 3) };
+    }
+}
+
 /// Returns the atomic number for a chemical symbol, or 0 if the symbol
 /// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
 /// is case-sensitive: "Fe" works, "fe" does not.
