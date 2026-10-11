@@ -108,7 +108,7 @@ end
     end
 
     @testset "Error handling" begin
-        @test_throws ErrorException read_con("/nonexistent/path.con")
+        @test_throws ReadCon.ReadConError read_con("/nonexistent/path.con")
     end
 
     @testset "Header strings" begin
