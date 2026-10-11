@@ -149,6 +149,30 @@ class TestAseVelocities:
         assert not frame.has_velocities
         assert frame.atoms[0].vx is None
 
+    def test_natural_time_label_and_kinetic_energy(self):
+        """ASE time is (amu*A^2/eV)^0.5 = 10.1805 fs, and KE stays put."""
+        natural = "(amu*angstrom^2/eV)^0.5"
+        frame = _velocity_frame(natural)
+        assert frame.metadata["units"]["time"] == natural
+        atoms = frame.to_ase()
+        raw = _file_kinetic_energy(frame)
+        ke = atoms.get_kinetic_energy()
+        factor = atoms.get_velocities()[0][0] / frame.atoms[0].vx
+        fs_frame = _velocity_frame("fs")
+        assert fs_frame.metadata["units"]["time"] == "fs"
+        fs = fs_frame.to_ase()
+        fs_scale = fs.get_velocities()[0][0]
+        assert f"{fs_scale:.4f}" == "10.1805"
+        inflation = fs_scale**2
+        assert f"{inflation:.2f}" == "103.64"
+        assert factor == pytest.approx(1.0, rel=0, abs=1e-15)
+        assert ke == pytest.approx(raw, rel=0, abs=1e-12)
+        assert ke != pytest.approx(raw * inflation, rel=1e-3)
+        fs_raw = _file_kinetic_energy(fs_frame)
+        fs_ke = fs.get_kinetic_energy()
+        assert fs_ke == pytest.approx(fs_raw * inflation, rel=1e-12)
+        assert fs_ke != pytest.approx(fs_raw * inflation * inflation, rel=1e-3)
+
 
 class TestAseMasses:
     """Mass roundtrip through ASE Atoms."""
@@ -268,3 +292,38 @@ class TestAseConstraints:
             [False, True, False],
             [True, True, True],
         ]
+
+
+def _velocity_frame(time_label):
+    header = (
+        '{"con_spec_version":3,"con_spec_minor":1,"units":'
+        '{"energy":"eV","length":"angstrom","mass":"amu","time":"%s"},'
+        '"sections":["velocities"]}' % time_label
+    )
+    text = "\n".join(
+        [
+            "ase time unit",
+            header,
+            "10.0 10.0 10.0",
+            "90.0 90.0 90.0",
+            "0 0",
+            "0 0 0",
+            "1",
+            "1",
+            "2.0",
+            "H",
+            "Coordinates of Component 1",
+            "0.0 0.0 0.0 0 0",
+            "",
+            "H",
+            "Velocities of Component 1",
+            "1.0 0.0 0.0 0 0",
+            "",
+        ]
+    )
+    return readcon.read_con_string(text)[0]
+
+
+def _file_kinetic_energy(frame):
+    atom = frame.atoms[0]
+    return 0.5 * atom.mass * (atom.vx**2 + atom.vy**2 + atom.vz**2)
