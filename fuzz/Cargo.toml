@@ -1,0 +1,37 @@
+[package]
+name = "readcon-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+flate2 = "1"
+zstd = "0.13"
+readcon-core = { path = "..", features = ["grammar", "zstd"] }
+
+[[bin]]
+name = "con_iterator"
+path = "fuzz_targets/con_iterator.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compression"
+path = "fuzz_targets/compression.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "peg_differential"
+path = "fuzz_targets/peg_differential.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

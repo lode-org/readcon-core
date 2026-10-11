@@ -1,0 +1,16 @@
+conformance
+{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","time":"fs"},"sections":["velocities"]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+1
+1
+63.546000
+Cu
+Coordinates of Component 1
+0.1 -0.2 0.3 0 0
+
+Cu
+Velocities of Component 1
+0.1 -0.2 0.3 0 0

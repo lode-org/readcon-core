@@ -1,0 +1,16 @@
+conformance
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["energies"],"energy":0.5,"validate":true}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+1
+1
+63.546000
+Cu
+Coordinates of Component 1
+0.5 0.0 0.0 0 0
+
+Cu
+Energies of Component 1
+0.5 0 0

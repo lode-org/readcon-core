@@ -53,7 +53,7 @@ source "$VENV/bin/activate"
 python -m pip install -U pip -q
 # ase exercises ConFrame.to_ase/from_ase (large python.rs surface); without it
 # pytest.importorskip skips tests/python/test_ase.py and coverage collapses.
-python -m pip install maturin pytest numpy ase -q
+python -m pip install maturin pytest numpy ase hypothesis -q
 
 # Append linker flag without dropping instrumentation (wrapper owns flags).
 # Use CARGO_TARGET_* / RUSTFLAGS only for link args if wrapper is active.

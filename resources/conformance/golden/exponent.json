@@ -1,0 +1,25 @@
+{
+  "atom_ids": [
+    3
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ]
+  ],
+  "id": "exponent",
+  "n_atoms": 1,
+  "positions": [
+    [
+      0.1,
+      -0.25,
+      0.1
+    ]
+  ],
+  "spec_version": 3,
+  "symbols": [
+    "Cu"
+  ]
+}

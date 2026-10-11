@@ -1,0 +1,21 @@
+# Producers for the foreign fixtures committed under resources/conformance/valid/.
+# scripts/gen_foreign_fixtures.sh recreates them.
+
+[eon]
+version = "3.6.0"
+package = "conda-forge"
+atoms = 32
+temperature_k = 300
+random_seed = 7
+kinetic_energy_ev = 1.483020355366643
+potential_energy_ev = 155.7462036103197
+con = "valid/eon_slab.con"
+convel = "valid/eon_slab.convel"
+forces = "valid/eon_forces.con"
+notes = "32-atom Pt slab. Velocities are Angstrom per (amu*angstrom^2/eV)^0.5. convel prints 6 decimals."
+
+[ase]
+version = "3.29.0"
+package = "conda-forge"
+single = "valid/ase_single.con"
+multi = "valid/ase_multi.con"

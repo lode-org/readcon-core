@@ -22,17 +22,16 @@ exclude = """(?x)(
 [[repos]]
 repo = "builtin"
 hooks = [
-  { id = "trailing-whitespace" },
-  # The natural-unit golden is byte-exact and has no trailing newline.
-  # The zero-atom fixture keeps the two blank lines after the type count.
-  { id = "end-of-file-fixer", exclude = "(?x)(^resources/conformance/natural_time_unit\\.txt$|^resources/conformance/valid/zero_atom\\.con$)" },
+  # Corpus bytes are the fixture: CRLF, trailing spaces, and missing newlines.
+  { id = "trailing-whitespace", exclude = "^(resources/conformance/|fuzz/corpus/)" },
+  { id = "end-of-file-fixer", exclude = "^(resources/conformance/|fuzz/corpus/)" },
   { id = "check-yaml" },
   { id = "check-toml" },
   { id = "check-merge-conflict" },
   { id = "check-added-large-files", args = ["--maxkb=1000"] },
   { id = "check-case-conflict" },
   { id = "detect-private-key" },
-  { id = "mixed-line-ending", args = ["--fix=lf"] },
+  { id = "mixed-line-ending", args = ["--fix=lf"], exclude = "^(resources/conformance/|fuzz/corpus/)" },
 ]
 
 [[repos]]
@@ -60,4 +59,4 @@ hooks = [{ id = "taplo-format", exclude = "^prek\\.toml$" }]
 [[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
-hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD"] }]
+hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,*.gz,*.zst,docs/build,docs/_build,docs/source/crates,fuzz/corpus", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD"] }]

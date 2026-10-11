@@ -1,0 +1,16 @@
+conformance
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+2
+2 1
+195.084000 1.007940
+Pt
+Coordinates of Component 1
+0.0 0.0 0.0 0 2
+1.0 0.0 0.0 3 0
+H
+Coordinates of Component 2
+0.0 0.0 2.0 7 1

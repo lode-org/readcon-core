@@ -1,0 +1,25 @@
+{
+  "atom_ids": [
+    0
+  ],
+  "fixed": [
+    [
+      false,
+      false,
+      false
+    ]
+  ],
+  "id": "v2-with-units",
+  "n_atoms": 1,
+  "positions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "spec_version": 2,
+  "symbols": [
+    "Cu"
+  ]
+}

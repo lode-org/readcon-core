@@ -7,6 +7,7 @@ on:
       - "fix/**"
       - "feat/**"
       - "ci/**"
+      - "test/**"
   pull_request:
   workflow_dispatch:
 
@@ -46,6 +47,7 @@ jobs:
           cmake -S tests/cmake-project -B build/cmake-fetch \
             -DREADCON_CORE_SOURCE_DIR="$GITHUB_WORKSPACE" \
             -DREADCON_CORE_USE_FETCHCONTENT=ON \
+            -DREADCON_CORE_CARGO_FEATURES=zstd \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/cmake-fetch --parallel
           ./build/cmake-fetch/c-main "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
@@ -56,6 +58,7 @@ jobs:
         run: |
           cmake -S . -B build/core-prefix \
             -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/prefix" \
+            -DREADCON_CORE_CARGO_FEATURES=zstd \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/core-prefix --parallel
           cmake --install build/core-prefix
@@ -78,9 +81,10 @@ jobs:
           meson setup build/meson-dist \
             --prefix="$GITHUB_WORKSPACE/meson-prefix" \
             --libdir=lib \
-            --buildtype=release -Dwith_tests=true
+            --buildtype=release -Dwith_tests=true \
+            -Dcargo_features=zstd
           meson compile -C build/meson-dist
-          meson test -C build/meson-dist --no-rebuild --print-errorlogs runtime-dependency shared-library-identity
+          meson test -C build/meson-dist --no-rebuild --print-errorlogs runtime-dependency shared-library-identity c-conformance-goldens
           meson install -C build/meson-dist
           test -f meson-prefix/include/readcon-core.h
           test -f meson-prefix/lib/pkgconfig/readcon-core.pc

@@ -28,6 +28,8 @@ struct Case {
     kind: Kind,
     error: Option<String>,
     expect_fixed: Option<[bool; 3]>,
+    clauses: Vec<String>,
+    frames: Option<usize>,
 }
 
 fn corpus_root() -> PathBuf {
@@ -77,6 +79,18 @@ fn unquote(raw: &str) -> String {
     }
 }
 
+fn parse_str_array(raw: &str) -> Vec<String> {
+    let inner = raw
+        .trim()
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or_else(|| panic!("clauses must be a string array, got {raw}"));
+    if inner.trim().is_empty() {
+        return Vec::new();
+    }
+    inner.split(',').map(|tok| unquote(tok.trim())).collect()
+}
+
 fn parse_bool3(raw: &str) -> [bool; 3] {
     let inner = raw
         .trim()
@@ -118,6 +132,8 @@ fn parse_manifest(text: &str) -> Vec<Case> {
                 },
                 error: None,
                 expect_fixed: None,
+                clauses: Vec::new(),
+                frames: None,
             });
             continue;
         }
@@ -140,6 +156,13 @@ fn parse_manifest(text: &str) -> Vec<Case> {
             "error" => case.error = Some(unquote(val)),
             "notes" => {}
             "expect_fixed" => case.expect_fixed = Some(parse_bool3(val)),
+            "clauses" => case.clauses = parse_str_array(val),
+            "frames" => {
+                case.frames = Some(val.parse().unwrap_or_else(|_| {
+                    panic!("manifest line {}: frames is not an integer", idx + 1)
+                }));
+            }
+            "ase" => {}
             other => panic!("manifest line {}: unknown key {other}", idx + 1),
         }
     }
@@ -179,7 +202,11 @@ fn listed_con_files(root: &Path) -> BTreeSet<String> {
             let entry = entry.expect("dirent");
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            if name.ends_with(".con") || name.ends_with(".convel") {
+            if name.ends_with(".con")
+                || name.ends_with(".convel")
+                || name.ends_with(".gz")
+                || name.ends_with(".zst")
+            {
                 out.insert(format!("{sub}/{name}"));
             }
         }
@@ -277,6 +304,26 @@ fn json_str_rows(val: &serde_json::Value, ctx: &str) -> Vec<String> {
         .collect()
 }
 
+fn golden_value(case_id: &str, frame: &ConFrame) -> serde_json::Value {
+    let fixed: Vec<[bool; 3]> = frame.atom_data.iter().map(|a| a.fixed).collect();
+    let positions: Vec<[f64; 3]> = frame.atom_data.iter().map(|a| [a.x, a.y, a.z]).collect();
+    let atom_ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+    let symbols: Vec<String> = frame
+        .atom_data
+        .iter()
+        .map(|a| a.symbol.to_string())
+        .collect();
+    serde_json::json!({
+        "id": case_id,
+        "n_atoms": frame.atom_data.len(),
+        "spec_version": frame.header.spec_version,
+        "fixed": fixed,
+        "positions": positions,
+        "atom_ids": atom_ids,
+        "symbols": symbols,
+    })
+}
+
 fn assert_matches_golden(case_id: &str, frame: &ConFrame, golden: &serde_json::Value) {
     let obj = golden
         .as_object()
@@ -342,16 +389,13 @@ fn conformance_corpus_matches_manifest() {
         "manifest paths must match .con files under valid/ and invalid/"
     );
 
+    let skip_zstd = cfg!(not(feature = "zstd"));
     let valid_goldens: BTreeSet<String> = cases
         .iter()
         .filter(|c| c.kind == Kind::Valid)
+        .filter(|c| !(skip_zstd && c.path.ends_with(".zst")))
         .map(|c| format!("{}.json", c.id))
         .collect();
-    let on_disk_goldens = listed_golden_files(&root);
-    assert_eq!(
-        valid_goldens, on_disk_goldens,
-        "golden/ must contain exactly one JSON file per valid manifest id"
-    );
     for case in cases.iter().filter(|c| c.kind == Kind::Invalid) {
         let extra = root.join("golden").join(format!("{}.json", case.id));
         assert!(
@@ -369,20 +413,44 @@ fn conformance_corpus_matches_manifest() {
             case.clause
         );
         let fixture = root.join(&case.path);
-        let body = fs::read_to_string(&fixture)
-            .unwrap_or_else(|e| panic!("{}: read {}: {e}", case.id, fixture.display()));
-        let parsed = ConFrameIterator::new(&body).next();
+        let body = match readcon_core::compression::read_file_contents(&fixture) {
+            Ok(contents) => contents
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|e| panic!("{}: utf-8 {}: {e}", case.id, fixture.display())),
+            Err(err) => {
+                let message = err.to_string();
+                if case.path.ends_with(".zst") && message.to_ascii_lowercase().contains("zstd") {
+                    #[cfg(feature = "zstd")]
+                    panic!("{}: zstd read failed: {message}", case.id);
+                    #[cfg(not(feature = "zstd"))]
+                    {
+                        let _ = message;
+                        continue;
+                    }
+                }
+                panic!("{}: read {}: {err}", case.id, fixture.display());
+            }
+        };
+        let parsed: Result<Vec<ConFrame>, ParseError> = ConFrameIterator::new(&body).collect();
         match case.kind {
             Kind::Valid => {
-                let frame = parsed
-                    .unwrap_or_else(|| panic!("{}: valid fixture produced no frame", case.id))
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "{}: expected parse, got {} ({e})",
-                            case.id,
-                            variant_name(&e)
-                        )
-                    });
+                let frames = parsed.unwrap_or_else(|e| {
+                    panic!(
+                        "{}: expected parse, got {} ({e})",
+                        case.id,
+                        variant_name(&e)
+                    )
+                });
+                assert!(
+                    !frames.is_empty(),
+                    "{}: valid fixture produced no frame",
+                    case.id
+                );
+                if let Some(n) = case.frames {
+                    assert_eq!(frames.len(), n, "{}: frame count", case.id);
+                }
+                let frame = &frames[0];
                 if let Some(want) = case.expect_fixed {
                     assert_eq!(
                         frame.atom_data[0].fixed, want,
@@ -391,6 +459,12 @@ fn conformance_corpus_matches_manifest() {
                     );
                 }
                 let golden_path = root.join("golden").join(format!("{}.json", case.id));
+                if std::env::var_os("CONFORMANCE_WRITE_GOLDENS").is_some() {
+                    let text = serde_json::to_string_pretty(&golden_value(&case.id, frame))
+                        .unwrap()
+                        + "\n";
+                    fs::write(&golden_path, text).unwrap();
+                }
                 let golden_text = fs::read_to_string(&golden_path).unwrap_or_else(|e| {
                     panic!("{}: missing golden {}: {e}", case.id, golden_path.display());
                 });
@@ -400,13 +474,13 @@ fn conformance_corpus_matches_manifest() {
             }
             Kind::Invalid => {
                 let err = match parsed {
-                    Some(Err(e)) => e,
-                    Some(Ok(_)) => panic!(
-                        "{}: expected {}, file parsed",
+                    Err(err) => err,
+                    Ok(frames) => panic!(
+                        "{}: expected {}, file parsed {} frame(s)",
                         case.id,
-                        case.error.as_deref().unwrap()
+                        case.error.as_deref().unwrap(),
+                        frames.len()
                     ),
-                    None => panic!("{}: invalid fixture produced no result", case.id),
                 };
                 let got = variant_name(&err);
                 let want = case.error.as_deref().unwrap();
@@ -414,4 +488,28 @@ fn conformance_corpus_matches_manifest() {
             }
         }
     }
+
+    let on_disk_goldens = listed_golden_files(&root)
+        .into_iter()
+        .filter(|name| !(skip_zstd && name == "zstd-multi.json"))
+        .collect();
+    assert_eq!(
+        valid_goldens, on_disk_goldens,
+        "golden/ must contain exactly one JSON file per valid manifest id"
+    );
+}
+
+/// Concatenate two zstd frames of the same CON text (CON-compress.2).
+#[test]
+#[cfg(feature = "zstd")]
+fn emit_zstd_multiframe_fixture() {
+    if std::env::var_os("CONFORMANCE_EMIT_ZSTD").is_none() {
+        return;
+    }
+    let payload = fs::read(corpus_root().join("valid/header_lines.con")).expect("header fixture");
+    let one = zstd::stream::encode_all(payload.as_slice(), 3).expect("zstd frame");
+    let mut bytes = one.clone();
+    bytes.extend_from_slice(&one);
+    let path = corpus_root().join("valid/zstd_multi.con.zst");
+    fs::write(&path, bytes).unwrap();
 }

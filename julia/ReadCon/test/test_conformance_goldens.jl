@@ -231,13 +231,21 @@ end
         fixture = joinpath(corpus, case["path"])
         @test isfile(fixture)
         if case["kind"] == "invalid"
-            frames = read_con(fixture)
-            @test isempty(frames)
-            first = ccall(ReadCon._lib_symbol(:rkr_read_first_frame), Ptr{Cvoid}, (Cstring,), fixture)
-            @test first == C_NULL
+            nframes = Ref{Csize_t}(0)
+            arr = ccall(ReadCon._lib_symbol(:rkr_read_all_frames), Ptr{Ptr{Cvoid}}, (Cstring, Ref{Csize_t}), fixture, nframes)
+            @test arr == C_NULL
             continue
         end
-        frames = read_con(fixture)
+        local frames
+        try
+            frames = read_con(fixture)
+        catch err
+            if endswith(case["path"], ".zst") && occursin("zstd", lowercase(string(err)))
+                @test_skip "library built without zstd"
+                continue
+            end
+            rethrow()
+        end
         @test length(frames) >= 1
         frame = frames[1]
         golden = parse_golden(read(joinpath(corpus, "golden", case["id"] * ".json"), String))
