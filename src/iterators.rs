@@ -173,9 +173,9 @@ impl<'a> ConFrameIterator<'a> {
             None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
         if natm_types == 0 {
-            return Some(Err(error::ParseError::InvalidCount(
-                "type count and each per-type count must be >= 1".into(),
-            )));
+            // Lines 8 and 9 are whitespace, or absent at EOF. Do not scan
+            // for coordinates or a legacy velocity block (CON-count.1).
+            return Some(crate::parser::read_zero_atom_tail(|| self.read_line_str()));
         }
         // Line 8: natms_per_type.
         let natms_per_type: Vec<usize> = match self.read_line_str() {
@@ -185,9 +185,9 @@ impl<'a> ConFrameIterator<'a> {
             },
             None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
-        if natm_types == 0 || natms_per_type.iter().any(|n| *n == 0) {
+        if natms_per_type.iter().any(|n| *n == 0) {
             return Some(Err(error::ParseError::InvalidCount(
-                "type count and each per-type count must be >= 1".into(),
+                "each per-type count must be >= 1".into(),
             )));
         }
         // Line 9: masses_per_type, consumed.

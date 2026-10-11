@@ -540,7 +540,7 @@ Constraints and limits
 
 - Component numbering starts at 1.
 
-- Total atom count equals the sum of line 8 values.
+- A type count of 0 is a legal zero-atom frame. Lines 8 and 9 are whitespace, and they may be absent at end of file. A per-type count of 0 is an error when the type count is at least 1. A sign or a decimal point in a count field is InvalidCount.
 
 - Symbol strings SHOULD match `IUPAC <https://iupac.org>`_ element symbols.
 

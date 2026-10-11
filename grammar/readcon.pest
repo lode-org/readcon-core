@@ -24,21 +24,18 @@ file = { SOI ~ !bom ~ frame+ ~ (ws* ~ NL)* ~ EOI }
 
 bom = { "\u{FEFF}" }
 
-/// Header + per-type coordinate blocks + optional section blocks.
-frame = { header ~ type_block+ ~ section* }
-
-/// Nine-line header (lines 1-9 of the specification).
-header = {
+/// Header lines 1-6. The type count chooses a zero-atom tail or typed body.
+header_open = {
     free_line ~ NL
     ~ metadata_line ~ NL
     ~ float3_line
     ~ float3_line
     ~ free_line ~ NL
     ~ free_line ~ NL
-    ~ count_line
-    ~ count_list_line
-    ~ float_list_line
 }
+
+/// One or more frames. A type count of 0 has no coordinate block (CON-count.1).
+frame = { header_open ~ (zero_atom | typed_body) }
 
 /// Free-form line. Does not consume the trailing newline.
 free_line = { (!NL ~ ANY)* }
@@ -75,12 +72,34 @@ json_number = @{
 
 float3_line = { ws* ~ float ~ ws+ ~ float ~ ws+ ~ float ~ ws* ~ NL }
 
-/// Type count and per-type counts are integers >= 1 (CON-count.1).
+/// Type count >= 1 (CON-count.3). A type count of 0 uses zero_atom.
 count_line = { ws* ~ positive_integer ~ ws* ~ NL }
 
 count_list_line = { ws* ~ positive_integer ~ (ws+ ~ positive_integer)* ~ ws* ~ NL }
 
 float_list_line = { ws* ~ float ~ (ws+ ~ float)* ~ ws* ~ NL }
+
+/// "0", "00", ... with no other token. The newline may be absent at EOI.
+zero_integer = @{ "0"+ }
+zero_count_line = { ws* ~ zero_integer ~ ws* ~ (NL | EOI) }
+blank_line = { ws* ~ NL }
+
+/// Whitespace lines 8 and 9, shortened only at end of file (CON-count.4).
+zero_atom = {
+    zero_count_line ~
+    (
+        blank_line ~ (blank_line | EOI)
+        | EOI
+    )
+}
+
+typed_body = {
+    count_line
+    ~ count_list_line
+    ~ float_list_line
+    ~ type_block+
+    ~ section*
+}
 
 /// One chemical-type block: symbol, "Coordinates of Component k", atom lines.
 type_block = {

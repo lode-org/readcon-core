@@ -466,22 +466,22 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// Integer counts. A sign is `InvalidNumberFormat` (the token is not an
-/// unsigned integer). Zero is left for the caller, which reports
-/// `InvalidCount` (D4).
+/// Integer counts. A sign, a decimal point, or any other non-digit token
+/// is `InvalidCount` (CON-error.3). Zero is a legal token here. The caller
+/// rejects a per-type count of 0 when the type count is 1 or more (D4).
 pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
     let mut values = Vec::with_capacity(n);
     for token in line.split_ascii_whitespace() {
         if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(ParseError::InvalidNumberFormat(format!(
-                "invalid integer: {token}"
+            return Err(ParseError::InvalidCount(format!(
+                "count field is not an unsigned integer: {token}"
             )));
         }
         let val: u64 = token.parse::<u64>().map_err(|_| {
-            ParseError::InvalidNumberFormat(format!("integer out of range: {token}"))
+            ParseError::InvalidCount(format!("count field is out of range: {token}"))
         })?;
         let val = usize::try_from(val).map_err(|_| {
-            ParseError::InvalidNumberFormat(format!("integer out of range: {token}"))
+            ParseError::InvalidCount(format!("count field is out of range: {token}"))
         })?;
         values.push(val);
     }
@@ -492,6 +492,32 @@ pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, Parse
             expected: n,
             found: values.len(),
         })
+    }
+}
+
+/// True when `line` has no tokens. Spaces and tabs count as empty.
+pub(crate) fn line_is_whitespace(line: &str) -> bool {
+    line.split_ascii_whitespace().next().is_none()
+}
+
+/// Lines 8 and 9 of a type count of 0.
+///
+/// A token on either line is `InvalidCount`. At end of file, a missing
+/// line is empty (CON-count.4). Mid-file, both lines are required.
+pub(crate) fn read_zero_atom_tail<'a>(
+    mut next_line: impl FnMut() -> Option<&'a str>,
+) -> Result<(), ParseError> {
+    let bad = || {
+        ParseError::InvalidCount("a zero-atom frame requires whitespace-only lines 8 and 9".into())
+    };
+    match next_line() {
+        None => Ok(()),
+        Some(line) if line_is_whitespace(line) => match next_line() {
+            None => Ok(()),
+            Some(line) if line_is_whitespace(line) => Ok(()),
+            Some(_) => Err(bad()),
+        },
+        Some(_) => Err(bad()),
     }
 }
 
@@ -898,26 +924,27 @@ pub fn parse_frame_header<'a>(
         .to_string();
     let natm_types_line = lines.next().ok_or(ParseError::IncompleteHeader)?;
     let natm_types = parse_count_line(natm_types_line, 1)?[0];
-    // Zero is InvalidCount in every mode, not only validate (CON-count.2, D4).
-    // A negative token never reaches here: it is InvalidNumberFormat.
-    if natm_types == 0 {
-        return Err(ParseError::InvalidCount(
-            "type count and each per-type count must be >= 1".into(),
-        ));
-    }
-    let natms_per_type = parse_count_line(
-        lines.next().ok_or(ParseError::IncompleteHeader)?,
-        natm_types,
-    )?;
-    if natms_per_type.iter().any(|n| *n == 0) {
-        return Err(ParseError::InvalidCount(
-            "type count and each per-type count must be >= 1".into(),
-        ));
-    }
-    let masses_per_type = parse_line_of_n_f64(
-        lines.next().ok_or(ParseError::IncompleteHeader)?,
-        natm_types,
-    )?;
+    // A type count of 0 is a zero-atom frame (CON-count.1, CON-count.4).
+    // A per-type count of 0 is InvalidCount only when the type count is >= 1.
+    let (natms_per_type, masses_per_type) = if natm_types == 0 {
+        read_zero_atom_tail(|| lines.next())?;
+        (Vec::new(), Vec::new())
+    } else {
+        let natms_per_type = parse_count_line(
+            lines.next().ok_or(ParseError::IncompleteHeader)?,
+            natm_types,
+        )?;
+        if natms_per_type.iter().any(|n| *n == 0) {
+            return Err(ParseError::InvalidCount(
+                "each per-type count must be >= 1".into(),
+            ));
+        }
+        let masses_per_type = parse_line_of_n_f64(
+            lines.next().ok_or(ParseError::IncompleteHeader)?,
+            natm_types,
+        )?;
+        (natms_per_type, masses_per_type)
+    };
     if validate {
         validate_header_geometry(&boxl_vec, &angles_vec)?;
         validate_masses(&masses_per_type)?;
@@ -1447,6 +1474,16 @@ pub fn parse_declared_sections<'a>(
     atom_data: &mut [AtomDatum],
 ) -> Result<usize, ParseError> {
     let mut applied = 0usize;
+    // A zero-atom frame has no coordinate block and no section block.
+    // The legacy velocity fallback must not run (CON-count.1).
+    if header.natm_types == 0 {
+        if !header.sections.is_empty() {
+            return Err(ParseError::InvalidCount(
+                "a zero-atom frame cannot declare sections".into(),
+            ));
+        }
+        return Ok(0);
+    }
     if !header.sections_declared && header.sections.is_empty() {
         // Legacy: try velocity detection via blank separator
         let found = parse_velocity_section(lines, header, atom_data)?;

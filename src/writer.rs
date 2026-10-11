@@ -357,12 +357,22 @@ impl<W: Write> ConFrameWriter<W> {
 
     /// Writes a single `ConFrame` to the output stream.
     pub fn write_frame(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
-        if frame.header.natm_types == 0
-            || frame.atom_data.is_empty()
-            || frame.header.natms_per_type.iter().any(|n| *n == 0)
+        let zero_frame = frame.header.natm_types == 0
+            && frame.atom_data.is_empty()
+            && frame.header.natms_per_type.is_empty()
+            && frame.header.masses_per_type.is_empty();
+        if zero_frame && !frame.header.sections.is_empty() {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                "a zero-atom frame cannot declare sections".into(),
+            )));
+        }
+        if !zero_frame
+            && (frame.header.natm_types == 0
+                || frame.atom_data.is_empty()
+                || frame.header.natms_per_type.iter().any(|n| *n == 0))
         {
             return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
-                "a frame with zero atoms is not representable".into(),
+                "each per-type count must be >= 1".into(),
             )));
         }
         // Writers emit ids that are unique within the frame (CON-id.4, D9).

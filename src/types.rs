@@ -6,6 +6,20 @@ pub use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+/// Indices of `ids` in pre-grouping order (CON-id.5, D9).
+///
+/// Unique ids sort by ascending id. Any repeated id keeps file order.
+/// Callers that return atoms in file order leave `atom_data` unchanged
+/// and still expose the column-5 ids (CON-id.6, CON-id.8).
+pub fn pre_grouping_indices(ids: &[u64]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..ids.len()).collect();
+    let mut seen = std::collections::HashSet::with_capacity(ids.len());
+    if ids.iter().copied().all(|id| seen.insert(id)) {
+        order.sort_by(|&i, &j| ids[i].cmp(&ids[j]).then(i.cmp(&j)));
+    }
+    order
+}
+
 /// JSON metadata key names recognized by spec v2.
 ///
 /// Each constant is the exact string that appears on the second header

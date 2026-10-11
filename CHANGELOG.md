@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file. See [conven
 - Readers reject NaN, Inf and their spellings in every mode with NonFiniteValue.
 - Column 4 is an integer token. Float spellings, signs and out-of-range values are InvalidFixedFlag.
 - Column 5 is an integer token up to 2^64-1 and is never parsed as a float.
-- A type count or per-type count of 0 is InvalidCount. A signed count is InvalidNumberFormat.
+- A type count of 0 is a legal zero-atom frame. Lines 8 and 9 hold only whitespace, and at end of file they may be absent. A per-type count of 0, or a sign or decimal point in a count field, is InvalidCount.
 - JSON con_spec_version 0 or 1, and any unknown major, is UnsupportedVersion.
 - The default writer float format is binary64 round-trip. Fixed decimals remain available when requested.
 - A v3 frame with a missing or invalid units object fails the write with InvalidUnits.
