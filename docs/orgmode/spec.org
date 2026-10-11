@@ -355,14 +355,21 @@ the reference implementation stay in sync.
 | ParseError variant | Fires when |
 |--------------------+-----------|
 | ~MissingSpecVersion~ | Line 2 starts with ={= but no ~con_spec_version~ key. |
-| ~UnsupportedSpecVersion(v)~ | ~con_spec_version~ exceeds ~CON_SPEC_VERSION~. |
-| ~InvalidMetadataJson(msg)~ | JSON is malformed, ~validate~ is not a boolean, ~sections~ is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ~validate=true~ omits the ~sections~ key. |
-| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, ~fixed_flag~ / ~atom_id~ integer tokens, section component symbol, section label, or per-row identity columns mismatch the rules above. Numeric tokens that are not finite are rejected here as well, after parse-time tokenization. |
-| ~UnknownSection(name)~ | A name in the ~sections~ array does not match a known section. |
+| ~UnsupportedVersion(v)~ | JSON major 0 or 1, or a major this reader does not implement. |
+| ~InvalidMetadataJson(msg)~ | Malformed JSON on line 2, ~validate~ is not a boolean, ~sections~ is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ~validate=true~ omits the ~sections~ key. |
+| ~NonFiniteValue~ | NaN, Inf, Infinity, or a signed or mixed-case spelling, in every mode. |
+| ~InvalidFixedFlag~ | Column 4 is not a legal integer flag, in every mode. |
+| ~InvalidCount~ | Type count, per-type count, or atom count is not >= 1, in every mode. |
+| ~InvalidUnits~ | A unit expression is missing, mistyped, or the wrong dimension. |
+| ~ValidationError(msg)~ (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, section component symbol, section label, or per-row identity columns mismatch. It does not relax ~NonFiniteValue~ or ~InvalidFixedFlag~. |
+| ~UnknownSection(name)~ | A section name is not known and cannot be skipped by ~section_arity~. |
 | ~IncompleteHeader~ | Fewer than 9 header lines remain. |
 | ~IncompleteFrame~ | Coordinate block ends short. |
-| ~IncompleteVelocitySection~ | Declared velocity section ends short or is absent. |
-| ~IncompleteForceSection~ | Declared force section ends short or is absent. |
+| ~IncompleteSection(name)~ | A declared section is missing or short. |
+| ~InvalidNumberFormat~ | A token is not a decimal number. A negative count is this class. |
+| ~InvalidVectorLength~ | A row has the wrong number of fields. |
+
+Line numbers count from 1. Metadata failures are line 2.
 
 A minimal example of each path: the file
 =resources/test/tiny_cuh2_strict_invalid.con= (=validate=true=

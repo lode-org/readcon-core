@@ -60,6 +60,11 @@ fn variant_name(err: &ParseError) -> &'static str {
         ParseError::ValidationError(_) => "ValidationError",
         ParseError::IndexOutOfBounds { .. } => "IndexOutOfBounds",
         ParseError::MassMismatch { .. } => "MassMismatch",
+        ParseError::NonFiniteValue(_) => "NonFiniteValue",
+        ParseError::InvalidFixedFlag(_) => "InvalidFixedFlag",
+        ParseError::InvalidCount(_) => "InvalidCount",
+        ParseError::InvalidUnits(_) => "InvalidUnits",
+        ParseError::UnsupportedVersion(_) => "UnsupportedVersion",
     }
 }
 
