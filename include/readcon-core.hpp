@@ -679,20 +679,6 @@ class SelectionResult {
 
 inline bool has_chemfiles_support() { return rkr_has_chemfiles_support() != 0; }
 
-inline SelectionResult ConFrame::select(std::string_view selection) const {
-    if (!has_chemfiles_support()) {
-        throw std::runtime_error(
-            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
-    }
-    std::string sel(selection);
-    RKRSelectionResult *raw = nullptr;
-    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
-    if (st != RKR_STATUS_SUCCESS) {
-        throw std::runtime_error(std::string("rkr_frame_select: ") + rkr_status_message(st));
-    }
-    return SelectionResult(raw);
-}
-
 inline std::vector<size_t> ConFrame::select_atom_indices(std::string_view selection) const {
     SelectionResult res = select(selection);
     if (res.context_size() != 1) {
@@ -756,6 +742,16 @@ class ConFrameWriter {
                             Compression compression, uint8_t precision);
 
     /**
+     * @brief Opens a writer through create_writer_from_path_round_trip_c.
+     *
+     * Finite binary64 values round-trip. The default path constructor
+     * uses the same text. Call this when the round-trip entry point
+     * must be named.
+     * @throws readcon::Error if the file cannot be created.
+     */
+    static ConFrameWriter round_trip(const std::filesystem::path &path);
+
+    /**
      * @brief Picks a compression codec from a path's file extension.
      * @param path The output path to inspect.
      * @return `Compression::Gzip` for `.gz`, `Compression::Zstd` for `.zst`,
@@ -788,6 +784,8 @@ class ConFrameWriter {
                 free_rkr_writer(ptr);
         }
     };
+    explicit ConFrameWriter(RKRConFrameWriter *raw);
+
     std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
 };
 
@@ -841,6 +839,24 @@ class ConFrameBuilder {
      * managed automatically by the writer and ignored if present.
      */
     ConFrameBuilder &set_metadata_json(const std::string &metadata_json);
+
+    /**
+     * @brief Sets the units object from a JSON object.
+     *
+     * Example:
+     * `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+     * Aliases are rewritten. The natural time spelling is kept byte for byte.
+     * @throws readcon::Error when the JSON or a unit expression is invalid.
+     */
+    ConFrameBuilder &set_units(const std::string &units_json);
+
+    /**
+     * @brief Sets con_spec_minor before build.
+     *
+     * A v3 frame built without this call carries minor 1.
+     * The writer does not invent or replace the minor.
+     */
+    ConFrameBuilder &set_con_spec_minor(uint32_t minor);
 
     /// Sets a numeric metadata key.
     ConFrameBuilder &set_scalar_metadata(const std::string &key, double value);
@@ -1055,10 +1071,47 @@ inline std::string z_to_symbol(uint64_t z) {
     return symbol ? std::string(symbol) : std::string("X");
 }
 
+class Error : public std::runtime_error {
+  public:
+    int32_t code;
+    uint32_t line;
+    uint64_t frame_index;
+
+    Error(int32_t code_, std::string message, uint32_t line_, uint64_t frame_index_)
+        : std::runtime_error(std::move(message)), code(code_), line(line_),
+          frame_index(frame_index_) {}
+
+    static Error from_last(const std::string &operation) {
+        const rkr_error *err = rkr_last_error();
+        if (err != nullptr && err->message != nullptr) {
+            return Error(err->code, operation + ": " + err->message, err->line,
+                         err->frame_index);
+        }
+        if (err != nullptr) {
+            return Error(err->code, operation, err->line, err->frame_index);
+        }
+        return Error(static_cast<int32_t>(RKR_STATUS_INTERNAL_ERROR), operation, 0, 0);
+    }
+};
+
 inline void throw_on_error(RKRStatus status, const std::string &operation) {
     if (status != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error(operation + ": " + status_message(status));
+        throw Error::from_last(operation);
     }
+}
+
+inline SelectionResult ConFrame::select(std::string_view selection) const {
+    if (!has_chemfiles_support()) {
+        throw std::runtime_error(
+            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
+    }
+    std::string sel(selection);
+    RKRSelectionResult *raw = nullptr;
+    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
+    if (st != RKR_STATUS_SUCCESS) {
+        throw Error::from_last("rkr_frame_select");
+    }
+    return SelectionResult(raw);
 }
 
 /**
@@ -1068,8 +1121,7 @@ inline void throw_on_error(RKRStatus status, const std::string &operation) {
 inline ConFrame read_first_frame(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_first_frame(path.string().c_str());
     if (!handle) {
-        throw std::runtime_error("Failed to read first frame from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read first frame from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1077,7 +1129,7 @@ inline ConFrame read_first_frame(const std::filesystem::path &path) {
 inline std::size_t count_frames(const std::filesystem::path &path) {
     std::size_t n = rkr_count_frames(path.string().c_str());
     if (n == static_cast<std::size_t>(-1))
-        throw std::runtime_error("count_frames failed: " + path.string());
+        throw Error::from_last("count_frames failed: " + path.string());
     return n;
 }
 
@@ -1085,9 +1137,8 @@ inline ConFrame read_nth_frame(const std::filesystem::path &path,
                                std::size_t index) {
     RKRConFrame *handle = rkr_read_nth_frame(path.string().c_str(), index);
     if (!handle) {
-        throw std::runtime_error("Failed to read frame " +
-                                 std::to_string(index) + " from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read frame " + std::to_string(index) +
+                               " from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1095,8 +1146,8 @@ inline ConFrame read_nth_frame(const std::filesystem::path &path,
 inline ConFrame read_chemfiles_first(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_chemfiles_first(path.string().c_str());
     if (!handle) {
-        throw std::runtime_error("Failed to read chemfiles first frame from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read chemfiles first frame from: " +
+                               path.string());
     }
     return ConFrame(handle);
 }
@@ -1105,9 +1156,8 @@ inline ConFrame read_chemfiles_nth(const std::filesystem::path &path,
                                    std::size_t index) {
     RKRConFrame *handle = rkr_read_chemfiles_nth(path.string().c_str(), index);
     if (!handle) {
-        throw std::runtime_error("Failed to read chemfiles frame " +
-                                 std::to_string(index) + " from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read chemfiles frame " +
+                               std::to_string(index) + " from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1115,7 +1165,7 @@ inline ConFrame read_chemfiles_nth(const std::filesystem::path &path,
 inline std::size_t chemfiles_nsteps(const std::filesystem::path &path) {
     std::size_t n = rkr_chemfiles_nsteps(path.string().c_str());
     if (n == static_cast<std::size_t>(-1)) {
-        throw std::runtime_error("chemfiles_nsteps failed: " + path.string());
+        throw Error::from_last("chemfiles_nsteps failed: " + path.string());
     }
     return n;
 }
@@ -1128,8 +1178,7 @@ inline std::vector<ConFrame>
 adopt_frame_handles(RKRConFrame **handles, size_t num_frames,
                     const std::filesystem::path &path) {
     if (!handles) {
-        throw std::runtime_error("Failed to read frames from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read frames from: " + path.string());
     }
     std::vector<ConFrame> frames;
     frames.reserve(num_frames);
@@ -1194,8 +1243,8 @@ read_all_frames(const std::filesystem::path &path, std::size_t n_threads) {
 inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {
     CConFrameIterator *iter_ptr = read_con_file_iterator(path.string().c_str());
     if (!iter_ptr) {
-        throw std::runtime_error("Failed to open .con file for iteration: " +
-                                 path.string());
+        throw Error::from_last("Failed to open .con file for iteration: " +
+                               path.string());
     }
     iterator_ptr_.reset(iter_ptr);
 }
@@ -1262,8 +1311,7 @@ inline void ConFrame::cache_data() const {
     // Extract the C-struct once for numeric data.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
     if (!c_frame) {
-        throw std::runtime_error(
-            "Failed to extract CFrame from handle for caching.");
+        throw Error::from_last("Failed to extract CFrame from handle for caching.");
     }
 
     cell_cache_ = {c_frame->cell[0], c_frame->cell[1], c_frame->cell[2]};
@@ -1521,7 +1569,7 @@ inline std::vector<Bond> ConFrame::bonds() const {
         int32_t order = 0;
         RKRStatus st = rkr_frame_bond_at(frame_handle_.get(), idx, &i, &j, &has_order, &order);
         if (st != RKR_STATUS_SUCCESS)
-            throw std::runtime_error(std::string("rkr_frame_bond_at: ") + rkr_status_message(st));
+            throw Error::from_last("rkr_frame_bond_at");
         Bond b;
         b.i = i;
         b.j = j;
@@ -1538,11 +1586,25 @@ inline bool ConFrame::has_bonds() const {
 
 // --- Implementation of ConFrameWriter methods ---
 
+inline ConFrameWriter::ConFrameWriter(RKRConFrameWriter *raw) {
+    writer_handle_.reset(raw);
+}
+
+inline ConFrameWriter
+ConFrameWriter::round_trip(const std::filesystem::path &path) {
+    RKRConFrameWriter *raw =
+        create_writer_from_path_round_trip_c(path.string().c_str());
+    if (!raw) {
+        throw Error::from_last(
+            "Failed to create round-trip writer for file: " + path.string());
+    }
+    return ConFrameWriter(raw);
+}
+
 inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
     writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " +
-                                 path.string());
+        throw Error::from_last("Failed to create writer for file: " + path.string());
     }
 }
 
@@ -1551,8 +1613,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     writer_handle_.reset(
         create_writer_from_path_with_precision_c(path.string().c_str(), precision));
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " +
-                                 path.string());
+        throw Error::from_last("Failed to create writer for file: " + path.string());
     }
 }
 
@@ -1580,7 +1641,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     }
     writer_handle_.reset(raw);
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " + p);
+        throw Error::from_last("Failed to create writer for file: " + p);
     }
 }
 
@@ -1609,7 +1670,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     }
     writer_handle_.reset(raw);
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " + p);
+        throw Error::from_last("Failed to create writer for file: " + p);
     }
 }
 
@@ -1656,7 +1717,7 @@ inline ConFrameBuilder::ConFrameBuilder(
         rkr_frame_new(cell.data(), angles.data(), prebox[0].c_str(),
                       prebox[1].c_str(), postbox[0].c_str(), postbox[1].c_str());
     if (!builder_handle_) {
-        throw std::runtime_error("Failed to create frame builder.");
+        throw Error::from_last("Failed to create frame builder.");
     }
 }
 
@@ -1686,7 +1747,7 @@ ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
 inline ConFrameBuilder ConFrameBuilder::clone() const {
     RKRConFrameBuilder *cloned_handle = rkr_frame_builder_clone(builder_handle_);
     if (!cloned_handle) {
-        throw std::runtime_error("Failed to clone frame builder.");
+        throw Error::from_last("Failed to clone frame builder.");
     }
     // Construct a placeholder builder (with throwaway cell metadata; the
     // shared ArcArray storage from the source overrides anything the
@@ -2033,6 +2094,19 @@ ConFrameBuilder::set_metadata_json(const std::string &metadata_json) {
 }
 
 inline ConFrameBuilder &
+ConFrameBuilder::set_units(const std::string &units_json) {
+    throw_on_error(rkr_frame_builder_set_units(builder_handle_, units_json.c_str()),
+                   "Failed to set builder units");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_con_spec_minor(uint32_t minor) {
+    throw_on_error(rkr_frame_builder_set_con_spec_minor(builder_handle_, minor),
+                   "Failed to set con_spec_minor");
+    return *this;
+}
+
+inline ConFrameBuilder &
 ConFrameBuilder::set_scalar_metadata(const std::string &key, double value) {
     throw_on_error(rkr_frame_builder_set_scalar_metadata(
                        builder_handle_, key.c_str(), value),
@@ -2089,7 +2163,7 @@ inline ConFrame ConFrameBuilder::build() {
     RKRConFrame *frame = rkr_frame_builder_build(builder_handle_);
     builder_handle_ = nullptr; // ownership transferred
     if (!frame) {
-        throw std::runtime_error(
+        throw Error::from_last(
             "Failed to build frame from builder (null handle or same-symbol mass mismatch).");
     }
     return ConFrame(frame);
