@@ -130,7 +130,7 @@ ASE 3.29.0 =write_eon(Atoms())= writes type count 0, an empty line 8, and an unt
 - CON-count.1 :: MUST :: A type count of 0 MUST be a frame with zero atoms: lines 8 and 9 contain only whitespace, no coordinate block and no section block follow, =sections= is absent or empty, and the legacy velocity fallback does not apply. Any other token on line 8 or 9 MUST be =InvalidCount=.
 - CON-count.2 :: MUST :: A zero-atom frame of that form MUST be accepted in every mode, including =validate= true. =CON-validate.3= still requires the =sections= key when =validate= is true.
 - CON-count.3 :: MUST :: When the type count is 1 or more, each per-type count MUST be an integer >= 1, and any other count token MUST be =InvalidCount=.
-- CON-count.4 :: MUST :: At end of file, when line 7 is 0, missing lines 8 and 9 MUST be read as empty, and =CON-frame.1= MUST NOT report that frame as =IncompleteHeader=.
+- CON-count.4 :: MUST :: At end of file, when line 7 is 0, missing lines 8 and 9 MUST be read as empty, and =CON-frame.3= MUST NOT report that frame as =IncompleteHeader=.
 - CON-count.5 :: SHOULD NOT :: Writers SHOULD NOT write a zero-atom frame for a consumer that predates v3.1.
 - CON-count.6 :: MUST :: The coordinate blocks MUST follow header order.
 - CON-count.7 :: MUST :: The total atom count MUST equal the sum of line 8.
@@ -184,7 +184,7 @@ v3.4.0 has the same function.
 - CON-id.5 :: MUST :: The pre-grouping order of a frame MUST be ascending column-5 id when the ids are unique, and file order otherwise.
 - CON-id.6 :: MUST :: A reader MUST expose column-5 ids unchanged.
 - CON-id.7 :: MUST :: A reader or consumer that returns atoms in pre-grouping order MUST use =CON-id.5=.
-- CON-id.8 :: MAY :: Returning file order together with the column-5 ids MAY be used, and that result is conforming.
+- CON-id.8 :: MAY :: A reader MAY return atoms in file order together with their column-5 ids.
 - CON-id.9 :: MUST :: A 4-column atom line MUST use the 0-based position of that atom in the frame as its id.
 
 * Sections
@@ -294,7 +294,7 @@ Names below are the ones =src/units.rs= at f09b1af accepts for length, energy, m
 - CON-units.13 :: MUST :: An invalid unit expression on write MUST be reported as =InvalidUnits=.
 - CON-units.14 :: MUST NOT :: Writers MUST NOT replace an invalid unit with a default.
 - CON-units.15 :: MAY :: A consumer MAY apply an explicit velocity time-unit override when a file breaks =CON-units.8= through =CON-units.10=.
-- CON-units.16 :: MUST :: A reader MUST accept these names case-insensitively: length m, meter, metre, angstrom, a, å, nm, nanometer, bohr, a0; energy j, joule, ev, mev, hartree, ha, kcal, kj; mass kg, kilogram, u, amu, dalton, da; time s, second, fs, femtosecond, ps, picosecond, ns, nanosecond.
+- CON-units.16 :: MUST :: A reader MUST accept at least these names case-insensitively: length m, meter, metre, angstrom, a, å, nm, nanometer, bohr, a0; energy j, joule, ev, mev, hartree, ha, kcal, kj; mass kg, kilogram, u, amu, dalton, da; time s, second, fs, femtosecond, ps, picosecond, ns, nanosecond; count mol.
 
 Minor 0 is the v3.0 rule because the producers of those velocity sections wrote natural-unit numbers under a =fs= label.
 
