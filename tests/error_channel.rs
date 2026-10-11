@@ -66,6 +66,7 @@ fn a_signed_count_is_invalid_count() {
     let _ = fs::remove_file(path_for("neg"));
 }
 
+/// CON-error.4. The count token on line 8 wins at 1, 2, 3, and 8 threads.
 #[test]
 fn the_lowest_line_wins_at_every_thread_count() {
     let early = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n2\n1 0\n1.0 1.0\n";
