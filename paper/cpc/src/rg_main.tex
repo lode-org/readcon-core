@@ -1,4 +1,4 @@
-% Created 2026-10-11 Sun 17:08
+% Created 2026-10-11 Sun 18:41
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -66,7 +66,7 @@ It has to remember which atom is which after the file groups atoms by chemical t
 When the restart continues a trajectory, the velocities have to be in a known time unit, because the kinetic energy scales with the square of that unit.
 CON is the text checkpoint used for this state.
 \textit{Solution method:}
-readcon-core is one parser and one writer for CON text.
+readcon-core is one parser and one writer for CON text \cite{goswamiReadconcoreV0170Conconvel2026}.
 A frame is a short header, coordinates with a constraint flag and an atom id, and optional sections for velocities, forces and other per-atom fields.
 Line 2 of a current file is a single JSON object that records the major version, the minor version, the unit system and the section names.
 From the minor version that makes the time label authoritative, a velocities section is written only with an explicit time unit, and the natural unit shared with existing producers is \texttt{(amu*angstrom\^{}2/eV)\^{}0.5}.
@@ -171,14 +171,14 @@ Machine-learning potentials exchange atomic features as tensors, including a uni
 A repository API and a materials archive keep a geometry findable after it leaves this file, which is what the data principles ask \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wilkinsonFairGuidingPrinciples2016}.
 Table \ref{tab:compat} puts the checkpoint next to those files, after the layout of one frame has been described.
 
-readcon-core is a reader and writer for the CON checkpoint used by saddle searches.
+readcon-core is a reader and writer for the CON checkpoint used by saddle searches \cite{goswamiReadconcoreV0170Conconvel2026}.
 The library is a Rust parser and writer, exposed through one C header so that C++, Python, Julia and Fortran share one reading of the file.
 The parts a restart depends on are the versioned time label, the round-trip default for floating-point text, and the preservation of unknown metadata keys.
 The parallel read finds frame boundaries from the text alone, so the frames come back in file order at every worker count, as Figure \ref{fig:pipeline} shows.
 The same program also opens the older files that eOn and ASE have been writing, including velocities stored in the natural unit.
 Section \ref{sec:format} describes the file, Section \ref{sec:implementation} describes the parser, and Section \ref{sec:validation} reports the corpus, the round trip, the slab and the HCN path.
 Section \ref{sec:performance} reports one-thread Python timings against one-thread peers, and it reports thread scaling from a separate run.
-Section \ref{sec:scope} states what the release covers, and Section \ref{sec:conclusions} collects the result of those checks.
+Section \ref{sec:scope} states what the release covers \cite{goswamiReadconcoreV0170Conconvel2026}, and Section \ref{sec:conclusions} collects the result of those checks.
 
 \section{The CON format}
 \label{sec:format}
@@ -248,7 +248,7 @@ The C header owns the frame on the far side of the call and returns a status cod
 C++ is a header over that interface, and Julia and Fortran call the same symbols, with the Fortran side using the standard C binding \cite{bezansonJuliaFreshApproach2017}.
 Python uses the same parse, so a file that is legal in one binding is legal in the others, and a file that is rejected is rejected for the same reason.
 That binding can return coordinates and velocities as arrays, so the caller is not handed one object per atom \cite{harrisArrayProgrammingNumpy2020}.
-The status code is the whole of the error report on the C side, and Section \ref{sec:scope} states that boundary as part of the release.
+The status code is the whole of the error report on the C side, and Section \ref{sec:scope} states that boundary as part of the release \cite{goswamiReadconcoreV0170Conconvel2026}.
 Every language maps one integer, and none of them invents a second message for the same failure.
 
 A caller builds a frame from a cell, symbols, coordinates, the mask, the id, and any velocities or forces.
@@ -383,7 +383,7 @@ The frames that come back are the frames that were stored, at every worker count
 
 \section{Scope}
 \label{sec:scope}
-The release reads and writes CON text, through one parser and one C header, with bindings for C++, Python, Julia and Fortran.
+The release reads and writes CON text, through one parser and one C header, with bindings for C++, Python, Julia and Fortran \cite{goswamiReadconcoreV0170Conconvel2026}.
 The C call reports success or failure as a status code, and the caller maps that integer in whichever language sits above the header.
 The Python extension follows ordinary interpreter locking, and the parse itself runs without holding that lock, so other Python work can proceed during a long read.
 zstd envelopes are part of a build that includes that feature, and the same text comes out of a gzip envelope on every build.
@@ -403,6 +403,7 @@ readcon-db is a downstream store that indexes this text for a search over many c
 \section*{Data availability}
 \label{sec:data}
 The software archive is \url{https://doi.org/10.5281/zenodo.18753567}, and the program will be deposited in the CPC Program Library \cite{goswamiReadconcoreConConvel2026}.
+The release described in this paper is version 0.17.0 \cite{goswamiReadconcoreV0170Conconvel2026}.
 The archive is the software object that the FAIR principles for research software ask an author to identify and to describe \cite{barkerIntroducingFairPrinciples2022}.
 A citation to research software is owed to the archived record, which is why the concept DOI appears in this paper \cite{smithSoftwareCitationPrinciples2016}.
 The benchmark scripts and the per-repeat timing tables are part of the submission archive.
