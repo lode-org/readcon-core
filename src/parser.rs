@@ -299,13 +299,19 @@ fn parse_vector_row(
     default_id: Option<u64>,
 ) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
     let bytes = line.as_bytes();
-    let i = skip_ascii_ws(bytes, 0);
-    let (x, i) = parse_finite_at(line, i)?;
-    let i = skip_ascii_ws(bytes, i);
-    let (y, i) = parse_finite_at(line, i)?;
-    let i = skip_ascii_ws(bytes, i);
-    let (z, i) = parse_finite_at(line, i)?;
-    let i = skip_ascii_ws(bytes, i);
+    let mut i = skip_ascii_ws(bytes, 0);
+    let mut xyz = [0.0f64; 3];
+    for slot in 0..3 {
+        if i >= bytes.len() {
+            return Err(ParseError::InvalidVectorLength {
+                expected: 5,
+                found: slot,
+            });
+        }
+        let (val, next) = parse_finite_at(line, i)?;
+        xyz[slot] = val;
+        i = skip_ascii_ws(bytes, next);
+    }
     let (flag_tok, i) = take_token(line, i).ok_or(ParseError::InvalidVectorLength {
         expected: 5,
         found: 3,
@@ -327,7 +333,7 @@ fn parse_vector_row(
         let found = 5 + line[i..].split_ascii_whitespace().count();
         return Err(ParseError::InvalidVectorLength { expected: 5, found });
     }
-    Ok(([x, y, z], fixed, atom_id))
+    Ok((xyz, fixed, atom_id))
 }
 
 /// Scalar section row: one finite float, a flag, and an id. Exact width 3.
@@ -359,12 +365,51 @@ fn parse_scalar_section_row(
 }
 
 fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
-    let (token, next) = take_token(line, i).ok_or(ParseError::InvalidVectorLength {
-        expected: 3,
-        found: 0,
+    let bytes = line.as_bytes();
+    if i >= bytes.len() {
+        return Err(ParseError::InvalidVectorLength {
+            expected: 3,
+            found: 0,
+        });
+    }
+    // "infinity" parses as the prefix "inf" in fast_float2. Name that
+    // spelling before the numeric kernel so the leftover is not a format error.
+    if looks_like_nonfinite(bytes, i) {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        if is_nonfinite_spelling(token) {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
+        }
+    }
+    let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).map_err(|_| {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
     })?;
-    let val = parse_finite_float_token(token)?;
+    let next = i + consumed;
+    let boundary = next == bytes.len() || bytes[next].is_ascii_whitespace();
+    if !boundary || !val.is_finite() {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        if is_nonfinite_spelling(token) || !val.is_finite() {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
+        }
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid float: {token}"
+        )));
+    }
     Ok((val, next))
+}
+
+/// True when the token may be a non-finite spelling. Digit and dot
+/// tokens, the common atom-line case, are false after one byte.
+fn looks_like_nonfinite(bytes: &[u8], i: usize) -> bool {
+    let mut j = i;
+    if bytes[j] == b'+' || bytes[j] == b'-' {
+        j += 1;
+        if j >= bytes.len() {
+            return false;
+        }
+    }
+    let b = bytes[j];
+    !b.is_ascii_digit() && b != b'.'
 }
 
 /// Case-insensitive, after collapsing each run of spaces (CON-file.4, D17).
