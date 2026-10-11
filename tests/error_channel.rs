@@ -53,16 +53,33 @@ fn last_error_names_the_class_and_the_line() {
 }
 
 #[test]
-fn a_signed_count_is_invalid_number_format() {
+fn a_signed_count_is_invalid_count() {
     rkr_clear_error();
     let text = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
     let path = write("neg", text);
     assert!(unsafe { rkr_read_first_frame(path.as_ptr()) }.is_null());
     let err = unsafe { &*rkr_last_error() };
     let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
-    assert!(message.contains("InvalidNumberFormat"), "{message}");
+    assert!(message.contains("InvalidCount"), "{message}");
+    assert!(!message.contains("InvalidNumberFormat"), "{message}");
     assert_eq!(err.line, 8);
     let _ = fs::remove_file(path_for("neg"));
+}
+
+#[test]
+fn the_lowest_line_wins_at_every_thread_count() {
+    let early = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n2\n1 0\n1.0 1.0\n";
+    let text = format!("{early}{}", one_atom("nan 0 0 0 0"));
+    for threads in [1usize, 2, 3, 8] {
+        let err = frames_from_text_located(&text, Some(threads)).unwrap_err();
+        assert_eq!(
+            err.error.class_name(),
+            "InvalidCount",
+            "threads {threads}: {err}"
+        );
+        assert_eq!(err.line, 8, "threads {threads}");
+        assert_eq!(err.frame_index, 0, "threads {threads}");
+    }
 }
 
 #[test]
