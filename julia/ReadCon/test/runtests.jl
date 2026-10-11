@@ -244,5 +244,36 @@ end
         @test a3.has_energy
     end
 
+    @testset "CON 3.1 keeps con_spec_version" begin
+        text = join([
+            "CON 3.1",
+            "{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"mass\":\"amu\"}}",
+            "10.000000 10.000000 10.000000",
+            "90.000000 90.000000 90.000000",
+            "",
+            "",
+            "1",
+            "1",
+            "1.007940",
+            "H",
+            "Coordinates of Component 1",
+            "0.000000 0.000000 0.000000 0 0",
+            "",
+        ], "\n")
+        src = tempname() * ".con"
+        first = tempname() * ".con"
+        second = tempname() * ".con"
+        write(src, text)
+        frame = read_con(src)[1]
+        @test frame.spec_version == 3
+        @test occursin("\"con_spec_version\":3", frame.metadata_json)
+        write_con(first, [frame])
+        again = read_con(first)[1]
+        @test again.spec_version == 3
+        @test occursin("\"con_spec_version\":3", again.metadata_json)
+        write_con(second, [again])
+        @test read(first) == read(second)
+    end
+
     include("test_conformance_goldens.jl")
 end

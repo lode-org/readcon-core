@@ -306,6 +306,91 @@ program test_read_con
     end if
   end block
 
+  block
+    integer :: unit, u1, u2, ios, stw
+    character :: c1, c2
+    character(len=:), allocatable :: meta
+    character(len=1024) :: path, out1, out2
+    type(frame_t) :: spec, mid
+    type(writer_t) :: wr1
+    logical :: differ
+    path = "/tmp/readcon_v31_spec.con"
+    out1 = "/tmp/readcon_v31_spec_a.con"
+    out2 = "/tmp/readcon_v31_spec_b.con"
+    open (newunit=unit, file=trim(path), status="replace", action="write")
+    write (unit, '(a)') 'CON 3.1'
+    write (unit, '(a)') '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu"}}'
+    write (unit, '(a)') '10.000000 10.000000 10.000000'
+    write (unit, '(a)') '90.000000 90.000000 90.000000'
+    write (unit, '(a)') ''
+    write (unit, '(a)') ''
+    write (unit, '(a)') '1'
+    write (unit, '(a)') '1'
+    write (unit, '(a)') '1.007940'
+    write (unit, '(a)') 'H'
+    write (unit, '(a)') 'Coordinates of Component 1'
+    write (unit, '(a)') '0.000000 0.000000 0.000000 0 0'
+    close (unit)
+    spec = read_first_frame(trim(path))
+    if (.not. spec%valid()) then
+      print *, "FAIL con 3.1 read"
+      nfail = nfail + 1
+    else
+      meta = spec%metadata_json()
+      if (index(meta, '"con_spec_version":3') == 0 .or. spec%spec_version() /= 3) then
+        print *, "FAIL con 3.1 metadata ", meta
+        nfail = nfail + 1
+      end if
+      wr1 = open_writer(trim(out1))
+      if (.not. wr1%valid()) then
+        nfail = nfail + 1
+      else
+        stw = wr1%extend_one(spec)
+        call wr1%free()
+        if (stw /= 0) nfail = nfail + 1
+      end if
+      mid = read_first_frame(trim(out1))
+      if (.not. mid%valid()) then
+        nfail = nfail + 1
+      else
+        meta = mid%metadata_json()
+        if (index(meta, '"con_spec_version":3') == 0) nfail = nfail + 1
+        wr1 = open_writer(trim(out2))
+        if (wr1%valid()) then
+          stw = wr1%extend_one(mid)
+          call wr1%free()
+          if (stw /= 0) nfail = nfail + 1
+        else
+          nfail = nfail + 1
+        end if
+        differ = .false.
+        open (newunit=u1, file=trim(out1), access="stream", form="unformatted", status="old")
+        open (newunit=u2, file=trim(out2), access="stream", form="unformatted", status="old")
+        do
+          read (u1, iostat=ios) c1
+          if (ios /= 0) exit
+          read (u2, iostat=ios) c2
+          if (ios /= 0 .or. c1 /= c2) then
+            differ = .true.
+            exit
+          end if
+        end do
+        if (.not. differ) then
+          read (u2, iostat=ios) c2
+          if (ios == 0) differ = .true.
+        end if
+        close (u1)
+        close (u2)
+        if (differ) then
+          print *, "FAIL con 3.1 rewrite bytes"
+          nfail = nfail + 1
+        end if
+        call mid%free()
+      end if
+      call spec%free()
+    end if
+  end block
+
   call fr%free()
   if (nfail /= 0) then
     print *, "FAIL", nfail

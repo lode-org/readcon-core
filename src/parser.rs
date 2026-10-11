@@ -863,15 +863,17 @@ pub fn parse_frame_header<'a>(
             }
 
             // Single pass over the JSON object: collect sections, capture the
-            // validate flag, copy the rest into metadata. Folds the previous
-            // pre-extract get(validate) + re-iterate pattern into one walk.
+            // validate flag, and copy every other key, including
+            // con_spec_version, into metadata.
             let mut sections: Vec<String> = Vec::new();
             let mut metadata = BTreeMap::new();
             let mut sections_declared = false;
             let mut validate = false;
             for (k, v) in json_obj {
                 match k.as_str() {
-                    meta::CON_SPEC_VERSION => {}
+                    meta::CON_SPEC_VERSION => {
+                        metadata.insert(k.clone(), v.clone());
+                    }
                     meta::CON_SPEC_MINOR => {
                         if json_u64(v).is_none() {
                             return Err(metadata_json_error(

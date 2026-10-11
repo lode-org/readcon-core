@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(readcon-core-cmake-test C)
+project(readcon-core-cmake-test C CXX)
 
 # Two modes:
 #   - READCON_CORE_SOURCE_DIR set: add_subdirectory / FetchContent-from-source
@@ -39,3 +39,10 @@ target_link_libraries(c-main-static PRIVATE readcon-core::static)
 add_executable(c-conformance "${CMAKE_CURRENT_SOURCE_DIR}/../c/test_conformance_goldens.c")
 target_link_libraries(c-conformance PRIVATE readcon-core::shared)
 target_link_libraries(c-conformance PRIVATE m)
+
+add_executable(c-con-spec-version "${CMAKE_CURRENT_SOURCE_DIR}/../c/test_con_spec_version.c")
+target_link_libraries(c-con-spec-version PRIVATE readcon-core::shared)
+
+add_executable(cxx-con-spec-version "${CMAKE_CURRENT_SOURCE_DIR}/../cxx/test_con_spec_version.cpp")
+target_compile_features(cxx-con-spec-version PRIVATE cxx_std_17)
+target_link_libraries(cxx-con-spec-version PRIVATE readcon-core::shared)
