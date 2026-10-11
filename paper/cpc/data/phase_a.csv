@@ -1,0 +1,15 @@
+kind,id,clause,error
+valid,v2-minimal,Line 2: Metadata,
+valid,v3-units,Units (required),
+valid,column-4-spec2-x-only,Per-direction constraints (column 4),
+valid,column-4-spec1-all-fixed,Per-direction constraints (column 4),
+valid,column-4-spec2-all-fixed,Per-direction constraints (column 4),
+valid,column-4-spec2-y-only,Per-direction constraints (column 4),
+valid,column-4-spec2-xz,Per-direction constraints (column 4),
+invalid,missing-spec-version,Line 2: Metadata,MissingSpecVersion
+invalid,v3-missing-units,Units (required),ValidationError
+invalid,v3-bad-units,Units (required),ValidationError
+invalid,column-4-out-of-range,Per-direction constraints (column 4),ValidationError
+invalid,unsupported-spec-version,Line 2: Metadata,UnsupportedSpecVersion
+invalid,unknown-section,Section declaration,UnknownSection
+invalid,validate-true-missing-sections,Validation mode,InvalidMetadataJson

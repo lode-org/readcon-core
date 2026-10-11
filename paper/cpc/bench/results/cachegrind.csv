@@ -1,0 +1,2 @@
+host,cpu_model,commit,base_sha,rustc,python,date_utc,payload,irefs,command,status
+cursor,Intel(R) Xeon(R) Processor,27d39d08edf0361dbebefd7378c88ce56fb20b16,bce95758d433a02a639998f513176a8eab393122,rustc 1.88.0 (6b00bc388 2025-06-23),3.12.3,2026-10-11T13:59:47Z,frames-1,824686,valgrind --tool=cachegrind --cache-sim=no --cachegrind-out-file=/workspace/paper/cpc/bench/work/cachegrind.out /workspace/paper/cpc/bench/readcon-bench/target/release/readcon-bench time /workspace/paper/cpc/bench/work/frames-1.con 1,ok

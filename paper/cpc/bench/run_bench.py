@@ -484,15 +484,11 @@ def main() -> None:
             proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
             irefs = ""
             for line in (proc.stderr or "").splitlines():
-                if "I   refs:" in line or line.strip().startswith("I  refs:"):
-                    irefs = line.split(":")[-1].strip().replace(",", "")
-            if not irefs:
-                for line in (proc.stderr or "").splitlines():
-                    if "refs:" in line and line.strip().startswith("I"):
-                        irefs = "".join(
-                            ch for ch in line.split(":")[-1] if ch.isdigit()
-                        )
-                        break
+                if "I refs:" not in line and "I  refs:" not in line:
+                    continue
+                irefs = "".join(ch for ch in line.split(":")[-1] if ch.isdigit())
+                if irefs:
+                    break
             writer.writerow(
                 {
                     **info,

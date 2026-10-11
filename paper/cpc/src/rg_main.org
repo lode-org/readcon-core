@@ -26,8 +26,7 @@
 (setq org-latex-prefer-user-labels t)
 (setq org-latex-default-packages-alist
   '(("" "graphicx" t)
-    ("" "rotating" nil)
-    ("normalem" "ulem" t)))
+    ("" "rotating" nil)))
 #+END_SRC
 *** TeX activation :ignoreheading:ignore:
 #+LATEX_COMPILER: pdflatex
@@ -40,6 +39,7 @@
 #+LATEX_HEADER: \usepackage{url}
 #+LATEX_HEADER: \usepackage{hyperref}
 #+LATEX_HEADER: \usepackage{longtable}
+#+LATEX_HEADER: \input{affilfix}
 #+LATEX_HEADER: \input{figures/generated/macros}
 #+LATEX_HEADER: \input{figures/generated/neb_macros}
 
@@ -331,6 +331,7 @@ From minor 1 the label has to be the unit the numbers are in (CON-units.10).
 The timings below were measured with =paper/cpc/bench/run_bench.py= on the host recorded in =paper/cpc/bench/results/repeats.csv=.
 readcon-core runs in one long-lived process started from =paper/cpc/bench/readcon-bench=.
 Each peer runs in the Python process.
+The paired baseline passes thread count 0, which selects the library default.
 The library sources are the sources of the base SHA in that CSV.
 The commit column is the git revision that contains these scripts.
 Each cell is 30 repeats in the order baseline, peer, baseline, peer.
