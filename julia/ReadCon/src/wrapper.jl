@@ -418,6 +418,55 @@ function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Noth
     end
 end
 
+# True when the units object already names a non-empty time unit.
+function _units_declares_time(metadata_json::AbstractString)
+    m = match(r"\"units\"\s*:\s*\{", metadata_json)
+    m === nothing && return false
+    depth = 0
+    started = false
+    buf = IOBuffer()
+    for c in metadata_json[m.offset:end]
+        if c == '{'
+            depth += 1
+            started = true
+        elseif c == '}'
+            depth -= 1
+        end
+        print(buf, c)
+        started && depth == 0 && break
+    end
+    return occursin(r"\"time\"\s*:\s*\"[^\"]+\"", String(take!(buf)))
+end
+
+# Insert units.time into an existing units object. An empty object gets one field.
+function _inject_units_time(metadata_json::AbstractString)
+    time = "(amu*angstrom^2/eV)^0.5"
+    replaced = replace(
+        metadata_json,
+        r"(\"units\"\s*:\s*)\{\s*\}" => SubstitutionString("\\1{\"time\":\"$time\"}"),
+        count=1,
+    )
+    replaced == metadata_json || return replaced
+    return replace(
+        metadata_json,
+        r"(\"units\"\s*:\s*\{)" => SubstitutionString("\\1\"time\":\"$time\","),
+        count=1,
+    )
+end
+
+# v1 and v2 velocities are in the natural time unit (CON-units.8).
+# Returns the metadata to store, and whether the caller must set default units.
+function _legacy_velocity_units(frame::ConFrame)
+    metadata_json = frame.metadata_json
+    if frame.spec_version >= 3 || !frame.has_velocities || _units_declares_time(metadata_json)
+        return metadata_json, false
+    end
+    if occursin(r"\"units\"\s*:", metadata_json)
+        return _inject_units_time(metadata_json), false
+    end
+    return metadata_json, true
+end
+
 function _build_frame_handle(frame::ConFrame)
     cell = Float64[frame.cell...]
     angles = Float64[frame.angles...]
@@ -432,12 +481,24 @@ function _build_frame_handle(frame::ConFrame)
     builder == C_NULL && error("failed to create frame builder")
 
     try
-        if !isempty(frame.metadata_json)
+        metadata_json, stamp_default_units = _legacy_velocity_units(frame)
+        if !isempty(metadata_json)
             status = ccall(
                 _lib_symbol(:rkr_frame_builder_set_metadata_json),
-                Cint, (Ptr{Cvoid}, Cstring), builder, frame.metadata_json
+                Cint, (Ptr{Cvoid}, Cstring), builder, metadata_json
             )
             _check_status(status, "failed to set frame metadata")
+        end
+        if stamp_default_units
+            # v1 and v2 velocities are in the natural time unit (CON-units.8).
+            # The builder writes minor 1, which requires units.time (CON-units.11).
+            status = ccall(
+                _lib_symbol(:rkr_frame_builder_set_units),
+                Cint, (Ptr{Cvoid}, Cstring),
+                builder,
+                "{\"length\":\"angstrom\",\"energy\":\"eV\",\"mass\":\"amu\",\"time\":\"(amu*angstrom^2/eV)^0.5\"}",
+            )
+            _check_status(status, "failed to set units")
         end
 
         for atom in frame.atoms
