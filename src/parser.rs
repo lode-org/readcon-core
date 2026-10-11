@@ -182,15 +182,21 @@ pub fn parse_line_of_range_f64(
 }
 
 /// CON-num.1 spellings. A leading sign is optional. Case is ignored.
+/// Digit and dot tokens return before any letter compare so the atom
+/// hot path does not allocate.
 fn is_nonfinite_spelling(token: &str) -> bool {
     let rest = token
         .strip_prefix('+')
         .or_else(|| token.strip_prefix('-'))
         .unwrap_or(token);
-    matches!(
-        rest.to_ascii_lowercase().as_str(),
-        "nan" | "inf" | "infinity"
-    )
+    match rest.as_bytes().first() {
+        Some(b) if b.is_ascii_digit() || *b == b'.' => return false,
+        None => return false,
+        _ => {}
+    }
+    rest.eq_ignore_ascii_case("nan")
+        || rest.eq_ignore_ascii_case("inf")
+        || rest.eq_ignore_ascii_case("infinity")
 }
 
 fn parse_finite_float_token(token: &str) -> Result<f64, ParseError> {
