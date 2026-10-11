@@ -241,7 +241,7 @@
       "seconds": 0.3266493350001838,
       "results": {
         "termination_reason": "5",
-        "termination_reason_text": "Too",
+        "termination_reason_text": "Too many iterations",
         "potential_energy_saddle": "-112.618941",
         "final_eigenvalue": "-10.613681",
         "potential_energy_reactant": "-112.818189"
@@ -258,7 +258,7 @@
       "seconds": 0.3150932250009646,
       "results": {
         "termination_reason": "5",
-        "termination_reason_text": "Too",
+        "termination_reason_text": "Too many iterations",
         "potential_energy_saddle": "-112.618941",
         "final_eigenvalue": "-10.613681",
         "potential_energy_reactant": "-112.818189"
@@ -275,7 +275,7 @@
       "seconds": 0.34335137699963525,
       "results": {
         "termination_reason": "5",
-        "termination_reason_text": "Too",
+        "termination_reason_text": "Too many iterations",
         "potential_energy_saddle": "-112.618944",
         "final_eigenvalue": "-10.613677",
         "potential_energy_reactant": "-112.818190"

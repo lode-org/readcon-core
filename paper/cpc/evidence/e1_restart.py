@@ -16,6 +16,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -204,13 +205,20 @@ def scrub_client_logs(root: Path) -> None:
 
 
 def parse_results(path: Path) -> dict[str, str]:
+    """eOn writes ``value key`` with the key as the last token.
+
+    Values may contain spaces (``Too many iterations termination_reason_text``).
+    """
     out = {}
     if not path.is_file():
         return out
     for line in path.read_text().splitlines():
-        parts = line.split()
-        if len(parts) >= 2:
-            out[parts[-1]] = parts[0]
+        text = line.strip()
+        if not text:
+            continue
+        value, sep, key = text.rpartition(" ")
+        if sep and key:
+            out[key] = value
     return out
 
 
@@ -501,6 +509,19 @@ def neb_campaign(reactant: Path, product: Path) -> dict:
     out["aligned_full_movie"] = aligned_name
     out["resume_roundtrip"] = resume("resume_round", None)
     out["resume_fixed6"] = resume("resume_fixed6", 6)
+    out["unmatched_step_record"] = {
+        "role": "secondary",
+        "resume_max_iterations": FULL_ITERS - INTERRUPT_AT,
+        "full_optimizer_steps": FULL_ITERS - 1,
+        "loaded_optimizer_steps": loaded_steps,
+        "resume_optimizer_steps": resume_steps,
+        "note": (
+            "This resume passes max_iterations = FULL_ITERS - INTERRUPT_AT. "
+            "That value takes two optimizer steps. The uninterrupted run takes five, "
+            "because iteration 0 does not step. The final-to-final fields on "
+            "resume_roundtrip and resume_fixed6 are this unmatched pair."
+        ),
+    }
     return out
 
 
@@ -825,6 +846,199 @@ def ase_mask_consequence(atoms, adatom: int) -> dict:
     }
 
 
+def _positive_steps(table: list[dict]) -> int:
+    return sum(1 for row in table if row["step_size_A"] > 0.0)
+
+
+def neb_matched_total_steps() -> dict:
+    """Resume so the checkpoint's two steps plus the resume equal the full run's five.
+
+    max_iterations N takes N - 1 steps. The uninterrupted job uses 6 and takes 5.
+    The checkpoint movie is the band after 2 steps, so the resume uses 4 and takes 3.
+    """
+    base = WORK / "neb"
+    full = base / "full"
+    movie = full / f"neb_path_{INTERRUPT_AT:03d}.con"
+    final = full / "neb.con"
+    if not movie.is_file() or not final.is_file():
+        raise SystemExit(f"missing uninterrupted NEB files under {full}")
+    full_steps = FULL_ITERS - 1
+    loaded_steps = INTERRUPT_AT - 1
+    resume_steps = full_steps - loaded_steps
+    resume_iters = resume_steps + 1
+    full_info = {
+        "barrier_eV": barrier_from_results(parse_results(full / "results.dat")),
+    }
+    full_xyz = positions_of(final)
+    lengths = cell_lengths(final)
+
+    def once(tag: str, precision: int | None) -> dict:
+        work = base / tag
+        if work.exists():
+            shutil.rmtree(work)
+        work.mkdir(parents=True)
+        band_name = prepare_resume(movie, work, tag, precision)
+        (work / "config.ini").write_text(neb_config(resume_iters, band_name))
+        t0 = time.perf_counter()
+        proc = run([EON], work, timeout=180)
+        info = parse_results(work / "results.dat")
+        table = iteration_table(work)
+        row = {
+            "returncode": proc.returncode,
+            "seconds": time.perf_counter() - t0,
+            "resume_max_iterations": resume_iters,
+            "barrier_eV": barrier_from_results(info),
+            "optimizer_steps": _positive_steps(table),
+            "iteration_table": table,
+            "results": info,
+        }
+        out_con = work / "neb.con"
+        if out_con.is_file():
+            versus = compare_geom(positions_of(out_con), full_xyz, lengths)
+            row["versus_uninterrupted_final"] = versus
+            row["barrier_delta_eV"] = (
+                None
+                if row["barrier_eV"] is None or full_info["barrier_eV"] is None
+                else row["barrier_eV"] - full_info["barrier_eV"]
+            )
+        scrub_client_logs(work)
+        return row
+
+    return {
+        "role": "primary",
+        "full_max_iterations": FULL_ITERS,
+        "full_optimizer_steps": full_steps,
+        "loaded_optimizer_steps": loaded_steps,
+        "resume_optimizer_steps": resume_steps,
+        "resume_max_iterations": resume_iters,
+        "checkpoint": f"neb_path_{INTERRUPT_AT:03d}.con",
+        "full_barrier_eV": full_info["barrier_eV"],
+        "note": (
+            "Both jobs take five steepest-descent steps. "
+            "Iteration 0 writes the loaded band and does not step, "
+            "so the resume max_iterations is one more than the three steps it must take."
+        ),
+        "roundtrip": once("resume_round_matched", None),
+        "fixed6": once("resume_fixed6_matched", 6),
+    }
+
+
+def refresh_results_json() -> None:
+    """Rewrite stored results.dat dicts with the space-preserving parser."""
+    pairs = {
+        "minimize_reactant": WORK / "geom" / "reactant_min_run" / "results.dat",
+        "minimize_product": WORK / "geom" / "product_min_run" / "results.dat",
+    }
+    summary_path = RESULTS / "e1_restart.json"
+    summary = json.loads(summary_path.read_text())
+    for key, path in pairs.items():
+        fresh = parse_results(path)
+        if fresh and isinstance(summary.get(key), dict) and "results" in summary[key]:
+            summary[key]["results"] = _corrected(summary[key]["results"], fresh)
+    neb = summary.get("neb", {})
+    for key, folder in (
+        ("full", "full"),
+        ("short", "short"),
+        ("resume_roundtrip", "resume_round"),
+        ("resume_fixed6", "resume_fixed6"),
+    ):
+        fresh = parse_results(WORK / "neb" / folder / "results.dat")
+        block = neb.get(key)
+        if fresh and isinstance(block, dict) and "results" in block:
+            block["results"] = _corrected(block["results"], fresh)
+    dimer = summary.get("dimer", {})
+    for key in ("plain", "round", "fixed6"):
+        fresh = parse_results(WORK / "dimer" / key / "results.dat")
+        block = dimer.get(key)
+        if fresh and isinstance(block, dict) and "results" in block:
+            block["results"] = _corrected(block["results"], fresh)
+    for key, folder in (
+        ("", "dynamics"),
+        ("round", "dynamics_round"),
+        ("fixed6", "dynamics_fixed6"),
+    ):
+        fresh = parse_results(WORK / folder / "results.dat")
+        if key == "":
+            block = summary.get("dynamics")
+        else:
+            block = summary.get("dynamics", {}).get("continue", {}).get(key)
+        if fresh and isinstance(block, dict) and "results" in block:
+            block["results"] = _corrected(block["results"], fresh)
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+
+    control_path = RESULTS / "e1_restart_lbfgs_control.json"
+    if control_path.is_file():
+        control = json.loads(control_path.read_text())
+        dimer = control.get("dimer", {})
+        for key in ("plain", "round", "fixed6"):
+            fresh = parse_results(WORK / "dimer" / key / "results.dat")
+            block = dimer.get(key, {}).get("results", {})
+            if (
+                fresh
+                and block.get("termination_reason") == fresh.get("termination_reason")
+                and "termination_reason_text" in fresh
+            ):
+                block["termination_reason_text"] = fresh["termination_reason_text"]
+        control_path.write_text(json.dumps(control, indent=2) + "\n")
+
+
+def _corrected(stored: dict, fresh: dict) -> dict:
+    if set(stored) <= set(fresh):
+        return {key: fresh[key] for key in stored}
+    return stored
+
+
+def followup() -> None:
+    refresh_results_json()
+    summary = json.loads((RESULTS / "e1_restart.json").read_text())
+    # Label the already recorded final-to-final pair, then add the matched run.
+    neb = summary["neb"]
+    neb["unmatched_step_record"] = {
+        "role": "secondary",
+        "resume_max_iterations": FULL_ITERS - INTERRUPT_AT,
+        "full_optimizer_steps": FULL_ITERS - 1,
+        "loaded_optimizer_steps": neb.get("loaded_optimizer_steps"),
+        "resume_optimizer_steps": neb.get("resume_optimizer_steps"),
+        "roundtrip_barrier_eV": neb["resume_roundtrip"].get("barrier_eV"),
+        "roundtrip_barrier_delta_eV": neb["resume_roundtrip"].get("barrier_delta_eV"),
+        "roundtrip_mic_max_abs_A": neb["resume_roundtrip"].get("mic_max_abs_A"),
+        "roundtrip_mic_rmsd_A": neb["resume_roundtrip"].get("mic_rmsd_A"),
+        "fixed6_barrier_eV": neb["resume_fixed6"].get("barrier_eV"),
+        "fixed6_barrier_delta_eV": neb["resume_fixed6"].get("barrier_delta_eV"),
+        "fixed6_mic_max_abs_A": neb["resume_fixed6"].get("mic_max_abs_A"),
+        "fixed6_mic_rmsd_A": neb["resume_fixed6"].get("mic_rmsd_A"),
+        "note": (
+            "Resume max_iterations was 3, so that job took two steps after the two-step checkpoint. "
+            "The uninterrupted run took five. These final-to-final numbers are that unmatched pair."
+        ),
+    }
+    neb["matched_total_steps"] = neb_matched_total_steps()
+    scrub_client_logs(WORK)
+    dest = RESULTS / "e1_restart.json"
+    dest.write_text(json.dumps(summary, indent=2) + "\n")
+    matched = neb["matched_total_steps"]
+    print(json.dumps({
+        "full_steps": matched["full_optimizer_steps"],
+        "resume_max_iterations": matched["resume_max_iterations"],
+        "round": {
+            "steps": matched["roundtrip"].get("optimizer_steps"),
+            "barrier": matched["roundtrip"].get("barrier_eV"),
+            "delta": matched["roundtrip"].get("barrier_delta_eV"),
+            "mic_max": matched["roundtrip"].get("versus_uninterrupted_final", {}).get("mic_max_abs_A"),
+            "mic_rmsd": matched["roundtrip"].get("versus_uninterrupted_final", {}).get("mic_rmsd_A"),
+            "bit": matched["roundtrip"].get("versus_uninterrupted_final", {}).get("bit_identical"),
+        },
+        "fixed6": {
+            "steps": matched["fixed6"].get("optimizer_steps"),
+            "barrier": matched["fixed6"].get("barrier_eV"),
+            "delta": matched["fixed6"].get("barrier_delta_eV"),
+            "mic_max": matched["fixed6"].get("versus_uninterrupted_final", {}).get("mic_max_abs_A"),
+            "mic_rmsd": matched["fixed6"].get("versus_uninterrupted_final", {}).get("mic_rmsd_A"),
+        },
+        "dimer_text": summary["dimer"]["plain"]["results"].get("termination_reason_text"),
+    }, indent=2))
+
+
 def main() -> None:
     WORK.mkdir(parents=True, exist_ok=True)
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -885,4 +1099,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--followup":
+        followup()
+    else:
+        main()
