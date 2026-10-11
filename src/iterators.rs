@@ -89,6 +89,16 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
     fn peek_line(&mut self) -> Option<&'a str> {
         MemchrLines::peek_line(self)
     }
+    fn remainder_is_whitespace(&mut self) -> bool {
+        if let Some(line) = self.peek_line()
+            && !line.trim().is_empty()
+        {
+            return false;
+        }
+        self.bytes[self.pos..]
+            .iter()
+            .all(|b| b.is_ascii_whitespace())
+    }
 }
 
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
@@ -156,20 +166,30 @@ impl<'a> ConFrameIterator<'a> {
         }
         // Line 7: natm_types.
         let natm_types: usize = match self.read_line_str() {
-            Some(line) => match crate::parser::parse_line_of_n::<usize>(line, 1) {
+            Some(line) => match crate::parser::parse_count_line(line, 1) {
                 Ok(v) => v[0],
                 Err(e) => return Some(Err(e)),
             },
             None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
+        if natm_types == 0 {
+            // Lines 8 and 9 are whitespace, or absent at EOF. Do not scan
+            // for coordinates or a legacy velocity block (CON-count.1).
+            return Some(crate::parser::read_zero_atom_tail(|| self.read_line_str()));
+        }
         // Line 8: natms_per_type.
         let natms_per_type: Vec<usize> = match self.read_line_str() {
-            Some(line) => match crate::parser::parse_line_of_n(line, natm_types) {
+            Some(line) => match crate::parser::parse_count_line(line, natm_types) {
                 Ok(v) => v,
                 Err(e) => return Some(Err(e)),
             },
             None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
+        if natms_per_type.iter().any(|n| *n == 0) {
+            return Some(Err(error::ParseError::InvalidCount(
+                "each per-type count must be >= 1".into(),
+            )));
+        }
         // Line 9: masses_per_type, consumed.
         if let Err(e) = self.advance_lines(1) {
             return Some(Err(e));
@@ -193,6 +213,16 @@ impl<'a> ConFrameIterator<'a> {
             };
             let is_blank = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
             if !is_blank {
+                break;
+            }
+            let after = match next_eol {
+                Some(pos) => &rest[pos + 1..],
+                None => &[][..],
+            };
+            // A blank line and then only whitespace is the end of the file,
+            // not a section (CON-frame.5).
+            if after.iter().all(|b| b.is_ascii_whitespace()) {
+                self.lines.pos = self.lines.bytes.len();
                 break;
             }
             // Consume the blank separator and the section block.
@@ -286,8 +316,13 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     /// If there are lines but they do not form a complete frame, it will return
     /// `Some(Err(ParseError::...))`.
     fn next(&mut self) -> Option<Self::Item> {
-        // If there are no more lines at all, the iterator is exhausted.
-        self.lines.peek_line()?;
+        // Trailing whitespace after the last complete frame is not a frame
+        // (CON-frame.1, D2). An empty line that is followed by more text is
+        // line 1 of the next frame (CON-frame.7).
+        if self.lines.remainder_is_whitespace() {
+            while self.lines.next_line().is_some() {}
+            return None;
+        }
         // Otherwise, attempt to parse the next frame from the available lines.
         let mut frame = match parse_single_frame(&mut self.lines) {
             Ok(f) => f,

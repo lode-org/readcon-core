@@ -2,8 +2,13 @@ name: Basic tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: btest_rust-${{ github.ref }}

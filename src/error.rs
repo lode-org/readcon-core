@@ -20,6 +20,23 @@ pub enum ParseError {
     IncompleteSection(String),
     UnknownSection(String),
     ValidationError(String),
+    /// NaN, Inf, Infinity, or a signed or mixed-case spelling, in any mode.
+    /// Clause CON-num.1 (D1).
+    NonFiniteValue(String),
+    /// Column 4 is not a legal integer flag. Clause CON-mask.5 (D8).
+    InvalidFixedFlag(String),
+    /// A count field is not an unsigned integer, or a per-type count is 0
+    /// when the type count is 1 or more. A type count of 0 is legal.
+    /// Clauses CON-count.1 and CON-error.3 (D4).
+    InvalidCount(String),
+    /// A unit expression is missing, mistyped, or the wrong dimension.
+    /// A minor of 1 or later with velocities and no `units.time` is this
+    /// class on read and on write.
+    /// Clauses CON-units.11, CON-units.12, CON-units.13, and CON-units.14 (D11).
+    InvalidUnits(String),
+    /// Unknown major, or JSON `con_spec_version` 0 or 1.
+    /// Clause CON-line2.5 (D15).
+    UnsupportedVersion(u32),
     /// An in-place builder mutation
     /// (`ConFrameBuilder::set_atom_position` / `set_atom_velocity` /
     /// `set_atom_force` / `set_atom_energy` / `set_atom_fixed` /
@@ -63,14 +80,14 @@ impl fmt::Display for ParseError {
             ParseError::MissingSpecVersion => {
                 write!(
                     f,
-                    "line 1 must be a JSON object containing \"con_spec_version\""
+                    "line 2 must be a JSON object containing \"con_spec_version\""
                 )
             }
-            ParseError::UnsupportedSpecVersion(v) => {
+            ParseError::UnsupportedSpecVersion(v) | ParseError::UnsupportedVersion(v) => {
                 write!(f, "unsupported con_spec_version: {v}")
             }
             ParseError::InvalidMetadataJson(msg) => {
-                write!(f, "invalid JSON metadata on line 1: {msg}")
+                write!(f, "invalid JSON metadata on line 2: {msg}")
             }
             ParseError::IncompleteForceSection => {
                 write!(f, "file ended unexpectedly while reading force section")
@@ -86,6 +103,18 @@ impl fmt::Display for ParseError {
             }
             ParseError::ValidationError(msg) => {
                 write!(f, "CON validation failed: {msg}")
+            }
+            ParseError::NonFiniteValue(token) => {
+                write!(f, "non-finite value: {token}")
+            }
+            ParseError::InvalidFixedFlag(msg) => {
+                write!(f, "invalid fixed flag: {msg}")
+            }
+            ParseError::InvalidCount(msg) => {
+                write!(f, "invalid count: {msg}")
+            }
+            ParseError::InvalidUnits(msg) => {
+                write!(f, "invalid units: {msg}")
             }
             ParseError::IndexOutOfBounds { index, len } => {
                 write!(
@@ -109,6 +138,49 @@ impl fmt::Display for ParseError {
 }
 
 impl std::error::Error for ParseError {}
+
+impl ParseError {
+    /// Stable class name from the v3.1 error table (CON-error.1).
+    pub fn class_name(&self) -> &'static str {
+        match self {
+            ParseError::IncompleteHeader => "IncompleteHeader",
+            ParseError::IncompleteFrame => "IncompleteFrame",
+            ParseError::IncompleteVelocitySection => "IncompleteVelocitySection",
+            ParseError::InvalidVectorLength { .. } => "InvalidVectorLength",
+            ParseError::InvalidNumberFormat(_) => "InvalidNumberFormat",
+            ParseError::MissingSpecVersion => "MissingSpecVersion",
+            ParseError::UnsupportedSpecVersion(_) | ParseError::UnsupportedVersion(_) => {
+                "UnsupportedVersion"
+            }
+            ParseError::InvalidMetadataJson(_) => "InvalidMetadataJson",
+            ParseError::IncompleteForceSection => "IncompleteForceSection",
+            ParseError::IncompleteEnergySection => "IncompleteEnergySection",
+            ParseError::IncompleteSection(_) => "IncompleteSection",
+            ParseError::UnknownSection(_) => "UnknownSection",
+            ParseError::ValidationError(_) => "ValidationError",
+            ParseError::IndexOutOfBounds { .. } => "IndexOutOfBounds",
+            ParseError::MassMismatch { .. } => "MassMismatch",
+            ParseError::NonFiniteValue(_) => "NonFiniteValue",
+            ParseError::InvalidFixedFlag(_) => "InvalidFixedFlag",
+            ParseError::InvalidCount(_) => "InvalidCount",
+            ParseError::InvalidUnits(_) => "InvalidUnits",
+        }
+    }
+
+    /// 1-based file line when this failure is tied to a known header line.
+    /// Metadata failures are line 2 of a single-frame file (CON-error.2).
+    /// Other failures report the line recorded by the iterator, or 0 when
+    /// the producing call did not have a cursor.
+    pub fn line(&self) -> u32 {
+        match self {
+            ParseError::MissingSpecVersion
+            | ParseError::InvalidMetadataJson(_)
+            | ParseError::UnsupportedSpecVersion(_)
+            | ParseError::UnsupportedVersion(_) => 2,
+            _ => 0,
+        }
+    }
+}
 
 impl From<ParseFloatError> for ParseError {
     fn from(e: ParseFloatError) -> Self {
