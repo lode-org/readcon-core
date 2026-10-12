@@ -228,15 +228,13 @@ def ase_mask() -> None:
 ABNF_LISTING = r"""\begin{lstlisting}[caption={Non-normative ABNF for one frame.},label={lst:abnf}]
 file = [bom] 1*frame *(*ws nl)
 bom = %xFEFF
-header_open = user_line nl metadata_line nl float3_line float3_line free_line nl free_line nl
+; An empty free_line on line 1 is the user line.
+header_open = free_line nl metadata_line nl float3_line float3_line free_line nl free_line nl
 frame = header_open (zero_atom / typed_body)
-user_line = free_line
 free_line = *(%x00-09 / %x0B-0C / %x0E-FF)
-metadata_line = json_line / implicit_version_1
-json_line = *ws json_object
-implicit_version_1 = *ws [legacy_body]
-legacy_body = comment_char *(%x00-09 / %x0B-0C / %x0E-FF)
-comment_char = %x00-09 / %x0B-0C / %x0E-7A / %x7C-FF
+metadata_line = *ws (json_object / legacy_metadata)
+; An empty legacy_metadata line is implicit version 1.
+legacy_metadata = *ws [(%x00-09 / %x0B-0C / %x0E-7A / %x7C-FF) *(%x00-09 / %x0B-0C / %x0E-FF)]
 json_object = "{" *ws [json_pair *(*ws "," *ws json_pair)] *ws "}" *ws
 json_pair = json_string *ws ":" *ws json_value
 json_value = json_string / json_number / json_object / json_array / "true" / "false" / "null"
@@ -260,8 +258,9 @@ coord_label = *ws "Coordinates of Component" 1*ws positive_integer *ws
 vector_atom_line = *ws float 1*ws float 1*ws float 1*ws integer [1*ws integer] *ws
 scalar_atom_line = *ws float 1*ws integer 1*ws integer *ws
 atom_line = vector_atom_line
-section = blank_line section_block
-section_block = 1*section_type_block_vector / 1*section_type_block_scalar / 1*generic_type_block
+; A blank_line is a section only when a block follows, including a velocity block.
+; Otherwise that line is line 1 of the next frame.
+section = blank_line (1*section_type_block_vector / 1*section_type_block_scalar / 1*generic_type_block)
 section_type_block_vector = symbol_line nl section_label_vector nl vector_section_line *(nl vector_section_line) [nl]
 section_type_block_scalar = symbol_line nl section_label_scalar nl scalar_atom_line *(nl scalar_atom_line) [nl]
 generic_type_block = symbol_line nl generic_label nl token_line *(nl token_line) [nl]
