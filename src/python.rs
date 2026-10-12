@@ -1310,16 +1310,7 @@ impl PyConFrameIterator {
         if self.pos >= self.contents.len() {
             return Ok(None);
         }
-        // Skip leading blank lines between frames.
-        let bytes = self.contents.as_bytes();
-        while self.pos < bytes.len()
-            && (bytes[self.pos] == b'\n' || bytes[self.pos] == b'\r' || bytes[self.pos] == b' ')
-        {
-            self.pos += 1;
-        }
-        if self.pos >= self.contents.len() {
-            return Ok(None);
-        }
+        // An empty line 1 is the user line (CON-header.4). Do not skip it.
         let slice = &self.contents[self.pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {

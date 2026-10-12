@@ -23,11 +23,17 @@ pub trait LineStream<'a> {
     fn remainder_is_whitespace(&mut self) -> bool {
         false
     }
+    /// Called while a blank line is peeked. True when that blank begins a
+    /// section: the next line is a symbol and the line after it is a
+    /// component label. A blank that does not is line 1 of the next frame.
+    fn blank_line_opens_section(&mut self) -> bool {
+        false
+    }
 }
 
 impl<'a, I> LineStream<'a> for Peekable<I>
 where
-    I: Iterator<Item = &'a str>,
+    I: Iterator<Item = &'a str> + Clone,
 {
     #[inline]
     fn next_line(&mut self) -> Option<&'a str> {
@@ -37,6 +43,44 @@ where
     fn peek_line(&mut self) -> Option<&'a str> {
         Peekable::peek(self).copied()
     }
+    fn blank_line_opens_section(&mut self) -> bool {
+        let mut probe = self.clone();
+        let Some(blank) = probe.next_line() else {
+            return false;
+        };
+        if !blank.trim().is_empty() {
+            return false;
+        }
+        section_follows(&mut probe)
+    }
+}
+
+/// True when `line` has the words `of` and `Component` in that order.
+pub(crate) fn line_has_component_label(line: &str) -> bool {
+    let mut words = line.split_ascii_whitespace();
+    while let Some(word) = words.next() {
+        if word.eq_ignore_ascii_case("of")
+            && words
+                .next()
+                .is_some_and(|next| next.eq_ignore_ascii_case("component"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn section_follows<'a>(lines: &mut impl LineStream<'a>) -> bool {
+    let Some(symbol) = lines.next_line() else {
+        return false;
+    };
+    if symbol.trim().is_empty() || symbol.trim_start().starts_with('{') {
+        return false;
+    }
+    let Some(label) = lines.next_line() else {
+        return false;
+    };
+    line_has_component_label(label)
 }
 
 /// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
@@ -1323,6 +1367,12 @@ pub fn parse_velocity_section<'a>(
     match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
             if lines.remainder_is_whitespace() {
+                return Ok(false);
+            }
+            // CON-section.2 / the legacy fallback: the blank counts only
+            // when it begins a complete velocity block. Otherwise it is
+            // line 1 of the next frame (CON-frame.7, CON-header.4).
+            if !lines.blank_line_opens_section() {
                 return Ok(false);
             }
             lines.next_line();

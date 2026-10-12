@@ -239,6 +239,9 @@ end
         end
         frames = read_con(fixture)
         @test length(frames) >= 1
+        if case["id"] == "empty-user-line-two"
+            @test length(frames) == 2
+        end
         frame = frames[1]
         golden = parse_golden(read(joinpath(corpus, "golden", case["id"] * ".json"), String))
         @test golden["id"] == case["id"]
