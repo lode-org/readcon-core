@@ -225,11 +225,14 @@ Velocities of Component 1
 \end{lstlisting}
 
 Line 1 is free text naming the frame.
+An empty first header line is the user line, and the reader keeps it.
 Line 2 is a single JSON object, without a byte-order mark, holding the version, the units, the periodicity and the names of the sections that follow \cite{brayJavascriptObjectNotation2017,langdaleParsingGigabytesJson2019}.
+An empty second header line is implicit version 1.
 Lines 3 and 4 are the three cell lengths and the three angles in degrees.
 Two blank lines are the free-text pair a version 1 file also carries, after which the type count, the per-type counts and the masses appear: one type, nine atoms, mass \(195.084\,\mathrm{u}\).
 Coordinates then come as a symbol, the heading ``Coordinates of Component \(N\)'', and one row of \(x\), \(y\), \(z\), mask and id per atom.
 A single blank line opens the velocity block, which repeats the symbol under ``Velocities of Component \(N\)'' and copies the mask and the id onto each row.
+A blank line after a frame is line 1 of the next frame unless it begins a velocity block.
 A value near \(1.386\) is printed as \texttt{1.3859292911256331e0}, and that \texttt{e0} form is harder to scan than a fixed decimal.
 Six decimals turn the first row into \texttt{1.385929 1.385929 6.000000 7 0}, which a person can check by eye and which no longer parses back to the stored bits.
 Under version 1, line 2 is a comment, column 4 is only 0 or 1, and masks 7 and 4 cannot be stored as written.
@@ -331,7 +334,9 @@ Several failures resolve to the lowest line, counting metadata as line 2, so a p
 
 \subsection{Sections}
 A section exists when \texttt{sections} names it.
-With no such key, one blank line that begins a complete velocity block is still a velocity section, and exactly one blank line precedes every later section.
+With no such key, one blank line that begins a complete velocity block is still a velocity section.
+A blank line that does not begin that block is line 1 of the next frame.
+Exactly one blank line precedes every later section.
 Table~\ref{tab:sections} is the set reserved at minor 1: three values for a vector, one for a scalar, then the flag and the id.
 Displacements and spreads use \texttt{units.length}, every spread component is at least zero, and the per-atom energies are named \texttt{energies}.
 A metadata energy need not match their sum.
@@ -764,6 +769,9 @@ Unknown section at a newer minor, width declared & May be skipped. \\
 Non-finite number, any mode & Rejected. \\
 Type count of zero & Legal empty frame. \\
 Short header or short section & No partial frame is returned. \\
+Empty first header line & User line, kept. \\
+Empty second header line & Implicit version 1. \\
+Blank line after a frame, no velocity block & Line 1 of the next frame. \\
 Several gzip members & Read in order. \\
 \bottomrule
 \end{tabular}
@@ -882,6 +890,7 @@ A corpus of 100{,}000 frames was left out, because the per-row ASE write is abou
 \section{ABNF of one frame}
 \label{sec:appendix-abnf}
 The non-normative ABNF of one frame follows.
+An empty first header line is the user line, an empty second header line is implicit version 1, and a blank line after a frame is the next frame unless it begins a velocity block.
 The specification wins where the two disagree, and the reader does not parse with this grammar.
 \input{figures/generated/con_abnf}
 
