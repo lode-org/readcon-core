@@ -678,7 +678,8 @@ The next minor should add a section under the rules of Section~\ref{sec:format},
 An H5MD export would serve a band that has outgrown text, once slicing matters more than a diff, and that bridge is not part of this release.
 Adoption in ASE would retire the mask collapse in the reader that freezes a nonzero column, and that change belongs in ASE.
 Both directions are open to contribution, provided a change stays inside the compatibility promise that keeps 3.1 stable after the seven months in which the four versions were written down.
-A store of frames for adaptive kinetic Monte Carlo queries is a separate project, sketched in Appendix~\ref{sec:appendix-db}, and it does not alter the frame.
+Appendix~\ref{sec:appendix-db} times a store of frames for adaptive kinetic Monte Carlo queries.
+That store does not alter the frame.
 A later minor still has to pass the eighteen-file corpus.
 Publishing a finished saddle remains the job of a repository interface and a materials archive, downstream of the checkpoint rather than a replacement for it \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019}.
 
@@ -770,9 +771,113 @@ Several gzip members & Read in order. \\
 
 \section{readcon-db}
 \label{sec:appendix-db}
-A store of CON frames and saddles would let an adaptive kinetic Monte Carlo campaign query the checkpoints it has already written, rather than scanning a directory of text after the fact.
-Results for that store are not in this version of the paper.
-The frame defined above is unchanged by that later store.
+readcon-db answers composition, energy and maximum-force queries over CON frames that an adaptive kinetic Monte Carlo campaign has already written.
+The frame defined in the body of this paper is unchanged.
+The machine is an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
+The software is Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.
+Threads were pinned to one.
+Five repeats were interleaved, and each value below is the median, followed by the minimum and the maximum.
+A megabyte is \(10^{6}\) bytes.
+A cold query follows a hint that cached pages are not needed, and then runs in a fresh process.
+A warm query is the next query in that same process.
+The timed corpora repeat ASE effective-medium searches: a hydrogen cyanide band, a copper adatom band, a platinum-hydrogen band and a platinum adatom dimer.
+Every frame in those corpora has its own hash, at both 1{,}000 and 10{,}000 frames, so the ingest times are the cost of storing new frames.
+The clock starts before the write and stops after a composition check.
+Every timed query was kept only after the hit count and the sum of frame indexes matched an oracle.
+
+Table~\ref{tab:db-ingest} is the ingest of 10{,}000 frames.
+The single-transaction column holds one ASE transaction.
+Inside that transaction ASE still commits every 5{,}000 rows, so 1{,}000 frames is one commit and 10{,}000 frames is two commits, plus the commit that closes the block.
+The other ASE column commits on every write.
+At 1{,}000 frames the medians are \(0.0329\,\mathrm{s}\) (30{,}400 frames/s) for readcon-db, \(0.646\,\mathrm{s}\) (1{,}550 frames/s) for one transaction, and \(5.03\,\mathrm{s}\) (199 frames/s) for a commit on every write.
+At 10{,}000 frames readcon-db writes at \(35.1\,\mathrm{MB/s}\) (33.0 to 38.0), the single transaction at \(1.83\,\mathrm{MB/s}\), and the per-write commits at \(0.226\,\mathrm{MB/s}\).
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Ingest of 10{,}000 frames.
+Each cell is the median, then the minimum and the maximum of five interleaved repeats.}
+\label{tab:db-ingest}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Writer & Time (s) & frames/s \\
+\midrule
+readcon-db & 0.311 (0.287 to 0.331) & 32{,}100 (30{,}200 to 34{,}800) \\
+ASE, one transaction & 5.99 (5.88 to 6.29) & 1{,}670 (1{,}590 to 1{,}700) \\
+ASE, commit per write & 48.4 (45.5 to 50.7) & 207 (197 to 220) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Ingest rate against the number of frames.
+The legend entry ase.db commits on every write.
+The entry ase.db-txn is one transaction, and ASE still commits every 5{,}000 rows inside it.
+Error bars run from the minimum to the maximum of five repeats.}
+\label{fig:db-throughput}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
+\caption{Ingest bandwidth for the same three writers and the same five repeats.
+Error bars run from the minimum to the maximum.
+A megabyte is \(10^{6}\) bytes.}
+\label{fig:db-bandwidth}
+\end{figure}
+
+On composition, energy and maximum force at 10{,}000 frames, readcon-db takes about 8 to 10 ms when cold and about 0.2 ms when warm.
+The cold medians are 8.14 ms (5.12 to 10.7), 10.1 ms (8.11 to 14.4) and 9.57 ms (7.70 to 11.6), in that query order.
+The warm medians are 0.176 ms, 0.211 ms and 0.208 ms.
+The ASE database takes 0.286 s, 0.223 s and 0.225 s on the cold queries, about 0.22 to 0.29 s, and 0.258 s, 0.203 s and 0.206 s when warm.
+A directory of the same CON text, in 64-frame chunks, takes 0.193 s, 0.193 s and 0.197 s cold, and 0.140 s, 0.138 s and 0.138 s warm, about 0.14 to 0.19 s.
+The directory has no write of its own.
+Figure~\ref{fig:db-query} shows both corpus sizes.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Query time for composition, energy and maximum force, cold and warm.
+readcon-db, the ASE database and a directory of CON text are the three series.
+Error bars run from the minimum to the maximum of five repeats.}
+\label{fig:db-query}
+\end{figure}
+
+readcon-db occupies 2.50 times the raw CON text, at both 1{,}000 and 10{,}000 frames.
+That factor is the cost of a memory-mapped indexed store that keeps the text.
+The ASE database is smaller than the raw text.
+Figure~\ref{fig:db-disk} also shows gzip and zstd of the same text.
+At 1{,}000 frames the zstd file is the smaller of those two, and at 10{,}000 frames the gzip file is the smaller.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
+\caption{Allocated bytes for the raw text, two compressed copies, readcon-db, both ASE database files and a directory of 64-frame chunks.
+The readcon-db bar is the memory-mapped file, text plus indexes.}
+\label{fig:db-disk}
+\end{figure}
+
+One adaptive kinetic Monte Carlo trace of 24{,}000 frames stores 27.9 MB of blobs, \(27{,}864{,}917\) bytes, equal to the raw file, because the stored texts are kept separately.
+The hash index records 7 unique structures, and their text is 8319 bytes.
+Those seven texts are the unhopped hydrogen cyanide state and its saddle, the unhopped copper state and its saddle, and both platinum-hydrogen states together with that saddle.
+Figure~\ref{fig:db-dedup} compares the full trace with that unique set.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf}
+\caption{The 24{,}000-frame trace against its 7 unique structures.
+The left panel counts frames.
+The right panel is allocated bytes for the full corpus and for a corpus of the unique texts.}
+\label{fig:db-dedup}
+\end{figure}
+
+Nine correctness checks pass.
+They cover a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared mask, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
+Ingest used one thread.
+The map is capped at 2 GiB, and one million frames does not fit.
+A corpus of 100{,}000 frames was left out, because the per-row ASE write is about 200 frames per second and that ingest alone exceeds two minutes.
 
 \section{ABNF of one frame}
 \label{sec:appendix-abnf}
