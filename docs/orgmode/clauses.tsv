@@ -17,6 +17,7 @@ CON-frame.7	MUST	After a complete frame, including its declared sections or the 
 CON-header.1	MAY	Writers MAY leave lines 5 and 6 empty.
 CON-header.2	MUST	Parsers MUST preserve line 1 and lines 5 and 6.
 CON-header.3	MUST	Line 3 and the coordinate columns MUST be read in =units.length=, and line 9 in =units.mass=. Absent =units= or an absent key means angstrom and amu.
+CON-header.4	MUST	Parsers MUST accept an empty line 1 and an empty line 2. An empty line 1 is preserved. An empty line 2 is implicit version 1.
 CON-line2.1	MUST	A line 2 that starts with ={= MUST be one UTF-8 JSON object and nothing else.
 CON-line2.2	MUST	Malformed JSON on that line MUST be rejected.
 CON-line2.3	MUST	A JSON object that omits =con_spec_version= MUST be rejected.

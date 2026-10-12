@@ -99,15 +99,69 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             .iter()
             .all(|b| b.is_ascii_whitespace())
     }
+    fn blank_line_opens_section(&mut self) -> bool {
+        // `peek_line` has already moved `pos` to the line after the peek.
+        let Some(peeked) = self.peeked else {
+            return false;
+        };
+        if !peeked.trim().is_empty() {
+            return false;
+        }
+        blank_opens_section(&self.bytes[self.pos..])
+    }
+}
+
+fn split_raw_line(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
+    if bytes.is_empty() {
+        return None;
+    }
+    match memchr::memchr(b'\n', bytes) {
+        Some(i) => Some((&bytes[..i], &bytes[i + 1..])),
+        None => Some((bytes, &[])),
+    }
+}
+
+fn strip_cr(line: &[u8]) -> &[u8] {
+    if line.last() == Some(&b'\r') {
+        &line[..line.len() - 1]
+    } else {
+        line
+    }
+}
+
+/// A blank line opens a section only when the next line is a symbol and
+/// the line after that is a component label. Otherwise the blank is line 1
+/// of the next frame.
+fn blank_opens_section(after_blank: &[u8]) -> bool {
+    let Some((raw1, after1)) = split_raw_line(after_blank) else {
+        return false;
+    };
+    let line1 = strip_cr(raw1);
+    if line1.iter().all(|b| matches!(b, b' ' | b'\t')) {
+        return false;
+    }
+    let Ok(text1) = std::str::from_utf8(line1) else {
+        return false;
+    };
+    if text1.trim_start().starts_with('{') {
+        return false;
+    }
+    let Some((raw2, _)) = split_raw_line(after1) else {
+        return false;
+    };
+    let Ok(text2) = std::str::from_utf8(strip_cr(raw2)) else {
+        return false;
+    };
+    crate::parser::line_has_component_label(text2)
 }
 
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
 /// file's contents.
 ///
 /// This struct wraps a memchr line cursor over the file buffer and, upon each
-/// iteration, attempts to parse a complete `ConFrame`. Velocity sections are
-/// detected automatically: if a blank line follows the coordinate blocks, the
-/// velocity data is parsed into the atoms.
+/// iteration, attempts to parse a complete `ConFrame`. A blank line after the
+/// coordinates is a velocity section only when it begins a complete velocity
+/// block. Otherwise that line is line 1 of the next frame, and it may be empty.
 ///
 /// The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
 /// robust error handling for each frame.
@@ -223,6 +277,11 @@ impl<'a> ConFrameIterator<'a> {
             // not a section (CON-frame.5).
             if after.iter().all(|b| b.is_ascii_whitespace()) {
                 self.lines.pos = self.lines.bytes.len();
+                break;
+            }
+            // A blank that does not begin a section is line 1 of the next
+            // frame, including an empty user line (CON-frame.7, CON-header.4).
+            if !blank_opens_section(after) {
                 break;
             }
             // Consume the blank separator and the section block.
