@@ -1,0 +1,58 @@
+name: MPI
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "perf/**"
+      - "ci/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mpi:
+    name: ${{ matrix.mpi }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mpi: mpich
+            packages: mpich libmpich-dev
+            launcher: mpiexec -n
+          - mpi: openmpi
+            packages: openmpi-bin libopenmpi-dev
+            launcher: mpiexec --oversubscribe -n
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install MPI and libclang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.packages }} libclang-dev clang
+          mpiexec --version | head -1
+      - name: Default build has no MPI dependency
+        run: |
+          cargo tree -e normal --prefix none | grep -E '^mpi(-sys)? ' && exit 1 || true
+      - name: Unit tests with the mpi feature
+        run: cargo test --features mpi --lib distrib
+      - name: Build Rust smoke test and C library
+        run: |
+          cargo build --features mpi --example mpi_smoke
+          cargo build --lib
+          mpicc -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
+          mpicxx -fsyntax-only -Iinclude -x c++ include/readcon-core-mpi.h
+      - name: Run on 1 to 4 ranks
+        env:
+          LD_LIBRARY_PATH: target/debug
+        run: |
+          for n in 1 2 3 4; do
+            ${{ matrix.launcher }} $n target/debug/examples/mpi_smoke
+            ${{ matrix.launcher }} $n target/test_mpi_shim
+          done

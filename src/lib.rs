@@ -2,6 +2,7 @@ pub mod array;
 pub mod compression;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
+pub mod distrib;
 pub mod error;
 pub mod ffi;
 pub mod frame_index;
