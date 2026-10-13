@@ -162,7 +162,7 @@ Figure~\ref{fig:workflow} is the path.
 \includegraphics[width=\textwidth]{figures/generated/workflow.pdf}
 \caption{A rare-event campaign treats the checkpoint as shared state.
 The search writes a frame, the job stops on a queue or a remote client, and the next reader loads that frame before the following force calls.
-What the frame dropped is what the resumed search silently gets wrong.}
+What the frame dropped is the error the resumed search then makes, and the load reports nothing.}
 \label{fig:workflow}
 \end{figure}
 
@@ -496,9 +496,10 @@ double e = rkr_frame_energy(f[0]);   /* NaN when absent */
 free_rkr_frame_array(f, n);          /* frees every frame */
 \end{lstlisting}
 
-Listing~\ref{lst:py} is the same contract from Python.
+Listing~\ref{lst:py} is the Python call for that read and write.
 The default write is the round-trip printer, and six decimals are a separate argument.
-An atom object exposes the symbol, the id, the per-axis mask and any velocity components, which is the surface a hand-off into ASE uses when the caller builds the ASE constraints from the mask rather than from a single freeze flag.
+An atom object exposes the symbol, the id, the per-axis mask and any velocity components.
+The caller who hands that atom to ASE builds the constraints from the mask, and a height constraint stays distinct from a full freeze.
 Fortran 2008 reaches the same C symbols through its C interoperability, and Julia does so through its foreign-function interface \cite{bezansonJuliaFreshApproach2017}.
 The Python binding can also hand coordinates back as arrays, so a caller who wants only coordinates can skip the per-atom objects \cite{harrisArrayProgrammingNumpy2020}.
 The timed path in Section~\ref{sec:performance} is the object path.
@@ -517,8 +518,8 @@ The reader scans the header counts in one pass and records the byte offset where
 Workers therefore never race to find the next newline.
 Once the offsets exist, each task parses only its own slice, the result array is filled at the index the scan assigned, and the hash of the frame contents is the same at every worker count.
 Adding workers cannot reorder atoms or drop a frame, since the split does not depend on how many workers are waiting.
-A file that holds a single frame stays one task however many atoms it contains.
-The wheels and the C archives ship with the parallel feature turned on.
+A file with a single frame stays one task however many atoms it contains.
+The wheels and the C archives are built with the parallel feature turned on.
 The bulk read takes a worker count.
 Zero follows the automatic policy, one forces the sequential parse, and a larger count builds a pool only when the parallel feature is present.
 A build without that feature stays sequential at every count.
@@ -533,7 +534,7 @@ Handles are per thread: a frame handle is used from the thread that received it,
 The Python call releases the interpreter lock while the core parses, and it takes the lock back to construct the per-atom objects the listing shows.
 The C archive and the Python wheel both contain that core, so the corpus a binding runs is a check of the same parse.
 
-The same corpus of legal and illegal frames is what each binding runs, so a binding cannot quietly accept a file the core rejects.
+The same corpus of legal and illegal frames is what each binding runs, so a binding rejects a file the core rejects.
 Builds that want an ingress from other chemical files can link chemfiles, and that ingress is optional \cite{frauxChemfileschemfilesVersion01042023}.
 An ASE atoms object can be copied into a frame.
 In this release that copy takes an id array when the caller has set one and otherwise numbers atoms in row order, and it does not write the velocity time unit into the metadata of a version 3 frame, so a caller who has velocities must set the unit.
@@ -612,7 +613,7 @@ The run is a fidelity test of the checkpoint.
 The band has not converged.
 On that final band the minimum-image displacement is at most \(8.9\times10^{-15}\,\text{\AA}\) (RMSD \(1.1\times10^{-15}\,\text{\AA}\)), which is agreement to \(1\times10^{-14}\,\text{\AA}\).
 The six-decimal resume shifts the same barrier by \(+1.0\times10^{-6}\,\mathrm{eV}\), with a minimum-image maximum of \(4.9\times10^{-7}\,\text{\AA}\) and an RMSD of \(2.0\times10^{-7}\,\text{\AA}\).
-The checkpoint round trip is the part that is bitwise exact.
+The checkpoint round trip is bitwise exact.
 The resumed band is not bitwise exact, because the search has taken steps after the load.
 Figure~\ref{fig:restart} plots those three printed forces, which the two resumes share with the uninterrupted run, and the final-band displacements.
 
@@ -813,7 +814,7 @@ The frame defined in the body of this paper is unchanged.
 The machine is an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
 The software is Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.
 Threads were pinned to one.
-Five repeats were interleaved, and each value below is the median, followed by the minimum and the maximum.
+Five repeats were interleaved, and each value is the median, followed by the minimum and the maximum.
 A megabyte is \(10^{6}\) bytes.
 A cold query follows a hint that cached pages are not needed, and then runs in a fresh process.
 A warm query is the next query in that same process.
@@ -823,7 +824,7 @@ The clock starts before the write and stops after a composition check.
 Every timed query was kept only after the hit count and the sum of frame indexes matched an oracle.
 
 Table~\ref{tab:db-ingest} is the ingest of 10{,}000 frames.
-The single-transaction column holds one ASE transaction.
+The single-transaction column uses one ASE transaction.
 Inside that transaction ASE still commits every 5{,}000 rows, so 1{,}000 frames is one commit and 10{,}000 frames is two commits, plus the commit that closes the block.
 The other ASE column commits on every write.
 At 1{,}000 frames the medians are \(0.0329\,\mathrm{s}\) (30{,}400 frames/s) for readcon-db, \(0.646\,\mathrm{s}\) (1{,}550 frames/s) for one transaction, and \(5.03\,\mathrm{s}\) (199 frames/s) for a commit on every write.
