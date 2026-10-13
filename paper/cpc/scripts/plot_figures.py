@@ -39,7 +39,8 @@ from chemparseplot.plot.theme import (
     setup_publication_theme,
 )
 from matplotlib.colors import LogNorm, Normalize
-from matplotlib.ticker import FormatStrFormatter, MaxNLocator
+from matplotlib.lines import Line2D
+from matplotlib.ticker import FixedLocator, FormatStrFormatter
 from rgpycrumbs.eon.plot_config import merge_plot_settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -448,59 +449,125 @@ def restart(theme, settings, png_dir: Path | None) -> None:
 
 
 def _black_dots(ax, progress, deviation) -> None:
-    """Scatter images the way ``--show-pts`` does for one band."""
+    """Solid image markers above the contour.
+
+    ``--show-pts`` scatters a faint pixel dot. A filled circle of about
+    4 pt stays visible on the colour field.
+    """
     ax.scatter(
         progress,
         deviation,
-        c="k",
-        s=12,
-        marker=".",
-        alpha=0.6,
+        s=16,
+        marker="o",
+        c=BLACK,
+        alpha=1.0,
         linewidths=0,
-        zorder=41,
+        zorder=36,
     )
 
 
 def _saddle_inset(ax, theme, saddles) -> None:
-    """Enlarge two saddle markers that share one spot on the full map."""
+    """Opaque zoom of the two saddles, in milliangstroms from their midpoint."""
     ss = np.array([item[0] for item in saddles], dtype=float)
     dd = np.array([item[1] for item in saddles], dtype=float)
-    gap = float(max(np.ptp(ss), np.ptp(dd), 1e-8))
-    half = 6.0 * gap
-    inset = ax.inset_axes([0.54, 0.58, 0.44, 0.38])
-    inset.set_xlim(float(ss.mean()) - half, float(ss.mean()) + half)
-    inset.set_ylim(float(dd.mean()) - half, float(dd.mean()) + half)
+    origin_s = float(ss.mean())
+    origin_d = float(dd.mean())
+    rel_s = (ss - origin_s) * 1e3
+    rel_d = (dd - origin_d) * 1e3
+    half = 0.09
+    # Lower left is clear of the variance labels, which sit on the upper
+    # contour and beside the saddle.
+    inset = ax.inset_axes([0.22, 0.11, 0.46, 0.36])
+    inset.set_xlim(-half, half)
+    inset.set_ylim(-half, half)
     inset.set_aspect("equal", adjustable="box")
+    inset.set_zorder(200)
+    inset.patch.set_facecolor("white")
+    inset.patch.set_alpha(1.0)
+    inset.patch.set_zorder(200)
     inset.plot(
-        [ss[0], ss[1]],
-        [dd[0], dd[1]],
+        [rel_s[0], rel_s[1]],
+        [rel_d[0], rel_d[1]],
         color=BLACK,
-        lw=0.6,
+        lw=0.8,
         solid_capstyle="round",
         zorder=2,
     )
-    for s_value, d_value, marker, size, color in saddles:
+    for x_value, y_value, marker, _map_size, color in zip(
+        rel_s,
+        rel_d,
+        [item[2] for item in saddles],
+        [item[3] for item in saddles],
+        [item[4] for item in saddles],
+        strict=True,
+    ):
         inset.scatter(
-            s_value,
-            d_value,
+            x_value,
+            y_value,
             marker=marker,
-            s=size,
+            s=160 if marker == "*" else 70,
             facecolors=color,
             edgecolors=BLACK,
-            linewidths=0.45,
+            linewidths=0.6,
+            alpha=1.0,
             zorder=3,
         )
-    inset.xaxis.set_major_locator(MaxNLocator(nbins=3))
-    inset.yaxis.set_major_locator(MaxNLocator(nbins=3))
-    inset.xaxis.set_major_formatter(FormatStrFormatter("%.5f"))
-    inset.yaxis.set_major_formatter(FormatStrFormatter("%.5f"))
-    inset.tick_params(labelsize=5.5, length=2, pad=1)
-    inset.set_xlabel("s (Å)", fontsize=6, labelpad=1)
-    inset.set_ylabel("d (Å)", fontsize=6, labelpad=1)
+    ticks = [-0.06, 0.0, 0.06]
+    inset.xaxis.set_major_locator(FixedLocator(ticks))
+    inset.yaxis.set_major_locator(FixedLocator(ticks))
+    inset.xaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    inset.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    # Names sit inside the white frame. Tick numbers stay just outside it,
+    # above the map's own tick row.
+    inset.tick_params(labelsize=8, length=3, pad=2, direction="out", colors=BLACK)
+    inset.set_xlabel("")
+    inset.set_ylabel("")
+    inset.text(
+        0.50,
+        0.03,
+        "Δs",
+        transform=inset.transAxes,
+        ha="center",
+        va="bottom",
+        fontsize=8,
+        color=BLACK,
+        zorder=4,
+    )
+    inset.text(
+        0.04,
+        0.97,
+        "Δd",
+        transform=inset.transAxes,
+        ha="left",
+        va="top",
+        fontsize=8,
+        color=BLACK,
+        zorder=4,
+    )
+    inset.text(
+        0.96,
+        0.97,
+        "mÅ",
+        transform=inset.transAxes,
+        ha="right",
+        va="top",
+        fontsize=8,
+        color=BLACK,
+        zorder=4,
+    )
     for spine in inset.spines.values():
         spine.set_visible(True)
+        spine.set_zorder(201)
     apply_axis_theme(inset, theme)
-    ax.indicate_inset_zoom(inset, edgecolor="0.35", linewidth=0.4)
+    inset.set_facecolor("white")
+    inset.patch.set_alpha(1.0)
+    pad = half * 1e-3
+    ax.indicate_inset(
+        [origin_s - pad, origin_d - pad, 2 * pad, 2 * pad],
+        inset,
+        edgecolor="0.35",
+        linewidth=0.4,
+    )
 
 
 def _nudge_variance_labels(ax, saddles) -> None:
@@ -515,18 +582,19 @@ def _nudge_variance_labels(ax, saddles) -> None:
         if not raw.startswith("var"):
             continue
         x_value, y_value = text.get_position()
+        xspan = abs(ax.get_xlim()[1] - ax.get_xlim()[0])
         for s_value, d_value, *_rest in saddles:
             if abs(x_value - s_value) < near and abs(y_value - d_value) < near:
-                text.set_position((x_value, d_value + 0.18 * span))
+                text.set_position((s_value + 0.10 * xspan, d_value + 0.05 * span))
                 break
 
 
 def ase_mask(theme, settings, png_dir: Path | None) -> None:
-    """One landscape per mask, with both bands as black image dots.
+    """One landscape per mask, with both bands as solid black image dots.
 
-    ``show_pts`` is the plt-neb switch that scatters every image of the
-    surface call. The other mask is projected into the same reactant and
-    product frame and scattered in that same black-dot style.
+    ``show_pts`` is the plt-neb switch for those image markers. The library
+    scatter is a faint pixel, so each panel draws both bands itself, the
+    held path solid and the frozen path dashed above it.
     """
     if not settings["show_pts"]:
         raise SystemExit("plt-neb --show-pts is off, so the mask dots would be missing.")
@@ -540,7 +608,7 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
             "marker": "*",
             "linestyle": "-",
             "size": 200,
-            "inset_size": 42,
+            "zorder": 48,
         },
         "frozen": {
             "title": "Adatom frozen",
@@ -548,9 +616,9 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
             "saddle": "Frozen saddle",
             "color": MAGENTA,
             "marker": "D",
-            "linestyle": "--",
+            "linestyle": (0, (5, 2)),
             "size": 70,
-            "inset_size": 28,
+            "zorder": 58,
         },
     }
     images = {name: _images_from_con(E5 / name / "neb.con") for name in styles}
@@ -561,11 +629,18 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
         other = "frozen" if name == "held" else "held"
         other_band = _project_band(images[other], ira_kmax, ref=frames[0], prod=frames[-1])
         panels.append((name, basis, other, other_band))
-    fig = plt.figure(figsize=(7.6, 5.0), layout="constrained")
-    grid = fig.add_gridspec(2, 3, height_ratios=[3.2, 1.15], width_ratios=[1, 1, 0.06])
+    fig = plt.figure(figsize=(7.6, 5.45), layout="constrained")
+    grid = fig.add_gridspec(
+        3,
+        3,
+        height_ratios=[3.15, 0.28, 1.12],
+        width_ratios=[1, 1, 0.06],
+    )
     axes = [fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])]
-    profiles = [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]
+    legend_ax = fig.add_subplot(grid[1, :2])
+    profiles = [fig.add_subplot(grid[2, 0]), fig.add_subplot(grid[2, 1])]
     cax = fig.add_subplot(grid[0, 2])
+    legend_ax.axis("off")
     captured = []
     for ax, (name, basis, _other, other_band) in zip(axes, panels, strict=True):
         extra = np.column_stack((other_band["r"], other_band["p"]))
@@ -576,7 +651,7 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
                 basis,
                 SEQUENTIAL,
                 extra_points=extra,
-                show_pts=True,
+                show_pts=False,
             )
         )
         ax.set_title(styles[name]["title"])
@@ -590,6 +665,7 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
     for ax, profile, (name, basis, other, other_band) in zip(axes, profiles, panels, strict=True):
         progress, deviation = _sd(bands[name], basis)
         other_s, other_d = _sd(other_band, basis)
+        _black_dots(ax, progress, deviation)
         _black_dots(ax, other_s, other_d)
         coords = {name: (progress, deviation), other: (other_s, other_d)}
         for path_name in ("held", "frozen"):
@@ -599,10 +675,10 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
                 path_s,
                 path_d,
                 color=style["color"],
-                lw=1.15,
+                lw=1.8,
                 linestyle=style["linestyle"],
-                zorder=44 if path_name == "held" else 45,
-                label=style["path"],
+                zorder=style["zorder"],
+                solid_capstyle="round",
             )
         ax.scatter(
             [progress[0], progress[-1]],
@@ -623,7 +699,7 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
             source = bands[name] if saddle_name == name else other_band
             peak = _saddle_index(source["z"])
             saddle_s, saddle_d = float(path_s[peak]), float(path_d[peak])
-            marked.append((saddle_s, saddle_d, style["marker"], style["inset_size"], style["color"]))
+            marked.append((saddle_s, saddle_d, style["marker"], style["size"], style["color"]))
             ax.scatter(
                 saddle_s,
                 saddle_d,
@@ -632,8 +708,8 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
                 facecolors=style["color"],
                 edgecolors=BLACK,
                 linewidths=0.7,
+                alpha=1.0,
                 zorder=80,
-                label=style["saddle"],
             )
         span = max(
             abs(ax.get_xlim()[1] - ax.get_xlim()[0]),
@@ -644,7 +720,6 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
             _saddle_inset(ax, theme, marked)
         _nudge_variance_labels(ax, marked)
         _landscape_labels(ax, ax is axes[0])
-        ax.legend(frameon=False, fontsize=6.5, loc="upper left")
         _companion(
             profile,
             progress,
@@ -657,6 +732,45 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
         )
         profile.set_xlabel("reaction progress s (Å)")
     profiles[0].set_ylabel("energy (eV)")
+    legend_ax.legend(
+        handles=[
+            Line2D([0], [0], color=styles["held"]["color"], lw=1.8, linestyle="-"),
+            Line2D(
+                [0],
+                [0],
+                color=styles["frozen"]["color"],
+                lw=1.8,
+                linestyle=styles["frozen"]["linestyle"],
+            ),
+            Line2D(
+                [0],
+                [0],
+                color=styles["held"]["color"],
+                lw=0,
+                marker="*",
+                markersize=11,
+                markeredgecolor=BLACK,
+                markeredgewidth=0.6,
+            ),
+            Line2D(
+                [0],
+                [0],
+                color=styles["frozen"]["color"],
+                lw=0,
+                marker="D",
+                markersize=6,
+                markeredgecolor=BLACK,
+                markeredgewidth=0.6,
+            ),
+        ],
+        labels=["Held path", "Frozen path", "Held saddle", "Frozen saddle"],
+        loc="center",
+        ncol=4,
+        frameon=False,
+        fontsize=8,
+        handlelength=2.6,
+        columnspacing=1.1,
+    )
     _theme_axes(axes + profiles, theme)
     _save(fig, "ase_mask", png_dir)
 
