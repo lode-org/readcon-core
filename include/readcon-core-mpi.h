@@ -21,6 +21,8 @@
  *     same negative code and owns no buffer.
  */
 
+#include "readcon-core.h"
+
 #include <mpi.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -31,6 +33,10 @@
 #define RKR_MPI_ERR_ALLOC (-3)
 #define RKR_MPI_ERR_TOO_BIG (-4)
 
+#define RKR_MPI_READ_AUTO 0    /* scatter for gzip/zstd, shared otherwise */
+#define RKR_MPI_READ_SHARED 1  /* every rank maps the file, uses .rcidx */
+#define RKR_MPI_READ_SCATTER 2 /* rank 0 reads, MPI_Scatterv per block */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +44,27 @@ extern "C" {
 /* Exported by libreadcon_core (no MPI needed). Writes [*start, *end). */
 int rkr_block_range(uint64_t n_frames, uint32_t n_ranks, uint32_t rank,
                     uint64_t *start, uint64_t *end);
+
+/*
+ * Exported by libreadcon_core built with the `mpi` feature.
+ * Reads this rank's block of frames (block partition of the whole file).
+ * Concatenating every rank's frames in rank order gives the serial read.
+ * Collective: returns NULL on every rank if any rank fails. Free the
+ * result with free_rkr_frame_array(frames, *num_frames).
+ */
+struct RKRConFrame **rkr_mpi_read_block_f(MPI_Fint comm_f, const char *path,
+                                          int mode, size_t n_threads,
+                                          size_t *num_frames,
+                                          uint64_t *first_frame,
+                                          uint64_t *total_frames);
+
+static inline struct RKRConFrame **
+rkr_mpi_read_block(MPI_Comm comm, const char *path, int mode, size_t n_threads,
+                   size_t *num_frames, uint64_t *first_frame,
+                   uint64_t *total_frames) {
+  return rkr_mpi_read_block_f(MPI_Comm_c2f(comm), path, mode, n_threads,
+                              num_frames, first_frame, total_frames);
+}
 
 /**
  * Broadcast a byte blob from `root` of `comm`.

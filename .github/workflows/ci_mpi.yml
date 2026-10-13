@@ -53,10 +53,12 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: |
-          cargo build --features mpi --example mpi_smoke
-          cargo build --lib
+          cargo build --features mpi --example mpi_smoke --example mpi_read_check
+          cargo build --features mpi --lib
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_read.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_read
           ${{ matrix.cxx }} -fsyntax-only -Iinclude -x c++ include/readcon-core-mpi.h
       - name: Run on 1 to 4 ranks
         env:
@@ -65,4 +67,9 @@ jobs:
           for n in 1 2 3 4; do
             ${{ matrix.launcher }} $n target/debug/examples/mpi_smoke
             ${{ matrix.launcher }} $n target/test_mpi_shim
+            ${{ matrix.launcher }} $n target/test_mpi_read resources/test/tiny_multi_cuh2.con
           done
+      - name: Distributed read is byte-identical to serial (sha256, 1 to 4 ranks)
+        run: |
+          scripts/mpi_read_check.sh "${{ matrix.launcher }}" \
+            target/debug/examples/mpi_read_check target/mpi-read-check
