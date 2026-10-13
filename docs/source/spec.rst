@@ -131,8 +131,8 @@ Line 1: Generator comment
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Free-form text. Writers SHOULD set this to a human-readable
-identifier. Parsers MUST preserve it through round-trips but MUST
-NOT assign it semantic meaning.
+identifier. The line may be empty. Parsers MUST preserve it, including
+an empty line, through round-trips but MUST NOT assign it semantic meaning.
 
 .. _metadata:
 
@@ -168,6 +168,7 @@ line 2, after trimming whitespace, starts with ``{``:
 - Starts with ``{``: parse as JSON, extract ``con_spec_version``.
 
 - Does not start with ``{``: treat as legacy (implicit version 1).
+  An empty line 2 does not start with ``{`` and is implicit version 1.
 
 If line 2 starts with ``{`` but contains malformed JSON, the parser
 MUST report an error. If the JSON object lacks ``con_spec_version``,
@@ -474,10 +475,12 @@ rejects column~4 value 8) and the clause-keyed corpus under
 Legacy section detection
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Files without a ``sections`` key use blank-separator detection: if a
-blank line follows coordinate blocks, the parser attempts to parse a
-velocity section. A present ``sections`` key disables this fallback,
-including when the value is ``[]``. This preserves backward
+Files without a ``sections`` key use blank-separator detection. A blank
+line that begins a complete velocity block (a symbol line, then a label
+containing the words ``of`` and ``Component``) is a velocity section.
+A blank line that does not begin that block is line 1 of the next frame,
+and that line may be empty. A present ``sections`` key disables this
+fallback, including when the value is ``[]``. This preserves backward
 compatibility with existing ``.convel`` files while giving v2 writers a
 precise declaration mechanism.
 
