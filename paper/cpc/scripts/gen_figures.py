@@ -24,7 +24,6 @@ ORANGE = "#E69F00"
 SKY = "#56B4E9"
 GREEN = "#009E73"
 BLUE = "#0072B2"
-VERMILLION = "#D55E00"
 BLACK = "#000000"
 
 
@@ -103,128 +102,6 @@ def architecture() -> None:
     plt.close(fig)
 
 
-def restart() -> None:
-    """Printed NEB series and final-band minimum-image displacement. No missing points."""
-    steps = [1, 2, 3]
-    force = [3.0658, 1.2007, 0.59762]
-    energy = [0.8305, 0.6911, 0.6417]
-    fig, axes = plt.subplots(1, 3, figsize=(7.4, 3.15))
-
-    axes[0].plot(steps, force, "-", color=BLACK, lw=1.0, label="uninterrupted", zorder=1)
-    axes[0].plot(steps, force, "o", color=BLUE, ms=6, label="round trip", zorder=2)
-    axes[0].plot(
-        [s + 0.08 for s in steps],
-        force,
-        "s",
-        color=VERMILLION,
-        ms=5,
-        label="six decimals",
-        zorder=3,
-    )
-    axes[0].set_ylabel("max force (eV/Å)")
-    axes[0].set_xlabel("aligned iteration")
-    axes[0].set_xticks(steps)
-    axes[0].legend(frameon=False, fontsize=7)
-
-    axes[1].plot(steps, energy, "-", color=BLACK, lw=1.0, zorder=1)
-    axes[1].plot(steps, energy, "o", color=BLUE, ms=6, zorder=2)
-    axes[1].plot(
-        [s + 0.08 for s in steps],
-        energy,
-        "s",
-        color=VERMILLION,
-        ms=5,
-        zorder=3,
-    )
-    axes[1].set_ylabel("highest image (eV)")
-    axes[1].set_xlabel("aligned iteration")
-    axes[1].set_xticks(steps)
-
-    labels = ["round trip\nmax", "round trip\nRMSD", "six decimals\nmax", "six decimals\nRMSD"]
-    values = [8.9e-15, 1.1e-15, 4.9e-7, 2.0e-7]
-    colors = [BLUE, SKY, VERMILLION, ORANGE]
-    axes[2].bar(range(4), values, color=colors, edgecolor=BLACK, linewidth=0.4)
-    axes[2].set_yscale("log")
-    axes[2].set_xticks(range(4))
-    axes[2].set_xticklabels(labels, fontsize=7)
-    axes[2].set_ylabel("minimum-image displacement (Å)")
-    axes[2].set_xlabel("against the final band")
-
-    fig.tight_layout()
-    fig.savefig(OUT / "restart.pdf")
-    plt.close(fig)
-
-
-def layers() -> None:
-    names = ["Rust core", "C++ wrapper", "Python objects"]
-    mbps = [1090, 1078, 122.5]
-    colors = [BLUE, GREEN, ORANGE]
-    fig, ax = plt.subplots(figsize=(7.2, 2.6))
-    y = list(range(len(names)))
-    ax.barh(y, mbps, color=colors, edgecolor=BLACK, linewidth=0.4)
-    ax.set_yticks(y)
-    ax.set_yticklabels(names)
-    ax.set_xlabel("throughput (MB/s)")
-    ax.set_xlim(0, 1400)
-    for yi, value in zip(y, mbps):
-        ax.text(value + 20, yi, f"{value:g}", va="center", fontsize=8)
-    fig.tight_layout()
-    fig.savefig(OUT / "layers.pdf")
-    plt.close(fig)
-
-
-def scaling() -> None:
-    threads = [1, 2, 4, 8]
-    series = {
-        "Rust": [1.00, 1.61, 2.73, 3.78],
-        "C++": [1.00, 1.39, 2.36, 3.26],
-        "Python": [1.00, 1.15, 1.22, 1.08],
-    }
-    colors = {"Rust": BLUE, "C++": GREEN, "Python": VERMILLION}
-    markers = {"Rust": "o", "C++": "s", "Python": "D"}
-    fig, ax = plt.subplots(figsize=(4.6, 3.3))
-    ax.plot(threads, threads, "--", color=BLACK, lw=0.8, label="ideal")
-    for name, speed in series.items():
-        ax.plot(
-            threads,
-            speed,
-            marker=markers[name],
-            color=colors[name],
-            label=name,
-        )
-    ax.set_xlabel("threads")
-    ax.set_ylabel("speedup")
-    ax.set_xticks(threads)
-    ax.set_ylim(0, 9)
-    ax.legend(frameon=False, fontsize=8)
-    fig.tight_layout()
-    fig.savefig(OUT / "scaling.pdf")
-    plt.close(fig)
-
-
-def ase_mask() -> None:
-    """Two EMT bands from the converged mask comparison, in the paper palette."""
-    correct_path = [0.0, 0.481128, 0.970489, 1.450201, 1.929912, 2.419274, 2.900402]
-    correct_energy = [0.0, 0.108638, 0.286212, 0.366598, 0.286212, 0.108638, 0.0]
-    collapsed_path = [0.0, 0.500396, 0.997861, 1.479777, 1.961694, 2.459159, 2.959555]
-    collapsed_energy = [0.0, 0.109109, 0.287736, 0.366584, 0.287736, 0.109109, 0.0]
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.15), sharey=True)
-    panels = (
-        (axes[0], correct_path, correct_energy, BLUE, "Height held, z only", True),
-        (axes[1], collapsed_path, collapsed_energy, VERMILLION, "Adatom frozen", False),
-    )
-    for ax, path, energy, color, title, is_saddle in panels:
-        ax.plot(path, energy, "-o", color=color, ms=5, lw=1.2)
-        ax.plot(path[3], energy[3], "o", color=ORANGE if is_saddle else BLACK, ms=7, zorder=3)
-        ax.axhline(0.0, color=BLACK, lw=0.4)
-        ax.set_title(title, fontsize=9)
-        ax.set_xlabel("path length (Å)")
-    axes[0].set_ylabel("energy relative to reactant (eV)")
-    fig.tight_layout()
-    fig.savefig(OUT / "ase_mask.pdf")
-    plt.close(fig)
-
-
 ABNF_LISTING = r"""\begin{lstlisting}[caption={Non-normative ABNF for one frame.},label={lst:abnf}]
 file = [bom] 1*frame *(*ws nl)
 bom = %xFEFF
@@ -298,11 +175,10 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     workflow()
     architecture()
-    restart()
-    ase_mask()
-    layers()
-    scaling()
     abnf_placeholder()
+    from plot_figures import main as plot_data
+
+    plot_data()
 
 
 if __name__ == "__main__":

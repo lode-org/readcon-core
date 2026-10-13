@@ -1,0 +1,16 @@
+{
+  "corpus_allocated_bytes": 74911744,
+  "corpus_apparent_bytes": 74911744,
+  "logical_unique_over_stored": 0.00029854745305719015,
+  "n_frames": 24000,
+  "n_keys": 24000,
+  "n_unique_hashes": 7,
+  "n_unique_index": 7,
+  "ok": true,
+  "raw_bytes": 27864917,
+  "stored_blob_bytes": 27864917,
+  "unique_blob_bytes": 8319,
+  "unique_corpus_allocated_bytes": 98304,
+  "unique_corpus_apparent_bytes": 98304,
+  "unique_reingest_frames": 7
+}
