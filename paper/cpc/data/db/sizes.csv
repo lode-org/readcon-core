@@ -1,0 +1,15 @@
+n_frames,store,apparent_bytes,allocated_bytes,allocated_minimum,allocated_maximum,note
+1000,raw_con,1088101,1088101,1088101,1088101,multi-frame CON
+1000,gzip,277258,277258,277258,277258,gzip level 6
+1000,zstd,270863,270863,270863,270863,zstd level 3
+1000,con_directory,1088101,1134592,1134592,1134592,chunk files
+10000,raw_con,10923745,10923745,10923745,10923745,multi-frame CON
+10000,gzip,3241302,3241302,3241302,3241302,gzip level 6
+10000,zstd,3312800,3312800,3312800,3312800,zstd level 3
+10000,con_directory,10923745,11501568,11501568,11501568,chunk files
+1000,ase.db,962560,966656,962560,974848,median over ingests
+1000,ase.db-txn,954368,958464,954368,974848,median over ingests; writes held in one ASE connection
+1000,readcon-db,2723840,2723840,2723840,2723840,median file size over ingests; the map ceiling is 2 GiB and is not the file size
+10000,ase.db,8925184,8929280,8921088,8953856,median over ingests
+10000,ase.db-txn,8908800,8912896,8904704,8945664,median over ingests; writes held in one ASE connection
+10000,readcon-db,27340800,27340800,27340800,27340800,median file size over ingests; the map ceiling is 2 GiB and is not the file size
