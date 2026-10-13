@@ -90,3 +90,20 @@ jobs:
           done
           scripts/mpi_write_check.sh "${{ matrix.launcher }}" \
             target/debug/examples/mpi_write_check target/mpi-write-check
+      - name: Install Fortran compiler and Python MPI tooling
+        run: |
+          sudo apt-get install -y gfortran
+          python3 -m venv target/pyenv
+          target/pyenv/bin/pip install maturin mpi4py numpy
+      - name: Build Python extension with the mpi feature
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/target/pyenv
+          CARGO_TARGET_DIR: target/py
+        run: |
+          PATH="$VIRTUAL_ENV/bin:$PATH" maturin develop --features python,mpi
+          target/pyenv/bin/python -c "import readcon; assert readcon.has_mpi_support()"
+      - name: C++, Fortran and Python bindings match serial (sha256, 1 to 4 ranks)
+        run: |
+          cargo build --features mpi --lib
+          scripts/mpi_bindings_check.sh "${{ matrix.launcher }}" target/debug \
+            target/mpi-bindings target/pyenv/bin/python

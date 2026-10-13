@@ -125,6 +125,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    bindings
    chemfiles-reference
    rpc
+   mpi
 
 .. toctree::
    :maxdepth: 1

@@ -1233,18 +1233,35 @@ fn stamp_legacy_velocity_time(
 /// buffer is at least 48 KiB), `1` for sequential parse, and `n >= 2`
 /// for an explicit Rayon pool.
 #[pyfunction]
-#[pyo3(name = "read_all_frames", signature = (path, n_threads=None))]
+#[pyo3(name = "read_all_frames", signature = (path, n_threads=None, *, comm=None, mode="auto"))]
 fn read_all_frames(
     py: Python<'_>,
     path: &str,
     n_threads: Option<usize>,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
 ) -> PyResult<Vec<PyConFrame>> {
-    read_con(py, path, n_threads)
+    read_con(py, path, n_threads, comm, mode)
 }
 
+/// Read frames from a .con or .convel file path.
+///
+/// With `comm` (an mpi4py communicator, needs the `mpi` build feature)
+/// this is collective and returns only this rank's block of frames;
+/// concatenating the blocks of ranks `0..size` in rank order gives the
+/// serial result. `mode` is `"auto"`, `"shared"` or `"scatter"`.
 #[pyfunction]
-#[pyo3(signature = (path, n_threads=None))]
-fn read_con(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Vec<PyConFrame>> {
+#[pyo3(signature = (path, n_threads=None, *, comm=None, mode="auto"))]
+fn read_con(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    if let Some(comm) = comm {
+        return read_con_mpi(py, path, n_threads, comm, mode);
+    }
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
     let path_owned = path.to_owned();
     let frames = py
@@ -1257,6 +1274,56 @@ fn read_con(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Ve
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
         .collect()
+}
+
+/// Fortran handle of an mpi4py communicator (`comm.py2f()`).
+#[cfg(feature = "mpi")]
+fn comm_from_py(comm: &Bound<'_, PyAny>) -> PyResult<crate::distrib::Comm> {
+    let f: i32 = comm.call_method0("py2f")?.extract()?;
+    unsafe { crate::distrib::Comm::dup_fint(f as ::mpi::ffi::RSMPI_Fint) }
+        .map_err(|rc| PyIOError::new_err(format!("MPI_Comm_dup failed with MPI error {rc}")))
+}
+
+#[cfg(feature = "mpi")]
+fn read_con_mpi(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+    comm: &Bound<'_, PyAny>,
+    mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    use crate::distrib_read::ReadMode;
+    let mode = match mode {
+        "auto" => ReadMode::Auto,
+        "shared" => ReadMode::Shared,
+        "scatter" => ReadMode::Scatter,
+        m => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown read mode {m:?}; use \"auto\", \"shared\" or \"scatter\""
+            )));
+        }
+    };
+    let c = comm_from_py(comm)?;
+    // MPI handles are not Send, so the GIL stays held for the collective.
+    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    rf.frames
+        .iter()
+        .map(|frame| PyConFrame::from_con_frame(py, frame))
+        .collect()
+}
+
+#[cfg(not(feature = "mpi"))]
+fn read_con_mpi(
+    _py: Python<'_>,
+    _path: &str,
+    _n_threads: Option<usize>,
+    _comm: &Bound<'_, PyAny>,
+    _mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    Err(pyo3::exceptions::PyNotImplementedError::new_err(
+        "comm= needs readcon built with the mpi feature",
+    ))
 }
 
 /// Read only the first frame from a .con or .convel file path.
@@ -1445,7 +1512,8 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto"))]
+#[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
     path: &str,
@@ -1453,8 +1521,18 @@ fn write_con(
     precision: Option<usize>,
     compression: Option<&str>,
     canonical: bool,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
 ) -> PyResult<()> {
     let rust_frames = py_frames_to_rust(py, frames)?;
+    if let Some(comm) = comm {
+        if compression.is_some_and(|c| c != "none") || path.ends_with(".gz") || canonical {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "comm= writes uncompressed, non-canonical output only",
+            ));
+        }
+        return write_con_mpi(py, path, &rust_frames, precision, comm, mode);
+    }
 
     let use_gzip = match compression {
         Some("gzip") => true,
@@ -1493,6 +1571,49 @@ fn write_con(
     Ok(())
 }
 
+/// Collective write: every rank passes its own frames (possibly none)
+/// and the file holds them in rank order.
+#[cfg(feature = "mpi")]
+fn write_con_mpi(
+    py: Python<'_>,
+    path: &str,
+    frames: &[ConFrame],
+    precision: Option<usize>,
+    comm: &Bound<'_, PyAny>,
+    mode: &str,
+) -> PyResult<()> {
+    use crate::distrib_write::WriteMode;
+    let mode = match mode {
+        "auto" => WriteMode::Auto,
+        "mpiio" => WriteMode::MpiIo,
+        "gather" => WriteMode::Gather,
+        m => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown write mode {m:?}; use \"auto\", \"mpiio\" or \"gather\""
+            )));
+        }
+    };
+    let c = comm_from_py(comm)?;
+    let _ = py;
+    crate::distrib_write::write_block(&c, Path::new(path), frames, mode, precision)
+        .map(|_| ())
+        .map_err(|e| PyIOError::new_err(e.to_string()))
+}
+
+#[cfg(not(feature = "mpi"))]
+fn write_con_mpi(
+    _py: Python<'_>,
+    _path: &str,
+    _frames: &[ConFrame],
+    _precision: Option<usize>,
+    _comm: &Bound<'_, PyAny>,
+    _mode: &str,
+) -> PyResult<()> {
+    Err(pyo3::exceptions::PyNotImplementedError::new_err(
+        "comm= needs readcon built with the mpi feature",
+    ))
+}
+
 /// Write frames to a string in .con format.
 #[pyfunction]
 #[pyo3(signature = (frames, precision=None, *, canonical=false))]
@@ -1521,7 +1642,7 @@ fn write_con_string(
 /// Requires the ase package.
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
-    let frames = read_con(py, path, None)?;
+    let frames = read_con(py, path, None, None, "auto")?;
     frames.iter().map(|f| ase_from_pyconframe(py, f)).collect()
 }
 
@@ -1927,6 +2048,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
+    m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_nth, m)?)?;
@@ -1956,6 +2078,12 @@ fn has_chemfiles_support() -> bool {
 #[pyfunction]
 fn has_parallel_support() -> bool {
     cfg!(feature = "parallel")
+}
+
+/// True when built with the `mpi` feature (`comm=` on read and write).
+#[pyfunction]
+fn has_mpi_support() -> bool {
+    cfg!(feature = "mpi")
 }
 
 fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyErr {
