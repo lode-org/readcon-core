@@ -1,0 +1,60 @@
+{
+  "cases": [
+    {
+      "id": "missing-spec-version",
+      "readcon_class": "MissingSpecVersion",
+      "readcon": "line 2 must be a JSON object containing \"con_spec_version\"",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "v3-missing-units",
+      "readcon_class": "InvalidUnits",
+      "readcon": "invalid units: con_spec_version >= 3 requires metadata \"units\" with length and energy",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "v3-bad-units",
+      "readcon_class": "InvalidUnits",
+      "readcon": "invalid units: v3 units: CON validation failed: unit 'eV' is not valid for quantity 'length'",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "column-4-out-of-range",
+      "readcon_class": "InvalidFixedFlag",
+      "readcon": "invalid fixed flag: column 4 flag \"8\" is not a legal integer for spec 2",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "unsupported-spec-version",
+      "readcon_class": "UnsupportedVersion",
+      "readcon": "unsupported con_spec_version: 4",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "unknown-section",
+      "readcon_class": "UnknownSection",
+      "readcon": "unknown section type in metadata: not_a_real_section",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "validate-true-missing-sections",
+      "readcon_class": "InvalidMetadataJson",
+      "readcon": "invalid JSON metadata on line 2: validate=true requires a sections array, even when empty",
+      "c_null_handle": true,
+      "ase": "accepted"
+    },
+    {
+      "id": "per-type-zero",
+      "readcon_class": "InvalidCount",
+      "readcon": "invalid count: each per-type count must be >= 1",
+      "c_null_handle": true,
+      "ase": "RuntimeError: generator raised StopIteration"
+    }
+  ]
+}
