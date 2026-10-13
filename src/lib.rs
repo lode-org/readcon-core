@@ -5,6 +5,8 @@ pub mod cuda_array;
 pub mod distrib;
 #[cfg(feature = "mpi")]
 pub mod distrib_read;
+#[cfg(feature = "mpi")]
+pub mod distrib_write;
 pub mod error;
 pub mod ffi;
 pub mod frame_index;

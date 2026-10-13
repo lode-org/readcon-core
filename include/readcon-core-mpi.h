@@ -66,6 +66,31 @@ rkr_mpi_read_block(MPI_Comm comm, const char *path, int mode, size_t n_threads,
                               num_frames, first_frame, total_frames);
 }
 
+#define RKR_MPI_WRITE_AUTO 0   /* currently MPI-IO */
+#define RKR_MPI_WRITE_MPIIO 1  /* Exscan offsets + MPI_File_write_at_all */
+#define RKR_MPI_WRITE_GATHER 2 /* rank 0 gathers and writes (no MPI-IO) */
+
+/*
+ * Exported by libreadcon_core built with the `mpi` feature.
+ * Writes every rank's frames to `path` in rank order; the bytes equal a
+ * serial write of the concatenated frames. Ranks may pass zero frames
+ * (frames may then be NULL). precision < 0 uses the writer default.
+ * Also writes the checked `path.rcidx` sidecar (best effort).
+ * Collective: returns 0 on every rank or -1 on every rank.
+ */
+int rkr_mpi_write_block_f(MPI_Fint comm_f, const char *path,
+                          const struct RKRConFrame *const *frames,
+                          size_t num_frames, int mode, int precision,
+                          uint64_t *total_bytes);
+
+static inline int rkr_mpi_write_block(MPI_Comm comm, const char *path,
+                                      const struct RKRConFrame *const *frames,
+                                      size_t num_frames, int mode,
+                                      int precision, uint64_t *total_bytes) {
+  return rkr_mpi_write_block_f(MPI_Comm_c2f(comm), path, frames, num_frames,
+                               mode, precision, total_bytes);
+}
+
 /**
  * Broadcast a byte blob from `root` of `comm`.
  *
