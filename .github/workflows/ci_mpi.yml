@@ -22,10 +22,19 @@ jobs:
         include:
           - mpi: mpich
             packages: mpich libmpich-dev
-            launcher: mpiexec -n
+            cc: mpicc.mpich
+            cxx: mpicxx.mpich
+            probe: mpiexec.hydra
+            # hydra is the MPICH PMI launcher. mpiexec.mpich is the same
+            # binary; do not use the alternatives-default mpiexec, which
+            # is Open MPI when both packages are installed.
+            launcher: mpiexec.hydra -n
           - mpi: openmpi
             packages: openmpi-bin libopenmpi-dev
-            launcher: mpiexec --oversubscribe -n
+            cc: mpicc.openmpi
+            cxx: mpicxx.openmpi
+            probe: mpiexec.openmpi
+            launcher: mpiexec.openmpi --oversubscribe -n
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -35,7 +44,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.packages }} libclang-dev clang
-          mpiexec --version | head -1
+          bindir="${RUNNER_TEMP}/mpi-wrappers"
+          mkdir -p "$bindir"
+          ln -sfn "$(command -v ${{ matrix.cc }})" "$bindir/mpicc"
+          ln -sfn "$(command -v ${{ matrix.cxx }})" "$bindir/mpicxx"
+          echo "$bindir" >> "$GITHUB_PATH"
+          ${{ matrix.probe }} --version | head -1
       - name: Default build has no MPI dependency
         run: |
           cargo tree -e normal --prefix none | grep -E '^mpi(-sys)? ' && exit 1 || true
@@ -45,9 +59,9 @@ jobs:
         run: |
           cargo build --features mpi --example mpi_smoke
           cargo build --lib
-          mpicc -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
-          mpicxx -fsyntax-only -Iinclude -x c++ include/readcon-core-mpi.h
+          ${{ matrix.cxx }} -fsyntax-only -Iinclude -x c++ include/readcon-core-mpi.h
       - name: Run on 1 to 4 ranks
         env:
           LD_LIBRARY_PATH: target/debug
