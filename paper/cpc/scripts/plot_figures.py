@@ -78,6 +78,28 @@ STORES = [
 ]
 
 
+def require_theme_font(family: str) -> None:
+    """Stop if the publication theme would substitute another face.
+
+    ``setup_publication_theme`` warns and switches to sans-serif when the
+    named face is absent. That substitution is a failed figure, not a fallback.
+    """
+    import matplotlib.font_manager as fm
+
+    try:
+        found = fm.findfont(family, fallback_to_default=False)
+    except ValueError as exc:
+        raise SystemExit(
+            f"Theme font {family!r} is not installed, so the publication "
+            "theme would draw in sans-serif."
+        ) from exc
+    resolved = fm.FontProperties(fname=found).get_name()
+    if resolved != family:
+        raise SystemExit(
+            f"Theme font {family!r} resolved to {resolved!r} at {found}."
+        )
+
+
 def house_style():
     """Resolve the eOn plot settings, then apply that publication theme."""
     settings = merge_plot_settings(
@@ -88,7 +110,14 @@ def house_style():
         settings["theme"],
         font_size=settings["fontsize_base"],
     )
+    require_theme_font(theme.font_family)
     setup_publication_theme(theme)
+    family = plt.rcParams["font.family"]
+    names = family if isinstance(family, (list, tuple)) else [family]
+    if theme.font_family not in names:
+        raise SystemExit(
+            f"Publication theme fell back from {theme.font_family!r} to {family!r}."
+        )
     plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
     return theme
 
