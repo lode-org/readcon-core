@@ -543,6 +543,34 @@ pub fn read_nth_frame_from_text(
     }
 }
 
+/// Reads all frames using the checked `.rcidx` sidecar next to `path`.
+///
+/// Uncompressed input uses (and refreshes) `path.rcidx`; compressed
+/// input is scanned in memory each time. UTF-8 is validated in
+/// newline-aligned slices.
+#[cfg(feature = "parallel")]
+pub fn read_all_frames_indexed(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str_sliced()?;
+    let idx = match contents {
+        crate::compression::FileContents::Mapped(_) => {
+            crate::frame_index::load_or_build(path, text, true)?
+        }
+        crate::compression::FileContents::Owned(_) => {
+            let on_disk = std::fs::metadata(path)?.len();
+            crate::frame_index::load_or_build(path, text, on_disk == text.len() as u64)?
+        }
+    };
+    let offs: Vec<usize> = idx.offsets.iter().map(|&o| o as usize).collect();
+    parse_frames_at_offsets(text, &offs, num_threads)
+        .into_iter()
+        .map(|r| r.map_err(|e| Box::new(e) as Box<dyn std::error::Error>))
+        .collect()
+}
+
 /// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
 /// Stops at the first skip error (that start is still included).
 pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
@@ -597,10 +625,26 @@ pub fn parse_frames_parallel_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    use rayon::prelude::*;
-
     // Phase 1: skip walk (no atom parse) for frame start offsets.
     let boundaries = frame_start_offsets(file_contents);
+    parse_frames_at_offsets(file_contents, &boundaries, num_threads)
+}
+
+/// Phase 2 of [`parse_frames_parallel_with_threads`]: parse the frames
+/// that start at `boundaries` (strictly increasing byte offsets into
+/// `file_contents`; frame `i` ends where frame `i + 1` starts).
+///
+/// Offsets may come from [`frame_start_offsets`] or from a checked
+/// [`crate::frame_index::FrameIndex`]. Results are ordered by frame index.
+///
+/// Requires the `parallel` feature.
+#[cfg(feature = "parallel")]
+pub fn parse_frames_at_offsets(
+    file_contents: &str,
+    boundaries: &[usize],
+    num_threads: Option<usize>,
+) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    use rayon::prelude::*;
 
     let parse_chunks = || {
         let num_frames = boundaries.len();

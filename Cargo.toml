@@ -118,6 +118,10 @@ tempfile = "3"
 name = "rust_usage"
 
 [[example]]
+name = "rcidx_bench"
+required-features = ["parallel"]
+
+[[example]]
 name = "wall_scale_harness"
 required-features = ["parallel"]
 
