@@ -24,11 +24,8 @@ jobs:
             packages: mpich libmpich-dev
             cc: mpicc.mpich
             cxx: mpicxx.mpich
-            probe: mpiexec.hydra
-            # hydra is the MPICH PMI launcher. mpiexec.mpich is the same
-            # binary; do not use the alternatives-default mpiexec, which
-            # is Open MPI when both packages are installed.
-            launcher: mpiexec.hydra -n
+            probe: mpiexec.mpich
+            launcher: mpiexec.mpich -n
           - mpi: openmpi
             packages: openmpi-bin libopenmpi-dev
             cc: mpicc.openmpi
@@ -44,18 +41,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.packages }} libclang-dev clang
-          bindir="${RUNNER_TEMP}/mpi-wrappers"
-          mkdir -p "$bindir"
-          ln -sfn "$(command -v ${{ matrix.cc }})" "$bindir/mpicc"
-          ln -sfn "$(command -v ${{ matrix.cxx }})" "$bindir/mpicxx"
-          echo "$bindir" >> "$GITHUB_PATH"
           ${{ matrix.probe }} --version | head -1
       - name: Default build has no MPI dependency
         run: |
           cargo tree -e normal --prefix none | grep -E '^mpi(-sys)? ' && exit 1 || true
       - name: Unit tests with the mpi feature
+        env:
+          MPICC: ${{ matrix.cc }}
         run: cargo test --features mpi --lib distrib
       - name: Build Rust smoke test and C library
+        env:
+          MPICC: ${{ matrix.cc }}
         run: |
           cargo build --features mpi --example mpi_smoke
           cargo build --lib
