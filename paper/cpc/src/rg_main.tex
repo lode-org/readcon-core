@@ -592,10 +592,12 @@ Writing the adatom's \(z\)-only constraint through ASE's eon writer raises an er
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Climbing-image bands for a Pt adatom hop on a Pt(100) slab with EMT, after the endpoints were relaxed under each constraint set.
+\caption{Climbing-image bands for a Pt adatom hop on a Pt(100) slab with EMT, drawn as energy on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
+Each mask has its own panel, and the two panels share one colour scale.
 Left: the adatom is held in \(z\) only, and the barrier is \(0.3666\,\mathrm{eV}\).
 Right: the ASE eon reader freezes the adatom on every axis.
-The middle image matches that energy because the straight line passes through the saddle, and the image has no imaginary mode.}
+The middle image matches that energy because the straight line passes through the saddle, and the image has no imaginary mode.
+The lower panels are energy against reaction progress \(s\).}
 \label{fig:asemask}
 \end{figure}
 
@@ -615,17 +617,16 @@ On that final band the minimum-image displacement is at most \(8.9\times10^{-15}
 The six-decimal resume shifts the same barrier by \(+1.0\times10^{-6}\,\mathrm{eV}\), with a minimum-image maximum of \(4.9\times10^{-7}\,\text{\AA}\) and an RMSD of \(2.0\times10^{-7}\,\text{\AA}\).
 The checkpoint round trip is bitwise exact.
 The resumed band is not bitwise exact, because the search has taken steps after the load.
-Figure~\ref{fig:restart} plots those three printed forces, which the two resumes share with the uninterrupted run, and the final-band displacements.
+Figure~\ref{fig:restart} places the uninterrupted band and both resumes on one \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{Interrupted eOn nudged elastic band on a 28-atom Pt(100) slab with a Morse potential, five movable images and steepest descent \cite{rohitgoswamiTheochemuieonV3602026,goswamiEnhancedClimbingImage2026}.
-Both the uninterrupted run and each resume take five steepest-descent steps, and the search stops at an iteration cap.
-Left and centre: max force and highest-image energy for the uninterrupted run and for resumes from a round-trip checkpoint and from a six-decimal checkpoint.
-The three series coincide at printed precision.
-Right: minimum-image maximum and RMSD of each final band against the uninterrupted band, on a logarithmic axis.
-The round-trip barrier at that band is \(0.63493\,\mathrm{eV}\), with difference 0.}
+\caption{Final bands of the interrupted Morse nudged elastic band on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026,rohitgoswamiTheochemuieonV3602026,goswamiEnhancedClimbingImage2026}.
+The filled contour is the uninterrupted energy, and the round-trip and six-decimal paths lie on that map.
+The companion panel is energy against reaction progress \(s\).
+Endpoints and the highest image are marked.
+The round-trip barrier on this band is \(0.63493\,\mathrm{eV}\), with difference 0.}
 \label{fig:restart}
 \end{figure}
 
@@ -693,9 +694,9 @@ Object construction is about \(0.826\,\mathrm{s}\), interval \([0.725, 0.851]\),
 That estimate subtracts the one-thread Rust parse from the Python read at the same repeat index, and the two blocks were sequential, so the difference is index-aligned rather than an interleaved pair.
 
 Speedup at 1, 2, 4 and 8 threads is 1.00, 1.61, 2.73, 3.78 for Rust, 1.00, 1.39, 2.36, 3.26 for C++, and 1.00, 1.15, 1.22, 1.08 for Python.
-The Python curve flattens because object construction holds the interpreter lock.
+The Python speedup flattens because object construction holds the interpreter lock.
 The boundary scan still has work left, and the measurement stops at 8 threads because that is the hardware.
-Figure~\ref{fig:scaling} in Appendix~\ref{sec:appendix-bench} draws the three curves.
+Figure~\ref{fig:scaling} in Appendix~\ref{sec:appendix-bench} maps those three speedups.
 A force-call framing, in the style of the i-PI 3.0 measurements, puts the same file next to the evaluator it is waiting on \cite{litmanIpi30Flexible2024}.
 One 218-atom frame reads in \(15\,\mu\mathrm{s}\).
 One Morse call on the 28-atom slab takes \(0.30\,\mathrm{ms}\), one EMT call takes \(59\,\mu\mathrm{s}\), and a DFT call takes seconds to minutes.
@@ -763,9 +764,10 @@ The intervals in Section~\ref{sec:performance} are for a few predeclared layers.
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.62\textwidth]{figures/generated/scaling.pdf}
-\caption{Speedup against a one-thread baseline on the 10{,}000-frame file, for the Rust core, the C++ wrapper and the Python object path.
-The dashed line is ideal scaling.
+\includegraphics[width=0.8\textwidth]{figures/generated/scaling.pdf}
+\caption{Speedup against a one-thread baseline on the 10{,}000-frame file.
+Rows are the Rust core, the C++ wrapper and the Python object path, and columns are the thread counts.
+The colour is the speedup.
 Python flattens because object construction holds the interpreter lock.
 The measurement stops at 8 threads.}
 \label{fig:scaling}
@@ -850,19 +852,18 @@ ASE, commit per write & 48.4 (45.5 to 50.7) & 207 (197 to 220) \\
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
-\caption{Ingest rate against the number of frames.
-The legend entry ase.db commits on every write.
-The entry ase.db-txn is one transaction, and ASE still commits every 5{,}000 rows inside it.
-Error bars run from the minimum to the maximum of five repeats.}
+\caption{Median ingest rate.
+Rows are readcon-db, an ASE database that commits on every write (ase.db), and one ASE transaction (ase.db-txn).
+Columns are the two corpus sizes, and the colour is the median of five repeats.
+ASE still commits every 5{,}000 rows inside the single transaction.}
 \label{fig:db-throughput}
 \end{figure}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
-\caption{Ingest bandwidth for the same three writers and the same five repeats.
-Error bars run from the minimum to the maximum.
-A megabyte is \(10^{6}\) bytes.}
+\caption{Median ingest bandwidth for the same three writers and the same five repeats.
+The colour is that median, and a megabyte is \(10^{6}\) bytes.}
 \label{fig:db-bandwidth}
 \end{figure}
 
@@ -877,9 +878,9 @@ Figure~\ref{fig:db-query} shows both corpus sizes.
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
-\caption{Query time for composition, energy and maximum force, cold and warm.
-readcon-db, the ASE database and a directory of CON text are the three series.
-Error bars run from the minimum to the maximum of five repeats.}
+\caption{Median query time for composition, energy and maximum force.
+Each panel is one corpus size.
+Rows pair the store with a cold or warm cache, and the colour is the median of five repeats.}
 \label{fig:db-query}
 \end{figure}
 
@@ -893,7 +894,8 @@ At 1{,}000 frames the zstd file is the smaller of those two, and at 10{,}000 fra
 \centering
 \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
 \caption{Allocated bytes for the raw text, two compressed copies, readcon-db, both ASE database files and a directory of 64-frame chunks.
-The readcon-db bar is the memory-mapped file, text plus indexes.}
+Rows are the stores and columns are the corpus sizes, on a logarithmic colour scale.
+The readcon-db cell is the memory-mapped file, text plus indexes.}
 \label{fig:db-disk}
 \end{figure}
 
