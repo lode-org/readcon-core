@@ -172,11 +172,11 @@ def _load_final_band(directory: Path, ira_kmax: float) -> dict[str, np.ndarray]:
     return _band_arrays(df)
 
 
-def _load_forced_con(con: Path, ira_kmax: float) -> dict[str, np.ndarray]:
+def _images_from_con(con: Path):
+    """Read a multi-frame CON file that carries cartesian forces."""
     import readcon
     from ase import Atoms
     from ase.geometry import cellpar_to_cell
-    from chemparseplot.parse.trajectory.neb import trajectory_to_landscape_df
 
     images = []
     for frame in readcon.read_con(str(con)):
@@ -196,8 +196,42 @@ def _load_forced_con(con: Path, ira_kmax: float) -> dict[str, np.ndarray]:
             relative = frame.metadata.get("energy", 0.0)
         atoms.info["energy"] = float(relative)
         images.append(atoms)
-    df = trajectory_to_landscape_df(images, ira_kmax=ira_kmax)
-    return _band_arrays(df)
+    return images
+
+
+def _project_band(images, ira_kmax: float, ref=None, prod=None) -> dict[str, np.ndarray]:
+    """RMSD coordinates against one reactant and one product."""
+    import ira_mod
+    from chemparseplot.parse.neb_utils import (
+        calculate_landscape_coords,
+        compute_synthetic_gradients,
+    )
+    from chemparseplot.parse.trajectory.neb import compute_tangent_force
+
+    rmsd_r, rmsd_p = calculate_landscape_coords(
+        images,
+        ira_mod.IRA(),
+        float(ira_kmax),
+        ref_a=ref,
+        ref_b=prod,
+    )
+    energy = np.array([float(image.info["energy"]) for image in images])
+    grad_r, grad_p = compute_synthetic_gradients(
+        rmsd_r,
+        rmsd_p,
+        compute_tangent_force(images, energy),
+    )
+    return {
+        "r": np.asarray(rmsd_r, dtype=float),
+        "p": np.asarray(rmsd_p, dtype=float),
+        "grad_r": np.asarray(grad_r, dtype=float),
+        "grad_p": np.asarray(grad_p, dtype=float),
+        "z": energy,
+    }
+
+
+def _load_forced_con(con: Path, ira_kmax: float) -> dict[str, np.ndarray]:
+    return _project_band(_images_from_con(con), ira_kmax)
 
 
 def _load_on_reference(directory: Path, ref, prod, ira_kmax: float) -> dict[str, np.ndarray]:
@@ -246,17 +280,23 @@ def _mark_ends(ax, s, d, energy) -> None:
     )
     ax.annotate("P", (s[-1], d[-1]), textcoords="offset points", xytext=(4, 4), fontsize=8)
     peak = _saddle_index(energy)
+    # chemparseplot.plot.neb.mark_saddle_point writes ``label`` twice:
+    # the scatter legend entry (neb.py line 1830) and the annotation
+    # text (neb.py line 1843). The annotation has to stay "SP".
     mark_saddle_point(
         ax,
         s[peak],
         d[peak],
         font_size=8,
         annotate=True,
-        label="_nolegend_",
+        label="SP",
     )
+    for artist in ax.collections:
+        if artist.get_label() == "SP":
+            artist.set_label("_nolegend_")
 
 
-def _companion(ax, s, energy, color, marker, linestyle, label: str | None) -> None:
+def _companion(ax, s, energy, color, marker, linestyle, label: str | None, saddle: bool = True) -> None:
     plot_energy_path(
         ax,
         np.asarray(s, dtype=float),
@@ -274,6 +314,8 @@ def _companion(ax, s, energy, color, marker, linestyle, label: str | None) -> No
             line.set_marker(marker)
             line.set_linestyle(linestyle)
             line.set_markersize(4.5)
+    if not saddle:
+        return
     peak = _saddle_index(energy)
     ax.scatter(
         s[peak],
@@ -327,21 +369,6 @@ def _draw_surface(ax, band, basis, cmap) -> object:
     if "cs" not in captured:
         raise SystemExit("plot_landscape_surface drew no filled contour.")
     return captured
-
-
-def _relevel(ax, captured, levels, cmap):
-    captured["cs"].remove()
-    grid_x, grid_y, grid_z = captured["args"][:3]
-    return ax.contourf(
-        grid_x,
-        grid_y,
-        grid_z,
-        levels=levels,
-        cmap=cmap,
-        alpha=0.75,
-        zorder=10,
-        extend="both",
-    )
 
 
 def _landscape_labels(ax, ylabel: bool) -> None:
@@ -401,40 +428,87 @@ def restart(theme, settings, png_dir: Path | None) -> None:
 
 
 def ase_mask(theme, settings, png_dir: Path | None) -> None:
+    """Both masks on one ``(s, d)`` map, each saddle named in the legend."""
     ira_kmax = float(settings["ira_kmax"])
-    panels = (
-        ("held", "Height held, z only"),
-        ("frozen", "Adatom frozen"),
+    series = (
+        ("held", "Height held", "Held saddle", TEAL, "o", "-", "*"),
+        ("frozen", "Adatom frozen", "Frozen saddle", MAGENTA, "s", "--", "D"),
     )
+    held_images = _images_from_con(E5 / "held" / "neb.con")
+    ref, prod = held_images[0], held_images[-1]
     loaded = []
-    for folder, title in panels:
-        band = _load_final_band(E5 / folder, ira_kmax)
-        basis = compute_projection_basis(band["r"], band["p"])
-        loaded.append((band, basis, title))
-    fig = plt.figure(figsize=(7.6, 4.5), layout="constrained")
-    grid = fig.add_gridspec(2, 3, height_ratios=[3.05, 1.2], width_ratios=[1, 1, 0.06])
-    axes = [fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])]
-    profiles = [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]
-    cax = fig.add_subplot(grid[0, 2])
-    captured = []
-    for ax, (band, basis, title) in zip(axes, loaded, strict=True):
-        captured.append(_draw_surface(ax, band, basis, SEQUENTIAL))
-        ax.set_title(title)
-    finite = np.concatenate([item["args"][2][np.isfinite(item["args"][2])] for item in captured])
-    levels = np.linspace(float(finite.min()), float(finite.max()), 20)
-    shared = _relevel(axes[0], captured[0], levels, SEQUENTIAL)
-    _relevel(axes[1], captured[1], levels, SEQUENTIAL)
-    fig.colorbar(shared, cax=cax, label="energy (eV)")
-    for ax, profile, (band, basis, _title) in zip(axes, profiles, loaded, strict=True):
+    for folder, path_label, saddle_label, color, marker, linestyle, saddle_marker in series:
+        images = held_images if folder == "held" else _images_from_con(E5 / folder / "neb.con")
+        band = _project_band(images, ira_kmax, ref=ref, prod=prod)
+        loaded.append((band, path_label, saddle_label, color, marker, linestyle, saddle_marker))
+    basis = compute_projection_basis(loaded[0][0]["r"], loaded[0][0]["p"])
+    cloud = {
+        key: np.concatenate([band[key] for band, *_rest in loaded])
+        for key in ("r", "p", "grad_r", "grad_p", "z")
+    }
+    fig = plt.figure(figsize=(7.5, 3.7), layout="constrained")
+    grid = fig.add_gridspec(1, 3, width_ratios=[2.45, 0.08, 1.2])
+    ax = fig.add_subplot(grid[0, 0])
+    cax = fig.add_subplot(grid[0, 1])
+    side = fig.add_subplot(grid[0, 2])
+    captured = _draw_surface(ax, cloud, basis, SEQUENTIAL)
+    fig.colorbar(captured["cs"], cax=cax, label="energy (eV)")
+    for band, path_label, saddle_label, color, marker, linestyle, saddle_marker in loaded:
         progress, deviation = _sd(band, basis)
-        ax.plot(progress, deviation, color=BLACK, lw=0.9, zorder=44)
-        ax.scatter(progress, deviation, c=BLACK, s=12, zorder=45)
-        _mark_ends(ax, progress, deviation, band["z"])
-        _landscape_labels(ax, ax is axes[0])
-        _companion(profile, progress, band["z"], BLACK, "o", "-", None)
-        profile.set_xlabel("reaction progress s (Å)")
-    profiles[0].set_ylabel("energy (eV)")
-    _theme_axes(axes + profiles, theme)
+        ax.plot(progress, deviation, linestyle=linestyle, color=color, lw=1.0, zorder=44)
+        ax.scatter(
+            progress,
+            deviation,
+            marker=marker,
+            s=32,
+            facecolors="none",
+            edgecolors=color,
+            linewidths=1.1,
+            zorder=46,
+            label=path_label,
+        )
+        peak = _saddle_index(band["z"])
+        ax.scatter(
+            progress[peak],
+            deviation[peak],
+            marker=saddle_marker,
+            s=160,
+            facecolors=color,
+            edgecolors=BLACK,
+            linewidths=0.7,
+            zorder=70,
+            label=saddle_label,
+        )
+        _companion(side, progress, band["z"], color, marker, linestyle, path_label, saddle=False)
+        side.scatter(
+            progress[peak],
+            band["z"][peak],
+            marker=saddle_marker,
+            s=90,
+            facecolors=color,
+            edgecolors=BLACK,
+            linewidths=0.5,
+            zorder=6,
+        )
+    progress, deviation = _sd(loaded[0][0], basis)
+    ax.scatter(
+        [progress[0], progress[-1]],
+        [deviation[0], deviation[-1]],
+        marker="o",
+        s=42,
+        facecolors="white",
+        edgecolors=BLACK,
+        linewidths=0.9,
+        zorder=65,
+    )
+    ax.annotate("R", (progress[0], deviation[0]), textcoords="offset points", xytext=(4, 4), fontsize=8)
+    ax.annotate("P", (progress[-1], deviation[-1]), textcoords="offset points", xytext=(4, 4), fontsize=8)
+    _landscape_labels(ax, True)
+    ax.legend(frameon=False, fontsize=7, loc="best")
+    side.set_xlabel("reaction progress s (Å)")
+    side.set_ylabel("energy (eV)")
+    side.legend(frameon=False, fontsize=7)
+    _theme_axes([ax, side], theme)
     _save(fig, "ase_mask", png_dir)
 
 
