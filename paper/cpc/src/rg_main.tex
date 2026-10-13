@@ -43,6 +43,8 @@
 \usepackage{xurl}
 \usepackage{listings}
 \usepackage{hyperref}
+\usepackage{xr-hyper}
+\externaldocument{rg_supp}
 \input{affilfix}
 \lstset{
   basicstyle=\ttfamily\footnotesize,
@@ -261,6 +263,7 @@ Lines 3 and 4 are the three cell lengths and the three angles in degrees.
 Two blank lines are the free-text pair a version 1 file also carries, after which the type count, the per-type counts and the masses appear: one type, nine atoms, mass \(195.084\,\mathrm{u}\).
 Coordinates then come as a symbol, the heading ``Coordinates of Component \(N\)'', and one row of \(x\), \(y\), \(z\), mask and id per atom.
 A single blank line opens the velocity block, which repeats the symbol under ``Velocities of Component \(N\)'' and copies the mask and the id onto each row.
+Section~\ref{sec:supp-anatomy} of the accompanying supplement counts the bytes in those fields and the time spent reading them.
 A blank line after a frame is line 1 of the next frame unless it begins a velocity block.
 A value near \(1.386\) is printed as \texttt{1.3859292911256331e0}, and that \texttt{e0} form is harder to scan than a fixed decimal.
 Six decimals turn the first row into \texttt{1.385929 1.385929 6.000000 7 0}, which a person can check by eye and which no longer parses back to the stored bits.
@@ -572,6 +575,7 @@ A probe frame keeps the HCN coordinates, writes ids 2, 0 and 1, and sets an x-on
 readcon-core returns masks 000, 000 and 100 with those ids, and it keeps the declared natural time unit.
 ASE 3.29.0 rejects that file once a velocity block is present.
 On the coordinate frame it reports the first two atoms free and hydrogen frozen on every axis, and it stores no id.
+Section~\ref{sec:supp-fidelity} of the accompanying supplement measures which of those fields survive a write into other formats.
 
 For the EMT Pt(100) hop, the bottom layer is fixed and the adatom is held in \(z\) only.
 The hold is the in-plane hop: desorption is a different coordinate, and mask 4 is what keeps that hold distinct from a full freeze.
@@ -621,6 +625,7 @@ The six-decimal resume shifts the same barrier by \(+1.0\times10^{-6}\,\mathrm{e
 The checkpoint round trip is bitwise exact.
 The resumed band is not bitwise exact, because the search has taken steps after the load.
 Figure~\ref{fig:restart} places the uninterrupted band and both resumes on one \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
+Section~\ref{sec:supp-restart} of the accompanying supplement shows the per-image displacement at each resumed step.
 
 \begin{figure}[ht]
 \centering
@@ -642,6 +647,7 @@ The dimer, like the band, stops at its iteration cap.
 The velocity numbers illustrate the mislabel on their own.
 On the same 28 atoms at 300\,K the kinetic energy is \(0.888\,\mathrm{eV}\) in the natural unit and \(92.02\,\mathrm{eV}\) if those components are misread as \(\text{\AA}/\mathrm{fs}\), a ratio of \(103.64=(10.1805)^{2}\).
 One velocity Verlet step of \(1\,\mathrm{fs}\) with the ASE EMT potential then misplaces atoms by an RMSD of \(0.096\,\text{\AA}\) (maximum \(0.315\,\text{\AA}\)).
+Section~\ref{sec:supp-velocity} of the accompanying supplement draws that displacement on the slab.
 The velocity round trip itself is exact.
 eOn's dynamics job redraws velocities and writes none, so there is no eOn velocity restart to compare \cite{rohitgoswamiTheochemuieonV3602026}.
 The factor is evidence of what the 3.0 label did to a reader.
@@ -699,7 +705,7 @@ That estimate subtracts the one-thread Rust parse from the Python read at the sa
 Speedup at 1, 2, 4 and 8 threads is 1.00, 1.61, 2.73, 3.78 for Rust, 1.00, 1.39, 2.36, 3.26 for C++, and 1.00, 1.15, 1.22, 1.08 for Python.
 The Python speedup flattens because object construction holds the interpreter lock.
 The boundary scan still has work left, and the measurement stops at 8 threads because that is the hardware.
-Figure~\ref{fig:scaling} in Appendix~\ref{sec:appendix-bench} maps those three speedups.
+Figure~\ref{fig:roofline} in Appendix~\ref{sec:appendix-bench} plots those throughputs against the memory-copy ceiling and an Amdahl curve.
 A force-call framing, in the style of the i-PI 3.0 measurements, puts the same file next to the evaluator it is waiting on \cite{litmanIpi30Flexible2024}.
 One 218-atom frame reads in \(15\,\mu\mathrm{s}\).
 One Morse call on the 28-atom slab takes \(0.30\,\mathrm{ms}\), one EMT call takes \(59\,\mu\mathrm{s}\), and a DFT call takes seconds to minutes.
@@ -711,8 +717,10 @@ On an earlier round of the same 10{,}000-frame band, with different fields in th
 A geometry checkpoint does not contain optimiser history, so an L-BFGS resume matches the atoms and not the quasi-Newton memory, as the control in Section~\ref{sec:validation} shows for both printers alike.
 Python pays for per-atom objects under the interpreter lock, which is most of the Python time in Table~\ref{tab:perf}, and a caller who needs only coordinates can stay on the array accessors instead.
 The C bulk read returns a null handle with no error class, so a C caller learns that the file failed and not which rule it broke.
+Section~\ref{sec:supp-errors} of the accompanying supplement names the class on each illegal file.
 The scaling measurement uses 8 hardware threads on one processor, and no claim is made for a larger machine.
-The Python binding is not a free-threaded build, so the plateau in Figure~\ref{fig:scaling} is an interpreter limit rather than a property of the scan, and a rebuild against a free-threaded interpreter would be a later measurement.
+The Python binding is not a free-threaded build, so the plateau in Figure~\ref{fig:roofline} is an interpreter limit rather than a property of the scan, and a rebuild against a free-threaded interpreter would be a later measurement.
+Section~\ref{sec:supp-mpi} of the accompanying supplement records that a distributed read does not yet keep frame offsets or per-rank times.
 The next minor should add a section under the rules of Section~\ref{sec:format}, without a new major and without a flag day for files already written.
 An H5MD export would serve a band that has outgrown text, once slicing matters more than a diff, and that bridge is not part of this release.
 Adoption in ASE would retire the mask collapse in the reader that freezes a nonzero column, and that change belongs in ASE.
@@ -735,6 +743,7 @@ The version 0.17.0 archive is \url{https://doi.org/10.5281/zenodo.23302640} \cit
 A citation to research software is owed to the archived record, and the archive is the object the software principles ask an author to identify \cite{smithSoftwareCitationPrinciples2016,wilkinsonFairGuidingPrinciples2016,barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020}.
 The HCN and HNC endpoints used in the cross-reader check are the public files of that workflow study \cite{goswamiReproducibleOrchestrationBest2026}.
 The normative specification, the grammar, the schema, the conformance corpus and the evidence scripts are the supplementary material.
+The accompanying supplement records the restart displacements, the format round trips, the frame bytes, the velocity step, the illegal-file classes and the hashed band geometries.
 
 \section*{CRediT authorship contribution statement}
 \label{sec:credit}
@@ -762,18 +771,20 @@ The processor, the compiler versions and the warm-cache condition are those of S
 Each reported time is a median, and the interval is a bias-corrected and accelerated bootstrap at 95 percent \cite{efronBetterBootstrapConfidence1987}.
 Repeats are the unit the interval is built from, which is the practice that keeps a benchmark from reporting a single lucky run as a rate \cite{kaliberaRigorousBenchmarkingReasonable2013,mytkowiczProducingWrongData2009,hoeflerScientificBenchmarkingParallel2015}.
 The Python object estimate is index-aligned across two sequential blocks, and it is not an interleaved pair, so it is labelled as an estimate in the main text.
-Figure~\ref{fig:scaling} is the speedup at 1, 2, 4 and 8 threads.\footnote{A step-down correction across many ratios is not applied.
+Figure~\ref{fig:roofline} is the throughput at 1, 2, 4 and 8 threads.\footnote{A step-down correction across many ratios is not applied.
 The intervals in Section~\ref{sec:performance} are for a few predeclared layers.}
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.8\textwidth]{figures/generated/scaling.pdf}
-\caption{Speedup against a one-thread baseline on the 10{,}000-frame file.
-Rows are the Rust core, the C++ wrapper and the Python object path, and columns are the thread counts.
-The colour is the speedup.
-Python flattens because object construction holds the interpreter lock.
-The measurement stops at 8 threads.}
-\label{fig:scaling}
+\includegraphics[width=0.92\textwidth]{figures/generated/roofline.pdf}
+\caption{Parse throughput on the 10{,}000-frame file at 1, 2, 4 and 8 threads.
+The dashed line is the hot-cache memory copy at 7.9\,GB/s.
+The Amdahl curve uses the serial fraction \((0.100\,\mathrm{s}+0.036\,\mathrm{s})/0.551\,\mathrm{s}\) and is anchored to the one-thread Rust rate of this sweep, so it reaches about 2.9 at 8 threads.
+The measured Rust speedup on the sweep is 3.78.
+The eight-thread parse in the main timing, 0.154\,s, is about 7.3 times the 0.0212\,s memory copy.
+Triangles mark the string-load rate and the boundary-scan rate.
+Python flattens because object construction holds the interpreter lock.}
+\label{fig:roofline}
 \end{figure}
 
 \section{Reader edge-case rules}
@@ -815,6 +826,7 @@ Several gzip members & Read in order. \\
 \section{readcon-db}
 \label{sec:appendix-db}
 readcon-db answers composition, energy and maximum-force queries over CON frames that an adaptive kinetic Monte Carlo campaign has already written.
+Section~\ref{sec:supp-dedup} of the accompanying supplement hashes the band geometries from this paper on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
 The frame defined in the body of this paper is unchanged.
 The machine is an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
 The software is Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.

@@ -1,0 +1,77 @@
+{
+  "source": "e1 velocity fixture with an x-only mask on the adatom",
+  "rows": [
+    {
+      "format": "CON 3.1",
+      "mask": "exact",
+      "id": "exact",
+      "time_unit": "exact",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "readcon write"
+    },
+    {
+      "format": "CON six decimals",
+      "mask": "exact",
+      "id": "exact",
+      "time_unit": "exact",
+      "binary64": "approx",
+      "max_abs_A": 4.556281654188865e-07,
+      "note": "precision 6"
+    },
+    {
+      "format": "extxyz",
+      "mask": "lost",
+      "id": "exact",
+      "time_unit": "lost",
+      "binary64": "approx",
+      "max_abs_A": 4.5025325690062346e-09,
+      "note": "ASE write then read"
+    },
+    {
+      "format": "traj",
+      "mask": "lost",
+      "id": "lost",
+      "time_unit": "lost",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "ASE write then read"
+    },
+    {
+      "format": "json",
+      "mask": "lost",
+      "id": "lost",
+      "time_unit": "lost",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "ASE write then read"
+    },
+    {
+      "format": "vasp",
+      "mask": "lost",
+      "id": "lost",
+      "time_unit": "lost",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "ASE write then read"
+    },
+    {
+      "format": "xyz",
+      "mask": "lost",
+      "id": "lost",
+      "time_unit": "lost",
+      "binary64": "approx",
+      "max_abs_A": 8.881784197001252e-16,
+      "note": "ASE write then read"
+    },
+    {
+      "format": "cif",
+      "mask": "lost",
+      "id": "lost",
+      "time_unit": "lost",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "ASE write then read"
+    }
+  ]
+}

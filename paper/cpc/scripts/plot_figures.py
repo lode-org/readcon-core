@@ -12,6 +12,7 @@ the deduplication counts stay one-dimensional.
 Series colours are ``chemparseplot.plot.theme.RUHI_COLORS``. The
 sequential map is built from that palette. The publication face is
 Atkinson Hyperlegible, and a missing face is a failed figure.
+The thread figure is a throughput roofline on the stored sweep.
 """
 
 from __future__ import annotations
@@ -62,12 +63,6 @@ SEQUENTIAL = build_cmap(
 
 LAYER_NAMES = ["Rust core", "C++ wrapper", "Python objects"]
 LAYER_MBPS = [1090, 1078, 122.5]
-THREADS = [1, 2, 4, 8]
-SPEEDUP = {
-    "Rust": [1.00, 1.61, 2.73, 3.78],
-    "C++": [1.00, 1.39, 2.36, 3.26],
-    "Python": [1.00, 1.15, 1.22, 1.08],
-}
 RESTART_BANDS = (
     ("full", "uninterrupted", TEAL, "o", "-"),
     ("resume_round_matched", "round trip", MAGENTA, "s", "--"),
@@ -821,25 +816,73 @@ def _heatmap(ax, data, rows, cols, cmap, norm, formatter) -> object:
     return image
 
 
-def scaling(theme, png_dir: Path | None) -> None:
-    rows = list(SPEEDUP)
-    data = np.array([SPEEDUP[name] for name in rows], dtype=float)
-    fig, ax = plt.subplots(figsize=(5.4, 2.5), layout="constrained")
-    norm = Normalize(vmin=float(data.min()), vmax=float(data.max()))
-    image = _heatmap(
-        ax,
-        data,
-        rows,
-        [str(thread) for thread in THREADS],
-        SEQUENTIAL,
-        norm,
-        lambda value: f"{value:.2f}",
+def roofline(theme, png_dir: Path | None) -> None:
+    """Throughput against threads, the memory-copy ceiling and an Amdahl curve.
+
+    Points are the stored thread sweep. The curve is anchored to the
+    one-thread Rust rate of that sweep. Its serial fraction is the
+    string-load plus boundary-scan time divided by the one-thread parse
+    in the main timing block.
+    """
+    from matplotlib.ticker import FixedLocator, FormatStrFormatter, NullFormatter
+
+    payload = json.loads((ROOT / "evidence" / "results" / "e2_layered.json").read_text())
+    nbytes = float(payload["file"]["bytes"])
+    threads = np.array([1.0, 2.0, 4.0, 8.0])
+    series = (
+        ("Rust", "rust", TEAL, "o"),
+        ("C++", "cpp", SKY, "s"),
+        ("Python", "python_full", MAGENTA, "D"),
     )
+    fig, ax = plt.subplots(figsize=(5.8, 4.2), layout="constrained")
+    for label, key, color, marker in series:
+        rates = [payload["scaling"][key][str(int(count))]["MB_per_s"] / 1000.0 for count in threads]
+        ax.plot(threads, rates, color=color, marker=marker, lw=1.5, ms=6, label=label, zorder=3)
+    floor = payload["stages"]["io_floor"]["MB_per_s"] / 1000.0
+    ax.axhline(floor, color=BLACK, ls=(0, (4, 2)), lw=1.1, label="memory copy", zorder=2)
+    file_read = float(payload["stages"]["file_read"]["median_s"])
+    scan = float(payload["stages"]["boundary_scan"]["median_s"])
+    one_thread = float(payload["native"]["rust_1"]["median_s"])
+    serial = (file_read + scan) / one_thread
+    rust_one = payload["scaling"]["rust"]["1"]["MB_per_s"] / 1000.0
+    dense = np.logspace(0.0, np.log10(8.0), 80)
+    speedup = 1.0 / (serial + (1.0 - serial) / dense)
+    ax.plot(dense, rust_one * speedup, color=SUNSHINE, lw=1.8, label="Amdahl", zorder=2)
+    ax.scatter(
+        [1.0],
+        [nbytes / file_read / 1e9],
+        marker="v",
+        s=42,
+        color=CORAL,
+        zorder=4,
+        label="string load",
+    )
+    ax.scatter(
+        [1.0],
+        [nbytes / scan / 1e9],
+        marker="^",
+        s=42,
+        facecolors="none",
+        edgecolors=BLACK,
+        linewidths=1.1,
+        zorder=4,
+        label="boundary scan",
+    )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(0.75, 12.0)
+    ax.set_ylim(0.08, 14.0)
+    ax.xaxis.set_major_locator(FixedLocator([1, 2, 4, 8]))
+    ax.xaxis.set_major_formatter(FormatStrFormatter("%d"))
+    ax.yaxis.set_major_locator(FixedLocator([0.1, 1, 10]))
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%g"))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.yaxis.set_minor_formatter(NullFormatter())
     ax.set_xlabel("threads")
-    ax.set_ylabel("implementation")
-    fig.colorbar(image, ax=ax, label="speedup")
+    ax.set_ylabel("throughput (GB/s)")
+    fig.legend(loc="outside lower center", ncol=4, frameon=False)
     _theme_axes([ax], theme)
-    _save(fig, "scaling", png_dir)
+    _save(fig, "roofline", png_dir)
 
 
 def _read_csv(name: str) -> list[dict]:
@@ -1016,7 +1059,7 @@ def main(png_dir: Path | None = None) -> None:
     theme, settings = house_style()
     restart(theme, settings, png_dir)
     layers(theme, png_dir)
-    scaling(theme, png_dir)
+    roofline(theme, png_dir)
     ase_mask(theme, settings, png_dir)
     summary = _summary(_read_csv("summary.csv"))
     db_rates(theme, png_dir, summary)
