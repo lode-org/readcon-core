@@ -132,6 +132,15 @@ impl FileContents {
             FileContents::Mapped(m) => std::str::from_utf8(m),
         }
     }
+
+    /// Like [`Self::as_str`], but validates mapped files in newline-aligned
+    /// slices (in parallel with the `parallel` feature).
+    pub fn as_str_sliced(&self) -> Result<&str, std::str::Utf8Error> {
+        match self {
+            FileContents::Owned(s) => Ok(s.as_str()),
+            FileContents::Mapped(m) => crate::frame_index::validate_utf8_sliced(m),
+        }
+    }
 }
 
 /// Creates a gzip-compressed writer wrapping a file at the given path.

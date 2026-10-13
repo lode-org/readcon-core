@@ -4,6 +4,7 @@ pub mod compression;
 pub mod cuda_array;
 pub mod error;
 pub mod ffi;
+pub mod frame_index;
 #[cfg(feature = "grammar")]
 pub mod grammar;
 pub mod helpers;
