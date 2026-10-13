@@ -39,6 +39,7 @@ from chemparseplot.plot.theme import (
     setup_publication_theme,
 )
 from matplotlib.colors import LogNorm, Normalize
+from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 from rgpycrumbs.eon.plot_config import merge_plot_settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +108,7 @@ def house_style():
             "project_path": True,
             "surface_type": "grad_imq_ny",
             "ira_kmax": 14,
+            "show_pts": True,
         },
     )
     if settings["plot_type"] != "landscape" or not settings["project_path"]:
@@ -116,6 +118,8 @@ def house_style():
             "Expected surface_type grad_imq_ny and ira_kmax 14, "
             f"got {settings['surface_type']!r} and {settings['ira_kmax']!r}."
         )
+    if not settings["show_pts"]:
+        raise SystemExit("plt-neb --show-pts did not resolve on.")
     theme = get_theme(settings["theme"], font_size=settings["fontsize_base"])
     require_theme_font(theme.font_family)
     setup_publication_theme(theme)
@@ -329,7 +333,7 @@ def _companion(ax, s, energy, color, marker, linestyle, label: str | None, saddl
     )
 
 
-def _draw_surface(ax, band, basis, cmap, extra_points=None) -> object:
+def _draw_surface(ax, band, basis, cmap, extra_points=None, show_pts: bool = False) -> object:
     """Draw one ``E(s, d)`` contour and return the filled contour set."""
     captured: dict = {}
     original = ax.contourf
@@ -360,7 +364,7 @@ def _draw_surface(ax, band, basis, cmap, extra_points=None) -> object:
             method="grad_imq_ny",
             project_path=True,
             cmap=cmap,
-            show_pts=False,
+            show_pts=show_pts,
             basis=basis,
             extra_points=extra_points,
         )
@@ -443,52 +447,139 @@ def restart(theme, settings, png_dir: Path | None) -> None:
     _save(fig, "restart", png_dir)
 
 
-def _saddle_image(images):
-    energy = np.array([float(image.info["energy"]) for image in images])
-    return images[_saddle_index(energy)]
-
-
-def _rmsd_of(image, ira_kmax: float, ref, prod) -> tuple[float, float]:
-    """RMSD of one geometry from a reactant and a product."""
-    import ira_mod
-    from chemparseplot.parse.neb_utils import calculate_landscape_coords
-
-    rmsd_r, rmsd_p = calculate_landscape_coords(
-        [image],
-        ira_mod.IRA(),
-        float(ira_kmax),
-        ref_a=ref,
-        ref_b=prod,
+def _black_dots(ax, progress, deviation) -> None:
+    """Scatter images the way ``--show-pts`` does for one band."""
+    ax.scatter(
+        progress,
+        deviation,
+        c="k",
+        s=12,
+        marker=".",
+        alpha=0.6,
+        linewidths=0,
+        zorder=41,
     )
-    return float(rmsd_r[0]), float(rmsd_p[0])
+
+
+def _saddle_inset(ax, theme, saddles) -> None:
+    """Enlarge two saddle markers that share one spot on the full map."""
+    ss = np.array([item[0] for item in saddles], dtype=float)
+    dd = np.array([item[1] for item in saddles], dtype=float)
+    gap = float(max(np.ptp(ss), np.ptp(dd), 1e-8))
+    half = 6.0 * gap
+    inset = ax.inset_axes([0.54, 0.58, 0.44, 0.38])
+    inset.set_xlim(float(ss.mean()) - half, float(ss.mean()) + half)
+    inset.set_ylim(float(dd.mean()) - half, float(dd.mean()) + half)
+    inset.set_aspect("equal", adjustable="box")
+    inset.plot(
+        [ss[0], ss[1]],
+        [dd[0], dd[1]],
+        color=BLACK,
+        lw=0.6,
+        solid_capstyle="round",
+        zorder=2,
+    )
+    for s_value, d_value, marker, size, color in saddles:
+        inset.scatter(
+            s_value,
+            d_value,
+            marker=marker,
+            s=size,
+            facecolors=color,
+            edgecolors=BLACK,
+            linewidths=0.45,
+            zorder=3,
+        )
+    inset.xaxis.set_major_locator(MaxNLocator(nbins=3))
+    inset.yaxis.set_major_locator(MaxNLocator(nbins=3))
+    inset.xaxis.set_major_formatter(FormatStrFormatter("%.5f"))
+    inset.yaxis.set_major_formatter(FormatStrFormatter("%.5f"))
+    inset.tick_params(labelsize=5.5, length=2, pad=1)
+    inset.set_xlabel("s (Å)", fontsize=6, labelpad=1)
+    inset.set_ylabel("d (Å)", fontsize=6, labelpad=1)
+    for spine in inset.spines.values():
+        spine.set_visible(True)
+    apply_axis_theme(inset, theme)
+    ax.indicate_inset_zoom(inset, edgecolor="0.35", linewidth=0.4)
+
+
+def _nudge_variance_labels(ax, saddles) -> None:
+    """Keep a variance label off the saddle markers and the zoom box."""
+    span = max(
+        abs(ax.get_xlim()[1] - ax.get_xlim()[0]),
+        abs(ax.get_ylim()[1] - ax.get_ylim()[0]),
+    )
+    near = 0.08 * span
+    for text in ax.texts:
+        raw = text.get_text().replace("\n", " ")
+        if not raw.startswith("var"):
+            continue
+        x_value, y_value = text.get_position()
+        for s_value, d_value, *_rest in saddles:
+            if abs(x_value - s_value) < near and abs(y_value - d_value) < near:
+                text.set_position((x_value, d_value + 0.18 * span))
+                break
 
 
 def ase_mask(theme, settings, png_dir: Path | None) -> None:
-    """One landscape per mask, with the other mask's saddle projected onto it."""
+    """One landscape per mask, with both bands as black image dots.
+
+    ``show_pts`` is the plt-neb switch that scatters every image of the
+    surface call. The other mask is projected into the same reactant and
+    product frame and scattered in that same black-dot style.
+    """
+    if not settings["show_pts"]:
+        raise SystemExit("plt-neb --show-pts is off, so the mask dots would be missing.")
     ira_kmax = float(settings["ira_kmax"])
     styles = {
-        "held": ("Height held, z only", "Held saddle", TEAL, "*"),
-        "frozen": ("Adatom frozen", "Frozen saddle", MAGENTA, "D"),
+        "held": {
+            "title": "Height held, z only",
+            "path": "Held path",
+            "saddle": "Held saddle",
+            "color": TEAL,
+            "marker": "*",
+            "linestyle": "-",
+            "size": 200,
+            "inset_size": 42,
+        },
+        "frozen": {
+            "title": "Adatom frozen",
+            "path": "Frozen path",
+            "saddle": "Frozen saddle",
+            "color": MAGENTA,
+            "marker": "D",
+            "linestyle": "--",
+            "size": 70,
+            "inset_size": 28,
+        },
     }
     images = {name: _images_from_con(E5 / name / "neb.con") for name in styles}
     bands = {name: _project_band(frames, ira_kmax) for name, frames in images.items()}
     panels = []
     for name, frames in images.items():
         basis = compute_projection_basis(bands[name]["r"], bands[name]["p"])
-        ref, prod = frames[0], frames[-1]
         other = "frozen" if name == "held" else "held"
-        other_r, other_p = _rmsd_of(_saddle_image(images[other]), ira_kmax, ref, prod)
-        panels.append((name, basis, other, other_r, other_p))
-    fig = plt.figure(figsize=(7.6, 4.6), layout="constrained")
-    grid = fig.add_gridspec(2, 3, height_ratios=[3.05, 1.2], width_ratios=[1, 1, 0.06])
+        other_band = _project_band(images[other], ira_kmax, ref=frames[0], prod=frames[-1])
+        panels.append((name, basis, other, other_band))
+    fig = plt.figure(figsize=(7.6, 5.0), layout="constrained")
+    grid = fig.add_gridspec(2, 3, height_ratios=[3.2, 1.15], width_ratios=[1, 1, 0.06])
     axes = [fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])]
     profiles = [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]
     cax = fig.add_subplot(grid[0, 2])
     captured = []
-    for ax, (name, basis, _other, other_r, other_p) in zip(axes, panels, strict=True):
-        extra = np.array([[other_r, other_p]], dtype=float)
-        captured.append(_draw_surface(ax, bands[name], basis, SEQUENTIAL, extra_points=extra))
-        ax.set_title(styles[name][0])
+    for ax, (name, basis, _other, other_band) in zip(axes, panels, strict=True):
+        extra = np.column_stack((other_band["r"], other_band["p"]))
+        captured.append(
+            _draw_surface(
+                ax,
+                bands[name],
+                basis,
+                SEQUENTIAL,
+                extra_points=extra,
+                show_pts=True,
+            )
+        )
+        ax.set_title(styles[name]["title"])
     finite = np.concatenate(
         [item["args"][2][np.isfinite(item["args"][2])] for item in captured]
     )
@@ -496,19 +587,23 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
     shared = _relevel(axes[0], captured[0], levels, SEQUENTIAL)
     _relevel(axes[1], captured[1], levels, SEQUENTIAL)
     fig.colorbar(shared, cax=cax, label="energy (eV)")
-    for ax, profile, (name, basis, other, other_r, other_p) in zip(axes, profiles, panels, strict=True):
+    for ax, profile, (name, basis, other, other_band) in zip(axes, profiles, panels, strict=True):
         progress, deviation = _sd(bands[name], basis)
-        color = styles[name][2]
-        ax.plot(progress, deviation, color=color, lw=1.0, zorder=44)
-        ax.scatter(
-            progress,
-            deviation,
-            s=16,
-            facecolors="none",
-            edgecolors=color,
-            linewidths=0.8,
-            zorder=46,
-        )
+        other_s, other_d = _sd(other_band, basis)
+        _black_dots(ax, other_s, other_d)
+        coords = {name: (progress, deviation), other: (other_s, other_d)}
+        for path_name in ("held", "frozen"):
+            path_s, path_d = coords[path_name]
+            style = styles[path_name]
+            ax.plot(
+                path_s,
+                path_d,
+                color=style["color"],
+                lw=1.15,
+                linestyle=style["linestyle"],
+                zorder=44 if path_name == "held" else 45,
+                label=style["path"],
+            )
         ax.scatter(
             [progress[0], progress[-1]],
             [deviation[0], deviation[-1]],
@@ -521,34 +616,45 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
         )
         ax.annotate("R", (progress[0], deviation[0]), textcoords="offset points", xytext=(3, 3), fontsize=8)
         ax.annotate("P", (progress[-1], deviation[-1]), textcoords="offset points", xytext=(3, 3), fontsize=8)
-        for saddle_name in (name, other):
-            label = styles[saddle_name][1]
-            saddle_color = styles[saddle_name][2]
-            saddle_marker = styles[saddle_name][3]
-            if saddle_name == name:
-                peak = _saddle_index(bands[name]["z"])
-                saddle_s, saddle_d = float(progress[peak]), float(deviation[peak])
-            else:
-                saddle_s, saddle_d = project_to_sd(
-                    np.array([other_r]),
-                    np.array([other_p]),
-                    basis,
-                )
-                saddle_s, saddle_d = float(saddle_s[0]), float(saddle_d[0])
+        marked = []
+        for saddle_name in ("held", "frozen"):
+            style = styles[saddle_name]
+            path_s, path_d = coords[saddle_name]
+            source = bands[name] if saddle_name == name else other_band
+            peak = _saddle_index(source["z"])
+            saddle_s, saddle_d = float(path_s[peak]), float(path_d[peak])
+            marked.append((saddle_s, saddle_d, style["marker"], style["inset_size"], style["color"]))
             ax.scatter(
                 saddle_s,
                 saddle_d,
-                marker=saddle_marker,
-                s=200 if saddle_marker == "*" else 70,
-                facecolors=saddle_color,
+                marker=style["marker"],
+                s=style["size"],
+                facecolors=style["color"],
                 edgecolors=BLACK,
                 linewidths=0.7,
                 zorder=80,
-                label=label,
+                label=style["saddle"],
             )
+        span = max(
+            abs(ax.get_xlim()[1] - ax.get_xlim()[0]),
+            abs(ax.get_ylim()[1] - ax.get_ylim()[0]),
+        )
+        separation = max(abs(marked[0][0] - marked[1][0]), abs(marked[0][1] - marked[1][1]))
+        if separation < 0.02 * span:
+            _saddle_inset(ax, theme, marked)
+        _nudge_variance_labels(ax, marked)
         _landscape_labels(ax, ax is axes[0])
-        ax.legend(frameon=False, fontsize=7, loc="best")
-        _companion(profile, progress, bands[name]["z"], color, "o", "-", None, saddle=False)
+        ax.legend(frameon=False, fontsize=6.5, loc="upper left")
+        _companion(
+            profile,
+            progress,
+            bands[name]["z"],
+            styles[name]["color"],
+            "o",
+            "-",
+            None,
+            saddle=False,
+        )
         profile.set_xlabel("reaction progress s (Å)")
     profiles[0].set_ylabel("energy (eV)")
     _theme_axes(axes + profiles, theme)
