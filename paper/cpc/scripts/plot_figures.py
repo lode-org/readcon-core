@@ -329,7 +329,7 @@ def _companion(ax, s, energy, color, marker, linestyle, label: str | None, saddl
     )
 
 
-def _draw_surface(ax, band, basis, cmap) -> object:
+def _draw_surface(ax, band, basis, cmap, extra_points=None) -> object:
     """Draw one ``E(s, d)`` contour and return the filled contour set."""
     captured: dict = {}
     original = ax.contourf
@@ -362,6 +362,7 @@ def _draw_surface(ax, band, basis, cmap) -> object:
             cmap=cmap,
             show_pts=False,
             basis=basis,
+            extra_points=extra_points,
         )
     finally:
         ax.contourf = original
@@ -369,6 +370,21 @@ def _draw_surface(ax, band, basis, cmap) -> object:
     if "cs" not in captured:
         raise SystemExit("plot_landscape_surface drew no filled contour.")
     return captured
+
+
+def _relevel(ax, captured, levels, cmap):
+    captured["cs"].remove()
+    grid_x, grid_y, grid_z = captured["args"][:3]
+    return ax.contourf(
+        grid_x,
+        grid_y,
+        grid_z,
+        levels=levels,
+        cmap=cmap,
+        alpha=0.75,
+        zorder=10,
+        extend="both",
+    )
 
 
 def _landscape_labels(ax, ylabel: bool) -> None:
@@ -427,88 +443,115 @@ def restart(theme, settings, png_dir: Path | None) -> None:
     _save(fig, "restart", png_dir)
 
 
-def ase_mask(theme, settings, png_dir: Path | None) -> None:
-    """Both masks on one ``(s, d)`` map, each saddle named in the legend."""
-    ira_kmax = float(settings["ira_kmax"])
-    series = (
-        ("held", "Height held", "Held saddle", TEAL, "o", "-", "*"),
-        ("frozen", "Adatom frozen", "Frozen saddle", MAGENTA, "s", "--", "D"),
+def _saddle_image(images):
+    energy = np.array([float(image.info["energy"]) for image in images])
+    return images[_saddle_index(energy)]
+
+
+def _rmsd_of(image, ira_kmax: float, ref, prod) -> tuple[float, float]:
+    """RMSD of one geometry from a reactant and a product."""
+    import ira_mod
+    from chemparseplot.parse.neb_utils import calculate_landscape_coords
+
+    rmsd_r, rmsd_p = calculate_landscape_coords(
+        [image],
+        ira_mod.IRA(),
+        float(ira_kmax),
+        ref_a=ref,
+        ref_b=prod,
     )
-    held_images = _images_from_con(E5 / "held" / "neb.con")
-    ref, prod = held_images[0], held_images[-1]
-    loaded = []
-    for folder, path_label, saddle_label, color, marker, linestyle, saddle_marker in series:
-        images = held_images if folder == "held" else _images_from_con(E5 / folder / "neb.con")
-        band = _project_band(images, ira_kmax, ref=ref, prod=prod)
-        loaded.append((band, path_label, saddle_label, color, marker, linestyle, saddle_marker))
-    basis = compute_projection_basis(loaded[0][0]["r"], loaded[0][0]["p"])
-    cloud = {
-        key: np.concatenate([band[key] for band, *_rest in loaded])
-        for key in ("r", "p", "grad_r", "grad_p", "z")
+    return float(rmsd_r[0]), float(rmsd_p[0])
+
+
+def ase_mask(theme, settings, png_dir: Path | None) -> None:
+    """One landscape per mask, with the other mask's saddle projected onto it."""
+    ira_kmax = float(settings["ira_kmax"])
+    styles = {
+        "held": ("Height held, z only", "Held saddle", TEAL, "*"),
+        "frozen": ("Adatom frozen", "Frozen saddle", MAGENTA, "D"),
     }
-    fig = plt.figure(figsize=(7.5, 3.7), layout="constrained")
-    grid = fig.add_gridspec(1, 3, width_ratios=[2.45, 0.08, 1.2])
-    ax = fig.add_subplot(grid[0, 0])
-    cax = fig.add_subplot(grid[0, 1])
-    side = fig.add_subplot(grid[0, 2])
-    captured = _draw_surface(ax, cloud, basis, SEQUENTIAL)
-    fig.colorbar(captured["cs"], cax=cax, label="energy (eV)")
-    for band, path_label, saddle_label, color, marker, linestyle, saddle_marker in loaded:
-        progress, deviation = _sd(band, basis)
-        ax.plot(progress, deviation, linestyle=linestyle, color=color, lw=1.0, zorder=44)
+    images = {name: _images_from_con(E5 / name / "neb.con") for name in styles}
+    bands = {name: _project_band(frames, ira_kmax) for name, frames in images.items()}
+    panels = []
+    for name, frames in images.items():
+        basis = compute_projection_basis(bands[name]["r"], bands[name]["p"])
+        ref, prod = frames[0], frames[-1]
+        other = "frozen" if name == "held" else "held"
+        other_r, other_p = _rmsd_of(_saddle_image(images[other]), ira_kmax, ref, prod)
+        panels.append((name, basis, other, other_r, other_p))
+    fig = plt.figure(figsize=(7.6, 4.6), layout="constrained")
+    grid = fig.add_gridspec(2, 3, height_ratios=[3.05, 1.2], width_ratios=[1, 1, 0.06])
+    axes = [fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])]
+    profiles = [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]
+    cax = fig.add_subplot(grid[0, 2])
+    captured = []
+    for ax, (name, basis, _other, other_r, other_p) in zip(axes, panels, strict=True):
+        extra = np.array([[other_r, other_p]], dtype=float)
+        captured.append(_draw_surface(ax, bands[name], basis, SEQUENTIAL, extra_points=extra))
+        ax.set_title(styles[name][0])
+    finite = np.concatenate(
+        [item["args"][2][np.isfinite(item["args"][2])] for item in captured]
+    )
+    levels = np.linspace(float(finite.min()), float(finite.max()), 20)
+    shared = _relevel(axes[0], captured[0], levels, SEQUENTIAL)
+    _relevel(axes[1], captured[1], levels, SEQUENTIAL)
+    fig.colorbar(shared, cax=cax, label="energy (eV)")
+    for ax, profile, (name, basis, other, other_r, other_p) in zip(axes, profiles, panels, strict=True):
+        progress, deviation = _sd(bands[name], basis)
+        color = styles[name][2]
+        ax.plot(progress, deviation, color=color, lw=1.0, zorder=44)
         ax.scatter(
             progress,
             deviation,
-            marker=marker,
-            s=32,
+            s=16,
             facecolors="none",
             edgecolors=color,
-            linewidths=1.1,
+            linewidths=0.8,
             zorder=46,
-            label=path_label,
         )
-        peak = _saddle_index(band["z"])
         ax.scatter(
-            progress[peak],
-            deviation[peak],
-            marker=saddle_marker,
-            s=160,
-            facecolors=color,
+            [progress[0], progress[-1]],
+            [deviation[0], deviation[-1]],
+            marker="o",
+            s=36,
+            facecolors="white",
             edgecolors=BLACK,
-            linewidths=0.7,
-            zorder=70,
-            label=saddle_label,
+            linewidths=0.8,
+            zorder=60,
         )
-        _companion(side, progress, band["z"], color, marker, linestyle, path_label, saddle=False)
-        side.scatter(
-            progress[peak],
-            band["z"][peak],
-            marker=saddle_marker,
-            s=90,
-            facecolors=color,
-            edgecolors=BLACK,
-            linewidths=0.5,
-            zorder=6,
-        )
-    progress, deviation = _sd(loaded[0][0], basis)
-    ax.scatter(
-        [progress[0], progress[-1]],
-        [deviation[0], deviation[-1]],
-        marker="o",
-        s=42,
-        facecolors="white",
-        edgecolors=BLACK,
-        linewidths=0.9,
-        zorder=65,
-    )
-    ax.annotate("R", (progress[0], deviation[0]), textcoords="offset points", xytext=(4, 4), fontsize=8)
-    ax.annotate("P", (progress[-1], deviation[-1]), textcoords="offset points", xytext=(4, 4), fontsize=8)
-    _landscape_labels(ax, True)
-    ax.legend(frameon=False, fontsize=7, loc="best")
-    side.set_xlabel("reaction progress s (Å)")
-    side.set_ylabel("energy (eV)")
-    side.legend(frameon=False, fontsize=7)
-    _theme_axes([ax, side], theme)
+        ax.annotate("R", (progress[0], deviation[0]), textcoords="offset points", xytext=(3, 3), fontsize=8)
+        ax.annotate("P", (progress[-1], deviation[-1]), textcoords="offset points", xytext=(3, 3), fontsize=8)
+        for saddle_name in (name, other):
+            label = styles[saddle_name][1]
+            saddle_color = styles[saddle_name][2]
+            saddle_marker = styles[saddle_name][3]
+            if saddle_name == name:
+                peak = _saddle_index(bands[name]["z"])
+                saddle_s, saddle_d = float(progress[peak]), float(deviation[peak])
+            else:
+                saddle_s, saddle_d = project_to_sd(
+                    np.array([other_r]),
+                    np.array([other_p]),
+                    basis,
+                )
+                saddle_s, saddle_d = float(saddle_s[0]), float(saddle_d[0])
+            ax.scatter(
+                saddle_s,
+                saddle_d,
+                marker=saddle_marker,
+                s=200 if saddle_marker == "*" else 70,
+                facecolors=saddle_color,
+                edgecolors=BLACK,
+                linewidths=0.7,
+                zorder=80,
+                label=label,
+            )
+        _landscape_labels(ax, ax is axes[0])
+        ax.legend(frameon=False, fontsize=7, loc="best")
+        _companion(profile, progress, bands[name]["z"], color, "o", "-", None, saddle=False)
+        profile.set_xlabel("reaction progress s (Å)")
+    profiles[0].set_ylabel("energy (eV)")
+    _theme_axes(axes + profiles, theme)
     _save(fig, "ase_mask", png_dir)
 
 

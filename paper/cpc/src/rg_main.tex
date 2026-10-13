@@ -592,12 +592,13 @@ Writing the adatom's \(z\)-only constraint through ASE's eon writer raises an er
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Climbing-image bands for a Pt adatom hop on a Pt(100) slab with EMT, both on one \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
-The height-held band and the band with the adatom frozen share that projection.
-Each saddle is marked on the map and named in the legend.
-The held barrier is \(0.3666\,\mathrm{eV}\).
+\caption{Climbing-image bands for a Pt adatom hop on a Pt(100) slab with EMT, each mask on its own \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
+Each panel also marks the other mask's saddle in that same projection.
+The two saddles use different markers and are named in the legend.
+Left: the adatom is held in \(z\) only, and the barrier is \(0.3666\,\mathrm{eV}\).
+Right: the ASE eon reader freezes the adatom on every axis.
 The frozen middle image matches that energy because the straight line passes through the saddle, and the image has no imaginary mode.
-The companion panel is energy against reaction progress \(s\).}
+The lower panels are energy against reaction progress \(s\).}
 \label{fig:asemask}
 \end{figure}
 
