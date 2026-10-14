@@ -1,0 +1,145 @@
+#+title: MPI: distributed read and collective write
+#+options: toc:nil num:nil ^:nil
+
+* Overview
+
+readcon-core can read and write one CON file across the ranks of an MPI
+communicator (behind the =mpi= feature flag).
+Each rank owns a contiguous block of frames, and the frames of ranks
+=0..P= in rank order are always the frames of a serial read.
+A collective write of those blocks produces the same bytes (sha256) as a
+serial write, for any rank count.
+
+The library never calls =MPI_Init= or =MPI_Finalize= and never assumes
+=MPI_COMM_WORLD=.
+Every entry point takes the communicator the host passes in (an eOn band
+communicator, a LAMMPS sub-communicator, an mpi4py =Split=), and the
+library works on its own duplicate of it.
+
+* Building
+
+#+begin_src bash
+cargo build --release --features mpi
+#+end_src
+
+The =mpi= feature uses rsmpi, which needs an MPI implementation (MPICH or
+Open MPI) and libclang at build time.
+The default build has no MPI dependency.
+=include/readcon-core-mpi.h= is header-only and compiles against the
+caller's MPI.
+
+* Frame ownership
+
+Rank =r= of =P= owns frames =[r*q + min(r, m), ...)= where =q = n / P= and
+=m = n % P=; the first =m= ranks get one extra frame.
+Ranks may own no frames (more ranks than frames).
+=rkr_block_range= (C) and =distrib::block_range= (Rust) compute it without
+MPI.
+
+* Reading
+
+| Mode | When | Data movement |
+|------+------+---------------|
+| =shared= | file visible on every rank | none: rank 0 broadcasts the =.rcidx= offsets, each rank maps the file and parses its block |
+| =scatter= | gzip/zstd input, or file only on rank 0 | rank 0 reads and sends each block with =MPI_Scatterv= |
+| =auto= | default | =scatter= for compressed input, =shared= otherwise |
+
+Within a rank the parse runs on rayon (=n_threads=, 0 for the global pool).
+
+* Writing
+
+| Mode | When | Path |
+|------+------+------|
+| =mpiio= | parallel file system with MPI-IO | =MPI_Exscan= offsets, =MPI_File_set_size=, =MPI_File_write_at_all= in rounds of at most 1 GiB per rank |
+| =gather= | no MPI-IO | rank 0 collects the blocks (=MPI_Gatherv=, point-to-point above 2 GiB) and writes |
+| =auto= | default | =mpiio= |
+
+Every rank formats its frames with the serial writer.
+Rank 0 also writes the =.rcidx= sidecar, so the next read skips the scan.
+Output is uncompressed.
+
+* Errors
+
+Every call is collective, and so are its failures: if any rank fails
+(bad path, parse error, write error), every rank returns an error and
+owns no frames.
+
+* C
+
+#+begin_src c
+#include "readcon-core-mpi.h"
+
+size_t n; uint64_t first, total, bytes;
+struct RKRConFrame **mine =
+    rkr_mpi_read_block(comm, "neb.con", RKR_MPI_READ_AUTO, 0, &n, &first, &total);
+/* ... */
+rkr_mpi_write_block(comm, "out.con", (const struct RKRConFrame *const *)mine, n,
+                    RKR_MPI_WRITE_MPIIO, -1, &bytes);
+free_rkr_frame_array(mine, n);
+#+end_src
+
+The =_f= variants (=rkr_mpi_read_block_f=, =rkr_mpi_write_block_f=) take a
+Fortran =MPI_Fint= handle and are the symbols exported by the library.
+
+* C++
+
+#+begin_src cpp
+#include "readcon-core-mpi.h"
+
+auto images = readcon::mpi::Frames::read(band_comm, "neb.con");  // RAII, move-only
+// images.first(), images.size(), images.total(), images[i]
+readcon::mpi::write(band_comm, "out.con", images, RKR_MPI_WRITE_MPIIO);
+#+end_src
+
+Both throw =std::runtime_error= on every rank when the call fails.
+=examples/eon_mpi_band.cpp= is a complete eOn-style NEB band example.
+Under C++ the C types live in namespace =readcon=, as in
+=readcon-core.h=.
+
+* Fortran
+
+Module =readcon_mpi= (=fortran/ReadCon/mpi/readcon_mpi.f90=) builds with
+an MPI Fortran compiler next to module =readcon=.
+=mpi_read_block= and =mpi_write_block= accept an =mpi_f08=
+=type(MPI_Comm)= or a legacy =INTEGER= communicator; both end up as
+=MPI_Fint= (=comm%MPI_VAL=).
+
+#+begin_src fortran
+use mpi_f08
+use readcon
+use readcon_mpi
+type(frame_t), allocatable :: mine(:)
+integer(c_int64_t) :: first, total
+integer :: stat
+call mpi_read_block(comm, 'neb.con', mine, first, total, stat)
+call mpi_write_block(comm, 'out.con', mine, stat, mode=rkr_mpi_write_mpiio)
+#+end_src
+
+#+begin_src bash
+mpifort -c fortran/ReadCon/src/readcon.f90
+mpifort -c fortran/ReadCon/mpi/readcon_mpi.f90
+mpifort app.f90 readcon_mpi.o readcon.o -L target/release -lreadcon_core
+#+end_src
+
+* Python
+
+Build the wheel with =--features python,mpi= against the same MPI as
+mpi4py; =readcon.has_mpi_support()= reports it.
+
+#+begin_src python
+from mpi4py import MPI
+import readcon
+
+comm = MPI.COMM_WORLD.Split(0, MPI.COMM_WORLD.rank)
+mine = readcon.read_con("neb.con", comm=comm)            # this rank's block
+readcon.write_con("out.con", mine, comm=comm, mode="mpiio")
+#+end_src
+
+=comm= is converted with =comm.py2f()=.
+=read_all_frames= takes the same =comm= and =mode= keywords.
+
+* Testing
+
+=.github/workflows/ci_mpi.yml= runs on MPICH and Open MPI with 1 to 4
+ranks and compares sha256 against the serial path for C, C++, Fortran,
+Python and Rust.
