@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
 import numpy as np
@@ -82,7 +83,7 @@ def holm(pvalues: list[float]) -> list[float]:
 
 
 def analyze_ratios() -> None:
-    rows = _rows("repeats.csv")
+    rows = _rows(os.environ.get("BENCH_OUT", "repeats.csv"))
     groups: dict[tuple[str, str], list[dict[str, str]]] = {}
     for row in rows:
         groups.setdefault((row["payload"], row["peer"]), []).append(row)
@@ -153,7 +154,7 @@ def analyze_ratios() -> None:
         item.pop("_lo", None)
         item.pop("_hi", None)
         item.pop("_p", None)
-    _write("ratios.csv", pending)
+    _write(os.environ.get("BENCH_RATIOS", "ratios.csv"), pending)
 
 
 def analyze_threads() -> None:

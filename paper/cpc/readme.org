@@ -1,10 +1,20 @@
 #+TITLE: CPC manuscript (readcon-core)
 
-The source of truth is =src/rg_main.org=.
-Do not hand-edit =src/rg_main.tex=.
+The source of truth is =src/rg_main.tex= and =src/rg_supp.tex=.
+=src/rg_main.org= predates the shortened manuscript and is kept only for its long-form methods text; do not export it over the TeX files.
 Tables and figures are written by =scripts/gen_tables.py= from the CSV files under =data/= and =bench/results/=.
 
 * Build
+
+Build the supplement first so the main text can resolve its cross-references, then the main text, twice:
+
+#+begin_src bash
+cd paper/cpc/src
+for i in 1 2; do latexmk -pdf rg_supp.tex; latexmk -pdf rg_main.tex; done
+python3 ../scripts/check_manuscript.py
+#+end_src
+
+The older org route follows.
 
 From the repository root, with the generated macros already written:
 

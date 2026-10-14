@@ -39,7 +39,10 @@ REPEATS = 30
 TIMEOUT_S = 240
 THREAD_COUNTS = (2, 4, 8)
 HASH_THREADS = (1, 2, 3, 4, 8)
-PEERS = ("ase_eon", "chemfiles_xyz", "mda_h5md", "h5py")
+ALL_PEERS = ("ase_eon", "chemfiles_xyz", "mda_h5md", "h5py", "ase_extxyz", "ase_traj")
+# BENCH_PEERS selects a subset; BENCH_OUT names the per-repeat file so a
+# second campaign does not overwrite the first. BENCH_NO_THREADS skips the sweep.
+PEERS = tuple(os.environ.get("BENCH_PEERS", ",".join(ALL_PEERS[:4])).split(","))
 
 RAW_FIELDS = [
     "host",
@@ -213,6 +216,24 @@ def write_h5(rows: list[list[tuple[str, str, str, str]]], path: Path) -> None:
         part.create_dataset("species", data=species)
 
 
+def write_ase_copies(con: Path, stem: Path) -> dict[str, Path]:
+    """Write extended XYZ and ASE trajectory copies of a CON file through ASE.
+
+    Both copies carry what the ASE eon reader keeps, including the constraint,
+    so these peers read the same fields ASE would hand a calculator.
+    """
+    if not ({"ase_extxyz", "ase_traj"} & set(PEERS)):
+        return {}
+    import ase.io
+
+    images = ase.io.read(con, index=":", format="eon")
+    images = images if isinstance(images, list) else [images]
+    out = {"ase_extxyz": stem.with_suffix(".extxyz"), "ase_traj": stem.with_suffix(".traj")}
+    ase.io.write(out["ase_extxyz"], images, format="extxyz")
+    ase.io.write(out["ase_traj"], images, format="traj")
+    return out
+
+
 def prepare_payloads(src: Path) -> dict[str, dict[str, Path]]:
     sys.path.insert(0, str(ROOT / "paper" / "cpc" / "scripts"))
     import cases
@@ -236,6 +257,7 @@ def prepare_payloads(src: Path) -> dict[str, dict[str, Path]]:
             "chemfiles_xyz": xyz,
             "mda_h5md": h5,
             "h5py": h5,
+            **write_ase_copies(con, WORK / name),
         }
     slab = cases.write_cases(WORK, src)
     payloads["slab"] = {
@@ -244,6 +266,7 @@ def prepare_payloads(src: Path) -> dict[str, dict[str, Path]]:
         "chemfiles_xyz": slab["xyz"],
         "mda_h5md": slab["h5"],
         "h5py": slab["h5"],
+        **write_ase_copies(slab["readcon"], WORK / "slab"),
     }
     return payloads
 
@@ -320,6 +343,13 @@ def peer_fn(peer: str, path: Path):
             for _ts in universe.trajectory:
                 n += 1
             return f"n={n}"
+        if peer in ("ase_extxyz", "ase_traj"):
+            import ase.io
+
+            fmt = "extxyz" if peer == "ase_extxyz" else "traj"
+            images = ase.io.read(path, index=":", format=fmt)
+            n = len(images) if isinstance(images, list) else 1
+            return f"n={n}"
         if peer == "h5py":
             import h5py
 
@@ -342,7 +372,7 @@ def main() -> None:
     info = meta(src)
     RESULTS.mkdir(parents=True, exist_ok=True)
     payloads = prepare_payloads(src)
-    raw_path = RESULTS / "repeats.csv"
+    raw_path = RESULTS / os.environ.get("BENCH_OUT", "repeats.csv")
     with raw_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS)
         writer.writeheader()
@@ -380,6 +410,9 @@ def main() -> None:
                     )
                     handle.flush()
                     print(f"{payload} {peer} {repeat} {status}", flush=True)
+    if os.environ.get("BENCH_NO_THREADS"):
+        print(f"wrote {raw_path}")
+        return
     thread_path = RESULTS / "threads.csv"
     fields = [
         "host",
