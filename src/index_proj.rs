@@ -83,7 +83,7 @@ pub fn finite_energy(frame: &ConFrame) -> Option<f64> {
 pub fn frame_fmax(frame: &ConFrame) -> Option<f64> {
     let mut m = None;
     for a in &frame.atom_data {
-        if let Some(f) = a.force {
+        if let Some(f) = a.force() {
             let mag = (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt();
             if mag.is_finite() {
                 m = Some(m.map_or(mag, |cur: f64| cur.max(mag)));
@@ -156,7 +156,7 @@ pub fn frame_has_forces(frame: &ConFrame) -> bool {
         .sections
         .iter()
         .any(|s| s.eq_ignore_ascii_case(SECTION_FORCES))
-        || frame.atom_data.iter().any(|a| a.force.is_some())
+        || frame.atom_data.iter().any(|a| a.force().is_some())
         || frame.has_forces()
 }
 
@@ -167,7 +167,7 @@ pub fn frame_has_velocities(frame: &ConFrame) -> bool {
         .sections
         .iter()
         .any(|s| s.eq_ignore_ascii_case(SECTION_VELOCITIES))
-        || frame.atom_data.iter().any(|a| a.velocity.is_some())
+        || frame.atom_data.iter().any(|a| a.velocity().is_some())
         || frame.has_velocities()
 }
 

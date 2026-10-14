@@ -49,8 +49,8 @@ impl Rcso {
             return Err(err("too many atoms for RCSO"));
         }
         let natoms = n as u32;
-        let has_f = frame.atom_data.iter().any(|a| a.force.is_some());
-        let has_v = frame.atom_data.iter().any(|a| a.velocity.is_some());
+        let has_f = frame.atom_data.iter().any(|a| a.force().is_some());
+        let has_v = frame.atom_data.iter().any(|a| a.velocity().is_some());
         let mut flags = 0u32;
         if has_f {
             flags |= RCSO_FLAG_FORCES;
@@ -76,7 +76,7 @@ impl Rcso {
         }
         if has_f {
             for a in &frame.atom_data {
-                let f = a.force.unwrap_or([0.0; 3]);
+                let f = a.force().unwrap_or([0.0; 3]);
                 for c in f {
                     out.extend_from_slice(&c.to_le_bytes());
                 }
@@ -84,7 +84,7 @@ impl Rcso {
         }
         if has_v {
             for a in &frame.atom_data {
-                let v = a.velocity.unwrap_or([0.0; 3]);
+                let v = a.velocity().unwrap_or([0.0; 3]);
                 for c in v {
                     out.extend_from_slice(&c.to_le_bytes());
                 }
@@ -248,14 +248,14 @@ mod tests {
     fn forces_fixture_keeps_force_block() {
         let text = include_str!("../resources/test/tiny_cuh2_forces.con");
         let frame = first_frame(text);
-        assert!(frame.atom_data.iter().any(|a| a.force.is_some()));
+        assert!(frame.atom_data.iter().any(|a| a.force().is_some()));
         let blob = Rcso::encode_frame(&frame).unwrap();
         let flags = u32::from_le_bytes(blob[12..16].try_into().unwrap());
         assert_ne!(flags & RCSO_FLAG_FORCES, 0);
         let got = Rcso::decode(&blob).unwrap();
         let forces = got.forces.expect("forces");
         for (a, f) in frame.atom_data.iter().zip(&forces) {
-            assert_eq!(a.force.unwrap_or([0.0; 3]), *f);
+            assert_eq!(a.force().unwrap_or([0.0; 3]), *f);
         }
     }
 
@@ -286,14 +286,14 @@ mod tests {
     fn velocities_fixture_keeps_velocity_block() {
         let text = include_str!("../resources/test/tiny_cuh2.convel");
         let frame = first_frame(text);
-        assert!(frame.atom_data.iter().any(|a| a.velocity.is_some()));
+        assert!(frame.atom_data.iter().any(|a| a.velocity().is_some()));
         let blob = Rcso::encode_frame(&frame).unwrap();
         let flags = u32::from_le_bytes(blob[12..16].try_into().unwrap());
         assert_ne!(flags & RCSO_FLAG_VELOCITIES, 0);
         let got = Rcso::decode(&blob).unwrap();
         let vels = got.velocities.expect("velocities");
         for (a, v) in frame.atom_data.iter().zip(&vels) {
-            assert_eq!(a.velocity.unwrap_or([0.0; 3]), *v);
+            assert_eq!(a.velocity().unwrap_or([0.0; 3]), *v);
         }
     }
 

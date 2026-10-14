@@ -71,32 +71,32 @@ fn edited_mode_and_spread_sections_survive_a_trajectory() {
         assert_eq!(decoded, frames);
         for index in [0, 3] {
             for atom in &decoded[index].atom_data {
-                assert_eq!(atom.displacement, None);
-                assert_eq!(atom.spread, None);
+                assert_eq!(atom.displacement(), None);
+                assert_eq!(atom.spread(), None);
             }
         }
         for (index, mode_atom, spread_atom) in [(1, 1, 0), (4, 0, 1)] {
             assert_eq!(
-                decoded[index].atom_data[mode_atom].displacement,
+                decoded[index].atom_data[mode_atom].displacement(),
                 Some(displacement)
             );
             assert_eq!(
-                decoded[index].atom_data[1 - mode_atom].displacement,
+                decoded[index].atom_data[1 - mode_atom].displacement(),
                 Some([0.0; 3])
             );
-            assert_eq!(decoded[index].atom_data[spread_atom].spread, Some(spread));
+            assert_eq!(decoded[index].atom_data[spread_atom].spread(), Some(spread));
             assert_eq!(
-                decoded[index].atom_data[1 - spread_atom].spread,
+                decoded[index].atom_data[1 - spread_atom].spread(),
                 Some([0.0; 3])
             );
         }
         for atom in &decoded[2].atom_data {
-            assert_eq!(atom.displacement, Some([0.0; 3]));
-            assert_eq!(atom.spread, Some([0.0; 3]));
+            assert_eq!(atom.displacement(), Some([0.0; 3]));
+            assert_eq!(atom.spread(), Some([0.0; 3]));
         }
         for frame in decoded {
-            assert_eq!(frame.atom_data[0].force, Some([1.25, -1.25, 0.0]));
-            assert_eq!(frame.atom_data[1].force, Some([2.5, -2.5, 0.0]));
+            assert_eq!(frame.atom_data[0].force(), Some([1.25, -1.25, 0.0]));
+            assert_eq!(frame.atom_data[1].force(), Some([2.5, -2.5, 0.0]));
         }
     }
 }
