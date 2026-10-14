@@ -14,6 +14,7 @@
 #include "readcon-core-mpi.h"
 
 #include <cstdio>
+#include <vector>
 
 int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
@@ -46,9 +47,28 @@ int main(int argc, char **argv) {
       std::string serial_path = std::string(argv[2]) + ".serial";
       readcon::RKRConFrameWriter *w =
           readcon::create_writer_from_path_c(serial_path.c_str());
-      if (all == nullptr || w == nullptr ||
-          readcon::rkr_writer_extend(w, all, n) != readcon::RKR_STATUS_SUCCESS)
+      // The collective write rebuilds each frame, which stamps
+      // con_spec_minor. The serial reference has to do the same or the
+      // two files differ.
+      std::vector<readcon::RKRConFrame *> rebuilt(n);
+      bool ok = all != nullptr && w != nullptr;
+      for (size_t i = 0; ok && i < n; i++) {
+        rebuilt[i] = readcon::rkr_frame_binding_rewrite(all[i]);
+        ok = rebuilt[i] != nullptr;
+      }
+      if (!ok || readcon::rkr_writer_extend(w, rebuilt.data(), n) !=
+                    readcon::RKR_STATUS_SUCCESS) {
+        for (auto *frame : rebuilt)
+          if (frame != nullptr)
+            readcon::free_rkr_frame(frame);
+        if (w != nullptr)
+          readcon::free_rkr_writer(w);
+        if (all != nullptr)
+          readcon::free_rkr_frame_array(all, n);
         throw std::runtime_error("serial reference write failed");
+      }
+      for (auto *frame : rebuilt)
+        readcon::free_rkr_frame(frame);
       readcon::free_rkr_writer(w);
       readcon::free_rkr_frame_array(all, n);
       std::printf("wrote %llu bytes, %zu images\n", (unsigned long long)bytes,
