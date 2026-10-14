@@ -8,6 +8,7 @@ the boundary scan as the serial fraction of the one-thread full read.
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import subprocess
 from pathlib import Path
@@ -27,6 +28,8 @@ from clean_common import (
 )
 
 THREADS = (2, 4, 8)
+# Gzip keeps every per-repeat row under the 1 MiB history limit.
+STAGES_RAW = "clean_stages.csv.gz"
 PART_KEYS = (
     "string_load_s",
     "boundary_s",
@@ -62,7 +65,7 @@ def run_stages() -> None:
     _run("full", path, 1)
     _run("full", path, 8)
     _run("parts", path, 1)
-    raw_path = RESULTS / "clean_stages.csv"
+    raw_path = RESULTS / STAGES_RAW
     fields = list(info.keys()) + [
         "payload",
         "stage",
@@ -76,7 +79,7 @@ def run_stages() -> None:
         "bytes",
     ]
     rows_for_summary = []
-    with raw_path.open("w", newline="") as handle:
+    with gzip.open(raw_path, "wt", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
 
@@ -152,7 +155,7 @@ def run_stages() -> None:
 
 
 def summarize_stages() -> None:
-    with (RESULTS / "clean_stages.csv").open(newline="") as handle:
+    with gzip.open(RESULTS / STAGES_RAW, "rt", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     tags = {r["tag"] for r in rows if r["stage"] == "full" and r["status"] == "ok"}
     out = []
