@@ -1,6 +1,6 @@
 # Consumers C: one crate and one C ABI
 
-The shared layer is a new crate, `readcon-xfer`, with a C ABI in `include/readcon-xfer.h`. It is the only new library. rgmin, rgsaddle, and the eOn client link it. The eOn Python server and rgpot call the same bytes through the `readcon` 0.17.1 wheel and `readcon-db`. cpmdc and seams-core call the C ABI for ionic frames.
+The shared layer is a new crate, `readcon-xfer`, with a C ABI in `include/readcon-xfer.h`. It is the only new library. rgmin, rgsaddle, and the eOn client link it. The eOn Python server, rgpot, chemparseplot, and rgpycrumbs call the same bytes through the `readcon` 0.17.1 wheel and `readcon-db`. For the plot stack that call sequence lives in `chemparseplot.parse.eon.con_io`, and rgpycrumbs calls that module. cpmdc and seams-core call the C ABI for ionic frames.
 
 `readcon-xfer` does not parse CON and does not own a file format. A restart is the RoundTrip CON UTF-8 of one frame. A checkpoint is that file plus the same UTF-8 stored in a corpus. A trajectory is a concatenation of those frames on disk and one `traj_id` whose `frame_idx` values are read back by index. The 64-frame zstd group already implemented in readcon-db is how a trajectory is stored. The single-pass parse and the SoA accessors already on readcon-core `main` (0.17.1) are how a frame is read.
 
@@ -16,6 +16,8 @@ Shallow clones this design was written from:
 | OmniPotentRPC/rgpot | `b901b09b92f0` |
 | OmniPotentRPC/cpmdc | `c518e1e07bbd` |
 | d-SEAMS/seams-core | `305fb3c67c39` |
+| HaoZeke/chemparseplot | `4e4095bd70c9` |
+| HaoZeke/rgpycrumbs | `73ddf2ebc8ca` |
 
 ## What each consumer does today
 
@@ -26,6 +28,8 @@ Shallow clones this design was written from:
 | rgsaddle | `frame_from_con` → `readcon_core::iterators::read_first_frame`. Cargo pin `readcon-core = "0.14"`. | None. | None. The `readcon-db` feature is declared and unused. |
 | rgmin | None. `python/rgmin/ase.py` `Optimizer.read` and `Optimizer.dump` raise `NotImplementedError`. ASE `trajectory=` is ASE's own writer. | None. | None. No readcon dependency. |
 | rgpot | `CppCore/rgpot/rpc/ase_helpers.py` `atoms_from_con` → `readcon.read_con_as_ase`. eonviz pin `readcon>=0.14.7`. | None. | None. `tests/eon_min_landscape.py` reads the last frame of `minimization.con` with `readcon.read_con`. |
+| chemparseplot | `con_io.read_first_atoms` loads every frame with `read_con_as_ase` and keeps index 0. Floor `readcon>=0.14.5` (`pyproject.toml` extras `neb` and `test`, `pixi.toml`). No `readcon-db`. | `write_con_frames` / `write_atoms_as_con` rewrite a whole file with `write_con` and no precision argument. `stitch_neb_segments` writes `sp.con` that way. | `read_con_frames` / `load_movie_and_table` parse a whole movie. `stitch_neb_segments` writes `neb.con` and `neb_path_000.con`. `parse.trajectory.neb.load_trajectory` is ASE extxyz/`.traj`, not CON. |
+| rgpycrumbs | Single-frame reads take `read_con(...)[0]` or `read_con_as_ase(...)[0]` (`uma/_io.py` `load_atoms`, `tls_pairs._atoms` and `_band_values`, `plt_kmc.collect_kmc_n2_timeline`, `plt_saddle`, `pimd_centroid._template`, `seed_dimers._match_eon_mode`). `xts/cuh2/datgen.py` `get_from_gitroot_con` and `xts/saddle/cuh2.py` `_cuh2_min` read `cuh2.con` with `ase.io.read`. Floors are `readcon>=0.14.5` in `pixi.toml` and `_aux._DEPENDENCY_MAP`, with PEP 723 floors from `0.13.1` (`plt_con`) through `0.16.0` (PIMD). No `readcon-db`. | `con_splitter._write_con_frame` / `_write_con_atoms` and `seed_dimers_from_peaks` (`pos.con`, `displacement.con`) call `write_con` on one frame. | `con_splitter._read_trajectory_frames` uses `read_con` for a whole band and writes one `ipath_{i:03d}.con` per image. `pimd_centroid.main` writes `centroid.con` with `write_con`. `modes_tensormap.read_modes` reads every `modes.con` frame. `plt_min` / `plt_saddle` / `plt_neb_stitch` open CON only by calling chemparseplot. `plt_con` expects `chemparseplot.api.load_trajectory`, which `chemparseplot/api.py` does not define at this commit. |
 | cpmdc | `cpmdc_restart_read_path` / `cpmdc_restart_coordinates` / `cpmdc_restart_velocities` on a gfortran unformatted `RESTART.n`. | `cpmdc_restart_set_coordinates`, `cpmdc_restart_set_velocities`, `cpmdc_restart_write_path`. Other records stay byte-identical. | `cpmdc_last_md_trajectory_row` copies a Hartree energy row. It is not a geometry. |
 | seams-core | `sinp::readCon` walks `readcon::ConFrameIterator::nth`. | None. | `sinp::ingestConCorpus` / `sinp::readConCorpus` via `rkrdb_append_trajectory` and `rkrdb_get_frame_text`. |
 | readcon-db | Corpus of CON text. | Same. | `frame_codec::GROUP_LEN = 64`. Indexed `ConCorpus::get_frame`. |
@@ -35,6 +39,7 @@ Pin facts that the implementation has to start from:
 - eOn `subprojects/readcon-core.wrap` is `revision = v0.16.0`. `client/meson.build` asks for `readcon-core` `>=0.16.0` because `ConFileIO.cpp` calls `set_spreads_from_flat`.
 - seams-core `subprojects/readcon-core.wrap` is `91181ef2699ef4c46fd7827cee1127776a32aa55`, which is `v0.16.2~2`. `subprojects/readcon-db.wrap` is `0001a2c5a931bdde6bc8fe9b308f666dc28f4fe5` (readcon-db 0.1.8), and that commit's `Cargo.toml` has `readcon-core = "=0.16.1"`.
 - readcon-db `main` has already moved to `readcon-core = "=0.17.0"` and ships the 64-frame codec. The remaining pin move on that crate is `0.17.0` to `0.17.1`.
+- chemparseplot and rgpycrumbs do not depend on `readcon-db`. Their CON writes already omit `precision`, so on a 0.17.1 wheel they are RoundTrip. Their reads are `read_con` of the whole file, including when the caller keeps only frame 0.
 
 eOn's C++ writer is the byte divergence that the shared layer removes. `client/ConFileIO.cpp` passes `kConPrecision = 17` and `kConvelPrecision = 6` into `ConFrameWriter`. Those are decimal-place writers. readcon-core 0.17.1's default, `writer::FloatFormat::RoundTrip` (`CON-num.6`), is what Python `write_con` uses when `precision` is omitted. A frame written by the client and a frame written by the server are not the same UTF-8.
 
@@ -116,7 +121,7 @@ Call map:
 
 Trajectory ids are the caller's. The crate does not hash paths. eOn keeps its FNV-1a for one-shot blobs so an unchanged checkpoint still hits the same corpus key.
 
-Python has no new module. The same bytes, on `readcon` 0.17.1 and the readcon-db that pins it:
+Python has no new module. The same bytes, on `readcon` 0.17.1 and the readcon-db that pins it. `chemparseplot.parse.eon.con_io` is the one implementation of this table for chemparseplot and rgpycrumbs. The eOn server and rgpot call the same functions directly.
 
 | Operation | Calls |
 | --- | --- |
@@ -203,6 +208,92 @@ The Rust functions and the C functions above are the whole public surface. Tests
 - `mirror_con_text` and `mirror_con_path` delegate to `checkpoint_store` so existing tests that call them keep working.
 
 `eon/fileio.py` `Dynamics` is unchanged. It reads reactant frames through `concorpus`, which is already indexed.
+
+### chemparseplot
+
+Python only. It does not link `readcon-xfer`. `chemparseplot/parse/eon/con_io.py` is already the module the package tells every eOn parser to use (`tests/parse/test_readcon_boundary.py` locks that). The six operations are added there. Callers keep their function names.
+
+`pyproject.toml` extras `neb` and `test`, and `pixi.toml`: `readcon>=0.17.1`, plus `readcon-db` at the release that pins `readcon-core = "=0.17.1"`. The error string in `_readcon` and the docstring that say `readcon>=0.7` become `readcon>=0.17.1`, because `test_con_io_is_single_readcon_entry_point` asserts that string.
+
+`chemparseplot/parse/eon/con_io.py`:
+
+- `read_con_frames` stays `readcon.read_con` for a plot that needs every frame in memory. After the read, `checkpoint_store` is not called. A movie ingest is `append_trajectory_str` of the file bytes under a path id, once, so later indexed reads do not rescan the file.
+- `read_first_atoms` calls `readcon.read_first_frame` and `frame.to_ase()`. It stops calling `read_con_as_ase(path)[0]`, which parses every frame to return the first.
+- `read_con_as_ase` stays the all-frames ASE adapter. Positions on a fresh frame come from `coords_array` inside `to_ase` as 0.17.1 implements it. The bit-exact check compares `coords_array` with the file, not `get_positions` on a corpus.
+- `frame_with_energy` stays. `set_energy` exists on 0.17.1, so the string-metadata fallback is dead on the new floor and the tests that still construct an old frame keep calling `set_energy`.
+- `write_con_frames` keeps `write_con` with `precision` omitted. One frame is a restart write. More than one frame is a trajectory: the file is the RoundTrip text, and `extend_trajectory_str` / `append_trajectory_str` stores that same text under a caller-supplied `traj_id` (default FNV-1a of the absolute path). `write_atoms_as_con` goes through `write_con_frames`, so it picks up the corpus copy.
+- Add `read_trajectory_frame(corpus, traj_id, frame_idx)` as `ConCorpus.get_frame` then the three arrays. Add `write_checkpoint(path, frames, corpus, traj_id)` as the one-frame form of `write_con_frames` plus `append_trajectory_str`.
+
+`chemparseplot/parse/eon/_trajectory_common.py`:
+
+- `read_first_structure` stays a call to `con_io.read_first_atoms`, so reactant and saddle restarts become one-frame parses.
+- `load_movie_and_table` stays on `con_io.read_con_frames` because `table_from_min_metadata` and `table_from_dimer_metadata` need every frame's metadata. It calls the new ingest so the movie text is one corpus trajectory. `metadata_value` stays on `frame.energy`, `frame.frame_index`, and `frame.metadata`.
+
+`chemparseplot/parse/eon/min_trajectory.py`: `parse_min_con`, `table_from_min_metadata`, and `load_min_trajectory` stay. `final_atoms` still prefers `{prefix}.con` then `min.con` via `read_optional_first`, which now reads one frame. The movie itself remains the trajectory.
+
+`chemparseplot/parse/eon/dimer_trajectory.py`: `parse_climb_con` and `load_dimer_trajectory` stay. `saddle.con` / `reactant.con` / `pos.con` go through `read_first_structure`. `_load_mode_dat` stays an Nx3 text file. It is not a CON restart.
+
+`chemparseplot/parse/eon/stitch.py` `stitch_neb_segments`: `read_con_frames` stays for the segments. `write_con_frames` of `neb.con` and `neb_path_000.con` is the trajectory write. `write_con_frames` of `sp.con`, and `write_atoms_as_con` of the saddle override, are the checkpoint of the highest image. The saddle geometry read `read_con_frames(sad_path)[0]` becomes `read_first_atoms`.
+
+`chemparseplot/parse/eon/frame_series.py` does not touch the filesystem. `atoms_list_from_frames` keeps `to_ase`.
+
+These stay off the CON path. They are not structure restarts:
+
+- `chemparseplot/parse/trajectory/neb.py` `load_trajectory` reads extxyz and `.traj` with `ase.io.read`.
+- `chemparseplot/parse/sella/saddle_search.py` reads and writes ASE trajectories with `ase.io.read` / `ase.io.write`.
+- `chemparseplot/parse/eon/gprd.py` uses `ase.io.trajectory.Trajectory` and HDF5.
+- `chemparseplot/plot/neb.py` `_render_xyzrender` writes a temporary `.xyz` for xyzrender.
+
+`chemparseplot/parse/eon/__init__.py` keeps exporting `con_io`. `readcon` and `readcon_db` stay imported inside `con_io` functions. A module-level import would fail `test_eon_modules_do_not_import_readcon_at_module_level_except_typed_files`.
+
+### rgpycrumbs
+
+Python only. It does not grow a second CON writer. The functions that read or write a `.con` call `chemparseplot.parse.eon.con_io` after that module has the operations above. `rgpycrumbs/_aux.py` `_DEPENDENCY_MAP["readcon"]` becomes `readcon>=0.17.1`. `pixi.toml` gets the same floor and the matching `readcon-db`. PEP 723 headers move in the same commit, because `ci_test.yml` runs `pytest --pep723-check` over `rgpycrumbs/`.
+
+`rgpycrumbs/eon/con_splitter.py`:
+
+- `_read_trajectory_frames` calls `con_io.read_con_frames` for `.con` / `.convel` and still returns `(atoms_list, con_frames)`. Non-CON inputs stay `ase.io.read`. The `ase.io` import of `read` stays. `test_con_splitter_source_has_no_asewrite` still forbids `ase.io.write`.
+- `_apply_frame_energy`, `_write_con_atoms`, and `_write_con_frame` delegate to `con_io.frame_with_energy` and `con_io.write_checkpoint`. An image that was not moved is still the original `ConFrame`, written with `precision` omitted. A centered or aligned image is `ConFrame.from_ase` plus the saved energy, which is what `_write_con_frame` does today.
+- The loop that writes `ipath_*.con` keeps that layout. Each file is one checkpoint. The band the splitter read is ingested as one trajectory by `read_con_frames`.
+
+`rgpycrumbs/eon/seed_dimers.py` `seed_dimers_from_peaks` (the function that takes `neb_con` and `out_dir`):
+
+- `read_con` of the band stays a full read. Energies still come from `ConFrame.energy`.
+- `pos.con` is `con_io.write_checkpoint` of `frames[idx]`, so the peak image is a RoundTrip restart.
+- `displacement.con` is `con_io.write_atoms_as_con` of the displaced ASE atoms. `direction.dat` stays `numpy.savetxt`.
+- `_match_eon_mode` reads each `peak*_pos.con` with `read_con(...)[0].to_ase()`. That becomes `con_io.read_first_atoms`. The paired `peak*_mode.dat` stays `numpy.loadtxt`.
+
+`rgpycrumbs/eon/pimd_centroid.py`:
+
+- `_template` reads the reference with `con_io.read_first_atoms` and takes symbol, mass, fixed flags, cell, and angles from that one frame. Spreads stay on the atoms (`sx`, `sy`, `sz`), which 0.17.1 still writes. The PEP 723 floor rises from `readcon>=0.16.0` to `readcon>=0.17.1`.
+- `build_frames` stays the `ConFrame` constructor.
+- `main` replaces `readcon.write_con` with `con_io.write_con_frames`, so `centroid.con` is a trajectory ingest as well as a file.
+
+`rgpycrumbs/eon/modes_tensormap.py` `read_modes`: `con_io.read_con_frames`, then `frame.disp` and the metadata keys `mode_eigenvalue`, `hbar_omega`, `wavenumber`. The PEP 723 floor rises from `readcon>=0.15.0`. This is a trajectory read of every mode frame. It does not write CON.
+
+Single-frame readers, each switched to `con_io.read_first_atoms`:
+
+- `rgpycrumbs/uma/_io.py` `load_atoms` for `.con` / `.convel`. Other suffixes stay `ase.io.read`.
+- `rgpycrumbs/eon/tls_pairs.py` `_atoms`. `_band_values` reads only the first frame's metadata (`read_con(...)[0].metadata`, key `tunnel_splitting`) and uses the same one-frame read, not `read_con_frames`.
+- `rgpycrumbs/eon/plt_kmc.py` `collect_kmc_n2_timeline`, which today does `read_con(str(con))[0]` on `states/<id>/reactant.con`.
+- `rgpycrumbs/eon/plt_saddle.py`, which today does `readcon.read_con_as_ase(str(ref_product))[0]`.
+
+Full-band readers stay on `con_io.read_con_frames`:
+
+- `rgpycrumbs/eon/helpers.py` `load_profile_rows`. The metadata keys `reaction_coordinate`, `relative_energy`, `parallel_force`, and optional `reaction_coordinate_mw` stay. A missing key is still `ValueError`.
+
+`rgpycrumbs/eon/plt_con.py` loads through `con_io.read_con_frames`. At `4e4095bd70c9`, `chemparseplot.api` does not define `load_trajectory`, `plot_con_overview`, or `plot_con_overlay`, which this file imports. The plot helpers are not added by this design. The structure load is `con_io`. When those plot names exist, `load_trajectory` for a `.con` path calls `read_con_frames` and does not call `ase.io.read`.
+
+These open no CON file themselves. They call chemparseplot, which is already on `con_io`:
+
+- `rgpycrumbs/eon/plt_min.py` calls `chemparseplot.parse.eon.min_trajectory.load_min_trajectory`.
+- `rgpycrumbs/eon/plt_saddle.py` calls `load_dimer_trajectory` in addition to the `ref_product` read above.
+- `rgpycrumbs/eon/plt_neb_stitch.py` calls `stitch_neb_segments`.
+- `rgpycrumbs/eon/plt_neb.py` imports `load_trajectory` from `chemparseplot.parse.trajectory.neb` (extxyz / `.traj`). Profile rows are `helpers.load_profile_rows`.
+
+`rgpycrumbs/xts/cuh2/datgen.py` `get_from_gitroot_con` and `rgpycrumbs/xts/saddle/cuh2.py` `_cuh2_min` read `cuh2.con` with `ase.io.read`. That is a one-frame geometry for a contour, and it moves to `con_io.read_first_atoms`. Neither function writes CON. `rgpycrumbs/eon/gen_dimer.py` declares a `readcon` floor and does not read or write a structure. Its PEP 723 header still moves to `>=0.17.1` with the others. `tests/test_uma_cli.py` `test_prepare_aoti_declares_the_export_stack` asserts the string `readcon>=0.14.5` in `uma/prepare_aoti.py` and is updated in that commit.
+
+`tests/test_cli_plotting.py` `_write_con_file` writes fixtures with `ase.io.write`. That helper is a test fixture writer, not the library path. It stays, and it is not the bit-exact witness. The witness writes with `con_io.write_con_frames`.
 
 ### rgsaddle
 
@@ -300,9 +391,11 @@ Each step is merged and green before the next one starts. A failure then belongs
 3. **rgsaddle.** Smallest reader. `frame_from_con` changes implementation and keeps its return type. The new write functions are additive.
 4. **rgmin.** Feature-gated. Default and `capi` builds do not compile the crate.
 5. **eOn client, then the Python server, in one eOn change.** The client is the writer everyone else restarts from. Landing it together with the server floor keeps `tests/test_fileio_readcon.py` and `tests/test_concorpus.py` on one pair of versions.
-6. **rgpot eonviz pin and `atoms_to_con`.** It only consumes files. It waits until a 0.17.1 wheel exists, which it does from step 2, and until the helpers match the eOn server sequence from step 5.
-7. **cpmdc bridge.** Independent of eOn. It waits on step 2 because it links the C ABI.
-8. **seams-core wraps and the three write functions.** Last, because the wrap move from `v0.16.2~2` / readcon-db `=0.16.1` to 0.17.1 is the largest pin jump and the read path must keep `tests/test_readcon.cpp` green on the new core before the write functions land.
+6. **chemparseplot `con_io`.** The plot stack's only CON boundary. It waits on steps 1 and 2 for `extend_trajectory_str` and the 0.17.1 wheel. It does not wait on the eOn client. A movie written by the client is the integration check, and it runs after step 5 with the same witness.
+7. **rgpycrumbs.** It calls `con_io` and does not land before step 6. PEP 723 floors and `_DEPENDENCY_MAP` move in that same change.
+8. **rgpot eonviz pin and `atoms_to_con`.** It only consumes files. It waits until a 0.17.1 wheel exists, which it does from step 2, and until the helpers match the eOn server sequence from step 5.
+9. **cpmdc bridge.** Independent of eOn. It waits on step 2 because it links the C ABI.
+10. **seams-core wraps and the three write functions.** Last, because the wrap move from `v0.16.2~2` / readcon-db `=0.16.1` to 0.17.1 is the largest pin jump and the read path must keep `tests/test_readcon.cpp` green on the new core before the write functions land.
 
 ## CI proof, with the existing suites left in place
 
@@ -315,6 +408,8 @@ The existing job is the regression gate. The new test is the bit-exact witness. 
 | rgsaddle | `.github/workflows/ci.yml` job `test`: `cargo test --features capi`, clippy, rustfmt. Job `ase-parity`. Neither gains a readcon dependency. | A new step `cargo test --features readcon,capi` runs `tests/io_cells.rs` plus the subnormal round trip. |
 | rgmin | `.github/workflows/ci.yml` matrix rows `default`, `capi`, and `highs` (`cargo test --locked` with those args). | A new matrix row `xfer` (`--features xfer`). `python/rgmin` tests: JSON `read` still raises; a `.con` restart restores positions; a `.traj` path still round-trips. `--all-features` will compile `xfer`. That row is the witness, and the three existing rows must not mention readcon in their link line. |
 | eOn | `.github/workflows/ci_build_akmc.yml` job `build_eon` (client tests, including `ConFileIOTest.cpp` and `ApproveConFileIO.cpp`) on ubuntu, macOS, and Windows. `.github/workflows/ci_serve.yml`. The Python tests `tests/test_fileio_readcon.py`, `tests/test_structure_readcon.py`, `tests/test_concorpus.py`, `tests/test_movie_corpus.py`. | One new client test writes a frame with `matter2con`, reads it with `rkrx_restart_read`, and checks `rkr_frame_xyz_f64` against the `Matter` positions bit for bit. One new Python test writes with `savecon`, reads with `read_first_frame` and `coords_array`, and checks `get_frame_text` against the file bytes. `ApproveConFileIO` masters are updated once in that commit. |
+| chemparseplot | `.github/workflows/build_test.yml` job `build`: `uv run pytest --cov=chemparseplot tests` on Python 3.10, 3.11, and 3.12. `tests/parse/test_con_io.py`, `tests/parse/test_readcon_boundary.py`, `tests/parse/test_min_trajectory.py`, `tests/parse/test_dimer_trajectory.py`, and `tests/parse/test_neb_stitch.py` stay. | `read_first_atoms` on a two-frame file matches `read_first_frame` and does not require the second frame's atoms. `write_con_frames` of 65 frames, then `get_frame` of index 64, matches `coords_array` bit for bit, including a subnormal. `test_con_io_is_single_readcon_entry_point` is updated in that commit to look for `readcon>=0.17.1`. |
+| rgpycrumbs | `.github/workflows/ci_test.yml` jobs `test-uv` (`uv run pytest`, including `--pep723-check` over `rgpycrumbs/`) and `test-pixi` (`pixi r -e fragments` and `pixi r -e surfaces`). `tests/test_con_splitter_readcon.py`, `tests/test_modes_tensormap.py`, `tests/test_pimd_centroid.py`, and `tests/test_seed_dimers.py` stay. | `con_splitter` of a RoundTrip band writes `ipath_000.con` whose bytes match `write_con_string` of that frame with `precision` omitted. `load_atoms` of a two-frame file equals `read_first_frame`. `tests/test_con_splitter_readcon.py` `test_con_splitter_source_has_no_asewrite` still requires a `readcon>=` floor and still forbids `ase.io.write`. The floor check is already `>= (0, 7)`, so 0.17.1 passes it. `tests/test_uma_cli.py` `test_prepare_aoti_declares_the_export_stack` is updated in that commit from the literal `readcon>=0.14.5`. |
 | rgpot | `pixi run rust-test` and the Python CI that already covers `tests/`. `scripts/check_eonviz_pins.sh`. | `atoms_to_con` then `atoms_from_con` on a subnormal coordinate. The eonviz pin check fails if `readcon` is below 0.17.1. |
 | cpmdc | `.github/workflows/ci.yml` jobs `stub-and-e2e` (`pixi run test-stub`, `test-e2e`, `test-cmocka`) and `sanitize` (`pixi run test-stub-sanitize`). | Extend `tests/test_cpmd_restart.c`: `cpmdc_restart_write_con` then `cpmdc_restart_apply_con` leaves every record other than coordinates and velocities byte-identical to the fixture `tests/restart_geo1.bin`, and the CON UTF-8 matches `rkrx_frame_text`. |
 | seams-core | `.github/workflows/ci_test.yml` job `build-test` (`pixi run test`), including `tests/test_readcon.cpp`. | The new `writeCon` / `appendCon` case in that file. The old `readCon` and `readConCorpus` cases are not rewritten. |
@@ -346,3 +441,13 @@ A consumer PR that only bumps a pin is not done when the old tests pass. The wit
 **seams pin distance.** The seams readcon-core wrap is two commits before `v0.16.2`, and the vendored readcon-db commit requires `=0.16.1`. Moving both wraps in one commit is what `pixi run test` has to survive. `readCon` returning an empty cloud on a missing frame is existing behavior and stays.
 
 **Append of a file this process did not write.** `matter2con` today parses an uncompressed target whose size or mtime changed before it concatenates, and returns `AppendError` with the bytes untouched when that parse fails. `trajectory_append` must keep that check: run `read_first_frame` (or `count_frames`) on a foreign tail, and on failure write nothing. A tail that parses is concatenated. Earlier frames are not rewritten, so their bytes survive.
+
+**chemparseplot reads the whole file to keep frame 0.** `read_first_atoms` and every rgpycrumbs `read_con(...)[0]` site parse every frame on 0.14.5. Switching those sites to `read_first_frame` changes the work, not the frame that is returned. `load_movie_and_table`, `load_profile_rows`, `read_modes`, and `stitch_neb_segments` still need every frame, and they stay on `read_con`. A test that counted `read_con` calls on a one-frame helper has to expect `read_first_frame` instead.
+
+**Re-serializing a band that was not RoundTrip.** `con_splitter._write_con_frame` and `seed_dimers` `write_con([peak_frame])` parse a frame and write it again. On 0.17.1 that write is RoundTrip, so a band written at 17 decimal places changes spelling on the way out. `tests/test_con_splitter_readcon.py` compares energies with `pytest.approx`, so those tests stay green while the bytes change. The new witness covers a frame that was already RoundTrip. An unchanged image from a decimal file is not required to keep its old spelling.
+
+**Two copies of the energy setter.** `con_io.frame_with_energy` and `con_splitter._apply_frame_energy` both clone a `ConFrame` and call `set_energy`, with the same string-metadata fallback. rgpycrumbs deletes its copy and calls `con_io`. Leaving both in place means a later metadata change has to be made twice, and the bit-exact tests can pass in one package and fail in the other.
+
+**`plt_con` imports names this chemparseplot commit does not export.** `rgpycrumbs/eon/plt_con.py` imports `load_trajectory`, `plot_con_overview`, and `plot_con_overlay` from `chemparseplot.api`. `chemparseplot/api.py` at `4e4095bd70c9` exports the ORCA and XYZ helpers and does not define those three names. This design does not add the plot functions. It only requires that a `.con` load, wherever it is called, go through `con_io.read_con_frames`. ASE `load_trajectory` in `parse/trajectory/neb.py` stays the extxyz/`.traj` reader.
+
+**PEP 723 floors disagree with each other today.** `plt_con.py` says `readcon>=0.13.1`, most eOn scripts and `uma/prepare_aoti.py` say `>=0.14.5`, `tls_pairs.py` says `>=0.14.9`, `modes_tensormap.py` says `>=0.15.0`, and `pimd_centroid.py` says `>=0.16.0`. `pytest --pep723-check` records the header it sees. Raising one script and leaving another on 0.14.5 lets `uv run` of that script write with an older wheel than `con_io`. Every header listed above moves to `>=0.17.1` in the rgpycrumbs commit, including `gen_dimer.py`, which declares the floor and does not touch a structure. `test_optional_peers_pinned_for_uv_and_readcon` only requires `>= (0, 13)`, so the higher floor still passes. `test_prepare_aoti_declares_the_export_stack` compares the header to the literal `readcon>=0.14.5` and has to change in that same commit.
