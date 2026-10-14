@@ -1,8 +1,10 @@
 //! Collective write: every rank of a caller-supplied communicator
 //! contributes its frames and the file holds them in rank order.
 //!
-//! Each rank formats its frames with the serial [`ConFrameWriter`], so
-//! the bytes depend only on the frames. `MPI_Exscan` of the local byte
+//! Each rank rebuilds its frames through [`ConFrameBuilder`](crate::types::ConFrameBuilder)
+//! and then formats them with the serial [`ConFrameWriter`], so the
+//! bytes depend only on the frames and match a binding rewrite
+//! (`con_spec_minor` included). `MPI_Exscan` of the local byte
 //! lengths gives each rank's file offset, and the output is
 //! byte-identical to a serial write of the rank-ordered frames for any
 //! rank count (including ranks with no frames).
@@ -83,13 +85,19 @@ pub fn format_frames(
     let mut starts = Vec::with_capacity(frames.len());
     for f in frames {
         starts.push(out.len() as u64);
+        // Parsed frames omit con_spec_minor unless the file had it.
+        // The C++ `mpi::write` path, the Fortran collective writer, and
+        // the Rust writer all come through here. Rebuilding stamps the
+        // minor the way ConFrameBuilder does for the other bindings.
+        // A failure is reported on every rank by the caller.
+        let rewritten = crate::writer::binding_rewrite_frame(f)?;
         let mut one = Vec::new();
         {
             let mut w = match precision {
                 Some(p) => ConFrameWriter::with_precision(&mut one, p),
                 None => ConFrameWriter::new(&mut one),
             };
-            w.write_frame(f)?;
+            w.write_frame(&rewritten)?;
             w.flush()?;
         }
         out.extend_from_slice(&one);

@@ -3,6 +3,9 @@
 
 The four outputs must be byte-identical. Accepted files are the [[valid]]
 entries in resources/conformance/manifest.toml.
+
+When READCON_MPI_LIB points at a cdylib built with the mpi feature, the
+C++ and Fortran collective writers are checked at 1, 2, and 4 ranks.
 """
 
 from __future__ import annotations
@@ -76,6 +79,127 @@ def run(cmd: list[str], **kwargs) -> None:
         sys.stderr.write(proc.stdout)
         sys.stderr.write(proc.stderr)
         raise SystemExit(f"command failed ({proc.returncode}): {' '.join(cmd)}")
+
+
+def mpi_launch(n: int, args: list[str]) -> list[str]:
+    return ["mpirun", "--oversubscribe", "-n", str(n), *args]
+
+
+def compile_mpi(work: Path, lib: Path, env: dict[str, str]) -> tuple[Path, Path]:
+    lib_dir = str(lib.parent)
+    cxx = work / "eon_mpi_band"
+    run(
+        [
+            "mpicxx",
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            f"-I{ROOT / 'include'}",
+            str(ROOT / "examples" / "eon_mpi_band.cpp"),
+            f"-L{lib_dir}",
+            "-lreadcon_core",
+            "-ldl",
+            "-lpthread",
+            "-lm",
+            "-o",
+            str(cxx),
+        ],
+        env=env,
+    )
+    mod = work / "mpimod"
+    mod.mkdir()
+    base = work / "readcon_mpi_base.o"
+    mpi_obj = work / "readcon_mpi.o"
+    run(
+        [
+            "mpifort",
+            "-Wall",
+            "-J",
+            str(mod),
+            "-c",
+            str(ROOT / "fortran" / "ReadCon" / "src" / "readcon.f90"),
+            "-o",
+            str(base),
+        ],
+        env=env,
+    )
+    run(
+        [
+            "mpifort",
+            "-Wall",
+            "-J",
+            str(mod),
+            "-c",
+            str(ROOT / "fortran" / "ReadCon" / "mpi" / "readcon_mpi.f90"),
+            "-o",
+            str(mpi_obj),
+        ],
+        env=env,
+    )
+    fort = work / "test_mpi_rw"
+    run(
+        [
+            "mpifort",
+            "-Wall",
+            "-I",
+            str(mod),
+            str(ROOT / "fortran" / "ReadCon" / "mpi" / "test_mpi_rw.f90"),
+            str(mpi_obj),
+            str(base),
+            f"-L{lib_dir}",
+            "-lreadcon_core",
+            "-ldl",
+            "-lpthread",
+            "-lm",
+            "-o",
+            str(fort),
+        ],
+        env=env,
+    )
+    return cxx, fort
+
+
+def compare_file(label: str, path: Path, expected: bytes) -> int:
+    got = path.read_bytes()
+    if got == expected:
+        return 0
+    show_diff(label, expected, got)
+    return 1
+
+
+def mpi_rewrites(
+    src: Path,
+    expected: bytes,
+    work: Path,
+    env: dict[str, str],
+    cxx: Path,
+    fort: Path,
+) -> int:
+    mismatches = 0
+    for n in (1, 2, 4):
+        cxx_out = work / f"{src.stem}.cxx.n{n}.con"
+        run(mpi_launch(n, [str(cxx), str(src), str(cxx_out)]), env=env)
+        mismatches += compare_file(f"C++ MPI n={n} {src.name}", cxx_out, expected)
+        mismatches += compare_file(
+            f"C++ serial n={n} {src.name}",
+            Path(str(cxx_out) + ".serial"),
+            expected,
+        )
+        fort_base = work / f"{src.stem}.fort.n{n}"
+        run(mpi_launch(n, [str(fort), str(src), str(fort_base)]), env=env)
+        for suffix, kind in (
+            (".f08", "Fortran MPI-IO"),
+            (".fint", "Fortran gather"),
+            (".serial", "Fortran serial"),
+        ):
+            mismatches += compare_file(
+                f"{kind} n={n} {src.name}",
+                Path(str(fort_base) + suffix),
+                expected,
+            )
+        print(f"ok mpi {src.name} n={n}")
+    return mismatches
 
 
 def show_diff(label: str, expected: bytes, actual: bytes) -> None:
@@ -168,6 +292,17 @@ def main() -> None:
             "using ReadCon\nframes = read_con(ARGS[1])\nwrite_con(ARGS[2], frames)\n"
         )
 
+        mpi_lib = os.environ.get("READCON_MPI_LIB")
+        cxx_bin = fort_bin = None
+        if mpi_lib:
+            env["LD_LIBRARY_PATH"] = (
+                str(Path(mpi_lib).parent) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+            )
+            env.setdefault("UCX_TLS", "tcp")
+            env.setdefault("OMPI_MCA_btl", "tcp,self")
+            env.setdefault("OMPI_MCA_pml", "ob1")
+            cxx_bin, fort_bin = compile_mpi(work, Path(mpi_lib), env)
+
         mismatches = 0
         for src in files:
             out = work / src.name
@@ -209,11 +344,18 @@ def main() -> None:
                     mismatches += 1
                     show_diff(f"{label} {src.name}", py_bytes, got)
             print(f"ok {src.name} ({len(py_bytes)} bytes)")
+            if cxx_bin is not None and fort_bin is not None:
+                mismatches += mpi_rewrites(src, py_bytes, work, env, cxx_bin, fort_bin)
 
     if mismatches:
         raise SystemExit(f"{mismatches} rewrite(s) were not byte-identical")
+    mpi = (
+        " plus C++ and Fortran MPI at 1, 2, and 4 ranks"
+        if os.environ.get("READCON_MPI_LIB")
+        else ""
+    )
     print(
-        f"byte-identical rewrites: {len(files)} accepted files, C Python Julia Fortran"
+        f"byte-identical rewrites: {len(files)} accepted files, C Python Julia Fortran{mpi}"
     )
 
 
