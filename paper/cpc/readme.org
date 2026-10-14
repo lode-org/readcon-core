@@ -43,3 +43,4 @@ Those endpoints are the public files of doi:10.1016/j.mex.2026.103899.
 
 The software archive is the Zenodo concept DOI 10.5281/zenodo.18753567.
 The per-repeat tables record the processor, the compiler, the library revision, the script revision, and the UTC date.
+The stage rows are =bench/results/clean_stages.csv.gz= (gzip-compressed CSV). =bench/results/CLEAN_RUN_SUMMARY.md= keeps the medians and checks.

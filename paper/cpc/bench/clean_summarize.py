@@ -26,10 +26,23 @@ def table(rows: list[dict[str, str]], columns: list[str] | None = None) -> str:
     return "\n".join([head, rule, *body]) + "\n"
 
 
+# Inlining the per-repeat tables makes this summary larger than the 1 MiB
+# history limit. Keep those rows in the result files and inline only the
+# small ones.
+INLINE_LIMIT = 64 * 1024
+
+
 def csv_block(name: str) -> str:
     path = RESULTS / name
+    if not path.exists() and name == "clean_stages.csv":
+        name = "clean_stages.csv.gz"
+        path = RESULTS / name
     if not path.exists():
         return f"Missing `{name}`.\n"
+    size = path.stat().st_size
+    if name.endswith(".gz") or size > INLINE_LIMIT:
+        kind = "gzip-compressed CSV" if name.endswith(".gz") else "CSV"
+        return f"Not inlined ({size} bytes, {kind}). The rows are in `{name}`.\n"
     return f"```\n{path.read_text().rstrip()}\n```\n"
 
 
@@ -179,7 +192,7 @@ def main() -> None:
         "",
         "## Every recorded number",
         "",
-        "The tables above are the medians, intervals, and checks. The blocks below are the raw CSV files, including every repeat.",
+        "The tables above are the medians, intervals, and checks. Small raw files are inlined below. The larger per-repeat tables stay in this directory: `clean_reads.csv`, `clean_writes.csv`, `clean_db_ingest.csv`, and `clean_stages.csv.gz`.",
         "",
     ]
     for name in (
@@ -195,7 +208,7 @@ def main() -> None:
         "clean_neb_restart.csv",
         "clean_reads.csv",
         "clean_writes.csv",
-        "clean_stages.csv",
+        "clean_stages.csv.gz",
         "clean_db_ingest.csv",
         "clean_conformance_fortran.log",
         "clean_conformance_julia.log",
