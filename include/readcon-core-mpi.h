@@ -23,7 +23,23 @@
 
 #include "readcon-core.h"
 
+/* Open MPI and MPICH include the deprecated C++ bindings from mpi.h.
+ * Those headers fail -Werror=cast-function-type on current g++. This
+ * shim uses the C API only. */
+#ifdef __cplusplus
+#ifndef OMPI_SKIP_MPICXX
+#define OMPI_SKIP_MPICXX 1
+#endif
+#ifndef MPICH_SKIP_MPICXX
+#define MPICH_SKIP_MPICXX 1
+#endif
+#endif
 #include <mpi.h>
+
+#ifdef __cplusplus
+/* readcon-core.h puts its C types in namespace readcon under C++. */
+using readcon::RKRConFrame;
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -189,6 +205,12 @@ static inline int rkr_mpi_my_frames_f(MPI_Fint comm_f, uint64_t n_frames,
 #ifdef __cplusplus
 } /* extern "C" */
 
+#include <cstddef>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace readcon {
 inline int mpi_bcast_blob(MPI_Comm comm, int root, int root_status,
                           const uint8_t *root_buf, int64_t root_nbytes,
@@ -200,6 +222,96 @@ inline int mpi_my_frames(MPI_Comm comm, uint64_t n_frames, uint64_t *start,
                          uint64_t *end) {
   return rkr_mpi_my_frames(comm, n_frames, start, end);
 }
+
+namespace mpi {
+
+/* This rank's block of frames from a distributed read. Owns the frame
+ * handles and frees them on destruction; move-only. */
+class Frames {
+public:
+  Frames() = default;
+  Frames(const Frames &) = delete;
+  Frames &operator=(const Frames &) = delete;
+  Frames(Frames &&o) noexcept { swap(o); }
+  Frames &operator=(Frames &&o) noexcept {
+    if (this != &o) {
+      reset();
+      swap(o);
+    }
+    return *this;
+  }
+  ~Frames() { reset(); }
+
+  /* Collective over `comm`; throws std::runtime_error on every rank if
+   * any rank fails. */
+  static Frames read(MPI_Comm comm, const std::string &path,
+                     int mode = RKR_MPI_READ_AUTO, std::size_t n_threads = 0) {
+    Frames f;
+    f.frames_ = rkr_mpi_read_block(comm, path.c_str(), mode, n_threads, &f.n_,
+                                   &f.first_, &f.total_);
+    if (f.frames_ == nullptr)
+      throw std::runtime_error("readcon: distributed read failed: " + path);
+    return f;
+  }
+
+  std::size_t size() const { return n_; }
+  bool empty() const { return n_ == 0; }
+  /* Global index of frame 0 of this rank, and the total across ranks. */
+  uint64_t first() const { return first_; }
+  uint64_t total() const { return total_; }
+  const RKRConFrame *operator[](std::size_t i) const { return frames_[i]; }
+  const RKRConFrame *const *data() const {
+    return const_cast<const RKRConFrame *const *>(frames_);
+  }
+  const RKRConFrame *const *begin() const { return data(); }
+  const RKRConFrame *const *end() const { return data() + n_; }
+
+  void reset() {
+    if (frames_ != nullptr)
+      free_rkr_frame_array(frames_, n_);
+    frames_ = nullptr;
+    n_ = 0;
+    first_ = total_ = 0;
+  }
+
+private:
+  void swap(Frames &o) noexcept {
+    std::swap(frames_, o.frames_);
+    std::swap(n_, o.n_);
+    std::swap(first_, o.first_);
+    std::swap(total_, o.total_);
+  }
+  RKRConFrame **frames_ = nullptr;
+  std::size_t n_ = 0;
+  uint64_t first_ = 0;
+  uint64_t total_ = 0;
+};
+
+/* Collective write of every rank's frames in rank order; returns the
+ * file size. Throws std::runtime_error on every rank if any rank fails. */
+inline uint64_t write(MPI_Comm comm, const std::string &path,
+                      const RKRConFrame *const *frames, std::size_t n,
+                      int mode = RKR_MPI_WRITE_AUTO, int precision = -1) {
+  uint64_t total = 0;
+  if (rkr_mpi_write_block(comm, path.c_str(), frames, n, mode, precision,
+                          &total) != 0)
+    throw std::runtime_error("readcon: collective write failed: " + path);
+  return total;
+}
+
+inline uint64_t write(MPI_Comm comm, const std::string &path,
+                      const Frames &frames, int mode = RKR_MPI_WRITE_AUTO,
+                      int precision = -1) {
+  return write(comm, path, frames.data(), frames.size(), mode, precision);
+}
+
+inline uint64_t write(MPI_Comm comm, const std::string &path,
+                      const std::vector<const RKRConFrame *> &frames,
+                      int mode = RKR_MPI_WRITE_AUTO, int precision = -1) {
+  return write(comm, path, frames.data(), frames.size(), mode, precision);
+}
+
+} // namespace mpi
 } // namespace readcon
 #endif /* __cplusplus */
 

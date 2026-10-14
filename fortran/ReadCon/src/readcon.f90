@@ -25,6 +25,8 @@ module readcon
   public :: open_writer_gzip, open_writer_zstd
   public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
   public :: read_chemfiles_first, read_chemfiles_nth, chemfiles_nsteps
+  ! Handle hand-off for companion modules (readcon_mpi).
+  public :: frames_from_handle_array, frame_c_handle
 
   ! Mirror include/readcon-core.h RKRStatus (keep in sync with src/ffi.rs)
   integer(c_int), parameter :: rkr_status_success = 0
@@ -875,6 +877,35 @@ contains
       frames(i)%cview = c_null_ptr
     end do
     call c_free_rkr_frame_ptr_array(arr, n)
+  end function
+
+  !> Take ownership of a C array of `n` RKRConFrame handles (as returned by
+  !> rkr_read_all_frames or rkr_mpi_read_block_f). Frees the array itself;
+  !> each frame_t then owns its handle.
+  function frames_from_handle_array(arr, n) result(frames)
+    type(c_ptr), value :: arr
+    integer(c_size_t), value :: n
+    type(frame_t), allocatable :: frames(:)
+    type(c_ptr), pointer :: ptrs(:)
+    integer(c_size_t) :: i
+    if (.not. c_associated(arr) .or. n == 0_c_size_t) then
+      allocate(frames(0))
+      if (c_associated(arr)) call c_free_rkr_frame_ptr_array(arr, n)
+      return
+    end if
+    call c_f_pointer(arr, ptrs, [n])
+    allocate(frames(n))
+    do i = 1_c_size_t, n
+      frames(i)%handle = ptrs(i)
+      frames(i)%cview = c_null_ptr
+    end do
+    call c_free_rkr_frame_ptr_array(arr, n)
+  end function
+
+  !> Borrowed RKRConFrame* of a frame (still owned by `fr`).
+  type(c_ptr) function frame_c_handle(fr)
+    type(frame_t), intent(in) :: fr
+    frame_c_handle = fr%handle
   end function
 
   function open_iterator(path) result(it)
