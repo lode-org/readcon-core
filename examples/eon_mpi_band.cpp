@@ -43,8 +43,9 @@ int main(int argc, char **argv) {
     if (rank == 0) {
       size_t n = 0;
       readcon::RKRConFrame **all = readcon::rkr_read_all_frames(argv[1], &n);
-      std::string ser = std::string(argv[2]) + ".serial";
-      readcon::RKRConFrameWriter *w = readcon::create_writer_from_path_c(ser.c_str());
+      std::string serial_path = std::string(argv[2]) + ".serial";
+      readcon::RKRConFrameWriter *w =
+          readcon::create_writer_from_path_c(serial_path.c_str());
       if (all == nullptr || w == nullptr ||
           readcon::rkr_writer_extend(w, all, n) != readcon::RKR_STATUS_SUCCESS)
         throw std::runtime_error("serial reference write failed");
