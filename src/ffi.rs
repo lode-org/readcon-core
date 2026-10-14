@@ -3626,7 +3626,10 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
 }
 
 /// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
-fn pack_frame_handles(frames: Vec<ConFrame>, num_frames: *mut usize) -> *mut *mut RKRConFrame {
+pub(crate) fn pack_frame_handles(
+    frames: Vec<ConFrame>,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
     let count = frames.len();
     let mut handles: Vec<*mut RKRConFrame> = frames
         .into_iter()

@@ -43,7 +43,7 @@ python = ["dep:pyo3", "dep:numpy", "parallel"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.
-mpi = ["dep:mpi"]
+mpi = ["dep:mpi", "parallel"]
 metatensor = ["dep:metatensor"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).
 # Off by default so lean builds / conda C-only consumers do not pull
@@ -123,6 +123,10 @@ name = "rust_usage"
 
 [[example]]
 name = "mpi_smoke"
+required-features = ["mpi"]
+
+[[example]]
+name = "mpi_read_check"
 required-features = ["mpi"]
 
 [[example]]
