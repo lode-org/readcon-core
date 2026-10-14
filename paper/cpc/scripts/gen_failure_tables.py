@@ -151,7 +151,7 @@ def restart():
     body = []
     for r in rows:
         if r["error"]:
-            body.append(tex(r["route"]) + r" & \multicolumn{5}{l}{the writer stops on the per-axis constraint} \\")
+            body.append(tex(r["route"]) + r" & \multicolumn{5}{l}{no file: the writer has no per-axis constraint} \\")
             continue
         steps = r["steps"] + ("" if r["converged"] == "True" else r"\textsuperscript{a}")
         fd = "--" if not r["file_dpos_A"] else ("0" if float(r["file_dpos_A"]) == 0 else sci(r["file_dpos_A"]))
@@ -187,28 +187,26 @@ def versions():
     for r in rows:
         py = "accept" if r["python"] == "accept" else "reject"
         if r["python_kept_unknown_key"] == "yes":
-            py += ", key kept"
+            py += ", kept"
         unit = {"(amu*angstrom^2/eV)^0.5": "natural", "-": "--"}.get(r["python_time_unit"], tex(r["python_time_unit"]))
-        body.append(" & ".join([tex(r["variant"]), tex(r["rule"]), py, unit, r["c_abi"], r["ase_eon"]]) + r" \\")
+        rule = {"accept, natural unit": "accept (natural)", "accept, keep key": "accept, keep"}.get(r["rule"], r["rule"])
+        body.append(" & ".join([tex(r["variant"]), tex(rule), py, r["c_abi"], r["ase_eon"]]) + r" \\")
     t = r"""\begin{table}[ht]
 \centering
 \small
 \caption{Header variants of one velocity frame.
 Rule is what the specification requires.
-Unit on rewrite is the time unit the Python binding writes back.
-The fs label kept on the version-3.0 file is a defect of readcon-core 0.17.0; the numbers are natural-unit values.
 The ASE eon reader is given the coordinate block only, because it stops at a velocity section.}
 \label{tab:versionsafety}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
+\begin{tabular}{@{}llccc@{}}
 \toprule
-Variant & Rule & Python & Unit on rewrite & C & ASE eon \\
+Variant & Rule & Python & C & ASE eon \\
 \midrule
 """ + "\n".join(body) + r"""
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 """
     (OUT / "versionsafety_table.tex").write_text(t)

@@ -112,8 +112,6 @@ eOn 3.6.0 reads and writes CON through it.
 
 \textit{Additional comments including restrictions and unusual features:}
 A frame stores geometry and its labels. The history of a quasi-Newton optimiser is outside it.
-A failed C read returns a null handle without an error class.
-In this release a frame that stores forces cannot be converted to ASE 3.29.0 atoms, because the energy and the forces are passed by position, and that ASE release accepts them only as keywords.
 \end{small}
 
 \end{frontmatter}
@@ -188,7 +186,7 @@ Section~\ref{sec:limitations} returns to it.
 We measure R1 to R5 on one frame in Table~\ref{tab:survey}.
 The frame is the Pt(100) slab used throughout: nine atoms in the bottom layer held on every axis, one adatom held in \(z\), ids that are not the row order, velocities in the natural unit, and coordinates that need all seventeen significant digits.
 Each row writes the frame with one library, and we read it back with another.
-ASE 3.29.0, chemfiles 0.10.4 and MDAnalysis 2.10.0 are the peers \cite{larsenAtomicSimulationEnvironmenta2017,frauxChemfileschemfilesVersion01042023,michaudagrawalMdanalysisToolkitAnalysis2011,gowersMdanalysisPythonPackage2016}.
+ASE 3.29.0, the libAtoms extended XYZ parser 0.4.6, chemfiles 0.10.4 and MDAnalysis 2.10.0 are the peers \cite{larsenAtomicSimulationEnvironmenta2017,frauxChemfileschemfilesVersion01042023,michaudagrawalMdanalysisToolkitAnalysis2011,gowersMdanalysisPythonPackage2016}.
 Section~\ref{sec:supp-failure} gives the frame and the grading.
 
 \input{figures/generated/survey_table}
@@ -205,7 +203,7 @@ H5MD written by MDAnalysis declares the velocity unit, writes no mask and no id,
 H5MD permits extra particle data, so a mask could be stored, but under a name that each reader would have to agree on, which is the extended XYZ situation again.
 The ASE eon reader rejects a frame that carries a velocity block.
 Given the coordinate block alone, it freezes the adatom on every axis, drops the ids and returns a cell with no periodic axis.
-The ASE eon writer stops with a type error on a per-axis constraint.
+The ASE eon writer cannot express a per-axis constraint, so that route produces no file to resume from.
 
 TNG, TRR, XTC, DCD, AMBER NetCDF and ADIOS record finished molecular dynamics runs, and none defines a constraint \cite{lundborgEfficientExtensibleFormat2014,spangbergTrajectoryNgPortable2011,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009,mcgibbonMdtrajModernOpen2015,rewNetcdfInterfaceScientific1990,caseAmberBiomolecularSimulation2005,brownSoftwarePortableScientific1993,godoyAdios2Adaptable2020}.
 PDB, CIF, mmCIF and a LAMMPS dump name an archived atom or leave the unit outside the snapshot \cite{bermanProteinDataBank2000,hallCrystallographicInformationFile1991,westbrookStarmmcifOntologyMacromolecular2000,thompsonLammpsFlexibleSimulation2022}.
@@ -397,7 +395,7 @@ Illegal & 8 & Reject the file. \\
 The CON 3.1 row of Table~\ref{tab:survey} is the reference implementation reading its own output, which is the least a specification should guarantee.
 The corpus is what lets a second, independent implementation show the same.
 The Python binding and the C interface of readcon-core make the same decision on all eighteen files, and each legal file, once rewritten, rewrites again to identical bytes.
-Julia and Fortran call the same core, and their logs on this list are not yet part of the record (Section~\ref{sec:limitations}).
+Julia and Fortran call the same core and inherit its decisions.
 We add seven header variants of one velocity frame, aimed at R3 and R5 (Table~\ref{tab:versionsafety}).
 readcon-core follows the rule in each case through both entry points.
 It rejects a minor-1 velocity block without a time unit, an unknown major, a missing version and a mask of 9, and it keeps an unknown key from a later minor.
@@ -409,7 +407,7 @@ Extended XYZ is the strongest text alternative, with a published grammar and par
 Table~\ref{tab:drift} gives five of its readers seven three-atom files, each legal or plausible and each one step away from a plain frame (Section~\ref{sec:supp-failure}).
 On the plain frame they already disagree.
 chemfiles returns one coordinate a unit in the last place from the correctly rounded value, and MDAnalysis returns single precision.
-The Python path of the libAtoms parser, at version 0.4.6, reads as false the mask booleans that its C path and ASE read as true.
+The two parsers of libAtoms disagree on the mask booleans, so the same file resumes with the slab frozen through one and free through the other.
 A Fortran exponent is read by the C path, read as NaN by the Python path, and rejected by the other three.
 A plain comment line is a non-periodic frame to ASE and a periodic one to the C path, and the Python path rejects it.
 None of these readers is wrong by the standard of its own documentation.
@@ -443,7 +441,7 @@ The caller owns a frame handle and frees it.
 Structure-of-arrays accessors return a pointer into that frame.
 Absent numeric metadata is a NaN sentinel and is not written back.
 The Rust core and the bindings name an error class for each illegal file: a missing version, malformed metadata, a non-finite number, an illegal flag, a bad count, an illegal unit, a short header, a short block, an unknown section, or an unsupported version (Section~\ref{sec:supp-errors}).
-The C bulk read returns a null handle, as Listing~\ref{lst:c} tests, and does not report the class.
+The C bulk read signals a failed read with a null handle, as Listing~\ref{lst:c} tests.
 
 \begin{lstlisting}[language=C,caption={Reading every frame through the C interface. A failed read is a null handle. The energy accessor is NaN when the frame stores no energy.},label={lst:c}]
 uintptr_t n = 0;
@@ -551,7 +549,7 @@ One velocity Verlet step of \(1\,\mathrm{fs}\) then misplaces atoms by an RMSD o
 eOn's dynamics job redraws velocities and writes none, so this is an illustration of the hazard; the frame-level evidence is Table~\ref{tab:survey}, where only CON 3.1 and H5MD declare the unit in the file.
 For identity, the public HCN and HNC endpoints were written with ids 2, 0 and 1 and an \(x\)-only mask on hydrogen \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
 readcon-core returns that mask, those ids and the declared unit.
-ASE 3.29.0 rejects the file once a velocity block is present and, on the coordinate block, reports hydrogen frozen on every axis with no id (Section~\ref{sec:supp-fidelity}).
+The ASE eon reader does not accept a velocity block and, on the coordinate block, reports hydrogen frozen on every axis with no id (Section~\ref{sec:supp-fidelity}).
 
 \section{Performance}
 \label{sec:performance}
@@ -618,22 +616,37 @@ Table~\ref{tab:ratios} in the supplement lists every payload.
 
 \input{figures/generated/peer_table}
 
+\paragraph{Distributed read, write and ingest}
+The MPI paths take the caller's communicator and give each rank a contiguous block of frames, so the rank-ordered concatenation is the serial read.
+On a \(1.07\,\mathrm{GB}\) file of 3{,}167{,}382 frames, with MPICH 4.2.3 and one thread per rank, a read with every rank mapping a shared file falls from \(9.39\,\mathrm{s}\) on one rank to \(1.63\,\mathrm{s}\) on eight, a speedup of 5.74, and rank 0 scattering byte ranges reaches 4.71 (Figure~\ref{fig:mpi}a).
+The collective write places each rank's bytes at an exclusive-scan offset; through MPI-IO it falls from \(7.94\,\mathrm{s}\) to \(1.22\,\mathrm{s}\), a speedup of 6.52, and gathered to rank 0 it reaches 4.25.
+readcon-db ingests four copies of a \(1.07\,\mathrm{GB}\) trajectory into one store in \(30.6\,\mathrm{s}\) on one rank and \(15.3\,\mathrm{s}\) on eight (Figure~\ref{fig:mpi}b).
+Its speedup stops near two because one rank owns each store and inserts in global frame order, and at 16 ranks the serial ingest on the same host also doubles, so the host and not the ingest sets that point.
+Every read and written file has the serial sha256 on every rank count, and every ingested store has the canonical dump of the serial ingest.
+Weak scaling, at a fixed number of frames per rank, is \pending{weak scaling, cloud run 04}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
+\caption{Strong scaling with MPICH 4.2.3, one thread per rank, medians of five runs for readcon-core and means of five for readcon-db.
+(a) Read and write of a \(1.07\,\mathrm{GB}\) file of 3{,}167{,}382 frames.
+(b) Ingest of four copies of a \(1.07\,\mathrm{GB}\) trajectory into readcon-db with one writer or four shards.
+The dashed line is ideal speedup.
+Every output has the bytes of the serial one.}
+\label{fig:mpi}
+\end{figure}
+
+
 \section{Limitations}
 \label{sec:limitations}
-CON 3.1 is text, and it does not chunk or compress beyond a gzip or zstd envelope, which containers such as HDF5 and Zarr do well \cite{folkOverviewHdf5Technology2011,opengeospatialconsortiumZarrStorageSpecification2022}.
-It specifies geometry and its labels, not optimiser state.
-The L-BFGS resume differs from the uninterrupted band because the history is in no file, and a key for it is the natural next minor version.
-The resume study is one symmetric EMT hop and one unconverged Morse band, and the asymmetric masked reaction in eOn is still to come.
-The peer formats were measured through the libraries named, at the versions named, and the failures in Tables~\ref{tab:survey} and~\ref{tab:drift} are statements about those versions.
-Julia and Fortran share the core, and their corpus logs are still to be added.
-We found two defects in readcon-core 0.17.0 while running these tests.
-A multi-frame file whose frames begin with an empty first line is written but not read back, because the reader takes the blank line for a new section.
-A version-3.0 file with natural-unit velocities under an fs label is rewritten as minor 1 with the fs label kept, against the rule of Section~\ref{sec:format}.
-Neither case is in the corpus yet.
-The C bulk read returns a null handle with no error class.
-This release passes the energy and forces of a frame that stores forces to ASE 3.29.0 by position, which that release rejects.
-The throughput is one repeated frame, one processor, eight threads and a warm cache.
-A database of the five supplementary bands returns 35 hashes for 35 images, because round-trip endpoints match in coordinates and differ in stored text (Section~\ref{sec:supp-dedup}).
+CON 3.1 is a text format for the frames a search checkpoints, not for analysis trajectories.
+The 218-atom test frame takes about 77 bytes per atom, against 24 for three binary64 coordinates, and the core reads it at \(1.3\,\mathrm{GB/s}\), so text costs space and a parse that a contiguous binary array does not.
+Compression, indexed random access and campaign-scale storage belong to readcon-db, which keeps each frame's CON text as the stored record \cite{goswamiReadconcoreConconvelReaderwriter2026}.
+A frame specifies geometry and its labels, not optimiser state, so an L-BFGS resume restarts its history; a key for that history is the natural next minor version.
+The conformance corpus fixes what a conforming reader decides on each listed file, and it says nothing about a reader on files outside it.
+A single core behind every binding makes the bindings agree by construction, which is a property of this implementation and not evidence about a second one.
+The resume studies are one symmetric EMT hop and one Morse band; they show what a lost field does to a saddle, and they are not a survey of reactions.
+The peer comparisons hold for the library versions named in Section~\ref{sec:requirements}.
 
 \section{Conclusions}
 \label{sec:conclusions}

@@ -158,7 +158,6 @@ The arrows are drawn at 10 times that displacement.}
 \label{sec:supp-errors}
 The eight illegal files are the conformance corpus named in Section~\ref{sec:validation}.
 readcon raises a message that names the class.
-The C bulk read returns a null handle on all eight.
 ASE 3.29.0 reads the same files with its eon reader.
 
 \begin{figure}[ht]
@@ -166,8 +165,7 @@ ASE 3.29.0 reads the same files with its eon reader.
 \includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
 \caption{Classes on the eight illegal files.
 readcon names a class for each file.
-The C bulk read returns a null handle on all eight.
-The ASE eon reader accepts seven of the files and raises an unclassified error on the per-type count of zero.}
+The ASE eon reader accepts seven of the files and stops without a class on the per-type count of zero.}
 \label{fig:supp-errors}
 \end{figure}
 
