@@ -95,5 +95,93 @@ def main():
     pf._save(fig, "restart_formats", None)
 
 
+def _e4_table(path: Path):
+    energy, force = [], []
+    for line in path.read_text().splitlines()[1:]:
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        energy.append(float(parts[2]))
+        force.append(float(parts[3]))
+    return np.asarray(energy), np.asarray(force)
+
+
+def _e4_band(directory: Path, ref: np.ndarray, prod: np.ndarray, lengths: np.ndarray):
+    import readcon
+    import e4_masked_neb as e4
+
+    frames = readcon.read_con(str(directory / "neb.con"))
+    pos = np.stack(
+        [np.array([[atom.x, atom.y, atom.z] for atom in frame.atoms], dtype=float) for frame in frames]
+    )
+    energy, f_para = _e4_table(directory / "neb.dat")
+    r = np.array([e4.mic_rmsd(p, ref, lengths) for p in pos])
+    p = np.array([e4.mic_rmsd(p, prod, lengths) for p in pos])
+    grad_r, grad_p = compute_synthetic_gradients(r, p, f_para)
+    return dict(r=r, p=p, grad_r=np.asarray(grad_r), grad_p=np.asarray(grad_p), z=energy, pos=pos)
+
+
+def e4_figure() -> Path:
+    """(s, d) landscapes for the masked eOn restart. Does not touch the paper figure."""
+    import e4_masked_neb as e4
+
+    theme, _settings = pf.house_style()
+    root = ROOT / "evidence" / "work" / "e4"
+    panels = [
+        ("full", "uninterrupted", pf.TEAL, "o"),
+        ("round", "shortest round trip", pf.MAGENTA, "s"),
+        ("six", "six decimals", pf.SKY, "D"),
+        ("freeze", "ASE eon reader, full freeze", pf.CORAL, "^"),
+        ("dropmask", "ASE POSCAR, masks dropped", pf.BLACK, "v"),
+    ]
+    full_pos = e4.positions_of(root / "full" / "neb.con")
+    lengths = e4.cell_lengths(root / "full" / "neb.con")
+    ref, prod = full_pos[0], full_pos[-1]
+    bands = {name: _e4_band(root / name, ref, prod, lengths) for name, *_ in panels}
+    basis = compute_projection_basis(bands["full"]["r"], bands["full"]["p"])
+    saddles = {}
+    for name, _label, color, marker in panels:
+        s, d = project_to_sd(bands[name]["r"], bands[name]["p"], basis)
+        k = pf._saddle_index(bands[name]["z"])
+        saddles[name] = (float(s[k]), float(d[k]), color, marker)
+    fig, axes = plt.subplots(1, 5, figsize=(12.8, 3.3), layout="constrained")
+    for ax, (name, label, color, marker) in zip(axes, panels):
+        band = bands[name]
+        cap = pf._draw_surface(ax, band, basis, pf.SEQUENTIAL)
+        s, d = project_to_sd(band["r"], band["p"], basis)
+        ax.plot(s, d, color=color, lw=1.0, zorder=44)
+        ax.scatter(s, d, marker=marker, s=18, facecolors="none", edgecolors=color, linewidths=0.9, zorder=46)
+        pf._mark_ends(ax, s, d, band["z"])
+        for other, (so, do, co, mo) in saddles.items():
+            if other == name:
+                ax.scatter(so, do, marker="o", s=36, facecolors=color, edgecolors=pf.BLACK, linewidths=0.6, zorder=60)
+            else:
+                ax.scatter(so, do, marker=mo, s=28, facecolors=co, edgecolors=pf.BLACK, linewidths=0.5, zorder=58)
+        ax.set_title(f"{label}\nbarrier {band['z'].max():.3f} eV", fontsize=6.5)
+        pf._landscape_labels(ax, ax is axes[0])
+        ax.set_aspect("auto")
+        fig.colorbar(
+            cap["cs"],
+            ax=ax,
+            orientation="horizontal",
+            label="energy (eV)",
+            shrink=0.9,
+            pad=0.02,
+            ticks=matplotlib.ticker.MaxNLocator(3),
+        )
+    pf._theme_axes(axes, theme)
+    dest = ROOT / "data" / "cloud-runs" / "spec02" / "e4_restart_formats.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(dest)
+    fig.savefig(dest.with_suffix(".png"), dpi=140)
+    plt.close(fig)
+    return dest
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--e4" in sys.argv:
+        print(e4_figure())
+    else:
+        main()

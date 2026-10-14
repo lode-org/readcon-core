@@ -1,0 +1,128 @@
+{
+  "eon": "/tmp/eon-build/client/eonclient",
+  "potential": "morse_pt",
+  "images": 7,
+  "fmax_eV_A": 0.01,
+  "sd": {
+    "iterations": 481,
+    "final_force": 0.0023626,
+    "barrier_eV": 2.033834,
+    "geometry": {
+      "saddle_index": 3,
+      "s": 0.19754764314323858,
+      "d": 0.1407059062693008,
+      "off_line_A": 0.1407059062693008,
+      "n_images": 9
+    },
+    "returncode": 0,
+    "prefactor": {
+      "imaginary_frequency_Hz": "-2.012186e+12;-1.719394e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "returncode": 0
+    },
+    "round": {
+      "iterations": 338,
+      "barrier_eV": 2.033834,
+      "final_force": 0.0023626,
+      "saddle_mic_rmsd_A": 0.0,
+      "imaginary_frequency_Hz": "-2.012186e+12;-1.719394e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "six": {
+      "iterations": 338,
+      "barrier_eV": 2.033835,
+      "final_force": 0.0023626,
+      "saddle_mic_rmsd_A": 2.0597828798875996e-07,
+      "imaginary_frequency_Hz": "-2.012186e+12;-1.719394e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "freeze": {
+      "iterations": 82,
+      "barrier_eV": 1.679825,
+      "final_force": 0.0099694,
+      "saddle_mic_rmsd_A": 0.3439301548646094,
+      "imaginary_frequency_Hz": "no imaginary mode",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "dropmask": {
+      "iterations": 338,
+      "barrier_eV": 0.570366,
+      "final_force": 0.52504,
+      "saddle_mic_rmsd_A": 0.06290062996500298,
+      "imaginary_frequency_Hz": "-1.408717e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "interrupt_k": 144,
+    "remaining": 338,
+    "full_saddle_mic_rmsd_A": 0.0
+  },
+  "lbfgs": {
+    "iterations": 91,
+    "final_force": 0.0045373,
+    "barrier_eV": 2.033657,
+    "geometry": {
+      "saddle_index": 3,
+      "s": 0.19734555358192546,
+      "d": 0.14071937747703683,
+      "off_line_A": 0.14071937747703683,
+      "n_images": 9
+    },
+    "returncode": 0,
+    "prefactor": {
+      "imaginary_frequency_Hz": "-2.010363e+12;-1.719607e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "returncode": 0
+    },
+    "round": {
+      "iterations": 59,
+      "barrier_eV": 2.033648,
+      "final_force": 0.0042564,
+      "saddle_mic_rmsd_A": 0.0008169448215099377,
+      "imaginary_frequency_Hz": "-2.012004e+12;-1.719607e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "six": {
+      "iterations": 59,
+      "barrier_eV": 2.033649,
+      "final_force": 0.0059849,
+      "saddle_mic_rmsd_A": 0.0008188916265442222,
+      "imaginary_frequency_Hz": "-2.012247e+12;-1.720033e+12",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "freeze": {
+      "iterations": 16,
+      "barrier_eV": 1.607404,
+      "final_force": 0.0085555,
+      "saddle_mic_rmsd_A": 0.34497022921906384,
+      "imaginary_frequency_Hz": "no imaginary mode",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "dropmask": {
+      "iterations": 65,
+      "barrier_eV": 1.64593,
+      "final_force": 2.0892,
+      "saddle_mic_rmsd_A": 0.42722862363504904,
+      "imaginary_frequency_Hz": "-1.361602e+12;-7.031861e+11",
+      "prefactor_Hz": "no imaginary mode",
+      "has_neb": true,
+      "stderr_tail": ""
+    },
+    "interrupt_k": 27,
+    "remaining": 65,
+    "full_saddle_mic_rmsd_A": 0.0
+  }
+}

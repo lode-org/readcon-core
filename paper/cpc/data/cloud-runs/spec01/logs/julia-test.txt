@@ -1,0 +1,18 @@
+     Testing ReadCon
+      Status `/tmp/jl_SoyKWp/Project.toml`
+  [db9801e4] ReadCon v0.17.0 `/workspace/julia/ReadCon`
+  [8dfed614] Test v1.11.0
+      Status `/tmp/jl_SoyKWp/Manifest.toml`
+  [db9801e4] ReadCon v0.17.0 `/workspace/julia/ReadCon`
+  [2a0f44e3] Base64 v1.11.0
+  [b77e0a4c] InteractiveUtils v1.11.0
+  [56ddb016] Logging v1.11.0
+  [d6f4376e] Markdown v1.11.0
+  [9a3f8284] Random v1.11.0
+  [ea8e919c] SHA v0.7.0
+  [9e88b42a] Serialization v1.11.0
+  [8dfed614] Test v1.11.0
+     Testing Running tests...
+Test Summary: | Pass  Broken  Total  Time
+ReadCon.jl    |  220       1    221  3.4s
+     Testing ReadCon tests passed 

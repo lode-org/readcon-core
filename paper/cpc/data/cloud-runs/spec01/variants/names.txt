@@ -1,0 +1,7 @@
+variant0.con	3.1, natural unit declared
+variant1.con	3.1, no time unit
+variant2.con	3.0, labelled fs
+variant3.con	3.2, unknown key
+variant4.con	4.0
+variant5.con	missing version
+variant6.con	3.1, mask 9

@@ -1,0 +1,11 @@
+optimizer,variant,iterations,barrier_eV,final_force_eV_A,saddle_mic_rmsd_A,off_line_A,imaginary_frequency_Hz,prefactor_Hz
+sd,full,481,2.033834,0.0023626,0.0,0.1407059062693008,-2.012186e+12;-1.719394e+12,no imaginary mode
+sd,round,338,2.033834,0.0023626,0.0,,-2.012186e+12;-1.719394e+12,no imaginary mode
+sd,six,338,2.033835,0.0023626,2.0597828798875996e-07,,-2.012186e+12;-1.719394e+12,no imaginary mode
+sd,freeze,82,1.679825,0.0099694,0.3439301548646094,,no imaginary mode,no imaginary mode
+sd,dropmask,338,0.570366,0.52504,0.06290062996500298,,-1.408717e+12,no imaginary mode
+lbfgs,full,91,2.033657,0.0045373,0.0,0.14071937747703683,-2.010363e+12;-1.719607e+12,no imaginary mode
+lbfgs,round,59,2.033648,0.0042564,0.0008169448215099377,,-2.012004e+12;-1.719607e+12,no imaginary mode
+lbfgs,six,59,2.033649,0.0059849,0.0008188916265442222,,-2.012247e+12;-1.720033e+12,no imaginary mode
+lbfgs,freeze,16,1.607404,0.0085555,0.34497022921906384,,no imaginary mode,no imaginary mode
+lbfgs,dropmask,65,1.64593,2.0892,0.42722862363504904,,-1.361602e+12;-7.031861e+11,no imaginary mode
