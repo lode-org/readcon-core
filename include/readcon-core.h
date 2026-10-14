@@ -820,6 +820,16 @@ enum RKRStatus rkr_writer_flush(struct RKRConFrameWriter *writer_handle);
 void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 
 /**
+ * Rebuild a parsed frame the way the Python, Julia, and Fortran writers do.
+ *
+ * ConFrameBuilder stamps con_spec_minor when the file omitted it. The writer
+ * itself does not invent that key, so a write of the parsed handle leaves it
+ * out. The caller owns the returned frame and must free it with
+ * free_rkr_frame. Returns NULL on a null argument or when the rebuild fails.
+ */
+struct RKRConFrame *rkr_frame_binding_rewrite(const struct RKRConFrame *frame_handle);
+
+/**
  * Writes multiple frames from an array of handles to the file managed by the writer.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
