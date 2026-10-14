@@ -1196,23 +1196,27 @@ impl PyConFrame {
 /// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
 /// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
 /// of 1 or later rejects velocities with no `units.time` (CON-units.11).
-/// A v3 frame is left alone so a caller who omitted time still fails.
+/// A 3.0 frame is treated the same way, overwriting any `units.time`
+/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
 fn stamp_legacy_velocity_time(
     meta: &mut BTreeMap<String, Value>,
     spec_version: u32,
     has_velocity: bool,
 ) {
-    if spec_version >= 3 || !has_velocity {
+    if !has_velocity {
         return;
     }
-    let time_ok = meta
-        .get(meta::UNITS)
-        .and_then(|units| units.get("time"))
-        .and_then(|value| value.as_str())
-        .is_some_and(|text| !text.trim().is_empty());
-    if time_ok {
+    let minor = meta
+        .get(meta::CON_SPEC_MINOR)
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if spec_version >= 3 && minor >= 1 {
         return;
     }
+    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
+    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
+    // the label authoritative (CON-units.10), so replace any label rather
+    // than keep one the old file never honoured.
     let mut units = match meta.get(meta::UNITS).cloned() {
         Some(Value::Object(map)) => Value::Object(map),
         Some(_) => return,
@@ -1224,6 +1228,10 @@ fn stamp_legacy_velocity_time(
             Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
         );
         meta.insert(meta::UNITS.to_string(), units);
+        // The label now holds, so the frame is written as minor 1.
+        if meta.contains_key(meta::CON_SPEC_MINOR) {
+            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        }
     }
 }
 
@@ -1894,7 +1902,13 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .ok()
             .and_then(|t| t.extract().ok())
             .unwrap_or_default();
-        if tags.iter().any(|&t| t != 0) {
+        // Tags label groups (slab layers, adsorbates) and repeat freely;
+        // only a set of distinct non-negative tags can stand in for ids.
+        let distinct = {
+            let mut seen = std::collections::HashSet::with_capacity(tags.len());
+            tags.iter().all(|&t| t >= 0 && seen.insert(t))
+        };
+        if tags.len() == n_atoms && tags.iter().any(|&t| t != 0) && distinct {
             tags.into_iter().map(|t| t as u64).collect()
         } else {
             (0..n_atoms).map(|i| i as u64).collect()

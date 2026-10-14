@@ -23,6 +23,12 @@ pub trait LineStream<'a> {
     fn remainder_is_whitespace(&mut self) -> bool {
         false
     }
+    /// With a blank line peeked, true unless the stream can see that the
+    /// line two past the blank is not a `Velocities of Component` label.
+    /// Default is true, which keeps the legacy blank-separator rule.
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        true
+    }
 }
 
 impl<'a, I> LineStream<'a> for Peekable<I>
@@ -1511,8 +1517,11 @@ pub fn parse_declared_sections<'a>(
         return Ok(0);
     }
     if !header.sections_declared && header.sections.is_empty() {
-        // Legacy: try velocity detection via blank separator
-        let found = parse_velocity_section(lines, header, atom_data)?;
+        // Legacy: try velocity detection via blank separator. A blank
+        // line can also be the empty line 1 of the next frame, so look for
+        // the velocity label before committing (CON-frame.5).
+        let found =
+            lines.blank_opens_velocity_block() && parse_velocity_section(lines, header, atom_data)?;
         if found {
             header.sections.push(SECTION_VELOCITIES.into());
             applied = 1;
