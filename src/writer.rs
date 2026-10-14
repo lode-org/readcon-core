@@ -97,6 +97,8 @@ pub struct ConFrameWriter<W: Write> {
     /// One frame of CON text. Filled then flushed with a single `write_all`
     /// so the sink is not entered once per atom line.
     scratch: Vec<u8>,
+    /// Reused shortest-round-trip buffer (ryu). One per writer, not per float.
+    ryu: ryu::Buffer,
 }
 
 #[derive(Debug)]
@@ -233,6 +235,7 @@ impl<W: Write> ConFrameWriter<W> {
             canonical: false,
             metadata_cache: None,
             scratch: Vec::with_capacity(16 * 1024),
+            ryu: ryu::Buffer::new(),
         }
     }
 
@@ -409,19 +412,7 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
-        // Writers emit ids that are unique within the frame (CON-id.3, D9).
-        // Readers accept repeats (CON-id.4) and may keep file order (CON-id.8).
-        let mut seen_ids = std::collections::HashSet::with_capacity(frame.atom_data.len());
-        for atom in &frame.atom_data {
-            if !seen_ids.insert(atom.atom_id) {
-                return Err(WriteError::Format(
-                    crate::error::ParseError::ValidationError(format!(
-                        "atom id {} is repeated in the frame",
-                        atom.atom_id
-                    )),
-                ));
-            }
-        }
+        ensure_unique_ids(&frame.atom_data)?;
         let prec = self.float_format;
         let meta_line = if frame.header.spec_version < 2 {
             // Spec 1 line 2 is free text. Do not re-emit JSON major 0 or 1 (D15).
@@ -441,21 +432,22 @@ impl<W: Write> ConFrameWriter<W> {
         self.scratch.clear();
         {
             let buf = &mut self.scratch;
+            let ryu = &mut self.ryu;
 
             // --- Write the 9-line Header ---
             let _ = writeln!(buf, "{}", frame.header.prebox_header.user);
             let _ = writeln!(buf, "{meta_line}");
-            push_f64(buf, boxl[0], prec);
+            push_f64(buf, ryu, boxl[0], prec);
             buf.push(b' ');
-            push_f64(buf, boxl[1], prec);
+            push_f64(buf, ryu, boxl[1], prec);
             buf.push(b' ');
-            push_f64(buf, boxl[2], prec);
+            push_f64(buf, ryu, boxl[2], prec);
             buf.push(b'\n');
-            push_f64(buf, angles[0], prec);
+            push_f64(buf, ryu, angles[0], prec);
             buf.push(b' ');
-            push_f64(buf, angles[1], prec);
+            push_f64(buf, ryu, angles[1], prec);
             buf.push(b' ');
-            push_f64(buf, angles[2], prec);
+            push_f64(buf, ryu, angles[2], prec);
             buf.push(b'\n');
             let _ = writeln!(buf, "{}", frame.header.postbox_header[0]);
             let _ = writeln!(buf, "{}", frame.header.postbox_header[1]);
@@ -473,7 +465,7 @@ impl<W: Write> ConFrameWriter<W> {
                 if i > 0 {
                     buf.push(b' ');
                 }
-                push_f64(buf, *m, prec);
+                push_f64(buf, ryu, *m, prec);
             }
             buf.push(b'\n');
 
@@ -488,6 +480,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let atom = &frame.atom_data[atom_idx_offset + i];
                     push_xyz_line(
                         buf,
+                        ryu,
                         atom.x,
                         atom.y,
                         atom.z,
@@ -512,9 +505,10 @@ impl<W: Write> ConFrameWriter<W> {
 
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[vel_idx_offset + i];
-                        let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
+                        let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
                         push_xyz_line(
                             buf,
+                            ryu,
                             vx,
                             vy,
                             vz,
@@ -540,9 +534,10 @@ impl<W: Write> ConFrameWriter<W> {
 
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[force_idx_offset + i];
-                        let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
+                        let [fx, fy, fz] = atom.force().unwrap_or([0.0; 3]);
                         push_xyz_line(
                             buf,
+                            ryu,
                             fx,
                             fy,
                             fz,
@@ -568,9 +563,10 @@ impl<W: Write> ConFrameWriter<W> {
 
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[energy_idx_offset + i];
-                        let e = atom.energy.unwrap_or(0.0);
+                        let e = atom.energy().unwrap_or(0.0);
                         push_scalar_line(
                             buf,
+                            ryu,
                             e,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -591,9 +587,10 @@ impl<W: Write> ConFrameWriter<W> {
                     let _ = writeln!(buf, "Charges of Component {}", type_idx + 1);
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
-                        let q = atom.charge.unwrap_or(0.0);
+                        let q = atom.charge().unwrap_or(0.0);
                         push_scalar_line(
                             buf,
+                            ryu,
                             q,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -614,9 +611,10 @@ impl<W: Write> ConFrameWriter<W> {
                     let _ = writeln!(buf, "Spins of Component {}", type_idx + 1);
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
-                        let s = atom.spin.unwrap_or(0.0);
+                        let s = atom.spin().unwrap_or(0.0);
                         push_scalar_line(
                             buf,
+                            ryu,
                             s,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -637,9 +635,10 @@ impl<W: Write> ConFrameWriter<W> {
                     let _ = writeln!(buf, "Magmoms of Component {}", type_idx + 1);
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
-                        let [mx, my, mz] = atom.magmom.unwrap_or([0.0; 3]);
+                        let [mx, my, mz] = atom.magmom().unwrap_or([0.0; 3]);
                         push_xyz_line(
                             buf,
+                            ryu,
                             mx,
                             my,
                             mz,
@@ -662,9 +661,10 @@ impl<W: Write> ConFrameWriter<W> {
                     let _ = writeln!(buf, "Displacements of Component {}", type_idx + 1);
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
-                        let [dx, dy, dz] = atom.displacement.unwrap_or([0.0; 3]);
+                        let [dx, dy, dz] = atom.displacement().unwrap_or([0.0; 3]);
                         push_xyz_line(
                             buf,
+                            ryu,
                             dx,
                             dy,
                             dz,
@@ -687,7 +687,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let _ = writeln!(buf, "Spreads of Component {}", type_idx + 1);
                     for i in 0..num_atoms_in_type {
                         let atom = &frame.atom_data[off + i];
-                        let [sx, sy, sz] = atom.spread.unwrap_or([0.0; 3]);
+                        let [sx, sy, sz] = atom.spread().unwrap_or([0.0; 3]);
                         if !crate::types::spread_row_ok([sx, sy, sz]) {
                             let err = if sx.is_finite() && sy.is_finite() && sz.is_finite() {
                                 crate::types::invalid_spread(off + i)
@@ -701,6 +701,7 @@ impl<W: Write> ConFrameWriter<W> {
                         }
                         push_xyz_line(
                             buf,
+                            ryu,
                             sx,
                             sy,
                             sz,
@@ -737,6 +738,33 @@ impl<W: Write> ConFrameWriter<W> {
     }
 }
 
+fn ensure_unique_ids(atoms: &[crate::types::AtomDatum]) -> Result<(), WriteError> {
+    let n = atoms.len();
+    if n == 0 {
+        return Ok(());
+    }
+    // Trajectory frames usually number atoms 0..n-1. That needs no set.
+    if atoms
+        .iter()
+        .enumerate()
+        .all(|(i, atom)| atom.atom_id == i as u64)
+    {
+        return Ok(());
+    }
+    let mut seen_ids = std::collections::HashSet::with_capacity(n);
+    for atom in atoms {
+        if !seen_ids.insert(atom.atom_id) {
+            return Err(WriteError::Format(
+                crate::error::ParseError::ValidationError(format!(
+                    "atom id {} is repeated in the frame",
+                    atom.atom_id
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn written_fixed_flag(fixed: [bool; 3], spec_version: u32) -> u8 {
     if spec_version < 2 {
         if fixed.iter().any(|axis| *axis) { 1 } else { 0 }
@@ -764,11 +792,18 @@ fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
     buf.extend_from_slice(&tmp[i..]);
 }
 
-fn push_f64(buf: &mut Vec<u8>, value: f64, format: FloatFormat) {
+fn push_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, value: f64, format: FloatFormat) {
     match format {
         FloatFormat::DecimalPlaces(precision) => push_f64_prec(buf, value, precision),
         FloatFormat::RoundTrip => {
-            let _ = write!(buf, "{value:e}");
+            // Shortest correctly-rounded spelling. `format` covers the
+            // non-finite fallback; finite values take the reused buffer.
+            let text = if value.is_finite() {
+                ryu.format_finite(value)
+            } else {
+                ryu.format(value)
+            };
+            buf.extend_from_slice(text.as_bytes());
         }
     }
 }
@@ -809,6 +844,7 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
 
 fn push_xyz_line(
     buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
     x: f64,
     y: f64,
     z: f64,
@@ -816,11 +852,11 @@ fn push_xyz_line(
     fixed: u8,
     atom_id: u64,
 ) {
-    push_f64(buf, x, prec);
+    push_f64(buf, ryu, x, prec);
     buf.push(b' ');
-    push_f64(buf, y, prec);
+    push_f64(buf, ryu, y, prec);
     buf.push(b' ');
-    push_f64(buf, z, prec);
+    push_f64(buf, ryu, z, prec);
     buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');
@@ -828,8 +864,15 @@ fn push_xyz_line(
     buf.push(b'\n');
 }
 
-fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: FloatFormat, fixed: u8, atom_id: u64) {
-    push_f64(buf, v, prec);
+fn push_scalar_line(
+    buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
+    v: f64,
+    prec: FloatFormat,
+    fixed: u8,
+    atom_id: u64,
+) {
+    push_f64(buf, ryu, v, prec);
     buf.push(b' ');
     push_u64(buf, u64::from(fixed));
     buf.push(b' ');

@@ -85,7 +85,7 @@ pub fn frame_velocities_block(frame: &ConFrame) -> Result<Option<TensorBlock>, m
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for atom in &frame.atom_data {
-        let [vx, vy, vz] = atom.velocity.unwrap_or([0.0; 3]);
+        let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
         data.extend_from_slice(&[vx, vy, vz]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
@@ -107,7 +107,7 @@ pub fn frame_forces_block(frame: &ConFrame) -> Result<Option<TensorBlock>, metat
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for atom in &frame.atom_data {
-        let [fx, fy, fz] = atom.force.unwrap_or([0.0; 3]);
+        let [fx, fy, fz] = atom.force().unwrap_or([0.0; 3]);
         data.extend_from_slice(&[fx, fy, fz]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
@@ -130,7 +130,7 @@ pub fn frame_energies_block(frame: &ConFrame) -> Result<Option<TensorBlock>, met
     let data: Vec<f64> = frame
         .atom_data
         .iter()
-        .map(|a| a.energy.unwrap_or(0.0))
+        .map(|a| a.energy().unwrap_or(0.0))
         .collect();
     let values = Array2::from_shape_vec((n, 1), data)
         .expect("array shape mismatch when building energies block")
