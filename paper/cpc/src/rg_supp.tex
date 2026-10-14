@@ -207,6 +207,35 @@ The round-trip and six-decimal maps sit on the uninterrupted Morse band at this 
 \label{fig:supp-neb}
 \end{figure}
 
+\section{Failure cases: frame, grading and drift files}
+\label{sec:supp-failure}
+The survey frame is a Pt(100) \(2\times2\times2\) slab with 6\,\AA{} of vacuum and one Pt adatom 1.8\,\AA{} above the hollow site.
+Every coordinate carries a uniform offset of up to \(10^{-3}\,\text{\AA}\) from a fixed seed, so all seventeen significant digits are needed.
+The bottom four atoms are fixed on every axis, and the adatom is fixed in \(z\).
+The ids are 17, 3, 11, 5, 23, 2, 13, 7 and 41 in row order.
+Velocities are normal deviates of standard deviation \(4\times10^{-3}\) in the natural unit, zero on held axes.
+For ASE the masks become one FixAtoms and one FixCartesian, the ids an integer array named \texttt{id}, and the velocities ASE momenta.
+For MDAnalysis the velocities are converted to \(\text{\AA}/\mathrm{ps}\), its base unit.
+We count a field as kept when it reads back equal; a mask counts as a full freeze when every masked atom returns frozen on every axis.
+A velocity is declared when the file names its unit and the values agree after conversion to within \(10^{-6}\) relative.
+When the file names no unit, we report what a reader that takes the numbers as \(\text{\AA}/\mathrm{fs}\) would see, a kinetic energy 103.64 times too large.
+
+Each drift file has three Pt atoms with the header
+\begin{lstlisting}
+Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 20.0" Properties=species:S:1:pos:R:3:move_mask:L:3:id:I:1 pbc="T T F"
+\end{lstlisting}
+and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0 T T T 3} and \texttt{Pt 1.3859292911256331 1.3859292911256331 7.8 F F T 41}.
+The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, write the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
+The readers are ASE 3.29.0, the libAtoms extended XYZ parser 0.4.6 through its C path and its Python path, chemfiles 0.10.4, and MDAnalysis 2.10.0.
+The correctly rounded binary64 value of 2.7718585822512662 has the bit pattern \texttt{40062cc4313f3fb9}; chemfiles returns \texttt{40062cc4313f3fb8}.
+
+The resume study uses an EMT Pt(100) \(3\times3\times3\) slab with 6\,\AA{} of vacuum, the bottom layer held, and one adatom 1.75\,\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
+Endpoints were relaxed with BFGS to \(0.002\,\mathrm{eV/\text{\AA}}\).
+Five movable images were interpolated with the constraints applied.
+The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
+We interrupt after step 25.
+Each route writes all seven images and reads them back with the reader the route names, keeping whatever constraints and periodicity that reader returns.
+
 \section{Reader rules}
 \label{sec:appendix-rules}
 Table~\ref{tab:rules} collects the edge cases a reader applies.

@@ -1,0 +1,8 @@
+variant,rule,python,python_time_unit,python_kept_unknown_key,c_abi,ase_eon
+"3.1, natural unit declared",accept,accept,(amu*angstrom^2/eV)^0.5,-,accept,accept
+"3.1, no time unit",reject,reject: invalid units,-,-,reject,accept
+"3.0, labelled fs","accept, natural unit",accept,fs,-,accept,accept
+"3.2, unknown key","accept, keep key",accept,(amu*angstrom^2/eV)^0.5,yes,accept,accept
+4.0,reject,reject: unsupported con_spec_version,-,-,reject,accept
+missing version,reject,reject: line 2 must be a JSON object containing ,-,-,reject,accept
+"3.1, mask 9",reject,reject: invalid fixed flag,-,-,reject,accept

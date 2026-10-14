@@ -1,0 +1,36 @@
+case,reader,status,z0,x1,pbc,move_mask,ids
+plain,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+plain,libextxyz (C),read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+plain,libextxyz (Python),read,6,2.7718585822512662,TTF,"FFF,FFF,FFF","17,3,41"
+plain,chemfiles,read,6,2.7718585822512658,-,-,"17,3,41"
+plain,MDAnalysis,read,6,2.7718586921691895,-,-,-
+no_pbc_key,ASE,read,6,2.7718585822512662,TTT,"TTT,TTT,FFT","17,3,41"
+no_pbc_key,libextxyz (C),read,6,2.7718585822512662,TTT,"TTT,TTT,FFT","17,3,41"
+no_pbc_key,libextxyz (Python),read,6,2.7718585822512662,TTT,"FFF,FFF,FFF","17,3,41"
+no_pbc_key,chemfiles,read,6,2.7718585822512658,-,-,"17,3,41"
+no_pbc_key,MDAnalysis,read,6,2.7718586921691895,-,-,-
+bare_comment,ASE,read,6,2.7718585822512662,FFF,"TTT,TTT,TTT",-
+bare_comment,libextxyz (C),read,6,2.7718585822512662,TTT,-,-
+bare_comment,libextxyz (Python),"error: SyntaxError: Failed to parse entire input line, only ''. Expecting one of : {=}",,,,,
+bare_comment,chemfiles,read,6,2.7718585822512658,-,-,-
+bare_comment,MDAnalysis,read,6,2.7718586921691895,-,-,-
+fortran_exponent,ASE,error: ValueError: could not convert string to float: '6.0d0',,,,,
+fortran_exponent,libextxyz (C),read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+fortran_exponent,libextxyz (Python),read,nan,2.7718585822512662,TTF,"FFF,FFF,FFF","17,3,41"
+fortran_exponent,chemfiles,error: ChemfilesError: error while reading 'Pt 0.0 0.0 6.0d0 T T T 17': can not parse '6.0d0' as a doub,,,,,
+fortran_exponent,MDAnalysis,error: EOFError: could not convert string to float: '6.0d0',,,,,
+bool_spelling,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+bool_spelling,libextxyz (C),read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+bool_spelling,libextxyz (Python),read,6,2.7718585822512662,TTF,"TFT,TFT,FFT","17,3,41"
+bool_spelling,chemfiles,read,6,2.7718585822512658,-,-,"17,3,41"
+bool_spelling,MDAnalysis,read,6,2.7718586921691895,-,-,-
+quoted_value_with_equals,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+quoted_value_with_equals,libextxyz (C),read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+quoted_value_with_equals,libextxyz (Python),read,6,2.7718585822512662,TTF,"FFF,FFF,FFF","17,3,41"
+quoted_value_with_equals,chemfiles,read,6,2.7718585822512658,-,-,"17,3,41"
+quoted_value_with_equals,MDAnalysis,read,6,2.7718586921691895,-,-,-
+units_key,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+units_key,libextxyz (C),read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+units_key,libextxyz (Python),read,6,2.7718585822512662,TTF,"FFF,FFF,FFF","17,3,41"
+units_key,chemfiles,read,6,2.7718585822512658,-,-,"17,3,41"
+units_key,MDAnalysis,read,6,2.7718586921691895,-,-,-

@@ -1,0 +1,27 @@
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{The climbing-image band of the EMT Pt(100) hop, interrupted after 25 steepest-descent steps, written and read back through each route, and resumed under the same rule to a maximum force of \(0.01\,\mathrm{eV/\AA}\).
+File: the largest coordinate change across the write and the read.
+Modes: free Cartesian degrees of freedom of the middle image after the read (56 for the intended masks).
+\(\Delta E^\ddagger\) and displacement are measured against the uninterrupted band.
+\textsuperscript{a}Not converged at the 4000-step cap.}
+\label{tab:restartfmt}
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Route & File (\AA) & Modes & Steps & \(\Delta E^\ddagger\) (eV) & Max displacement (\AA) \\
+\midrule
+uninterrupted & -- & 56 & 60 & 0 & 0 \\
+CON 3.1, shortest round trip & 0 & 56 & 60 & \(-5.7\times10^{-14}\) & \(2.7\times10^{-15}\) \\
+CON 3.1, six decimals & \(4.9\times10^{-7}\) & 56 & 60 & \(-4.1\times10^{-7}\) & \(6.2\times10^{-7}\) \\
+CON 3.1 read by the ASE eon reader & 0 & 54 & 4000\textsuperscript{a} & \(-3.5\times10^{-1}\) & \(5.4\times10^{0}\) \\
+same, periodicity restored by hand & 0 & 54 & 127 & \(-2.9\times10^{-6}\) & \(4.2\times10^{-2}\) \\
+extended XYZ (ASE) & \(5.0\times10^{-9}\) & 56 & 60 & \(1.1\times10^{-9}\) & \(4.9\times10^{-9}\) \\
+ASE trajectory & 0 & 56 & 60 & \(-2.3\times10^{-14}\) & \(3.6\times10^{-15}\) \\
+POSCAR (ASE) & \(4.9\times10^{-17}\) & 57 & 98 & \(-7.0\times10^{-2}\) & \(1.6\times10^{-1}\) \\
+legacy CON (ASE eon writer) & \multicolumn{5}{l}{the writer stops on the per-axis constraint} \\
+\bottomrule
+\end{tabular}}
+\end{table}

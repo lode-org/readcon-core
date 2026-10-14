@@ -1,0 +1,142 @@
+{
+ "meta": {
+  "ase": "3.29.0",
+  "chemfiles": "0.10.4",
+  "MDAnalysis": "2.10.0",
+  "readcon_spec": 3
+ },
+ "rows": [
+  {
+   "format": "CON 3.1",
+   "writer": "readcon-core",
+   "reader": "readcon-core",
+   "R1": "kept",
+   "R2": "kept",
+   "R3": "declared",
+   "R4": "bit-exact",
+   "dpos": 0.0,
+   "pbc": "kept",
+   "error": ""
+  },
+  {
+   "format": "CON 3.1",
+   "writer": "readcon-core",
+   "reader": "ASE eon reader",
+   "R1": "reader error",
+   "R2": "reader error",
+   "R3": "reader error",
+   "R4": "reader error",
+   "pbc": "",
+   "dpos": "",
+   "error": "ValueError: could not convert string to float: 'Velocities'"
+  },
+  {
+   "format": "CON 3.1, coordinates only",
+   "writer": "readcon-core",
+   "reader": "ASE eon reader",
+   "R1": "full freeze",
+   "R2": "lost",
+   "R3": "lost",
+   "R4": "bit-exact",
+   "dpos": 0.0,
+   "pbc": "FFF",
+   "error": ""
+  },
+  {
+   "format": "legacy CON",
+   "writer": "ASE eon writer",
+   "reader": "readcon-core",
+   "R1": "writer error",
+   "R2": "writer error",
+   "R3": "writer error",
+   "R4": "writer error",
+   "pbc": "",
+   "dpos": "",
+   "error": "TypeError: category must be a Warning subclass, not 'FixCartesian'"
+  },
+  {
+   "format": "extended XYZ",
+   "writer": "ASE",
+   "reader": "ASE",
+   "R1": "convention",
+   "R2": "convention",
+   "R3": "convention",
+   "R4": "4.7e-09 A",
+   "dpos": 4.708383904983293e-09,
+   "pbc": "kept",
+   "error": ""
+  },
+  {
+   "format": "extended XYZ",
+   "writer": "ASE",
+   "reader": "chemfiles",
+   "R1": "lost",
+   "R2": "convention",
+   "R3": "lost",
+   "R4": "4.7e-09 A",
+   "dpos": 4.708383904983293e-09,
+   "pbc": "-",
+   "error": ""
+  },
+  {
+   "format": "extended XYZ",
+   "writer": "ASE",
+   "reader": "MDAnalysis",
+   "R1": "lost",
+   "R2": "lost",
+   "R3": "lost",
+   "R4": "2.2e-07 A",
+   "dpos": 2.1514905768071912e-07,
+   "pbc": "-",
+   "error": ""
+  },
+  {
+   "format": "extended XYZ",
+   "writer": "chemfiles",
+   "reader": "ASE",
+   "R1": "lost",
+   "R2": "lost",
+   "R3": "lost",
+   "R4": "4.9e-06 A",
+   "dpos": 4.910985489381403e-06,
+   "pbc": "TTT",
+   "error": ""
+  },
+  {
+   "format": "ASE trajectory",
+   "writer": "ASE",
+   "reader": "ASE",
+   "R1": "kept",
+   "R2": "lost",
+   "R3": "convention",
+   "R4": "bit-exact",
+   "dpos": 0.0,
+   "pbc": "kept",
+   "error": ""
+  },
+  {
+   "format": "POSCAR",
+   "writer": "ASE",
+   "reader": "ASE",
+   "R1": "changed",
+   "R2": "lost",
+   "R3": "fixed by format",
+   "R4": "4.5e-17 A",
+   "dpos": 4.456070928915423e-17,
+   "pbc": "TTT",
+   "error": ""
+  },
+  {
+   "format": "H5MD",
+   "writer": "MDAnalysis",
+   "reader": "MDAnalysis",
+   "R1": "lost",
+   "R2": "lost",
+   "R3": "declared",
+   "R4": "2.2e-07 A",
+   "dpos": 2.1514905768071912e-07,
+   "pbc": "TTT",
+   "error": ""
+  }
+ ]
+}

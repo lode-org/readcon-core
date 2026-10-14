@@ -1,0 +1,26 @@
+\begin{table}[ht]
+\centering
+\small
+\caption{Header variants of one velocity frame.
+Rule is what the specification requires.
+Unit on rewrite is the time unit the Python binding writes back.
+The fs label kept on the version-3.0 file is a defect of readcon-core 0.17.0; the numbers are natural-unit values.
+The ASE eon reader is given the coordinate block only, because it stops at a velocity section.}
+\label{tab:versionsafety}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+Variant & Rule & Python & Unit on rewrite & C & ASE eon \\
+\midrule
+3.1, natural unit declared & accept & accept & natural & accept & accept \\
+3.1, no time unit & reject & reject & -- & reject & accept \\
+3.0, labelled fs & accept, natural unit & accept & fs & accept & accept \\
+3.2, unknown key & accept, keep key & accept, key kept & natural & accept & accept \\
+4.0 & reject & reject & -- & reject & accept \\
+missing version & reject & reject & -- & reject & accept \\
+3.1, mask 9 & reject & reject & -- & reject & accept \\
+\bottomrule
+\end{tabular}}
+\end{table}
