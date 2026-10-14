@@ -34,6 +34,11 @@ jobs:
             launcher: mpiexec.openmpi --oversubscribe -n
     env:
       CARGO_TERM_COLOR: always
+      # Ubuntu runners expose a verbs device UCX cannot use.
+      # ibv_create_srq returns ENOTSUP and MPICH aborts in MPI_Init.
+      # TCP is selected before any mpiexec.
+      UCX_TLS: tcp
+      UCX_SOCKADDR_TLS_PRIORITY: tcp
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
