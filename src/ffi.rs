@@ -1,7 +1,7 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
 use crate::types::{ConFrame, ConFrameBuilder, meta};
-use crate::writer::ConFrameWriter;
+use crate::writer::{ConFrameWriter, binding_rewrite_frame};
 use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char};
 use std::fs::File;
@@ -1138,6 +1138,27 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
         let _ = unsafe { Box::from_raw(writer_handle as *mut RkrWriter) };
     }
 }
+/// Rebuild a parsed frame the way the Python, Julia, and Fortran writers do.
+///
+/// The builder stamps `con_spec_minor` when the file omitted it. The caller
+/// owns the returned frame and must free it with `free_rkr_frame`. Returns
+/// NULL on a null argument or when the rebuild fails.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_binding_rewrite(
+    frame_handle: *const RKRConFrame,
+) -> *mut RKRConFrame {
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return ptr::null_mut();
+    };
+    match binding_rewrite_frame(frame) {
+        Ok(rewritten) => Box::into_raw(Box::new(rewritten)) as *mut RKRConFrame,
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 /// Writes multiple frames from an array of handles to the file managed by the writer.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
