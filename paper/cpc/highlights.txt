@@ -1,4 +1,4 @@
-A saddle-search checkpoint needs masks, ids, a time unit and binary64 coordinates
+A checkpoint needs masks, ids, a time unit, binary64 coordinates and a version
 One masked slab frame loses part of that state in every common format
 An ASE POSCAR resume drops a height constraint and ends 70 meV lower
 Five extended XYZ readers return four different answers for one file
