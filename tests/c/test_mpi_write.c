@@ -3,6 +3,7 @@
  * against a serial write. Needs libreadcon_core with the `mpi` feature. */
 #include "readcon-core-mpi.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CHECK(c)                                                               \
@@ -65,7 +66,18 @@ int main(int argc, char **argv) {
     snprintf(sp, sizeof sp, "%s.serial", argv[2]);
     struct RKRConFrameWriter *w = create_writer_from_path_c(sp);
     CHECK(w != NULL);
-    CHECK(rkr_writer_extend(w, (const struct RKRConFrame *const *)s, ns) == RKR_STATUS_SUCCESS);
+    /* Collective write rebuilds frames and stamps con_spec_minor. */
+    struct RKRConFrame **rebuilt = (struct RKRConFrame **)calloc(ns ? ns : 1, sizeof(*rebuilt));
+    CHECK(rebuilt != NULL);
+    for (size_t i = 0; i < ns; i++) {
+      rebuilt[i] = rkr_frame_binding_rewrite(s[i]);
+      CHECK(rebuilt[i] != NULL);
+    }
+    CHECK(rkr_writer_extend(w, (const struct RKRConFrame *const *)rebuilt, ns) ==
+          RKR_STATUS_SUCCESS);
+    for (size_t i = 0; i < ns; i++)
+      free_rkr_frame(rebuilt[i]);
+    free(rebuilt);
     free_rkr_writer(w);
     free_rkr_frame_array(s, ns);
     long a, b, c;

@@ -288,7 +288,10 @@ private:
 };
 
 /* Collective write of every rank's frames in rank order; returns the
- * file size. Throws std::runtime_error on every rank if any rank fails. */
+ * file size. Throws std::runtime_error on every rank if any rank fails.
+ * The library rebuilds each frame through ConFrameBuilder before
+ * formatting, so a parsed frame gains con_spec_minor 1 the same way
+ * the Fortran, Python, and Julia writers do. */
 inline uint64_t write(MPI_Comm comm, const std::string &path,
                       const RKRConFrame *const *frames, std::size_t n,
                       int mode = RKR_MPI_WRITE_AUTO, int precision = -1) {
