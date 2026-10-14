@@ -99,6 +99,25 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             .iter()
             .all(|b| b.is_ascii_whitespace())
     }
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        match self.peek_line() {
+            Some(line) if line.trim().is_empty() => {}
+            _ => return true,
+        }
+        // `pos` sits just past the peeked blank line.
+        second_line_is_component_label(&self.bytes[self.pos..])
+    }
+}
+
+/// True when the second line of `after` is a `<Name> of Component N`
+/// label, the shape of a section block and never of a frame header.
+fn second_line_is_component_label(after: &[u8]) -> bool {
+    let Some(i) = memchr::memchr(b'\n', after) else {
+        return false;
+    };
+    let rest = &after[i + 1..];
+    let end = memchr::memchr(b'\n', rest).unwrap_or(rest.len());
+    std::str::from_utf8(&rest[..end]).is_ok_and(|label| label.contains(" of Component"))
 }
 
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
@@ -223,6 +242,12 @@ impl<'a> ConFrameIterator<'a> {
             // not a section (CON-frame.5).
             if after.iter().all(|b| b.is_ascii_whitespace()) {
                 self.lines.pos = self.lines.bytes.len();
+                break;
+            }
+            // A blank line followed by a header is the empty line 1 of the
+            // next frame. A section block has a component label on its
+            // second line; a frame header has the cell lengths there.
+            if !second_line_is_component_label(after) {
                 break;
             }
             // Consume the blank separator and the section block.
