@@ -1,6 +1,8 @@
+% Created 2026-10-14 Wed 09:04
 % Intended LaTeX compiler: pdflatex
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
+\usepackage{rotating}
 \journal{Computer Physics Communications}
 \usepackage{iftex}
 \ifPDFTeX\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\else\usepackage{fontspec}\fi
@@ -9,30 +11,30 @@
 % The class footer box is followed by a space token.
 % The output routine then packs that box to \textwidth, and the space makes the line 2.6pt overfull.
 \def\ps@pprintTitle{%
-     \let\@oddhead\@empty
-     \let\@evenhead\@empty
-     \def\@oddfoot{%
-       \hbox to \textwidth{%
-        \ifnopreprintline\relax\else
-        \@myfooterfont
-         \ifx\@elsarticlemyfooteralign\@elsarticlemyfooteraligncenter
-           \hfil\@elsarticlemyfooter\hfil
-         \else
-         \ifx\@elsarticlemyfooteralign\@elsarticlemyfooteralignleft
-           \@elsarticlemyfooter\hfill{}%
-         \else
-         \ifx\@elsarticlemyfooteralign\@elsarticlemyfooteralignright
-           {}\hfill\@elsarticlemyfooter
-         \else
-               Preprint submitted to \ifx\@journal\@empty
-                 Elsevier%
-            \else\@journal\fi\hfill\@date\fi
-         \fi
-         \fi
-         \fi
-       }%
-     }%
-     \let\@evenfoot\@oddfoot}
+\let\@oddhead\@empty
+\let\@evenhead\@empty
+\def\@oddfoot{%
+\hbox to \textwidth{%
+\ifnopreprintline\relax\else
+\@myfooterfont
+\ifx\@elsarticlemyfooteralign\@elsarticlemyfooteraligncenter
+\hfil\@elsarticlemyfooter\hfil
+\else
+\ifx\@elsarticlemyfooteralign\@elsarticlemyfooteralignleft
+\@elsarticlemyfooter\hfill{}%
+\else
+\ifx\@elsarticlemyfooteralign\@elsarticlemyfooteralignright
+{}\hfill\@elsarticlemyfooter
+\else
+Preprint submitted to \ifx\@journal\@empty
+Elsevier%
+\else\@journal\fi\hfill\@date\fi
+\fi
+\fi
+\fi
+}%
+}%
+\let\@evenfoot\@oddfoot}
 \makeatother
 \usepackage{amssymb,amsmath}
 \usepackage{booktabs}
@@ -44,29 +46,33 @@
 \externaldocument{rg_main}
 \input{affilfix}
 \lstset{
-  basicstyle=\ttfamily\footnotesize,
-  breaklines=true,
-  breakatwhitespace=false,
-  columns=fullflexible,
-  keepspaces=true,
-  showstringspaces=false,
-  frame=none,
-  aboveskip=0.6em,
-  belowskip=0.4em
+basicstyle=\ttfamily\footnotesize,
+breaklines=true,
+breakatwhitespace=false,
+columns=fullflexible,
+keepspaces=true,
+showstringspaces=false,
+frame=none,
+aboveskip=0.6em,
+belowskip=0.4em
 }
-\date{\today}
-\title{Supplementary material for CON 3.1}
-\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black,
- pdfauthor={Rohit Goswami},
- pdftitle={Supplementary material for CON 3.1},
- pdfkeywords={checkpoint, specification, restart, saddle},
- pdflang={English}}
 \renewcommand{\thesection}{S\arabic{section}}
 \renewcommand{\thetable}{S\arabic{table}}
 \renewcommand{\thefigure}{S\arabic{figure}}
 \AtBeginDocument{\renewcommand{\thelstlisting}{S\arabic{lstlisting}}}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black}
+\date{\today}
+\title{Supplementary material for CON 3.1}
+\hypersetup{
+ pdfauthor={Rohit Goswami},
+ pdftitle={Supplementary material for CON 3.1},
+ pdfkeywords={checkpoint, specification, restart, saddle},
+ pdfsubject={},
+ pdfcreator={Emacs 30.1 (Org mode 9.7.11)}, 
+ pdflang={English}}
 \begin{document}
 
+\label{sec:org96ce26f}
 \begin{frontmatter}
 \input{authors.tex}
 \begin{abstract}
@@ -76,11 +82,10 @@ The hash figure is a query of those bands.
 The ingest tables are the stored five-repeat measurements of that store.
 \end{abstract}
 \end{frontmatter}
-
 \section{Restart difference}
 \label{sec:supp-restart}
-The interrupted band in Section~\ref{sec:validation} writes a checkpoint and then continues.
-Figure~\ref{fig:supp-restart} compares each resumed movie with the uninterrupted movie at the same index.
+The interrupted band in Section \ref{sec:validation} writes a checkpoint and then continues.
+Figure \ref{fig:supp-restart} compares each resumed movie with the uninterrupted movie at the same index.
 Column 3 is that checkpoint.
 The final column is the band after the five steepest-descent steps.
 
@@ -93,10 +98,9 @@ The final column is at most \(8.9\times10^{-15}\,\text{\AA}\) for the round trip
 Intermediate columns differ by up to \(0.050\,\text{\AA}\) because the search has taken further steps after the load.}
 \label{fig:supp-restart}
 \end{figure}
-
 \section{Round-trip fidelity}
 \label{sec:supp-fidelity}
-Figure~\ref{fig:supp-fidelity} uses two unmodified files.
+Figure \ref{fig:supp-fidelity} uses two unmodified files.
 The matrix rows other than the velocity-file row are the first frame of the height-held EMT band.
 That frame already carries mask 4, a \(z\)-only hold, on the adatom, together with ids, forces and an energy.
 It carries no velocities and no time unit, so the time-unit cell on those rows is absent.
@@ -121,10 +125,9 @@ The number in the binary64 cell is the maximum absolute coordinate change.
 A grey cell is a time unit the source frame did not carry.}
 \label{fig:supp-fidelity}
 \end{figure}
-
 \section{Frame bytes and parse time}
 \label{sec:supp-anatomy}
-The frame is the 28-atom velocity file, 3{,}826 bytes.
+The frame is the 28-atom velocity file, 3,826 bytes.
 The timed files are 400 copies of that frame and 400 copies with the velocity section removed.
 The reported times are medians of 31 paired reads.
 
@@ -137,10 +140,9 @@ The velocity section adds \(2.90\,\mu\mathrm{s}\) to a \(13.2\,\mu\mathrm{s}\) r
 Masks and ids share the coordinate line, so their parse time is inside that \(13.2\,\mu\mathrm{s}\).}
 \label{fig:supp-anatomy}
 \end{figure}
-
 \section{Velocity mislabel}
 \label{sec:supp-velocity}
-The kinetic energies and the Verlet step are the illustration in Section~\ref{sec:validation}.
+The kinetic energies and the Verlet step are the illustration in Section \ref{sec:validation}.
 The conversion from the natural unit to femtoseconds is the factor used for that illustration.
 The cell is the slab cell of the file.
 
@@ -153,10 +155,9 @@ The RMSD is \(0.096\,\text{\AA}\) and the maximum component is \(0.315\,\text{\A
 The arrows are drawn at 10 times that displacement.}
 \label{fig:supp-velocity}
 \end{figure}
-
 \section{Illegal-file classes}
 \label{sec:supp-errors}
-The eight illegal files are the conformance corpus named in Section~\ref{sec:validation}.
+The eight illegal files are the conformance corpus named in Section \ref{sec:validation}.
 readcon raises a message that names the class.
 ASE 3.29.0 reads the same files with its eon reader.
 
@@ -168,21 +169,20 @@ readcon names a class for each file.
 The ASE eon reader accepts seven of the files and stops without a class on the per-type count of zero.}
 \label{fig:supp-errors}
 \end{figure}
-
 \section{Database hashes of the campaign bands}
 \label{sec:supp-dedup}
 The hashes are a query against readcon-db 0.1.8.
 The five bands were appended as stored trajectories, and each frame hash was read back by the same query.
-The bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section~\ref{sec:validation}.
+The bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section \ref{sec:validation}.
 The query returns 35 images and 35 hashes.
 Every returned hash locates the frame that was stored.
 Endpoint coordinates of the uninterrupted band and the round-trip resume agree: the maximum absolute component is 0 at both endpoints and \(8.9\times10^{-15}\,\text{\AA}\) over the seven images.
 The stored texts still differ, so the hash keeps every frame apart.
 On the reactant the only differing line is the metadata line.
-The printed curvature products differ by one byte, 2{,}507 bytes against 2{,}506, and the coordinate rows match.
+The printed curvature products differ by one byte, 2,507 bytes against 2,506, and the coordinate rows match.
 The product frame differs only in that same metadata line.
 The five intermediate images differ in the metadata line and in coordinate rows at the last printed digits, which is the \(8.9\times10^{-15}\,\text{\AA}\) displacement.
-Figure~\ref{fig:supp-neb} is the same five bands on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
+Figure \ref{fig:supp-neb} is the same five bands on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
 
 \begin{figure}[ht]
 \centering
@@ -204,10 +204,9 @@ Black dots are the images.
 The round-trip and six-decimal maps sit on the uninterrupted Morse band at this scale.}
 \label{fig:supp-neb}
 \end{figure}
-
 \section{Failure cases: frame, grading and drift files}
 \label{sec:supp-failure}
-The survey frame is a Pt(100) \(2\times2\times2\) slab with 6\,\AA{} of vacuum and one Pt adatom 1.8\,\AA{} above the hollow site.
+The survey frame is a Pt(100) \(2\times2\times2\) slab with 6\hspace*{.2em}\AA{} of vacuum and one Pt adatom 1.8\hspace*{.2em}\AA{} above the hollow site.
 Every coordinate carries a uniform offset of up to \(10^{-3}\,\text{\AA}\) from a fixed seed, so all seventeen significant digits are needed.
 The bottom four atoms are fixed on every axis, and the adatom is fixed in \(z\).
 The ids are 17, 3, 11, 5, 23, 2, 13, 7 and 41 in row order.
@@ -227,17 +226,16 @@ The variants drop the \texttt{pbc} key, replace the header by a plain comment an
 The readers are ASE 3.29.0, the libAtoms extended XYZ parser 0.4.6 through its C path and its Python path, chemfiles 0.10.4, and MDAnalysis 2.10.0.
 The correctly rounded binary64 value of 2.7718585822512662 has the bit pattern \texttt{40062cc4313f3fb9}; chemfiles returns \texttt{40062cc4313f3fb8}.
 
-The resume study uses an EMT Pt(100) \(3\times3\times3\) slab with 6\,\AA{} of vacuum, the bottom layer held, and one adatom 1.75\,\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
+The resume study uses an EMT Pt(100) \(3\times3\times3\) slab with 6\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
 Endpoints were relaxed with BFGS to \(0.002\,\mathrm{eV/\text{\AA}}\).
 Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 We interrupt after step 25.
 Each route writes all seven images and reads them back with the reader the route names, keeping whatever constraints and periodicity that reader returns.
-
 \section{Reader rules}
 \label{sec:appendix-rules}
-Table~\ref{tab:rules} collects the edge cases a reader applies.
-They are the classes of Section~\ref{sec:format}, stated as input and outcome.
+Table \ref{tab:rules} collects the edge cases a reader applies.
+They are the classes of Section \ref{sec:format}, stated as input and outcome.
 
 \begin{table}[ht]
 \centering
@@ -269,19 +267,17 @@ Several gzip members & Read in order. \\
 \bottomrule
 \end{tabular}
 \end{table}
-
 \section{Paired peer timings on every payload}
 \label{sec:appendix-peers}
-Table~\ref{tab:ratios} extends the peer table of the main text to the 1-frame and 100-frame files.
+Table \ref{tab:ratios} extends the peer table of the main text to the 1-frame and 100-frame files.
 The comparison calls the Python binding with one worker, and ASE, chemfiles, MDAnalysis and h5py run in the same process with OpenMP and BLAS limited to one thread.
 XYZ and H5MD peers receive the coordinates of the same frames, written before the timed loop starts.
 Each cell is one-worker readcon-core, then the peer, thirty times, after one untimed call of each side.
-A repeat over 240\,s would be recorded as a timeout and a peer that raises as a failure; neither occurred.
+A repeat over 240\hspace*{.2em}s would be recorded as a timeout and a peer that raises as a failure; neither occurred.
 The interval is a bias-corrected and accelerated bootstrap of the median with 9999 draws \cite{efronBetterBootstrapConfidence1987}.
 On one frame the fixed cost of opening the file dominates, which is why h5py and chemfiles lose their lead there.
 
 \input{figures/generated/ratio_table}
-
 \section{Stored ingest timings}
 \label{sec:appendix-db}
 readcon-db answers composition, energy and maximum-force queries over CON frames that an adaptive kinetic Monte Carlo campaign has already written.
@@ -296,15 +292,15 @@ A megabyte is \(10^{6}\) bytes.
 A cold query follows a hint that cached pages are not needed, and then runs in a fresh process.
 A warm query is the next query in that same process.
 The timed corpora repeat ASE effective-medium searches: a hydrogen cyanide band, a copper adatom band, a platinum-hydrogen band and a platinum adatom dimer.
-Every frame in those corpora has its own hash, at both 1{,}000 and 10{,}000 frames.
+Every frame in those corpora has its own hash, at both 1,000 and 10,000 frames.
 The clock starts before the write and stops after a composition check.
 Every timed query was kept only after the hit count and the sum of frame indexes matched an oracle.
 
-Table~\ref{tab:db-ingest} is the ingest of 10{,}000 frames.
-Inside a single ASE transaction the writer still commits every 5{,}000 rows, so 1{,}000 frames is one commit and 10{,}000 frames is two commits, plus the commit that closes the block.
+Table \ref{tab:db-ingest} is the ingest of 10,000 frames.
+Inside a single ASE transaction the writer still commits every 5,000 rows, so 1,000 frames is one commit and 10,000 frames is two commits, plus the commit that closes the block.
 The other ASE column commits on every write.
-At 1{,}000 frames the medians are \(0.0329\,\mathrm{s}\) (30{,}400 frames/s) for readcon-db, \(0.646\,\mathrm{s}\) (1{,}550 frames/s) for one transaction, and \(5.03\,\mathrm{s}\) (199 frames/s) for a commit on every write.
-At 10{,}000 frames readcon-db writes at \(35.1\,\mathrm{MB/s}\) (33.0 to 38.0), the single transaction at \(1.83\,\mathrm{MB/s}\), and the per-write commits at \(0.226\,\mathrm{MB/s}\).
+At 1,000 frames the medians are \(0.0329\,\mathrm{s}\) (30,400 frames/s) for readcon-db, \(0.646\,\mathrm{s}\) (1,550 frames/s) for one transaction, and \(5.03\,\mathrm{s}\) (199 frames/s) for a commit on every write.
+At 10,000 frames readcon-db writes at \(35.1\,\mathrm{MB/s}\) (33.0 to 38.0), the single transaction at \(1.83\,\mathrm{MB/s}\), and the per-write commits at \(0.226\,\mathrm{MB/s}\).
 
 \begin{table}[ht]
 \centering
@@ -340,12 +336,12 @@ A megabyte is \(10^{6}\) bytes.}
 \label{fig:db-bandwidth}
 \end{figure}
 
-On composition, energy and maximum force at 10{,}000 frames, readcon-db takes about 8 to 10 ms when cold and about 0.2 ms when warm.
+On composition, energy and maximum force at 10,000 frames, readcon-db takes about 8 to 10 ms when cold and about 0.2 ms when warm.
 The cold medians are 8.14 ms (5.12 to 10.7), 10.1 ms (8.11 to 14.4) and 9.57 ms (7.70 to 11.6), in that query order.
 The warm medians are 0.176 ms, 0.211 ms and 0.208 ms.
 The ASE database takes 0.286 s, 0.223 s and 0.225 s on the cold queries, and 0.258 s, 0.203 s and 0.206 s when warm.
 A directory of the same CON text, in 64-frame chunks, takes 0.193 s, 0.193 s and 0.197 s cold, and 0.140 s, 0.138 s and 0.138 s warm.
-Figure~\ref{fig:db-query} shows both corpus sizes.
+Figure \ref{fig:db-query} shows both corpus sizes.
 
 \begin{figure}[ht]
 \centering
@@ -356,9 +352,9 @@ Rows pair the store with a cold or warm cache.}
 \label{fig:db-query}
 \end{figure}
 
-readcon-db occupies 2.50 times the raw CON text, at both 1{,}000 and 10{,}000 frames.
+readcon-db occupies 2.50 times the raw CON text, at both 1,000 and 10,000 frames.
 The ASE database is smaller than the raw text.
-Figure~\ref{fig:db-disk} also shows gzip and zstd of the same text.
+Figure \ref{fig:db-disk} also shows gzip and zstd of the same text.
 
 \begin{figure}[ht]
 \centering
@@ -368,12 +364,12 @@ The readcon-db cell is the memory-mapped file, text plus indexes.}
 \label{fig:db-disk}
 \end{figure}
 
-One adaptive kinetic Monte Carlo trace of 24{,}000 frames stores 27.9 MB of blobs, \(27{,}864{,}917\) bytes, equal to the raw file, because the stored texts are kept separately.
+One adaptive kinetic Monte Carlo trace of 24,000 frames stores 27.9 MB of blobs, \(27{,}864{,}917\) bytes, equal to the raw file, because the stored texts are kept separately.
 The hash index of that stored trace records 7 unique structures, and their text is 8319 bytes.
 Those seven texts are the unhopped hydrogen cyanide state and its saddle, the unhopped copper state and its saddle, and both platinum-hydrogen states together with that saddle.
-Figure~\ref{fig:db-dedup} compares the full trace with that unique set.
+Figure \ref{fig:db-dedup} compares the full trace with that unique set.
 That collapse is a property of the repeated states in the trace.
-It is separate from the campaign-band query in Section~\ref{sec:supp-dedup}, which found no shared hash.
+It is separate from the campaign-band query in Section \ref{sec:supp-dedup}, which found no shared hash.
 
 \begin{figure}[ht]
 \centering
@@ -387,7 +383,6 @@ The right panel is allocated bytes for the full corpus and for a corpus of the u
 Nine correctness checks pass on that store.
 They cover a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared mask, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
 The map is capped at 2 GiB, and one million frames does not fit.
-
 \section{ABNF of one frame}
 \label{sec:appendix-abnf}
 The non-normative ABNF of one frame follows.
@@ -398,5 +393,4 @@ The specification wins where the two disagree.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{rg_main}
-
 \end{document}
