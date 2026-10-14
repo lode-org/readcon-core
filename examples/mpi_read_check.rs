@@ -56,17 +56,17 @@ fn main() {
         let t1 = Instant::now();
         let serial = readcon_core::iterators::read_all_frames(path).unwrap();
         let ds = t1.elapsed().as_secs_f64() * 1e3;
-        let ser = write_all(&serial);
+        let serial_bytes = write_all(&serial);
         std::fs::write(format!("{}.mpi", a[3]), &cat).unwrap();
-        std::fs::write(format!("{}.serial", a[3]), &ser).unwrap();
+        std::fs::write(format!("{}.serial", a[3]), &serial_bytes).unwrap();
         println!(
             "ranks={} mode={} frames={} distributed_ms={dt:.1} serial_ms={ds:.1} identical={}",
             comm.size(),
             a[2],
             rf.n_total,
-            cat == ser
+            cat == serial_bytes
         );
-        if cat != ser {
+        if cat != serial_bytes {
             std::process::exit(1);
         }
     } else {
