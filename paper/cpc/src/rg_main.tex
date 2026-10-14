@@ -628,6 +628,9 @@ Neither of those two reads the fields this paper is about.
 The XYZ copy carries coordinates and no mask, id or velocity unit, and chemfiles fills arrays without building one object per atom.
 The h5py row loads one contiguous binary array and parses no text, so it is the floor for any text reader and not a competitor.
 On one frame of the platinum slab the same ordering holds with smaller margins.
+ASE reading extended XYZ written from the same frames takes 2.6 times as long as readcon-core on the 10{,}000-frame file.
+The binary ASE trajectory is level with it on that file, within the interval, and 3.2 times faster on the single slab frame, where the fixed cost of the text parse dominates and the binary file needs no parse.
+Both ASE files return ASE atoms with the constraint, so they carry more than the XYZ copy and less than the CON frame: a FixAtoms constraint and no declared time unit.
 Table~\ref{tab:ratios} in the supplement lists the 1-frame and 100-frame files.
 
 \input{figures/generated/peer_table}

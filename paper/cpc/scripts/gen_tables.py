@@ -138,7 +138,9 @@ def gen_peers(rows: list[dict[str, str]]) -> str:
             r"\caption{Paired ratios of the one-worker Python read to each peer, "
             r"readcon-core time over peer time, so a value below 1 means readcon-core finished sooner. "
             r"Each cell is 30 interleaved pairs; the interval is a bias-corrected and accelerated "
-            r"95 percent interval of the median. The fields column says what the peer returns.}"
+            r"95 percent interval of the median. The fields column says what the peer returns. "
+            r"The two ASE rows beyond the eon reader come from a second campaign on a shared host, "
+            r"in which the ASE eon ratio on the 10000-frame file reproduced at 0.348 against 0.337.}"
         ),
         r"\label{tab:peers}",
         r"\footnotesize",
