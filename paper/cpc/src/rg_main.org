@@ -399,13 +399,36 @@ A text checkpoint diffs under version control, so a changed mask or id shows in 
 eOn has written and read CON since its first releases, and every existing campaign is in it \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}.
 The eOn server and its clients exchange geometries as files, often across machines and operating systems, and text needs no agreement on byte order or library version \cite{pedersenDistributedImplementationAdaptive2010}.
 The metadata is one JSON line because a JSON object takes new keys without a new grammar, carries its own version pair, and lets a reader keep a key it does not know \cite{brayJavascriptObjectNotation2017}.
-Table \ref{tab:sizes} measures the cost on the 218-atom frame.
+Table \ref{tab:sizes} measures the cost on the 218-atom frame, alone and as a 10,000-frame molecular dynamics trajectory in which every frame differs.
 One CON frame takes 42 bytes per atom, half of extended XYZ written by ASE and less than either H5MD file, where the HDF5 structure dominates a single frame.
-Over 10,000 frames H5MD falls to 24 bytes per atom in binary64 and 12.6 in single precision, against 42 for CON, and gzip narrows every gap.
+Over the trajectory CON stays at 42.2 bytes per atom (92.0 MB), against 83.6 for extended XYZ (182.3 MB), 46.3 for the ASE trajectory (101.0 MB) and 24.3 for H5MD with binary64 positions (52.9 MB).
+Plain XYZ, with symbols and coordinates and no mask, id or units, takes 32.4.
 H5MD is designed for that case, long trajectories where binary storage and chunked access pay off \cite{buylH5mdStructuredEfficient2014}; a checkpoint is one frame, and there text costs little.
 
 #+BEGIN_EXPORT latex
-\input{figures/generated/sizes_table}
+\begin{table}[ht]
+\centering
+\small
+\caption{Bytes per atom of the 218-atom frame.
+The one-frame columns are raw and after gzip at level 6.
+The trajectory column is 10{,}000 distinct frames of a velocity Verlet EMT run at \(1\,\mathrm{fs}\) and \(300\,\mathrm{K}\), divided by \(2.18\times10^{6}\) atoms; the file size in MB (\(10^{6}\) bytes) is in parentheses.
+CON 3.1 is the default readcon-core writer, extended XYZ the ASE writer with the mask column, the ASE trajectory its binary writer, plain XYZ symbols and coordinates at 16 significant digits, and H5MD (h5py) binary64 positions with cell and species, plus mask and id datasets in the one-frame file.
+A dash is a size not measured.}
+\label{tab:sizes}
+\begin{tabular}{lrrr}
+\toprule
+& \multicolumn{2}{c}{One frame} & 10{,}000 MD frames \\
+Format & raw & gzip & raw (MB) \\
+\midrule
+CON 3.1 & 41.99 & 6.07 & 42.22 (92.0) \\
+extended XYZ (ASE) & 83.64 & 6.65 & 83.64 (182.3) \\
+ASE trajectory & -- & -- & 46.33 (101.0) \\
+plain XYZ & -- & -- & 32.37 (70.6) \\
+H5MD (h5py) & 95.40 & 9.66 & 24.26 (52.9) \\
+H5MD (MDAnalysis) & 314.39 & 9.04 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
 #+END_EXPORT
 
 * Conformance and drift
@@ -438,7 +461,9 @@ Illegal & 8 & Reject the file. \\
 
 The CON 3.1 row of Table \ref{tab:survey} is the reference implementation reading its own output, which is the least a specification should guarantee.
 The corpus is what lets a second, independent implementation show the same.
-The Python binding and the C interface of readcon-core make the same decision on all eighteen files, and each legal file, once rewritten, rewrites again to identical bytes.
+The Python, Julia and Fortran bindings and the C interface of readcon-core make the same decision on all eighteen files and on the seven header variants below.
+The Julia golden suite passes 136 of 136 checks and the Fortran suite accepts all ten legal files and rejects all eight illegal ones.
+Python and Julia rewrite each legal file to identical bytes, and in every binding a rewritten file rewrites again to identical bytes.
 We add seven header variants of one velocity frame, aimed at R3 and R5 (Table \ref{tab:versionsafety}).
 readcon-core follows the rule in each case through both entry points.
 It rejects a minor-1 velocity block without a time unit, an unknown major, a missing version and a mask of 9, and it keeps an unknown key from a later minor.
@@ -597,6 +622,15 @@ The job stops at five steepest-descent steps.}
 \end{figure}
 #+END_EXPORT
 
+** An asymmetric band resumed
+The Pt hops above are symmetric, so a band can pass through the saddle on the straight line.
+A palladium adatom on a \(3\times3\times3\) Al(111) slab with EMT moves from an fcc hollow to an hcp hollow, and the endpoints differ by \(-11.3\,\mathrm{meV}\).
+Mask 7 fixes the lowest aluminium layer, and the fast inertial relaxation engine (FIRE) drives a band of five movable images with a spring of \(0.1\,\mathrm{eV/\text{\AA}^2}\) to \(0.02\,\mathrm{eV/\text{\AA}}\) \cite{bitzekStructuralRelaxationMade2006}.
+With the palladium free the band converges in 31 steps to a forward barrier of \(19.85\,\mathrm{meV}\) and a reverse barrier of \(31.18\,\mathrm{meV}\).
+With its height held by mask 4 it converges in 26 steps to \(15.02\) and \(21.51\,\mathrm{meV}\), so a lost or added height constraint moves the forward barrier by \(4.83\,\mathrm{meV}\), a quarter of its value.
+The converged free band, written through the canonical writer and read back, returns every coordinate bit for bit.
+Resumed from it at the same threshold, FIRE takes no step, the positions stay bit-identical, and the energy differs from the pre-restart value by \(8.9\times10^{-15}\,\mathrm{eV}\), at the rounding level of the force field.
+
 ** The velocity unit and identity
 On the 28-atom slab the kinetic energy is \(0.888\,\mathrm{eV}\) in the natural unit and \(92.02\,\mathrm{eV}\) if the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of 103.64.
 One velocity Verlet step of \(1\,\mathrm{fs}\) then misplaces atoms by an RMSD of \(0.096\,\text{\AA}\) (Section \ref{sec:supp-velocity}).
@@ -614,8 +648,8 @@ The ASE eon reader does not accept a velocity block and, on the coordinate block
 :END:
 A resume reads its checkpoint once per force call at most, so a read has to stay cheap beside that call.
 The timings use one file on one Intel Xeon processor of family 6, model 207, with 8 hardware threads, rustc 1.88, g++ 13.3 and Python 3.12.
-The file is \(167.71\,\mathrm{MB}\): 10,000 copies of one 218-atom frame, read from a warm page cache.
-Repeating one frame removes frame-to-frame variation, so the rate is the cost of this frame; production trajectories will differ.
+The layer and thread timings use a \(167.71\,\mathrm{MB}\) file of 10,000 copies of one 218-atom frame, read from a warm page cache, so the rate is the cost of this frame.
+The peer comparison and the readcon-db ingest use a 10,000-frame velocity Verlet EMT trajectory of the same frame at \(1\,\mathrm{fs}\) and \(300\,\mathrm{K}\), in which the two free hydrogen atoms move and every frame is distinct; its CON file is \(92.03\,\mathrm{MB}\).
 An interval is a bias-corrected and accelerated 95 percent interval of the median \cite{efronBetterBootstrapConfidence1987,kaliberaRigorousBenchmarkingReasonable2013,mytkowiczProducingWrongData2009,hoeflerScientificBenchmarkingParallel2015}.
 Table \ref{tab:perf} and Figure \ref{fig:layers} give the layers.
 
@@ -654,10 +688,39 @@ The Python bar includes one object per atom.}
 
 The C++ wrapper eOn calls costs nothing measurable over the core: the automatic Rust time is 0.904 of the C++ time, interval 0.815 to 0.993, and on one thread the ratio is 0.991.
 One frame at the automatic rate costs \(12.6\,\mu\mathrm{s}\), against \(0.304\,\mathrm{ms}\) for one Morse call and \(52.6\,\mu\mathrm{s}\) for one EMT call on the 28-atom slab, so the whole file costs about 413 Morse calls; the i-PI 3.0 measurements use the same force-call framing \cite{litmanIpi30Flexible2024}.
-Copying the file to the null device takes \(0.0185\,\mathrm{s}\), loading it into a string \(0.0945\,\mathrm{s}\), and the boundary scan \(0.0344\,\mathrm{s}\).
-Treated as a serial fraction of the one-thread parse, those stages give \(f=0.267\) and an Amdahl limit of 2.79 on 8 threads.
-The measured speedups at 1, 2, 4 and 8 threads are 1.00, 1.58, 2.82 and 4.35, so the two stages are not a pure serial fraction, and Figure \ref{fig:roofline} draws the Amdahl curve as a bound without fitting it.
+Table \ref{tab:stages} times each stage of the read on its own, 30 repeats per thread count with 90 at one thread.
+The full read falls from \(0.445\,\mathrm{s}\) on one thread to \(0.126\,\mathrm{s}\) on eight, a speedup of 3.53 with interval 3.48 to 3.56, and the in-memory parse alone reaches 4.83, interval 4.71 to 4.89.
+The token walk and the numeric parse scale to 7.55 and 7.60, the boundary scan stays at \(0.033\,\mathrm{s}\) on every thread count, and assembly peaks at 2.77 on four threads.
+The Amdahl bound we drew earlier counted the string load and the boundary scan as the serial fraction, \(f=(0.0824+0.0332)/0.445=0.260\), which gives 2.84 on 8 threads.
+That bound is conservative: the timed read maps the file and validates it in place, so the string load is not on its path.
+The boundary scan alone gives \(f=0.075\) and a bound of 5.25, and the measured speedup implies an effective serial fraction of 0.181.
+Every thread count returns the same frames.
 Python flattens at 1.00, 1.22, 1.27 and 1.15, because object construction takes the interpreter lock.
+
+#+BEGIN_EXPORT latex
+\begin{table}[ht]
+\centering
+\small
+\caption{Warm-cache stage timings on the 10{,}000-frame repeated file: median at one thread and speedup at 8 threads with its interval.
+The full read is the library call; the other rows are isolated passes.}
+\label{tab:stages}
+\begin{tabular}{lrrl}
+\toprule
+Stage & 1 thread (s) & Speedup at 8 & Interval \\
+\midrule
+full read & 0.4449 & 3.53 & [3.48, 3.56] \\
+in-memory parse & 0.4255 & 4.83 & [4.71, 4.89] \\
+numeric parse & 0.3477 & 7.60 & [7.01, 7.70] \\
+token walk & 0.1679 & 7.55 & [7.09, 7.67] \\
+string load & 0.0824 & 0.93 & [0.92, 0.94] \\
+assembly & 0.0394 & 2.43 & [2.39, 2.46] \\
+boundary scan & 0.0332 & 0.99 & [0.99, 1.00] \\
+library file load & 0.0262 & 1.01 & [1.01, 1.02] \\
+UTF-8 validation & 0.0203 & 0.76 & [0.75, 0.79] \\
+\bottomrule
+\end{tabular}
+\end{table}
+#+END_EXPORT
 
 #+BEGIN_EXPORT latex
 \begin{figure}[ht]
@@ -665,7 +728,8 @@ Python flattens at 1.00, 1.22, 1.27 and 1.15, because object construction takes 
 \includegraphics[width=0.78\textwidth]{figures/generated/roofline.pdf}
 \caption{Parse throughput at 1, 2, 4 and 8 threads on the repeated 218-atom frame.
 The dashed line is the hot-cache memory copy at 9.06\,GB/s.
-The Amdahl curve uses \(f=(0.0945\,\mathrm{s}+0.0344\,\mathrm{s})/0.484\,\mathrm{s}\), anchored to the one-thread Rust rate, and reaches 2.79 at 8 threads; the measured speedup is 4.35.
+Points are the layer timings of Table \ref{tab:perf}.
+The Amdahl curve counts the string load and the boundary scan as serial, and is a conservative bound because the string load is not on the timed path.
 Triangles mark the string-load and boundary-scan rates.}
 \label{fig:roofline}
 \end{figure}
@@ -675,18 +739,45 @@ Triangles mark the string-load and boundary-scan rates.}
 :PROPERTIES:
 :CUSTOM_ID: sec:perf-peers
 :END:
-Table \ref{tab:peers} sets the one-worker Python read beside peers on the same frames, as 30 interleaved pairs with a Holm adjustment \cite{holmSimpleSequentiallyRejective1979,michaudagrawalMdanalysisToolkitAnalysis2011,jakupovicMpiparallelMolecularDynamics2021,gowersMdanalysismdanalysisRelease21002025,colletteH5pyh5py3702022}.
-Each ratio is the peer's rate over the readcon-core rate, and each peer returns a different amount of the frame.
-chemfiles on XYZ is at \pending{chemfiles ratio} and returns coordinates and symbols as arrays.
-The ASE trajectory is at \pending{ASE trajectory ratio, 10k frames} on the large file and \pending{ASE trajectory ratio, slab} on one slab frame; it is binary, needs no parse, and returns ASE atoms with the mask and without ids.
-h5py loading one contiguous array is at \pending{h5py ratio}, the floor for any text reader, and returns positions only.
-MDAnalysis on H5MD is at \pending{MDAnalysis H5MD ratio} and returns single-precision coordinates with the declared unit.
-ASE on extended XYZ is at \pending{ASE extended XYZ ratio} and returns ASE atoms with the mask and ids by column convention.
-readcon-core returns one object per atom with the mask, the id and the declared units.
-Table \ref{tab:ratios} in the supplement lists every payload.
+Table \ref{tab:peers} sets the one-worker Python read and write beside five peers on the 10,000-frame trajectory, as 30 interleaved pairs per cell with a Holm adjustment, from a cold and a warm page cache \cite{holmSimpleSequentiallyRejective1979,michaudagrawalMdanalysisToolkitAnalysis2011,jakupovicMpiparallelMolecularDynamics2021,gowersMdanalysismdanalysisRelease21002025,colletteH5pyh5py3702022}.
+Each ratio is the readcon-core time over the peer time, so a value below 1 means readcon-core finished sooner, and every adjusted p-value is 0.002.
+The peers return different amounts of the frame.
+readcon-core parses the CON text and returns one object per atom with the mask, the id and the declared units, in \(1.22\,\mathrm{s}\) cold and \(1.15\) to \(1.20\,\mathrm{s}\) warm.
+h5py returns the binary64 position array without parsing anything, and the ratios of 37.2 cold and 87.2 warm are the distance between a text parse and a binary load.
+chemfiles parses XYZ text with symbols and coordinates only, at 2.49 cold and 2.44 warm.
+The ASE trajectory is binary and returns ASE atoms with the mask and without ids, at 0.960 cold and 0.940 warm.
+MDAnalysis returns single-precision coordinates with the declared unit from H5MD, at 0.208 and 0.200, and ASE returns ASE atoms with the mask and ids by column convention from extended XYZ, at 0.282 and 0.281.
+Writing from objects already in memory, readcon-core takes \(1.55\) to \(1.62\,\mathrm{s}\), 0.19 to 0.24 of the ASE extended XYZ and MDAnalysis writers, about twice chemfiles and the ASE trajectory, and about 60 times h5py writing one array.
+On the repeated file the ratios are within 0.16 of these except the ASE trajectory read, at 1.40 cold and 1.31 warm, and h5py.
+Table \ref{tab:ratios} in the supplement lists the earlier payloads.
 
 #+BEGIN_EXPORT latex
-\input{figures/generated/peer_table}
+\begin{table}[ht]
+\centering
+\small
+\caption{Paired ratios on the 10{,}000-frame trajectory, readcon-core time over peer time, one worker.
+Each cell is the median of 30 interleaved pairs with its bias-corrected and accelerated 95 percent interval.
+Cold repeats drop the page cache before each call.}
+\label{tab:peers}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lllll}
+\toprule
+Peer & Returns & & Cold & Warm \\
+\midrule
+ASE extended XYZ & ASE atoms & read & 0.282 [0.280, 0.283] & 0.281 [0.281, 0.281] \\
+ & & write & 0.196 [0.194, 0.197] & 0.188 [0.187, 0.190] \\
+ASE trajectory & ASE atoms & read & 0.960 [0.952, 0.964] & 0.940 [0.936, 0.948] \\
+ & & write & 2.06 [2.05, 2.08] & 2.02 [2.00, 2.04] \\
+chemfiles XYZ & parsed XYZ & read & 2.49 [2.47, 2.51] & 2.44 [2.44, 2.45] \\
+ & & write & 1.99 [1.98, 2.00] & 1.98 [1.97, 1.99] \\
+h5py H5MD & raw array & read & 37.2 [35.5, 37.7] & 87.2 [86.1, 88.1] \\
+ & & write & 64.4 [63.6, 65.2] & 59.1 [58.7, 59.3] \\
+MDAnalysis H5MD & float32 array & read & 0.208 [0.204, 0.210] & 0.200 [0.198, 0.201] \\
+ & & write & 0.235 [0.233, 0.236] & 0.225 [0.223, 0.227] \\
+\bottomrule
+\end{tabular}
+\end{table}
 #+END_EXPORT
 
 ** Parallel read, write and ingest
@@ -704,6 +795,9 @@ At 16 ranks the two modes take \(35.2\,\mathrm{s}\) and \(43.5\,\mathrm{s}\); th
 #+BEGIN_EXPORT latex
 \input{figures/generated/dbmpi_table}
 #+END_EXPORT
+
+On one thread, readcon-db ingests the 10,000-frame trajectory in \(0.579\,\mathrm{s}\), 17,260 frames per second, against 3,373 for the ASE database in one transaction and 592 when it commits every row; the paired ratios are 0.193, interval 0.190 to 0.196, and 0.0337, interval 0.0324 to 0.0346.
+An ingest of 80,000 distinct frames, \(1.34\,\mathrm{GB}\), grows the store past its \(2\,\mathrm{GiB}\) default map without intervention, at 12,344 frames per second.
 
 Weak scaling, at a fixed number of frames per rank, is \pending{weak scaling, cloud run 04}.
 
@@ -731,7 +825,7 @@ Indexed random access and campaign storage are readcon-db's part of the design \
 A frame specifies geometry and its labels, not optimiser state, so an L-BFGS resume restarts its history; a key for that history is the natural next minor version.
 The conformance corpus fixes what a conforming reader decides on each listed file, and it says nothing about a reader on files outside it.
 A single core behind every binding makes the bindings agree by construction, which is a property of this implementation and not evidence about a second one.
-The resume studies are one symmetric EMT hop and one Morse band; they show what a lost field does to a saddle, and they are not a survey of reactions.
+The resume studies are one symmetric and one asymmetric EMT hop and one Morse band; they show what a lost field does to a saddle, and they are not a survey of reactions.
 The peer comparisons hold for the library versions named in Section \ref{sec:requirements}.
 
 * Conclusions
