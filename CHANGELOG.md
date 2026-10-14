@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.17.1 - 2026-10-14
+
+### Fixed
+
+- `ConFrame.to_ase` now attaches stored energy and forces through `SinglePointCalculator` keywords. Before this, converting a frame that stores forces raised an error under ASE 3.29.
+
 ## v0.17.0 - 2026-10-11
 
 ### Breaking
