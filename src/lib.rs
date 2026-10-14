@@ -3,6 +3,8 @@ pub mod compression;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
 pub mod distrib;
+#[cfg(feature = "mpi")]
+pub mod distrib_read;
 pub mod error;
 pub mod ffi;
 pub mod frame_index;
