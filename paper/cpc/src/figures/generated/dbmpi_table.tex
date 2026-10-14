@@ -1,0 +1,20 @@
+\begin{table}[ht]
+\centering
+\small
+\caption{readcon-db MPI ingest of four copies of a \(1.07\,\mathrm{GB}\) trajectory (30{,}965 frames each), batch 4096, MPICH 4.2.3, means of five runs in seconds.
+Serial is the serial ingest that rank 0 runs on the same host right after each MPI run.
+Every MPI corpus has the canonical dump of the serial one.}
+\label{tab:dbmpi}
+\begin{tabular}{rrrrrrr}
+\toprule
+& \multicolumn{3}{c}{One writer} & \multicolumn{3}{c}{Four shards} \\
+Ranks & MPI & Speedup & Serial & MPI & Speedup & Serial \\
+\midrule
+1 & 30.62 & 1.00 & 22.82 & 32.54 & 1.00 & 23.19 \\
+2 & 22.59 & 1.36 & 23.28 & 24.67 & 1.32 & 24.89 \\
+4 & 17.68 & 1.73 & 24.12 & 22.58 & 1.44 & 24.46 \\
+8 & 15.28 & 2.00 & 24.21 & 17.08 & 1.90 & 25.93 \\
+16 & 35.17 & 0.87 & 51.61 & 43.52 & 0.75 & 51.11 \\
+\bottomrule
+\end{tabular}
+\end{table}

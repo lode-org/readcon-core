@@ -1,0 +1,9 @@
+payload,format,bytes,gzip_bytes,bytes_per_atom,gzip_bytes_per_atom
+one frame,CON 3.1,9153,1324,41.99,6.07
+one frame,extended XYZ (ASE),18233,1450,83.64,6.65
+one frame,H5MD (MDAnalysis),68536,1970,314.39,9.04
+one frame,H5MD (h5py),20798,2106,95.40,9.66
+10000 frames,CON 3.1,91530000,842249,41.99,0.39
+10000 frames,extended XYZ (ASE),182330000,2467616,83.64,1.13
+10000 frames,H5MD (MDAnalysis),27489856,260243,12.61,0.12
+10000 frames,H5MD (h5py),52415566,358029,24.04,0.16
