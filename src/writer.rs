@@ -1,9 +1,10 @@
 use crate::types::{
-    ConFrame, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES, SECTION_FORCES,
-    SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES, encode_fixed_bitmask,
-    meta,
+    ConFrame, ConFrameBuilder, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES,
+    SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES,
+    encode_fixed_bitmask, meta,
 };
-use serde_json::json;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
@@ -835,6 +836,122 @@ fn push_scalar_line(buf: &mut Vec<u8>, v: f64, prec: FloatFormat, fixed: u8, ato
     buf.push(b' ');
     push_u64(buf, atom_id);
     buf.push(b'\n');
+}
+
+/// Record `units.time` for a v1 or v2 frame that carries velocities.
+///
+/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
+/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
+/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
+/// A 3.0 frame is treated the same way, overwriting any `units.time`
+/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
+pub(crate) fn stamp_legacy_velocity_time(
+    meta: &mut BTreeMap<String, Value>,
+    spec_version: u32,
+    has_velocity: bool,
+) {
+    if !has_velocity {
+        return;
+    }
+    let minor = meta
+        .get(meta::CON_SPEC_MINOR)
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if spec_version >= 3 && minor >= 1 {
+        return;
+    }
+    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
+    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
+    // the label authoritative (CON-units.10), so replace any label rather
+    // than keep one the old file never honoured.
+    let mut units = match meta.get(meta::UNITS).cloned() {
+        Some(Value::Object(map)) => Value::Object(map),
+        Some(_) => return,
+        None => crate::units::default_v3_units_json(),
+    };
+    if let Some(object) = units.as_object_mut() {
+        object.insert(
+            "time".to_string(),
+            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+        );
+        meta.insert(meta::UNITS.to_string(), units);
+        // The label now holds, so the frame is written as minor 1.
+        if meta.contains_key(meta::CON_SPEC_MINOR) {
+            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        }
+    }
+}
+
+/// Rebuild `frame` the way the Python and Julia writers do.
+///
+/// [`ConFrameBuilder::build`] stamps `con_spec_minor` 1 when the key is
+/// absent (D15). A parsed frame does not carry that key unless the file
+/// did, and the writer does not invent it. Language bindings that turn a
+/// read frame back into atoms and metadata therefore emit the minor, and
+/// this is that rebuild.
+pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
+    let mut meta = frame.header.metadata.clone();
+    meta.remove(meta::CON_SPEC_VERSION);
+    meta.remove(meta::SECTIONS);
+    let has_velocity = frame.atom_data.iter().any(|atom| atom.velocity.is_some());
+    stamp_legacy_velocity_time(&mut meta, frame.header.spec_version, has_velocity);
+
+    let mut builder = ConFrameBuilder::new(frame.header.boxl, frame.header.angles);
+    builder
+        .prebox_header(frame.header.prebox_header.user.as_str())
+        .postbox_header(frame.header.postbox_header.clone())
+        .metadata(meta);
+
+    let mut masses = Vec::with_capacity(frame.atom_data.len());
+    for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let mass = frame
+            .header
+            .masses_per_type
+            .get(type_index)
+            .copied()
+            .unwrap_or(0.0);
+        for _ in 0..count {
+            masses.push(mass);
+        }
+    }
+
+    for (index, atom) in frame.atom_data.iter().enumerate() {
+        let mass = masses.get(index).copied().unwrap_or(0.0);
+        builder.add_atom(
+            atom.symbol.as_ref(),
+            atom.x,
+            atom.y,
+            atom.z,
+            atom.fixed,
+            atom.atom_id,
+            mass,
+        );
+        if let Some(velocity) = atom.velocity {
+            builder.with_velocity(velocity);
+        }
+        if let Some(force) = atom.force {
+            builder.with_force(force);
+        }
+        if let Some(energy) = atom.energy {
+            builder.with_energy(energy);
+        }
+        if let Some(charge) = atom.charge {
+            builder.with_charge(charge);
+        }
+        if let Some(spin) = atom.spin {
+            builder.with_spin(spin);
+        }
+        if let Some(magmom) = atom.magmom {
+            builder.with_magmom(magmom);
+        }
+        if let Some(displacement) = atom.displacement {
+            builder.with_displacement(displacement);
+        }
+        if let Some(spread) = atom.spread {
+            builder.with_spread(spread);
+        }
+    }
+    builder.build()
 }
 
 // Implementation block specifically for when the writer is a `File`.
