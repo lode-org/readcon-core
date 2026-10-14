@@ -1738,24 +1738,20 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
             })
             .collect();
         let force_array = np.call_method1("array", (forces,))?;
-        // Get energy from metadata if present
-        let energy = frame.energy(py)?;
-        let calc = if let Some(e) = energy {
-            ase_calc
-                .getattr("SinglePointCalculator")?
-                .call1((atoms.clone(), e, force_array))?
-        } else {
-            ase_calc.getattr("SinglePointCalculator")?.call(
-                (),
-                Some(
-                    &[
-                        ("atoms", atoms.clone().into_any()),
-                        ("forces", force_array.into_any()),
-                    ]
-                    .into_py_dict(py)?,
-                ),
-            )?
-        };
+        // ASE passes everything after `atoms` to SinglePointCalculator as
+        // keyword results (ASE >= 3.23 rejects positional energy/forces), so
+        // hand both over by name.
+        let kwargs = [
+            ("atoms", atoms.clone().into_any()),
+            ("forces", force_array.into_any()),
+        ]
+        .into_py_dict(py)?;
+        if let Some(e) = frame.energy(py)? {
+            kwargs.set_item("energy", e)?;
+        }
+        let calc = ase_calc
+            .getattr("SinglePointCalculator")?
+            .call((), Some(&kwargs))?;
         atoms.setattr("calc", calc)?;
     }
 
