@@ -11,7 +11,7 @@ use readcon_core::distrib::Comm;
 use readcon_core::distrib_read::{ReadMode, read_block};
 use readcon_core::distrib_write::{WriteMode, write_block};
 use readcon_core::frame_index::{FrameIndex, read_sidecar};
-use readcon_core::writer::ConFrameWriter;
+use readcon_core::writer::{ConFrameWriter, binding_rewrite_frame};
 use std::path::Path;
 use std::time::Instant;
 
@@ -42,6 +42,11 @@ fn main() {
 
     if comm.rank() == 0 {
         let serial = readcon_core::iterators::read_all_frames(input).unwrap();
+        // Collective write rebuilds each frame and stamps con_spec_minor.
+        let serial: Vec<_> = serial
+            .iter()
+            .map(|frame| binding_rewrite_frame(frame).unwrap())
+            .collect();
         let ser_path = format!("{}.serial", a[2]);
         let t1 = Instant::now();
         {

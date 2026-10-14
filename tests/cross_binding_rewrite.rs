@@ -141,6 +141,9 @@ fn is_fresh(path: &Path) -> bool {
         "src/types.rs",
         "fortran/ReadCon/src/readcon.f90",
         "include/readcon-core.h",
+        "include/readcon-core-mpi.h",
+        "src/distrib_write.rs",
+        "examples/eon_mpi_band.cpp",
     ] {
         let Ok(modified) =
             std::fs::metadata(repo_root().join(rel)).and_then(|meta| meta.modified())
@@ -204,6 +207,45 @@ fn binding_libraries() -> (PathBuf, PathBuf) {
     (plain, python)
 }
 
+/// cdylib built with the mpi feature, for the C++ and Fortran collective writers.
+fn mpi_library() -> Option<PathBuf> {
+    for tool in ["mpicxx", "mpifort", "mpirun", "mpicc"] {
+        if !tool_runs(tool) {
+            eprintln!("skip MPI cross-binding rewrite: {tool} is not installed");
+            return None;
+        }
+    }
+    let root = repo_root();
+    let candidates = [
+        root.join("target/binding-mpi/debug/libreadcon_core.so"),
+        root.join("target/debug/libreadcon_core.so"),
+    ];
+    for candidate in &candidates {
+        if candidate.is_file()
+            && is_fresh(candidate)
+            && exports_symbol(candidate, "rkr_mpi_write_block_f")
+        {
+            return Some(candidate.clone());
+        }
+    }
+    let dir = root.join("target/binding-mpi");
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(&root)
+        .args(["build", "--lib", "--features", "mpi", "--target-dir"])
+        .arg(&dir)
+        .env("MPICC", "mpicc");
+    let status = cmd
+        .status()
+        .unwrap_or_else(|err| panic!("cargo build --features mpi failed to start: {err}"));
+    assert!(status.success(), "cargo build --features mpi failed");
+    let lib = dir.join("debug/libreadcon_core.so");
+    assert!(
+        lib.is_file() && exports_symbol(&lib, "rkr_mpi_write_block_f"),
+        "mpi build did not export rkr_mpi_write_block_f"
+    );
+    Some(lib)
+}
+
 #[test]
 fn accepted_corpus_rewrites_are_byte_identical() {
     for tool in ["cc", "gfortran", "julia", "python3", "nm"] {
@@ -220,11 +262,22 @@ fn accepted_corpus_rewrites_are_byte_identical() {
         lib_path = PathBuf::from(format!("{}:{}", lib_path.display(), py_parent.display()));
     }
     let script = repo_root().join("tests/cross_binding_rewrite.py");
-    let status = Command::new("python3")
-        .arg(&script)
+    let mut cmd = Command::new("python3");
+    cmd.arg(&script)
         .env("READCON_CORE_LIB", &plain)
         .env("READCON_PYTHON_LIB", &python)
-        .env("LD_LIBRARY_PATH", &lib_path)
+        .env("LD_LIBRARY_PATH", &lib_path);
+    if let Some(mpi_lib) = mpi_library() {
+        let mut path = lib_path.clone();
+        if let Some(parent) = mpi_lib.parent()
+            && parent != path.as_path()
+        {
+            path = PathBuf::from(format!("{}:{}", parent.display(), path.display()));
+        }
+        cmd.env("READCON_MPI_LIB", &mpi_lib)
+            .env("LD_LIBRARY_PATH", &path);
+    }
+    let status = cmd
         .status()
         .unwrap_or_else(|err| panic!("failed to run {}: {err}", script.display()));
     assert!(status.success(), "cross-binding rewrite comparison failed");
