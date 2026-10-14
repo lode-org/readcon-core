@@ -1,0 +1,30 @@
+\begin{table}[ht]
+\centering
+\small
+\caption{Five extended XYZ readers on seven three-atom files.
+Each file departs from the reference frame in one respect.
+\checkmark: positions correctly rounded, periodicity as written, mask and ids returned as written.
+E: the read failed.
+u: a coordinate one unit in the last place from the correctly rounded value.
+f: single-precision coordinates.
+n: a coordinate returned as NaN.
+p: periodicity differs from the file, or from the grammar's default when the key is absent.
+b: the mask came back with different booleans.
+m, i: the reader returns no mask, or no ids.}
+\label{tab:drift}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & ASE & libAtoms C & libAtoms Py & chemfiles & MDAnalysis \\
+\midrule
+reference frame & \checkmark & \checkmark & b & um & fmi \\
+no pbc key & \checkmark & \checkmark & b & um & fmi \\
+plain comment line & \checkmark & p & E & u & f \\
+Fortran exponent \texttt{6.0d0} & E & \checkmark & nb & E & E \\
+\texttt{True}/\texttt{False} & \checkmark & \checkmark & b & um & fmi \\
+quoted value with \texttt{=} & \checkmark & \checkmark & b & um & fmi \\
+\texttt{units} key & \checkmark & \checkmark & b & um & fmi \\
+\bottomrule
+\end{tabular}
+\end{table}

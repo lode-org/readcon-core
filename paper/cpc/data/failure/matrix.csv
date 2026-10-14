@@ -1,0 +1,12 @@
+format,writer,reader,R1,R2,R3,R4,pbc,dpos,error
+CON 3.1,readcon-core,readcon-core,kept,kept,declared,bit-exact,kept,0.0,
+CON 3.1,readcon-core,ASE eon reader,reader error,reader error,reader error,reader error,,,ValueError: could not convert string to float: 'Velocities'
+"CON 3.1, coordinates only",readcon-core,ASE eon reader,full freeze,lost,lost,bit-exact,FFF,0.0,
+legacy CON,ASE eon writer,readcon-core,writer error,writer error,writer error,writer error,,,"TypeError: category must be a Warning subclass, not 'FixCartesian'"
+extended XYZ,ASE,ASE,convention,convention,convention,4.7e-09 A,kept,4.708383904983293e-09,
+extended XYZ,ASE,chemfiles,lost,convention,lost,4.7e-09 A,-,4.708383904983293e-09,
+extended XYZ,ASE,MDAnalysis,lost,lost,lost,2.2e-07 A,-,2.1514905768071912e-07,
+extended XYZ,chemfiles,ASE,lost,lost,lost,4.9e-06 A,TTT,4.910985489381403e-06,
+ASE trajectory,ASE,ASE,kept,lost,convention,bit-exact,kept,0.0,
+POSCAR,ASE,ASE,changed,lost,fixed by format,4.5e-17 A,TTT,4.456070928915423e-17,
+H5MD,MDAnalysis,MDAnalysis,lost,lost,declared,2.2e-07 A,TTT,2.1514905768071912e-07,

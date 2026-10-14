@@ -1,5 +1,5 @@
-CON 3.1 specifies the text checkpoint that eOn and ASE exchange
-Frames keep per-axis constraints, atom ids and a declared velocity time unit
-An interrupted eOn band resumes to 1e-14 Å; six decimals drift by 5e-7 Å
-One Rust core and C ABI serve C++, Python, Julia and Fortran
-A shared conformance corpus checks every language binding
+A saddle-search checkpoint needs masks, ids, a time unit and binary64 coordinates
+One masked slab frame loses part of that state in every common format
+An ASE POSCAR resume drops a height constraint and ends 70 meV lower
+Five extended XYZ readers return four different answers for one file
+CON 3.1 adds a version, a conformance corpus and one shared parser
