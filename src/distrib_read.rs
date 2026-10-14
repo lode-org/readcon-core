@@ -71,7 +71,7 @@ fn bytes_of(fc: &FileContents) -> &[u8] {
 }
 
 /// True on every rank iff `ok` is true on every rank.
-fn agree(comm: &Comm, ok: bool) -> bool {
+pub(crate) fn agree(comm: &Comm, ok: bool) -> bool {
     let mut all = 0i32;
     comm.raw().all_reduce_into(
         &i32::from(ok),

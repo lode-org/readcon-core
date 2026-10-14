@@ -100,3 +100,20 @@ jobs:
         run: |
           scripts/mpi_read_check.sh "${{ matrix.launcher }}" \
             target/debug/examples/mpi_read_check target/mpi-read-check
+      - name: Build collective write checks
+        env:
+          MPICC: ${{ matrix.cc }}
+        run: |
+          cargo build --features mpi --lib --example mpi_write_check
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_write.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_write
+      - name: Collective write is byte-identical to serial (sha256, 1 to 4 ranks)
+        env:
+          LD_LIBRARY_PATH: target/debug
+        run: |
+          for n in 1 2 3 4; do
+            ${{ matrix.launcher }} $n target/test_mpi_write \
+              resources/test/tiny_multi_cuh2.con target/mpi-write-c
+          done
+          scripts/mpi_write_check.sh "${{ matrix.launcher }}" \
+            target/debug/examples/mpi_write_check target/mpi-write-check
