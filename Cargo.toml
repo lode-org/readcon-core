@@ -130,6 +130,10 @@ name = "mpi_read_check"
 required-features = ["mpi"]
 
 [[example]]
+name = "mpi_write_check"
+required-features = ["mpi"]
+
+[[example]]
 name = "rcidx_bench"
 required-features = ["parallel"]
 
