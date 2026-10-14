@@ -9,7 +9,6 @@ uses the thread sweep already stored with the layered benchmark.
 from __future__ import annotations
 
 import ctypes
-import hashlib
 import json
 import tempfile
 import time
@@ -145,7 +144,9 @@ def _grade(reference: dict, got: dict | None, note: str) -> dict:
         ids = "lost"
     else:
         ids = "exact" if np.array_equal(got["ids"], reference["ids"]) else "lost"
-    if got["time_unit"] == reference["time_unit"] and got["time_unit"] is not None:
+    if reference["time_unit"] is None:
+        unit = "absent"
+    elif got["time_unit"] == reference["time_unit"]:
         unit = "exact"
     else:
         unit = "lost"
@@ -165,37 +166,18 @@ def _from_readcon(path: Path) -> dict:
     return _field_snapshot(readcon.read_con(str(path))[0])
 
 
-def _partial_mask_copy(text: str) -> str:
-    """Give the adatom an x-only mask so a full freeze is not a lookalike.
-
-    The velocity fixture freezes whole atoms (mask 7) or none (mask 0).
-    ASE's FixAtoms then matches that pattern. Mask 1 on the adatom, on
-    both the coordinate row and the velocity row, is a per-axis flag.
-    """
-    lines = []
-    for line in text.splitlines(keepends=True):
-        parts = line.split()
-        if len(parts) == 5 and parts[3] == "0" and parts[4] == "27":
-            body = line.rstrip("\r\n")
-            ending = line[len(body) :]
-            if not body.endswith(" 0 27"):
-                raise SystemExit(f"adatom row did not end in ' 0 27': {body!r}")
-            line = body[:-4] + " 1 27" + ending
-        lines.append(line)
-    return "".join(lines)
-
-
 def _ase_snapshot(atoms) -> dict:
     masks = np.zeros((len(atoms), 3), dtype=bool)
-    # FixAtoms freezes every axis. A per-axis mask does not survive that.
-    from ase.constraints import FixAtoms
+    from ase.constraints import FixAtoms, FixCartesian
 
-    frozen = set()
     for constraint in atoms.constraints:
         if isinstance(constraint, FixAtoms):
-            frozen.update(int(index) for index in constraint.index)
-    for index in frozen:
-        masks[index] = True
+            for index in constraint.index:
+                masks[int(index)] = True
+        elif isinstance(constraint, FixCartesian):
+            frozen = np.asarray(constraint.mask, dtype=bool)
+            for index in np.atleast_1d(np.asarray(constraint.index)):
+                masks[int(index)] = frozen
     has_id = False
     ids = np.zeros(len(atoms), dtype=int)
     for key in ("atom_id", "atom_ids"):
@@ -219,32 +201,75 @@ def _ase_snapshot(atoms) -> dict:
     }
 
 
+def _time_unit_roundtrip() -> dict:
+    """Unmodified velocity fixture. The file is not edited."""
+    import readcon
+
+    source = E1 / "velocity" / "natural.con"
+    reference = _from_readcon(source)
+    with tempfile.TemporaryDirectory(prefix="readcon-time-") as tmp:
+        native = Path(tmp) / "round.con"
+        readcon.write_con(str(native), readcon.read_con(str(source)))
+        got = _from_readcon(native)
+    return {
+        "source": "e1 velocity fixture, unmodified",
+        "time_unit": reference["time_unit"],
+        "round_trip": got["time_unit"] == reference["time_unit"] and got["time_unit"] is not None,
+    }
+
+
 def fidelity() -> None:
+    """First frame of the height-held EMT band. The file is not edited."""
     import readcon
     from ase.io import read as ase_read
     from ase.io import write as ase_write
 
-    source_text = _partial_mask_copy((E1 / "velocity" / "natural.con").read_text())
+    source = EVIDENCE / "work" / "e5" / "bands" / "held" / "neb.con"
+    frame = readcon.read_con(str(source))[0]
+    reference = _field_snapshot(frame)
+    z_only = bool(reference["masks"][27, 2]) and not bool(reference["masks"][27, 0])
+    if not z_only:
+        raise SystemExit("the held band adatom is not a z-only mask")
     with tempfile.TemporaryDirectory(prefix="readcon-fidelity-") as tmp:
         out = Path(tmp)
-        source = out / "source.con"
-        source.write_text(source_text)
-        reference = _from_readcon(source)
-        if not bool(reference["masks"][27, 0]) or bool(reference["masks"][27, 1]):
-            raise SystemExit("adatom mask 1 did not read back as x-only")
         rows = []
-
         native = out / "round.con"
-        readcon.write_con(str(native), readcon.read_con(str(source)))
+        readcon.write_con(str(native), [frame])
         rows.append({"format": "CON 3.1", **_grade(reference, _from_readcon(native), "readcon write")})
 
         six = out / "six.con"
-        readcon.write_con(str(six), readcon.read_con(str(source)), precision=6)
+        readcon.write_con(str(six), [frame], precision=6)
         rows.append(
             {"format": "CON six decimals", **_grade(reference, _from_readcon(six), "precision 6")}
         )
 
-        atoms = readcon.read_con(str(source))[0].to_ase()
+        velocity = E1 / "velocity" / "natural.con"
+        velocity_frame = readcon.read_con(str(velocity))[0]
+        velocity_ref = _field_snapshot(velocity_frame)
+        velocity_path = out / "velocity-round.con"
+        readcon.write_con(str(velocity_path), [velocity_frame])
+        rows.append(
+            {
+                "format": "CON 3.1, velocity file",
+                **_grade(velocity_ref, _from_readcon(velocity_path), "unmodified velocity fixture"),
+            }
+        )
+
+        # readcon-core 0.17.0 passes energy and forces positionally.
+        # ASE 3.29.0 accepts only keywords. The frame file is not edited.
+        import ase.calculators.singlepoint as singlepoint
+
+        original_init = singlepoint.SinglePointCalculator.__init__
+
+        def _accept_positional(self, atoms, energy=None, forces=None, **results):
+            if energy is not None:
+                results["energy"] = energy
+            if forces is not None:
+                results["forces"] = forces
+            original_init(self, atoms, **results)
+
+        singlepoint.SinglePointCalculator.__init__ = _accept_positional
+        atoms = frame.to_ase()
         trials = ("extxyz", "traj", "json", "vasp", "xyz", "cif")
         for fmt in trials:
             path = out / f"round.{fmt if fmt != 'vasp' else 'poscar'}"
@@ -260,7 +285,7 @@ def fidelity() -> None:
                         "format": fmt,
                         "mask": "lost",
                         "id": "lost",
-                        "time_unit": "lost",
+                        "time_unit": "absent",
                         "binary64": "lost",
                         "max_abs_A": None,
                         "note": f"{type(exc).__name__}: {exc}".split("\n", 1)[0][:180],
@@ -269,7 +294,11 @@ def fidelity() -> None:
     _write(
         "fidelity.json",
         {
-            "source": "e1 velocity fixture with an x-only mask on the adatom",
+            "source": "first frame of the height-held EMT band, unmodified",
+            "adatom_mask": "z-only",
+            "file_edited": False,
+            "ase_note": "SinglePointCalculator positional energy and forces are passed as keywords",
+            "time_unit_fixture": _time_unit_roundtrip(),
             "rows": rows,
         },
     )
@@ -538,16 +567,11 @@ def _error_class(message: str) -> str:
     return "unclassified"
 
 
-def _frame_hash(frame) -> str:
-    coords = np.asarray(frame.coords_array(), dtype=float)
-    payload = coords.tobytes()
-    masks = np.array([list(atom.fixed) for atom in frame.atoms], dtype=np.uint8)
-    payload += masks.tobytes()
-    return hashlib.sha256(payload).hexdigest()[:12]
-
-
 def dedup() -> None:
-    import readcon
+    """Hash graph from a readcon-db query of the five campaign bands."""
+    import tempfile
+
+    from readcon_db import ConCorpus
 
     runs = {
         "uninterrupted": E1 / "neb" / "full" / "neb.con",
@@ -556,21 +580,73 @@ def dedup() -> None:
         "height held": EVIDENCE / "work" / "e5" / "bands" / "held" / "neb.con",
         "adatom frozen": EVIDENCE / "work" / "e5" / "bands" / "frozen" / "neb.con",
     }
-    edges = []
-    counts: dict[str, int] = {}
-    for run, path in runs.items():
-        for frame in readcon.read_con(str(path)):
-            digest = _frame_hash(frame)
-            counts[digest] = counts.get(digest, 0) + 1
-            edges.append({"run": run, "hash": digest, "image": int(frame.frame_index or 0)})
+    with tempfile.TemporaryDirectory(prefix="readcon-db-") as tmp:
+        db = ConCorpus(str(Path(tmp) / "campaign.lmdb"))
+        edges = []
+        counts: dict[str, int] = {}
+        for index, (run, path) in enumerate(runs.items()):
+            db.append_trajectory(index, str(path))
+            frame_index = 0
+            while True:
+                try:
+                    digest = db.frame_hash(index, frame_index)
+                except Exception:
+                    break
+                text = digest.hex() if isinstance(digest, (bytes, bytearray)) else str(digest)
+                counts[text] = counts.get(text, 0) + 1
+                hits = db.find_by_hash(digest)
+                edges.append(
+                    {
+                        "run": run,
+                        "hash": text,
+                        "image": frame_index,
+                        "query_hits": 1 if hits is not None else 0,
+                    }
+                )
+                frame_index += 1
+
+        def _nbytes(value) -> int:
+            if isinstance(value, str):
+                return len(value.encode())
+            return len(bytes(value))
+
+        paired = []
+        texts = []
+        image = 0
+        while True:
+            try:
+                left = np.asarray(db.get_positions(0, image), dtype=float)
+                right = np.asarray(db.get_positions(1, image), dtype=float)
+                stored_left = db.get_frame_text(0, image)
+                stored_right = db.get_frame_text(1, image)
+            except Exception:
+                break
+            paired.append(float(np.max(np.abs(left - right))))
+            texts.append(
+                {
+                    "image": image,
+                    "bytes_uninterrupted": _nbytes(stored_left),
+                    "bytes_round_trip": _nbytes(stored_right),
+                    "text_equal": stored_left == stored_right,
+                }
+            )
+            image += 1
+        endpoint = {
+            "reactant_max_A": paired[0],
+            "product_max_A": paired[-1],
+            "max_over_images_A": float(max(paired)),
+            "stored_text": texts,
+        }
     _write(
         "dedup_graph.json",
         {
+            "source": "readcon-db 0.1.8 frame_hash and find_by_hash",
             "runs": list(runs),
             "edges": edges,
             "multiplicity": counts,
             "n_images": len(edges),
             "n_hashes": len(counts),
+            "endpoint_geometry": endpoint,
         },
     )
 

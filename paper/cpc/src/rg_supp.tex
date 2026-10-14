@@ -36,11 +36,24 @@
      \let\@evenfoot\@oddfoot}
 \makeatother
 \usepackage{amssymb,amsmath}
+\usepackage{booktabs}
+\usepackage{listings}
 \usepackage{xurl}
 \usepackage{hyperref}
 \usepackage{xr-hyper}
 \externaldocument{rg_main}
 \input{affilfix}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=none,
+  aboveskip=0.6em,
+  belowskip=0.4em
+}
 \date{\today}
 \title{Supplementary material for CON 3.1}
 \hypersetup{
@@ -54,8 +67,9 @@
 \input{authors.tex}
 \begin{abstract}
 These notes record the measurements behind the figures that accompany the CON 3.1 paper.
-Each section is the one named from the main text.
-The numbers are reads of the campaign files, the conformance corpus and the stored thread sweep.
+The restart displacements, the format matrix, the frame bytes, the velocity step and the illegal-file classes are reads of the campaign files and the conformance corpus.
+The hash figure is a query of those bands.
+The ingest tables are the stored five-repeat measurements of that store.
 \end{abstract}
 \end{frontmatter}
 
@@ -72,27 +86,35 @@ The final column is the band after the five steepest-descent steps.
 \caption{Minimum-image maximum component of the displacement, in \AA, between the uninterrupted Morse band and each resume.
 The checkpoint column is bitwise exact for the round-trip printer and about \(5\times10^{-7}\,\text{\AA}\) for six decimals.
 The final column is at most \(8.9\times10^{-15}\,\text{\AA}\) for the round trip and \(4.9\times10^{-7}\,\text{\AA}\) for six decimals.
-Intermediate columns differ by up to \(0.050\,\text{\AA}\) because the search has taken further steps after the load.
-The colour scale is shared, and a zero cell is exact.}
+Intermediate columns differ by up to \(0.050\,\text{\AA}\) because the search has taken further steps after the load.}
 \label{fig:supp-restart}
 \end{figure}
 
 \section{Round-trip fidelity}
 \label{sec:supp-fidelity}
-The comparison writes the velocity fixture through readcon and through ASE 3.29.0, then reads it back.
-The adatom mask on the measured copy is 1, an x-only flag.
-The stored velocity fixture itself uses mask 0 on that atom.
-An id counts as kept only when the file that comes back still carries an id array.
+Figure~\ref{fig:supp-fidelity} uses two unmodified files.
+The matrix rows other than the velocity-file row are the first frame of the height-held EMT band.
+That frame already carries mask 4, a \(z\)-only hold, on the adatom, together with ids, forces and an energy.
+It carries no velocities and no time unit, so the time-unit cell on those rows is absent.
+The velocity-file row is a separate round trip of the unmodified 28-atom velocity fixture, whose time unit is the natural unit.
+Neither file was edited.
+The library conversion into ASE atoms passes energy and forces as positional arguments.
+ASE 3.29.0 accepts those values only as keywords, so the measurement supplies them as the keywords that constructor requires.
+The grades are the fields that come back from a write and a read after that conversion.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf}
-\caption{Fields kept by a write and a read of the 28-atom velocity fixture.
-CON 3.1 is the only format that keeps the mask, the id, the time unit and binary64 together.
-The six-decimal CON writer keeps the mask, the id and the time unit, and moves a coordinate by at most \(4.6\times10^{-7}\,\text{\AA}\).
-Extended XYZ keeps the id.
-Every ASE format loses the per-axis mask.
-The number in the binary64 cell is the maximum absolute coordinate change.}
+\caption{Fields kept by a write and a read.
+The held-frame rows have no time unit in the source file.
+The velocity-file row keeps the natural unit.
+CON 3.1 keeps the mask, the id and binary64 on both files.
+Six decimals keep the mask and the id and move a held-frame coordinate by \(4.9\times10^{-7}\,\text{\AA}\).
+Extended XYZ keeps the mask and the id and moves a coordinate by \(4.8\times10^{-9}\,\text{\AA}\).
+The trajectory and JSON writers keep the mask and the coordinates and drop the id.
+POSCAR, XYZ and CIF drop the mask and the id.
+The number in the binary64 cell is the maximum absolute coordinate change.
+A grey cell is a time unit the source frame did not carry.}
 \label{fig:supp-fidelity}
 \end{figure}
 
@@ -124,7 +146,7 @@ The cell is the slab cell of the file.
 \caption{Displacement after one velocity Verlet step of \(1\,\mathrm{fs}\) on the 28-atom slab when the natural velocity is misread as \(\text{\AA}/\mathrm{fs}\).
 The kinetic energy goes from \(0.888\,\mathrm{eV}\) to \(92.02\,\mathrm{eV}\), a factor of 103.64.
 The RMSD is \(0.096\,\text{\AA}\) and the maximum component is \(0.315\,\text{\AA}\).
-The arrows are drawn at 10 times that displacement, and the colour is the length of the displacement.}
+The arrows are drawn at 10 times that displacement.}
 \label{fig:supp-velocity}
 \end{figure}
 
@@ -132,7 +154,7 @@ The arrows are drawn at 10 times that displacement, and the colour is the length
 \label{sec:supp-errors}
 The eight illegal files are the conformance corpus named in Section~\ref{sec:validation}.
 readcon raises a message that names the class.
-The C bulk read, the iterator in Section~\ref{sec:implementation}, returns a null handle.
+The C bulk read returns a null handle on all eight.
 ASE 3.29.0 reads the same files with its eon reader.
 
 \begin{figure}[ht]
@@ -145,25 +167,29 @@ The ASE eon reader accepts seven of the files and raises an unclassified error o
 \label{fig:supp-errors}
 \end{figure}
 
-\section{Distributed frame ownership}
-\label{sec:supp-mpi}
-A distributed read would assign each rank a contiguous block of frames.
-The present code defines that partition.
-It does not record the byte offset of each frame or the time spent on each rank.
-This section has no figure.
-
-\section{Hashed band geometries}
+\section{Database hashes of the campaign bands}
 \label{sec:supp-dedup}
-The hashes below are computed from the campaign geometries in this paper.
-Each hash covers the coordinate array and the mask.
-The five bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section~\ref{sec:validation}.
+The hashes are a query against readcon-db 0.1.8.
+The five bands were appended as stored trajectories, and each frame hash was read back by the same query.
+The bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section~\ref{sec:validation}.
+The query returns 35 images and 35 hashes.
+Every returned hash locates the frame that was stored.
+Endpoint coordinates of the uninterrupted band and the round-trip resume agree: the maximum absolute component is 0 at both endpoints and \(8.9\times10^{-15}\,\text{\AA}\) over the seven images.
+The stored texts still differ, so the hash keeps every frame apart.
+On the reactant the only differing line is the metadata line.
+The printed curvature products differ by one byte, 2{,}507 bytes against 2{,}506, and the coordinate rows match.
+The product frame differs only in that same metadata line.
+The five intermediate images differ in the metadata line and in coordinate rows at the last printed digits, which is the \(8.9\times10^{-15}\,\text{\AA}\) displacement.
+Figure~\ref{fig:supp-neb} is the same five bands on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf}
-\caption{Runs on the left and coordinate-and-mask hashes on the right.
-The 35 images collapse to 33 hashes.
-The two shared hashes are the endpoints common to the uninterrupted Morse band and the round-trip resume, and each of those hashes occurs twice.}
+\caption{Campaign bands on the left and the database hash of each stored frame on the right.
+The query returns 35 images and 35 hashes.
+No hash is shared.
+The endpoints match in coordinates.
+Their hashes differ because the metadata line does.}
 \label{fig:supp-dedup}
 \end{figure}
 
@@ -173,9 +199,159 @@ The two shared hashes are the endpoints common to the uninterrupted Morse band a
 \caption{The same five bands on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
 The Morse maps share one colour scale and the EMT maps share another.
 Black dots are the images.
-The round-trip and six-decimal maps sit on the uninterrupted Morse band at this scale, which is the agreement in Section~\ref{sec:supp-restart}.}
+The round-trip and six-decimal maps sit on the uninterrupted Morse band at this scale.}
 \label{fig:supp-neb}
 \end{figure}
+
+\section{Reader rules}
+\label{sec:appendix-rules}
+Table~\ref{tab:rules} collects the edge cases a reader applies.
+They are the classes of Section~\ref{sec:format}, stated as input and outcome.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Reader rules for flags, versions, identity and incomplete input.}
+\label{tab:rules}
+\begin{tabular}{@{}p{0.46\linewidth}p{0.46\linewidth}@{}}
+\toprule
+Input & Rule \\
+\midrule
+Column 4 outside the legal set & Illegal flag. \\
+Version 1 column 4 equal to 1 & Fixed on \(x\), \(y\) and \(z\). \\
+Version 1 column 4 other than 0 or 1 & Illegal flag. \\
+Missing id column & Id is the zero-based row index. \\
+Repeated id & File order is kept. \\
+Unique ids & Ascending id is the pre-grouping order. \\
+Unknown major & Rejected. \\
+Unknown minor of a known major & Accepted. \\
+Unknown metadata key & Kept on rewrite. \\
+Unknown section at this minor & Rejected. \\
+Unknown section at a newer minor, width declared & May be skipped. \\
+Non-finite number & Rejected. \\
+Type count of zero & Legal empty frame. \\
+Short header or short section & No partial frame is returned. \\
+Empty first header line & User line, kept. \\
+Empty second header line & Implicit version 1. \\
+Blank line after a frame, no velocity block & Line 1 of the next frame. \\
+Several gzip members & Read in order. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Stored ingest timings}
+\label{sec:appendix-db}
+readcon-db answers composition, energy and maximum-force queries over CON frames that an adaptive kinetic Monte Carlo campaign has already written.
+The frame defined in the main text is unchanged.
+The numbers in this section are the stored five-repeat measurements.
+They were not remeasured for this manuscript.
+The machine for those measurements was an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
+The software was Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.
+Threads were pinned to one.
+Five repeats were interleaved, and each value is the median, followed by the minimum and the maximum.
+A megabyte is \(10^{6}\) bytes.
+A cold query follows a hint that cached pages are not needed, and then runs in a fresh process.
+A warm query is the next query in that same process.
+The timed corpora repeat ASE effective-medium searches: a hydrogen cyanide band, a copper adatom band, a platinum-hydrogen band and a platinum adatom dimer.
+Every frame in those corpora has its own hash, at both 1{,}000 and 10{,}000 frames.
+The clock starts before the write and stops after a composition check.
+Every timed query was kept only after the hit count and the sum of frame indexes matched an oracle.
+
+Table~\ref{tab:db-ingest} is the ingest of 10{,}000 frames.
+Inside a single ASE transaction the writer still commits every 5{,}000 rows, so 1{,}000 frames is one commit and 10{,}000 frames is two commits, plus the commit that closes the block.
+The other ASE column commits on every write.
+At 1{,}000 frames the medians are \(0.0329\,\mathrm{s}\) (30{,}400 frames/s) for readcon-db, \(0.646\,\mathrm{s}\) (1{,}550 frames/s) for one transaction, and \(5.03\,\mathrm{s}\) (199 frames/s) for a commit on every write.
+At 10{,}000 frames readcon-db writes at \(35.1\,\mathrm{MB/s}\) (33.0 to 38.0), the single transaction at \(1.83\,\mathrm{MB/s}\), and the per-write commits at \(0.226\,\mathrm{MB/s}\).
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Ingest of 10{,}000 frames from the stored measurements.
+Each cell is the median, then the minimum and the maximum of five interleaved repeats.}
+\label{tab:db-ingest}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Writer & Time (s) & frames/s \\
+\midrule
+readcon-db & 0.311 (0.287 to 0.331) & 32{,}100 (30{,}200 to 34{,}800) \\
+ASE, one transaction & 5.99 (5.88 to 6.29) & 1{,}670 (1{,}590 to 1{,}700) \\
+ASE, commit per write & 48.4 (45.5 to 50.7) & 207 (197 to 220) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Median ingest rate from the stored measurements.
+Rows are readcon-db, an ASE database that commits on every write, and one ASE transaction.
+Columns are the two corpus sizes.}
+\label{fig:db-throughput}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
+\caption{Median ingest bandwidth for the same three writers and the same five repeats.
+A megabyte is \(10^{6}\) bytes.}
+\label{fig:db-bandwidth}
+\end{figure}
+
+On composition, energy and maximum force at 10{,}000 frames, readcon-db takes about 8 to 10 ms when cold and about 0.2 ms when warm.
+The cold medians are 8.14 ms (5.12 to 10.7), 10.1 ms (8.11 to 14.4) and 9.57 ms (7.70 to 11.6), in that query order.
+The warm medians are 0.176 ms, 0.211 ms and 0.208 ms.
+The ASE database takes 0.286 s, 0.223 s and 0.225 s on the cold queries, and 0.258 s, 0.203 s and 0.206 s when warm.
+A directory of the same CON text, in 64-frame chunks, takes 0.193 s, 0.193 s and 0.197 s cold, and 0.140 s, 0.138 s and 0.138 s warm.
+Figure~\ref{fig:db-query} shows both corpus sizes.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Median query time for composition, energy and maximum force, from the stored measurements.
+Each panel is one corpus size.
+Rows pair the store with a cold or warm cache.}
+\label{fig:db-query}
+\end{figure}
+
+readcon-db occupies 2.50 times the raw CON text, at both 1{,}000 and 10{,}000 frames.
+The ASE database is smaller than the raw text.
+Figure~\ref{fig:db-disk} also shows gzip and zstd of the same text.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
+\caption{Allocated bytes for the raw text, two compressed copies, readcon-db, both ASE database files and a directory of 64-frame chunks.
+The readcon-db cell is the memory-mapped file, text plus indexes.}
+\label{fig:db-disk}
+\end{figure}
+
+One adaptive kinetic Monte Carlo trace of 24{,}000 frames stores 27.9 MB of blobs, \(27{,}864{,}917\) bytes, equal to the raw file, because the stored texts are kept separately.
+The hash index of that stored trace records 7 unique structures, and their text is 8319 bytes.
+Those seven texts are the unhopped hydrogen cyanide state and its saddle, the unhopped copper state and its saddle, and both platinum-hydrogen states together with that saddle.
+Figure~\ref{fig:db-dedup} compares the full trace with that unique set.
+That collapse is a property of the repeated states in the trace.
+It is separate from the campaign-band query in Section~\ref{sec:supp-dedup}, which found no shared hash.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf}
+\caption{The stored 24{,}000-frame trace against its 7 unique structures.
+The left panel counts frames.
+The right panel is allocated bytes for the full corpus and for a corpus of the unique texts.}
+\label{fig:db-dedup}
+\end{figure}
+
+Nine correctness checks pass on that store.
+They cover a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared mask, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
+The map is capped at 2 GiB, and one million frames does not fit.
+
+\section{ABNF of one frame}
+\label{sec:appendix-abnf}
+The non-normative ABNF of one frame follows.
+An empty first header line is the user line, an empty second header line is implicit version 1, and a blank line after a frame is the next frame unless it begins a velocity block.
+The listing has 50 rules.
+The specification wins where the two disagree.
+\input{figures/generated/con_abnf}
 
 \bibliographystyle{elsarticle-num}
 \bibliography{rg_main}

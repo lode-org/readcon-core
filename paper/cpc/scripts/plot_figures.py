@@ -62,7 +62,6 @@ SEQUENTIAL = build_cmap(
 )
 
 LAYER_NAMES = ["Rust core", "C++ wrapper", "Python objects"]
-LAYER_MBPS = [1090, 1078, 122.5]
 RESTART_BANDS = (
     ("full", "uninterrupted", TEAL, "o", "-"),
     ("resume_round_matched", "round trip", MAGENTA, "s", "--"),
@@ -770,19 +769,30 @@ def ase_mask(theme, settings, png_dir: Path | None) -> None:
     _save(fig, "ase_mask", png_dir)
 
 
+def _layer_mbps() -> list[float]:
+    """Automatic Rust and C++ rates, and the Python object rate, from the fresh sweep."""
+    payload = json.loads((ROOT / "evidence" / "results" / "e2_layered.json").read_text())
+    return [
+        float(payload["native"]["rust_auto"]["MB_per_s"]),
+        float(payload["native"]["cpp_auto"]["MB_per_s"]),
+        float(payload["python"]["full_objects"]["readcon_python"]["MB_per_s"]),
+    ]
+
+
 def layers(theme, png_dir: Path | None) -> None:
+    rates = _layer_mbps()
     colors = [TEAL, SKY, CORAL]
     fig, ax = plt.subplots(figsize=(7.2, 2.8), layout="constrained")
     y = list(range(len(LAYER_NAMES)))
-    bars = ax.barh(y, LAYER_MBPS, color=colors, edgecolor=BLACK, linewidth=0.4)
+    bars = ax.barh(y, rates, color=colors, edgecolor=BLACK, linewidth=0.4)
     for bar, hatch in zip(bars, ("", "//", ".."), strict=True):
         bar.set_hatch(hatch)
     ax.set_yticks(y)
     ax.set_yticklabels(LAYER_NAMES)
     ax.set_xlabel("throughput (MB/s)")
-    ax.set_xlim(0, 1500)
-    for yi, value in zip(y, LAYER_MBPS, strict=True):
-        ax.text(value + 20, yi, f"{value:g}", va="center", fontsize=9)
+    ax.set_xlim(0, 1700)
+    for yi, value in zip(y, rates, strict=True):
+        ax.text(value + 24, yi, f"{value:.0f}", va="center", fontsize=9)
     _theme_axes([ax], theme)
     _save(fig, "layers", png_dir)
 

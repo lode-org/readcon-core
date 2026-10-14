@@ -41,6 +41,20 @@ STATICLIB = ROOT / "e2_bench" / "target" / "release" / "deps" / "libreadcon_core
 N_BOOT = 9999
 SEED = 20261011
 ALPHA = 0.05
+def _bench_rustc() -> str:
+    """Compiler that built the timed binary, read from the cargo fingerprint."""
+    info = ROOT / "e2_bench" / "target" / ".rustc_info.json"
+    if info.exists():
+        payload = json.loads(info.read_text())
+        for item in payload.get("outputs", {}).values():
+            stdout = item.get("stdout") or ""
+            first = stdout.splitlines()[0] if stdout else ""
+            if first.startswith("rustc "):
+                return first
+    completed = subprocess.run(["rustc", "--version"], text=True, capture_output=True, check=False)
+    return completed.stdout.strip()
+
+
 N_NATIVE = 15
 N_PYTHON = 9
 N_SCALE = 5
@@ -386,7 +400,7 @@ def main() -> None:
             }
 
     gxx = subprocess.run(["g++", "--version"], text=True, capture_output=True, check=False).stdout.splitlines()[0]
-    rustc = subprocess.run(["rustc", "--version"], text=True, capture_output=True, check=False).stdout.strip()
+    rustc = _bench_rustc()
     summary = {
         "cpu": f"{cpu_name()}, {os.cpu_count()} hardware threads",
         "physical_cores_reported": os.cpu_count(),

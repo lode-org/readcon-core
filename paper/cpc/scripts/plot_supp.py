@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Supplementary figures from the measurements in data/novel.
-
-The distributed-read section has no figure. The sketch does not record
-frame offsets or per-rank times, and this script does not invent them.
-"""
+"""Supplementary figures from the measurements in data/novel."""
 
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ BLACK = pf.BLACK
 EXACT = TEAL
 APPROX = SUNSHINE
 LOST = CORAL
-GRADE = {"exact": 0, "approx": 1, "lost": 2}
+GRADE = {"exact": 0, "approx": 1, "lost": 2, "absent": 3}
 
 
 def _load(name: str) -> dict:
@@ -109,16 +105,16 @@ def fidelity_matrix(theme, png_dir: Path | None) -> None:
     columns = ("mask", "id", "time_unit", "binary64")
     headers = ("mask", "id", "time unit", "binary64")
     data = np.array([[GRADE[row[name]] for name in columns] for row in rows], dtype=float)
-    cmap = ListedColormap([EXACT, APPROX, LOST])
-    fig, ax = plt.subplots(figsize=(6.4, 3.8), layout="constrained")
-    ax.imshow(data, cmap=cmap, vmin=-0.5, vmax=2.5, aspect="auto")
+    cmap = ListedColormap([EXACT, APPROX, LOST, "#E6E6E6"])
+    fig, ax = plt.subplots(figsize=(6.6, 5.0), layout="constrained")
+    ax.imshow(data, cmap=cmap, vmin=-0.5, vmax=3.5, aspect="auto")
     ax.set_xticks(range(len(headers)))
     ax.set_xticklabels(headers)
     ax.set_yticks(range(len(rows)))
     ax.set_yticklabels([row["format"] for row in rows])
     for spine in ax.spines.values():
         spine.set_visible(True)
-    ink = {0: "white", 1: BLACK, 2: "white"}
+    ink = {0: "white", 1: BLACK, 2: "white", 3: BLACK}
     for i, row in enumerate(rows):
         for j, name in enumerate(columns):
             grade = row[name]
@@ -362,6 +358,11 @@ def dedup_graph(theme, png_dir: Path | None) -> None:
             ax.text(1.04, hash_y[digest], f"{digest} ×{multiplicity[digest]}", ha="left", va="center", fontsize=7)
     ax.set_xlim(-0.62, 1.48)
     ax.set_axis_off()
+    ax.set_title(
+        f"{payload['n_images']} images, {payload['n_hashes']} hashes",
+        fontsize=10,
+        loc="left",
+    )
     pf._theme_axes([ax], theme)
     pf._save(fig, "dedup_graph", png_dir)
 
