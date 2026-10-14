@@ -1,0 +1,16 @@
+[package]
+name = "stage-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Per-stage wall times for the CPC clean run"
+
+[[bin]]
+name = "stage-bench"
+path = "src/main.rs"
+
+[dependencies]
+readcon-core = { path = "../../../..", features = ["parallel"] }
+rayon = "1"
+fast-float2 = "0.2"
+memmap2 = "0.9"

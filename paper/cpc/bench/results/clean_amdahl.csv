@@ -1,0 +1,2 @@
+t1_full_s,string_load_s,boundary_s,utf8_s,f_paper,amdahl_8_paper,f_boundary_only,amdahl_8_boundary_only,f_utf8_plus_boundary,amdahl_8_utf8_plus_boundary,measured_speedup_8,measured_speedup_8_low,measured_speedup_8_high,f_effective,paper_published_speedup_8,paper_published_amdahl_8,formula_paper
+0.444892,0.0824465,0.0332094,0.0203381,0.259964,2.83713,0.074646,5.25444,0.120361,4.34187,3.52734,3.47885,3.56248,0.181143,4.35,2.79,1/(f+(1-f)/8) with f=(string_load+boundary)/t1_full

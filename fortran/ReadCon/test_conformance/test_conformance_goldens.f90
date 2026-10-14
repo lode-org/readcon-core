@@ -452,7 +452,7 @@ program test_conformance_goldens
 
   character(len=1024) :: root
   character(len=:), allocatable :: manifest
-  integer :: nlen, ierr, nfail, nvalid, ninvalid, i, ncases
+  integer :: nlen, ierr, nfail, nfail_case, nvalid, ninvalid, i, ncases
   logical :: ok
   type(case_t), allocatable :: cases(:)
 
@@ -476,11 +476,17 @@ program test_conformance_goldens
   do i = 1, ncases
     if (cases(i)%valid) then
       nvalid = nvalid + 1
-      nfail = nfail + check_valid(trim(root), cases(i))
+      nfail_case = check_valid(trim(root), cases(i))
     else
       ninvalid = ninvalid + 1
-      nfail = nfail + check_invalid(trim(root), cases(i))
+      nfail_case = check_invalid(trim(root), cases(i))
     end if
+    if (nfail_case == 0) then
+      print '(A)', 'PASS ' // trim(cases(i)%id) // ' ' // trim(cases(i)%path)
+    else
+      print '(A,1X,I0)', 'FAIL ' // trim(cases(i)%id) // ' ' // trim(cases(i)%path), nfail_case
+    end if
+    nfail = nfail + nfail_case
   end do
 
   if (nvalid < 1 .or. ninvalid < 1) then
