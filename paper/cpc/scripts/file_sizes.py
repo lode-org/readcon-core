@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Bytes per atom of one checkpoint frame and of the 10,000-frame file.
 
-CON 3.1 (readcon-core), extended XYZ (ASE), H5MD written by MDAnalysis and
-H5MD written with h5py (binary64 positions plus mask and id datasets) carry
-the same 218-atom frame. Each file is also gzipped at level 6.
+The trajectory is 10,000 steps of Langevin dynamics at 300 K with ASE's EMT
+potential, started from the 218-atom Cu(100) slab with H2 of the benchmark
+file, with its frozen atoms held. Every frame differs, so gzip sees a real
+trajectory. CON 3.1 (readcon-core, default shortest-decimal writer),
+extended XYZ (ASE), H5MD written by MDAnalysis and H5MD written with h5py
+(binary64 positions plus mask and id datasets) carry the same frames.
+Each file is also gzipped at level 6.
 """
 import gzip, os, sys, tempfile
 from pathlib import Path
@@ -14,6 +18,7 @@ from MDAnalysis.coordinates.memory import MemoryReader
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "bench" / "work" / "frames-10000.con"
 OUT = ROOT / "data" / "sizes.csv"
+CACHE = Path(tempfile.gettempdir()) / "rc_md_positions.npy"
 
 
 def gz(p):
@@ -44,10 +49,46 @@ def mda_write(path, pos, cell, symbols):
             w.write(u)
 
 
+def trajectory(n_frames=10_000):
+    from ase.calculators.emt import EMT
+    from ase.md.langevin import Langevin
+    from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+    from ase import units
+    start = readcon.read_con(str(SRC))[0]
+    atoms = start.to_ase()
+    atoms.calc = EMT()
+    if CACHE.exists():
+        pos = np.load(CACHE)
+        return _frames(atoms, pos), atoms, pos
+    rng = np.random.default_rng(7)
+    MaxwellBoltzmannDistribution(atoms, temperature_K=300, rng=rng)
+    dyn = Langevin(atoms, 1.0 * units.fs, temperature_K=300, friction=0.01, rng=rng)
+    pos = []
+    for _ in range(n_frames):
+        dyn.run(1)
+        pos.append(atoms.positions.copy())
+    pos = np.array(pos)
+    np.save(CACHE, pos)
+    return _frames(atoms, pos), atoms, pos
+
+
+def _frames(atoms, pos):
+    # The payload is positions, cell, mask and ids; velocities stay out,
+    # as in the other formats.
+    atoms.calc = None
+    atoms.set_momenta(np.zeros_like(atoms.positions))
+    frames = []
+    for p in pos:
+        f = readcon.ConFrame.from_ase(atoms)
+        for a, xyz in zip(f.atoms, p):
+            a.x, a.y, a.z = map(float, xyz)
+        frames.append(f)
+    return frames
+
+
 def main():
-    frames = readcon.read_con(str(SRC))
+    frames, atoms, traj = trajectory()
     n_frames = len(frames)
-    atoms = frames[0].to_ase()
     n = len(atoms)
     cell = atoms.cell.array
     mask = np.array([[a.fixed[0], a.fixed[1], a.fixed[2]] for a in frames[0].atoms], dtype=np.uint8)
@@ -60,8 +101,11 @@ def main():
             con = d / f"f{nf}.con"
             readcon.write_con(str(con), frames[:nf]); files["CON 3.1"] = con
             xyz = d / f"f{nf}.extxyz"
-            ase.io.write(xyz, [atoms] * nf, format="extxyz"); files["extended XYZ (ASE)"] = xyz
-            pos = np.repeat(atoms.positions[None], nf, axis=0)
+            snaps = []
+            for p in traj[:nf]:
+                b = atoms.copy(); b.positions = p; b.arrays.pop("momenta", None); snaps.append(b)
+            ase.io.write(xyz, snaps, format="extxyz"); files["extended XYZ (ASE)"] = xyz
+            pos = traj[:nf]
             h1 = d / f"f{nf}_mda.h5md"; mda_write(h1, pos, cell, atoms.get_chemical_symbols())
             files["H5MD (MDAnalysis)"] = h1
             h2 = d / f"f{nf}_h5py.h5md"; h5py_write(h2, pos, cell, mask, ids)
@@ -93,9 +137,9 @@ def table():
     t = r"""\begin{table}[ht]
 \centering
 \small
-\caption{Bytes per atom of the 218-atom frame, alone and repeated 10{,}000 times, raw and after gzip at level 6.
+\caption{Bytes per atom of a 218-atom frame and of a 10{,}000-frame trajectory, raw and after gzip at level 6.
 CON 3.1 is the default readcon-core writer, extended XYZ the ASE writer with the mask column, H5MD (MDAnalysis) its writer in single precision, and H5MD (h5py) binary64 positions with mask and id datasets.
-The repeated file compresses better than any real trajectory would.}
+The frames are 10{,}000 steps of EMT Langevin dynamics at 300\,K from that frame.}
 \label{tab:sizes}
 \begin{tabular}{lrrrr}
 \toprule
