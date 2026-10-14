@@ -23,6 +23,17 @@
 
 #include "readcon-core.h"
 
+/* Open MPI and MPICH include the deprecated C++ bindings from mpi.h.
+ * Those headers fail -Werror=cast-function-type on current g++. This
+ * shim uses the C API only. */
+#ifdef __cplusplus
+#ifndef OMPI_SKIP_MPICXX
+#define OMPI_SKIP_MPICXX 1
+#endif
+#ifndef MPICH_SKIP_MPICXX
+#define MPICH_SKIP_MPICXX 1
+#endif
+#endif
 #include <mpi.h>
 
 #ifdef __cplusplus
