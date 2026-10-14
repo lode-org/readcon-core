@@ -1,0 +1,52 @@
+eOn Client
+3.6.0 (2d2adad)
+compiled Wed Oct 14 02:03:13 PM GMT 2026
+OS: linux
+Arch: x86_64
+Hostname: cursor
+PID: 13024
+DIR: /workspace/paper/cpc/evidence/work/e4/geom/reactant_min
+Loading parameter file config.ini
+
+Beginning minimization of pos.con
+[Matter] Iter        Step size       ||Force||           Energy       
+[Matter]          0     0.00000e+00         5.49812e+00     -216.03000
+[Matter]          1     1.24867e-01         2.15141e+00     -216.57759
+[Matter]          2     2.20788e-02         1.00006e+00     -216.67305
+[Matter]          3     2.68777e-02         3.13981e-01     -216.71376
+[Matter]          4     9.11718e-03         1.76783e-01     -216.71835
+[Matter]          5     7.37422e-03         1.63456e-01     -216.71998
+[Matter]          6     7.06335e-03         1.05023e-01     -216.72096
+[Matter]          7     4.19953e-03         5.67465e-02     -216.72138
+[Matter]          8     1.78092e-03         3.25747e-02     -216.72149
+[Matter]          9     1.39219e-03         9.04833e-02     -216.72156
+[Matter]         10     5.26565e-02         7.30762e-01     -216.69938
+[Matter]         11     5.35176e-02         1.35028e-01     -216.72138
+[Matter]         12     2.99008e-02         6.68848e-01     -216.71009
+[Matter]         13     2.45232e-02         1.06111e-01     -216.72188
+[Matter]         14     4.01658e-03         8.18914e-02     -216.72211
+[Matter]         15     2.39179e-03         8.06553e-02     -216.72214
+[Matter]         16     4.56518e-04         7.32977e-02     -216.72217
+[Matter]         17     4.66378e-04         6.88064e-02     -216.72219
+[Matter]         18     9.28929e-04         5.83231e-02     -216.72223
+[Matter]         19     1.23872e-03         4.47173e-02     -216.72226
+[Matter]         20     1.37417e-03         2.80657e-02     -216.72229
+[Matter]         21     6.53211e-04         1.60701e-02     -216.72231
+[Matter]         22     4.99475e-04         1.24292e-02     -216.72232
+[Matter]         23     8.24291e-04         9.43402e-03     -216.72233
+[Matter]         24     7.85803e-04         2.32739e-02     -216.72233
+[Matter]         25     3.32272e-04         3.58624e-03     -216.72234
+[Matter]         26     8.46254e-05         2.34851e-03     -216.72234
+[Matter]         27     1.64370e-04         1.38277e-03     -216.72234
+[Matter]         28     9.35764e-05         8.77414e-04     -216.72234
+[Matter]         29     5.69952e-05         1.38594e-03     -216.72234
+[Matter]         30     2.75780e-05         1.61111e-04     -216.72234
+[Matter]         31     2.24074e-06         1.26529e-04     -216.72234
+[Matter]         32     9.27476e-06         6.55524e-05     -216.72234
+Minimization converged within tolerence
+Saving result to min.con
+Final Energy: -216.72233718329028
+Timing Information:
+  Real time: 0.003 seconds
+  User time: 0.007 seconds
+  System time: 0.000 seconds

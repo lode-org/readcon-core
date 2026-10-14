@@ -1,0 +1,36 @@
+case,reader,status,z0,x1,pbc,move_mask,ids
+plain,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+plain,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+plain,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+plain,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+plain,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+no_pbc_key,ASE,read,6,2.7718585822512662,TTT,"TTT,TTT,FFT","17,3,41"
+no_pbc_key,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+no_pbc_key,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+no_pbc_key,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+no_pbc_key,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+bare_comment,ASE,read,6,2.7718585822512662,FFF,"TTT,TTT,TTT",-
+bare_comment,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+bare_comment,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+bare_comment,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+bare_comment,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+fortran_exponent,ASE,error: ValueError: could not convert string to float: '6.0d0',,,,,
+fortran_exponent,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+fortran_exponent,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+fortran_exponent,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+fortran_exponent,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+bool_spelling,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+bool_spelling,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+bool_spelling,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+bool_spelling,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+bool_spelling,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+quoted_value_with_equals,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+quoted_value_with_equals,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+quoted_value_with_equals,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+quoted_value_with_equals,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+quoted_value_with_equals,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,
+units_key,ASE,read,6,2.7718585822512662,TTF,"TTT,TTT,FFT","17,3,41"
+units_key,libextxyz (C),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+units_key,libextxyz (Python),error: ModuleNotFoundError: No module named 'extxyz',,,,,
+units_key,chemfiles,error: ModuleNotFoundError: No module named 'chemfiles',,,,,
+units_key,MDAnalysis,error: ModuleNotFoundError: No module named 'MDAnalysis',,,,,

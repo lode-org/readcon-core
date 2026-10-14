@@ -1,0 +1,9 @@
+--- /workspace/paper/cpc/data/cloud-runs/spec01/reproducer/python_v3_units.con	2026-10-14 14:08:48.856917824 +0000
++++ /workspace/paper/cpc/data/cloud-runs/spec01/reproducer/fortran_v3_units.con	2026-10-14 14:08:48.860917704 +0000
+@@ -1,5 +1,5 @@
+ conformance: v3-units; spec.org: Units (required)
+-{"con_spec_minor":1,"con_spec_version":3,"units":{"energy":"eV","length":"angstrom"}}
++{"con_spec_version":3,"units":{"energy":"eV","length":"angstrom"}}
+ 1e1 1e1 1e1
+ 9e1 9e1 9e1
+ 

@@ -1,0 +1,7 @@
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant0.con 3.1, natural unit declared
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant1.con 3.1, no time unit
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant2.con 3.0, labelled fs
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant3.con 3.2, unknown key
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant4.con 4.0
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant5.con missing version
+/workspace/paper/cpc/data/cloud-runs/spec01/variants/variant6.con 3.1, mask 9

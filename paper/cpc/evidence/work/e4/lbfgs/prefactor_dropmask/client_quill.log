@@ -1,0 +1,84 @@
+eOn Client
+3.6.0 (2d2adad)
+compiled Wed Oct 14 02:03:13 PM GMT 2026
+OS: linux
+Arch: x86_64
+Hostname: cursor
+PID: 13136
+DIR: /workspace/paper/cpc/evidence/work/e4/lbfgs/prefactor_dropmask
+Loading parameter file config.ini
+[Prefactor] including all atoms that make up 90.000% of the motion
+[Prefactor] sum of atom distances moved 24.3323
+[Prefactor] max moved atom distance: 3.4409
+[Prefactor] including 35 atoms in the hessian (17 moved + 18 neighbors)
+[Hessian] Hessian size: 105
+[Hessian] cutoff coloring: 35 colors for 35 mobile atoms
+[Hessian] writing hessian
+[Hessian] calculating eigen values of the hessian
+[Hessian] eigenvalue problem took 8.5836e-04 seconds
+[Hessian] Hessian size: 105
+[Hessian] writing hessian
+[Hessian] calculating eigen values of the hessian
+[Hessian] eigenvalue problem took 9.1025e-04 seconds
+[Hessian] Hessian size: 105
+[Hessian] cutoff coloring: 35 colors for 35 mobile atoms
+[Hessian] writing hessian
+[Hessian] calculating eigen values of the hessian
+[Hessian] eigenvalue problem took 7.6541e-04 seconds
+[Prefactor] min1 had negative mode of -0.015079898970833444
+[Prefactor] min1 had negative mode of -0.012888486709218489
+[Prefactor] min1 had negative mode of -0.011687560721615782
+[Prefactor] min1 had negative mode of -0.01111230372859686
+[Prefactor] min1 had negative mode of -0.011092128500004851
+[Prefactor] min1 had negative mode of -0.010142638398629795
+[Prefactor] min1 had negative mode of -0.009984947130949409
+[Prefactor] min1 had negative mode of -0.00965088719055292
+[Prefactor] min1 had negative mode of -0.009410767350624459
+[Prefactor] min1 had negative mode of -0.008273708180808194
+[Prefactor] min1 had negative mode of -0.008214385232698424
+[Prefactor] min1 had negative mode of -0.00783663141625312
+[Prefactor] min1 had negative mode of -0.007371433456624021
+[Prefactor] min1 had negative mode of -0.006973668431113312
+[Prefactor] min1 had negative mode of -0.0063400903002573394
+[Prefactor] min1 had negative mode of -0.006303288106071914
+[Prefactor] min1 had negative mode of -0.0060869237091954265
+[Prefactor] min1 had negative mode of -0.005902667144733692
+[Prefactor] min1 had negative mode of -0.005358813048422281
+[Prefactor] min1 had negative mode of -0.005251583182350199
+[Prefactor] min1 had negative mode of -0.005016050270179662
+[Prefactor] min1 had negative mode of -0.004446374165442068
+[Prefactor] min1 had negative mode of -0.004396576191690071
+[Prefactor] min1 had negative mode of -0.004258856929549929
+[Prefactor] min1 had negative mode of -0.0040473823825613086
+[Prefactor] min1 had negative mode of -0.0036545598858695
+[Prefactor] min1 had negative mode of -0.003405275391595086
+[Prefactor] min1 had negative mode of -0.0030738144692069747
+[Prefactor] min1 had negative mode of -0.002899414384022884
+[Prefactor] min1 had negative mode of -0.0028789441217558845
+[Prefactor] min1 had negative mode of -0.0027182895275803818
+[Prefactor] min1 had negative mode of -0.0026703916034907407
+[Prefactor] min1 had negative mode of -0.0023779707478640342
+[Prefactor] min1 had negative mode of -0.0022930124500493585
+[Prefactor] min1 had negative mode of -0.002254784740317664
+[Prefactor] min1 had negative mode of -0.002052055797449503
+[Prefactor] min1 had negative mode of -0.0018839592457877566
+[Prefactor] min1 had negative mode of -0.001671310250653036
+[Prefactor] min1 had negative mode of -0.001599170418910317
+[Prefactor] min1 had negative mode of -0.0015707930573119692
+[Prefactor] min1 had negative mode of -0.0013884053599973656
+[Prefactor] min1 had negative mode of -0.001346229770256025
+[Prefactor] min1 had negative mode of -0.0006062102768374997
+[Prefactor] min1 had negative mode of -0.0004794672186668927
+[Prefactor] min1 had negative mode of -7.610577962498382e-05
+[Prefactor] min1 had negative mode of -3.825104403253542e-05
+[Prefactor] min1 had negative mode of -2.109964368407459e-05
+[Prefactor] min1 had negative mode of -1.0315999347693584e-05
+[Prefactor] min1 had negative mode of -2.2424937080594996e-06
+[Prefactor] min1 had negative mode of -9.378478138241869e-07
+[Prefactor] min1 had negative mode of -3.3059769663105942e-18
+[Prefactor] min1 had negative mode of -7.287485447667085e-19
+[Prefactor] Error: 52 negative modes at min1
+Timing Information:
+  Real time: 0.040 seconds
+  User time: 0.045 seconds
+  System time: 0.000 seconds

@@ -1,0 +1,65 @@
+eOn Client
+3.6.0 (2d2adad)
+compiled Wed Oct 14 02:03:13 PM GMT 2026
+OS: linux
+Arch: x86_64
+Hostname: cursor
+PID: 13116
+DIR: /workspace/paper/cpc/evidence/work/e4/lbfgs/resume_freeze
+Loading parameter file config.ini
+NEB endpoints from initial path list (skipped reactant.con / product.con)
+minimize_endpoints == false: not minimizing endpoints.
+Nudged elastic band calculation started.
+===============================================================
+ NEB Optimization Configuration
+===============================================================
+ Baseline Force            : 0.4079
+ Climbing Image (CI)       : ENABLED
+   - Relative Trigger      : 0.0000 (Factor: 0.00)
+   - Absolute Trigger      : INF
+   - Converged Only        : true
+ Hybrid MMF (OCINEB)       : DISABLED
+---------------------------------------------------------------
+ iteration    step size      ||Force||   max image   max energy
+---------------------------------------------------------------
+         1   0.0000e+00     4.0786e-01           6        1.612
+         2   3.4794e-03     3.1861e-01           6         1.61
+         3   1.2267e-02     1.4566e-01           6        1.608
+         4   5.2543e-03     1.2686e-01           6        1.608
+         5   1.0179e-02     1.6633e-01           6        1.608
+         6   6.6295e-03     7.0923e-02           6        1.608
+         7   3.5395e-03     3.2684e-02           6        1.608
+         8   3.8543e-03     2.2944e-02           6        1.608
+         9   9.0592e-03     6.1978e-02           6        1.608
+        10   3.0381e-03     3.6824e-02           6        1.608
+        11   2.3998e-03     1.5203e-02           6        1.607
+        12   1.3416e-03     1.1653e-02           6        1.607
+        13   1.2150e-03     1.2627e-02           6        1.607
+        14   3.4678e-04     1.4626e-02           6        1.607
+        15   1.0135e-03     1.5581e-02           6        1.607
+        16   4.3306e-04     8.5555e-03           6        1.607
+NEB converged
+  0     0.000000     0.000000    -0.000004
+  1     0.589090     0.428710    -0.014683
+  2     1.498719     1.578279    -0.025754
+  3     2.850241     1.549660    -0.047236
+  4     4.971472     0.643157     0.000082
+  5     7.085536     1.377121     0.034749
+  6     8.531354     1.607404    -0.000108
+  7     9.389301     0.266080     0.015172
+  8     9.924482    -0.133609     0.000003
+Found 7 extrema
+Energy reference: -216.7223371832903
+extrema #1 at image position 2.087520666401022 with energy 1.5797503239077741 and curvature -0.3567666593162882
+extrema #2 at image position 2.8503952382873403 with energy 1.545145289143818 and curvature 0.3567666593162882
+extrema #3 at image position 3.0174585422879407 with energy 1.5505293377593148 and curvature -5.639070841309578
+extrema #4 at image position 4.984114598056286 with energy 1.377701521424683 and curvature -4.55104928263316
+extrema #5 at image position 4.00003816728995 with energy 0.643157296379087 and curvature 4.551049282633159
+extrema #6 at image position 5.032792041621868 with energy 1.3763063703040643 and curvature 1.481878942145532
+extrema #7 at image position 6.000011599068327 with energy 1.6074043864602174 and curvature -8.022100544500754
+Final state: 
+Nudged elastic band, successful.
+Timing Information:
+  Real time: 0.023 seconds
+  User time: 0.022 seconds
+  System time: 0.009 seconds

@@ -1,0 +1,51 @@
+[  0%]                     read_first
+[ 25%]                     read_first  done.
+[ 25%]                 print_neb_band
+[ 50%]                 print_neb_band  done.
+[ 50%]                  test_read_con
+[ 75%]                  test_read_con  done.
+[ 75%]       test_conformance_goldens
+[100%]       test_conformance_goldens  done.
+[100%] Project compiled successfully.
+ lib=0.17.0 chemfiles= F
+ tiny=/workspace/resources/test/tiny_cuh2.con
+ frame_copy_positions st=           0  natoms=           4
+ frame_copy_velocities st=          -8
+ frame_copy_forces st=          -8
+ frame_copy_masses st=           0
+ read_all_frames n=           1  atoms0=           4
+ iterator frames=           2
+ positions_dlpack st=           0  ok= T  ndim=           2  shape=                    2                    3  bits=          64  data= T
+ masses_dlpack st=           0  ndim=           1  shape0=                    2
+ builder_copy_masses st=           0  m0=   15.999000000000001       m1=   1.0080000000000000     
+ velocities_dlpack (expect absent) st=          -8  null= T
+ metatensor_positions st=         -11  block= F
+ metatensor lean FEATURE_DISABLED ok
+ chemfiles_support= F
+ open_writer_gzip ok
+ open_writer_zstd null (lean stub or error)
+ status_message=success
+ con_spec=           3
+ z_to_symbol(8)=O
+ symbol_to_z(O)=                    8
+ helpers en=                       NaN  e0=                       NaN  mass=   129.10785999999999       vol=   33303.021119999998       fmax=                       NaN
+ natoms=           4  atom_count=           4
+ has_vel= F  has_frc= F
+ meta={"con_spec_version":2}
+ comp=Cu:2|H:2
+ proj={"cell_volume":33303.02112,"charge":null,"energy":null,"fmax":null,"formula":"Cu:2|H:2","frame_index":null,"has_energy":false,"has_forces":false,"has_velocities":false,"magmom":null,"n_atoms":4,"neb_band":null,"neb_bead":null,"sections_mask":0,"species_counts":[["Cu",2],["H",2]],"symbols":["Cu","H"],"time":null,"timestep":null,"total_mass":129.10786}
+ pot=
+ spec=           2
+ fidx=                   -1  time=                       NaN  dt=                       NaN
+ nmask=           0  nidx=           4  atom1_z=                   29
+ nbonds=           0
+ id_index0=                    0
+ fr_write_path st=           0
+ builder meta/fidx st=           0
+ bd2 build atoms=           1
+ wr_set_canonical st=           0  is_can= T
+ wr_extend_one st=           0
+ open_writer_gzip_with_precision ok
+ open_writer_zstd_with_precision null (lean)
+ OK full parity suite
+ OK fortran conformance goldens  valid=          10  invalid=           8
