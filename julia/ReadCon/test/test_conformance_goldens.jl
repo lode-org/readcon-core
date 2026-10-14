@@ -229,12 +229,14 @@ end
 
     for case in cases
         fixture = joinpath(corpus, case["path"])
+        println("CASE\t", case["kind"], "\t", case["id"], "\t", case["path"])
         @test isfile(fixture)
         if case["kind"] == "invalid"
             frames = read_con(fixture)
             @test isempty(frames)
             first = ccall(ReadCon._lib_symbol(:rkr_read_first_frame), Ptr{Cvoid}, (Cstring,), fixture)
             @test first == C_NULL
+            println("PASS\t", case["id"])
             continue
         end
         frames = read_con(fixture)
@@ -253,5 +255,6 @@ end
             @test atom.y ≈ want[2] atol=1e-12
             @test atom.z ≈ want[3] atol=1e-12
         end
+        println("PASS\t", case["id"])
     end
 end

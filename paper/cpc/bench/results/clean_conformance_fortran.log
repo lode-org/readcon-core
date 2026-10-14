@@ -1,0 +1,19 @@
+PASS v2-minimal valid/v2_minimal.con
+PASS v3-units valid/v3_units.con
+PASS column-4-spec2-x-only valid/column4_spec2_x_only.con
+PASS column-4-spec1-all-fixed valid/column4_spec1_all_fixed.con
+PASS column-4-spec2-all-fixed valid/column4_spec2_all_fixed.con
+PASS column-4-spec2-y-only valid/column4_spec2_y_only.con
+PASS column-4-spec2-xz valid/column4_spec2_xz.con
+PASS zero-atom valid/zero_atom.con
+PASS zero-atom-eof valid/zero_atom_eof.con
+PASS zero-atom-then-frame valid/zero_atom_then_frame.con
+PASS missing-spec-version invalid/missing_spec_version.con
+PASS v3-missing-units invalid/v3_missing_units.con
+PASS v3-bad-units invalid/v3_bad_units.con
+PASS column-4-out-of-range invalid/column4_out_of_range.con
+PASS unsupported-spec-version invalid/unsupported_spec_version.con
+PASS unknown-section invalid/unknown_section.con
+PASS validate-true-missing-sections invalid/validate_true_missing_sections.con
+PASS per-type-zero invalid/per_type_zero.con
+ OK fortran conformance goldens  valid=          10  invalid=           8
