@@ -1,0 +1,27 @@
+system,operation,mode,ranks,seconds
+readcon-core,read,shared,1,9.3856
+readcon-core,read,shared,2,5.7285
+readcon-core,read,shared,4,3.0256
+readcon-core,read,shared,8,1.6348
+readcon-core,read,scatter,1,9.7792
+readcon-core,read,scatter,2,6.0779
+readcon-core,read,scatter,4,3.4157
+readcon-core,read,scatter,8,2.0782
+readcon-core,write,MPI-IO,1,7.9444
+readcon-core,write,MPI-IO,2,3.9348
+readcon-core,write,MPI-IO,4,2.1875
+readcon-core,write,MPI-IO,8,1.2193
+readcon-core,write,gather,1,8.8974
+readcon-core,write,gather,2,4.9815
+readcon-core,write,gather,4,3.2087
+readcon-core,write,gather,8,2.0938
+readcon-db,ingest,single writer,1,30.619
+readcon-db,ingest,single writer,2,22.587
+readcon-db,ingest,single writer,4,17.679
+readcon-db,ingest,single writer,8,15.283
+readcon-db,ingest,single writer,16,35.173
+readcon-db,ingest,sharded,1,32.543
+readcon-db,ingest,sharded,2,24.668
+readcon-db,ingest,sharded,4,22.576
+readcon-db,ingest,sharded,8,17.083
+readcon-db,ingest,sharded,16,43.519
