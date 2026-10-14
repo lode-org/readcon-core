@@ -2,9 +2,8 @@
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
 \journal{Computer Physics Communications}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\else\usepackage{fontspec}\fi
 \usepackage{microtype}
 \makeatletter
 % The class footer box is followed by a space token.
@@ -39,6 +38,7 @@
 \usepackage{booktabs}
 \usepackage{listings}
 \usepackage{xurl}
+\usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{xr-hyper}
 \externaldocument{rg_supp}
@@ -55,7 +55,7 @@
 }
 \date{\today}
 \title{CON 3.1: a versioned text checkpoint for saddle searches and long-timescale simulations, with its reference implementation readcon-core}
-\hypersetup{
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black,
  pdfauthor={Rohit Goswami},
  pdftitle={CON 3.1: a versioned text checkpoint for saddle searches and long-timescale simulations, with its reference implementation readcon-core},
  pdfkeywords={checkpoint, specification, interoperability, reproducibility, saddle, restart, eOn},
@@ -81,6 +81,15 @@ On a Pt(100) hop, a height constraint read as a full freeze removes the imaginar
 A natural-unit velocity read as femtoseconds multiplies the kinetic energy by 103.64.
 On a warm-cache file of 10{,}000 copies of one 218-atom frame, the Rust core reads at 1.34\,GB/s.
 
+\end{abstract}
+
+\begin{keyword}
+checkpoint \sep specification \sep interoperability \sep reproducibility \sep saddle \sep restart \sep eOn
+\end{keyword}
+
+{\bf PROGRAM SUMMARY}
+
+\begin{small}
 \noindent
 \textit{Program title:} readcon-core\\
 \textit{CPC Library link to program files:} (to be added by Technical Editor)\\
@@ -88,10 +97,12 @@ On a warm-cache file of 10{,}000 copies of one 218-atom frame, the Rust core rea
 \textit{Licensing provisions:} MIT\\
 \textit{Programming language:} Rust, C, C++, Python, Julia, Fortran 2008\\
 \textit{Supplementary material:} specification, ABNF grammar of 50 rules, conformance corpus, and the notes that accompany the figures\\
+
 \textit{Nature of problem:}
 Campaigns exchange geometries and resume from CON frames, which had no specification.
 Readers therefore drop a per-axis mask, drop the atom id after the file has grouped atoms by element, mislabel the velocity time unit, or round coordinates to a fixed number of decimals.
 The search that continues then runs under a different constraint, pairs a different atom with its image, or restarts from a different kinetic energy than the one that was stored.
+
 \textit{Solution method:}
 CON 3.1 names a major version and a minor version, and it states which later changes a reader of the same major must still accept.
 Decimal fields are read with correct rounding, and the default writer emits the shortest text that parses back to the same binary64 value.
@@ -99,6 +110,7 @@ Six fixed decimals remain available when a caller asks for them.
 One C interface sits over the Rust core, so that every binding shares a single parse, and eOn 3.6.0 reads through that path.
 A multi-frame file is split by a serial scan of frame boundaries, after which each frame is parsed on its own and returned in file order.
 gzip and zstd are envelopes around the same text.
+
 \textit{Additional comments including restrictions and unusual features:}
 The restart comparison is five steepest-descent steps on one Morse band, stopped at an iteration cap.
 The limited-memory quasi-Newton history is absent from the frame, and a resume with that optimiser takes a different next step.
@@ -106,11 +118,7 @@ The velocity factor is an illustration: an eOn dynamics job redraws velocities a
 The timed file repeats one 218-atom frame, on one processor with a warm cache.
 Conversion of a frame that stores forces into ASE 3.29.0 atoms passes energy and forces positionally, which that ASE release accepts only as keywords.
 A failed C read returns a null handle and does not classify the error.
-\end{abstract}
-
-\begin{keyword}
-checkpoint \sep specification \sep interoperability \sep reproducibility \sep saddle \sep restart \sep eOn
-\end{keyword}
+\end{small}
 
 \end{frontmatter}
 
@@ -612,7 +620,17 @@ The sweep stops at 8 threads because that is the hardware.
 One frame at the automatic rate costs \(12.6\,\mu\mathrm{s}\).
 One Morse call on the 28-atom slab takes \(0.304\,\mathrm{ms}\) and one EMT call takes \(52.6\,\mu\mathrm{s}\), so the whole file costs about 413 Morse calls.
 A force-call framing of that kind is the one used for the i-PI 3.0 measurements \cite{litmanIpi30Flexible2024}.
-chemfiles on XYZ, h5py on one position array, and MDAnalysis on H5MD were timed on an earlier band whose fields differ from this file, so those ratios are not repeated here \cite{michaudagrawalMdanalysisToolkitAnalysis2011,jakupovicMpiparallelMolecularDynamics2021,gowersMdanalysismdanalysisRelease21002025,colletteH5pyh5py3702022}.
+Table~\ref{tab:peers} sets the one-worker Python read beside four peers on the same frames, on the same host, as 30 interleaved pairs \cite{michaudagrawalMdanalysisToolkitAnalysis2011,jakupovicMpiparallelMolecularDynamics2021,gowersMdanalysismdanalysisRelease21002025,colletteH5pyh5py3702022}.
+Every ratio differs from 1 after the Holm adjustment \cite{holmSimpleSequentiallyRejective1979}.
+MDAnalysis on H5MD takes 4.8 times as long on the 10{,}000-frame file, and the ASE eon reader takes 3.0 times as long.
+chemfiles on XYZ finishes in 0.46 of the readcon-core time, and h5py finishes in 0.015 of it.
+Neither of those two reads the fields this paper is about.
+The XYZ copy carries coordinates and no mask, id or velocity unit, and chemfiles fills arrays without building one object per atom.
+The h5py row loads one contiguous binary array and parses no text, so it is the floor for any text reader and not a competitor.
+On one frame of the platinum slab the same ordering holds with smaller margins.
+Table~\ref{tab:ratios} in the supplement lists the 1-frame and 100-frame files.
+
+\input{figures/generated/peer_table}
 
 \section{Limitations}
 \label{sec:limitations}

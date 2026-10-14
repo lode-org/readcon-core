@@ -2,9 +2,8 @@
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
 \journal{Computer Physics Communications}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\else\usepackage{fontspec}\fi
 \usepackage{microtype}
 \makeatletter
 % The class footer box is followed by a space token.
@@ -39,6 +38,7 @@
 \usepackage{booktabs}
 \usepackage{listings}
 \usepackage{xurl}
+\usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{xr-hyper}
 \externaldocument{rg_main}
@@ -56,11 +56,15 @@
 }
 \date{\today}
 \title{Supplementary material for CON 3.1}
-\hypersetup{
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black,
  pdfauthor={Rohit Goswami},
  pdftitle={Supplementary material for CON 3.1},
  pdfkeywords={checkpoint, specification, restart, saddle},
  pdflang={English}}
+\renewcommand{\thesection}{S\arabic{section}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\AtBeginDocument{\renewcommand{\thelstlisting}{S\arabic{lstlisting}}}
 \begin{document}
 
 \begin{frontmatter}
@@ -238,6 +242,18 @@ Several gzip members & Read in order. \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\section{Paired peer timings on every payload}
+\label{sec:appendix-peers}
+Table~\ref{tab:ratios} extends the peer table of the main text to the 1-frame and 100-frame files.
+The comparison calls the Python binding with one worker, and ASE, chemfiles, MDAnalysis and h5py run in the same process with OpenMP and BLAS limited to one thread.
+XYZ and H5MD peers receive the coordinates of the same frames, written before the timed loop starts.
+Each cell is one-worker readcon-core, then the peer, thirty times, after one untimed call of each side.
+A repeat over 240\,s would be recorded as a timeout and a peer that raises as a failure; neither occurred.
+The interval is a bias-corrected and accelerated bootstrap of the median with 9999 draws \cite{efronBetterBootstrapConfidence1987}.
+On one frame the fixed cost of opening the file dominates, which is why h5py and chemfiles lose their lead there.
+
+\input{figures/generated/ratio_table}
 
 \section{Stored ingest timings}
 \label{sec:appendix-db}

@@ -25,6 +25,16 @@ PEER = {
     "chemfiles_xyz": "chemfiles XYZ",
     "mda_h5md": "MDAnalysis H5MD",
     "h5py": "h5py",
+    "ase_extxyz": "ASE extended XYZ",
+    "ase_traj": "ASE trajectory",
+}
+FIELDS = {
+    "ase_eon": "same CON text",
+    "chemfiles_xyz": "coordinates",
+    "mda_h5md": "coordinates",
+    "h5py": "one binary array",
+    "ase_extxyz": "ASE atoms",
+    "ase_traj": "ASE atoms",
 }
 
 
@@ -113,6 +123,39 @@ def gen_ratios(rows: list[dict[str, str]]) -> str:
             rf"{tex(PAYLOAD.get(row['payload'], row['payload']))} & "
             rf"{tex(PEER.get(row['peer'], row['peer']))} & {row['n_pair_ok']} & "
             rf"{row['n_failure']} & {tex(ratio)} & {tex(interval)} \\"
+        )
+    body += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    return "\n".join(body)
+
+
+def gen_peers(rows: list[dict[str, str]]) -> str:
+    """One table for every peer on the two production-sized payloads."""
+    body = [
+        r"\begin{table}[ht]",
+        r"\centering",
+        r"\small",
+        (
+            r"\caption{Paired ratios of the one-worker Python read to each peer, "
+            r"readcon-core time over peer time, so a value below 1 means readcon-core finished sooner. "
+            r"Each cell is 30 interleaved pairs; the interval is a bias-corrected and accelerated "
+            r"95 percent interval of the median. The fields column says what the peer returns.}"
+        ),
+        r"\label{tab:peers}",
+        r"\footnotesize",
+        r"\setlength{\tabcolsep}{4pt}",
+        r"\begin{tabular}{lllrl}",
+        r"\toprule",
+        r"Payload & Peer & Fields & Ratio & Interval \\",
+        r"\midrule",
+    ]
+    for row in rows:
+        if row["payload"] not in ("frames-10000", "slab") or not row["bca_low"]:
+            continue
+        body.append(
+            rf"{tex(PAYLOAD[row['payload']])} & {tex(PEER[row['peer']])} & "
+            rf"{tex(FIELDS[row['peer']])} & "
+            rf"{sig(float(row['median_ratio_readcon_over_peer']))} & "
+            rf"[{sig(float(row['bca_low']))}, {sig(float(row['bca_high']))}] \\"
         )
     body += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
     return "\n".join(body)
@@ -338,6 +381,11 @@ def main() -> None:
     slab = read_csv(DATA / "slab_build.csv")[0]
     write("macros.tex", gen_macros(ratios, threads, velocity, host, corpus, roundtrip, slab))
     write("ratio_table.tex", gen_ratios(ratios))
+    extra = RESULTS / "ratios_ase_formats.csv"
+    peer_rows = ratios + [
+        r for r in (read_csv(extra) if extra.exists() else []) if r["peer"] != "ase_eon"
+    ]
+    write("peer_table.tex", gen_peers(peer_rows))
     write("compat_table.tex", gen_compat(compat))
     write("hcn_table.tex", gen_hcn(loss, read_csv(DATA / "slab_masks.csv")))
     subprocess.check_call([sys.executable, str(CPC / "scripts" / "gen_figures.py")])

@@ -1,0 +1,23 @@
+% Written by paper/cpc/scripts/gen_tables.py.
+\begin{table}[ht]
+\centering
+\small
+\caption{Paired ratios of the one-worker Python read to each peer, readcon-core time over peer time, so a value below 1 means readcon-core finished sooner. Each cell is 30 interleaved pairs; the interval is a bias-corrected and accelerated 95 percent interval of the median. The fields column says what the peer returns.}
+\label{tab:peers}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lllrl}
+\toprule
+Payload & Peer & Fields & Ratio & Interval \\
+\midrule
+10000 frames & ASE eon & same CON text & 0.337 & [0.335, 0.345] \\
+10000 frames & chemfiles XYZ & coordinates & 2.15 & [2.14, 2.17] \\
+10000 frames & h5py & one binary array & 67.1 & [66.5, 67.3] \\
+10000 frames & MDAnalysis H5MD & coordinates & 0.207 & [0.204, 0.213] \\
+Pt slab & ASE eon & same CON text & 0.233 & [0.231, 0.241] \\
+Pt slab & chemfiles XYZ & coordinates & 1.14 & [1.13, 1.16] \\
+Pt slab & h5py & one binary array & 6.05 & [5.91, 6.27] \\
+Pt slab & MDAnalysis H5MD & coordinates & 0.394 & [0.387, 0.404] \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -35,9 +35,8 @@
 #+LATEX_CLASS_OPTIONS: [preprint,12pt]
 *** Preamble :ignoreheading:ignore:
 #+LATEX_HEADER: \journal{Computer Physics Communications}
-#+LATEX_HEADER: \usepackage[utf8]{inputenc}
-#+LATEX_HEADER: \usepackage[T1]{fontenc}
-#+LATEX_HEADER: \usepackage{lmodern}
+#+LATEX_HEADER: \usepackage{iftex}
+#+LATEX_HEADER: \ifPDFTeX\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\else\usepackage{fontspec}\fi
 #+LATEX_HEADER: \usepackage{amssymb,amsmath}
 #+LATEX_HEADER: \usepackage{booktabs}
 #+LATEX_HEADER: \usepackage{tabularx}

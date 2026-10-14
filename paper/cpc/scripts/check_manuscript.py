@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ORG = ROOT / "src" / "rg_main.org"
+ORG = ROOT / "src" / "rg_main.tex"
 HIGHLIGHTS = ROOT / "highlights.txt"
 
 
