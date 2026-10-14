@@ -124,16 +124,14 @@ fn v31_example_parses() {
             .iter()
             .map(|atom| atom.fixed)
             .collect::<Vec<_>>(),
-        vec![
-            [false, false, false],
-            [true, true, false],
-            [true, true, true]
-        ]
+        vec![[false, false, false], [true, true, false], [
+            true, true, true
+        ]]
     );
-    assert_eq!(frame.atom_data[0].velocity, Some([0.01, 0.0, 0.0]));
-    assert_eq!(frame.atom_data[1].velocity, Some([0.0, 0.02, 0.0]));
-    assert_eq!(frame.atom_data[2].velocity, Some([0.0, 0.0, 0.03]));
-    assert_eq!(frame.atom_data[0].force, Some([0.1, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[0].velocity(), Some([0.01, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[1].velocity(), Some([0.0, 0.02, 0.0]));
+    assert_eq!(frame.atom_data[2].velocity(), Some([0.0, 0.0, 0.03]));
+    assert_eq!(frame.atom_data[0].force(), Some([0.1, 0.0, 0.0]));
     assert!(frame.header.sections.iter().any(|s| s == "velocities"));
     assert!(frame.header.sections.iter().any(|s| s == "forces"));
     assert_eq!(
@@ -182,14 +180,12 @@ fn v31_frame_as_v1_parses() {
             .iter()
             .map(|atom| atom.fixed)
             .collect::<Vec<_>>(),
-        vec![
-            [false, false, false],
-            [true, true, true],
-            [true, true, true]
-        ]
+        vec![[false, false, false], [true, true, true], [
+            true, true, true
+        ]]
     );
-    assert!(frame.atom_data.iter().all(|atom| atom.velocity.is_none()));
-    assert!(frame.atom_data.iter().all(|atom| atom.force.is_none()));
+    assert!(frame.atom_data.iter().all(|atom| atom.velocity().is_none()));
+    assert!(frame.atom_data.iter().all(|atom| atom.force().is_none()));
 }
 
 #[test]
