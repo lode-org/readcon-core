@@ -131,7 +131,7 @@ Forces of Component 1
         .map(|r| r.expect("frame parses"))
         .collect();
     assert_eq!(frames.len(), 2);
-    assert!(frames[0].atom_data.iter().any(|a| a.force.is_some()));
+    assert!(frames[0].atom_data.iter().any(|a| a.force().is_some()));
     assert!(!frames[1].has_velocities());
     assert_eq!(frames[1].atom_data[0].z, 0.5);
     let mut it = ConFrameIterator::new(&text);
@@ -187,7 +187,7 @@ Velocities of Component 1
         .collect();
     assert_eq!(frames.len(), 2);
     assert!(frames[0].has_velocities());
-    let v0 = frames[0].atom_data[0].velocity.expect("v0");
+    let v0 = frames[0].atom_data[0].velocity().expect("v0");
     assert!(
         (v0[0] - 0.5).abs() < 1e-12,
         "3.0 must not scale by the fs label"
