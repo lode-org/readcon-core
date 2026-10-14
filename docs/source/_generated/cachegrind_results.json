@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T14:33:01Z",
-  "git_sha": "6c11f58",
+  "generated_at": "2026-10-14T14:46:16Z",
+  "git_sha": "2824ca3",
   "features": "chemfiles-from-sources",
   "tool": "cachegrind",
   "metric": "I_refs",
@@ -13,7 +13,7 @@
     "parse_cuh2_218": 12734763,
     "float_fast_float2": 31845667,
     "float_std_parse": 32896159,
-    "write_100_frames": 33160227,
+    "write_100_frames": 33160324,
     "chemfiles_xyz_path": 9737499,
     "chemfiles_xyz_memory": 9599146,
     "chemfiles_select_name_O": 6084434
