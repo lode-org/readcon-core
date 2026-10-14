@@ -41,6 +41,9 @@ rpc = [
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
 python = ["dep:pyo3", "dep:numpy", "parallel"]
 zstd = ["dep:zstd"]
+# Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
+# MPI implementation and libclang at build time. See src/distrib.rs.
+mpi = ["dep:mpi"]
 metatensor = ["dep:metatensor"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).
 # Off by default so lean builds / conda C-only consumers do not pull
@@ -82,6 +85,7 @@ memchr = "2"
 memmap2 = "0.9"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
+mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
 tokio = { version = "1", features = [
@@ -116,6 +120,10 @@ tempfile = "3"
 
 [[example]]
 name = "rust_usage"
+
+[[example]]
+name = "mpi_smoke"
+required-features = ["mpi"]
 
 [[example]]
 name = "rcidx_bench"
