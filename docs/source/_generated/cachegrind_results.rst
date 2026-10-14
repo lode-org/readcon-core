@@ -32,7 +32,7 @@
      - 32,896,159
      - 5-col str::parse (10k)
    * - ``write_100_frames``
-     - 33,160,227
+     - 33,160,324
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
      - 9,737,499
@@ -44,7 +44,7 @@
      - 6,084,434
      - selection ``name O`` (50×)
 
-Generated **2026-10-14T14:33:01Z** from commit ``6c11f58``
+Generated **2026-10-14T14:46:16Z** from commit ``2824ca3``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
