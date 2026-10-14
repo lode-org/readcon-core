@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.17.1 - 2026-10-14
+
+### Fixed
+
+- `ConFrame.to_ase` now attaches stored energy and forces through `SinglePointCalculator` keywords. Before this, converting a frame that stores forces raised an error under ASE 3.29.
+- Multi-frame files with an empty first header line can be read back. A blank line after coordinates is no longer taken as a velocity section when the next line is a frame header.
+- Rewriting a 3.0 file that carries a misleading `units.time` of `fs` now replaces that label with the natural unit and writes minor 1, so velocities are not scaled on the next read.
+- `ConFrame.from_ase` uses ASE tags as atom ids only when they are distinct and non-negative; otherwise ids are sequential.
+
 ## v0.17.0 - 2026-10-11
 
 ### Breaking
