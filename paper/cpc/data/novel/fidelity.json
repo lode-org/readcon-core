@@ -1,11 +1,19 @@
 {
-  "source": "e1 velocity fixture with an x-only mask on the adatom",
+  "source": "first frame of the height-held EMT band, unmodified",
+  "adatom_mask": "z-only",
+  "file_edited": false,
+  "ase_note": "SinglePointCalculator positional energy and forces are passed as keywords",
+  "time_unit_fixture": {
+    "source": "e1 velocity fixture, unmodified",
+    "time_unit": "(amu*angstrom^2/eV)^0.5",
+    "round_trip": true
+  },
   "rows": [
     {
       "format": "CON 3.1",
       "mask": "exact",
       "id": "exact",
-      "time_unit": "exact",
+      "time_unit": "absent",
       "binary64": "exact",
       "max_abs_A": 0.0,
       "note": "readcon write"
@@ -14,34 +22,43 @@
       "format": "CON six decimals",
       "mask": "exact",
       "id": "exact",
-      "time_unit": "exact",
+      "time_unit": "absent",
       "binary64": "approx",
-      "max_abs_A": 4.556281654188865e-07,
+      "max_abs_A": 4.897403034220815e-07,
       "note": "precision 6"
     },
     {
-      "format": "extxyz",
-      "mask": "lost",
+      "format": "CON 3.1, velocity file",
+      "mask": "exact",
       "id": "exact",
-      "time_unit": "lost",
+      "time_unit": "exact",
+      "binary64": "exact",
+      "max_abs_A": 0.0,
+      "note": "unmodified velocity fixture"
+    },
+    {
+      "format": "extxyz",
+      "mask": "exact",
+      "id": "exact",
+      "time_unit": "absent",
       "binary64": "approx",
-      "max_abs_A": 4.5025325690062346e-09,
+      "max_abs_A": 4.771221639998657e-09,
       "note": "ASE write then read"
     },
     {
       "format": "traj",
-      "mask": "lost",
+      "mask": "exact",
       "id": "lost",
-      "time_unit": "lost",
+      "time_unit": "absent",
       "binary64": "exact",
       "max_abs_A": 0.0,
       "note": "ASE write then read"
     },
     {
       "format": "json",
-      "mask": "lost",
+      "mask": "exact",
       "id": "lost",
-      "time_unit": "lost",
+      "time_unit": "absent",
       "binary64": "exact",
       "max_abs_A": 0.0,
       "note": "ASE write then read"
@@ -50,16 +67,16 @@
       "format": "vasp",
       "mask": "lost",
       "id": "lost",
-      "time_unit": "lost",
-      "binary64": "exact",
-      "max_abs_A": 0.0,
+      "time_unit": "absent",
+      "binary64": "approx",
+      "max_abs_A": 4.85722573273506e-17,
       "note": "ASE write then read"
     },
     {
       "format": "xyz",
       "mask": "lost",
       "id": "lost",
-      "time_unit": "lost",
+      "time_unit": "absent",
       "binary64": "approx",
       "max_abs_A": 8.881784197001252e-16,
       "note": "ASE write then read"
@@ -68,9 +85,9 @@
       "format": "cif",
       "mask": "lost",
       "id": "lost",
-      "time_unit": "lost",
-      "binary64": "exact",
-      "max_abs_A": 0.0,
+      "time_unit": "absent",
+      "binary64": "approx",
+      "max_abs_A": 3.552713678800501e-15,
       "note": "ASE write then read"
     }
   ]

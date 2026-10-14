@@ -1,4 +1,5 @@
 {
+  "source": "readcon-db 0.1.8 frame_hash and find_by_hash",
   "runs": [
     "uninterrupted",
     "round trip",
@@ -9,215 +10,301 @@
   "edges": [
     {
       "run": "uninterrupted",
-      "hash": "002ab14b8f65",
-      "image": 0
+      "hash": "ab5549b3852deb8afe5d912bb0b11987",
+      "image": 0,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "04cc3a423abe",
-      "image": 1
+      "hash": "392a980e63c4e2a8ce43ffaedee66951",
+      "image": 1,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "339589acec7d",
-      "image": 2
+      "hash": "becf9de950e0f2d59196cb411b6eafc0",
+      "image": 2,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "fbfbc9bfe01f",
-      "image": 3
+      "hash": "d81c6e3fcf02b1ddb3191a1329a21e04",
+      "image": 3,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "8fb1ddc10472",
-      "image": 4
+      "hash": "1ef5435648fd357487fc3839cb4c36c9",
+      "image": 4,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "2aff181ad7f9",
-      "image": 5
+      "hash": "e16f9686440dbf773e41805e0eab25c5",
+      "image": 5,
+      "query_hits": 1
     },
     {
       "run": "uninterrupted",
-      "hash": "73d26ea9d63b",
-      "image": 6
+      "hash": "6ca7110c8d9813d868d1e3b1b8fe2e32",
+      "image": 6,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "002ab14b8f65",
-      "image": 0
+      "hash": "27ca358e9b4de5428d2109f9f167d0e8",
+      "image": 0,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "222d6b27a47d",
-      "image": 1
+      "hash": "c756f19150545d8dcba0519c762e7366",
+      "image": 1,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "b3bf1c27201f",
-      "image": 2
+      "hash": "10879b555aa9da75a2fd421fcbc0e326",
+      "image": 2,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "2344c39dc83f",
-      "image": 3
+      "hash": "1447f247d531b0cef8ed9ef894388a18",
+      "image": 3,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "fa5a41e90875",
-      "image": 4
+      "hash": "7ab64d0701ee082ad732bce3f127957b",
+      "image": 4,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "d24fa73564ba",
-      "image": 5
+      "hash": "66e3fd821c6023f7d9cf8f96e3a82d36",
+      "image": 5,
+      "query_hits": 1
     },
     {
       "run": "round trip",
-      "hash": "73d26ea9d63b",
-      "image": 6
+      "hash": "65df4bf60094073b988c2a5b4db0f617",
+      "image": 6,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "57bda27f2466",
-      "image": 0
+      "hash": "290131c934f2950424702485b176400d",
+      "image": 0,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "56d95626b60d",
-      "image": 1
+      "hash": "c8e1fc676e10e7cbd9751aa50f7f2a3a",
+      "image": 1,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "f750a3bf2e58",
-      "image": 2
+      "hash": "9b7867ed8ef0057f6363e37190fa248e",
+      "image": 2,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "9bd90e2d3bb5",
-      "image": 3
+      "hash": "4cc5725368f31e5686a40dd31256b2bf",
+      "image": 3,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "ebbe37f0e5fc",
-      "image": 4
+      "hash": "1f3719c121a2b558e822b3a71e45d4f3",
+      "image": 4,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "3257023f7acb",
-      "image": 5
+      "hash": "cab08eae1d9a10892b835fc45325fa31",
+      "image": 5,
+      "query_hits": 1
     },
     {
       "run": "six decimals",
-      "hash": "295fd1258076",
-      "image": 6
+      "hash": "35a042cb9c885fd837d728dfe2988f0e",
+      "image": 6,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "e4f2c8ccaf2d",
-      "image": 0
+      "hash": "43a572576fba98da6f0719e398529a6e",
+      "image": 0,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "2dbbd81efa05",
-      "image": 0
+      "hash": "ccbada056537e95967a57ee5d21f3dda",
+      "image": 1,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "b9ffc33fb762",
-      "image": 0
+      "hash": "ed838b4734b4a2050f050ee7e92b8c66",
+      "image": 2,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "354833ec4c3b",
-      "image": 0
+      "hash": "331e681d465f6a82d0b4f00bf9a0ed6a",
+      "image": 3,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "46d52f23b6a4",
-      "image": 0
+      "hash": "bf9acec9f98a97491ec0463b759dccd0",
+      "image": 4,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "386425079e49",
-      "image": 0
+      "hash": "03fc48943a6082243018832a84a39512",
+      "image": 5,
+      "query_hits": 1
     },
     {
       "run": "height held",
-      "hash": "64cffb774136",
-      "image": 0
+      "hash": "48dd5d106f9d54ff66b833b49655f193",
+      "image": 6,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "dcef4f94f9ee",
-      "image": 0
+      "hash": "8031587ee248c5e23bcd5502b4df963b",
+      "image": 0,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "17884f5cc8dd",
-      "image": 0
+      "hash": "3994eda8118f30e2eb0b510266a97ac5",
+      "image": 1,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "622af12a3370",
-      "image": 0
+      "hash": "d8e396912805cec787f7483d96fb49dc",
+      "image": 2,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "2412df5bb0de",
-      "image": 0
+      "hash": "9fab7238712e6e31ba7c52175ab9a585",
+      "image": 3,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "dc8337f247a6",
-      "image": 0
+      "hash": "39d35325f424702ba197ca653876b71e",
+      "image": 4,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "30cd47f5e986",
-      "image": 0
+      "hash": "e392bc9748915893fb4af246e0a1c2b2",
+      "image": 5,
+      "query_hits": 1
     },
     {
       "run": "adatom frozen",
-      "hash": "5762e4223193",
-      "image": 0
+      "hash": "3cd664370f5d525cc91f89225918bea2",
+      "image": 6,
+      "query_hits": 1
     }
   ],
   "multiplicity": {
-    "002ab14b8f65": 2,
-    "04cc3a423abe": 1,
-    "339589acec7d": 1,
-    "fbfbc9bfe01f": 1,
-    "8fb1ddc10472": 1,
-    "2aff181ad7f9": 1,
-    "73d26ea9d63b": 2,
-    "222d6b27a47d": 1,
-    "b3bf1c27201f": 1,
-    "2344c39dc83f": 1,
-    "fa5a41e90875": 1,
-    "d24fa73564ba": 1,
-    "57bda27f2466": 1,
-    "56d95626b60d": 1,
-    "f750a3bf2e58": 1,
-    "9bd90e2d3bb5": 1,
-    "ebbe37f0e5fc": 1,
-    "3257023f7acb": 1,
-    "295fd1258076": 1,
-    "e4f2c8ccaf2d": 1,
-    "2dbbd81efa05": 1,
-    "b9ffc33fb762": 1,
-    "354833ec4c3b": 1,
-    "46d52f23b6a4": 1,
-    "386425079e49": 1,
-    "64cffb774136": 1,
-    "dcef4f94f9ee": 1,
-    "17884f5cc8dd": 1,
-    "622af12a3370": 1,
-    "2412df5bb0de": 1,
-    "dc8337f247a6": 1,
-    "30cd47f5e986": 1,
-    "5762e4223193": 1
+    "ab5549b3852deb8afe5d912bb0b11987": 1,
+    "392a980e63c4e2a8ce43ffaedee66951": 1,
+    "becf9de950e0f2d59196cb411b6eafc0": 1,
+    "d81c6e3fcf02b1ddb3191a1329a21e04": 1,
+    "1ef5435648fd357487fc3839cb4c36c9": 1,
+    "e16f9686440dbf773e41805e0eab25c5": 1,
+    "6ca7110c8d9813d868d1e3b1b8fe2e32": 1,
+    "27ca358e9b4de5428d2109f9f167d0e8": 1,
+    "c756f19150545d8dcba0519c762e7366": 1,
+    "10879b555aa9da75a2fd421fcbc0e326": 1,
+    "1447f247d531b0cef8ed9ef894388a18": 1,
+    "7ab64d0701ee082ad732bce3f127957b": 1,
+    "66e3fd821c6023f7d9cf8f96e3a82d36": 1,
+    "65df4bf60094073b988c2a5b4db0f617": 1,
+    "290131c934f2950424702485b176400d": 1,
+    "c8e1fc676e10e7cbd9751aa50f7f2a3a": 1,
+    "9b7867ed8ef0057f6363e37190fa248e": 1,
+    "4cc5725368f31e5686a40dd31256b2bf": 1,
+    "1f3719c121a2b558e822b3a71e45d4f3": 1,
+    "cab08eae1d9a10892b835fc45325fa31": 1,
+    "35a042cb9c885fd837d728dfe2988f0e": 1,
+    "43a572576fba98da6f0719e398529a6e": 1,
+    "ccbada056537e95967a57ee5d21f3dda": 1,
+    "ed838b4734b4a2050f050ee7e92b8c66": 1,
+    "331e681d465f6a82d0b4f00bf9a0ed6a": 1,
+    "bf9acec9f98a97491ec0463b759dccd0": 1,
+    "03fc48943a6082243018832a84a39512": 1,
+    "48dd5d106f9d54ff66b833b49655f193": 1,
+    "8031587ee248c5e23bcd5502b4df963b": 1,
+    "3994eda8118f30e2eb0b510266a97ac5": 1,
+    "d8e396912805cec787f7483d96fb49dc": 1,
+    "9fab7238712e6e31ba7c52175ab9a585": 1,
+    "39d35325f424702ba197ca653876b71e": 1,
+    "e392bc9748915893fb4af246e0a1c2b2": 1,
+    "3cd664370f5d525cc91f89225918bea2": 1
   },
   "n_images": 35,
-  "n_hashes": 33
+  "n_hashes": 35,
+  "endpoint_geometry": {
+    "reactant_max_A": 0.0,
+    "product_max_A": 0.0,
+    "max_over_images_A": 8.881784197001252e-15,
+    "stored_text": [
+      {
+        "image": 0,
+        "bytes_uninterrupted": 2507,
+        "bytes_round_trip": 2506,
+        "text_equal": false
+      },
+      {
+        "image": 1,
+        "bytes_uninterrupted": 2328,
+        "bytes_round_trip": 2330,
+        "text_equal": false
+      },
+      {
+        "image": 2,
+        "bytes_uninterrupted": 2329,
+        "bytes_round_trip": 2329,
+        "text_equal": false
+      },
+      {
+        "image": 3,
+        "bytes_uninterrupted": 2329,
+        "bytes_round_trip": 2330,
+        "text_equal": false
+      },
+      {
+        "image": 4,
+        "bytes_uninterrupted": 2329,
+        "bytes_round_trip": 2330,
+        "text_equal": false
+      },
+      {
+        "image": 5,
+        "bytes_uninterrupted": 2330,
+        "bytes_round_trip": 2329,
+        "text_equal": false
+      },
+      {
+        "image": 6,
+        "bytes_uninterrupted": 2331,
+        "bytes_round_trip": 2332,
+        "text_equal": false
+      }
+    ]
+  }
 }
