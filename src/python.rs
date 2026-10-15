@@ -1690,21 +1690,48 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     let ase = py.import("ase")?;
     let ase_atoms_cls = ase.getattr("Atoms")?;
     let frame_atoms = frame.py_atoms(py)?;
+    let metadata = frame.metadata_map(py)?;
+    let scale = |quantity: &str, target: &str| -> PyResult<f64> {
+        let source = metadata
+            .get(meta::UNITS)
+            .and_then(|units| units.get(quantity))
+            .and_then(Value::as_str)
+            .unwrap_or(target);
+        crate::units::unit_conversion_factor(source, target)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    };
+    let length_scale = scale("length", "angstrom")?;
+    let energy_scale = scale("energy", "eV")?;
+    let mass_scale = scale("mass", "amu")?;
 
     // Build symbols list and positions array
     let symbols: Vec<&str> = frame_atoms.iter().map(|a| a.symbol.as_str()).collect();
-    let positions: Vec<[f64; 3]> = frame_atoms.iter().map(|a| [a.x, a.y, a.z]).collect();
-
-    // Build cell from lengths + angles using ASE's cellpar_to_cell
-    let cellpar: Vec<f64> = frame
-        .cell
+    let positions: Vec<[f64; 3]> = frame_atoms
         .iter()
-        .chain(frame.angles.iter())
-        .copied()
+        .map(|a| [a.x * length_scale, a.y * length_scale, a.z * length_scale])
         .collect();
 
-    let ase_cell_mod = py.import("ase.geometry.cell")?;
-    let cell = ase_cell_mod.getattr("cellpar_to_cell")?.call1((cellpar,))?;
+    // Full row vectors retain the orientation of a triclinic cell.
+    let cell = if let Some(vectors) = metadata.get(meta::LATTICE_VECTORS) {
+        let mut rows: [[f64; 3]; 3] = serde_json::from_value(vectors.clone())
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        for row in &mut rows {
+            for value in row {
+                *value *= length_scale;
+            }
+        }
+        rows.into_pyobject(py)?.into_any()
+    } else {
+        let cellpar: Vec<f64> = frame.cell.iter().map(|v| v * length_scale)
+            .chain(frame.angles.iter().copied()).collect();
+        py.import("ase.geometry.cell")?.getattr("cellpar_to_cell")?
+            .call1((cellpar,))?
+    };
+    let pbc: [bool; 3] = match metadata.get(meta::PBC) {
+        Some(flags) => serde_json::from_value(flags.clone())
+            .map_err(|error| PyValueError::new_err(error.to_string()))?,
+        None => [true; 3],
+    };
 
     let atoms = ase_atoms_cls.call(
         (),
@@ -1713,7 +1740,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
                 ("symbols", symbols.into_pyobject(py)?.into_any()),
                 ("positions", positions.into_pyobject(py)?.into_any()),
                 ("cell", cell.into_any()),
-                ("pbc", true.into_pyobject(py)?.to_owned().into_any()),
+                ("pbc", pbc.into_pyobject(py)?.into_any()),
             ]
             .into_py_dict(py)?,
         ),
@@ -1728,20 +1755,26 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
 
     // Set masses if present (overrides ASE's atomic-number defaults)
     if frame_atoms.iter().any(|a| a.mass.is_some()) {
-        let masses: Vec<f64> = frame_atoms.iter().map(|a| a.mass.unwrap_or(0.0)).collect();
+        let masses: Vec<f64> = frame_atoms.iter()
+            .map(|a| a.mass.unwrap_or(0.0) * mass_scale).collect();
         let mass_array = np.call_method1("array", (masses,))?;
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
     // Set velocities if present
     if frame.has_velocities(py)? {
+        let time_unit = crate::units::velocity_file_time_unit(
+            frame.spec_version, &metadata.clone().into_iter().collect(), None,
+        ).map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let velocity_scale = length_scale * crate::units::velocity_scale_to_natural(&time_unit)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
         let velocities: Vec<[f64; 3]> = frame_atoms
             .iter()
             .map(|a| {
                 [
-                    a.vx.unwrap_or(0.0),
-                    a.vy.unwrap_or(0.0),
-                    a.vz.unwrap_or(0.0),
+                    a.vx.unwrap_or(0.0) * velocity_scale,
+                    a.vy.unwrap_or(0.0) * velocity_scale,
+                    a.vz.unwrap_or(0.0) * velocity_scale,
                 ]
             })
             .collect();
@@ -1749,30 +1782,23 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_velocities", (vel_array,))?;
     }
 
-    // Set forces via SinglePointCalculator if present
-    if frame.has_forces(py)? {
+    // A stored energy is useful even when the frame has no force section.
+    let energy = frame.energy(py)?.map(|value| value * energy_scale);
+    if frame.has_forces(py)? || energy.is_some() {
         let ase_calc = py.import("ase.calculators.singlepoint")?;
-        let forces: Vec<[f64; 3]> = frame_atoms
-            .iter()
-            .map(|a| {
-                [
-                    a.fx.unwrap_or(0.0),
-                    a.fy.unwrap_or(0.0),
-                    a.fz.unwrap_or(0.0),
-                ]
-            })
-            .collect();
-        let force_array = np.call_method1("array", (forces,))?;
-        // ASE passes everything after `atoms` to SinglePointCalculator as
-        // keyword results (ASE >= 3.23 rejects positional energy/forces), so
-        // hand both over by name.
-        let kwargs = [
-            ("atoms", atoms.clone().into_any()),
-            ("forces", force_array.into_any()),
-        ]
-        .into_py_dict(py)?;
-        if let Some(e) = frame.energy(py)? {
+        let kwargs = [("atoms", atoms.clone().into_any())].into_py_dict(py)?;
+        if frame.has_forces(py)? {
+            let force_scale = energy_scale / length_scale;
+            let forces: Vec<[f64; 3]> = frame_atoms.iter().map(|a| [
+                a.fx.unwrap_or(0.0) * force_scale,
+                a.fy.unwrap_or(0.0) * force_scale,
+                a.fz.unwrap_or(0.0) * force_scale,
+            ]).collect();
+            kwargs.set_item("forces", np.call_method1("array", (forces,))?)?;
+        }
+        if let Some(e) = energy {
             kwargs.set_item("energy", e)?;
+            atoms.getattr("info")?.set_item("energy", e)?;
         }
         let calc = ase_calc
             .getattr("SinglePointCalculator")?
@@ -2013,6 +2039,13 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         })
         .collect();
 
+    let metadata = PyDict::new(py);
+    metadata.set_item(meta::PBC, ase_atoms.getattr("pbc")?.call_method0("tolist")?)?;
+    metadata.set_item(meta::LATTICE_VECTORS, ase_atoms.getattr("cell")?.call_method0("tolist")?)?;
+    metadata.set_item(meta::UNITS, [
+        ("length", "angstrom"), ("energy", "eV"), ("mass", "amu"),
+        ("time", crate::units::NATURAL_TIME_UNIT),
+    ].into_py_dict(py)?)?;
     Ok(PyConFrame {
         cell,
         angles,
@@ -2020,7 +2053,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         postbox_header: Default::default(),
         atoms: py_atoms_to_list(py, atoms)?,
         spec_version: crate::CON_SPEC_VERSION,
-        metadata: PyDict::new(py).unbind(),
+        metadata: metadata.unbind(),
         inner: None,
     })
 }
