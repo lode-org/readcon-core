@@ -47,7 +47,7 @@ fn c_writer_preserves_finite_values_and_flushes_before_close() {
                 [value, -value, -0.0].map(f64::to_bits)
             );
             assert_eq!(
-                atom.force.unwrap().map(f64::to_bits),
+                atom.force().unwrap().map(f64::to_bits),
                 [value, -value, -0.0].map(f64::to_bits)
             );
             assert_eq!(frame.header.energy().unwrap().to_bits(), value.to_bits());

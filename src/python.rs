@@ -179,23 +179,23 @@ impl PyAtomDatum {
 
 impl PyAtomDatum {
     fn from_atom_with_mass(atom: &AtomDatum, mass: f64) -> Self {
-        let (vx, vy, vz) = match atom.velocity {
+        let (vx, vy, vz) = match atom.velocity() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (fx, fy, fz) = match atom.force {
+        let (fx, fy, fz) = match atom.force() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (mx, my, mz) = match atom.magmom {
+        let (mx, my, mz) = match atom.magmom() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (dx, dy, dz) = match atom.displacement {
+        let (dx, dy, dz) = match atom.displacement() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (sx, sy, sz) = match atom.spread {
+        let (sx, sy, sz) = match atom.spread() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
@@ -213,9 +213,9 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
-            energy: atom.energy,
-            charge: atom.charge,
-            spin: atom.spin,
+            energy: atom.energy(),
+            charge: atom.charge(),
+            spin: atom.spin(),
             mx,
             my,
             mz,

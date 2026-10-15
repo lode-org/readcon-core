@@ -782,7 +782,7 @@ mod tests {
         let con = con_frame_from_chemfiles(&frame).expect("convert");
         assert!(con.has_velocities());
         let atom = &con.atom_data[0];
-        let v = atom.velocity.expect("velocity on atom");
+        let v = atom.velocity().expect("velocity on atom");
         assert!((v[0] - 0.1).abs() < 1e-12);
         assert!((v[1] - 0.2).abs() < 1e-12);
         assert!((v[2] - 0.3).abs() < 1e-12);
