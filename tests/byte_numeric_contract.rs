@@ -1,6 +1,10 @@
 use readcon_core::error::ParseError;
-use readcon_core::frame_index::{FrameIndex, load_or_build, read_sidecar, sidecar_path, write_sidecar};
-use readcon_core::iterators::{ConFrameIterator, MemchrLines, frames_from_bytes, read_all_frames_with_threads};
+use readcon_core::frame_index::{
+    FrameIndex, load_or_build, read_sidecar, sidecar_path, write_sidecar,
+};
+use readcon_core::iterators::{
+    ConFrameIterator, MemchrLines, frames_from_bytes, read_all_frames_with_threads,
+};
 use readcon_core::parser::{parse_line_of_n_f64, parse_line_of_range_f64};
 use readcon_core::types::AtomDatum;
 
@@ -12,7 +16,9 @@ fn byte_frames_preserve_order_identity_and_coordinates_at_every_worker_count() {
         .map(|i| FRAME.replace("1.25 -2.5", &format!("{}.25 -2.5", i)))
         .collect::<String>()
         .replace('\n', "\r\n");
-    let expected = ConFrameIterator::new(&text).collect::<Result<Vec<_>, _>>().unwrap();
+    let expected = ConFrameIterator::new(&text)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
     assert_eq!(expected.len(), 32);
     for workers in [None, Some(0), Some(1), Some(2), Some(4)] {
         let actual = frames_from_bytes(text.as_bytes(), workers).unwrap();
@@ -74,19 +80,35 @@ fn byte_line_cursor_preserves_unicode_crlf_and_an_unterminated_final_line() {
 #[test]
 fn long_numeric_fields_round_trip_binary64_and_apply_only_missing_defaults() {
     let input = "-0.0 1e-300 -1e300 0.1 1.7976931348623157e308 4.9406564584124654e-324";
-    let expected = input.split_whitespace().map(|s| s.parse::<f64>().unwrap().to_bits()).collect::<Vec<_>>();
+    let expected = input
+        .split_whitespace()
+        .map(|s| s.parse::<f64>().unwrap().to_bits())
+        .collect::<Vec<_>>();
     let actual = parse_line_of_n_f64(input, 6).unwrap();
-    assert_eq!(actual.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), expected);
+    assert_eq!(
+        actual.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+        expected
+    );
     let defaults = [10., 20., 30., 40., 50., 60., 70.];
-    assert_eq!(parse_line_of_range_f64("1 2 3 4 5", 5, 7, &defaults).unwrap(), vec![1., 2., 3., 4., 5., 60., 70.]);
-    assert_eq!(parse_line_of_range_f64("1 2 3 4 5 6 7", 5, 7, &defaults).unwrap(), vec![1., 2., 3., 4., 5., 6., 7.]);
+    assert_eq!(
+        parse_line_of_range_f64("1 2 3 4 5", 5, 7, &defaults).unwrap(),
+        vec![1., 2., 3., 4., 5., 60., 70.]
+    );
+    assert_eq!(
+        parse_line_of_range_f64("1 2 3 4 5 6 7", 5, 7, &defaults).unwrap(),
+        vec![1., 2., 3., 4., 5., 6., 7.]
+    );
     for count in [5, 7] {
         let line = vec!["1"; count].join(" ");
-        assert!(matches!(parse_line_of_n_f64(&line, 6), Err(ParseError::InvalidVectorLength { expected: 6, found }) if found == count));
+        assert!(
+            matches!(parse_line_of_n_f64(&line, 6), Err(ParseError::InvalidVectorLength { expected: 6, found }) if found == count)
+        );
     }
     for count in [4, 8] {
         let line = vec!["1"; count].join(" ");
-        assert!(matches!(parse_line_of_range_f64(&line, 5, 7, &defaults), Err(ParseError::InvalidVectorLength { expected: 7, found }) if found == count));
+        assert!(
+            matches!(parse_line_of_range_f64(&line, 5, 7, &defaults), Err(ParseError::InvalidVectorLength { expected: 7, found }) if found == count)
+        );
     }
 }
 
@@ -95,13 +117,25 @@ fn long_numeric_fields_reject_nonfinite_and_partial_tokens() {
     let defaults = [0.; 6];
     for token in ["NaN", "+INF", "-Infinity", "1e309"] {
         let input = format!("1 2 3 4 5 {token}");
-        assert!(matches!(parse_line_of_n_f64(&input, 6), Err(ParseError::NonFiniteValue(_))));
-        assert!(matches!(parse_line_of_range_f64(&input, 5, 6, &defaults), Err(ParseError::NonFiniteValue(_))));
+        assert!(matches!(
+            parse_line_of_n_f64(&input, 6),
+            Err(ParseError::NonFiniteValue(_))
+        ));
+        assert!(matches!(
+            parse_line_of_range_f64(&input, 5, 6, &defaults),
+            Err(ParseError::NonFiniteValue(_))
+        ));
     }
     for token in ["1.2abc", "1.2.3", "value", "+"] {
         let input = format!("1 2 3 4 5 {token}");
-        assert!(matches!(parse_line_of_n_f64(&input, 6), Err(ParseError::InvalidNumberFormat(_))));
-        assert!(matches!(parse_line_of_range_f64(&input, 5, 6, &defaults), Err(ParseError::InvalidNumberFormat(_))));
+        assert!(matches!(
+            parse_line_of_n_f64(&input, 6),
+            Err(ParseError::InvalidNumberFormat(_))
+        ));
+        assert!(matches!(
+            parse_line_of_range_f64(&input, 5, 6, &defaults),
+            Err(ParseError::InvalidNumberFormat(_))
+        ));
     }
 }
 
@@ -121,7 +155,10 @@ fn sidecars_never_replace_the_data_file_as_authority() {
     assert_eq!(read_sidecar(&path).unwrap(), Some(index.clone()));
     let mut wrong_length = index.clone();
     wrong_length.data_len += 1;
-    assert_eq!(write_sidecar(&path, &wrong_length).unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        write_sidecar(&path, &wrong_length).unwrap_err().kind(),
+        std::io::ErrorKind::InvalidInput
+    );
     let intact = std::fs::read(sidecar_path(&path)).unwrap();
     for byte in [0, 8, intact.len() - 1] {
         let mut corrupt = intact.clone();
