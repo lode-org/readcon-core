@@ -423,9 +423,15 @@ class TestConFrameConstructor:
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
-        frames = readcon.read_all_frames(_resource("tiny_multi_cuh2.con"))
-        for frame in frames:
-            frame.prebox_header = ["", ""]
+        frames = [
+            readcon.ConFrame(
+                cell=frame.cell,
+                angles=frame.angles,
+                atoms=frame.atoms,
+                prebox_header=["", ""],
+            )
+            for frame in readcon.read_all_frames(_resource("tiny_multi_cuh2.con"))
+        ]
         path = tmp_path / "blank-preambles.con"
         path.write_text(readcon.write_con_string(frames))
 
