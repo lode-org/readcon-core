@@ -15,8 +15,11 @@
  *     rkr_frame_potential_type, and rkr_frame_get_header_line_cpp are heap
  *     allocated; free them with rkr_free_string. rkr_free_string is safe
  *     to call with NULL (no-op).
- *   - const char* returned by rkr_library_version is process-static; do
- *     NOT free it.
+ *   - const char* returned by rkr_library_version and rkr_status_message
+ *     is process-static; do NOT free it.
+ *   - const char* returned by rkr_last_error_message is thread-local.
+ *     It stays valid until the next rkr_writer_extend or rkr_writer_flush
+ *     on that thread. Do NOT free it. NULL means no detail was recorded.
  *   - rkr_frame_*_view / rkr_frame_xyz_f64 borrow the frame SoA. The
  *     pointer is valid until free_rkr_frame. Prefer these over
  *     rkr_frame_to_c_frame (which allocates an AoS copy).
@@ -631,6 +634,19 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
+ * Detailed message from the most recent failing `rkr_writer_extend` or
+ * `rkr_writer_flush` on this thread.
+ *
+ * `rkr_status_message` stays a fixed string per status code. This pointer
+ * carries the underlying I/O or format text, for example
+ * `CON validation failed: atom id 1 is repeated in the frame`.
+ * Returns NULL when that call succeeded or no such failure has been
+ * recorded. The pointer is valid until the next call on this thread that
+ * records or clears the message. Do NOT free it.
+ */
+const char *rkr_last_error_message(void);
+
+/**
  * Creates a new iterator for a .con / .convel path, including transparent
  * gzip (`.con.gz`) and zstd (`.con.zst`, requires `zstd` feature) inputs via
  * [`crate::compression::read_file_contents`].
@@ -807,7 +823,10 @@ struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 /** Preserves every finite binary64 value. Free with free_rkr_writer. */
 struct RKRConFrameWriter *create_writer_from_path_round_trip_c(const char *filename_c);
 
-/** Flush buffered CON data. Returns RKR_STATUS_IO_ERROR on write failure. */
+/**
+ * Flush buffered CON data. Returns RKR_STATUS_IO_ERROR on write failure.
+ * On failure, `rkr_last_error_message` returns the underlying I/O text.
+ */
 enum RKRStatus rkr_writer_flush(struct RKRConFrameWriter *writer_handle);
 
 
@@ -822,6 +841,8 @@ void free_rkr_writer(struct RKRConFrameWriter *writer_handle);
 /**
  * Writes multiple frames from an array of handles to the file managed by the writer.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+ * On failure, `rkr_last_error_message` returns the underlying I/O or
+ * format text instead of only the generic status string.
  *
  * # Safety
  * writer_handle and frame_handles must be valid.

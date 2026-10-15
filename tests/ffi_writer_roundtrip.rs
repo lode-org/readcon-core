@@ -1,7 +1,7 @@
 use readcon_core::ffi::*;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrameBuilder;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::ptr;
 
 #[test]
@@ -77,6 +77,52 @@ fn c_writer_flush_reports_full_device() {
             RKRStatus::RKR_STATUS_SUCCESS
         );
         assert_eq!(rkr_writer_flush(writer), RKRStatus::RKR_STATUS_IO_ERROR);
+        let message = CStr::from_ptr(rkr_last_error_message());
+        assert!(
+            !message.to_bytes().is_empty(),
+            "flush must keep the underlying I/O message"
+        );
+        free_rkr_writer(writer);
+    }
+}
+
+#[test]
+fn c_writer_reports_repeated_atom_id() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("duplicate.con");
+    let name = CString::new(path.to_str().unwrap()).unwrap();
+    unsafe {
+        let writer = create_writer_from_path_c(name.as_ptr());
+        assert!(!writer.is_null());
+        let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let frame = builder.build().unwrap();
+        let handle = (&frame as *const _) as *const RKRConFrame;
+        assert_eq!(
+            rkr_writer_extend(writer, &handle, 1),
+            RKRStatus::RKR_STATUS_IO_ERROR
+        );
+        let message = CStr::from_ptr(rkr_last_error_message()).to_str().unwrap();
+        assert!(message.contains("atom id 1 is repeated"), "{message}");
+        assert_eq!(
+            CStr::from_ptr(rkr_status_message(RKRStatus::RKR_STATUS_IO_ERROR))
+                .to_str()
+                .unwrap(),
+            "I/O error"
+        );
+        free_rkr_writer(writer);
+
+        let writer = create_writer_from_path_c(name.as_ptr());
+        let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let frame = builder.build().unwrap();
+        let handle = (&frame as *const _) as *const RKRConFrame;
+        assert_eq!(
+            rkr_writer_extend(writer, &handle, 1),
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert!(rkr_last_error_message().is_null());
         free_rkr_writer(writer);
     }
 }
