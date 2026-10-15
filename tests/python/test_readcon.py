@@ -422,6 +422,23 @@ class TestConFrameConstructor:
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
+    def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
+        frames = readcon.read_all_frames(_resource("tiny_multi_cuh2.con"))
+        for frame in frames:
+            frame.prebox_header = ["", ""]
+        path = tmp_path / "blank-preambles.con"
+        path.write_text(readcon.write_con_string(frames))
+
+        streamed = list(readcon.iter_con(str(path)))
+        assert len(streamed) == len(frames) == 2
+        for expected, actual in zip(frames, streamed):
+            assert len(actual.atoms) == len(expected.atoms)
+            assert actual.cell == pytest.approx(expected.cell)
+            assert actual.coords_array() == pytest.approx(expected.coords_array())
+            assert [atom.atom_id for atom in actual.atoms] == [
+                atom.atom_id for atom in expected.atoms
+            ]
+
     def test_xyz_matches_coords_and_soa(self):
         path = _resource("tiny_cuh2.con")
         fr = readcon.read_first_frame(path)
