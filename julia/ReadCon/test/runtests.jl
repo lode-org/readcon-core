@@ -159,6 +159,13 @@ end
         @test !occursin("\"time\":\"fs\"", written_fs)
         @test reread_fs[1].atoms[1].vx ≈ 0.1
 
+        minor0 = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        written0, reread0 = round_trip(minor0)
+        @test occursin("\"time\":\"$natural\"", written0)
+        @test occursin("\"con_spec_minor\":1", written0)
+        @test !occursin("\"con_spec_minor\":0", written0)
+        @test reread0[1].atoms[1].vx ≈ 0.1
+
         minor1 = "{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
         written_minor, _ = round_trip(minor1)
         @test occursin("\"time\":\"fs\"", written_minor)
