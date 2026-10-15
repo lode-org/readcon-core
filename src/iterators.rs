@@ -48,7 +48,7 @@ impl<'a> MemchrLines<'a> {
 
     #[inline]
     fn read_one(&mut self) -> Option<&'a str> {
-        if self.pos >= self.bytes.len() {
+        if self.utf8_bad || self.pos >= self.bytes.len() {
             return None;
         }
         let rest = &self.bytes[self.pos..];
@@ -56,7 +56,6 @@ impl<'a> MemchrLines<'a> {
             Some(i) => (&rest[..i], i + 1),
             None => (rest, rest.len()),
         };
-        self.pos += advance;
         let trimmed = if line_bytes.last() == Some(&b'\r') {
             &line_bytes[..line_bytes.len() - 1]
         } else {
@@ -64,13 +63,19 @@ impl<'a> MemchrLines<'a> {
         };
         if self.check_utf8 {
             match std::str::from_utf8(trimmed) {
-                Ok(s) => Some(s),
+                Ok(s) => {
+                    self.pos += advance;
+                    Some(s)
+                }
                 Err(_) => {
+                    // Stay on the rejected line. Moving past it makes a
+                    // whitespace tail look like a clean end of file.
                     self.utf8_bad = true;
                     None
                 }
             }
         } else {
+            self.pos += advance;
             // SAFETY: source was `&str`; line is a UTF-8 prefix cut on ASCII `\n`/`\r`.
             Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
@@ -100,6 +105,19 @@ impl<'a> MemchrLines<'a> {
             self.pos = start;
         }
     }
+
+    fn utf8_error(&self) -> Option<error::ParseError> {
+        self.utf8_bad.then(invalid_utf8)
+    }
+
+    /// Keep `err` unless this cursor already rejected a line as UTF-8.
+    fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
+        if self.utf8_bad { invalid_utf8() } else { err }
+    }
+}
+
+fn invalid_utf8() -> error::ParseError {
+    error::ParseError::ValidationError("invalid UTF-8".into())
 }
 
 impl<'a> Iterator for MemchrLines<'a> {
@@ -134,9 +152,17 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         Ok(row)
     }
     fn remainder_is_whitespace(&mut self) -> bool {
+        if self.utf8_bad {
+            return false;
+        }
         if let Some(line) = self.peek_line()
             && !line.trim().is_empty()
         {
+            return false;
+        }
+        // `peek_line` may have rejected a line. That is a decode error,
+        // including when every byte after it is ASCII whitespace.
+        if self.utf8_bad {
             return false;
         }
         self.bytes[self.pos..]
@@ -394,31 +420,31 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     ///
     /// This method will return `None` only when there are no more lines to consume.
     /// If there are lines but they do not form a complete frame, it will return
-    /// `Some(Err(ParseError::...))`.
+    /// `Some(Err(ParseError::...))`. Invalid UTF-8 is a validation error, not
+    /// the end of the stream.
     fn next(&mut self) -> Option<Self::Item> {
+        // A line rejected earlier in this cursor (for example while probing
+        // for a velocity block) must not be reported as a clean EOF.
+        if let Some(err) = self.lines.utf8_error() {
+            return Some(Err(err));
+        }
         // Trailing whitespace after the last complete frame is not a frame
         // (CON-frame.1, D2). An empty line that is followed by more text is
         // line 1 of the next frame (CON-frame.7).
         if self.lines.remainder_is_whitespace() {
+            if let Some(err) = self.lines.utf8_error() {
+                return Some(Err(err));
+            }
             while self.lines.next_line().is_some() {}
             return None;
         }
-        if self.lines.utf8_bad {
-            return Some(Err(error::ParseError::ValidationError(
-                "invalid UTF-8".into(),
-            )));
+        if let Some(err) = self.lines.utf8_error() {
+            return Some(Err(err));
         }
         // Otherwise, attempt to parse the next frame from the available lines.
         let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines) {
             Ok(f) => f,
-            Err(e) => {
-                if self.lines.utf8_bad {
-                    return Some(Err(error::ParseError::ValidationError(
-                        "invalid UTF-8".into(),
-                    )));
-                }
-                return Some(Err(e));
-            }
+            Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
         };
         // Optional sections mutate AoS; only re-sync section SoA when needed.
         // Plain .con assembly already filled positions/ids/masses (no O(N)
@@ -427,7 +453,9 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data)
             {
                 Ok(n) => n,
-                Err(e) => return Some(Err(e)),
+                // A section line that failed UTF-8 makes `next_line` return
+                // `None`. That must not surface as `IncompleteSection`.
+                Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
             };
         if sections > 0 {
             frame.sync_arrays_from_atom_data();
