@@ -6,6 +6,20 @@ pub use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+/// Indices of `ids` in pre-grouping order (CON-id.5, D9).
+///
+/// Unique ids sort by ascending id. Any repeated id keeps file order.
+/// Callers that return atoms in file order leave `atom_data` unchanged
+/// and still expose the column-5 ids (CON-id.6, CON-id.8).
+pub fn pre_grouping_indices(ids: &[u64]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..ids.len()).collect();
+    let mut seen = std::collections::HashSet::with_capacity(ids.len());
+    if ids.iter().copied().all(|id| seen.insert(id)) {
+        order.sort_by(|&i, &j| ids[i].cmp(&ids[j]).then(i.cmp(&j)));
+    }
+    order
+}
+
 /// JSON metadata key names recognized by spec v2.
 ///
 /// Each constant is the exact string that appears on the second header
@@ -42,6 +56,11 @@ use std::sync::Arc;
 pub mod meta {
     /// Required JSON key carrying the spec version (unsigned integer).
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
+    /// Minor of a known major. Absent or 0 means minor 0 (CON-line2.10).
+    pub const CON_SPEC_MINOR: &str = "con_spec_minor";
+    /// Value-field counts for sections this reader may skip (CON-section.12).
+    /// The flag and the optional id are not part of the count.
+    pub const SECTION_ARITY: &str = "section_arity";
     /// Array of declared section names (strings). Required when
     /// `validate=true`; absent triggers the legacy blank-separator
     /// velocity detection.
@@ -136,6 +155,22 @@ pub const SECTION_DISPLACEMENTS: &str = "displacements";
 /// written coordinates (a standard deviation per axis, each non-negative; 0
 /// is a classical point); same block shape as [`SECTION_VELOCITIES`].
 pub const SECTION_SPREADS: &str = "spreads";
+
+/// Value-field count of a section that minor 1 reserves (CON-section.13).
+///
+/// Vector rows are 3 and scalar rows are 1. `None` means the name is
+/// not reserved, so a later minor lists it in `section_arity` (CON-section.16).
+pub fn reserved_section_value_arity(name: &str) -> Option<u64> {
+    match name {
+        SECTION_VELOCITIES
+        | SECTION_FORCES
+        | SECTION_MAGMOMS
+        | SECTION_DISPLACEMENTS
+        | SECTION_SPREADS => Some(3),
+        SECTION_ENERGIES | SECTION_CHARGES | SECTION_SPINS => Some(1),
+        _ => None,
+    }
+}
 
 /// A spread row is a standard deviation per axis: finite and non-negative.
 /// Zero is a classical point.
@@ -345,6 +380,18 @@ impl FrameHeader {
         self.unit_for("length")
     }
 
+    /// Unit of line 3 and the coordinate columns.
+    /// Absent `units`, or an absent `length` key, means angstrom (CON-header.3).
+    pub fn coordinate_length_unit(&self) -> &str {
+        self.length_unit().unwrap_or("angstrom")
+    }
+
+    /// Unit of the masses on line 9.
+    /// Absent `units`, or an absent `mass` key, means amu (CON-header.3).
+    pub fn mass_unit(&self) -> &str {
+        self.unit_for("mass").unwrap_or("amu")
+    }
+
     /// `energy` unit string when present.
     pub fn energy_unit(&self) -> Option<&str> {
         self.unit_for("energy")
@@ -406,7 +453,21 @@ impl FrameHeader {
         Some([row(0)?, row(1)?, row(2)?])
     }
 
-    /// Sets the exact lattice vector matrix.
+    /// Cell matrix. A present `lattice_vectors` wins over lines 3-4 (CON-cell.1).
+    /// Otherwise the matrix is built from those lines (CON-cell.6).
+    pub fn cell_matrix(&self) -> [[f64; 3]; 3] {
+        self.lattice_vectors()
+            .unwrap_or_else(|| cell_vectors(self.boxl, self.angles))
+    }
+
+    /// Periodic boundary conditions. A missing `pbc` key is fully periodic
+    /// (CON-cell.3, D12).
+    pub fn pbc_effective(&self) -> [bool; 3] {
+        self.pbc().unwrap_or([true, true, true])
+    }
+
+    /// Sets the exact lattice vector matrix and keeps lines 3-4 consistent
+    /// with that matrix (CON-cell.2, D12).
     pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
         self.metadata.insert(
             meta::LATTICE_VECTORS.into(),
@@ -416,6 +477,11 @@ impl FrameHeader {
                 [vecs[2][0], vecs[2][1], vecs[2][2]],
             ]),
         );
+        let (boxl, angles) = lengths_and_angles(vecs);
+        if boxl.iter().all(|v| v.is_finite()) && angles.iter().all(|v| v.is_finite()) {
+            self.boxl = boxl;
+            self.angles = angles;
+        }
     }
 
     /// NEB bead (image) index.
@@ -527,8 +593,39 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
     None
 }
 
+/// Optional per-atom sections. Absent on the coordinate-only path so a frame
+/// does not pay a fat tail on every atom.
+#[derive(Debug, Clone, PartialEq, Default)]
+struct AtomTail {
+    velocity: Option<[f64; 3]>,
+    force: Option<[f64; 3]>,
+    energy: Option<f64>,
+    charge: Option<f64>,
+    spin: Option<f64>,
+    magmom: Option<[f64; 3]>,
+    displacement: Option<[f64; 3]>,
+    spread: Option<[f64; 3]>,
+}
+
+impl AtomTail {
+    fn is_empty(&self) -> bool {
+        self.velocity.is_none()
+            && self.force.is_none()
+            && self.energy.is_none()
+            && self.charge.is_none()
+            && self.spin.is_none()
+            && self.magmom.is_none()
+            && self.displacement.is_none()
+            && self.spread.is_none()
+    }
+}
+
 /// Represents the data for a single atom in a frame.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// Coordinates, the symbol, the fixed mask, and the id sit inline. Optional
+/// sections live in one heap tail, allocated only when a section value is set,
+/// so a coordinates-only trajectory does not store eight empty `Option`s per atom.
+#[derive(Debug, Clone)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
     /// Using Arc<str> to avoid expensive clones for each atom of the same type.
@@ -556,31 +653,202 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
-    pub velocity: Option<[f64; 3]>,
-    /// Force vector `[fx, fy, fz]` (present when `"forces"` section declared).
-    pub force: Option<[f64; 3]>,
-    /// Per-atom energy contribution (present when `"energies"` section declared).
-    ///
-    /// Useful for ML potentials that decompose total energy into per-atom
-    /// contributions; the per-frame total still lives in
-    /// `FrameHeader.metadata` under the `energy` key.
-    pub energy: Option<f64>,
-    /// Partial charge (present when `"charges"` section declared).
-    pub charge: Option<f64>,
-    /// Spin / magnetic quantum number scalar (present when `"spins"` declared).
-    pub spin: Option<f64>,
-    /// Magnetic moment `[mx, my, mz]` (present when `"magmoms"` declared).
-    pub magmom: Option<[f64; 3]>,
-    /// Displacement vector `[dx, dy, dz]` in Angstrom (present when
-    /// `"displacements"` declared).
-    pub displacement: Option<[f64; 3]>,
-    /// Root-mean-square spread `[sx, sy, sz]` in Angstrom about `[x, y, z]`
-    /// (present when `"spreads"` declared).
-    pub spread: Option<[f64; 3]>,
+    tail: Option<Box<AtomTail>>,
+}
+
+impl PartialEq for AtomDatum {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbol == other.symbol
+            && self.x.to_bits() == other.x.to_bits()
+            && self.y.to_bits() == other.y.to_bits()
+            && self.z.to_bits() == other.z.to_bits()
+            && self.fixed == other.fixed
+            && self.atom_id == other.atom_id
+            && self.velocity() == other.velocity()
+            && self.force() == other.force()
+            && self.energy().map(f64::to_bits) == other.energy().map(f64::to_bits)
+            && self.charge().map(f64::to_bits) == other.charge().map(f64::to_bits)
+            && self.spin().map(f64::to_bits) == other.spin().map(f64::to_bits)
+            && self.magmom() == other.magmom()
+            && self.displacement() == other.displacement()
+            && self.spread() == other.spread()
+    }
 }
 
 impl AtomDatum {
+    /// Coordinate-only atom. Section accessors return `None` until one is set.
+    pub fn coords(
+        symbol: impl Into<Arc<str>>,
+        x: f64,
+        y: f64,
+        z: f64,
+        fixed: [bool; 3],
+        atom_id: u64,
+    ) -> Self {
+        Self {
+            symbol: symbol.into(),
+            x,
+            y,
+            z,
+            fixed,
+            atom_id,
+            tail: None,
+        }
+    }
+
+    /// Full atom, boxing the section tail only when at least one section is set.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_sections(
+        symbol: impl Into<Arc<str>>,
+        x: f64,
+        y: f64,
+        z: f64,
+        fixed: [bool; 3],
+        atom_id: u64,
+        velocity: Option<[f64; 3]>,
+        force: Option<[f64; 3]>,
+        energy: Option<f64>,
+        charge: Option<f64>,
+        spin: Option<f64>,
+        magmom: Option<[f64; 3]>,
+        displacement: Option<[f64; 3]>,
+        spread: Option<[f64; 3]>,
+    ) -> Self {
+        let mut atom = Self::coords(symbol, x, y, z, fixed, atom_id);
+        if velocity.is_some()
+            || force.is_some()
+            || energy.is_some()
+            || charge.is_some()
+            || spin.is_some()
+            || magmom.is_some()
+            || displacement.is_some()
+            || spread.is_some()
+        {
+            atom.tail = Some(Box::new(AtomTail {
+                velocity,
+                force,
+                energy,
+                charge,
+                spin,
+                magmom,
+                displacement,
+                spread,
+            }));
+        }
+        atom
+    }
+
+    fn ensure_tail(&mut self) -> &mut AtomTail {
+        if self.tail.is_none() {
+            self.tail = Some(Box::new(AtomTail::default()));
+        }
+        self.tail.as_mut().unwrap()
+    }
+
+    fn shrink_tail(&mut self) {
+        if self.tail.as_ref().is_some_and(|tail| tail.is_empty()) {
+            self.tail = None;
+        }
+    }
+
+    /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
+    #[inline]
+    pub fn velocity(&self) -> Option<[f64; 3]> {
+        self.tail.as_ref().and_then(|tail| tail.velocity)
+    }
+    /// Force vector `[fx, fy, fz]`.
+    #[inline]
+    pub fn force(&self) -> Option<[f64; 3]> {
+        self.tail.as_ref().and_then(|tail| tail.force)
+    }
+    /// Per-atom energy contribution.
+    #[inline]
+    pub fn energy(&self) -> Option<f64> {
+        self.tail.as_ref().and_then(|tail| tail.energy)
+    }
+    /// Partial charge.
+    #[inline]
+    pub fn charge(&self) -> Option<f64> {
+        self.tail.as_ref().and_then(|tail| tail.charge)
+    }
+    /// Spin scalar.
+    #[inline]
+    pub fn spin(&self) -> Option<f64> {
+        self.tail.as_ref().and_then(|tail| tail.spin)
+    }
+    /// Magnetic moment `[mx, my, mz]`.
+    #[inline]
+    pub fn magmom(&self) -> Option<[f64; 3]> {
+        self.tail.as_ref().and_then(|tail| tail.magmom)
+    }
+    /// Displacement `[dx, dy, dz]`.
+    #[inline]
+    pub fn displacement(&self) -> Option<[f64; 3]> {
+        self.tail.as_ref().and_then(|tail| tail.displacement)
+    }
+    /// RMS spread `[sx, sy, sz]`.
+    #[inline]
+    pub fn spread(&self) -> Option<[f64; 3]> {
+        self.tail.as_ref().and_then(|tail| tail.spread)
+    }
+
+    pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().velocity = value;
+        self.shrink_tail();
+    }
+    pub fn set_force(&mut self, value: Option<[f64; 3]>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().force = value;
+        self.shrink_tail();
+    }
+    pub fn set_energy(&mut self, value: Option<f64>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().energy = value;
+        self.shrink_tail();
+    }
+    pub fn set_charge(&mut self, value: Option<f64>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().charge = value;
+        self.shrink_tail();
+    }
+    pub fn set_spin(&mut self, value: Option<f64>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().spin = value;
+        self.shrink_tail();
+    }
+    pub fn set_magmom(&mut self, value: Option<[f64; 3]>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().magmom = value;
+        self.shrink_tail();
+    }
+    pub fn set_displacement(&mut self, value: Option<[f64; 3]>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().displacement = value;
+        self.shrink_tail();
+    }
+    pub fn set_spread(&mut self, value: Option<[f64; 3]>) {
+        if value.is_none() && self.tail.is_none() {
+            return;
+        }
+        self.ensure_tail().spread = value;
+        self.shrink_tail();
+    }
+
     /// Returns `true` if any direction is fixed.
     pub fn is_fixed(&self) -> bool {
         self.fixed[0] || self.fixed[1] || self.fixed[2]
@@ -593,38 +861,98 @@ impl AtomDatum {
 
     /// Returns `true` if this atom has velocity data.
     pub fn has_velocity(&self) -> bool {
-        self.velocity.is_some()
+        self.velocity().is_some()
     }
 
     /// Returns `true` if this atom has force data.
     pub fn has_forces(&self) -> bool {
-        self.force.is_some()
+        self.force().is_some()
     }
 
     /// Returns `true` if this atom carries a per-atom energy contribution.
     pub fn has_energy(&self) -> bool {
-        self.energy.is_some()
+        self.energy().is_some()
     }
 
     pub fn has_charge(&self) -> bool {
-        self.charge.is_some()
+        self.charge().is_some()
     }
 
     pub fn has_spin(&self) -> bool {
-        self.spin.is_some()
+        self.spin().is_some()
     }
 
     pub fn has_magmom(&self) -> bool {
-        self.magmom.is_some()
+        self.magmom().is_some()
     }
 
     pub fn has_displacement(&self) -> bool {
-        self.displacement.is_some()
+        self.displacement().is_some()
     }
 
     pub fn has_spread(&self) -> bool {
-        self.spread.is_some()
+        self.spread().is_some()
     }
+}
+
+/// Lengths `|a| |b| |c|` and angles `alpha beta gamma` in degrees.
+/// `alpha` is the angle between b and c, `beta` between a and c,
+/// `gamma` between a and b (CON-cell, D12).
+pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
+    fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+        a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    }
+    fn len(v: [f64; 3]) -> f64 {
+        dot(v, v).sqrt()
+    }
+    fn angle_deg(a: [f64; 3], b: [f64; 3]) -> f64 {
+        let la = len(a);
+        let lb = len(b);
+        if la == 0.0 || lb == 0.0 {
+            return f64::NAN;
+        }
+        let cosine = (dot(a, b) / (la * lb)).clamp(-1.0, 1.0);
+        cosine.acos().to_degrees()
+    }
+    let a = vecs[0];
+    let b = vecs[1];
+    let c = vecs[2];
+    ([len(a), len(b), len(c)], [
+        angle_deg(b, c),
+        angle_deg(a, c),
+        angle_deg(a, b),
+    ])
+}
+
+/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
+/// in degrees (CON-cell.6).
+///
+/// `a = (|a|, 0, 0)`,
+/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
+/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
+/// |c| sqrt(1 - cos^2 beta - cy^2))` where `cy` is that middle term.
+pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
+    let [a_len, b_len, c_len] = lengths;
+    let alpha = angles_deg[0].to_radians();
+    let beta = angles_deg[1].to_radians();
+    let gamma = angles_deg[2].to_radians();
+    let cos_alpha = alpha.cos();
+    let cos_beta = beta.cos();
+    let cos_gamma = gamma.cos();
+    let sin_gamma = gamma.sin();
+    let cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
+    let cz_sq = 1.0 - cos_beta * cos_beta - cy * cy;
+    // Orthogonal angles leave a rounding crumb below zero.
+    let cz = if cz_sq < 0.0 && cz_sq > -1e-12 {
+        0.0
+    } else {
+        cz_sq.sqrt()
+    };
+    [
+        [a_len, 0.0, 0.0],
+        [b_len * cos_gamma, b_len * sin_gamma, 0.0],
+        [c_len * cos_beta, c_len * cy, c_len * cz],
+    ]
 }
 
 /// Decode a column-4 bitmask as a spec-2 value.
@@ -759,28 +1087,28 @@ impl ConFrame {
             a.y = p[1];
             a.z = p[2];
             if has_vel {
-                a.velocity = Some(self.velocities.as_f64_row(i));
+                a.set_velocity(Some(self.velocities.as_f64_row(i)));
             }
             if has_frc {
-                a.force = Some(self.forces.as_f64_row(i));
+                a.set_force(Some(self.forces.as_f64_row(i)));
             }
             if has_eng {
-                a.energy = Some(self.atom_energies.get_f64(i));
+                a.set_energy(Some(self.atom_energies.get_f64(i)));
             }
             if has_chg {
-                a.charge = Some(self.charges.get_f64(i));
+                a.set_charge(Some(self.charges.get_f64(i)));
             }
             if has_spn {
-                a.spin = Some(self.spins.get_f64(i));
+                a.set_spin(Some(self.spins.get_f64(i)));
             }
             if has_mm {
-                a.magmom = Some(self.magmoms.as_f64_row(i));
+                a.set_magmom(Some(self.magmoms.as_f64_row(i)));
             }
             if has_dsp {
-                a.displacement = Some(self.displacements.as_f64_row(i));
+                a.set_displacement(Some(self.displacements.as_f64_row(i)));
             }
             if has_spr {
-                a.spread = Some(self.spreads.as_f64_row(i));
+                a.set_spread(Some(self.spreads.as_f64_row(i)));
             }
             if i < self.atom_ids.len() {
                 a.atom_id = self.atom_ids[i];
@@ -878,33 +1206,33 @@ impl ConFrame {
             }
             self.atom_ids[i] = a.atom_id;
             if has_vel {
-                if let Some(v) = a.velocity {
+                if let Some(v) = a.velocity() {
                     self.velocities.set_f64_row(i, v);
                 }
             }
             if has_frc {
-                if let Some(f) = a.force {
+                if let Some(f) = a.force() {
                     self.forces.set_f64_row(i, f);
                 }
             }
             if has_eng {
-                self.atom_energies.set_f64(i, a.energy.unwrap_or(0.0));
+                self.atom_energies.set_f64(i, a.energy().unwrap_or(0.0));
             }
             if has_chg {
-                self.charges.set_f64(i, a.charge.unwrap_or(0.0));
+                self.charges.set_f64(i, a.charge().unwrap_or(0.0));
             }
             if has_spn {
-                self.spins.set_f64(i, a.spin.unwrap_or(0.0));
+                self.spins.set_f64(i, a.spin().unwrap_or(0.0));
             }
             if has_mm {
-                if let Some(m) = a.magmom {
+                if let Some(m) = a.magmom() {
                     self.magmoms.set_f64_row(i, m);
                 }
             }
-            if has_dsp && let Some(d) = a.displacement {
+            if has_dsp && let Some(d) = a.displacement() {
                 self.displacements.set_f64_row(i, d);
             }
-            if has_spr && let Some(d) = a.spread {
+            if has_spr && let Some(d) = a.spread() {
                 self.spreads.set_f64_row(i, d);
             }
         }
@@ -1288,6 +1616,30 @@ impl ConFrameBuilder {
             self.metadata.insert(key, value);
         }
         Ok(())
+    }
+
+    /// Sets `metadata["units"]` from a JSON object.
+    ///
+    /// Aliases are rewritten to preferred names. The natural time spelling
+    /// `(amu*angstrom^2/eV)^0.5` is kept byte for byte (CON-units.5, D10).
+    /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
+    /// is the same contract on a frame that already exists.
+    pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {
+        let stored = crate::units::canonicalize_units_object(&units)
+            .map_err(|err| crate::error::ParseError::InvalidUnits(err.to_string()))?;
+        self.metadata.insert(meta::UNITS.into(), stored);
+        Ok(())
+    }
+
+    /// Sets `con_spec_minor` for the frame this builder will write.
+    ///
+    /// [`Self::build`] stamps [`crate::CON_SPEC_MINOR`] (1) when this has
+    /// not been called and the key is absent. The writer does not invent
+    /// or replace the minor (D15).
+    pub fn set_con_spec_minor(&mut self, minor: u32) -> &mut Self {
+        self.metadata
+            .insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
+        self
     }
 
     /// Sets a numeric metadata key.
@@ -2602,13 +2954,13 @@ impl ConFrameBuilder {
                 } else {
                     None
                 };
-                atom_data.push(AtomDatum {
-                    symbol: Arc::clone(symbol),
-                    x: pos[0],
-                    y: pos[1],
-                    z: pos[2],
-                    fixed: self.fixed[i],
-                    atom_id: self.atom_ids[i],
+                atom_data.push(AtomDatum::with_sections(
+                    Arc::clone(symbol),
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    self.fixed[i],
+                    self.atom_ids[i],
                     velocity,
                     force,
                     energy,
@@ -2617,7 +2969,7 @@ impl ConFrameBuilder {
                     magmom,
                     displacement,
                     spread,
-                });
+                ));
             }
         }
 
@@ -2657,6 +3009,14 @@ impl ConFrameBuilder {
         if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
+        // The builder, not the writer, stamps minor 1 on a v3 frame when
+        // the caller did not call set_con_spec_minor (D15).
+        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+            metadata.insert(
+                meta::CON_SPEC_MINOR.into(),
+                serde_json::Value::from(crate::CON_SPEC_MINOR),
+            );
+        }
         use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
         let dt = StorageDtypes::from_metadata(&metadata).unwrap_or_default();
         // Allocate SoA in the requested storage dtypes (not f64-then-cast).
@@ -2678,33 +3038,33 @@ impl ConFrameBuilder {
             pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
             if has_vel {
-                if let Some(v) = a.velocity {
+                if let Some(v) = a.velocity() {
                     vel.set_f64_row(i, v);
                 }
             }
             if has_frc {
-                if let Some(f) = a.force {
+                if let Some(f) = a.force() {
                     frc.set_f64_row(i, f);
                 }
             }
             if has_eng {
-                eng.set_f64(i, a.energy.unwrap_or(0.0));
+                eng.set_f64(i, a.energy().unwrap_or(0.0));
             }
             if has_chg {
-                chg.set_f64(i, a.charge.unwrap_or(0.0));
+                chg.set_f64(i, a.charge().unwrap_or(0.0));
             }
             if has_spn {
-                spn.set_f64(i, a.spin.unwrap_or(0.0));
+                spn.set_f64(i, a.spin().unwrap_or(0.0));
             }
             if has_mag {
-                if let Some(m) = a.magmom {
+                if let Some(m) = a.magmom() {
                     mag.set_f64_row(i, m);
                 }
             }
-            if has_dsp && let Some(d) = a.displacement {
+            if has_dsp && let Some(d) = a.displacement() {
                 dsp.set_f64_row(i, d);
             }
-            if has_spr && let Some(d) = a.spread {
+            if has_spr && let Some(d) = a.spread() {
                 spr.set_f64_row(i, d);
             }
         }
@@ -2783,7 +3143,23 @@ pub fn con_frame_coords_only(
     positions: crate::storage_dtype::FloatArray2,
 ) -> ConFrame {
     let n = atom_data.len();
+    let mut ids = Vec::with_capacity(n);
+    for a in &atom_data {
+        ids.push(a.atom_id);
+    }
+    con_frame_coords_only_with_ids(header, atom_data, positions, ids)
+}
+
+/// [`con_frame_coords_only`] with ids already collected during the coordinate scan.
+pub(crate) fn con_frame_coords_only_with_ids(
+    header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    positions: crate::storage_dtype::FloatArray2,
+    ids: Vec<u64>,
+) -> ConFrame {
+    let n = atom_data.len();
     debug_assert_eq!(positions.nrows(), n);
+    debug_assert_eq!(ids.len(), n);
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
 
@@ -2805,10 +3181,6 @@ pub fn con_frame_coords_only(
         m
     };
 
-    let mut ids = vec![0u64; n];
-    for (i, a) in atom_data.iter().enumerate() {
-        ids[i] = a.atom_id;
-    }
     let ids_arr = ndarray::Array1::from(ids).into_shared();
 
     let mut header = header;
@@ -2879,33 +3251,33 @@ pub fn con_frame_from_atom_data_with_positions(
     for (i, a) in atom_data.iter().enumerate() {
         ids_arr[i] = a.atom_id;
         if has_vel {
-            if let Some(v) = a.velocity {
+            if let Some(v) = a.velocity() {
                 vel.set_f64_row(i, v);
             }
         }
         if has_frc {
-            if let Some(f) = a.force {
+            if let Some(f) = a.force() {
                 frc.set_f64_row(i, f);
             }
         }
         if has_eng {
-            eng.set_f64(i, a.energy.unwrap_or(0.0));
+            eng.set_f64(i, a.energy().unwrap_or(0.0));
         }
         if has_chg {
-            chg.set_f64(i, a.charge.unwrap_or(0.0));
+            chg.set_f64(i, a.charge().unwrap_or(0.0));
         }
         if has_spn {
-            spn.set_f64(i, a.spin.unwrap_or(0.0));
+            spn.set_f64(i, a.spin().unwrap_or(0.0));
         }
         if has_mm {
-            if let Some(m) = a.magmom {
+            if let Some(m) = a.magmom() {
                 mm.set_f64_row(i, m);
             }
         }
-        if has_dsp && let Some(d) = a.displacement {
+        if has_dsp && let Some(d) = a.displacement() {
             dsp.set_f64_row(i, d);
         }
-        if has_spr && let Some(d) = a.spread {
+        if has_spr && let Some(d) = a.spread() {
             spr.set_f64_row(i, d);
         }
     }
@@ -3013,7 +3385,7 @@ mod tests {
         let frame = builder.build().unwrap();
 
         assert!(frame.has_velocities());
-        assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
+        assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
     }
 
     #[test]
@@ -3539,10 +3911,10 @@ mod tests {
     fn builder_set_atom_id_out_of_bounds_is_loud() {
         let mut b = three_atom_builder();
         let err = b.set_atom_id(99, 0).unwrap_err();
-        assert!(matches!(
-            err,
-            crate::error::ParseError::IndexOutOfBounds { index: 99, len: 3 }
-        ));
+        assert!(matches!(err, crate::error::ParseError::IndexOutOfBounds {
+            index: 99,
+            len: 3
+        }));
     }
 
     #[test]
@@ -3607,8 +3979,8 @@ mod tests {
         assert!(frame.has_forces());
         assert!(frame.has_energies());
         // group order: Cu, Cu, H
-        assert_eq!(frame.atom_data[0].force, Some([1.0, 0.0, 0.0]));
-        assert_eq!(frame.atom_data[2].force, Some([0.0, 0.0, 1.0]));
+        assert_eq!(frame.atom_data[0].force(), Some([1.0, 0.0, 0.0]));
+        assert_eq!(frame.atom_data[2].force(), Some([0.0, 0.0, 1.0]));
     }
 
     // ----- DLPack export tier tests -----------------------------------------
@@ -3686,22 +4058,33 @@ mod tests {
         use std::io::Cursor;
         let mut frame = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         frame.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
-        let mut fr = frame.build().unwrap();
+        let mut fr = frame.clone().build().unwrap();
         // Strip units to simulate hand-built non-compliant header still claiming v3
         fr.header.metadata.remove(meta::UNITS);
         fr.header.spec_version = 3;
         let mut buf = Cursor::new(Vec::new());
         {
             let mut w = ConFrameWriter::new(&mut buf);
-            w.write_frame(&fr).unwrap();
+            let err = w.write_frame(&fr).unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    crate::writer::WriteError::Format(crate::error::ParseError::InvalidUnits(_))
+                ),
+                "D11: writer must not replace missing v3 units, got {err}"
+            );
+        }
+        // A frame that still carries the builder units does write them.
+        let fr_ok = frame.build().unwrap();
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut w = ConFrameWriter::new(&mut buf);
+            w.write_frame(&fr_ok).unwrap();
         }
         let s = String::from_utf8(buf.into_inner()).unwrap();
-        assert!(
-            s.contains("\"units\""),
-            "writer must emit units for v3: {s}"
-        );
+        assert!(s.contains("\"units\""), "builder frames carry units: {s}");
         assert!(s.contains("angstrom") || s.contains("length"), "{s}");
-        // Round-trip parse must succeed as v3
+        assert!(!s.contains("\"time\""), "builder must not inject time: {s}");
         let parsed = crate::iterators::ConFrameIterator::new(&s)
             .next()
             .unwrap()

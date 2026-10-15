@@ -19,10 +19,17 @@ fn round_trip_preserves_every_numeric_section() {
     ];
     for canonical in [false, true] {
         for value in values {
-            let mut builder = ConFrameBuilder::new(
-                [10.001_527_890_189_283, 20.0, 30.0],
-                [89.123_456_789_012_35, 90.0, 90.0],
-            );
+            let mut builder = ConFrameBuilder::new([10.001_527_890_189_283, 20.0, 30.0], [
+                89.123_456_789_012_35,
+                90.0,
+                90.0,
+            ]);
+            builder
+                .set_metadata_json(&format!(
+                    r#"{{"units":{{"length":"angstrom","energy":"eV","mass":"amu","time":"{}"}}}}"#,
+                    readcon_core::units::NATURAL_TIME_UNIT
+                ))
+                .unwrap();
             builder.set_energy(value);
             builder
                 .add_atom(
@@ -60,21 +67,21 @@ fn round_trip_preserves_every_numeric_section() {
             let expected = [value, -value, -0.0];
             for vector in [
                 stored,
-                atom.force.unwrap(),
-                atom.velocity.unwrap(),
-                atom.magmom.unwrap(),
-                atom.displacement.unwrap(),
+                atom.force().unwrap(),
+                atom.velocity().unwrap(),
+                atom.magmom().unwrap(),
+                atom.displacement().unwrap(),
             ] {
                 assert_eq!(vector.map(f64::to_bits), expected.map(f64::to_bits));
             }
             assert_eq!(
-                atom.spread.unwrap().map(f64::to_bits),
+                atom.spread().unwrap().map(f64::to_bits),
                 [value.abs(), value.abs(), 0.0].map(f64::to_bits)
             );
             for scalar in [
-                atom.energy.unwrap(),
-                atom.charge.unwrap(),
-                atom.spin.unwrap(),
+                atom.energy().unwrap(),
+                atom.charge().unwrap(),
+                atom.spin().unwrap(),
                 actual.header.energy().unwrap(),
             ] {
                 assert_eq!(scalar.to_bits(), value.to_bits());

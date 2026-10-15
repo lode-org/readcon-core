@@ -102,7 +102,7 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
     let n = frame.atom_data.len();
     let mut need_vel = false;
     for atom in &frame.atom_data {
-        if atom.velocity.is_some() {
+        if atom.velocity().is_some() {
             need_vel = true;
             break;
         }
@@ -115,7 +115,7 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
         let (display_name, atomic_type) = chemfiles_name_and_type_for_atom(frame, data_idx);
         let mut ch_atom = Atom::new(display_name.as_str());
         ch_atom.set_atomic_type(atomic_type.as_str());
-        let vel = atom.velocity;
+        let vel = atom.velocity();
         chfl.add_atom(&ch_atom, [atom.x, atom.y, atom.z], vel);
     }
 
@@ -123,7 +123,7 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
     if need_vel {
         if let Some(vels) = chfl.velocities_mut() {
             for (i, atom) in frame.atom_data.iter().enumerate() {
-                if let Some(v) = atom.velocity {
+                if let Some(v) = atom.velocity() {
                     if i < vels.len() {
                         vels[i] = v;
                     }

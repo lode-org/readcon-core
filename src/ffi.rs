@@ -820,8 +820,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         .iter()
         .zip(masses_iter)
         .map(|(atom_datum, mass)| {
-            let [vx, vy, vz] = atom_datum.velocity.unwrap_or([0.0; 3]);
-            let [fx, fy, fz] = atom_datum.force.unwrap_or([0.0; 3]);
+            let [vx, vy, vz] = atom_datum.velocity().unwrap_or([0.0; 3]);
+            let [fx, fy, fz] = atom_datum.force().unwrap_or([0.0; 3]);
             CAtom {
                 atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
                 x: atom_datum.x,
@@ -841,7 +841,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
                 fy,
                 fz,
                 has_forces: atom_datum.has_forces(),
-                energy: atom_datum.energy.unwrap_or(0.0),
+                energy: atom_datum.energy().unwrap_or(0.0),
                 has_energy: atom_datum.has_energy(),
             }
         })
@@ -2904,6 +2904,55 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
         Err(_) => RKRStatus::RKR_STATUS_INVALID_JSON,
     }
 }
+/// Sets the units object on an existing frame builder.
+/// `units_json` is a JSON object, for example
+/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+/// Returns `RKR_STATUS_SUCCESS` on success, `RKR_STATUS_INVALID_JSON` when
+/// the text is not a JSON object, or `RKR_STATUS_VALIDATION_ERROR` when a
+/// unit expression is not valid.
+///
+/// # Safety
+/// builder_handle and units_json must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_units(
+    builder_handle: *mut RKRConFrameBuilder,
+    units_json: *const c_char,
+) -> RKRStatus {
+    if builder_handle.is_null() || units_json.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let units_json = match unsafe { CStr::from_ptr(units_json).to_str() } {
+        Ok(s) => s,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_UTF8,
+    };
+    let units: serde_json::Value = match serde_json::from_str(units_json) {
+        Ok(value) => value,
+        Err(_) => return RKRStatus::RKR_STATUS_INVALID_JSON,
+    };
+    match builder.set_units(units) {
+        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
+        Err(_) => RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+    }
+}
+/// Sets `con_spec_minor` on an existing frame builder.
+/// A v3 frame built without this call carries minor 1.
+/// Returns `RKR_STATUS_SUCCESS` on success.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_con_spec_minor(
+    builder_handle: *mut RKRConFrameBuilder,
+    minor: u32,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.set_con_spec_minor(minor);
+    RKRStatus::RKR_STATUS_SUCCESS
+}
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
@@ -3577,7 +3626,10 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
 }
 
 /// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
-fn pack_frame_handles(frames: Vec<ConFrame>, num_frames: *mut usize) -> *mut *mut RKRConFrame {
+pub(crate) fn pack_frame_handles(
+    frames: Vec<ConFrame>,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
     let count = frames.len();
     let mut handles: Vec<*mut RKRConFrame> = frames
         .into_iter()
@@ -4443,7 +4495,7 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let v = a.velocity.unwrap_or([0.0; 3]);
+        let v = a.velocity().unwrap_or([0.0; 3]);
         data.extend_from_slice(&v);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4483,7 +4535,7 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let f = a.force.unwrap_or([0.0; 3]);
+        let f = a.force().unwrap_or([0.0; 3]);
         data.extend_from_slice(&f);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4534,7 +4586,7 @@ pub unsafe extern "C" fn rkr_frame_displacements_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let d = a.displacement.unwrap_or([0.0; 3]);
+        let d = a.displacement().unwrap_or([0.0; 3]);
         data.extend_from_slice(&d);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4585,7 +4637,7 @@ pub unsafe extern "C" fn rkr_frame_spreads_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let d = a.spread.unwrap_or([0.0; 3]);
+        let d = a.spread().unwrap_or([0.0; 3]);
         data.extend_from_slice(&d);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4625,7 +4677,7 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
     let data: Vec<f64> = frame
         .atom_data
         .iter()
-        .map(|a| a.energy.unwrap_or(0.0))
+        .map(|a| a.energy().unwrap_or(0.0))
         .collect();
     let arr = ndarray::ArcArray1::from_vec(data);
     export_owned_array1_f64_dlpack_opts(&arr, &o, out_tensor)
@@ -5277,6 +5329,77 @@ mod tests {
     fn c_string(s: &str) -> CString {
         CString::new(s).unwrap()
     }
+    #[test]
+    fn builder_set_units_c_abi_stores_the_object() {
+        let builder = test_builder_handle();
+        let units = c_string(
+            r#"{"length":"A","energy":"ev","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}"#,
+        );
+        let status = unsafe { rkr_frame_builder_set_units(builder, units.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        assert!(!frame.is_null());
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        assert!(!json.is_null());
+        let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
+        assert!(text.contains(r#""length":"angstrom""#), "{text}");
+        assert!(text.contains(r#""energy":"eV""#), "{text}");
+        assert!(
+            text.contains(r#""time":"(amu*angstrom^2/eV)^0.5""#),
+            "{text}"
+        );
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
+    }
+    #[test]
+    fn builder_stamps_con_spec_minor_one_unless_set() {
+        let builder = test_builder_handle();
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        let text = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains(r#""con_spec_minor":1"#), "{text}");
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
+
+        let builder = test_builder_handle();
+        assert_eq!(
+            unsafe { rkr_frame_builder_set_con_spec_minor(builder, 4) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let symbol = c_string("H");
+        assert_eq!(
+            unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let json = unsafe { rkr_frame_metadata_json(frame) };
+        let text = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains(r#""con_spec_minor":4"#), "{text}");
+        unsafe {
+            rkr_free_string(json);
+            free_rkr_frame(frame);
+        }
+    }
     unsafe fn assert_single_atom(
         frame: *mut RKRConFrame,
         fixed: [bool; 3],
@@ -5442,14 +5565,12 @@ mod tests {
         let c_frame_ref = unsafe { &*c_frame };
         assert_eq!(c_frame_ref.num_atoms, 2);
         let atoms = unsafe { std::slice::from_raw_parts(c_frame_ref.atoms, c_frame_ref.num_atoms) };
-        assert_eq!(
-            [atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z],
-            [true, true, true]
-        );
-        assert_eq!(
-            [atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z],
-            [false, false, false]
-        );
+        assert_eq!([atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z], [
+            true, true, true
+        ]);
+        assert_eq!([atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z], [
+            false, false, false
+        ]);
         unsafe { free_c_frame(c_frame) };
         unsafe { free_rkr_frame(frame) };
     }

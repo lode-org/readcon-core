@@ -271,13 +271,13 @@ Control the number of decimal places in output coordinates:
     use std::fs::File;
     use readcon_core::writer::ConFrameWriter;
 
-    // Default precision (6 decimal places)
-    let file = File::create("output.con").unwrap();
-    let mut writer = ConFrameWriter::new(file);
+   // Default text round-trips every finite binary64 value.
+   let file = File::create("output.con").unwrap();
+   let mut writer = ConFrameWriter::new(file);
 
-    // High precision (17 decimal places for lossless roundtrip)
-    let file = File::create("precise.con").unwrap();
-    let mut writer = ConFrameWriter::with_precision(file, 17);
+   // Fixed decimals are lossy. Ask for them explicitly.
+   let file = File::create("fixed.con").unwrap();
+   let mut writer = ConFrameWriter::with_precision(file, 6);
 
 Reading a single frame efficiently
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -470,12 +470,12 @@ Pass the ``precision`` keyword to control decimal places:
 
     import readcon
 
-    # Default (6 decimal places)
-    readcon.write_con("output.con", frames)
+   # Default text round-trips every finite binary64 value.
+   readcon.write_con("output.con", frames)
 
-    # Lossless roundtrip (17 decimal places)
-    readcon.write_con("precise.con", frames, precision=17)
-    output = readcon.write_con_string(frames, precision=17)
+   # Fixed decimals are lossy. Ask for them explicitly.
+   readcon.write_con("fixed.con", frames, precision=6)
+   output = readcon.write_con_string(frames, precision=17)
 
 ASE Atoms conversion
 ~~~~~~~~~~~~~~~~~~~~
@@ -777,13 +777,13 @@ Collecting and writing frames
         all_frames.push_back(std::move(frame));
     }
 
-    // Default precision (6 decimal places)
-    readcon::ConFrameWriter writer("output.con");
-    writer.extend(all_frames);
+   // Default text round-trips every finite binary64 value.
+   readcon::ConFrameWriter writer("output.con");
+   writer.extend(all_frames);
 
-    // High precision (17 decimal places)
-    readcon::ConFrameWriter precise_writer("precise.con", 17);
-    precise_writer.extend(all_frames);
+   // Fixed decimals are lossy. Ask for them explicitly.
+   readcon::ConFrameWriter fixed_writer("fixed.con", 6);
+   fixed_writer.extend(all_frames);
 
 Integration with eOn
 ~~~~~~~~~~~~~~~~~~~~

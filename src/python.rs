@@ -179,23 +179,23 @@ impl PyAtomDatum {
 
 impl PyAtomDatum {
     fn from_atom_with_mass(atom: &AtomDatum, mass: f64) -> Self {
-        let (vx, vy, vz) = match atom.velocity {
+        let (vx, vy, vz) = match atom.velocity() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (fx, fy, fz) = match atom.force {
+        let (fx, fy, fz) = match atom.force() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (mx, my, mz) = match atom.magmom {
+        let (mx, my, mz) = match atom.magmom() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (dx, dy, dz) = match atom.displacement {
+        let (dx, dy, dz) = match atom.displacement() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
-        let (sx, sy, sz) = match atom.spread {
+        let (sx, sy, sz) = match atom.spread() {
             Some([x, y, z]) => (Some(x), Some(y), Some(z)),
             None => (None, None, None),
         };
@@ -213,9 +213,9 @@ impl PyAtomDatum {
             fx,
             fy,
             fz,
-            energy: atom.energy,
-            charge: atom.charge,
-            spin: atom.spin,
+            energy: atom.energy(),
+            charge: atom.charge(),
+            spin: atom.spin(),
             mx,
             my,
             mz,
@@ -1129,8 +1129,15 @@ impl PyConFrame {
     }
 
     fn to_con_frame(&self, py: Python<'_>) -> PyResult<ConFrame> {
-        let meta = self.metadata_map(py)?;
+        let mut meta = self.metadata_map(py)?;
         let atoms = self.py_atoms(py)?;
+        // v1 and v2 velocities are in the natural time unit (CON-units.8).
+        // The builder writes minor 1, which requires units.time (CON-units.11).
+        stamp_legacy_velocity_time(
+            &mut meta,
+            self.spec_version,
+            atoms.iter().any(PyAtomDatum::has_velocity),
+        );
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles);
         builder
@@ -1201,24 +1208,85 @@ impl PyConFrame {
     }
 }
 
+/// Record `units.time` for a v1 or v2 frame that carries velocities.
+///
+/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
+/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
+/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
+/// A 3.0 frame is treated the same way, overwriting any `units.time`
+/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
+fn stamp_legacy_velocity_time(
+    meta: &mut BTreeMap<String, Value>,
+    spec_version: u32,
+    has_velocity: bool,
+) {
+    if !has_velocity {
+        return;
+    }
+    let minor = meta
+        .get(meta::CON_SPEC_MINOR)
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if spec_version >= 3 && minor >= 1 {
+        return;
+    }
+    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
+    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
+    // the label authoritative (CON-units.10), so replace any label rather
+    // than keep one the old file never honoured.
+    let mut units = match meta.get(meta::UNITS).cloned() {
+        Some(Value::Object(map)) => Value::Object(map),
+        Some(_) => return,
+        None => crate::units::default_v3_units_json(),
+    };
+    if let Some(object) = units.as_object_mut() {
+        object.insert(
+            "time".to_string(),
+            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+        );
+        meta.insert(meta::UNITS.to_string(), units);
+        // The label now holds, so the frame is written as minor 1.
+        if meta.contains_key(meta::CON_SPEC_MINOR) {
+            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        }
+    }
+}
+
 /// Read frames from a .con or .convel file path.
 ///
 /// `n_threads` is `None` or `0` for the automatic policy (Rayon when the
 /// buffer is at least 48 KiB), `1` for sequential parse, and `n >= 2`
 /// for an explicit Rayon pool.
 #[pyfunction]
-#[pyo3(name = "read_all_frames", signature = (path, n_threads=None))]
+#[pyo3(name = "read_all_frames", signature = (path, n_threads=None, *, comm=None, mode="auto"))]
 fn read_all_frames(
     py: Python<'_>,
     path: &str,
     n_threads: Option<usize>,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
 ) -> PyResult<Vec<PyConFrame>> {
-    read_con(py, path, n_threads)
+    read_con(py, path, n_threads, comm, mode)
 }
 
+/// Read frames from a .con or .convel file path.
+///
+/// With `comm` (an mpi4py communicator, needs the `mpi` build feature)
+/// this is collective and returns only this rank's block of frames;
+/// concatenating the blocks of ranks `0..size` in rank order gives the
+/// serial result. `mode` is `"auto"`, `"shared"` or `"scatter"`.
 #[pyfunction]
-#[pyo3(signature = (path, n_threads=None))]
-fn read_con(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Vec<PyConFrame>> {
+#[pyo3(signature = (path, n_threads=None, *, comm=None, mode="auto"))]
+fn read_con(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    if let Some(comm) = comm {
+        return read_con_mpi(py, path, n_threads, comm, mode);
+    }
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
     let path_owned = path.to_owned();
     let frames = py
@@ -1231,6 +1299,56 @@ fn read_con(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Ve
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
         .collect()
+}
+
+/// Fortran handle of an mpi4py communicator (`comm.py2f()`).
+#[cfg(feature = "mpi")]
+fn comm_from_py(comm: &Bound<'_, PyAny>) -> PyResult<crate::distrib::Comm> {
+    let f: i32 = comm.call_method0("py2f")?.extract()?;
+    unsafe { crate::distrib::Comm::dup_fint(f as ::mpi::ffi::RSMPI_Fint) }
+        .map_err(|rc| PyIOError::new_err(format!("MPI_Comm_dup failed with MPI error {rc}")))
+}
+
+#[cfg(feature = "mpi")]
+fn read_con_mpi(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+    comm: &Bound<'_, PyAny>,
+    mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    use crate::distrib_read::ReadMode;
+    let mode = match mode {
+        "auto" => ReadMode::Auto,
+        "shared" => ReadMode::Shared,
+        "scatter" => ReadMode::Scatter,
+        m => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown read mode {m:?}; use \"auto\", \"shared\" or \"scatter\""
+            )));
+        }
+    };
+    let c = comm_from_py(comm)?;
+    // MPI handles are not Send, so the GIL stays held for the collective.
+    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    rf.frames
+        .iter()
+        .map(|frame| PyConFrame::from_con_frame(py, frame))
+        .collect()
+}
+
+#[cfg(not(feature = "mpi"))]
+fn read_con_mpi(
+    _py: Python<'_>,
+    _path: &str,
+    _n_threads: Option<usize>,
+    _comm: &Bound<'_, PyAny>,
+    _mode: &str,
+) -> PyResult<Vec<PyConFrame>> {
+    Err(pyo3::exceptions::PyNotImplementedError::new_err(
+        "comm= needs readcon built with the mpi feature",
+    ))
 }
 
 /// Read only the first frame from a .con or .convel file path.
@@ -1419,16 +1537,27 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=6, compression=None, *, canonical=false))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto"))]
+#[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
     path: &str,
     frames: &Bound<'_, PyAny>,
-    precision: usize,
+    precision: Option<usize>,
     compression: Option<&str>,
     canonical: bool,
+    comm: Option<&Bound<'_, PyAny>>,
+    mode: &str,
 ) -> PyResult<()> {
     let rust_frames = py_frames_to_rust(py, frames)?;
+    if let Some(comm) = comm {
+        if compression.is_some_and(|c| c != "none") || path.ends_with(".gz") || canonical {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "comm= writes uncompressed, non-canonical output only",
+            ));
+        }
+        return write_con_mpi(py, path, &rust_frames, precision, comm, mode);
+    }
 
     let use_gzip = match compression {
         Some("gzip") => true,
@@ -1442,16 +1571,24 @@ fn write_con(
     };
 
     if use_gzip {
-        let mut writer = ConFrameWriter::from_path_gzip_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?
-            .canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
+                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
+            None => ConFrameWriter::from_path_gzip(path)
+                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
     } else {
-        let mut writer = ConFrameWriter::from_path_with_precision(path, precision)
-            .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?
-            .canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
+                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+            None => ConFrameWriter::from_path(path)
+                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -1459,20 +1596,66 @@ fn write_con(
     Ok(())
 }
 
+/// Collective write: every rank passes its own frames (possibly none)
+/// and the file holds them in rank order.
+#[cfg(feature = "mpi")]
+fn write_con_mpi(
+    py: Python<'_>,
+    path: &str,
+    frames: &[ConFrame],
+    precision: Option<usize>,
+    comm: &Bound<'_, PyAny>,
+    mode: &str,
+) -> PyResult<()> {
+    use crate::distrib_write::WriteMode;
+    let mode = match mode {
+        "auto" => WriteMode::Auto,
+        "mpiio" => WriteMode::MpiIo,
+        "gather" => WriteMode::Gather,
+        m => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown write mode {m:?}; use \"auto\", \"mpiio\" or \"gather\""
+            )));
+        }
+    };
+    let c = comm_from_py(comm)?;
+    let _ = py;
+    crate::distrib_write::write_block(&c, Path::new(path), frames, mode, precision)
+        .map(|_| ())
+        .map_err(|e| PyIOError::new_err(e.to_string()))
+}
+
+#[cfg(not(feature = "mpi"))]
+fn write_con_mpi(
+    _py: Python<'_>,
+    _path: &str,
+    _frames: &[ConFrame],
+    _precision: Option<usize>,
+    _comm: &Bound<'_, PyAny>,
+    _mode: &str,
+) -> PyResult<()> {
+    Err(pyo3::exceptions::PyNotImplementedError::new_err(
+        "comm= needs readcon built with the mpi feature",
+    ))
+}
+
 /// Write frames to a string in .con format.
 #[pyfunction]
-#[pyo3(signature = (frames, precision=6, *, canonical=false))]
+#[pyo3(signature = (frames, precision=None, *, canonical=false))]
 fn write_con_string(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
-    precision: usize,
+    precision: Option<usize>,
     canonical: bool,
 ) -> PyResult<String> {
     let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
-        let mut writer =
-            ConFrameWriter::with_precision(&mut buffer, precision).canonical(canonical);
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+            None => ConFrameWriter::new(&mut buffer),
+        }
+        .canonical(canonical);
         writer
             .extend(rust_frames.iter())
             .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
@@ -1484,7 +1667,7 @@ fn write_con_string(
 /// Requires the ase package.
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
-    let frames = read_con(py, path, None)?;
+    let frames = read_con(py, path, None, None, "auto")?;
     frames.iter().map(|f| ase_from_pyconframe(py, f)).collect()
 }
 
@@ -1580,24 +1763,20 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
             })
             .collect();
         let force_array = np.call_method1("array", (forces,))?;
-        // Get energy from metadata if present
-        let energy = frame.energy(py)?;
-        let calc = if let Some(e) = energy {
-            ase_calc
-                .getattr("SinglePointCalculator")?
-                .call1((atoms.clone(), e, force_array))?
-        } else {
-            ase_calc.getattr("SinglePointCalculator")?.call(
-                (),
-                Some(
-                    &[
-                        ("atoms", atoms.clone().into_any()),
-                        ("forces", force_array.into_any()),
-                    ]
-                    .into_py_dict(py)?,
-                ),
-            )?
-        };
+        // ASE passes everything after `atoms` to SinglePointCalculator as
+        // keyword results (ASE >= 3.23 rejects positional energy/forces), so
+        // hand both over by name.
+        let kwargs = [
+            ("atoms", atoms.clone().into_any()),
+            ("forces", force_array.into_any()),
+        ]
+        .into_py_dict(py)?;
+        if let Some(e) = frame.energy(py)? {
+            kwargs.set_item("energy", e)?;
+        }
+        let calc = ase_calc
+            .getattr("SinglePointCalculator")?
+            .call((), Some(&kwargs))?;
         atoms.setattr("calc", calc)?;
     }
 
@@ -1740,7 +1919,13 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .ok()
             .and_then(|t| t.extract().ok())
             .unwrap_or_default();
-        if tags.iter().any(|&t| t != 0) {
+        // Tags label groups (slab layers, adsorbates) and repeat freely;
+        // only a set of distinct non-negative tags can stand in for ids.
+        let distinct = {
+            let mut seen = std::collections::HashSet::with_capacity(tags.len());
+            tags.iter().all(|&t| t >= 0 && seen.insert(t))
+        };
+        if tags.len() == n_atoms && tags.iter().any(|&t| t != 0) && distinct {
             tags.into_iter().map(|t| t as u64).collect()
         } else {
             (0..n_atoms).map(|i| i as u64).collect()
@@ -1890,6 +2075,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
+    m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_nth, m)?)?;
@@ -1919,6 +2105,12 @@ fn has_chemfiles_support() -> bool {
 #[pyfunction]
 fn has_parallel_support() -> bool {
     cfg!(feature = "parallel")
+}
+
+/// True when built with the `mpi` feature (`comm=` on read and write).
+#[pyfunction]
+fn has_mpi_support() -> bool {
+    cfg!(feature = "mpi")
 }
 
 fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyErr {
