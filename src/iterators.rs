@@ -463,11 +463,21 @@ impl<'a> ConFrameIterator<'a> {
     /// Skip `n` frames without parsing atom data. Returns how many were skipped.
     /// Named `skip_frames` so it does not collide with [`Iterator::skip`].
     pub fn skip_frames(&mut self, n: usize) -> Result<usize, error::ParseError> {
+        self.skip_frames_counted(n).map_err(|(_, err)| err)
+    }
+
+    /// Like [`Self::skip_frames`]. The error's first field is how many frames
+    /// were skipped before the failure, which is the 0-based index of the
+    /// failing frame when the iterator started at frame 0.
+    pub(crate) fn skip_frames_counted(
+        &mut self,
+        n: usize,
+    ) -> Result<usize, (usize, error::ParseError)> {
         let mut skipped = 0usize;
         for _ in 0..n {
             match self.forward() {
                 None => break,
-                Some(Err(e)) => return Err(e),
+                Some(Err(e)) => return Err((skipped, e)),
                 Some(Ok(())) => skipped += 1,
             }
         }
@@ -997,7 +1007,7 @@ pub fn read_nth_frame_located(path: &Path, index: usize) -> Result<types::ConFra
     let contents = load_text(path)?;
     let text = contents.as_str().map_err(LoadError::Utf8)?;
     let mut iter = ConFrameIterator::new(text);
-    match iter.skip_frames(index) {
+    match iter.skip_frames_counted(index) {
         Ok(skipped) if skipped == index => {}
         Ok(skipped) => {
             return Err(LoadError::Parse(error::LocatedParseError::new(
@@ -1006,11 +1016,11 @@ pub fn read_nth_frame_located(path: &Path, index: usize) -> Result<types::ConFra
                 skipped as u64,
             )));
         }
-        Err(e) => {
+        Err((failed_at, e)) => {
             return Err(LoadError::Parse(error::LocatedParseError::new(
                 e,
                 iter.lines.line_no(),
-                index as u64,
+                failed_at as u64,
             )));
         }
     }
