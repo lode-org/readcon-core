@@ -2,6 +2,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
 use crate::types::{ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
+use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char};
 use std::fs::File;
 use std::path::Path;
@@ -439,6 +440,20 @@ pub unsafe extern "C" fn rkr_frame_bond_at(
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
+thread_local! {
+    static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };
+}
+
+fn set_last_error(message: &str) {
+    let stored = CString::new(message.replace('\0', ""))
+        .unwrap_or_else(|_| c"unrepresentable error".to_owned());
+    LAST_ERROR.with(|slot| *slot.borrow_mut() = Some(stored));
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
+}
+
 /// Returns a stable, static message for a status code.
 /// The returned pointer is valid for the lifetime of the process. Do NOT free it.
 #[unsafe(no_mangle)]
@@ -461,6 +476,23 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
             c"device allocation unsupported in this build".as_ptr()
         }
     }
+}
+
+/// Detailed message from the most recent failing `rkr_writer_extend` or
+/// `rkr_writer_flush` on this thread.
+///
+/// `rkr_status_message` stays a fixed string per status code. This pointer
+/// carries the underlying I/O or format text, for example
+/// `CON validation failed: atom id 1 is repeated in the frame`.
+/// Returns NULL when that call succeeded or no such failure has been
+/// recorded. The pointer is valid until the next call on this thread that
+/// records or clears the message. Do NOT free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_last_error_message() -> *const c_char {
+    LAST_ERROR.with(|slot| match slot.borrow().as_ref() {
+        Some(message) => message.as_ptr(),
+        None => ptr::null(),
+    })
 }
 /// An opaque handle to a full, lossless Rust `ConFrame` object.
 /// The C/C++ side needs to treat this as a void pointer
@@ -1073,6 +1105,9 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
 
 /// Flushes buffered CON data and reports write errors.
 ///
+/// On failure the status is `RKR_STATUS_IO_ERROR` and
+/// [`rkr_last_error_message`] returns the underlying I/O text.
+///
 /// # Safety
 /// writer_handle must be a live writer handle or null.
 #[unsafe(no_mangle)]
@@ -1082,8 +1117,14 @@ pub unsafe extern "C" fn rkr_writer_flush(writer_handle: *mut RKRConFrameWriter)
         None => return RKRStatus::RKR_STATUS_NULL_POINTER,
     };
     match writer.flush() {
-        Ok(()) => RKRStatus::RKR_STATUS_SUCCESS,
-        Err(_) => RKRStatus::RKR_STATUS_IO_ERROR,
+        Ok(()) => {
+            clear_last_error();
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(err) => {
+            set_last_error(&err.to_string());
+            RKRStatus::RKR_STATUS_IO_ERROR
+        }
     }
 }
 
@@ -1099,6 +1140,10 @@ pub unsafe extern "C" fn free_rkr_writer(writer_handle: *mut RKRConFrameWriter) 
 }
 /// Writes multiple frames from an array of handles to the file managed by the writer.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
+///
+/// Format failures such as a repeated atom id stay `RKR_STATUS_IO_ERROR`.
+/// [`rkr_last_error_message`] returns the underlying text, which
+/// [`rkr_status_message`] does not carry.
 ///
 /// # Safety
 /// writer_handle and frame_handles must be valid.
@@ -1131,8 +1176,14 @@ pub unsafe extern "C" fn rkr_writer_extend(
         }
     }
     match writer.extend(rust_frames.into_iter()) {
-        Ok(_) => RKRStatus::RKR_STATUS_SUCCESS,
-        Err(_) => RKRStatus::RKR_STATUS_IO_ERROR,
+        Ok(_) => {
+            clear_last_error();
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(err) => {
+            set_last_error(&err.to_string());
+            RKRStatus::RKR_STATUS_IO_ERROR
+        }
     }
 }
 

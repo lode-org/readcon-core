@@ -10,10 +10,12 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 | `dl_managed_tensor_versioned_t` / `dl_tensor_t` | DLPack C header layout (`dlpack.h`) for field inspect |
 | `frame_t` | Owns `RKRConFrame*`; atoms, cell, **metadata_json**, energy, potential, time, NEB, bonds, **select** |
 | `iterator_t` | Lazy multi-frame via `read_con_file_iterator` |
-| `builder_t` | `rkr_frame_new` + add_atom (per-axis fixed) + set_energy / metadata_json / build / **DLPack** |
+| `builder_t` | `rkr_frame_new` + `add_atom` (per-axis fixed mask) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
 | `writer_t` | `create_writer_from_path_c` + extend |
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
+
+`last_error_message()` is the underlying text from the most recent failing `extend_one` or writer flush on this thread. `status_message(-4)` stays the generic `I/O error`.
 
 ## Test
 
