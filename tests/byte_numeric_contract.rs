@@ -225,6 +225,9 @@ fn byte_frames_ignore_trailing_whitespace_with_parallel_workers() {
         .unwrap();
     assert_eq!(expected.len(), 3);
     for workers in [Some(1), Some(2), Some(4)] {
-        assert_eq!(frames_from_bytes(text.as_bytes(), workers).unwrap(), expected);
+        assert_eq!(
+            frames_from_bytes(text.as_bytes(), workers).unwrap(),
+            expected
+        );
     }
 }
