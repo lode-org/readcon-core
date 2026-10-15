@@ -557,13 +557,21 @@ function _legacy_velocity_units(frame::ConFrame)
     if frame.spec_version >= 3 && minor >= 1
         return metadata_json, false
     end
-    # A v3.0 frame with velocities and no units.time is rebuilt as minor 1.
-    # Stamp the natural unit, matching Python's stamp_legacy_velocity_time.
+    # A v3.0 frame with velocities is rebuilt as minor 1. Stamp the natural
+    # unit, and promote an explicit minor of 0 so that label is authoritative.
+    # This matches Python's stamp_legacy_velocity_time.
     if frame.spec_version >= 3
-        if _units_object_bounds(metadata_json) !== nothing
-            return _ensure_natural_time(metadata_json), false
+        stamped = if _units_object_bounds(metadata_json) !== nothing
+            _ensure_natural_time(metadata_json)
+        else
+            metadata_json
         end
-        return metadata_json, true
+        stamped = replace(
+            stamped,
+            r"(\"con_spec_minor\"\s*:\s*)0+\b" => SubstitutionString("\\g<1>1"),
+            count=1,
+        )
+        return stamped, _units_object_bounds(metadata_json) === nothing
     end
     if _units_declares_time(metadata_json)
         return metadata_json, false
