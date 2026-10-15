@@ -78,7 +78,7 @@ pub fn fill_frame_builder(
         ab.set_fixed_mask(encode_fixed_bitmask(atom.fixed));
         ab.set_atom_id(atom.atom_id);
 
-        if let Some([vx, vy, vz]) = atom.velocity {
+        if let Some([vx, vy, vz]) = atom.velocity() {
             ab.set_has_velocity(true);
             ab.set_vx(vx);
             ab.set_vy(vy);
@@ -86,7 +86,7 @@ pub fn fill_frame_builder(
         } else {
             ab.set_has_velocity(false);
         }
-        if let Some([fx, fy, fz]) = atom.force {
+        if let Some([fx, fy, fz]) = atom.force() {
             ab.set_has_force(true);
             ab.set_fx(fx);
             ab.set_fy(fy);
@@ -94,25 +94,25 @@ pub fn fill_frame_builder(
         } else {
             ab.set_has_force(false);
         }
-        if let Some(e) = atom.energy {
+        if let Some(e) = atom.energy() {
             ab.set_has_energy(true);
             ab.set_energy(e);
         } else {
             ab.set_has_energy(false);
         }
-        if let Some(c) = atom.charge {
+        if let Some(c) = atom.charge() {
             ab.set_has_charge(true);
             ab.set_charge(c);
         } else {
             ab.set_has_charge(false);
         }
-        if let Some(s) = atom.spin {
+        if let Some(s) = atom.spin() {
             ab.set_has_spin(true);
             ab.set_spin(s);
         } else {
             ab.set_has_spin(false);
         }
-        if let Some([mx, my, mz]) = atom.magmom {
+        if let Some([mx, my, mz]) = atom.magmom() {
             ab.set_has_magmom(true);
             ab.set_mx(mx);
             ab.set_my(my);
@@ -120,7 +120,7 @@ pub fn fill_frame_builder(
         } else {
             ab.set_has_magmom(false);
         }
-        if let Some([dx, dy, dz]) = atom.displacement {
+        if let Some([dx, dy, dz]) = atom.displacement() {
             ab.set_has_displacement(true);
             ab.set_dx(dx);
             ab.set_dy(dy);
@@ -128,7 +128,7 @@ pub fn fill_frame_builder(
         } else {
             ab.set_has_displacement(false);
         }
-        if let Some([sx, sy, sz]) = atom.spread {
+        if let Some([sx, sy, sz]) = atom.spread() {
             ab.set_has_spread(true);
             ab.set_sx(sx);
             ab.set_sy(sy);
@@ -279,54 +279,54 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
             .to_str()
             .unwrap_or_default()
             .to_string();
-        atom_data.push(AtomDatum {
-            symbol: Arc::from(sym),
-            x: a.get_x(),
-            y: a.get_y(),
-            z: a.get_z(),
-            fixed: decode_fixed_bitmask_for_spec(a.get_fixed_mask(), spec_version),
-            atom_id: a.get_atom_id(),
-            velocity: if a.get_has_velocity() {
+        atom_data.push(AtomDatum::with_sections(
+            Arc::from(sym),
+            a.get_x(),
+            a.get_y(),
+            a.get_z(),
+            decode_fixed_bitmask_for_spec(a.get_fixed_mask(), spec_version),
+            a.get_atom_id(),
+            if a.get_has_velocity() {
                 Some([a.get_vx(), a.get_vy(), a.get_vz()])
             } else {
                 None
             },
-            force: if a.get_has_force() {
+            if a.get_has_force() {
                 Some([a.get_fx(), a.get_fy(), a.get_fz()])
             } else {
                 None
             },
-            energy: if a.get_has_energy() {
+            if a.get_has_energy() {
                 Some(a.get_energy())
             } else {
                 None
             },
-            charge: if a.get_has_charge() {
+            if a.get_has_charge() {
                 Some(a.get_charge())
             } else {
                 None
             },
-            spin: if a.get_has_spin() {
+            if a.get_has_spin() {
                 Some(a.get_spin())
             } else {
                 None
             },
-            magmom: if a.get_has_magmom() {
+            if a.get_has_magmom() {
                 Some([a.get_mx(), a.get_my(), a.get_mz()])
             } else {
                 None
             },
-            displacement: if a.get_has_displacement() {
+            if a.get_has_displacement() {
                 Some([a.get_dx(), a.get_dy(), a.get_dz()])
             } else {
                 None
             },
-            spread: if a.get_has_spread() {
+            if a.get_has_spread() {
                 Some([a.get_sx(), a.get_sy(), a.get_sz()])
             } else {
                 None
             },
-        });
+        ));
     }
 
     let header = FrameHeader {
@@ -385,9 +385,9 @@ mod tests {
             assert!((a.x - b.x).abs() < 1e-12);
             assert_eq!(a.fixed, b.fixed);
             assert_eq!(a.atom_id, b.atom_id);
-            assert_eq!(a.charge, b.charge);
-            assert_eq!(a.spin, b.spin);
-            assert_eq!(a.magmom, b.magmom);
+            assert_eq!(a.charge(), b.charge());
+            assert_eq!(a.spin(), b.spin());
+            assert_eq!(a.magmom(), b.magmom());
         }
         assert!(back.atom_data.iter().any(|a| a.has_charge()));
         assert!(back.atom_data.iter().any(|a| a.has_spin()));
@@ -412,7 +412,7 @@ mod tests {
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
             assert_eq!(a.symbol, b.symbol);
             assert_eq!(a.atom_id, b.atom_id);
-            assert_eq!(a.displacement, b.displacement);
+            assert_eq!(a.displacement(), b.displacement());
         }
         assert!(back.atom_data.iter().all(|a| a.has_displacement()));
         assert!(back.has_displacements());
@@ -436,7 +436,7 @@ mod tests {
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
             assert_eq!(a.symbol, b.symbol);
             assert_eq!(a.atom_id, b.atom_id);
-            assert_eq!(a.spread, b.spread);
+            assert_eq!(a.spread(), b.spread());
         }
         assert!(back.atom_data.iter().all(|a| a.has_spread()));
         assert!(back.has_spreads());
@@ -455,8 +455,8 @@ mod tests {
             .unwrap();
         let back = frame_from_reader(reader).unwrap();
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
-            assert_eq!(a.velocity, b.velocity);
-            assert_eq!(a.force, b.force);
+            assert_eq!(a.velocity(), b.velocity());
+            assert_eq!(a.force(), b.force());
             assert_eq!(encode_fixed_bitmask(a.fixed), encode_fixed_bitmask(b.fixed));
         }
     }
