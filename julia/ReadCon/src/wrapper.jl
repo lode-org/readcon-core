@@ -482,9 +482,11 @@ function _units_declares_time(metadata_json::AbstractString)
     return occursin(r"\"time\"\s*:\s*\"[^\"]+\"", String(take!(buf)))
 end
 
+const _NATURAL_TIME_UNIT = "(amu*angstrom^2/eV)^0.5"
+
 # Insert units.time into an existing units object. An empty object gets one field.
 function _inject_units_time(metadata_json::AbstractString)
-    time = "(amu*angstrom^2/eV)^0.5"
+    time = _NATURAL_TIME_UNIT
     replaced = replace(
         metadata_json,
         r"(\"units\"\s*:\s*)\{\s*\}" => SubstitutionString("\\1{\"time\":\"$time\"}"),
@@ -498,11 +500,72 @@ function _inject_units_time(metadata_json::AbstractString)
     )
 end
 
-# v1 and v2 velocities are in the natural time unit (CON-units.8).
+# Inclusive bounds of the units object, or nothing when it is absent.
+function _units_object_bounds(metadata_json::AbstractString)
+    m = match(r"\"units\"\s*:\s*\{", metadata_json)
+    m === nothing && return nothing
+    open = findnext(==('{'), metadata_json, m.offset)
+    open === nothing && return nothing
+    depth = 0
+    for i in open:lastindex(metadata_json)
+        c = metadata_json[i]
+        if c == '{'
+            depth += 1
+        elseif c == '}'
+            depth -= 1
+            depth == 0 && return (open, i)
+        end
+    end
+    return nothing
+end
+
+# v3.0 stores velocities in the natural unit whatever units.time says
+# (CON-units.9). Writing minor 1 makes that label authoritative, so replace
+# a present label and insert one when it is missing.
+function _ensure_natural_time(metadata_json::AbstractString)
+    _units_declares_time(metadata_json) || return _inject_units_time(metadata_json)
+    bounds = _units_object_bounds(metadata_json)
+    bounds === nothing && return metadata_json
+    open, close = bounds
+    body = metadata_json[nextind(metadata_json, open):prevind(metadata_json, close)]
+    time = _NATURAL_TIME_UNIT
+    body = replace(
+        body,
+        r"(\"time\"\s*:\s*)\"[^\"]*\"" => SubstitutionString("\\1\"$time\""),
+        count=1,
+    )
+    return metadata_json[begin:prevind(metadata_json, open)] *
+        "{" * body * "}" *
+        metadata_json[nextind(metadata_json, close):end]
+end
+
+function _json_u64(metadata_json::AbstractString, key::AbstractString)
+    m = match(Regex("\"$(key)\"\\s*:\\s*(\\d+)"), metadata_json)
+    m === nothing && return UInt64(0)
+    return parse(UInt64, m.captures[1])
+end
+
+# v1, v2, and v3.0 velocities are in the natural time unit (CON-units.8, CON-units.9).
 # Returns the metadata to store, and whether the caller must set default units.
 function _legacy_velocity_units(frame::ConFrame)
     metadata_json = frame.metadata_json
-    if frame.spec_version >= 3 || !frame.has_velocities || _units_declares_time(metadata_json)
+    if !frame.has_velocities
+        return metadata_json, false
+    end
+    minor = _json_u64(metadata_json, "con_spec_minor")
+    # Minor 1 and later name the time unit. Do not invent or replace it.
+    if frame.spec_version >= 3 && minor >= 1
+        return metadata_json, false
+    end
+    # A v3.0 frame with velocities and no units.time is rebuilt as minor 1.
+    # Stamp the natural unit, matching Python's stamp_legacy_velocity_time.
+    if frame.spec_version >= 3
+        if _units_object_bounds(metadata_json) !== nothing
+            return _ensure_natural_time(metadata_json), false
+        end
+        return metadata_json, true
+    end
+    if _units_declares_time(metadata_json)
         return metadata_json, false
     end
     if occursin(r"\"units\"\s*:", metadata_json)
@@ -534,7 +597,7 @@ function _build_frame_handle(frame::ConFrame)
             _check_status(status, "failed to set frame metadata")
         end
         if stamp_default_units
-            # v1 and v2 velocities are in the natural time unit (CON-units.8).
+            # v1, v2, and v3.0 velocities are in the natural time unit.
             # The builder writes minor 1, which requires units.time (CON-units.11).
             status = ccall(
                 _lib_symbol(:rkr_frame_builder_set_units),

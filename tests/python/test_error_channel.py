@@ -10,6 +10,30 @@ def test_missing_path_is_oserror():
         raise AssertionError("missing path did not raise")
 
 
+def test_non_utf8_path_is_oserror(tmp_path):
+    # Under 64 KiB, read_to_string already fails as OSError. The mmap path
+    # is the one that used to surface as InvalidNumberFormat.
+    path = tmp_path / "bad.con"
+    path.write_bytes(b"\xff" * (64 * 1024))
+    name = str(path)
+    openers = (
+        lambda: readcon.read_con(name),
+        lambda: readcon.read_first_frame(name),
+        lambda: readcon.read_nth_frame(name, 3),
+        lambda: readcon.read_all_frames(name),
+        lambda: readcon.iter_con(name),
+        lambda: readcon.count_frames(name),
+    )
+    for opener in openers:
+        try:
+            opener()
+        except OSError as exc:
+            assert not isinstance(exc, readcon.ConError)
+            assert not isinstance(exc, readcon.InvalidNumberFormat)
+        else:
+            raise AssertionError("non-utf8 file did not raise")
+
+
 def test_non_finite_is_a_con_error_with_a_line():
     text = (
         "seed\n"

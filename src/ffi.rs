@@ -933,12 +933,12 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let iter = unsafe { &mut *(*iterator).iterator };
-    match iter.skip_frames(index) {
+    match iter.skip_frames_counted(index) {
         Ok(skipped) if skipped == index => {}
         Ok(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
-        Err(e) => {
+        Err((failed_at, e)) => {
             let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), index as u64);
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), failed_at as u64);
             return null_located(&located);
         }
     }

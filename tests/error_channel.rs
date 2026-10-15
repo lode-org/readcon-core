@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 use readcon_core::ffi::{
     RKRStatus, free_rkr_frame, rkr_clear_error, rkr_last_error, rkr_read_first_frame,
+    rkr_read_nth_frame,
 };
-use readcon_core::iterators::frames_from_text_located;
+use readcon_core::iterators::{LoadError, frames_from_text_located, read_nth_frame_located};
 use readcon_core::units::{NATURAL_TIME_UNIT, velocity_file_time_unit, velocity_scale_to_natural};
 
 fn path_for(name: &str) -> PathBuf {
@@ -190,4 +191,28 @@ fn class_names_and_write_errors_cover_every_variant() {
     let back_io: io::Error =
         WriteError::from(io::Error::new(io::ErrorKind::NotFound, "gone")).into();
     assert_eq!(back_io.kind(), io::ErrorKind::NotFound);
+}
+
+/// A skip that dies on an earlier frame must name that frame, not the index asked for.
+#[test]
+fn skip_failure_names_the_frame_that_failed() {
+    let good = one_atom("0 0 0 0 0");
+    let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+    let text = format!("{good}{bad}{good}");
+    let path = write("skip-idx", &text);
+    let err = read_nth_frame_located(path_for("skip-idx").as_path(), 4).unwrap_err();
+    match err {
+        LoadError::Parse(located) => {
+            assert_eq!(located.frame_index, 1, "{located}");
+            assert_eq!(located.error.class_name(), "InvalidCount");
+        }
+        other => panic!("expected a parse error, got {other}"),
+    }
+    rkr_clear_error();
+    assert!(unsafe { rkr_read_nth_frame(path.as_ptr(), 4) }.is_null());
+    let stored = unsafe { &*rkr_last_error() };
+    assert_eq!(stored.frame_index, 1);
+    let message = unsafe { CStr::from_ptr(stored.message) }.to_string_lossy();
+    assert!(message.contains("InvalidCount"), "{message}");
+    let _ = fs::remove_file(path_for("skip-idx"));
 }

@@ -1474,9 +1474,7 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
         })
         .map_err(|err| match err {
             OpenFail::Io(msg) => PyIOError::new_err(msg),
-            OpenFail::Utf8(msg) => Python::attach(|py| {
-                parse_err_to_py(py, &ParseError::InvalidNumberFormat(msg), 0, 0)
-            }),
+            OpenFail::Utf8(msg) => PyIOError::new_err(msg),
         })?;
     Ok(PyConFrameIterator {
         contents: text,
@@ -1490,7 +1488,9 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
     py.detach(|| {
         crate::iterators::count_frames(Path::new(&path_owned)).map_err(|err| {
-            if err.downcast_ref::<std::io::Error>().is_some() {
+            if err.downcast_ref::<std::io::Error>().is_some()
+                || err.downcast_ref::<std::str::Utf8Error>().is_some()
+            {
                 CountFail::Io(err.to_string())
             } else if let Some(parse) = err.downcast_ref::<ParseError>() {
                 CountFail::Parse {
@@ -2220,9 +2220,7 @@ fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
     use crate::iterators::LoadError;
     match err {
         LoadError::Io(io) => PyIOError::new_err(io.to_string()),
-        LoadError::Utf8(utf) => Python::attach(|py| {
-            parse_err_to_py(py, &ParseError::InvalidNumberFormat(utf.to_string()), 0, 0)
-        }),
+        LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
         LoadError::Parse(located) => located_to_py(located),
         LoadError::Empty => {
             Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
