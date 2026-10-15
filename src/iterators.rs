@@ -621,7 +621,8 @@ fn parse_frames_parallel_bytes(
     loop {
         scanner.lines.clear_peek();
         let start = scanner.lines.pos;
-        if start >= bytes.len() {
+        // Whitespace after the final frame does not open another frame.
+        if start >= bytes.len() || bytes[start..].iter().all(u8::is_ascii_whitespace) {
             break;
         }
         boundaries.push(start);
