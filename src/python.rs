@@ -1,17 +1,17 @@
 use ndarray::Array2;
 use numpy::{IntoPyArray, PyArray1, PyArray2};
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
-use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::iterators::ConFrameIterator;
-use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
+use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -1722,9 +1722,14 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         }
         rows.into_pyobject(py)?.into_any()
     } else {
-        let cellpar: Vec<f64> = frame.cell.iter().map(|v| v * length_scale)
-            .chain(frame.angles.iter().copied()).collect();
-        py.import("ase.geometry.cell")?.getattr("cellpar_to_cell")?
+        let cellpar: Vec<f64> = frame
+            .cell
+            .iter()
+            .map(|v| v * length_scale)
+            .chain(frame.angles.iter().copied())
+            .collect();
+        py.import("ase.geometry.cell")?
+            .getattr("cellpar_to_cell")?
             .call1((cellpar,))?
     };
     let pbc: [bool; 3] = match metadata.get(meta::PBC) {
@@ -1755,8 +1760,10 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
 
     // Set masses if present (overrides ASE's atomic-number defaults)
     if frame_atoms.iter().any(|a| a.mass.is_some()) {
-        let masses: Vec<f64> = frame_atoms.iter()
-            .map(|a| a.mass.unwrap_or(0.0) * mass_scale).collect();
+        let masses: Vec<f64> = frame_atoms
+            .iter()
+            .map(|a| a.mass.unwrap_or(0.0) * mass_scale)
+            .collect();
         let mass_array = np.call_method1("array", (masses,))?;
         atoms.call_method1("set_masses", (mass_array,))?;
     }
@@ -1764,10 +1771,14 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     // Set velocities if present
     if frame.has_velocities(py)? {
         let time_unit = crate::units::velocity_file_time_unit(
-            frame.spec_version, &metadata.clone().into_iter().collect(), None,
-        ).map_err(|error| PyValueError::new_err(error.to_string()))?;
-        let velocity_scale = length_scale * crate::units::velocity_scale_to_natural(&time_unit)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            frame.spec_version,
+            &metadata.clone().into_iter().collect(),
+            None,
+        )
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let velocity_scale = length_scale
+            * crate::units::velocity_scale_to_natural(&time_unit)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
         let velocities: Vec<[f64; 3]> = frame_atoms
             .iter()
             .map(|a| {
@@ -1789,11 +1800,16 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         let kwargs = [("atoms", atoms.clone().into_any())].into_py_dict(py)?;
         if frame.has_forces(py)? {
             let force_scale = energy_scale / length_scale;
-            let forces: Vec<[f64; 3]> = frame_atoms.iter().map(|a| [
-                a.fx.unwrap_or(0.0) * force_scale,
-                a.fy.unwrap_or(0.0) * force_scale,
-                a.fz.unwrap_or(0.0) * force_scale,
-            ]).collect();
+            let forces: Vec<[f64; 3]> = frame_atoms
+                .iter()
+                .map(|a| {
+                    [
+                        a.fx.unwrap_or(0.0) * force_scale,
+                        a.fy.unwrap_or(0.0) * force_scale,
+                        a.fz.unwrap_or(0.0) * force_scale,
+                    ]
+                })
+                .collect();
             kwargs.set_item("forces", np.call_method1("array", (forces,))?)?;
         }
         if let Some(e) = energy {
@@ -2041,11 +2057,20 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
 
     let metadata = PyDict::new(py);
     metadata.set_item(meta::PBC, ase_atoms.getattr("pbc")?.call_method0("tolist")?)?;
-    metadata.set_item(meta::LATTICE_VECTORS, ase_atoms.getattr("cell")?.call_method0("tolist")?)?;
-    metadata.set_item(meta::UNITS, [
-        ("length", "angstrom"), ("energy", "eV"), ("mass", "amu"),
-        ("time", crate::units::NATURAL_TIME_UNIT),
-    ].into_py_dict(py)?)?;
+    metadata.set_item(
+        meta::LATTICE_VECTORS,
+        ase_atoms.getattr("cell")?.call_method0("tolist")?,
+    )?;
+    metadata.set_item(
+        meta::UNITS,
+        [
+            ("length", "angstrom"),
+            ("energy", "eV"),
+            ("mass", "amu"),
+            ("time", crate::units::NATURAL_TIME_UNIT),
+        ]
+        .into_py_dict(py)?,
+    )?;
     Ok(PyConFrame {
         cell,
         angles,
