@@ -1,0 +1,63 @@
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{One restart frame through each writer and reader.
+The frame is the Pt(100) slab with one adatom: the bottom layer is held on every axis, the adatom is held in \(z\), ids are not the row order, and velocities are in the natural unit.
+R1 to R4 are measured on the round trip.
+``Kept'' means the field came back.
+``Convention'' means it came back only because writer and reader share one library's column name or internal unit, which the format does not define.
+``Fixed by format'' means the format's own definition sets the unit without writing it in the file.
+R4 gives the largest coordinate change in \AA{} when the coordinates are not bit-identical.
+Periodicity is the slab's \(xy\)-periodic, \(z\)-open flags after the read.
+R5 is the version rule in the format's published definition.
+``Error'' rows failed before any field could be compared; the text gives the failure.}
+\label{tab:survey}
+\setlength{\tabcolsep}{2.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllllllll@{}}
+\toprule
+Format & Writer & Reader & R1 mask & R2 id & R3 unit & R4 coordinates & Periodicity & R5 version \\
+\midrule
+CON 3.1 & readcon-core & readcon-core & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & readcon-core & ASE eon reader & error & error & error & error & error & major.minor \\
+CON 3.1, coordinates only & readcon-core & ASE eon reader & full freeze & lost & lost & exact & none & major.minor \\
+legacy CON & ASE eon writer & readcon-core & error & error & error & error & error & none \\
+extended XYZ & ASE & ASE & convention & convention & convention & \(4.7\times10^{-9}\) & kept & none \\
+extended XYZ & ASE & chemfiles & lost & convention & lost & \(4.7\times10^{-9}\) & not returned & none \\
+extended XYZ & ASE & MDAnalysis & lost & lost & lost & \(2.2\times10^{-7}\) & not returned & none \\
+extended XYZ & chemfiles & ASE & lost & lost & lost & \(4.9\times10^{-6}\) & all periodic & none \\
+ASE trajectory & ASE & ASE & kept & lost & convention & exact & kept & code only \\
+POSCAR & ASE & ASE & changed & lost & fixed by format & \(4.5\times10^{-17}\) & all periodic & none \\
+H5MD & MDAnalysis & MDAnalysis & lost & lost & declared & \(2.2\times10^{-7}\) & all periodic & major.minor \\
+CON 3.1 & Python & Python & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Python & C & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Python & C++ & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Python & Fortran & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Python & Julia & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C & Python & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C & C & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C & C++ & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C & Fortran & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C & Julia & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C++ & Python & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C++ & C & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C++ & C++ & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C++ & Fortran & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & C++ & Julia & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Fortran & Python & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Fortran & C & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Fortran & C++ & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Fortran & Fortran & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Fortran & Julia & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Julia & Python & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Julia & C & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Julia & C++ & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Julia & Fortran & kept & kept & declared & exact & kept & major.minor \\
+CON 3.1 & Julia & Julia & kept & kept & declared & exact & kept & major.minor \\
+H5MD & MDAnalysis & MDAnalysis & lost & lost & declared & \(2.2\times10^{-7}\) & kept & major.minor \\
+H5MD & MDAnalysis & h5py & by convention & kept & declared & \(2.2\times10^{-7}\) & kept & major.minor \\
+H5MD & h5py & h5py & by convention & kept & declared & exact & kept & major.minor \\
+H5MD & h5py & MDAnalysis & lost & lost & declared & \(2.2\times10^{-7}\) & kept & major.minor \\
+\bottomrule
+\end{tabular}}
+\end{table}
