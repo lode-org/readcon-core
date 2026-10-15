@@ -82,7 +82,8 @@ pub fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::erro
         Compression::Gzip => {
             // Re-open and decompress the entire file
             let file = std::fs::File::open(path)?;
-            let mut decoder = flate2::read::GzDecoder::new(file);
+            // Every gzip member, in order (CON-compress.1, D16).
+            let mut decoder = flate2::read::MultiGzDecoder::new(file);
             let mut contents = String::new();
             decoder.read_to_string(&mut contents)?;
             Ok(FileContents::Owned(contents))
@@ -129,6 +130,15 @@ impl FileContents {
         match self {
             FileContents::Owned(s) => Ok(s.as_str()),
             FileContents::Mapped(m) => std::str::from_utf8(m),
+        }
+    }
+
+    /// Like [`Self::as_str`], but validates mapped files in newline-aligned
+    /// slices (in parallel with the `parallel` feature).
+    pub fn as_str_sliced(&self) -> Result<&str, std::str::Utf8Error> {
+        match self {
+            FileContents::Owned(s) => Ok(s.as_str()),
+            FileContents::Mapped(m) => crate::frame_index::validate_utf8_sliced(m),
         }
     }
 }

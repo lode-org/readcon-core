@@ -55,6 +55,24 @@ clause = "Per-direction constraints (column 4)"
 expect_fixed = [true, false, true]
 notes = "Spec 2+ column 4 value 5 is x+z."
 
+[[valid]]
+id = "zero-atom"
+path = "valid/zero_atom.con"
+clause = "legal zero-atom frame"
+notes = "Type count 0 with whitespace lines 8 and 9."
+
+[[valid]]
+id = "zero-atom-eof"
+path = "valid/zero_atom_eof.con"
+clause = "legal zero-atom frame"
+notes = "Type count 0 at end of file with lines 8 and 9 absent."
+
+[[valid]]
+id = "zero-atom-then-frame"
+path = "valid/zero_atom_then_frame.con"
+clause = "legal zero-atom frame"
+notes = "A zero-atom frame with lines 8 and 9, then one normal frame."
+
 [[invalid]]
 id = "missing-spec-version"
 path = "invalid/missing_spec_version.con"
@@ -66,28 +84,28 @@ notes = "JSON object on line 2 without con_spec_version."
 id = "v3-missing-units"
 path = "invalid/v3_missing_units.con"
 clause = "Units (required)"
-error = "ValidationError"
+error = "InvalidUnits"
 notes = "con_spec_version 3 without units."
 
 [[invalid]]
 id = "v3-bad-units"
 path = "invalid/v3_bad_units.con"
 clause = "Units (required)"
-error = "ValidationError"
+error = "InvalidUnits"
 notes = "v3 units with swapped length/energy dimensions."
 
 [[invalid]]
 id = "column-4-out-of-range"
 path = "invalid/column4_out_of_range.con"
 clause = "Per-direction constraints (column 4)"
-error = "ValidationError"
-notes = "validate=true rejects column 4 value 8 (outside 0-7)."
+error = "InvalidFixedFlag"
+notes = "column 4 value 8 is InvalidFixedFlag in every mode, including validate=true."
 
 [[invalid]]
 id = "unsupported-spec-version"
 path = "invalid/unsupported_spec_version.con"
 clause = "Line 2: Metadata"
-error = "UnsupportedSpecVersion"
+error = "UnsupportedVersion"
 notes = "con_spec_version 4 exceeds CON_SPEC_VERSION."
 
 [[invalid]]
@@ -103,3 +121,10 @@ path = "invalid/validate_true_missing_sections.con"
 clause = "Validation mode"
 error = "InvalidMetadataJson"
 notes = "validate=true requires a sections array even if empty."
+
+[[invalid]]
+id = "per-type-zero"
+path = "invalid/per_type_zero.con"
+clause = "per-type count of 0 is InvalidCount"
+error = "InvalidCount"
+notes = "Type count 2 with a per-type count of 0."

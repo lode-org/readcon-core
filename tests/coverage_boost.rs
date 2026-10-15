@@ -49,6 +49,11 @@ fn parse_error_display_and_from_all_variants() {
             found_mass: 2.014,
             atom_index: 1,
         },
+        ParseError::NonFiniteValue("nan".into()),
+        ParseError::InvalidFixedFlag("8".into()),
+        ParseError::InvalidCount("0".into()),
+        ParseError::InvalidUnits("time".into()),
+        ParseError::UnsupportedVersion(0),
     ];
     for e in &variants {
         let s = e.to_string();
@@ -426,7 +431,7 @@ fn project_storage_displacements_section() {
     assert_eq!(frame.displacements.kind(), ElementKind::Float32);
     assert_eq!(frame.displacements.nrows(), 4);
     frame.sync_atom_data_from_arrays();
-    assert_eq!(frame.atom_data[2].displacement, Some([0.125, -0.25, 0.0]));
+    assert_eq!(frame.atom_data[2].displacement(), Some([0.125, -0.25, 0.0]));
 }
 
 #[test]
@@ -449,7 +454,7 @@ fn project_storage_spreads_section() {
     assert_eq!(frame.spreads.kind(), ElementKind::Float32);
     assert_eq!(frame.spreads.nrows(), 4);
     frame.sync_atom_data_from_arrays();
-    assert_eq!(frame.atom_data[2].spread, Some([0.125, 0.25, 0.0]));
+    assert_eq!(frame.atom_data[2].spread(), Some([0.125, 0.25, 0.0]));
 }
 
 #[test]

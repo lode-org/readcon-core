@@ -75,7 +75,7 @@ def test_python_matches_golden_or_rejects(case):
             readcon.read_con_string(body)
         return
     frames = readcon.read_con_string(body)
-    assert len(frames) == 1
+    assert len(frames) >= 1
     frame = frames[0]
     golden = json.loads((CORPUS / "golden" / f"{case['id']}.json").read_text())
     assert golden["id"] == case["id"]

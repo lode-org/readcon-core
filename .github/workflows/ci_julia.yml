@@ -2,7 +2,11 @@ name: Julia ReadCon
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
     paths:
       - 'julia/**'
       - 'src/ffi.rs'
@@ -27,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: julia-actions/setup-julia@v2
+      - uses: julia-actions/setup-julia@v3
         with:
           version: '1.10'
       - name: Build libreadcon_core

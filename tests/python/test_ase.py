@@ -268,3 +268,60 @@ class TestAseConstraints:
             [False, True, False],
             [True, True, True],
         ]
+
+
+class TestAseSinglePointResults:
+    """Stored energy and forces reach ASE as calculator results."""
+
+    @pytest.mark.parametrize(
+        "fname", ["tiny_cuh2_forces.con", "tiny_cuh2_vel_forces.con"]
+    )
+    def test_to_ase_attaches_forces_and_energy(self, fname):
+        frame = readcon.read_con(_resource(fname))[0]
+        atoms = frame.to_ase()
+        expected = np.array([[a.fx, a.fy, a.fz] for a in frame.atoms])
+        np.testing.assert_array_equal(
+            atoms.get_forces(apply_constraint=False), expected
+        )
+        if frame.energy is not None and not np.isnan(frame.energy):
+            assert atoms.get_potential_energy() == frame.energy
+
+
+class TestRestartDefects:
+    """Regressions for defects found while resuming saddle searches."""
+
+    def test_from_ase_repeated_tags_not_used_as_ids(self):
+        from ase.build import fcc100
+
+        slab = fcc100("Pt", (2, 2, 3), vacuum=5.0)
+        assert len(set(slab.get_tags())) < len(slab)
+        ids = [a.atom_id for a in readcon.ConFrame.from_ase(slab).atoms]
+        assert ids == list(range(len(slab)))
+
+    def test_from_ase_distinct_tags_still_used_as_ids(self):
+        atoms = ase.Atoms("H3", positions=np.eye(3), cell=[5, 5, 5])
+        atoms.set_tags([7, 3, 5])
+        ids = [a.atom_id for a in readcon.ConFrame.from_ase(atoms).atoms]
+        assert ids == [7, 3, 5]
+
+    def test_multi_frame_empty_line1_round_trip(self, tmp_path):
+        atoms = ase.Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]], cell=[8, 8, 8])
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert frame.prebox_header[0] == ""
+        path = tmp_path / "band.con"
+        readcon.write_con(str(path), [frame, frame, frame])
+        assert len(readcon.read_con(str(path))) == 3
+
+
+class TestLegacyVelocityLabel:
+    """A 3.0 file's time label is ignored on read (CON-units.9)."""
+
+    def test_v30_fs_label_rewritten_as_natural(self, tmp_path):
+        src = readcon.read_con(_resource("v30_fs_label.convel"))[0]
+        out = tmp_path / "out.convel"
+        readcon.write_con(str(out), [src])
+        header = out.read_text().splitlines()[1]
+        assert '"con_spec_minor":1' in header
+        assert '"time":"fs"' not in header
+        again = readcon.read_con(str(out))[0]
+        assert again.atoms[0].vx == pytest.approx(src.atoms[0].vx, rel=0, abs=0)

@@ -3,7 +3,7 @@ use crate::helpers::symbol_to_atomic_number;
 use crate::types::{
     AtomDatum, ConFrame, FrameHeader, PreboxHeader, SECTION_CHARGES, SECTION_DISPLACEMENTS,
     SECTION_ENERGIES, SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS,
-    SECTION_VELOCITIES, decode_fixed_bitmask_for_spec, meta,
+    SECTION_VELOCITIES, meta,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -17,6 +17,32 @@ use std::sync::Arc;
 pub trait LineStream<'a> {
     fn next_line(&mut self) -> Option<&'a str>;
     fn peek_line(&mut self) -> Option<&'a str>;
+    /// True when every remaining line, including the current peek, is
+    /// empty or whitespace. Default is false so a one-line peek cannot
+    /// hide a following section.
+    fn remainder_is_whitespace(&mut self) -> bool {
+        false
+    }
+    /// With a blank line peeked, true unless the stream can see that the
+    /// line two past the blank is not a `Velocities of Component` label.
+    /// Default is true, which keeps the legacy blank-separator rule.
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        true
+    }
+
+    /// One coordinate row, fused with the line scan when the stream can do it.
+    ///
+    /// The default pulls a `&str` line. [`crate::iterators::MemchrLines`]
+    /// parses the row directly from the byte cursor so tokenize and numeric
+    /// parse are one pass.
+    fn next_coord_row(
+        &mut self,
+        spec_version: u32,
+        default_id: u64,
+    ) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+        let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
+        parse_coord_row(line, spec_version, default_id)
+    }
 }
 
 impl<'a, I> LineStream<'a> for Peekable<I>
@@ -61,28 +87,26 @@ pub fn parse_line_of_range_f64_stack(
         if i >= n {
             break;
         }
-        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).map_err(|_| {
-            // Best-effort token for the error message (up to next whitespace).
-            let end = bytes[i..]
-                .iter()
-                .position(|b| b.is_ascii_whitespace())
-                .map(|k| i + k)
-                .unwrap_or(n);
-            let token = String::from_utf8_lossy(&bytes[i..end]);
-            ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
-        })?;
+        let end = bytes[i..]
+            .iter()
+            .position(|b| b.is_ascii_whitespace())
+            .map(|k| i + k)
+            .unwrap_or(n);
+        let token = std::str::from_utf8(&bytes[i..end]).unwrap_or("");
+        if is_nonfinite_spelling(token) {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
+        }
+        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..])
+            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
         let next = i + consumed;
         // Reject partial tokens like "1.2abc" (must end at whitespace or EOS).
-        if next < n && !bytes[next].is_ascii_whitespace() {
-            let end = bytes[i..]
-                .iter()
-                .position(|b| b.is_ascii_whitespace())
-                .map(|k| i + k)
-                .unwrap_or(n);
-            let token = String::from_utf8_lossy(&bytes[i..end]);
+        if next != end {
             return Err(ParseError::InvalidNumberFormat(format!(
                 "invalid float: {token}"
             )));
+        }
+        if !val.is_finite() {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
         }
         out[found] = val;
         found += 1;
@@ -131,9 +155,7 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
     }
     let mut values = Vec::with_capacity(n);
     for token in line.split_ascii_whitespace() {
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-        values.push(val);
+        values.push(parse_finite_float_token(token)?);
     }
     if values.len() == n {
         Ok(values)
@@ -164,9 +186,7 @@ pub fn parse_line_of_range_f64(
     }
     let mut values = Vec::with_capacity(max);
     for token in line.split_ascii_whitespace() {
-        let val: f64 = fast_float2::parse(token)
-            .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
-        values.push(val);
+        values.push(parse_finite_float_token(token)?);
     }
     if values.len() < min || values.len() > max {
         return Err(ParseError::InvalidVectorLength {
@@ -179,6 +199,667 @@ pub fn parse_line_of_range_f64(
         values.push(defaults[idx]);
     }
     Ok(values)
+}
+
+/// CON-num.1 spellings. A leading sign is optional. Case is ignored.
+/// Digit and dot tokens return before any letter compare so the atom
+/// hot path does not allocate.
+fn is_nonfinite_spelling(token: &str) -> bool {
+    let rest = token
+        .strip_prefix('+')
+        .or_else(|| token.strip_prefix('-'))
+        .unwrap_or(token);
+    match rest.as_bytes().first() {
+        Some(b) if b.is_ascii_digit() || *b == b'.' => return false,
+        None => return false,
+        _ => {}
+    }
+    rest.eq_ignore_ascii_case("nan")
+        || rest.eq_ignore_ascii_case("inf")
+        || rest.eq_ignore_ascii_case("infinity")
+}
+
+fn parse_finite_float_token(token: &str) -> Result<f64, ParseError> {
+    if is_nonfinite_spelling(token) {
+        return Err(ParseError::NonFiniteValue(token.to_string()));
+    }
+    let (val, consumed) = fast_float2::parse_partial::<f64, _>(token.as_bytes())
+        .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
+    if consumed != token.len() {
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid float: {token}"
+        )));
+    }
+    if !val.is_finite() {
+        return Err(ParseError::NonFiniteValue(token.to_string()));
+    }
+    Ok(val)
+}
+
+fn skip_ascii_ws(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+fn take_token(line: &str, i: usize) -> Option<(&str, usize)> {
+    let bytes = line.as_bytes();
+    if i >= bytes.len() {
+        return None;
+    }
+    let mut j = i;
+    while j < bytes.len() && !bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    Some((&line[i..j], j))
+}
+
+/// Column 4. A sign, a decimal point, or a value outside the spec's set
+/// is `InvalidFixedFlag` in every mode (CON-mask.1, CON-mask.5, D8).
+fn parse_fixed_flag(token: &str, spec_version: u32) -> Result<[bool; 3], ParseError> {
+    let bad = || {
+        ParseError::InvalidFixedFlag(format!(
+            "column 4 flag {token:?} is not a legal integer for spec {spec_version}"
+        ))
+    };
+    if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(bad());
+    }
+    let val: u64 = token.parse::<u64>().map_err(|_| bad())?;
+    if spec_version < 2 {
+        return match val {
+            0 => Ok([false, false, false]),
+            1 => Ok([true, true, true]),
+            _ => Err(bad()),
+        };
+    }
+    if val > 7 {
+        return Err(bad());
+    }
+    let v = val as u8;
+    Ok([v & 1 != 0, v & 2 != 0, v & 4 != 0])
+}
+
+/// Column 5. Digits only, parsed as `u64`, never through `f64` (CON-id.1, D9).
+/// A sign or a decimal point is `InvalidNumberFormat` at the token level.
+fn parse_atom_id_token(token: &str) -> Result<u64, ParseError> {
+    if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid integer: {token}"
+        )));
+    }
+    token.parse::<u64>().map_err(|_| {
+        ParseError::InvalidNumberFormat(format!("integer out of range 0..=2^64-1: {token}"))
+    })
+}
+
+/// Coordinate row: three finite floats, an integer flag, and an optional id.
+/// Four columns take `default_id`, the 0-based position in the frame
+/// (CON-id.9). Any other width is `InvalidVectorLength` (CON-num.9).
+fn parse_coord_row(
+    line: &str,
+    spec_version: u32,
+    default_id: u64,
+) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+    parse_vector_row(line, spec_version, Some(default_id))
+}
+
+/// Vector section row. The flag and id columns are required (exact width 5).
+fn parse_vector_section_row(
+    line: &str,
+    spec_version: u32,
+) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+    parse_vector_row(line, spec_version, None)
+}
+
+fn parse_vector_row(
+    line: &str,
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+    let (row, end) = parse_coord_fields(line.as_bytes(), 0, spec_version, default_id)?;
+    if end != line.len() {
+        let found = 5 + count_tokens_on_line(line.as_bytes(), end);
+        return Err(ParseError::InvalidVectorLength { expected: 5, found });
+    }
+    Ok(row)
+}
+
+/// Field separator inside a coordinate row. Newline ends the row.
+#[inline(always)]
+fn is_field_ws(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\r' | 0x0c)
+}
+
+#[inline(always)]
+fn skip_field_ws(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && is_field_ws(bytes[i]) {
+        i += 1;
+    }
+    i
+}
+
+fn token_on_line(bytes: &[u8], i: usize) -> String {
+    let mut j = i;
+    while j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+        j += 1;
+    }
+    String::from_utf8_lossy(&bytes[i..j]).into_owned()
+}
+
+fn count_tokens_on_line(bytes: &[u8], mut i: usize) -> usize {
+    let mut n = 0usize;
+    loop {
+        i = skip_field_ws(bytes, i);
+        if i >= bytes.len() || bytes[i] == b'\n' {
+            break;
+        }
+        n += 1;
+        while i < bytes.len() && !is_field_ws(bytes[i]) && bytes[i] != b'\n' {
+            i += 1;
+        }
+    }
+    n
+}
+
+/// Invalid UTF-8 in a numeric row, otherwise a normal number-format error.
+fn utf8_or_number(bytes: &[u8], line_start: usize, i: usize) -> ParseError {
+    let end = bytes[line_start..]
+        .iter()
+        .position(|b| *b == b'\n')
+        .map(|p| line_start + p)
+        .unwrap_or(bytes.len());
+    if std::str::from_utf8(&bytes[line_start..end]).is_err() {
+        return ParseError::ValidationError("invalid UTF-8".into());
+    }
+    ParseError::InvalidNumberFormat(format!("invalid float: {}", token_on_line(bytes, i)))
+}
+
+#[inline(always)]
+fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize), ParseError> {
+    if i >= bytes.len() || bytes[i] == b'\n' {
+        return Err(ParseError::InvalidVectorLength {
+            expected: 5,
+            found: 0,
+        });
+    }
+    if bytes[i] >= 0x80 {
+        return Err(utf8_or_number(bytes, line_start, i));
+    }
+    if looks_like_nonfinite(bytes, i) {
+        let token = token_on_line(bytes, i);
+        if is_nonfinite_spelling(&token) {
+            return Err(ParseError::NonFiniteValue(token));
+        }
+    }
+    let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).map_err(|_| {
+        ParseError::InvalidNumberFormat(format!("invalid float: {}", token_on_line(bytes, i)))
+    })?;
+    let next = i + consumed;
+    let boundary = next >= bytes.len() || is_field_ws(bytes[next]) || bytes[next] == b'\n';
+    if !boundary || !val.is_finite() {
+        let token = token_on_line(bytes, i);
+        if is_nonfinite_spelling(&token) || !val.is_finite() {
+            return Err(ParseError::NonFiniteValue(token));
+        }
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid float: {token}"
+        )));
+    }
+    Ok((val, next))
+}
+
+#[inline(always)]
+fn parse_flag_at(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+) -> Result<([bool; 3], usize), ParseError> {
+    if i >= bytes.len() || bytes[i] == b'\n' {
+        return Err(ParseError::InvalidVectorLength {
+            expected: 5,
+            found: 3,
+        });
+    }
+    let bad = || {
+        ParseError::InvalidFixedFlag(format!(
+            "column 4 flag {:?} is not a legal integer for spec {spec_version}",
+            token_on_line(bytes, i)
+        ))
+    };
+    if !bytes[i].is_ascii_digit() {
+        return Err(bad());
+    }
+    let mut j = i;
+    let mut val: u64 = 0;
+    while j < bytes.len() && bytes[j].is_ascii_digit() {
+        let d = u64::from(bytes[j] - b'0');
+        val = val
+            .checked_mul(10)
+            .and_then(|v| v.checked_add(d))
+            .ok_or_else(bad)?;
+        j += 1;
+    }
+    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+        return Err(bad());
+    }
+    let fixed = if spec_version < 2 {
+        match val {
+            0 => [false, false, false],
+            1 => [true, true, true],
+            _ => return Err(bad()),
+        }
+    } else if val <= 7 {
+        let v = val as u8;
+        [v & 1 != 0, v & 2 != 0, v & 4 != 0]
+    } else {
+        return Err(bad());
+    };
+    Ok((fixed, j))
+}
+
+#[inline(always)]
+fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
+    if i >= bytes.len() || bytes[i] == b'\n' || !bytes[i].is_ascii_digit() {
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid integer: {}",
+            token_on_line(bytes, i)
+        )));
+    }
+    let mut j = i;
+    let mut val: u64 = 0;
+    while j < bytes.len() && bytes[j].is_ascii_digit() {
+        let d = u64::from(bytes[j] - b'0');
+        val = val
+            .checked_mul(10)
+            .and_then(|v| v.checked_add(d))
+            .ok_or_else(|| {
+                ParseError::InvalidNumberFormat(format!(
+                    "integer out of range 0..=2^64-1: {}",
+                    token_on_line(bytes, i)
+                ))
+            })?;
+        j += 1;
+    }
+    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid integer: {}",
+            token_on_line(bytes, i)
+        )));
+    }
+    Ok((val, j))
+}
+
+/// One coordinate or vector row starting at `i`.
+///
+/// Stops at newline or end of `bytes` and returns the index just past the
+/// row (after the newline, when one was present). Floats, the flag, and the
+/// id are parsed in that single scan. The success path does not build error
+/// strings; those stay on the cold fallback.
+#[inline(always)]
+fn parse_coord_fields(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+    if let Some(parsed) = parse_coord_fields_fast(bytes, i, spec_version, default_id) {
+        return Ok(parsed);
+    }
+    parse_coord_fields_detailed(bytes, i, spec_version, default_id)
+}
+
+/// Common coordinate row: three finite decimals, a small flag, an optional id.
+#[inline(always)]
+fn parse_coord_fields_fast(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Option<(([f64; 3], [bool; 3], u64), usize)> {
+    let mut i = skip_field_ws(bytes, i);
+    let mut xyz = [0.0f64; 3];
+    for slot in 0..3 {
+        if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
+            return None;
+        }
+        if looks_like_nonfinite(bytes, i) {
+            return None;
+        }
+        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).ok()?;
+        if !val.is_finite() {
+            return None;
+        }
+        let next = i + consumed;
+        if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
+            return None;
+        }
+        xyz[slot] = val;
+        i = skip_field_ws(bytes, next);
+    }
+    let (fixed, next) = parse_flag_fast(bytes, i, spec_version)?;
+    i = skip_field_ws(bytes, next);
+    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+        (default_id?, i)
+    } else {
+        parse_u64_fast(bytes, i)?
+    };
+    i = skip_field_ws(bytes, next);
+    if i < bytes.len() && bytes[i] != b'\n' {
+        return None;
+    }
+    if i < bytes.len() && bytes[i] == b'\n' {
+        i += 1;
+    }
+    Some(((xyz, fixed, atom_id), i))
+}
+
+#[inline(always)]
+fn parse_u64_fast(bytes: &[u8], i: usize) -> Option<(u64, usize)> {
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return None;
+    }
+    let mut j = i;
+    let mut val: u64 = 0;
+    let mut digits = 0u32;
+    while j < bytes.len() && bytes[j].is_ascii_digit() {
+        digits += 1;
+        // 19 digits can overflow u64; the detailed parser reports that.
+        if digits > 18 {
+            return None;
+        }
+        val = val * 10 + u64::from(bytes[j] - b'0');
+        j += 1;
+    }
+    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+        return None;
+    }
+    Some((val, j))
+}
+
+#[inline(always)]
+fn parse_flag_fast(bytes: &[u8], i: usize, spec_version: u32) -> Option<([bool; 3], usize)> {
+    let (val, j) = parse_u64_fast(bytes, i)?;
+    let fixed = if spec_version < 2 {
+        match val {
+            0 => [false, false, false],
+            1 => [true, true, true],
+            _ => return None,
+        }
+    } else if val <= 7 {
+        let v = val as u8;
+        [v & 1 != 0, v & 2 != 0, v & 4 != 0]
+    } else {
+        return None;
+    };
+    Some((fixed, j))
+}
+
+#[cold]
+#[inline(never)]
+fn parse_coord_fields_detailed(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+    let line_start = i;
+    let mut i = skip_field_ws(bytes, i);
+    if i >= bytes.len() || bytes[i] == b'\n' {
+        return Err(ParseError::InvalidVectorLength {
+            expected: 5,
+            found: 0,
+        });
+    }
+    let mut xyz = [0.0f64; 3];
+    for slot in 0..3 {
+        if i >= bytes.len() || bytes[i] == b'\n' {
+            return Err(ParseError::InvalidVectorLength {
+                expected: 5,
+                found: slot,
+            });
+        }
+        if bytes[i] >= 0x80 {
+            return Err(utf8_or_number(bytes, line_start, i));
+        }
+        let (val, next) = parse_f64_at(bytes, i, line_start)?;
+        xyz[slot] = val;
+        i = skip_field_ws(bytes, next);
+    }
+    let (fixed, next) = parse_flag_at(bytes, i, spec_version)?;
+    i = skip_field_ws(bytes, next);
+    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+        (
+            default_id.ok_or(ParseError::InvalidVectorLength {
+                expected: 5,
+                found: 4,
+            })?,
+            i,
+        )
+    } else {
+        parse_id_at(bytes, i)?
+    };
+    i = skip_field_ws(bytes, next);
+    if i < bytes.len() && bytes[i] != b'\n' {
+        let found = 5 + count_tokens_on_line(bytes, i);
+        return Err(ParseError::InvalidVectorLength { expected: 5, found });
+    }
+    if i < bytes.len() && bytes[i] == b'\n' {
+        i += 1;
+    }
+    Ok(((xyz, fixed, atom_id), i))
+}
+
+/// Coordinate row at byte offset `i` in a multi-line buffer.
+///
+/// The returned index is the start of the next line. ASCII rows are valid
+/// UTF-8 without a separate scan; a non-ASCII byte is checked only then.
+pub(crate) fn parse_coord_row_at(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: u64,
+) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+    if i >= bytes.len() {
+        return Err(ParseError::IncompleteFrame);
+    }
+    parse_coord_fields(bytes, i, spec_version, Some(default_id))
+}
+
+/// Scalar section row: one finite float, a flag, and an id. Exact width 3.
+fn parse_scalar_section_row(
+    line: &str,
+    spec_version: u32,
+) -> Result<(f64, [bool; 3], u64), ParseError> {
+    let bytes = line.as_bytes();
+    let i = skip_ascii_ws(bytes, 0);
+    let (value, i) = parse_finite_at(line, i)?;
+    let i = skip_ascii_ws(bytes, i);
+    let (flag_tok, i) = take_token(line, i).ok_or(ParseError::InvalidVectorLength {
+        expected: 3,
+        found: 1,
+    })?;
+    let fixed = parse_fixed_flag(flag_tok, spec_version)?;
+    let i = skip_ascii_ws(bytes, i);
+    let (id_tok, i) = take_token(line, i).ok_or(ParseError::InvalidVectorLength {
+        expected: 3,
+        found: 2,
+    })?;
+    let atom_id = parse_atom_id_token(id_tok)?;
+    let i = skip_ascii_ws(bytes, i);
+    if i < bytes.len() {
+        let found = 3 + line[i..].split_ascii_whitespace().count();
+        return Err(ParseError::InvalidVectorLength { expected: 3, found });
+    }
+    Ok((value, fixed, atom_id))
+}
+
+fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
+    let bytes = line.as_bytes();
+    if i >= bytes.len() {
+        return Err(ParseError::InvalidVectorLength {
+            expected: 3,
+            found: 0,
+        });
+    }
+    // "infinity" parses as the prefix "inf" in fast_float2. Name that
+    // spelling before the numeric kernel so the leftover is not a format error.
+    if looks_like_nonfinite(bytes, i) {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        if is_nonfinite_spelling(token) {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
+        }
+    }
+    let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).map_err(|_| {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
+    })?;
+    let next = i + consumed;
+    let boundary = next == bytes.len() || bytes[next].is_ascii_whitespace();
+    if !boundary || !val.is_finite() {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        if is_nonfinite_spelling(token) || !val.is_finite() {
+            return Err(ParseError::NonFiniteValue(token.to_string()));
+        }
+        return Err(ParseError::InvalidNumberFormat(format!(
+            "invalid float: {token}"
+        )));
+    }
+    Ok((val, next))
+}
+
+/// True when the token may be a non-finite spelling. Digit and dot
+/// tokens, the common atom-line case, are false after one byte.
+fn looks_like_nonfinite(bytes: &[u8], i: usize) -> bool {
+    let mut j = i;
+    if bytes[j] == b'+' || bytes[j] == b'-' {
+        j += 1;
+        if j >= bytes.len() {
+            return false;
+        }
+    }
+    let b = bytes[j];
+    !b.is_ascii_digit() && b != b'.'
+}
+
+/// Case-insensitive, after collapsing each run of spaces (CON-file.5, D17).
+fn labels_equal(found: &str, expected: &str) -> bool {
+    let mut found_words = found.split_ascii_whitespace();
+    let mut expected_words = expected.split_ascii_whitespace();
+    loop {
+        match (found_words.next(), expected_words.next()) {
+            (Some(a), Some(b)) => {
+                if !a.eq_ignore_ascii_case(b) {
+                    return false;
+                }
+            }
+            (None, None) => return true,
+            _ => return false,
+        }
+    }
+}
+
+/// True when `line`, after the same folding, starts with every word of `prefix`.
+fn label_has_prefix(line: &str, prefix: &str) -> bool {
+    let mut found_words = line.split_ascii_whitespace();
+    for word in prefix.split_ascii_whitespace() {
+        match found_words.next() {
+            Some(got) if got.eq_ignore_ascii_case(word) => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn token_count(line: &str) -> usize {
+    line.split_ascii_whitespace().count()
+}
+
+fn json_u64(value: &Value) -> Option<u64> {
+    value.as_u64()
+}
+
+fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
+    let obj = value.as_object().ok_or_else(|| {
+        metadata_json_error("section_arity must be an object mapping section names to integers")
+    })?;
+    for (name, entry) in obj {
+        let n = json_u64(entry).ok_or_else(|| {
+            metadata_json_error(format!("section_arity.{name} must be an integer >= 1"))
+        })?;
+        if n < 1 {
+            return Err(ParseError::InvalidCount(format!(
+                "section_arity.{name} must be >= 1"
+            )));
+        }
+        // Reserved names have a fixed value-field count (CON-section.13).
+        if let Some(expect) = crate::types::reserved_section_value_arity(name)
+            && n != expect
+        {
+            return Err(ParseError::InvalidVectorLength {
+                expected: usize::try_from(expect).unwrap_or(usize::MAX),
+                found: usize::try_from(n).unwrap_or(usize::MAX),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Integer counts. A sign, a decimal point, or any other non-digit token
+/// is `InvalidCount` (CON-error.3). Zero is a legal token here. The caller
+/// rejects a per-type count of 0 when the type count is 1 or more (D4).
+pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
+    let mut values = Vec::with_capacity(n);
+    for token in line.split_ascii_whitespace() {
+        if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ParseError::InvalidCount(format!(
+                "count field is not an unsigned integer: {token}"
+            )));
+        }
+        let val: u64 = token.parse::<u64>().map_err(|_| {
+            ParseError::InvalidCount(format!("count field is out of range: {token}"))
+        })?;
+        let val = usize::try_from(val).map_err(|_| {
+            ParseError::InvalidCount(format!("count field is out of range: {token}"))
+        })?;
+        values.push(val);
+    }
+    if values.len() == n {
+        Ok(values)
+    } else {
+        Err(ParseError::InvalidVectorLength {
+            expected: n,
+            found: values.len(),
+        })
+    }
+}
+
+/// True when `line` has no tokens. Spaces and tabs count as empty.
+pub(crate) fn line_is_whitespace(line: &str) -> bool {
+    line.split_ascii_whitespace().next().is_none()
+}
+
+/// Lines 8 and 9 of a type count of 0.
+///
+/// A token on either line is `InvalidCount`. At end of file, a missing
+/// line is empty (CON-count.4), and that frame is not `IncompleteHeader`
+/// (CON-frame.3). Mid-file, both lines are required.
+pub(crate) fn read_zero_atom_tail<'a>(
+    mut next_line: impl FnMut() -> Option<&'a str>,
+) -> Result<(), ParseError> {
+    let bad = || {
+        ParseError::InvalidCount("a zero-atom frame requires whitespace-only lines 8 and 9".into())
+    };
+    match next_line() {
+        None => Ok(()),
+        Some(line) if line_is_whitespace(line) => match next_line() {
+            None => Ok(()),
+            Some(line) if line_is_whitespace(line) => Ok(()),
+            Some(_) => Err(bad()),
+        },
+        Some(_) => Err(bad()),
+    }
 }
 
 fn metadata_json_error(message: impl Into<String>) -> ParseError {
@@ -239,6 +920,14 @@ pub fn validate_metadata_schema(
     for (key, value) in json_obj {
         match key.as_str() {
             meta::CON_SPEC_VERSION | meta::SECTIONS | meta::VALIDATE => {}
+            meta::CON_SPEC_MINOR => {
+                if json_u64(value).is_none() {
+                    return Err(metadata_json_error(
+                        "con_spec_minor must be a JSON integer >= 0",
+                    ));
+                }
+            }
+            meta::SECTION_ARITY => validate_section_arity_value(value)?,
             meta::ENERGY
             | meta::TIME
             | meta::TIMESTEP
@@ -453,10 +1142,18 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
+    // CON-file.2: a leading BOM is rejected. It would sit on line 1.
+    if prebox1.starts_with('\u{feff}') {
+        return Err(ParseError::ValidationError(
+            "file begins with a byte-order mark".into(),
+        ));
+    }
     let prebox2_raw = lines.next().ok_or(ParseError::IncompleteHeader)?;
 
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
+    // One JSON object and nothing else (CON-line2.1). serde_json::from_str
+    // rejects trailing junk after the value.
     let trimmed = prebox2_raw.trim();
     let (spec_version, metadata, sections, validate, sections_declared) =
         if trimmed.starts_with('{') {
@@ -465,19 +1162,30 @@ pub fn parse_frame_header<'a>(
             let json_obj = json_val.as_object().ok_or_else(|| {
                 ParseError::InvalidMetadataJson("expected a JSON object".to_string())
             })?;
-            let ver = json_obj
+            let ver_value = json_obj
                 .get(meta::CON_SPEC_VERSION)
-                .and_then(|v| v.as_u64())
-                .ok_or(ParseError::MissingSpecVersion)? as u32;
-            if ver > crate::CON_SPEC_VERSION {
-                return Err(ParseError::UnsupportedSpecVersion(ver));
+                .ok_or(ParseError::MissingSpecVersion)?;
+            let ver = json_u64(ver_value).ok_or_else(|| {
+                ParseError::InvalidMetadataJson(
+                    "con_spec_version must be a JSON integer, the major version".into(),
+                )
+            })?;
+            if ver > u64::from(u32::MAX) {
+                return Err(ParseError::UnsupportedVersion(u32::MAX));
+            }
+            let ver = ver as u32;
+            // JSON majors 0 and 1 are UnsupportedVersion (CON-line2.5).
+            // An unknown major is UnsupportedVersion (CON-line2.6).
+            // Unknown minors of a known major are accepted (CON-line2.7, CON-status.1).
+            if ver == 0 || ver == 1 || ver > crate::CON_SPEC_VERSION {
+                return Err(ParseError::UnsupportedVersion(ver));
             }
             if ver >= 3 {
                 match json_obj.get(meta::UNITS) {
                     Some(u) => crate::units::validate_v3_units_metadata(u)
-                        .map_err(|e| ParseError::ValidationError(format!("v3 units: {e}")))?,
+                        .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?,
                     None => {
-                        return Err(ParseError::ValidationError(
+                        return Err(ParseError::InvalidUnits(
                         "con_spec_version >= 3 requires metadata \"units\" with length and energy"
                             .into(),
                     ));
@@ -495,6 +1203,18 @@ pub fn parse_frame_header<'a>(
             for (k, v) in json_obj {
                 match k.as_str() {
                     meta::CON_SPEC_VERSION => {}
+                    meta::CON_SPEC_MINOR => {
+                        if json_u64(v).is_none() {
+                            return Err(metadata_json_error(
+                                "con_spec_minor must be a JSON integer >= 0",
+                            ));
+                        }
+                        metadata.insert(k.clone(), v.clone());
+                    }
+                    meta::SECTION_ARITY => {
+                        validate_section_arity_value(v)?;
+                        metadata.insert(k.clone(), v.clone());
+                    }
                     meta::SECTIONS => {
                         sections_declared = true;
                         let arr = v.as_array().ok_or_else(|| {
@@ -544,18 +1264,31 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    let natm_types =
-        parse_line_of_n::<usize>(lines.next().ok_or(ParseError::IncompleteHeader)?, 1)?[0];
-    let natms_per_type = parse_line_of_n::<usize>(
-        lines.next().ok_or(ParseError::IncompleteHeader)?,
-        natm_types,
-    )?;
-    let masses_per_type = parse_line_of_n_f64(
-        lines.next().ok_or(ParseError::IncompleteHeader)?,
-        natm_types,
-    )?;
+    let natm_types_line = lines.next().ok_or(ParseError::IncompleteHeader)?;
+    let natm_types = parse_count_line(natm_types_line, 1)?[0];
+    // A type count of 0 is a zero-atom frame (CON-count.1, CON-count.4).
+    // A per-type count of 0 is InvalidCount only when the type count is >= 1.
+    let (natms_per_type, masses_per_type) = if natm_types == 0 {
+        read_zero_atom_tail(|| lines.next())?;
+        (Vec::new(), Vec::new())
+    } else {
+        let natms_per_type = parse_count_line(
+            lines.next().ok_or(ParseError::IncompleteHeader)?,
+            natm_types,
+        )?;
+        if natms_per_type.iter().any(|n| *n == 0) {
+            return Err(ParseError::InvalidCount(
+                "each per-type count must be >= 1".into(),
+            ));
+        }
+        let masses_per_type = parse_line_of_n_f64(
+            lines.next().ok_or(ParseError::IncompleteHeader)?,
+            natm_types,
+        )?;
+        (natms_per_type, masses_per_type)
+    };
     if validate {
-        validate_header_geometry(&boxl_vec, &angles_vec, natm_types, &natms_per_type)?;
+        validate_header_geometry(&boxl_vec, &angles_vec)?;
         validate_masses(&masses_per_type)?;
     }
     Ok(FrameHeader {
@@ -611,10 +1344,10 @@ pub fn parse_frame_header<'a>(
 ///12.011 1.008
 ///C
 ///Coordinates of Component 1
-///1.0 1.0 1.0 0.0 1
+///1.0 1.0 1.0 0 1
 ///H
 ///Coordinates of Component 2
-///2.0 2.0 2.0 0.0 2
+///2.0 2.0 2.0 0 2
 /// "#;
 ///
 /// let mut lines = frame_text.trim().lines();
@@ -628,99 +1361,104 @@ pub fn parse_frame_header<'a>(
 pub fn parse_single_frame<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<ConFrame, ParseError> {
+    let mut peekable = lines.peekable();
+    parse_single_frame_ls(&mut peekable)
+}
+
+/// Frame parse over a [`LineStream`].
+///
+/// Coordinate rows go through [`LineStream::next_coord_row`] so the memchr
+/// cursor can fuse the newline scan with numeric parse. Positions, ids, and
+/// flags land in flat buffers; [`AtomDatum`] values are built from those
+/// buffers afterwards (one `Vec` allocation, no per-atom heap traffic).
+pub(crate) fn parse_single_frame_ls<'a, L>(lines: &mut L) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
     let header = parse_frame_header(lines)?;
     let validate = header.strict_validation;
     let total_atoms: usize = header.natms_per_type.iter().sum();
-    let mut atom_data = Vec::with_capacity(total_atoms);
-    // SoA positions: default f64 fills a flat `Vec` then one Arc wrap (profile:
-    // per-row ArcArray mut checks were a real cost on multi-atom parse).
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
-    let mut pos_flat = if f64_positions {
-        vec![0.0f64; total_atoms.saturating_mul(3)]
-    } else {
-        Vec::new()
-    };
+    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
     let mut positions_other = if f64_positions {
         None
     } else {
         Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
+    let mut ids = Vec::with_capacity(total_atoms);
+    let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(total_atoms);
 
     let mut global_atom_idx: u64 = 0;
-    let mut atom_i = 0usize;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
-        // Allocate the per-component Arc<str> directly from the trimmed
-        // line; going through a String intermediate would add a second
-        // allocation and copy for no semantic gain.
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
         let symbol: Arc<str> = Arc::from(symbol_line.trim());
         let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
         if validate {
             validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
         }
-        for _ in 0..*num_atoms {
-            let coord_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
-            // Column 5 (atom_index) is optional; defaults to sequential index.
-            let defaults = [0.0, 0.0, 0.0, 0.0, global_atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(coord_line, 4, 5, &defaults, &mut vals)?;
-            let (fixed, atom_id) = if validate {
-                parse_identity_columns(coord_line, "coordinate", 3, 4, 5, header.spec_version)?
-            } else {
-                (
-                    decode_fixed_bitmask_for_spec(vals[3] as u8, header.spec_version),
-                    vals[4] as u64,
-                )
-            };
-            let xyz = [vals[0], vals[1], vals[2]];
-            if f64_positions {
-                let o = atom_i * 3;
-                pos_flat[o] = xyz[0];
-                pos_flat[o + 1] = xyz[1];
-                pos_flat[o + 2] = xyz[2];
-            } else if let Some(ref mut pos) = positions_other {
-                pos.set_f64_row(atom_i, xyz);
-            }
-            atom_data.push(AtomDatum {
-                // This is a cheap reference-count increment, not a full string clone.
-                symbol: Arc::clone(&symbol),
-                x: xyz[0],
-                y: xyz[1],
-                z: xyz[2],
-                fixed,
-                atom_id,
-                velocity: None,
-                force: None,
-                energy: None,
-                charge: None,
-                spin: None,
-                magmom: None,
-                displacement: None,
-                spread: None,
-            });
-            global_atom_idx += 1;
-            atom_i += 1;
-        }
+        global_atom_idx = ingest_coord_rows(
+            lines,
+            *num_atoms,
+            header.spec_version,
+            global_atom_idx,
+            &symbol,
+            &mut pos_flat,
+            &mut ids,
+            &mut positions_other,
+            &mut atom_data,
+        )?;
     }
     let positions = if f64_positions {
         FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat)
     } else {
         positions_other.expect("non-f64 positions allocated")
     };
-    // Sections still attach to AoS; assemble uses prefilled positions (no second pos pass).
-    Ok(crate::types::con_frame_from_atom_data_with_positions(
-        header, atom_data, positions,
+    Ok(crate::types::con_frame_coords_only_with_ids(
+        header, atom_data, positions, ids,
     ))
 }
 
-fn validate_header_geometry(
-    boxl: &[f64],
-    angles: &[f64],
-    natm_types: usize,
-    natms_per_type: &[usize],
-) -> Result<(), ParseError> {
+/// Parse `n` coordinate rows into flat SoA buffers.
+#[inline(always)]
+fn ingest_coord_rows<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    positions_other: &mut Option<crate::storage_dtype::FloatArray2>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        if let Some(pos) = positions_other.as_mut() {
+            pos.set_f64_row(ids.len(), xyz);
+        }
+        pos_flat.push(xyz[0]);
+        pos_flat.push(xyz[1]);
+        pos_flat.push(xyz[2]);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            Arc::clone(symbol),
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            fixed,
+            atom_id,
+        ));
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+fn validate_header_geometry(boxl: &[f64], angles: &[f64]) -> Result<(), ParseError> {
     if boxl
         .iter()
         .any(|length| !length.is_finite() || *length <= 0.0)
@@ -731,11 +1469,6 @@ fn validate_header_geometry(
         return Err(ParseError::ValidationError(
             "cell geometry must have positive lengths and angles between 0 and 180 degrees"
                 .to_string(),
-        ));
-    }
-    if natm_types == 0 || natms_per_type.contains(&0) {
-        return Err(ParseError::ValidationError(
-            "atom counts must contain at least one atom per component".to_string(),
         ));
     }
     Ok(())
@@ -759,7 +1492,7 @@ fn validate_coordinate_component(
     label: &str,
 ) -> Result<(), ParseError> {
     let expected_label = format!("Coordinates of Component {}", type_idx + 1);
-    if label.trim() != expected_label {
+    if !labels_equal(label, &expected_label) {
         return Err(ParseError::ValidationError(format!(
             "expected coordinate label {expected_label:?}, found {label:?}"
         )));
@@ -772,51 +1505,6 @@ fn validate_coordinate_component(
     Ok(())
 }
 
-/// Strict-validation parser for the per-row identity columns
-/// (fixed bitmask + atom_id) used by every section type.
-///
-/// `n_cols` is the total whitespace-separated column count expected on
-/// the row in strict mode, and `(fixed_idx, atom_id_idx)` are the
-/// 0-based positions of the fixed bitmask and atom_id columns inside
-/// that layout. Each section calls in with its own values:
-///
-/// - coordinates / velocities / forces: 5 cols, fixed=3, atom_id=4
-/// - energies: 3 cols, fixed=1, atom_id=2
-///
-/// String-based parsing on purpose: strict v2 mode rejects values that
-/// are not in the canonical integer form (e.g. `5.0` for a bitmask),
-/// which an f64 round-trip would silently accept.
-fn parse_identity_columns(
-    line: &str,
-    row_kind: &str,
-    fixed_idx: usize,
-    atom_id_idx: usize,
-    n_cols: usize,
-    spec_version: u32,
-) -> Result<([bool; 3], u64), ParseError> {
-    let columns = line.split_ascii_whitespace().collect::<Vec<_>>();
-    if columns.len() != n_cols {
-        return Err(ParseError::ValidationError(format!(
-            "{row_kind} rows require {n_cols} columns including fixed_flag and atom_id in validate mode"
-        )));
-    }
-    let fixed_flag = columns[fixed_idx].parse::<u8>().map_err(|_| {
-        ParseError::ValidationError(format!("{row_kind} fixed_flag must be an integer bitmask"))
-    })?;
-    if fixed_flag > 7 {
-        return Err(ParseError::ValidationError(format!(
-            "{row_kind} fixed_flag must be between 0 and 7"
-        )));
-    }
-    let atom_id = columns[atom_id_idx].parse::<u64>().map_err(|_| {
-        ParseError::ValidationError(format!("{row_kind} atom_id must be an integer"))
-    })?;
-    Ok((
-        decode_fixed_bitmask_for_spec(fixed_flag, spec_version),
-        atom_id,
-    ))
-}
-
 fn validate_section_component(
     section: &str,
     type_idx: usize,
@@ -827,7 +1515,7 @@ fn validate_section_component(
     atom_data: &[AtomDatum],
 ) -> Result<(), ParseError> {
     let expected_label = format!("{section} of Component {}", type_idx + 1);
-    if label.trim() != expected_label {
+    if !labels_equal(label, &expected_label) {
         return Err(ParseError::ValidationError(format!(
             "expected section label {expected_label:?}, found {label:?}"
         )));
@@ -885,6 +1573,83 @@ fn validate_section_atom_identity(
     Ok(())
 }
 
+/// Consume the single blank line that opens a section.
+///
+/// A blank line followed only by whitespace to EOF does not open a section
+/// (CON-frame.5). The lines stay in the stream.
+fn frame_minor(header: &FrameHeader) -> u64 {
+    header
+        .metadata
+        .get(meta::CON_SPEC_MINOR)
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+}
+
+fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
+    let obj = header.metadata.get(meta::SECTION_ARITY)?.as_object()?;
+    let n = obj.get(name)?.as_u64()?;
+    if n >= 1 { Some(n as usize) } else { None }
+}
+
+/// Skip one unknown section of a newer minor.
+///
+/// `arity` is the value-field count (CON-section.12). Each data row holds
+/// that many values, then the flag, and an optional id, so the row has
+/// `arity + 1` or `arity + 2` tokens (CON-section.14). The label is the
+/// section name under CON-file.5, then `of Component N` (CON-section.15).
+fn skip_unknown_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    name: &str,
+    arity: usize,
+) -> Result<(), ParseError> {
+    if !open_section(lines)? {
+        return Err(ParseError::IncompleteSection(name.to_string()));
+    }
+    let with_flag = arity.saturating_add(1);
+    let with_id = arity.saturating_add(2);
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        if lines.next_line().is_none() {
+            return Err(ParseError::IncompleteSection(name.to_string()));
+        }
+        let label = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(name.to_string()))?;
+        let expected = format!("{name} of Component {}", type_idx + 1);
+        if !labels_equal(label, &expected) {
+            return Err(ParseError::IncompleteSection(name.to_string()));
+        }
+        for _ in 0..num_atoms {
+            let row = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(name.to_string()))?;
+            let found = token_count(row);
+            if found != with_flag && found != with_id {
+                let expected = if found < with_flag {
+                    with_flag
+                } else {
+                    with_id
+                };
+                return Err(ParseError::InvalidVectorLength { expected, found });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn open_section<'a>(lines: &mut impl LineStream<'a>) -> Result<bool, ParseError> {
+    match lines.peek_line() {
+        Some(line) if line.trim().is_empty() => {
+            if lines.remainder_is_whitespace() {
+                return Ok(false);
+            }
+            lines.next_line();
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 /// Attempts to parse an optional velocity section following coordinate blocks.
 ///
 /// In `.convel` files, after all coordinate blocks there is a blank separator line
@@ -903,10 +1668,13 @@ pub fn parse_velocity_section<'a>(
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    // Peek at the next line to check for blank separator
+    // A blank line followed only by whitespace to EOF is not a velocity
+    // block (CON-frame.5, D2). Leave those lines for the iterator.
     match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
-            // Consume the blank separator
+            if lines.remainder_is_whitespace() {
+                return Ok(false);
+            }
             lines.next_line();
         }
         _ => return Ok(false),
@@ -917,16 +1685,15 @@ pub fn parse_velocity_section<'a>(
         // Symbol line
         let symbol = lines
             .next_line()
-            .ok_or(ParseError::IncompleteVelocitySection)?
+            .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?
             .trim();
 
         // "Velocities of Component N" line
         let comp_line = lines
             .next_line()
-            .ok_or(ParseError::IncompleteVelocitySection)?;
-        // Validate it looks like a velocity header (optional strictness)
-        if !comp_line.contains("Velocities of Component") {
-            return Err(ParseError::IncompleteVelocitySection);
+            .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
+        if !label_has_prefix(comp_line, "Velocities of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_VELOCITIES.into()));
         }
         if validate {
             validate_section_component(
@@ -943,18 +1710,13 @@ pub fn parse_velocity_section<'a>(
         for _ in 0..num_atoms {
             let vel_line = lines
                 .next_line()
-                .ok_or(ParseError::IncompleteVelocitySection)?;
-            // Column 5 (atom_index) is optional in velocity lines too.
-            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(vel_line, 4, 5, &defaults, &mut vals)?;
+                .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
+            let (vals, fixed, atom_id) = parse_vector_section_row(vel_line, header.spec_version)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(vel_line, "velocities", 3, 4, 5, header.spec_version)?;
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].velocity = Some([vals[0], vals[1], vals[2]]);
+                atom_data[atom_idx].set_velocity(Some(vals));
             }
             atom_idx += 1;
         }
@@ -976,26 +1738,22 @@ pub fn parse_force_section<'a>(
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    // Peek at the next line to check for blank separator
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
+    if !open_section(lines)? {
+        return Ok(false);
     }
 
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
             .next_line()
-            .ok_or(ParseError::IncompleteForceSection)?
+            .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?
             .trim();
 
         let comp_line = lines
             .next_line()
-            .ok_or(ParseError::IncompleteForceSection)?;
-        if !comp_line.contains("Forces of Component") {
-            return Err(ParseError::IncompleteForceSection);
+            .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
+        if !label_has_prefix(comp_line, "Forces of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_FORCES.into()));
         }
         if validate {
             validate_section_component(
@@ -1006,17 +1764,13 @@ pub fn parse_force_section<'a>(
         for _ in 0..num_atoms {
             let force_line = lines
                 .next_line()
-                .ok_or(ParseError::IncompleteForceSection)?;
-            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(force_line, 4, 5, &defaults, &mut vals)?;
+                .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
+            let (vals, fixed, atom_id) = parse_vector_section_row(force_line, header.spec_version)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(force_line, "forces", 3, 4, 5, header.spec_version)?;
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].force = Some([vals[0], vals[1], vals[2]]);
+                atom_data[atom_idx].set_force(Some(vals));
             }
             atom_idx += 1;
         }
@@ -1043,25 +1797,22 @@ pub fn parse_energy_section<'a>(
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
+    if !open_section(lines)? {
+        return Ok(false);
     }
 
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
             .next_line()
-            .ok_or(ParseError::IncompleteEnergySection)?
+            .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?
             .trim();
 
         let comp_line = lines
             .next_line()
-            .ok_or(ParseError::IncompleteEnergySection)?;
-        if !comp_line.contains("Energies of Component") {
-            return Err(ParseError::IncompleteEnergySection);
+            .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?;
+        if !label_has_prefix(comp_line, "Energies of Component") {
+            return Err(ParseError::IncompleteSection(SECTION_ENERGIES.into()));
         }
         if validate {
             validate_section_component(
@@ -1072,18 +1823,14 @@ pub fn parse_energy_section<'a>(
         for _ in 0..num_atoms {
             let energy_line = lines
                 .next_line()
-                .ok_or(ParseError::IncompleteEnergySection)?;
-            // Single energy column, plus optional fixed flag and atom_id
-            // for round-trip identity checks.
-            let defaults = [0.0, 0.0, atom_idx as f64];
-            let vals = parse_line_of_range_f64(energy_line, 1, 3, &defaults)?;
+                .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?;
+            let (value, fixed, atom_id) =
+                parse_scalar_section_row(energy_line, header.spec_version)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(energy_line, "energies", 1, 2, 3, header.spec_version)?;
                 validate_section_atom_identity("energies", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].energy = Some(vals[0]);
+                atom_data[atom_idx].set_energy(Some(value));
             }
             atom_idx += 1;
         }
@@ -1103,9 +1850,22 @@ pub fn parse_declared_sections<'a>(
     atom_data: &mut [AtomDatum],
 ) -> Result<usize, ParseError> {
     let mut applied = 0usize;
+    // A zero-atom frame has no coordinate block and no section block.
+    // The legacy velocity fallback must not run (CON-count.1).
+    if header.natm_types == 0 {
+        if !header.sections.is_empty() {
+            return Err(ParseError::InvalidCount(
+                "a zero-atom frame cannot declare sections".into(),
+            ));
+        }
+        return Ok(0);
+    }
     if !header.sections_declared && header.sections.is_empty() {
-        // Legacy: try velocity detection via blank separator
-        let found = parse_velocity_section(lines, header, atom_data)?;
+        // Legacy: try velocity detection via blank separator. A blank
+        // line can also be the empty line 1 of the next frame, so look for
+        // the velocity label before committing (CON-frame.5).
+        let found =
+            lines.blank_opens_velocity_block() && parse_velocity_section(lines, header, atom_data)?;
         if found {
             header.sections.push(SECTION_VELOCITIES.into());
             applied = 1;
@@ -1117,21 +1877,21 @@ pub fn parse_declared_sections<'a>(
                 SECTION_VELOCITIES => {
                     let found = parse_velocity_section(lines, header, atom_data)?;
                     if !found {
-                        return Err(ParseError::IncompleteVelocitySection);
+                        return Err(ParseError::IncompleteSection(SECTION_VELOCITIES.into()));
                     }
                     applied += 1;
                 }
                 SECTION_FORCES => {
                     let found = parse_force_section(lines, header, atom_data)?;
                     if !found {
-                        return Err(ParseError::IncompleteForceSection);
+                        return Err(ParseError::IncompleteSection(SECTION_FORCES.into()));
                     }
                     applied += 1;
                 }
                 SECTION_ENERGIES => {
                     let found = parse_energy_section(lines, header, atom_data)?;
                     if !found {
-                        return Err(ParseError::IncompleteEnergySection);
+                        return Err(ParseError::IncompleteSection(SECTION_ENERGIES.into()));
                     }
                     applied += 1;
                 }
@@ -1170,12 +1930,50 @@ pub fn parse_declared_sections<'a>(
                     }
                     applied += 1;
                 }
-                other => return Err(ParseError::UnknownSection(other.to_string())),
+                other => {
+                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR) {
+                        if let Some(arity) = section_row_arity(header, other) {
+                            skip_unknown_section(lines, header, other, arity)?;
+                            continue;
+                        }
+                    }
+                    return Err(ParseError::UnknownSection(other.to_string()));
+                }
             }
         }
         header.sections = sections;
     }
+    reject_velocities_without_time(header)?;
     Ok(applied)
+}
+
+/// CON-units.11. Versions 1, 2, and 3.0 do not require `units.time`
+/// (CON-units.8, CON-units.9). From minor 1 the key is required when a
+/// velocities section is present.
+fn reject_velocities_without_time(header: &FrameHeader) -> Result<(), ParseError> {
+    if header.spec_version < 3 || frame_minor(header) < 1 {
+        return Ok(());
+    }
+    if !header
+        .sections
+        .iter()
+        .any(|name| name == SECTION_VELOCITIES)
+    {
+        return Ok(());
+    }
+    let time_ok = header
+        .metadata
+        .get(meta::UNITS)
+        .and_then(|units| units.get("time"))
+        .and_then(|value| value.as_str())
+        .is_some_and(|unit| !unit.trim().is_empty());
+    if time_ok {
+        Ok(())
+    } else {
+        Err(ParseError::InvalidUnits(
+            "minor >= 1 requires units.time when a velocities section is present".into(),
+        ))
+    }
 }
 
 /// Scalar per-atom section: blank separator + per-type blocks
@@ -1189,11 +1987,8 @@ fn parse_scalar_atom_section<'a>(
     mut set_value: impl FnMut(&mut AtomDatum, f64),
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
+    if !open_section(lines)? {
+        return Ok(false);
     }
 
     let mut atom_idx: usize = 0;
@@ -1206,7 +2001,7 @@ fn parse_scalar_atom_section<'a>(
         let comp_line = lines
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-        if !comp_line.contains(component_label) {
+        if !label_has_prefix(comp_line, component_label) {
             return Err(ParseError::IncompleteSection(section_name.into()));
         }
         if validate {
@@ -1225,15 +2020,12 @@ fn parse_scalar_atom_section<'a>(
             let data_line = lines
                 .next_line()
                 .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-            let defaults = [0.0, 0.0, atom_idx as f64];
-            let vals = parse_line_of_range_f64(data_line, 1, 3, &defaults)?;
+            let (value, fixed, atom_id) = parse_scalar_section_row(data_line, header.spec_version)?;
             if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(data_line, section_name, 1, 2, 3, header.spec_version)?;
                 validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                set_value(&mut atom_data[atom_idx], vals[0]);
+                set_value(&mut atom_data[atom_idx], value);
             }
             atom_idx += 1;
         }
@@ -1252,7 +2044,7 @@ pub fn parse_charge_section<'a>(
         atom_data,
         SECTION_CHARGES,
         "Charges of Component",
-        |a, v| a.charge = Some(v),
+        |a, v| a.set_charge(Some(v)),
     )
 }
 
@@ -1267,8 +2059,57 @@ pub fn parse_spin_section<'a>(
         atom_data,
         SECTION_SPINS,
         "Spins of Component",
-        |a, v| a.spin = Some(v),
+        |a, v| a.set_spin(Some(v)),
     )
+}
+
+fn parse_vector_named_section<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+    section_name: &str,
+    component_label: &str,
+    label_kind: &str,
+    mut set_value: impl FnMut(&mut AtomDatum, [f64; 3]),
+    mut check_row: impl FnMut(usize, [f64; 3]) -> Result<(), ParseError>,
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    if !open_section(lines)? {
+        return Ok(false);
+    }
+    let mut atom_idx: usize = 0;
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
+            .trim();
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
+        if !label_has_prefix(comp_line, component_label) {
+            return Err(ParseError::IncompleteSection(section_name.into()));
+        }
+        if validate {
+            validate_section_component(
+                label_kind, type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+        }
+        for _ in 0..num_atoms {
+            let row = lines
+                .next_line()
+                .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
+            let (vals, fixed, atom_id) = parse_vector_section_row(row, header.spec_version)?;
+            check_row(atom_idx, vals)?;
+            if validate {
+                validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
+            }
+            if atom_idx < atom_data.len() {
+                set_value(&mut atom_data[atom_idx], vals);
+            }
+            atom_idx += 1;
+        }
+    }
+    Ok(true)
 }
 
 /// Magmoms: 3-vector per atom, same layout as velocities/forces.
@@ -1277,58 +2118,16 @@ pub fn parse_magmom_section<'a>(
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
-    let validate = header.strict_validation;
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
-    }
-
-    let mut atom_idx: usize = 0;
-    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        let symbol = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?
-            .trim();
-
-        let comp_line = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?;
-        if !comp_line.contains("Magmoms of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_MAGMOMS.into()));
-        }
-        if validate {
-            validate_section_component(
-                "Magmoms", type_idx, atom_idx, symbol, comp_line, header, atom_data,
-            )?;
-        }
-
-        for _ in 0..num_atoms {
-            let mm_line = lines
-                .next_line()
-                .ok_or_else(|| ParseError::IncompleteSection(SECTION_MAGMOMS.into()))?;
-            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(mm_line, 4, 5, &defaults, &mut vals)?;
-            if validate {
-                let (fixed, atom_id) =
-                    parse_identity_columns(mm_line, SECTION_MAGMOMS, 3, 4, 5, header.spec_version)?;
-                validate_section_atom_identity(
-                    SECTION_MAGMOMS,
-                    atom_idx,
-                    fixed,
-                    atom_id,
-                    atom_data,
-                )?;
-            }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].magmom = Some([vals[0], vals[1], vals[2]]);
-            }
-            atom_idx += 1;
-        }
-    }
-    Ok(true)
+    parse_vector_named_section(
+        lines,
+        header,
+        atom_data,
+        SECTION_MAGMOMS,
+        "Magmoms of Component",
+        "Magmoms",
+        |a, v| a.set_magmom(Some(v)),
+        |_, _| Ok(()),
+    )
 }
 
 /// Displacements: 3-vector per atom (Angstrom), same layout as velocities/forces.
@@ -1337,70 +2136,16 @@ pub fn parse_displacement_section<'a>(
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
-    let validate = header.strict_validation;
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
-    }
-
-    let mut atom_idx: usize = 0;
-    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        let symbol = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?
-            .trim();
-
-        let comp_line = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?;
-        if !comp_line.contains("Displacements of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()));
-        }
-        if validate {
-            validate_section_component(
-                "Displacements",
-                type_idx,
-                atom_idx,
-                symbol,
-                comp_line,
-                header,
-                atom_data,
-            )?;
-        }
-
-        for _ in 0..num_atoms {
-            let dsp_line = lines
-                .next_line()
-                .ok_or_else(|| ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()))?;
-            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(dsp_line, 4, 5, &defaults, &mut vals)?;
-            if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    dsp_line,
-                    SECTION_DISPLACEMENTS,
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?;
-                validate_section_atom_identity(
-                    SECTION_DISPLACEMENTS,
-                    atom_idx,
-                    fixed,
-                    atom_id,
-                    atom_data,
-                )?;
-            }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].displacement = Some([vals[0], vals[1], vals[2]]);
-            }
-            atom_idx += 1;
-        }
-    }
-    Ok(true)
+    parse_vector_named_section(
+        lines,
+        header,
+        atom_data,
+        SECTION_DISPLACEMENTS,
+        "Displacements of Component",
+        "Displacements",
+        |a, v| a.set_displacement(Some(v)),
+        |_, _| Ok(()),
+    )
 }
 
 /// Spreads: per-atom root-mean-square spread `[sx, sy, sz]` (Angstrom, each
@@ -1410,67 +2155,26 @@ pub fn parse_spread_section<'a>(
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
-    let validate = header.strict_validation;
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            lines.next_line();
-        }
-        _ => return Ok(false),
-    }
-
-    let mut atom_idx: usize = 0;
-    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        let symbol = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?
-            .trim();
-
-        let comp_line = lines
-            .next_line()
-            .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?;
-        if !comp_line.contains("Spreads of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_SPREADS.into()));
-        }
-        if validate {
-            validate_section_component(
-                "Spreads", type_idx, atom_idx, symbol, comp_line, header, atom_data,
-            )?;
-        }
-
-        for _ in 0..num_atoms {
-            let spr_line = lines
-                .next_line()
-                .ok_or_else(|| ParseError::IncompleteSection(SECTION_SPREADS.into()))?;
-            let defaults = [0.0, 0.0, 0.0, 0.0, atom_idx as f64];
-            let mut vals = [0.0f64; 5];
-            parse_line_of_range_f64_stack(spr_line, 4, 5, &defaults, &mut vals)?;
-            if !crate::types::spread_row_ok([vals[0], vals[1], vals[2]]) {
+    parse_vector_named_section(
+        lines,
+        header,
+        atom_data,
+        SECTION_SPREADS,
+        "Spreads of Component",
+        "Spreads",
+        |a, v| a.set_spread(Some(v)),
+        |atom_idx, vals| {
+            if !vals.iter().all(|v| v.is_finite()) {
+                return Err(ParseError::NonFiniteValue(format!(
+                    "spreads atom {atom_idx}"
+                )));
+            }
+            if vals.iter().any(|v| *v < 0.0) {
                 return Err(crate::types::invalid_spread(atom_idx));
             }
-            if validate {
-                let (fixed, atom_id) = parse_identity_columns(
-                    spr_line,
-                    SECTION_SPREADS,
-                    3,
-                    4,
-                    5,
-                    header.spec_version,
-                )?;
-                validate_section_atom_identity(
-                    SECTION_SPREADS,
-                    atom_idx,
-                    fixed,
-                    atom_id,
-                    atom_data,
-                )?;
-            }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].spread = Some([vals[0], vals[1], vals[2]]);
-            }
-            atom_idx += 1;
-        }
-    }
-    Ok(true)
+            Ok(())
+        },
+    )
 }
 
 #[cfg(test)]
@@ -1660,7 +2364,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            ParseError::UnsupportedSpecVersion(999)
+            ParseError::UnsupportedVersion(999)
         ));
     }
 
@@ -1786,14 +2490,14 @@ mod tests {
             "12.011 1.008",
             "1",
             "Coordinates of Component 1",
-            "0.0 0.0 0.0 0.0 1",
-            "1.0940 0.0 0.0 0.0 2",
-            "-0.5470 0.9499 0.0 0.0 3",
+            "0.0 0.0 0.0 0 1",
+            "1.0940 0.0 0.0 0 2",
+            "-0.5470 0.9499 0.0 0 3",
             "2",
             "Coordinates of Component 2",
-            "5.0 5.0 5.0 0.0 4",
-            "6.0940 5.0 5.0 0.0 5",
-            "5.5470 5.9499 5.0 0.0 6",
+            "5.0 5.0 5.0 0 4",
+            "6.0940 5.0 5.0 0 5",
+            "5.5470 5.9499 5.0 0 6",
         ];
         let mut line_it = lines.iter().copied();
         let frame = parse_single_frame(&mut line_it).unwrap();
@@ -1867,9 +2571,9 @@ mod tests {
             "12.011 1.008",
             "1",
             "Coordinates of Component 1",
-            "0.0 0.0 0.0 0.0 1",
-            "1.0940 0.0 0.0 0.0 2",
-            "-0.5470 0.9499 0.0 0.0 3",
+            "0.0 0.0 0.0 0 1",
+            "1.0940 0.0 0.0 0 2",
+            "-0.5470 0.9499 0.0 0 3",
             // Missing Component 2 entirely
         ];
         let mut line_it = lines.iter().copied();
@@ -1893,14 +2597,14 @@ mod tests {
             "12.011 1.008",
             "1",
             "Coordinates of Component 1",
-            "0.0 0.0 0.0 0.0 1",
-            "1.0940 0.0 0.0 0.0 2",
-            "-0.5470 0.9499 0.0 0.0 3",
+            "0.0 0.0 0.0 0 1",
+            "1.0940 0.0 0.0 0 2",
+            "-0.5470 0.9499 0.0 0 3",
             "2",
             "Coordinates of Component 2",
-            "5.0 5.0 5.0 0.0",       // No atom_index: defaults to 3
-            "6.0940 5.0 5.0 0.0 10", // Explicit atom_index: 10
-            "5.5470 5.9499 5.0 0.0", // No atom_index: defaults to 5
+            "5.0 5.0 5.0 0",       // No atom_index: defaults to 3
+            "6.0940 5.0 5.0 0 10", // Explicit atom_index: 10
+            "5.5470 5.9499 5.0 0", // No atom_index: defaults to 5
         ];
         let mut line_it = lines.iter().copied();
         let frame = parse_single_frame(&mut line_it).unwrap();
@@ -1958,17 +2662,17 @@ mod tests {
             "63.546 1.008",
             "Cu",
             "Coordinates of Component 1",
-            "0.0 0.0 0.0 1.0 0",
+            "0.0 0.0 0.0 1 0",
             "H",
             "Coordinates of Component 2",
-            "1.0 2.0 3.0 0.0 1",
+            "1.0 2.0 3.0 0 1",
             "",
             "Cu",
             "Velocities of Component 1",
-            "0.1 0.2 0.3 1.0 0",
+            "0.1 0.2 0.3 1 0",
             "H",
             "Velocities of Component 2",
-            "0.4 0.5 0.6 0.0 1",
+            "0.4 0.5 0.6 0 1",
         ];
         let mut line_it = lines.iter().copied().peekable();
         // Parse the frame first (consuming 15 lines)
@@ -1980,8 +2684,8 @@ mod tests {
         let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
             .expect("velocity parsing should succeed");
         assert!(has_vel);
-        assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
-        assert_eq!(frame.atom_data[1].velocity, Some([0.4, 0.5, 0.6]));
+        assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
+        assert_eq!(frame.atom_data[1].velocity(), Some([0.4, 0.5, 0.6]));
     }
 
     #[test]
@@ -2185,8 +2889,8 @@ Coordinates of Component 1
         let mut iter = ConFrameIterator::new(text.trim());
         let err = iter.next().unwrap().unwrap_err();
 
-        assert!(matches!(err, ParseError::ValidationError(_)));
-        assert!(err.to_string().contains("fixed_flag"));
+        assert!(matches!(err, ParseError::InvalidFixedFlag(_)));
+        assert!(err.to_string().contains("5.0"));
     }
 
     #[test]
@@ -2254,7 +2958,10 @@ Coordinates of Component 1
         let mut iter = ConFrameIterator::new(text.trim());
         let err = iter.next().unwrap().unwrap_err();
 
-        assert!(matches!(err, ParseError::IncompleteVelocitySection));
+        assert!(matches!(
+            err,
+            ParseError::IncompleteSection(ref name) if name == "velocities"
+        ));
     }
 
     #[test]
@@ -2273,8 +2980,8 @@ Coordinates of Component 1
         let mut line_it = lines.iter().copied();
         let err = parse_frame_header(&mut line_it).unwrap_err();
 
-        assert!(matches!(err, ParseError::ValidationError(_)));
-        assert!(err.to_string().contains("cell"));
+        assert!(matches!(err, ParseError::NonFiniteValue(_)));
+        assert!(err.to_string().contains("NaN"));
     }
 
     #[test]
@@ -2375,14 +3082,14 @@ Coordinates of Component 1
             "12.011",
             "C",
             "Coordinates of Component 1",
-            "0.0 0.0 0.0 0.0 1",
+            "0.0 0.0 0.0 0 1",
         ];
         let mut line_it = lines.iter().copied().peekable();
         let mut frame = parse_single_frame(&mut line_it).expect("parse should succeed");
         let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
             .expect("should succeed with no velocities");
         assert!(!has_vel);
-        assert_eq!(frame.atom_data[0].velocity, None);
+        assert_eq!(frame.atom_data[0].velocity(), None);
     }
 
     #[test]

@@ -21,13 +21,13 @@ fn parse_charges_spins_magmoms() {
     assert!(frame.has_spins());
     assert!(frame.has_magmoms());
     assert_eq!(frame.header.sections, vec!["charges", "spins", "magmoms"]);
-    assert_eq!(frame.atom_data[0].charge, Some(0.5));
-    assert_eq!(frame.atom_data[1].charge, Some(-0.25));
-    assert_eq!(frame.atom_data[2].charge, Some(0.1));
-    assert_eq!(frame.atom_data[0].spin, Some(0.5));
-    assert_eq!(frame.atom_data[2].spin, Some(0.0));
-    assert_eq!(frame.atom_data[0].magmom, Some([0.0, 0.0, 1.0]));
-    assert_eq!(frame.atom_data[1].magmom, Some([0.0, 0.0, -1.0]));
+    assert_eq!(frame.atom_data[0].charge(), Some(0.5));
+    assert_eq!(frame.atom_data[1].charge(), Some(-0.25));
+    assert_eq!(frame.atom_data[2].charge(), Some(0.1));
+    assert_eq!(frame.atom_data[0].spin(), Some(0.5));
+    assert_eq!(frame.atom_data[2].spin(), Some(0.0));
+    assert_eq!(frame.atom_data[0].magmom(), Some([0.0, 0.0, 1.0]));
+    assert_eq!(frame.atom_data[1].magmom(), Some([0.0, 0.0, -1.0]));
     // SoA sync on iterator path
     assert_eq!(frame.charges.len(), 4);
     assert_eq!(frame.spins.len(), 4);
@@ -69,7 +69,7 @@ fn coords_only_still_ok_without_new_sections() {
     assert!(!f.has_magmoms());
     assert!(!f.has_displacements());
     assert!(!f.has_spreads());
-    assert!(f.atom_data.iter().all(|a| a.charge.is_none()));
+    assert!(f.atom_data.iter().all(|a| a.charge().is_none()));
 }
 
 #[test]
@@ -85,9 +85,9 @@ fn builder_authors_charges_spins_magmoms() {
     assert!(frame.has_spins());
     assert!(frame.has_magmoms());
     assert_eq!(frame.header.sections, vec!["charges", "spins", "magmoms"]);
-    assert_eq!(frame.atom_data[0].charge, Some(0.5));
-    assert_eq!(frame.atom_data[0].spin, Some(1.0));
-    assert_eq!(frame.atom_data[0].magmom, Some([0.0, 0.0, 1.0]));
+    assert_eq!(frame.atom_data[0].charge(), Some(0.5));
+    assert_eq!(frame.atom_data[0].spin(), Some(1.0));
+    assert_eq!(frame.atom_data[0].magmom(), Some([0.0, 0.0, 1.0]));
 }
 
 #[test]
@@ -101,10 +101,10 @@ fn parse_displacements() {
     assert!(!frame.has_magmoms());
     assert!(frame.has_displacements());
     assert_eq!(frame.header.sections, vec!["displacements"]);
-    assert_eq!(frame.atom_data[0].displacement, Some([0.0, 0.0, 0.0]));
-    assert_eq!(frame.atom_data[2].displacement, Some([0.125, -0.25, 0.0]));
-    assert_eq!(frame.atom_data[3].displacement, Some([-0.125, 0.25, 0.0]));
-    assert!(frame.atom_data.iter().all(|a| a.magmom.is_none()));
+    assert_eq!(frame.atom_data[0].displacement(), Some([0.0, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[2].displacement(), Some([0.125, -0.25, 0.0]));
+    assert_eq!(frame.atom_data[3].displacement(), Some([-0.125, 0.25, 0.0]));
+    assert!(frame.atom_data.iter().all(|a| a.magmom().is_none()));
     // SoA sync on iterator path
     assert_eq!(frame.displacements.nrows(), 4);
     assert_eq!(frame.displacements.as_f64_row(2), [0.125, -0.25, 0.0]);
@@ -143,9 +143,9 @@ fn builder_authors_displacements_after_magmoms() {
     assert!(frame.has_magmoms());
     assert!(frame.has_displacements());
     assert_eq!(frame.header.sections, vec!["magmoms", "displacements"]);
-    assert_eq!(frame.atom_data[0].displacement, Some([0.1, -0.2, 0.3]));
+    assert_eq!(frame.atom_data[0].displacement(), Some([0.1, -0.2, 0.3]));
     // Later atoms are zero-filled so the section stays length-coherent.
-    assert_eq!(frame.atom_data[1].displacement, Some([0.0, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[1].displacement(), Some([0.0, 0.0, 0.0]));
 }
 
 /// Drops the final data row; the last declared section then has one row
@@ -191,10 +191,10 @@ fn parse_spreads() {
     assert!(!frame.has_magmoms());
     assert!(frame.has_spreads());
     assert_eq!(frame.header.sections, vec!["spreads"]);
-    assert_eq!(frame.atom_data[0].spread, Some([0.0, 0.0, 0.0]));
-    assert_eq!(frame.atom_data[2].spread, Some([0.125, 0.25, 0.0]));
-    assert_eq!(frame.atom_data[3].spread, Some([0.125, 0.25, 0.0625]));
-    assert!(frame.atom_data.iter().all(|a| a.magmom.is_none()));
+    assert_eq!(frame.atom_data[0].spread(), Some([0.0, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[2].spread(), Some([0.125, 0.25, 0.0]));
+    assert_eq!(frame.atom_data[3].spread(), Some([0.125, 0.25, 0.0625]));
+    assert!(frame.atom_data.iter().all(|a| a.magmom().is_none()));
     // SoA sync on iterator path
     assert_eq!(frame.spreads.nrows(), 4);
     assert_eq!(frame.spreads.as_f64_row(2), [0.125, 0.25, 0.0]);
@@ -233,9 +233,9 @@ fn builder_authors_spreads_after_magmoms() {
     assert!(frame.has_magmoms());
     assert!(frame.has_spreads());
     assert_eq!(frame.header.sections, vec!["magmoms", "spreads"]);
-    assert_eq!(frame.atom_data[0].spread, Some([0.1, 0.2, 0.3]));
+    assert_eq!(frame.atom_data[0].spread(), Some([0.1, 0.2, 0.3]));
     // Later atoms are zero-filled so the section stays length-coherent.
-    assert_eq!(frame.atom_data[1].spread, Some([0.0, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[1].spread(), Some([0.0, 0.0, 0.0]));
 }
 
 #[test]
@@ -330,7 +330,7 @@ fn builder_rejects_negative_spread() {
     b.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.008)
         .with_spread([0.0, 0.0, 0.0]);
     let mut frame = b.build().expect("zero spread is a classical point");
-    frame.atom_data[0].spread = Some([0.1, -0.2, 0.0]);
+    frame.atom_data[0].set_spread(Some([0.1, -0.2, 0.0]));
     let mut buffer = Vec::new();
     let err = ConFrameWriter::with_precision(&mut buffer, 17)
         .write_frame(&frame)
