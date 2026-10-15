@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-10-14T20:27:27Z",
-  "git_sha": "d0dedb4",
+  "generated_at": "2026-10-15T13:51:30Z",
+  "git_sha": "16ea8a7",
   "features": "chemfiles-from-sources",
   "tool": "cachegrind",
   "metric": "I_refs",
   "scenarios": {
-    "parse_multi_2x4": 6534241,
-    "forward_multi_2x4": 4875818,
-    "convel_multi": 7656646,
-    "parse_100_frames": 30134512,
-    "forward_100_frames": 6435430,
-    "parse_cuh2_218": 10599264,
-    "float_fast_float2": 31843566,
-    "float_std_parse": 32894057,
-    "write_100_frames": 21620524,
-    "chemfiles_xyz_path": 9728567,
-    "chemfiles_xyz_memory": 9561248,
-    "chemfiles_select_name_O": 6082329
+    "parse_multi_2x4": 6534229,
+    "forward_multi_2x4": 4875806,
+    "convel_multi": 7656634,
+    "parse_100_frames": 30134500,
+    "forward_100_frames": 6435418,
+    "parse_cuh2_218": 10599252,
+    "float_fast_float2": 31843554,
+    "float_std_parse": 32894045,
+    "write_100_frames": 21620512,
+    "chemfiles_xyz_path": 9728555,
+    "chemfiles_xyz_memory": 9561236,
+    "chemfiles_select_name_O": 6082317
   }
 }
