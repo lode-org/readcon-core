@@ -106,13 +106,21 @@ fn utf8_slice_target(len: usize, index: usize, n_slices: usize) -> usize {
 }
 
 /// `err` came from `bytes[start..]`. Report it against the whole buffer.
+///
+/// `error_len` counts only the invalid sequence. A multi-byte lead followed
+/// by a non-continuation is `Some`, and the next byte is what proves it.
+/// A prefix that stops on the lead is an incomplete character, so
+/// `from_utf8` reports `None` and the error looks truncated.
 fn reject_with_absolute_utf8(
     bytes: &[u8],
     start: usize,
     err: std::str::Utf8Error,
 ) -> Result<(), std::str::Utf8Error> {
     let end = match err.error_len() {
-        Some(len) => start.saturating_add(err.valid_up_to()).saturating_add(len),
+        Some(len) => start
+            .saturating_add(err.valid_up_to())
+            .saturating_add(len)
+            .saturating_add(1),
         None => bytes.len(),
     };
     let end = end.min(bytes.len());
@@ -479,6 +487,37 @@ mod tests {
         assert_eq!(err.error_len(), std_err.error_len());
         assert_eq!(err.valid_up_to(), buf.len() - 1);
         assert_eq!(err.error_len(), None);
+    }
+
+    #[test]
+    fn sliced_utf8_lead_plus_non_continuation_is_not_truncated() {
+        // A multi-byte lead followed by a non-continuation is an invalid
+        // sequence in the middle of the buffer. `error_len` is `Some`
+        // (resume after the lead). `None` would mean the bytes ran out.
+        let mut buf = b"head\n".to_vec();
+        let at = buf.len();
+        buf.push(0xC2);
+        buf.extend_from_slice(b"A tail\n");
+        let err = validate_utf8_sliced(&buf).unwrap_err();
+        let std_err = std::str::from_utf8(&buf).unwrap_err();
+        assert_eq!(err.valid_up_to(), at);
+        assert_eq!(err.valid_up_to(), std_err.valid_up_to());
+        assert_eq!(err.error_len(), Some(1));
+        assert_eq!(err.error_len(), std_err.error_len());
+
+        // Same shape for a three-byte lead whose second byte is a
+        // continuation and whose third is not. The invalid sequence is
+        // two bytes; stopping on those two still looks truncated.
+        let mut buf = b"head\n".to_vec();
+        let at = buf.len();
+        buf.extend_from_slice(&[0xE1, 0x80, b'Z']);
+        buf.extend_from_slice(b" tail\n");
+        let err = validate_utf8_sliced(&buf).unwrap_err();
+        let std_err = std::str::from_utf8(&buf).unwrap_err();
+        assert_eq!(err.valid_up_to(), at);
+        assert_eq!(err.valid_up_to(), std_err.valid_up_to());
+        assert_eq!(err.error_len(), Some(2));
+        assert_eq!(err.error_len(), std_err.error_len());
     }
 
     #[test]
