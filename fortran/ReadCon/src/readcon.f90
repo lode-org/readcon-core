@@ -494,6 +494,11 @@ module readcon
       import :: c_ptr
       type(c_ptr), value :: w
     end subroutine
+    function c_rkr_frame_binding_rewrite(f) bind(C, name="rkr_frame_binding_rewrite")
+      import :: c_ptr
+      type(c_ptr), value :: f
+      type(c_ptr) :: c_rkr_frame_binding_rewrite
+    end function
     function c_rkr_writer_extend(w, frames, n) bind(C, name="rkr_writer_extend")
       import :: c_ptr, c_int, c_size_t
       type(c_ptr), value :: w
@@ -1421,10 +1426,19 @@ contains
     class(writer_t), intent(inout) :: self
     class(frame_t), intent(in) :: fr
     type(c_ptr) :: arr(1)
+    type(c_ptr) :: prepared
     wr_extend_one = rkr_status_null_pointer
     if (.not. c_associated(self%w) .or. .not. c_associated(fr%handle)) return
-    arr(1) = fr%handle
+    ! Parsed frames omit con_spec_minor unless the file had it. The builder
+    ! stamps it, which is what the Python, Julia, and C rewrites emit.
+    prepared = c_rkr_frame_binding_rewrite(fr%handle)
+    if (.not. c_associated(prepared)) then
+      wr_extend_one = rkr_status_validation_error
+      return
+    end if
+    arr(1) = prepared
     wr_extend_one = int(c_rkr_writer_extend(self%w, arr, 1_c_size_t))
+    call c_free_rkr_frame(prepared)
   end function
 
   function read_chemfiles_first(path) result(fr)
