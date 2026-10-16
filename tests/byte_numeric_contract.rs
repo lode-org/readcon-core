@@ -231,3 +231,131 @@ fn byte_frames_ignore_trailing_whitespace_with_parallel_workers() {
         );
     }
 }
+
+fn assert_invalid_utf8(err: &ParseError) {
+    assert!(
+        matches!(err, ParseError::ValidationError(message) if message == "invalid UTF-8"),
+        "expected invalid UTF-8, got {err:?}"
+    );
+}
+
+#[test]
+fn invalid_utf8_is_not_end_of_file_when_the_tail_is_whitespace() {
+    for bytes in [
+        b"\xff".as_slice(),
+        b"\xff\n".as_slice(),
+        b"\xff\n \t\r\n".as_slice(),
+    ] {
+        let mut iter = ConFrameIterator::from_bytes(bytes);
+        let err = iter
+            .next()
+            .expect("invalid UTF-8 is an item, not iterator exhaustion")
+            .expect_err("invalid UTF-8 must fail");
+        assert_invalid_utf8(&err);
+        let again = iter
+            .next()
+            .expect("a rejected line stays an error if the cursor is polled again")
+            .expect_err("the decode error must not turn into a frame");
+        assert_invalid_utf8(&again);
+    }
+
+    let mut corrupt_last = FRAME.as_bytes().to_vec();
+    corrupt_last.extend_from_slice(b"\xff\n \t\n");
+    for workers in [Some(1), Some(2), Some(4)] {
+        for bytes in [
+            b"\xff".as_slice(),
+            b"\xff\n \t\r\n".as_slice(),
+            corrupt_last.as_slice(),
+        ] {
+            assert_invalid_utf8(
+                &frames_from_bytes(bytes, workers).expect_err("invalid UTF-8 must not succeed"),
+            );
+        }
+    }
+}
+
+const VELOCITY_FRAME: &str = "\
+seed
+{\"con_spec_version\":2,\"sections\":[\"velocities\"]}
+10 11 12
+90 90 90
+0 0
+0 0 0
+1
+1
+1.008
+H
+Coordinates of Component 1
+1.25 -2.5 3.75 0 42
+
+H
+Velocities of Component 1
+0.1 0.2 0.3 0 42
+";
+
+fn corrupt_unique_line(text: &str, line: &str) -> Vec<u8> {
+    let mut bytes = text.as_bytes().to_vec();
+    let needle = line.as_bytes();
+    let at = bytes
+        .windows(needle.len())
+        .position(|window| window == needle)
+        .unwrap_or_else(|| panic!("missing line {line}"));
+    bytes[at] = 0xff;
+    bytes
+}
+
+#[test]
+fn section_utf8_failures_are_not_incomplete_sections() {
+    let parsed = ConFrameIterator::from_bytes(VELOCITY_FRAME.as_bytes())
+        .next()
+        .expect("frame")
+        .expect("valid section frame");
+    assert_eq!(parsed.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
+
+    for line in ["Velocities of Component 1", "0.1 0.2 0.3 0 42"] {
+        let bytes = corrupt_unique_line(VELOCITY_FRAME, line);
+        let err = ConFrameIterator::from_bytes(&bytes)
+            .next()
+            .expect("section UTF-8 is an item, not iterator exhaustion")
+            .expect_err("section UTF-8 must fail");
+        assert_invalid_utf8(&err);
+        assert_invalid_utf8(&frames_from_bytes(&bytes, Some(1)).expect_err("byte read"));
+    }
+
+    let mut lines: Vec<&str> = VELOCITY_FRAME.lines().collect();
+    lines.pop();
+    let short = lines.join("\n");
+    let err = ConFrameIterator::from_bytes(short.as_bytes())
+        .next()
+        .expect("truncated section is an item")
+        .expect_err("truncated section must fail");
+    assert!(
+        matches!(err, ParseError::IncompleteSection(ref name) if name == "velocities"),
+        "valid UTF-8 that ends early stays IncompleteSection, got {err:?}"
+    );
+}
+
+#[test]
+fn mapped_file_reports_invalid_utf8_on_a_corrupt_last_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("mapped-corrupt-tail.con");
+    let mut bytes = FRAME.repeat(800).into_bytes();
+    assert!(
+        bytes.len() >= 64 * 1024,
+        "fixture must cross the mmap threshold"
+    );
+    bytes.extend_from_slice(b"\xff\n \t\n");
+    std::fs::write(&path, &bytes).unwrap();
+    for workers in [Some(1), Some(2), Some(4)] {
+        let err = read_all_frames_with_threads(&path, workers).expect_err("mapped corrupt tail");
+        let message = err.to_string();
+        assert!(
+            message.contains("invalid UTF-8"),
+            "workers={workers:?} mapped read reported {message}"
+        );
+        assert!(
+            !message.contains("IncompleteSection"),
+            "workers={workers:?} mapped read reported {message}"
+        );
+    }
+}
