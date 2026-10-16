@@ -2558,11 +2558,13 @@ fn evaluate_selection_on_frames(
 /// Atom-context multi-frame selection: positions of selected atoms per frame.
 ///
 /// Errors if the selection is not atom context (size 1) on the first frame.
-/// Typical use::
+/// Typical use:
 ///
-///     frames = readcon.read_all_frames("traj.con")
-///     out = readcon.select_atom_positions_on_frames("name H", frames)
-///     # out["frames"][i]["positions"] — H xyz on frame i
+/// ```python
+/// frames = readcon.read_all_frames("traj.con")
+/// out = readcon.select_atom_positions_on_frames("name H", frames)
+/// # out["frames"][i]["positions"] — H xyz on frame i
+/// ```
 #[pyfunction]
 fn select_atom_positions_on_frames(
     py: Python<'_>,
