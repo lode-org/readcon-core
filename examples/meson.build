@@ -27,6 +27,11 @@ if get_option('with_cpp')
             'cpp_spreads_roundtrip.cpp',
             meson.current_build_dir() / 'cpp_spreads_roundtrip.con',
         ],
+        [
+            'cpp_v31_units_roundtrip',
+            'cpp_v31_units_roundtrip.cpp',
+            meson.current_build_dir() / 'cpp_v31_units_roundtrip.con',
+        ],
     ]
 endif
 foreach exmpl : examples_array
