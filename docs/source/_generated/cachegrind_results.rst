@@ -11,7 +11,7 @@
      - 6,536,830
      - 2-frame multi CON (50×)
    * - ``forward_multi_2x4``
-     - 4,876,657
+     - 4,876,857
      - forward() skip (50×)
    * - ``convel_multi``
      - 7,659,635
@@ -20,7 +20,7 @@
      - 30,157,091
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
-     - 6,443,469
+     - 6,445,469
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
      - 10,599,863
@@ -44,7 +44,7 @@
      - 6,082,333
      - selection ``name O`` (50×)
 
-Generated **2026-10-16T00:20:18Z** from commit ``9e9b78c``
+Generated **2026-10-16T14:37:04Z** from commit ``8151030``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 

@@ -74,6 +74,24 @@ fn blank_then_whitespace_eof_is_not_a_section_on_skip() {
     assert!(!frames[0].has_velocities());
 }
 
+/// The last coordinate line may omit its newline. Skip and parse both accept it.
+#[test]
+fn final_coordinate_line_without_newline_skips_and_parses() {
+    let first = frame("", 0.0);
+    let second = frame("", 1.0);
+    let text = format!("{first}{}", second.strip_suffix('\n').unwrap());
+    let frames: Vec<_> = ConFrameIterator::new(&text)
+        .map(|r| r.expect("parse"))
+        .collect();
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[1].atom_data[0].z, 1.0);
+    let mut it = ConFrameIterator::new(&text);
+    assert!(it.forward().unwrap().is_ok());
+    assert!(it.forward().unwrap().is_ok());
+    assert!(it.forward().is_none());
+    assert_eq!(frame_start_offsets(&text).len(), 2);
+}
+
 /// Last line is a blank with no trailing newline — still not a velocity block.
 #[test]
 fn terminal_blank_without_newline_is_not_a_section() {

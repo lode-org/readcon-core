@@ -250,9 +250,13 @@ impl<'a> ConFrameIterator<'a> {
     }
 
     /// Bulk-skips `n` lines from the shared memchr cursor.
+    ///
+    /// A final line with no trailing newline still counts when it is the
+    /// last line this call needs and its bytes are present. The full
+    /// parser accepts that line. Further lines after it are missing.
     fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
         self.lines.clear_peek();
-        for _ in 0..n {
+        for i in 0..n {
             let rest = &self.lines.bytes[self.lines.pos..];
             match memchr::memchr(b'\n', rest) {
                 Some(pos) => {
@@ -264,7 +268,13 @@ impl<'a> ConFrameIterator<'a> {
                         return Err(error::ParseError::IncompleteFrame);
                     }
                     self.lines.pos = self.lines.bytes.len();
+                    // Count the unterminated line so a later located error
+                    // names it. It satisfies this skip only when it is the
+                    // last line still required; the full parser accepts it.
                     self.lines.line_no = self.lines.line_no.saturating_add(1);
+                    if i + 1 == n {
+                        return Ok(());
+                    }
                     return Err(error::ParseError::IncompleteFrame);
                 }
             }
