@@ -1,0 +1,11 @@
+path,ranks,median_s,bytes_total,aggregate_MBps,time_over_rank1
+shared read,1,1.161,135600000,116.8,1.00
+shared read,8,1.5815,1084800000,685.9,1.36
+MPI-IO write,1,1.0369,135600000,130.8,1.00
+MPI-IO write,8,1.3821,1084800000,784.9,1.33
+one-writer ingest,1,7.841,1068323900,136.2,1.00
+one-writer ingest,8,29.594,8546831576,288.8,3.77
+four-shard ingest,1,7.465,1068323900,143.1,1.00
+four-shard ingest,2,10.856,2136675340,196.8,1.45
+four-shard ingest,4,18.375,4273391820,232.6,2.46
+four-shard ingest,8,34.899,8546831576,244.9,4.68

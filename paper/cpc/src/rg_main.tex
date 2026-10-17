@@ -109,92 +109,68 @@ The default writer emits the shortest decimal that parses back to the same binar
 A corpus of legal and illegal frames decides what a conforming reader accepts.
 One Rust core sits behind one C interface, and eOn 3.6.0 reads and writes CON through it.
 The companion store readcon-db keeps that text, indexes composition, energy and forces, recognises gzip and zstd wrappers of the same text, and ingests frames from several MPI ranks.
+Its LMDB map defaults to 2 GiB and is raised with \texttt{open\_with\_map\_size} or \texttt{READCON\_DB\_MAP\_SIZE}.
 
 \textit{Additional comments including restrictions and unusual features:}
 A frame stores geometry and its labels.
 The short history of a quasi-Newton or FIRE step lies outside the frame.
-The default memory map of readcon-db is 2 GiB.
 \end{small}
 
 \end{frontmatter}
 
 \section{Introduction}
 \label{sec:introduction}
-Harmonic transition-state theory builds a rate from a barrier and from the curvatures at a minimum and at a first-order saddle \cite{eyringActivatedComplexChemical1935}.
-The prefactor is a ratio of frequencies of the free modes \cite{vineyardFrequencyFactorsIsotope1957}.
-The rate theories that followed keep that dependence on the barrier region \cite{hanggiReactionrateTheoryFifty1990}.
-A mask read wrongly removes a mode, so the stored geometry has to carry the mask.
-A coordinate that moves on restart is a different stationary point, so the stored geometry has to come back as the same binary64 values.
+Harmonic transition-state theory builds a rate from the barrier and from the curvatures at a minimum and at a first-order saddle \cite{eyringActivatedComplexChemical1935}.
+The Vineyard prefactor is the ratio of the real frequencies of the free modes \cite{vineyardFrequencyFactorsIsotope1957}, and later rate theory keeps that dependence on the barrier region \cite{hanggiReactionrateTheoryFifty1990}.
+readcon returns the per-axis mask because a mask that comes back as a different set of free modes changes that prefactor.
+Section \ref{sec:cases} measures the change on one hop.
+readcon also returns each coordinate as the binary64 value that was written, because the rate was taken at that point on the surface.
 
-The searches that find those points all stop on a file.
-The nudged elastic band stores a chain of images tied by springs \cite{jonssonNudgedElasticBand1998}.
-Its climbing image pushes the highest image to the saddle, which is the number the campaign reports \cite{henkelmanClimbingImageNudged2000}.
-The tangent that image uses is estimated from its neighbours, so a displaced neighbour changes the next step \cite{henkelmanImprovedTangentEstimate2000}.
-Energy-weighted springs change the spacing and still resume from the same images \cite{asgeirssonNudgedElasticBand2021}.
-An improved initial path is itself a file of geometries \cite{smidstrupImprovedInitialGuess2014}.
-The string method stores the path as a curve of configurations \cite{eStringMethodStudy2002}, and the simplified string does the same \cite{eSimplifiedImprovedString2007}.
-A growing string adds images from the endpoints, so an interrupted growth resumes from the images already placed \cite{petersGrowingStringMethod2004}.
-The dimer stores two nearby geometries and rotates them onto the lowest mode \cite{henkelmanDimerMethodFinding1999}.
-Later dimer variants change the rotation and still restart from those two geometries \cite{heydenEfficientMethodsFinding2005,kastnerSuperlinearlyConvergingDimer2008}.
-Single-ended searches differ in how they climb, and they share the stored point as the object being compared \cite{olsenComparisonMethodsFinding2004}.
-A catalogue of stationary points is a catalogue of geometries \cite{walesExploringEnergyLandscapes2018}.
-Partial Hessian diagonalization accelerates the refinement of a saddle the file already holds \cite{hermesAcceleratedSaddlePoint2019}.
-A geodesic step in internal coordinates speeds the optimiser and still writes the Cartesian frame \cite{hermesGeometryOptimizationSpeedup2021}.
-An automation layer such as Sella stops and resumes that frame \cite{hermesSellaOpensourceAutomationfriendly2022}.
-Aligning the climbing image with a Hessian eigenmode is a later step on the same stored band \cite{goswamiEnhancedClimbingImage2026}.
-The chapter that collects these searches is a list of algorithms with one shared record, the geometry \cite{henkelmanMethodsFindingSaddle2005}.
+The searches that stop on the file differ in the object the next iteration reads, and they share the requirement that the object come back unchanged.
+A nudged elastic band resumes from the chain of images tied by springs \cite{jonssonNudgedElasticBand1998}.
+The climbing image reports the highest of those images \cite{henkelmanClimbingImageNudged2000}, and its tangent is estimated from the stored neighbours, so a neighbour that has moved changes the next step \cite{henkelmanImprovedTangentEstimate2000}.
+Energy-weighted springs, an improved initial path, the string method, its simplification, and a growing string all continue from geometries already written \cite{asgeirssonNudgedElasticBand2021,smidstrupImprovedInitialGuess2014,eStringMethodStudy2002,eSimplifiedImprovedString2007,petersGrowingStringMethod2004}.
+The dimer resumes from two nearby geometries and rotates them onto the lowest mode \cite{henkelmanDimerMethodFinding1999}; later variants change the rotation and still start from those two geometries \cite{heydenEfficientMethodsFinding2005,kastnerSuperlinearlyConvergingDimer2008}.
+Single-ended searches differ in the climb and compare the same stored point \cite{olsenComparisonMethodsFinding2004}.
+A catalogue of stationary points, and the chapter that collects these algorithms, can be rerun only by reloading the geometries \cite{walesExploringEnergyLandscapes2018,henkelmanMethodsFindingSaddle2005}.
+Partial-Hessian refinement, a geodesic step that still writes Cartesians, and Sella all stop on that frame \cite{hermesAcceleratedSaddlePoint2019,hermesGeometryOptimizationSpeedup2021,hermesSellaOpensourceAutomationfriendly2022}.
+Aligning the climbing image with a Hessian eigenmode is a later iteration on the same stored band \cite{goswamiEnhancedClimbingImage2026}.
 
-When the event is too rare for a direct trajectory, the campaign still hands a configuration from one stage to the next.
-Hyperdynamics adds a bias defined on the stored configuration \cite{voterHyperdynamicsAcceleratedMolecular1997}.
-The bond-boost form of that bias is defined on the same point \cite{mironAcceleratedMolecularDynamics2003}.
-The review of accelerated molecular dynamics is a review of methods that exchange a configuration \cite{voterExtendingTimeScale2002}.
-Off-lattice kinetic Monte Carlo accepts an event and writes the new state for the next search \cite{henkelmanLongTimeScale2001}.
-The event table is keyed by that configuration \cite{voterIntroductionKineticMonte2007}.
-Adaptive kinetic Monte Carlo builds the table as it goes, and the campaign is the sequence of stored states \cite{xuAdaptiveKineticMonte2008}.
-Absorbing Markov chains for slow dynamics resume from the last configuration \cite{novotnyMonteCarloAlgorithms1995}.
-A parallel replica copies one state onto many ranks, so every replica has to start from the same geometry \cite{voterParallelReplicaMethod1998}.
-Dephasing starts from that same stored state \cite{perezParallelReplicaDynamics2015}.
-Parallel trajectory splicing passes states between segments \cite{perezLongtimeDynamicsThrough2016}.
+Rare-event stages hand one configuration forward.
+Hyperdynamics and the bond-boost bias are defined on the stored point \cite{voterHyperdynamicsAcceleratedMolecular1997,mironAcceleratedMolecularDynamics2003}, which is the configuration the accelerated-dynamics review follows from one method to the next \cite{voterExtendingTimeScale2002}.
+Off-lattice kinetic Monte Carlo accepts an event and writes the new state, and the event table is keyed by that configuration \cite{henkelmanLongTimeScale2001,voterIntroductionKineticMonte2007,terrellDatabaseAtomisticReaction2012}.
+Adaptive kinetic Monte Carlo builds the table as it goes \cite{xuAdaptiveKineticMonte2008}.
+Absorbing Markov chains resume from the last configuration \cite{novotnyMonteCarloAlgorithms1995}.
+Parallel replica, dephasing and trajectory splicing copy one stored state onto other ranks, so every replica starts from the same geometry \cite{voterParallelReplicaMethod1998,perezParallelReplicaDynamics2015,perezLongtimeDynamicsThrough2016}.
 Basin hopping records the minimum it just accepted \cite{walesGlobalOptimizationBasinhopping1997}.
-Minima hopping escapes by a short trajectory and then relaxes, so it writes both velocities and a geometry \cite{goedeckerMinimaHoppingEfficient2004}.
+Minima hopping writes the relaxed geometry together with the velocities of the short escape \cite{goedeckerMinimaHoppingEfficient2004}.
+On a surface the slab is held and the adatom moves in the plane, so the mask is per atom and per axis \cite{jonssonSimulationSurfaceProcesses2011}.
+After the file groups rows by element, a band and an event table find an atom by the id stored on the row \cite{gundeIraShapeMatching2021}.
 
-eOn is the program that runs these searches and stops them on a file \cite{chillEonSoftwareLong2014}.
-The concept record of that program is separate from any one release \cite{goswamiEon2026}.
-Release 3.6.0 reads and writes the file through the reader in this paper \cite{rohitgoswamiTheochemuieonV3602026}.
-A long exploration writes thousands of such files \cite{goswamiEfficientExplorationChemical2025}.
-A distributed adaptive kinetic Monte Carlo run ships the files between ranks \cite{pedersenDistributedImplementationAdaptive2010}.
-A public-resource client returns the same files across machines \cite{andersonBoincSystemPublicresource2005}.
+eOn runs these searches and stops them on the file \cite{chillEonSoftwareLong2014}.
+The concept record is separate from any one release \cite{goswamiEon2026}, and release 3.6.0 reads and writes the file through the reader in this paper \cite{rohitgoswamiTheochemuieonV3602026}.
+A long exploration writes thousands of such files \cite{goswamiEfficientExplorationChemical2025}, a distributed adaptive kinetic Monte Carlo run ships them between ranks \cite{pedersenDistributedImplementationAdaptive2010}, and a public-resource client returns the same bytes across machines \cite{andersonBoincSystemPublicresource2005}.
 
-A surrogate inside the search loop does not replace the file.
-A Gaussian-process force model is trained on geometries \cite{goswamiEfficientImplementationGaussian2025}.
-Pruning that model removes training points and still evaluates the geometry the search is standing on \cite{goswamiAdaptivePruningIncreased2026}.
-A Gaussian-process band and a Gaussian-process minimum-mode search both write the geometry they refined \cite{koistinenNudgedElasticBand2019,koistinenMinimumModeSaddle2020}.
-Accelerating the saddle search leaves the checkpoint in place \cite{petersonAccelerationSaddlepointSearches2016}.
+A surrogate inside the loop still writes the frame it evaluated.
+That is the checkpoint left by a Gaussian-process force model, by pruning that model, by a Gaussian-process band, by a Gaussian-process minimum-mode search, and by other accelerations of the saddle search \cite{goswamiEfficientImplementationGaussian2025,goswamiAdaptivePruningIncreased2026,koistinenNudgedElasticBand2019,koistinenMinimumModeSaddle2020,petersonAccelerationSaddlepointSearches2016}.
 A Bayesian search places its posterior on stationary points that are geometries \cite{goswamiTutorialReviewBayesian2026}.
-A model container such as metatensor evaluates a geometry; it does not store the search \cite{bigiMetatensorMetatomicFoundational2026}.
-A universal potential such as PET-MAD consumes a geometry and returns energy and forces \cite{mazitovPetmadLightweightUniversal2025}.
-A descriptor library consumes the same geometry and cannot rebuild a mask from the descriptor \cite{himanenDscribeLibraryDescriptors2020}.
-Symmetry search can renumber atoms, so an atom id is not recoverable from coordinates alone \cite{togoSpglibSoftwareLibrary2024}.
-A materials-analysis library starts from a stored structure \cite{ongPythonMaterialsGenomics2013}.
-A materials API returns that structure and does not return the optimiser state that produced it \cite{ongMaterialsApplicationProgramming2015}.
+metatensor evaluates a geometry, and the search state stays in the checkpoint \cite{bigiMetatensorMetatomicFoundational2026}.
+PET-MAD returns energy and forces for a geometry it is given \cite{mazitovPetmadLightweightUniversal2025}.
+A descriptor is a vector, so the mask has to travel in the frame \cite{himanenDscribeLibraryDescriptors2020}.
+A symmetry search can renumber atoms, so the id stored on the row is what a later frame uses \cite{togoSpglibSoftwareLibrary2024}.
+pymatgen starts from a structure that was stored \cite{ongPythonMaterialsGenomics2013}, and a materials API returns that structure downstream of the optimiser state \cite{ongMaterialsApplicationProgramming2015}.
 
-The file therefore has a job an exchange format does not.
-A surface calculation holds the slab and lets an adatom move in the plane, so the mask is per atom and per axis \cite{jonssonSimulationSurfaceProcesses2011}.
-A band and an event table refer to atoms by identity after a file has grouped them by element \cite{gundeIraShapeMatching2021,terrellDatabaseAtomisticReaction2012}.
-Velocities enter a step only with a unit.
-The natural unit of eOn is \((\mathrm{amu}\cdot\text{\AA}^{2}/\mathrm{eV})^{1/2}\).
-On a \(10{,}001\)-atom slab the committed conversion is \(10.1805056712\,\mathrm{fs}\), and the kinetic energy scales by \(103.642696\) when the same numbers are read as \(\text{\AA}/\mathrm{fs}\) \cite{tiesingaCodataRecommendedValues2021}.
-A unit library is how a program names that quantity; the file has to carry the name \cite{mckeeverUnitMeasurementLibraries2021}.
-Velocity Verlet advances positions with those velocities \cite{swopeComputerSimulationMethod1982}.
-A thermostat rescales the kinetic energy it is given \cite{bussiCanonicalSamplingThrough2007}.
-The developers of MDAnalysis stated the documentation problem directly: simulation file formats ``are often only poorly documented and just adhere to certain community expectations that can be difficult to understand for outsiders'' \cite{gowersMdanalysisPythonPackage2016}.
+Velocities enter a step with a unit.
+The natural unit of eOn is \((\mathrm{amu}\cdot\text{\AA}^{2}/\mathrm{eV})^{1/2}\), and the conversion to femtoseconds uses the CODATA constants \cite{tiesingaCodataRecommendedValues2021}.
+Section \ref{sec:cases} measures the kinetic energy when the same numbers are read as \(\text{\AA}/\mathrm{fs}\).
+A unit library names the quantity; the file carries the name the library looks up \cite{mckeeverUnitMeasurementLibraries2021}.
+Velocity Verlet advances positions with the velocities it is given \cite{swopeComputerSimulationMethod1982}, and a thermostat rescales the kinetic energy it is given \cite{bussiCanonicalSamplingThrough2007}.
+The developers of MDAnalysis stated the gap this grammar closes: simulation file formats ``are often only poorly documented and just adhere to certain community expectations that can be difficult to understand for outsiders'' \cite{gowersMdanalysisPythonPackage2016}.
 
-Two readers given the same bytes have to return the same state, because the computation is the data \cite{pengReproducibleResearchComputational2011}.
-A second group can rerun that computation only from the file and the program \cite{inceCaseOpenComputer2012}.
+Two readers of the same bytes have to return the same state, because the computation is the data \cite{pengReproducibleResearchComputational2011}, and a second group can rerun it from the file and the program \cite{inceCaseOpenComputer2012}.
 The file outlives the code that wrote it \cite{hinsenCaringYourData2012}.
 A format defined only by one library version collapses when that library changes \cite{hinsenDealingSoftwareCollapse2019}.
-The FAIR principles ask for a record another group can reuse \cite{wilkinsonFairGuidingPrinciples2016}.
-The matching principles for research software ask for a versioned, citable program \cite{barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020,smithSoftwareCitationPrinciples2016}.
+The FAIR principles ask for a record another group can reuse \cite{wilkinsonFairGuidingPrinciples2016}, and the matching principles for research software ask for a versioned, citable program \cite{barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020,smithSoftwareCitationPrinciples2016}.
 Chemical Markup Language and MOSAIC wrote the data model down before the code \cite{murrayrustChemicalMarkupXml1999,hinsenMosaicDataModel2014}.
 checkCIF turned the CIF rules into alerts a later reader can reproduce \cite{hallCrystallographicInformationFile1991,spekCheckcifValidationAlerts2020}.
 CON 3.1 is that treatment of the text eOn already writes.
@@ -272,40 +248,50 @@ Given coordinates alone it freezes every masked atom on every axis, drops the id
 The ASE eon writer cannot express a per-axis constraint, so that route produces no file.
 
 \subsection{Records that are not this checkpoint}
-The formats below are in use next to a saddle search.
-Each one stores a record this checkpoint does not, or omits a field this checkpoint requires.
-They are the boundary of the problem, and Section \ref{sec:limitations} keeps that boundary.
+\label{sec:neighbours}
+Table \ref{tab:compare} answers four questions for the checkpoint and for the records that sit beside a saddle search.
+Restart-exact means binary64 coordinates, the per-axis mask, the persistent id and the periodic flags all come back.
+Velocities means a velocity block whose time unit is written in the file.
+Metadata means a version or a schema a second reader can apply.
+Indexed means frame \(k\) can be opened without a scan whose length is the number of earlier frames.
+The first six rows are the round trips in Table \ref{tab:survey}.
+Rows below the second rule are what the cited specification stores.
+The grammar and the store are separate libraries, which is the split argued for electronic-structure codes \cite{oliveiraCecamElectronicStructure2020}.
 
-TNG is a portable compressed trajectory of a finished molecular-dynamics run \cite{spangbergTrajectoryNgPortable2011}, and its library and API serve that trajectory \cite{lundborgEfficientExtensibleFormat2014}.
-GROMACS writes the production trajectory of a finished run \cite{abrahamGromacsHighPerformance2015}.
-CHARMM does the same for its own trajectories \cite{brooksCharmmBiomolecularSimulation2009}.
-AMBER stores trajectories in NetCDF \cite{caseAmberBiomolecularSimulation2005,rewNetcdfInterfaceScientific1990}.
-A portable scientific-data manager stores arrays of a finished dataset \cite{brownSoftwarePortableScientific1993}.
-MDTraj analyses those trajectories \cite{mcgibbonMdtrajModernOpen2015}.
-VMD displays them \cite{humphreyVmdVisualMolecular1996}.
-OVITO displays and filters atomistic snapshots \cite{stukowskiVisualizationAnalysisAtomistic2010}.
-ADIOS2 moves high-performance output during a run \cite{godoyAdios2Adaptable2020}.
-Essential-dynamics compression keeps principal components and discards the exact coordinates a resume needs \cite{meyerEssentialDynamicsTool2006}.
-d-SEAMS analyses a finished trajectory for structure \cite{goswamiDseamsDeferredStructural2020}.
-An MPI-parallel H5MD analysis reads that finished trajectory; it is a different job from a checkpoint read \cite{jakupovicMpiparallelMolecularDynamics2021}.
-Zarr specifies chunked arrays for analysis \cite{opengeospatialconsortiumZarrStorageSpecification2022}.
-
-The Protein Data Bank archives a curated structure \cite{bermanProteinDataBank2000}.
-The worldwide PDB is the organisation of that archive \cite{bermanAnnouncingWorldwideProtein2003}.
-mmCIF is the ontology of the same archive \cite{westbrookStarmmcifOntologyMacromolecular2000}.
-A LAMMPS dump is a snapshot whose units live in the input deck \cite{thompsonLammpsFlexibleSimulation2022}.
-Atomsk and Open Babel convert columns that both dialects define \cite{hirelAtomskToolManipulating2015,oboyleOpenBabelOpen2011}.
-cclib and IOData parse quantum-chemistry outputs into documented objects \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021}.
-TREXIO stores a wave function \cite{posenitskiyTrexioFileFormat2023}.
-QCArchive stores quantum-chemistry results \cite{smithMolssiQcaRchive2021}.
-OPTIMADE, NOMAD, Catalysis-Hub, Transition1x and OC20 distribute structures or reaction endpoints after the search \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}.
-PACKMOL builds an initial box and does not record a search \cite{martinezPackmolPackageBuilding2009}.
-PLUMED accumulates collective variables on a running trajectory \cite{tribelloPlumed2New2014}.
-ESPResSo writes the checkpoint of its own integrator \cite{weikEspresso40Extensible2019}.
-i-PI, in its original interface and in the 2.0 and 3.0 force engines, exchanges positions during a running step \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024}.
-The MolSSI driver interface does that exchange on the fly \cite{barnesMolssiDriverInterface2021}.
-The stopped job still resumes from a file.
-The electronic-structure community has argued for one library per concern with a stable interface, which is the split used here between the grammar and the store \cite{oliveiraCecamElectronicStructure2020}.
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{Restart record against neighbouring records.
+The first six rows are measured in Table \ref{tab:survey}.
+Later rows follow the cited specification.
+``Scan'' means the reader walks the file to find a frame.
+``Offsets'' means readcon records a byte offset after that scan, which stays serial because each start depends on the counts before it.}
+\label{tab:compare}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{0.34\linewidth}llll@{}}
+\toprule
+Record & Restart-exact & Velocities & Metadata & Indexed \\
+\midrule
+CON 3.1 & yes & declared & versioned & offsets \\
+extended XYZ & no & omitted & comment & scan \\
+ASE trajectory & coordinates & unnamed & code & yes \\
+POSCAR & mask changed & omitted & selective & no \\
+H5MD & single precision & declared & versioned & HDF5 \\
+ASE eon on CON & collapsed & rejected & none & no \\
+\midrule
+TNG, GROMACS, CHARMM, AMBER/NetCDF \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009,caseAmberBiomolecularSimulation2005,rewNetcdfInterfaceScientific1990} & trajectory & MD fields & container & frames \\
+PDB, wwPDB, mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000} & archive & omitted & ontology & archive id \\
+LAMMPS, Atomsk, Open Babel \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015,oboyleOpenBabelOpen2011} & columns & deck units & converter & no \\
+cclib, IOData, TREXIO, QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021} & QC object & omitted & schema & result index \\
+OPTIMADE, NOMAD, Catalysis-Hub, Transition1x, OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021} & published geometry & omitted & schema & yes \\
+MDTraj, VMD, OVITO, d-SEAMS, essential dynamics, MPI H5MD \cite{mcgibbonMdtrajModernOpen2015,humphreyVmdVisualMolecular1996,stukowskiVisualizationAnalysisAtomistic2010,goswamiDseamsDeferredStructural2020,meyerEssentialDynamicsTool2006,jakupovicMpiparallelMolecularDynamics2021} & analysis & from the file & the tool & opened file \\
+Zarr, ADIOS2, portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993} & arrays & omitted & container & chunks \\
+PACKMOL \cite{martinezPackmolPackageBuilding2009} & initial box & omitted & none & no \\
+PLUMED, ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019} & program state & program & checkpoint & no \\
+i-PI, MDI \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021} & live step & in the step & interface & no \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{The CON 3.1 specification}
 \label{sec:format}
@@ -711,7 +697,10 @@ The comparison is of the stopped search.
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
 \caption{Final images of the Morse band on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
-With the step count matched, the shortest round trip returns the uninterrupted barrier, \(0.63493\,\mathrm{eV}\).}
+With the step count matched, the shortest round trip returns the uninterrupted barrier, \(0.63493\,\mathrm{eV}\).
+The colour bar is the fitted surface.
+Its labels, including \(0.6152\,\mathrm{eV}\), are locator ticks written to the trace table.
+The image energies are the energy column of the uninterrupted \texttt{neb.dat}, and the highest image is \(0.634930\,\mathrm{eV}\).}
 \label{fig:restart}
 \end{figure}
 
@@ -875,10 +864,15 @@ Table \ref{tab:mpi-weak} is the warm medians, and the ratio is the eight-rank ti
 Shared read grows by \(1.36\), scatter by \(1.61\), MPI-IO write by \(1.33\), and gather write by \(1.78\).
 One-writer ingest grows by \(3.77\), from \(7.841\,\mathrm{s}\) to \(29.594\,\mathrm{s}\).
 Four-shard ingest grows by \(4.68\), from \(7.465\,\mathrm{s}\) to \(34.899\,\mathrm{s}\).
-The read and the MPI-IO write stay near the one-rank time.
-The ingest does not: eight ranks take several times as long as one rank on the same work per rank.
+Every rank writes one virtio ext4 device, and the byte count grows with the rank count.
+Table \ref{tab:weak-io} is the aggregate rate on that device, the warm byte count divided by the warm median.
+Shared read and MPI-IO write still gain rate from one rank to eight.
+Both ingest paths level off, and at eight ranks the sharded path is the slower of the two on the same bytes.
+The shard files share that device, which is the single-host I/O contention in these medians.
 Figure \ref{fig:mpi-weak} is that growth.
-An earlier campaign with a different host and with means rather than medians is not this table.
+An earlier campaign on another host, summarised by means, is a separate measurement.
+
+\input{figures/generated/weak_io}
 
 \input{figures/generated/mpi_weak_warm}
 
@@ -901,12 +895,9 @@ Five repeats are interleaved.
 Cold is a \texttt{posix\_fadvise} \texttt{DONTNEED} hint and then a fresh process; the run did not drop the page cache.
 Warm is the next query in that process.
 The timed corpora have \(1{,}000\) and \(10{,}000\) frames, and every frame has its own xxHash3-128, so the ingest timing is not a deduplication win.
-The frames come from ASE EMT searches: an HCN/HNC band of 157 frames, a Cu adatom band of 159, a Pt--H band of 83, and a Pt adatom dimer of 71, plus an adaptive kinetic Monte Carlo trace of \(4{,}000\) steps on three systems.
-EMT on H, C and N is not a quantitative barrier.
-The HCN saddle in that trace is \(197.6\,\mathrm{eV}\) with no hops, the Cu saddle is \(5.23\,\mathrm{eV}\) with barrier about \(1.09\,\mathrm{eV}\) and no hops, and the Pt--H trace has \(1{,}664\) hops and a barrier about \(0.03\,\mathrm{eV}\).
-eOn was not used for those searches.
-A \(100{,}000\)-frame ingest was not timed: ASE's database writes about \(200\) frames/s and does not finish in two minutes.
-One million frames does not fit the default \(2\,\mathrm{GiB}\) map.
+The frames are ASE effective-medium geometries stored as CON text: an HCN/HNC band of 157 frames, a Cu adatom band of 159, a Pt--H band of 83, a Pt adatom dimer of 71, and an adaptive kinetic Monte Carlo trace of \(4{,}000\) steps on three systems.
+The evaluation times bytes, hashes and index hits.
+A \(100{,}000\)-frame ingest exceeds two minutes because ASE's database writes about \(200\) frames/s, so that size was left out of the timed table.
 
 At \(10{,}000\) frames the ingest medians are \(0.311306\,\mathrm{s}\) for readcon-db (\(32{,}123\) frames/s, \(35.09\,\mathrm{MB/s}\)), \(48.411\,\mathrm{s}\) for ASE's database committing every write (\(206.6\) frames/s), and \(5.985\,\mathrm{s}\) for one ASE connection that still commits every \(5{,}000\) rows (\(1{,}671\) frames/s).
 The paired ratios are \(0.006800\) against the per-write commits and \(0.05283\) against the single connection.
@@ -921,7 +912,11 @@ The index is what the warm readcon-db number measures.
 
 Allocated bytes at \(10{,}000\) frames are \(10{,}923{,}745\) for the raw CON text, \(3{,}241{,}302\) after gzip level 6, \(3{,}312{,}800\) after zstd level 3, \(11{,}501{,}568\) for the directory, \(27{,}340{,}800\) for readcon-db and \(8{,}929{,}280\) for ASE's database.
 readcon-db is \(2.503\) times the raw text: the text plus the indexes.
-The \(2\,\mathrm{GiB}\) figure is the map ceiling, not this file.
+The LMDB map defaults to \(2\,\mathrm{GiB}\).
+In readcon-db 0.1.8, commit \path{55214d1}, that value is \texttt{DEFAULT\_MAP\_SIZE}.
+\texttt{open\_with\_map\_size} and \texttt{READCON\_DB\_MAP\_SIZE} raise it, and a write that hits \texttt{MDB\_MAP\_FULL} grows the map and retries.
+These tables were collected at commit \path{6146c3b}, where the map was still that \(2\,\mathrm{GiB}\) constant, so a one-million-frame open returned \texttt{MDB\_MAP\_FULL} and that size stays outside the tables.
+The byte counts above are the data files.
 At \(1{,}000\) frames zstd level 3 (\(270{,}863\) bytes) is smaller than gzip level 6 (\(277{,}258\) bytes).
 At \(10{,}000\) frames zstd is the larger of the two.
 The adaptive kinetic Monte Carlo trace has \(24{,}000\) frames and \(27{,}864{,}917\) stored blob bytes, equal to the raw file, and 7 unique hashes whose text is \(8{,}319\) bytes.
@@ -939,10 +934,8 @@ The corpus decides the listed files.
 Agreement among the language bindings is agreement of one core, and the public Fortran wrapper shows that a binding can still fail while that core is unchanged.
 The resumed bands are one EMT Pt hop and one Morse band.
 They show what a lost field does to those searches.
-The EMT energies quoted for H, C and N are recorded as the trace produced them: the HCN saddle is \(197.6\,\mathrm{eV}\), and that potential is not a quantitative barrier for those atoms.
 Peer ratios hold for the library versions named in Sections \ref{sec:requirements} and \ref{sec:perf-peers}.
 The MPI claim covers ranks 1 to 8 on the 8-core virtio host in Section \ref{sec:perf-mpi}.
-The default LMDB map is \(2\,\mathrm{GiB}\), and one million frames returns \texttt{MDB\_MAP\_FULL}.
 CON is the checkpoint record.
 H5MD is the trajectory record.
 The byte counts in Table \ref{tab:sizes} are the measured cost of the checkpoint text.
@@ -959,7 +952,7 @@ Twenty-five language pairs resume the climbing-image band at the uninterrupted b
 The public Fortran wrapper, tested the same way, returns status \(-4\) and writes no usable frame.
 A warm read costs \(12.6\,\mu\mathrm{s}\) per 218-atom frame.
 Shared MPI reads and MPI-IO writes speed up across eight ranks on this host.
-The sharded ingest does not stay flat under weak scaling.
+Under weak scaling the sharded ingest grows by \(4.68\) because every rank writes the same virtio ext4 device (Table \ref{tab:weak-io}).
 readcon-db stores the CON text, indexes it, and ingests it in parallel; those are the operations Section \ref{sec:perf-db} and Section \ref{sec:perf-mpi} time.
 
 \section*{Data availability}
@@ -971,6 +964,7 @@ The software citation points at those archived records \cite{smithSoftwareCitati
 The store is archived separately \cite{goswamiReadcondbMmapCon2026}.
 Publishing a finished saddle remains the job of a repository, a materials archive or a reaction database, downstream of this checkpoint \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021,ongMaterialsApplicationProgramming2015}.
 The HCN coordinates are the public endpoints of that isomerisation \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
+The values \(0.670723\,\mathrm{eV}\), \(0.037113\,\mathrm{eV}\), \(390.085819\,\mathrm{eV}\), \(40429.545793\,\mathrm{eV}\), the factor \(2.503\), the warm query times \(0.211\,\mathrm{ms}\) and \(0.208\,\mathrm{ms}\), and the colour-bar tick \(0.6152\,\mathrm{eV}\) are the rows of \path{data/trace/claimed.csv}, written by \path{scripts/trace_claimed.py}.
 The specification, the grammar, the corpus and the campaign files are the supplementary material.
 The \((s, d)\) figures use the projection defined for comparing bands that share atom identity \cite{goswamiTwodimensionalRmsdProjections2026}.
 

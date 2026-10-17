@@ -188,6 +188,10 @@ These two are unchanged:
 ## Limits
 
 Ingest parallelism in a directory load was not used; the thread cap is 1.
-Cold times are fadvise hints, not a guaranteed cache drop. The LMDB map stays
-at 2 GiB. ASE's database lock waits forever if a dead process leaves
-`*.db.lock`; the ASE ingest helper removes that lock before connect.
+Cold times are fadvise hints, not a guaranteed cache drop. This evaluation
+commit keeps the LMDB map at the 2 GiB constant, so one million frames
+returns `MDB_MAP_FULL`. In readcon-db 0.1.8 that same 2 GiB value is
+`DEFAULT_MAP_SIZE`: `open_with_map_size` and `READCON_DB_MAP_SIZE` raise it,
+and a write that hits `MDB_MAP_FULL` grows the map and retries. ASE's
+database lock waits forever if a dead process leaves `*.db.lock`; the ASE
+ingest helper removes that lock before connect.
