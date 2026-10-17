@@ -1,0 +1,41 @@
+format,writer,reader,R1,R2,R3,R4,pbc,dpos,error,notes
+CON 3.1,readcon-core,readcon-core,kept,kept,declared,bit-exact,kept,0.0,,
+CON 3.1,readcon-core,ASE eon reader,error,error,error,error,,,ValueError: could not convert string to float: 'Velocities',
+"CON 3.1, coordinates only",readcon-core,ASE eon reader,full freeze,lost,lost,bit-exact,FFF,0.0,,
+legacy CON,ASE eon writer,readcon-core,error,error,error,error,,,"TypeError: category must be a Warning subclass, not 'FixCartesian'",
+extended XYZ,ASE,ASE,convention,convention,convention,4.7e-09 A,kept,4.708383904983293e-09,,
+extended XYZ,ASE,chemfiles,lost,convention,lost,4.7e-09 A,-,4.708383904983293e-09,,
+extended XYZ,ASE,MDAnalysis,lost,lost,lost,2.2e-07 A,-,2.1514905768071912e-07,,
+extended XYZ,chemfiles,ASE,lost,lost,lost,4.9e-06 A,TTT,4.910985489381403e-06,,
+ASE trajectory,ASE,ASE,kept,lost,convention,bit-exact,kept,0.0,,
+POSCAR,ASE,ASE,changed,lost,fixed by format,4.5e-17 A,TTT,4.456070928915423e-17,,
+H5MD,MDAnalysis,MDAnalysis,lost,lost,declared,2.2e-07 A,TTT,2.1514905768071912e-07,,
+CON 3.1,Python,Python,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Python,C,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Python,C++,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Python,Fortran,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Python,Julia,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C,Python,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C,C,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C,C++,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C,Fortran,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C,Julia,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C++,Python,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C++,C,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C++,C++,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C++,Fortran,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,C++,Julia,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Fortran,Python,kept,kept,declared,bit-exact,kept,0.0,,"Fortran calls rkr_frame_add_atom_full with the C header order. The public module add_atom binding swaps id/mass with the fixed flags and cannot write this frame (status -4, atom id 1 repeated)."
+CON 3.1,Fortran,C,kept,kept,declared,bit-exact,kept,0.0,,"Fortran calls rkr_frame_add_atom_full with the C header order. The public module add_atom binding swaps id/mass with the fixed flags and cannot write this frame (status -4, atom id 1 repeated)."
+CON 3.1,Fortran,C++,kept,kept,declared,bit-exact,kept,0.0,,"Fortran calls rkr_frame_add_atom_full with the C header order. The public module add_atom binding swaps id/mass with the fixed flags and cannot write this frame (status -4, atom id 1 repeated)."
+CON 3.1,Fortran,Fortran,kept,kept,declared,bit-exact,kept,0.0,,"Fortran calls rkr_frame_add_atom_full with the C header order. The public module add_atom binding swaps id/mass with the fixed flags and cannot write this frame (status -4, atom id 1 repeated)."
+CON 3.1,Fortran,Julia,kept,kept,declared,bit-exact,kept,0.0,,"Fortran calls rkr_frame_add_atom_full with the C header order. The public module add_atom binding swaps id/mass with the fixed flags and cannot write this frame (status -4, atom id 1 repeated)."
+CON 3.1,Julia,Python,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Julia,C,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Julia,C++,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Julia,Fortran,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+CON 3.1,Julia,Julia,kept,kept,declared,bit-exact,kept,0.0,,cross-binding
+H5MD,MDAnalysis,MDAnalysis,lost,lost,declared,2.2e-07 A,kept,2.1514905768071912e-07,,"measured; fixed is by convention; id, unit and boundary are H5MD names"
+H5MD,MDAnalysis,h5py,by convention,kept,declared,2.2e-07 A,kept,2.1514905768071912e-07,,"measured; fixed is by convention; id, unit and boundary are H5MD names"
+H5MD,h5py,h5py,by convention,kept,declared,bit-exact,kept,0.0,,"measured; fixed is by convention; id, unit and boundary are H5MD names"
+H5MD,h5py,MDAnalysis,lost,lost,declared,2.2e-07 A,kept,2.1514905768071912e-07,,"measured; fixed is by convention; id, unit and boundary are H5MD names"

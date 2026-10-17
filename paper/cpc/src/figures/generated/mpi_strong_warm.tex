@@ -1,0 +1,19 @@
+% Written by paper/cpc/scripts/gen_cloud_tables.py.
+\begin{table}[ht]
+\centering
+\small
+\caption{Strong scaling, warm page cache. Each cell is the median of five repeats. $t_1/t_8$ is the one-rank median divided by the eight-rank median. The file is $1{,}073{,}742{,}498$ bytes. readcon-core holds $3{,}167{,}382$ frames. readcon-db ingests four copies of a $1{,}074{,}071{,}389$-byte trajectory ($30{,}965$ frames of $1{,}000$ atoms), batch 4096. One thread per rank. Every output matches the serial bytes.}
+\label{tab:mpi-strong}
+\begin{tabular}{lrrrr}
+\toprule
+Path & 1 rank (s) & 8 ranks (s) & min--max at 8 & $t_1/t_8$ \\
+\midrule
+read, shared file & 9.088 & 1.504 & 1.416--1.570 & 6.04 \\
+read, scatter & 9.223 & 1.836 & 1.810--1.875 & 5.02 \\
+write, MPI-IO & 8.369 & 1.416 & 1.366--1.491 & 5.91 \\
+write, gather & 9.490 & 2.152 & 2.102--2.262 & 4.41 \\
+ingest, one writer & 31.699 & 16.810 & 16.663--17.330 & 1.89 \\
+ingest, four shards & 32.549 & 18.805 & 18.644--18.879 & 1.73 \\
+\bottomrule
+\end{tabular}
+\end{table}

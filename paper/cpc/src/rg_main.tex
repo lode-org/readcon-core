@@ -1,5 +1,4 @@
-% Created 2026-10-14 Wed 11:43
-% Intended LaTeX compiler: pdflatex
+% CPC draft. The TeX sources are the manuscript. Do not export the org files over them.
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
 \usepackage{rotating}
@@ -44,8 +43,6 @@ Elsevier%
 \usepackage{hyperref}
 \usepackage{xr-hyper}
 \externaldocument{rg_supp}
-% Placeholder for numbers still due from the clean-host benchmark run; must be empty before submission.
-\newcommand{\pending}[1]{\textcolor{red}{[PENDING: #1]}}
 \input{affilfix}
 \lstset{
 basicstyle=\ttfamily\footnotesize,
@@ -65,24 +62,23 @@ belowskip=0.4em
  pdftitle={The restart state of a saddle search: CON 3.1, a conformance corpus, and one reference reader},
  pdfkeywords={checkpoint, specification, interoperability, reproducibility, saddle, restart, eOn},
  pdfsubject={},
- pdfcreator={Emacs 30.1 (Org mode 9.7.11)}, 
  pdflang={English}}
 \begin{document}
 
-\label{sec:org88d7e0b}
 \begin{frontmatter}
 
 \input{authors.tex}
 
 \begin{abstract}
-Saddle searches, nudged elastic bands and adaptive kinetic Monte Carlo resume from a geometry file, which is therefore the restart state of the algorithm.
-A resume needs five things of that file: a mask for each atom and axis (R1), an atom identity that survives reordering (R2), velocities in a declared time unit (R3), binary64 coordinates, cell and periodicity (R4), and a versioned grammar two readers agree on (R5).
-We push one masked Pt(100) slab frame through the formats in common use, and none meets all five.
-A POSCAR round trip through ASE drops the adatom's height constraint, and the resumed climbing-image band ends \(70\,\mathrm{meV}\) lower.
-Extended XYZ moves coordinates by \(5\times10^{-9}\,\text{\AA}\), and five readers of one extended XYZ file return four different answers.
-CON 3.1 is a versioned specification of the text eOn already uses, with an executable conformance corpus and one reference implementation, readcon-core, behind a C interface for C, C++, Python, Julia and Fortran.
-Resumed through CON 3.1, the band matches the uninterrupted one to \(3\times10^{-15}\,\text{\AA}\), the floor set by restarting the force field.
-Reading costs \(12.6\,\mu\mathrm{s}\) per 218-atom frame.
+A saddle search resumes from a geometry file, so that file is the restart state.
+The resume needs a per-axis mask, a persistent atom id, a declared velocity time unit, binary64 coordinates with the cell and the periodic flags, and a versioned grammar.
+One masked Pt(100) frame loses at least one of those fields in every common format tested here.
+An ASE POSCAR round trip drops the adatom's height constraint, and the resumed climbing-image band finishes \(70.2\,\mathrm{meV}\) below the uninterrupted barrier of \(0.644561366\,\mathrm{eV}\).
+Five extended XYZ readers return four answers for one file.
+CON 3.1 versions the text eOn writes, pairs it with a conformance corpus, and implements it once: a Rust core behind a C interface for C, C++, Python, Julia and Fortran.
+Twenty-five language pairs resume the band at that barrier.
+A warm read of \(10{,}000\) frames of 218 atoms takes \(12.6\,\mu\mathrm{s}\) per frame.
+The reader scales across threads and across eight MPI ranks, and the companion store readcon-db keeps the CON text, indexes it, and ingests it from several ranks.
 \end{abstract}
 
 \begin{keyword}
@@ -98,125 +94,224 @@ checkpoint \sep restart \sep specification \sep conformance \sep saddle \sep nud
 \textit{Developer's repository link:} \url{https://github.com/lode-org/readcon-core}\\
 \textit{Licensing provisions:} MIT\\
 \textit{Programming language:} Rust, C, C++, Python, Julia, Fortran 2008\\
-\textit{Supplementary material:} specification, ABNF grammar of 50 rules, conformance corpus, failure-case scripts, and notes to the figures\\
+\textit{Supplementary material:} specification, ABNF grammar, conformance corpus, failure-case scripts, MPI and restart tables\\
 
 \textit{Nature of problem:}
 Rare-event campaigns stop and resume from a stored geometry.
-The common formats each lose part of what a resumed search needs: a per-axis mask, a persistent atom id, the velocity time unit, binary64 coordinates, or the periodicity.
-Readers of one format also disagree with each other.
-The resumed search then runs on a different surface, pairs the wrong atoms, or starts from a different kinetic energy.
+The formats in common use each drop part of the resume state: a per-axis mask, a persistent atom id, the velocity time unit, binary64 coordinates, or the periodic flags.
+Readers of one format also disagree with each other, so the resumed search runs on a different surface.
 
 \textit{Solution method:}
-CON 3.1 is a versioned grammar with a major and a minor number.
-It states which later changes a reader of the same major must still accept, and it requires every velocity block to declare its time unit.
+CON 3.1 is a versioned grammar.
+A reader of a known major accepts a later minor, keeps unknown keys, and rejects an unknown major.
+Every velocity block declares its time unit.
 The default writer emits the shortest decimal that parses back to the same binary64 value.
-A corpus of legal and illegal frames fixes what a conforming reader accepts.
-One Rust core sits behind one C interface, and every binding calls that core, so there is a single parser.
-eOn 3.6.0 reads and writes CON through it.
+A corpus of legal and illegal frames decides what a conforming reader accepts.
+One Rust core sits behind one C interface, and eOn 3.6.0 reads and writes CON through it.
+The companion store readcon-db keeps that text, indexes composition, energy and forces, recognises gzip and zstd wrappers of the same text, and ingests frames from several MPI ranks.
 
 \textit{Additional comments including restrictions and unusual features:}
-A frame stores geometry and its labels. The history of a quasi-Newton optimiser is outside it.
+A frame stores geometry and its labels.
+The short history of a quasi-Newton or FIRE step lies outside the frame.
+The default memory map of readcon-db is 2 GiB.
 \end{small}
 
 \end{frontmatter}
+
 \section{Introduction}
 \label{sec:introduction}
-Rare events in solids and molecules set the rates of diffusion, reaction and structural change.
-Harmonic transition-state theory turns a barrier and the curvatures at a minimum and a first-order saddle into a rate \cite{eyringActivatedComplexChemical1935,vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990}.
-The stationary points come from the nudged elastic band, its climbing-image form and the string method, and from single-ended searches such as the dimer \cite{henkelmanMethodsFindingSaddle2005,jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,asgeirssonNudgedElasticBand2021,smidstrupImprovedInitialGuess2014,eStringMethodStudy2002,eSimplifiedImprovedString2007,petersGrowingStringMethod2004,henkelmanDimerMethodFinding1999,heydenEfficientMethodsFinding2005,kastnerSuperlinearlyConvergingDimer2008,olsenComparisonMethodsFinding2004,walesExploringEnergyLandscapes2018,hermesAcceleratedSaddlePoint2019,hermesGeometryOptimizationSpeedup2021,hermesSellaOpensourceAutomationfriendly2022}.
-When an event is too rare for a direct trajectory, hyperdynamics, other accelerated dynamics, adaptive kinetic Monte Carlo and parallel replicas reach the same landscape \cite{voterHyperdynamicsAcceleratedMolecular1997,voterExtendingTimeScale2002,mironAcceleratedMolecularDynamics2003,henkelmanLongTimeScale2001,voterIntroductionKineticMonte2007,xuAdaptiveKineticMonte2008,novotnyMonteCarloAlgorithms1995,voterParallelReplicaMethod1998,perezLongtimeDynamicsThrough2016}.
-Basin hopping and minima hopping propose the next minimum \cite{walesGlobalOptimizationBasinhopping1997,goedeckerMinimaHoppingEfficient2004}.
-None of these is one calculation.
-A long-timescale run in eOn spawns thousands of saddle searches, stops them, and resumes them, often on another rank, another machine, or a public-resource client \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026,goswamiEfficientExplorationChemical2025,andersonBoincSystemPublicresource2005,pedersenDistributedImplementationAdaptive2010}.
-A surrogate fitted inside the saddle loop still hands each geometry to the force evaluator \cite{goswamiEfficientImplementationGaussian2025,koistinenNudgedElasticBand2019,koistinenMinimumModeSaddle2020,petersonAccelerationSaddlepointSearches2016}.
-The stored geometry is therefore not an export.
-It is the restart state of the algorithm, and the next reader may be a different program in a different language \cite{pengReproducibleResearchComputational2011,inceCaseOpenComputer2012,hinsenCaringYourData2012,hinsenDealingSoftwareCollapse2019}.
+Harmonic transition-state theory builds a rate from a barrier and from the curvatures at a minimum and at a first-order saddle \cite{eyringActivatedComplexChemical1935}.
+The prefactor is a ratio of frequencies of the free modes \cite{vineyardFrequencyFactorsIsotope1957}.
+The rate theories that followed keep that dependence on the barrier region \cite{hanggiReactionrateTheoryFifty1990}.
+A mask read wrongly removes a mode, so the stored geometry has to carry the mask.
+A coordinate that moves on restart is a different stationary point, so the stored geometry has to come back as the same binary64 values.
 
-The restart state has requirements that an exchange format does not.
-A surface search fixes the slab and lets an adatom move only in the surface plane, so the mask is per atom and per axis \cite{jonssonSimulationSurfaceProcesses2011}.
-Harmonic transition-state theory builds the prefactor from the free modes, so a mask read wrongly removes or adds a mode.
-A band and a kinetic Monte Carlo event table refer to atoms by identity, which has to survive a file that groups atoms by element \cite{gundeIraShapeMatching2021,perezParallelReplicaDynamics2015,terrellDatabaseAtomisticReaction2012}.
-Dynamics needs velocities in a known unit, and the natural unit of eOn, \((\mathrm{amu}\cdot\text{\AA}^{2}/\mathrm{eV})^{1/2}=10.1805\,\mathrm{fs}\), differs from a femtosecond by a factor of 103.64 in kinetic energy \cite{tiesingaCodataRecommendedValues2021,mckeeverUnitMeasurementLibraries2021,swopeComputerSimulationMethod1982,bussiCanonicalSamplingThrough2007}.
-A converged band restarted from rounded coordinates is a different band.
-Finally, two readers given the same bytes must agree.
-The developers of MDAnalysis put that last point plainly: simulation file formats ``are often only poorly documented and just adhere to certain community expectations that can be difficult to understand for outsiders'' \cite{gowersMdanalysisPythonPackage2016}.
+The searches that find those points all stop on a file.
+The nudged elastic band stores a chain of images tied by springs \cite{jonssonNudgedElasticBand1998}.
+Its climbing image pushes the highest image to the saddle, which is the number the campaign reports \cite{henkelmanClimbingImageNudged2000}.
+The tangent that image uses is estimated from its neighbours, so a displaced neighbour changes the next step \cite{henkelmanImprovedTangentEstimate2000}.
+Energy-weighted springs change the spacing and still resume from the same images \cite{asgeirssonNudgedElasticBand2021}.
+An improved initial path is itself a file of geometries \cite{smidstrupImprovedInitialGuess2014}.
+The string method stores the path as a curve of configurations \cite{eStringMethodStudy2002}, and the simplified string does the same \cite{eSimplifiedImprovedString2007}.
+A growing string adds images from the endpoints, so an interrupted growth resumes from the images already placed \cite{petersGrowingStringMethod2004}.
+The dimer stores two nearby geometries and rotates them onto the lowest mode \cite{henkelmanDimerMethodFinding1999}.
+Later dimer variants change the rotation and still restart from those two geometries \cite{heydenEfficientMethodsFinding2005,kastnerSuperlinearlyConvergingDimer2008}.
+Single-ended searches differ in how they climb, and they share the stored point as the object being compared \cite{olsenComparisonMethodsFinding2004}.
+A catalogue of stationary points is a catalogue of geometries \cite{walesExploringEnergyLandscapes2018}.
+Partial Hessian diagonalization accelerates the refinement of a saddle the file already holds \cite{hermesAcceleratedSaddlePoint2019}.
+A geodesic step in internal coordinates speeds the optimiser and still writes the Cartesian frame \cite{hermesGeometryOptimizationSpeedup2021}.
+An automation layer such as Sella stops and resumes that frame \cite{hermesSellaOpensourceAutomationfriendly2022}.
+Aligning the climbing image with a Hessian eigenmode is a later step on the same stored band \cite{goswamiEnhancedClimbingImage2026}.
+The chapter that collects these searches is a list of algorithms with one shared record, the geometry \cite{henkelmanMethodsFindingSaddle2005}.
 
-Chemical Markup Language and MOSAIC answered it with data models written down before the code \cite{murrayrustChemicalMarkupXml1999,hinsenMosaicDataModel2014}, and H5MD answered it for molecular dynamics output with a specification layered on HDF5 \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011}.
-It records identity, velocities and the box, and it does not define a per-axis constraint.
-The Atomic Simulation Environment stores constraints as Python objects, and its trajectory file keeps them, but that file is defined by its implementation \cite{bahnObjectorientedScriptingInterface2002,larsenAtomicSimulationEnvironmenta2017}.
-CON, the text eOn has written for two decades, carries a mask column and an id column, and it was never specified, so eOn and ASE read it differently \cite{rohitgoswamiTheochemuieonV3602026}.
+When the event is too rare for a direct trajectory, the campaign still hands a configuration from one stage to the next.
+Hyperdynamics adds a bias defined on the stored configuration \cite{voterHyperdynamicsAcceleratedMolecular1997}.
+The bond-boost form of that bias is defined on the same point \cite{mironAcceleratedMolecularDynamics2003}.
+The review of accelerated molecular dynamics is a review of methods that exchange a configuration \cite{voterExtendingTimeScale2002}.
+Off-lattice kinetic Monte Carlo accepts an event and writes the new state for the next search \cite{henkelmanLongTimeScale2001}.
+The event table is keyed by that configuration \cite{voterIntroductionKineticMonte2007}.
+Adaptive kinetic Monte Carlo builds the table as it goes, and the campaign is the sequence of stored states \cite{xuAdaptiveKineticMonte2008}.
+Absorbing Markov chains for slow dynamics resume from the last configuration \cite{novotnyMonteCarloAlgorithms1995}.
+A parallel replica copies one state onto many ranks, so every replica has to start from the same geometry \cite{voterParallelReplicaMethod1998}.
+Dephasing starts from that same stored state \cite{perezParallelReplicaDynamics2015}.
+Parallel trajectory splicing passes states between segments \cite{perezLongtimeDynamicsThrough2016}.
+Basin hopping records the minimum it just accepted \cite{walesGlobalOptimizationBasinhopping1997}.
+Minima hopping escapes by a short trajectory and then relaxes, so it writes both velocities and a geometry \cite{goedeckerMinimaHoppingEfficient2004}.
 
-We make that text a specification with a test suite and a single implementation.
-The contributions are three.
-First, a set of five requirements for a restart state, each tied to a measured failure in a common format (Section \ref{sec:requirements}).
-Second, CON 3.1, a versioned grammar that meets them, and a conformance corpus that any reader can run (Sections \ref{sec:format} and \ref{sec:conformance}).
-Third, readcon-core, one Rust core behind one C interface, which every binding and eOn 3.6.0 call (Section \ref{sec:implementation}).
-Section \ref{sec:cases} resumes bands through each format.
-Section \ref{sec:performance} reports the cost of a read and the parallel read, write and ingest.
+eOn is the program that runs these searches and stops them on a file \cite{chillEonSoftwareLong2014}.
+The concept record of that program is separate from any one release \cite{goswamiEon2026}.
+Release 3.6.0 reads and writes the file through the reader in this paper \cite{rohitgoswamiTheochemuieonV3602026}.
+A long exploration writes thousands of such files \cite{goswamiEfficientExplorationChemical2025}.
+A distributed adaptive kinetic Monte Carlo run ships the files between ranks \cite{pedersenDistributedImplementationAdaptive2010}.
+A public-resource client returns the same files across machines \cite{andersonBoincSystemPublicresource2005}.
+
+A surrogate inside the search loop does not replace the file.
+A Gaussian-process force model is trained on geometries \cite{goswamiEfficientImplementationGaussian2025}.
+Pruning that model removes training points and still evaluates the geometry the search is standing on \cite{goswamiAdaptivePruningIncreased2026}.
+A Gaussian-process band and a Gaussian-process minimum-mode search both write the geometry they refined \cite{koistinenNudgedElasticBand2019,koistinenMinimumModeSaddle2020}.
+Accelerating the saddle search leaves the checkpoint in place \cite{petersonAccelerationSaddlepointSearches2016}.
+A Bayesian search places its posterior on stationary points that are geometries \cite{goswamiTutorialReviewBayesian2026}.
+A model container such as metatensor evaluates a geometry; it does not store the search \cite{bigiMetatensorMetatomicFoundational2026}.
+A universal potential such as PET-MAD consumes a geometry and returns energy and forces \cite{mazitovPetmadLightweightUniversal2025}.
+A descriptor library consumes the same geometry and cannot rebuild a mask from the descriptor \cite{himanenDscribeLibraryDescriptors2020}.
+Symmetry search can renumber atoms, so an atom id is not recoverable from coordinates alone \cite{togoSpglibSoftwareLibrary2024}.
+A materials-analysis library starts from a stored structure \cite{ongPythonMaterialsGenomics2013}.
+A materials API returns that structure and does not return the optimiser state that produced it \cite{ongMaterialsApplicationProgramming2015}.
+
+The file therefore has a job an exchange format does not.
+A surface calculation holds the slab and lets an adatom move in the plane, so the mask is per atom and per axis \cite{jonssonSimulationSurfaceProcesses2011}.
+A band and an event table refer to atoms by identity after a file has grouped them by element \cite{gundeIraShapeMatching2021,terrellDatabaseAtomisticReaction2012}.
+Velocities enter a step only with a unit.
+The natural unit of eOn is \((\mathrm{amu}\cdot\text{\AA}^{2}/\mathrm{eV})^{1/2}\).
+On a \(10{,}001\)-atom slab the committed conversion is \(10.1805056712\,\mathrm{fs}\), and the kinetic energy scales by \(103.642696\) when the same numbers are read as \(\text{\AA}/\mathrm{fs}\) \cite{tiesingaCodataRecommendedValues2021}.
+A unit library is how a program names that quantity; the file has to carry the name \cite{mckeeverUnitMeasurementLibraries2021}.
+Velocity Verlet advances positions with those velocities \cite{swopeComputerSimulationMethod1982}.
+A thermostat rescales the kinetic energy it is given \cite{bussiCanonicalSamplingThrough2007}.
+The developers of MDAnalysis stated the documentation problem directly: simulation file formats ``are often only poorly documented and just adhere to certain community expectations that can be difficult to understand for outsiders'' \cite{gowersMdanalysisPythonPackage2016}.
+
+Two readers given the same bytes have to return the same state, because the computation is the data \cite{pengReproducibleResearchComputational2011}.
+A second group can rerun that computation only from the file and the program \cite{inceCaseOpenComputer2012}.
+The file outlives the code that wrote it \cite{hinsenCaringYourData2012}.
+A format defined only by one library version collapses when that library changes \cite{hinsenDealingSoftwareCollapse2019}.
+The FAIR principles ask for a record another group can reuse \cite{wilkinsonFairGuidingPrinciples2016}.
+The matching principles for research software ask for a versioned, citable program \cite{barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020,smithSoftwareCitationPrinciples2016}.
+Chemical Markup Language and MOSAIC wrote the data model down before the code \cite{murrayrustChemicalMarkupXml1999,hinsenMosaicDataModel2014}.
+checkCIF turned the CIF rules into alerts a later reader can reproduce \cite{hallCrystallographicInformationFile1991,spekCheckcifValidationAlerts2020}.
+CON 3.1 is that treatment of the text eOn already writes.
+
+The contributions are the five requirements, the grammar and corpus that meet them, and one reader that every binding calls.
+Section \ref{sec:requirements} measures the requirements on one frame.
+Section \ref{sec:format} states the grammar.
+Section \ref{sec:conformance} is the corpus and the extended XYZ disagreement.
+Section \ref{sec:implementation} is the reader and the store.
+Section \ref{sec:cases} resumes the same band through every route.
+Section \ref{sec:performance} reports threads, peers, MPI and the store.
+
 \section{Requirements and the failure each one closes}
 \label{sec:requirements}
-We state five requirements in Table \ref{tab:requirements}.
-Each comes from a step of a saddle or long-timescale workflow.
+Table \ref{tab:requirements} states five requirements.
+Each is a field a later step reads.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Requirements on a restart state, the workflow step that sets each one, and the failure measured when it is missing.}
+\caption{Requirements on a restart state, the step that reads each field, and the failure measured when the field is missing.}
 \label{tab:requirements}
-\begin{tabular}{p{0.22\linewidth}p{0.30\linewidth}p{0.38\linewidth}}
+\begin{tabular}{p{0.22\linewidth}p{0.32\linewidth}p{0.36\linewidth}}
 \toprule
-Requirement & Workflow step & Failure measured in this paper \\
+Requirement & Step that reads it & Failure measured here \\
 \midrule
-R1 per-axis mask & Surface saddle search, prefactor & Height constraint dropped: barrier \(-70\,\mathrm{meV}\) on resume \\
-R2 persistent id & Band and event bookkeeping & Ids lost in six of the eight foreign round trips that complete \\
-R3 declared time unit & Dynamics, AKMC with velocities & Kinetic energy off by 103.64 when the unit is guessed \\
-R4 binary64 geometry and cell & Resume of a converged search & \(5\times10^{-9}\) to \(5\times10^{-6}\,\text{\AA}\) per write, periodicity lost \\
-R5 versioned grammar & Any second reader & One file, four answers from five readers \\
+R1, per-axis mask & Surface search, prefactor & Height constraint dropped; barrier \(-70.2\,\mathrm{meV}\) \\
+R2, persistent id & Band and event table & Id lost on completed foreign round trips \\
+R3, declared time unit & Dynamics & Kinetic energy scaled by \(103.642696\) \\
+R4, binary64 geometry, cell, periodicity & Resume of a search & \(10^{-9}\) to \(10^{-6}\,\text{\AA}\), or periodicity rewritten \\
+R5, versioned grammar & Any second reader & One file, four answers from five readers \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 R1 is a mask for each Cartesian axis of each atom.
-R2 is an identity stored on the row, so a later frame finds the same atom after reordering.
-R3 is a time unit that the file declares, so the reader does not have to guess it.
-R4 is coordinates and cell that read back as the same binary64 values, with the periodic flags.
-R5 is a grammar with a version, a rule for what a reader of a later minor version must accept, and a corpus that decides disputes.
-The history of a quasi-Newton optimiser is not on the list.
-Limited-memory quasi-Newton, the optimisers surveyed for saddle searches, and FIRE keep a short history that no geometry format stores, so a resume can match the coordinates and still take a different next step \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008,bitzekStructuralRelaxationMade2006}.
-Section \ref{sec:limitations} returns to it.
+R2 is an integer stored on the row, so a later frame finds the same atom after the file groups rows by element.
+R3 is a time unit written in the file.
+R4 is coordinates, cell and periodic flags that read back as the values written.
+R5 is a grammar with a major and a minor, a rule for what a later minor may add, and a corpus that decides disputes.
 
-We measure R1 to R5 on one frame in Table \ref{tab:survey}.
-The frame is the Pt(100) slab used throughout: nine atoms in the bottom layer held on every axis, one adatom held in \(z\), ids that are not the row order, velocities in the natural unit, and coordinates that need all seventeen significant digits.
-Each row writes the frame with one library, and we read it back with another.
-ASE 3.29.0, the libAtoms extended XYZ parser 0.4.6, chemfiles 0.10.4 and MDAnalysis 2.10.0 are the peers \cite{larsenAtomicSimulationEnvironmenta2017,frauxChemfileschemfilesVersion01042023,michaudagrawalMdanalysisToolkitAnalysis2011,gowersMdanalysisPythonPackage2016}.
-Section \ref{sec:supp-failure} gives the frame and the grading.
+The short history of an optimiser is outside the five.
+Limited-memory quasi-Newton updates a Hessian from a few previous steps \cite{nocedalUpdatingQuasinewtonMatrices1980}.
+The optimisers used on minimum-energy paths keep an analogous history \cite{sheppardOptimizationMethodsFinding2008}.
+FIRE carries velocities of the images between steps \cite{bitzekStructuralRelaxationMade2006}.
+A resume can match the coordinates and still take a different next step.
+Section \ref{sec:cases} measures that on one band, and Section \ref{sec:limitations} states the scope.
+
+\subsection{One frame through each format}
+The frame is a Pt(100) slab with one adatom: the bottom atoms held on every axis, the adatom held in \(z\), ids that are not the row order, and velocities in the natural unit.
+Section \ref{sec:supp-failure} gives the coordinates, the ids and the grading rules.
+Each row of Table \ref{tab:survey} writes that frame with one library and reads it with another.
+The libraries are ASE 3.29.0 \cite{larsenAtomicSimulationEnvironmenta2017,bahnObjectorientedScriptingInterface2002}, chemfiles 0.10.4 \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis 2.10.0 \cite{gowersMdanalysismdanalysisRelease21002025,michaudagrawalMdanalysisToolkitAnalysis2011}, and h5py 3.7.0 where the route needs it \cite{colletteH5pyh5py3702022}.
+The chemfiles concept record covers the project across versions \cite{frauxChemfiles2023}.
+The 2016 MDAnalysis paper is the toolkit description; the 2.10.0 record is the version in the table.
 
 \input{figures/generated/survey_table}
 
-Only the CON 3.1 row keeps every field.
-Extended XYZ written and read by ASE comes closest.
-Its mask, its ids and its time unit come back because writer and reader share ASE's column names and ASE's internal unit, which the extended XYZ grammar does not define, so chemfiles and MDAnalysis drop them.
-Its default writer prints eight decimals, and the coordinates move by up to \(4.7\times10^{-9}\,\text{\AA}\).
-chemfiles writing the same frame moves them by \(4.9\times10^{-6}\,\text{\AA}\), and MDAnalysis keeps coordinates in single precision by design.
-The ASE trajectory keeps the mask and the coordinates exactly, and it drops the id array; its time unit is ASE's internal unit, which the file does not name.
-POSCAR selective dynamics is per-axis in the VASP definition, and VASP fixes the velocity unit \cite{kresseEfficientIterativeSchemes1996,kresseEfficiencyAbinitioTotal1996}.
-The ASE writer translates the frozen slab and writes the adatom as free, so the format could carry R1 and this writer does not; POSCAR has no id and no open axis.
-H5MD written by MDAnalysis declares the velocity unit, writes no mask and no id, and marks the open \(z\) axis periodic.
-H5MD permits extra particle data, so a mask could be stored, but under a name that each reader would have to agree on, which is the extended XYZ situation again.
-The ASE eon reader rejects a frame that carries a velocity block.
-Given the coordinate block alone, it freezes the adatom on every axis, drops the ids and returns a cell with no periodic axis.
-The ASE eon writer cannot express a per-axis constraint, so that route produces no file to resume from.
+The CON 3.1 row keeps every field.
+Extended XYZ written and read by ASE returns the mask, the ids and the time unit because both sides share ASE's column names and ASE's internal unit.
+The extended XYZ grammar does not define those names, so chemfiles drops the mask and MDAnalysis drops the mask and the ids.
+The ASE writer prints a fixed number of decimals and the coordinates move by up to \(4.7\times10^{-9}\,\text{\AA}\).
+chemfiles writing the same frame moves them by \(4.9\times10^{-6}\,\text{\AA}\) and returns every axis periodic.
+MDAnalysis returns single-precision coordinates, a shift of \(2.2\times10^{-7}\,\text{\AA}\).
+The ASE trajectory keeps the mask and the coordinates exactly and drops the id; its time unit is the library's unit, which the file does not name.
+POSCAR selective dynamics is a per-axis mask in the VASP definition of the ionic restart \cite{kresseEfficientIterativeSchemes1996,kresseEfficiencyAbinitioTotal1996}.
+The ASE writer turns the held slab into a different mask and writes the adatom free, so this route changes R1.
+POSCAR has no atom id and no open axis.
+H5MD written by MDAnalysis declares the velocity unit, writes no mask and no id, stores single-precision coordinates, and marks the open \(z\) axis periodic \cite{buylH5mdStructuredEfficient2014}.
+H5MD sits on HDF5, whose container can hold extra arrays \cite{folkOverviewHdf5Technology2011}.
+An extra array carries a mask only when every reader agrees on its name and type, which is the extended XYZ situation again.
+Section \ref{sec:cases} attaches that array and shows which readers return it.
+The ASE eon reader rejects a CON frame that contains a velocity block.
+Given coordinates alone it freezes every masked atom on every axis, drops the ids, and returns no periodic axis.
+The ASE eon writer cannot express a per-axis constraint, so that route produces no file.
 
-TNG, TRR, XTC, DCD, AMBER NetCDF and ADIOS record finished molecular dynamics runs, and none defines a constraint \cite{lundborgEfficientExtensibleFormat2014,spangbergTrajectoryNgPortable2011,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009,mcgibbonMdtrajModernOpen2015,rewNetcdfInterfaceScientific1990,caseAmberBiomolecularSimulation2005,brownSoftwarePortableScientific1993,godoyAdios2Adaptable2020}.
-PDB, CIF, mmCIF and a LAMMPS dump name an archived atom or leave the unit outside the snapshot \cite{bermanProteinDataBank2000,hallCrystallographicInformationFile1991,westbrookStarmmcifOntologyMacromolecular2000,thompsonLammpsFlexibleSimulation2022}.
-Converters keep a column when the dialect defines it, so the meaning of a mask often lives in the tool \cite{hirelAtomskToolManipulating2015,oboyleOpenBabelOpen2011,stukowskiVisualizationAnalysisAtomistic2010}.
-Package-independent parsers made documented exchange the usual path \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021}.
-A live coupling such as i-PI or the MolSSI driver interface moves coordinates during a running step, and the stopped job still resumes from a file \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
-TREXIO stores a wave function, a different record \cite{posenitskiyTrexioFileFormat2023}.
+\subsection{Records that are not this checkpoint}
+The formats below are in use next to a saddle search.
+Each one stores a record this checkpoint does not, or omits a field this checkpoint requires.
+They are the boundary of the problem, and Section \ref{sec:limitations} keeps that boundary.
+
+TNG is a portable compressed trajectory of a finished molecular-dynamics run \cite{spangbergTrajectoryNgPortable2011}, and its library and API serve that trajectory \cite{lundborgEfficientExtensibleFormat2014}.
+GROMACS writes the production trajectory of a finished run \cite{abrahamGromacsHighPerformance2015}.
+CHARMM does the same for its own trajectories \cite{brooksCharmmBiomolecularSimulation2009}.
+AMBER stores trajectories in NetCDF \cite{caseAmberBiomolecularSimulation2005,rewNetcdfInterfaceScientific1990}.
+A portable scientific-data manager stores arrays of a finished dataset \cite{brownSoftwarePortableScientific1993}.
+MDTraj analyses those trajectories \cite{mcgibbonMdtrajModernOpen2015}.
+VMD displays them \cite{humphreyVmdVisualMolecular1996}.
+OVITO displays and filters atomistic snapshots \cite{stukowskiVisualizationAnalysisAtomistic2010}.
+ADIOS2 moves high-performance output during a run \cite{godoyAdios2Adaptable2020}.
+Essential-dynamics compression keeps principal components and discards the exact coordinates a resume needs \cite{meyerEssentialDynamicsTool2006}.
+d-SEAMS analyses a finished trajectory for structure \cite{goswamiDseamsDeferredStructural2020}.
+An MPI-parallel H5MD analysis reads that finished trajectory; it is a different job from a checkpoint read \cite{jakupovicMpiparallelMolecularDynamics2021}.
+Zarr specifies chunked arrays for analysis \cite{opengeospatialconsortiumZarrStorageSpecification2022}.
+
+The Protein Data Bank archives a curated structure \cite{bermanProteinDataBank2000}.
+The worldwide PDB is the organisation of that archive \cite{bermanAnnouncingWorldwideProtein2003}.
+mmCIF is the ontology of the same archive \cite{westbrookStarmmcifOntologyMacromolecular2000}.
+A LAMMPS dump is a snapshot whose units live in the input deck \cite{thompsonLammpsFlexibleSimulation2022}.
+Atomsk and Open Babel convert columns that both dialects define \cite{hirelAtomskToolManipulating2015,oboyleOpenBabelOpen2011}.
+cclib and IOData parse quantum-chemistry outputs into documented objects \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021}.
+TREXIO stores a wave function \cite{posenitskiyTrexioFileFormat2023}.
+QCArchive stores quantum-chemistry results \cite{smithMolssiQcaRchive2021}.
+OPTIMADE, NOMAD, Catalysis-Hub, Transition1x and OC20 distribute structures or reaction endpoints after the search \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}.
+PACKMOL builds an initial box and does not record a search \cite{martinezPackmolPackageBuilding2009}.
+PLUMED accumulates collective variables on a running trajectory \cite{tribelloPlumed2New2014}.
+ESPResSo writes the checkpoint of its own integrator \cite{weikEspresso40Extensible2019}.
+i-PI, in its original interface and in the 2.0 and 3.0 force engines, exchanges positions during a running step \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024}.
+The MolSSI driver interface does that exchange on the fly \cite{barnesMolssiDriverInterface2021}.
+The stopped job still resumes from a file.
+The electronic-structure community has argued for one library per concern with a stable interface, which is the split used here between the grammar and the store \cite{oliveiraCecamElectronicStructure2020}.
+
 \section{The CON 3.1 specification}
 \label{sec:format}
 A CON file is a sequence of text frames.
-Listing \ref{lst:frame} is the slab of Table \ref{tab:survey} as CON 3.1, with the velocity block cut to its first and last rows.
+Listing \ref{lst:frame} is one nine-atom frame.
+The survey frame of Table \ref{tab:survey} uses the same columns; its ids and its coordinate offset are in Section \ref{sec:supp-failure}.
 
 \begin{lstlisting}[caption={A nine-atom Pt frame in CON 3.1. Line 2 declares the version, the units and the periodicity. The velocity block is abbreviated.},label={lst:frame}]
 Pt(100) 2x2x2 with one Pt adatom
@@ -247,11 +342,11 @@ Velocities of Component 1
 \end{lstlisting}
 
 Line 1 is free text.
-Line 2 is one JSON object with the version, the units, the periodicity and the section names \cite{brayJavascriptObjectNotation2017,langdaleParsingGigabytesJson2019}.
+Line 2 is one JSON object \cite{brayJavascriptObjectNotation2017}.
+A bulk JSON parser reaches gigabytes per second on arrays of objects, so this single header line is not the cost measured in Section \ref{sec:perf-read} \cite{langdaleParsingGigabytesJson2019}.
 Lines 3 and 4 are the cell lengths and the angles in degrees.
 The type count, the per-type counts and the masses follow.
 Each coordinate row is \(x\), \(y\), \(z\), the mask and the id.
-A blank line opens a later section.
 Lengths and angles rebuild the box with \(a\) along \(x\) and \(b\) in the \(xy\) plane,
 \begin{equation}
 \mathbf{a}=a\,\hat{\mathbf{x}},\qquad
@@ -261,7 +356,7 @@ after which \(\mathbf{c}\) is fixed by \(\alpha\) and \(\beta\) so the cell is r
 When line 2 carries lattice vectors, those rows are the cell.
 A missing periodicity flag means periodic on every axis.
 
-\paragraph{R1, the mask}
+\paragraph{R1, the mask.}
 Column 4 is the integer of Table \ref{tab:mask}.
 Mask 0 is free, mask 4 fixes \(z\) only, and mask 7 fixes every axis.
 A float spelling, a sign, or a value outside 0 to 7 is an illegal flag.
@@ -283,27 +378,34 @@ Bit & Axis & Value \\
 \end{tabular}
 \end{table}
 
-\paragraph{R2, the identity}
+\paragraph{R2, the identity.}
 Column 5 is an integer from 0 through \(2^{64}-1\).
 Writers emit ids unique within a frame.
 A missing id column takes the zero-based row index.
 
-\paragraph{R3, the time unit}
-From minor 1, a velocity block must declare \texttt{units.time}, and the natural unit is spelled \texttt{(amu*angstrom\textasciicircum{}2/eV)\textasciicircum{}0.5}.
-Versions 1, 2 and 3.0 are read in the natural unit, and an fs label on those files is not trusted, because producers of that era wrote natural-unit numbers under an fs label \cite{rohitgoswamiTheochemuieonV3602026}.
+\paragraph{R3, the time unit.}
+From minor 1, a velocity block declares \texttt{units.time}.
+The natural unit is spelled \texttt{(amu*angstrom\textasciicircum{}2/eV)\textasciicircum{}0.5}.
+Versions 1, 2 and 3.0 are read in the natural unit.
+An fs label on those older files is not trusted: producers of that era wrote natural-unit numbers under an fs label \cite{rohitgoswamiTheochemuieonV3602026}.
 
-\paragraph{R4, the numbers}
+\paragraph{R4, the numbers.}
 Readers convert each finite decimal to binary64 with correct rounding \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,goldbergWhatEveryComputer1991,clingerHowReadFloating1990,clingerHowReadFloating2004}.
-The default writer prints the shortest decimal that parses back to the same value, in the line of shortest printers from the early algorithms through Grisu, Errol and Ryū \cite{steeleHowPrintFloatingpoint1990,steeleHowPrintFloatingpoint2004,burgerPrintingFloatingpointNumbers1996,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}.
+The default writer prints the shortest decimal that parses back to the same value.
+That printer is the end of the line that runs from the early correct algorithms through Grisu, Errol and Ryū \cite{steeleHowPrintFloatingpoint1990,steeleHowPrintFloatingpoint2004,burgerPrintingFloatingpointNumbers1996,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}.
 Six fixed decimals are an optional writer mode.
-gzip and zstd wrap the same bytes and are recognised by content \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}.
+gzip and zstd wrap the same bytes, and a reader recognises the wrapper by content \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}.
+The wrapper is part of the grammar: a conforming reader accepts the compressed file and returns the same frames.
 
-\paragraph{R5, the version}
-Table \ref{tab:keys} lists the 25 reserved keys of the JSON line.
+\paragraph{R5, the version.}
+Table \ref{tab:keys} lists the reserved keys of the JSON line.
 A reader accepts a later minor of a known major, keeps an unknown key on rewrite, may skip an unknown section whose width is declared, and rejects an unknown major.
 H5MD uses the same split for its version pair \cite{buylH5mdStructuredEfficient2014}.
-Table \ref{tab:versions} is the history, Table \ref{tab:sections} the sections reserved at minor 1, and Table \ref{tab:rules} the reader rules.
-The grammar of one frame is the 50-rule listing in Section \ref{sec:appendix-abnf}, and the prose specification wins where the two disagree.
+Table \ref{tab:versions} is the history of the grammar.
+Table \ref{tab:sections} is the sections reserved at minor 1.
+Table \ref{tab:rules} is the reader rules.
+The grammar of one frame is the 50-rule listing in Section \ref{sec:appendix-abnf}.
+The prose specification wins where the listing and the prose disagree.
 
 \begin{table}[ht]
 \centering
@@ -368,53 +470,39 @@ Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
 \bottomrule
 \end{tabular}
 \end{table}
-\subsection{Design rationale}
-\label{sec:rationale}
-CON stays text for three reasons.
-A text checkpoint diffs under version control, so a changed mask or id shows in review.
-eOn has written and read CON since its first releases, and every existing campaign is in it \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}.
-The eOn server and its clients exchange geometries as files, often across machines and operating systems, and text needs no agreement on byte order or library version \cite{pedersenDistributedImplementationAdaptive2010}.
-The metadata is one JSON line because a JSON object takes new keys without a new grammar, carries its own version pair, and lets a reader keep a key it does not know \cite{brayJavascriptObjectNotation2017}.
-Table \ref{tab:sizes} measures the cost on the 218-atom frame, alone and as a 10,000-frame molecular dynamics trajectory in which every frame differs.
-One CON frame takes 42 bytes per atom, half of extended XYZ written by ASE and less than either H5MD file, where the HDF5 structure dominates a single frame.
-Over the trajectory CON stays at 42.2 bytes per atom (92.0 MB), against 83.6 for extended XYZ (182.3 MB), 46.3 for the ASE trajectory (101.0 MB) and 24.3 for H5MD with binary64 positions (52.9 MB).
-Plain XYZ, with symbols and coordinates and no mask, id or units, takes 32.4.
-H5MD is designed for that case, long trajectories where binary storage and chunked access pay off \cite{buylH5mdStructuredEfficient2014}; a checkpoint is one frame, and there text costs little.
 
-\begin{table}[ht]
-\centering
-\small
-\caption{Bytes per atom of the 218-atom frame.
-The one-frame columns are raw and after gzip at level 6.
-The trajectory column is 10{,}000 distinct frames of a velocity Verlet EMT run at \(1\,\mathrm{fs}\) and \(300\,\mathrm{K}\), divided by \(2.18\times10^{6}\) atoms; the file size in MB (\(10^{6}\) bytes) is in parentheses.
-CON 3.1 is the default readcon-core writer, extended XYZ the ASE writer with the mask column, the ASE trajectory its binary writer, plain XYZ symbols and coordinates at 16 significant digits, and H5MD (h5py) binary64 positions with cell and species, plus mask and id datasets in the one-frame file.
-A dash is a size not measured.}
-\label{tab:sizes}
-\begin{tabular}{lrrr}
-\toprule
-& \multicolumn{2}{c}{One frame} & 10{,}000 MD frames \\
-Format & raw & gzip & raw (MB) \\
-\midrule
-CON 3.1 & 41.99 & 6.07 & 42.22 (92.0) \\
-extended XYZ (ASE) & 83.64 & 6.65 & 83.64 (182.3) \\
-ASE trajectory & -- & -- & 46.33 (101.0) \\
-plain XYZ & -- & -- & 32.37 (70.6) \\
-H5MD (h5py) & 95.40 & 9.66 & 24.26 (52.9) \\
-H5MD (MDAnalysis) & 314.39 & 9.04 & -- \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{What the text costs}
+\label{sec:rationale}
+eOn has written CON since its first releases, so the campaigns already on disk are in this grammar \cite{chillEonSoftwareLong2014}.
+The server and its clients exchange those files across machines, and the bytes do not depend on endianness \cite{pedersenDistributedImplementationAdaptive2010}.
+A diff of a text checkpoint shows a changed mask or id.
+The JSON line takes a new key without a new grammar, and a reader keeps a key it does not know \cite{brayJavascriptObjectNotation2017}.
+
+Table \ref{tab:sizes} is the byte cost on the committed size table: one 218-atom frame, and the same frame repeated \(10{,}000\) times, raw and after gzip at level 6.
+The repeated file is the same text, so its gzip column is smaller than the gzip column of a trajectory whose frames differ.
+That is the measurement in the table.
+One CON frame is \(41.99\) bytes per atom, against \(83.64\) for extended XYZ written by ASE with the mask column, \(314.39\) for one H5MD frame written by MDAnalysis, and \(95.40\) for one H5MD frame written by h5py with binary64 positions, a mask dataset and an id dataset.
+At \(10{,}000\) copies the raw CON cost stays \(41.99\) bytes per atom.
+H5MD amortises its container and falls to \(12.61\) and \(24.04\) bytes per atom.
+gzip of the repeated CON file reaches \(0.39\) bytes per atom.
+H5MD is the record for a long trajectory, where binary storage and chunked reads pay for the container \cite{buylH5mdStructuredEfficient2014}.
+CON is the record for the checkpoint, where one frame has to keep the mask, the id and the unit.
+
+\input{figures/generated/sizes_table}
+
 \section{Conformance and drift}
 \label{sec:conformance}
-A specification is only as good as the agreement it produces between readers.
-CON 3.1 writes that agreement down as data, in the way checkCIF turned the crystallographic rules into alerts a later reader reproduces \cite{spekCheckcifValidationAlerts2020,hallCrystallographicInformationFile1991}.
-We publish ten legal frames and eight illegal ones as the corpus of Table \ref{tab:corpus}.
+The corpus is the executable form of the grammar, on the model of checkCIF \cite{spekCheckcifValidationAlerts2020,hallCrystallographicInformationFile1991}.
+The committed manifest summary is 10 legal files and 8 illegal files.
+The files on disk split as in Table \ref{tab:corpus}: two header-and-unit frames, five mask frames and three empty frames, plus eight illegal files.
 A conforming reader accepts the first group and rejects the second.
+The same summary names five bindings, one per language of the C interface.
+The measured test of those languages on a resume is the 25-pair matrix in Section \ref{sec:cases}.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Conformance corpus.}
+\caption{Conformance corpus. Counts are the committed manifest summary.}
 \label{tab:corpus}
 \begin{tabular}{@{}lrp{0.55\linewidth}@{}}
 \toprule
@@ -428,353 +516,481 @@ Illegal & 8 & Reject the file. \\
 \end{tabular}
 \end{table}
 
-The CON 3.1 row of Table \ref{tab:survey} is the reference implementation reading its own output, which is the least a specification should guarantee.
-The corpus is what lets a second, independent implementation show the same.
-The Python, Julia and Fortran bindings and the C interface of readcon-core make the same decision on all eighteen files and on the seven header variants below.
-The Julia golden suite passes 136 of 136 checks and the Fortran suite accepts all ten legal files and rejects all eight illegal ones.
-Python and Julia rewrite each legal file to identical bytes, and in every binding a rewritten file rewrites again to identical bytes.
-We add seven header variants of one velocity frame, aimed at R3 and R5 (Table \ref{tab:versionsafety}).
-readcon-core follows the rule in each case through both entry points.
-It rejects a minor-1 velocity block without a time unit, an unknown major, a missing version and a mask of 9, and it keeps an unknown key from a later minor.
-The ASE eon reader, which has no version rule to follow, accepts all seven.
+Table \ref{tab:versionsafety} applies R3 and R5 to seven headers of one velocity frame.
+Python and C follow the rule on each row.
+They reject a minor-1 velocity block with no time unit, an unknown major, a missing version and a mask of 9, and they keep an unknown key from a later minor.
+The ASE eon reader has no version rule.
+Given the coordinate block, it accepts all seven, including the illegal mask and the unknown major.
 
 \input{figures/generated/versionsafety_table}
 
-Extended XYZ is the strongest text alternative, with a published grammar and parsers in several languages.
-Table \ref{tab:drift} gives five of its readers seven three-atom files, each legal or plausible and each one step away from a plain frame (Section \ref{sec:supp-failure}).
-On the plain frame they already disagree.
-chemfiles returns one coordinate a unit in the last place from the correctly rounded value, and MDAnalysis returns single precision.
-The two parsers of libAtoms disagree on the mask booleans, so the same file resumes with the slab frozen through one and free through the other.
-A Fortran exponent is read by the C path, read as NaN by the Python path, and rejected by the other three.
-A plain comment line is a non-periodic frame to ASE and a periodic one to the C path, and the Python path rejects it.
-None of these readers is wrong by the standard of its own documentation.
-The grammar does not settle these cases, and no shared corpus exists to settle them.
-A specification has to close that gap; the column layout is the easy part.
+Extended XYZ has a published layout and parsers in several languages, so it is the text format to compare on R5.
+Table \ref{tab:drift} gives five readers seven three-atom files.
+The readers are ASE 3.29.0, libAtoms 0.4.6 through its C path and its Python path, chemfiles 0.10.4, and MDAnalysis 2.10.0.
+On the reference frame the five readers return four outcomes: ASE and the libAtoms C path accept it, the libAtoms Python path changes the mask booleans, chemfiles moves one coordinate by one unit in the last place and returns no mask, and MDAnalysis returns single precision with no mask and no ids.
+The correctly rounded binary64 value of the coordinate \(2.7718585822512662\) has bit pattern \texttt{40062cc4313f3fb9}; chemfiles returns \texttt{40062cc4313f3fb8} (Section \ref{sec:supp-failure}).
+A Fortran exponent \texttt{6.0d0} is read by the libAtoms C path, returned as NaN by the libAtoms Python path, and rejected by the other three.
+A plain comment line is non-periodic to ASE, periodic to the libAtoms C path, and rejected by the libAtoms Python path.
+The readers follow their own documentation.
+The grammar does not decide these cases, and the formats share no corpus that would.
 
 \input{figures/generated/drift_table}
+
 \section{Reference implementation}
 \label{sec:implementation}
 readcon-core 0.17.0 is the reference reader and writer \cite{goswamiReadconcoreConconvelReaderwriter2026}.
+The concept record covers every version \cite{goswamiReadconcoreConConvel2026}.
+The store measurements in Section \ref{sec:perf-db} use 0.16.2 \cite{goswamiReadconcoreV0162Conconvel2026}.
 Figure \ref{fig:architecture} is the layering.
-One Rust core parses and writes, and one C interface is the waist every other caller uses.
-C++ wraps it for eOn, Python binds it with array accessors \cite{harrisArrayProgrammingNumpy2020}, Julia calls it through its foreign-function interface \cite{bezansonJuliaFreshApproach2017}, and Fortran 2008 reaches the same symbols through its C interoperability.
-chemfiles took the same course for trajectory formats, one C++ core with bindings in several languages \cite{frauxChemfileschemfilesVersion01042023}, and readcon-core can link it to read those formats.
-The electronic-structure community argues for the same modular split, one library per concern with a stable interface \cite{oliveiraCecamElectronicStructure2020}.
-Rust gives the core memory safety without a garbage collector behind a plain C interface \cite{jungRustbeltSecuringFoundations2018,perkelWhyScientistsTurning2020}.
-Decimal fields go through a correctly rounded conversion on the shared path \cite{lemireNumberParsingGigabyte2021,mushtakFastNumberParsing2023}.
-A behaviour difference between languages therefore requires a defect in a binding's thin accessor layer, not in a parser, because there is only one parser.
+One Rust core parses and writes.
+One C interface is the waist every other caller uses.
+C++ wraps it for eOn.
+Python exposes array views \cite{harrisArrayProgrammingNumpy2020}.
+Julia calls the C symbols through its foreign-function interface \cite{bezansonJuliaFreshApproach2017}.
+Fortran 2008 reaches the same symbols through C interoperability.
+chemfiles took the same route for trajectories, one core and several language bindings \cite{frauxChemfileschemfilesVersion01042023}.
+Rust gives the core memory safety without a garbage collector on the far side of a C interface \cite{jungRustbeltSecuringFoundations2018,perkelWhyScientistsTurning2020}.
+Decimal fields go through a correctly rounded conversion on that shared path \cite{lemireNumberParsingGigabyte2021,mushtakFastNumberParsing2023}.
+A second parser would be a second implementation.
+The public Fortran wrapper shows that a binding can still disagree with the core; Section \ref{sec:cases} records the status it returns.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/generated/architecture.pdf}
-\caption{Layering of the reference implementation.
-The Rust core parses and writes CON.
-The C interface is the waist every other caller uses, including the C++ wrapper that eOn 3.6.0 calls.}
+\caption{The Rust core parses and writes CON.
+The C interface is the waist.
+eOn 3.6.0 calls the C++ wrapper.}
 \label{fig:architecture}
 \end{figure}
 
 The caller owns a frame handle and frees it.
 Structure-of-arrays accessors return a pointer into that frame.
 Absent numeric metadata is a NaN sentinel and is not written back.
+The reader records the byte offset of each frame.
+The scan that finds those offsets is serial, because each start depends on the counts before it.
+Each frame is then parsed on its own, and the frames return in file order.
+The Python binding releases the interpreter lock during the parse and takes it back to build objects.
 
-readcon-db is the campaign-storage half of the design \cite{goswamiReadcondbMmapCon2026}.
-It keeps the CON text of each frame as the stored record in a memory-mapped LMDB store, with a 128-bit hash per frame for exact deduplication and indexes on atom count, composition, energy and section presence, so a query touches only the frames it selects.
-Indexed random access and campaign-scale storage live there and not in the format, and the text a campaign stores is the text a resume reads.
-Its MPI ingest splits the frames across ranks and inserts them in global frame order, and the stored corpus is the one the serial ingest builds.
-Every binding reads and writes whole files or single frames through the same calls, and an illegal file is rejected with a named class (Section \ref{sec:supp-errors}).
-
-
-\begin{lstlisting}[language=Python,caption={A round-trip write in Python. The default printer preserves binary64. Six decimals are a separate argument.},label={lst:py}]
+\begin{lstlisting}[language=Python,caption={A round trip in Python. The default printer preserves binary64. Six decimals are a separate argument.},label={lst:py}]
 frames = readcon.read_con("slab.con")
 readcon.write_con("rt.con", frames)
 \end{lstlisting}
 
-The reader records the byte offset where each frame starts, as an on-disk offset index does for a trajectory \cite{gowersMdanalysisPythonPackage2016}.
-The scan is serial because each start depends on the counts before it.
-Each frame is then parsed on its own, and the frames return in file order.
-The Python binding releases the interpreter lock while the core parses and takes it back to build one object per atom.
+readcon-db is the campaign store for that text \cite{goswamiReadcondbMmapCon2026}.
+It writes each CON frame into LMDB, posts an xxHash3-128 of the text, and keeps secondary indexes on atom count, composition, energy, maximum force and section presence.
+A select touches the index and then the frames the index names.
+Identical texts share one hash entry, and each frame keeps its own stored text, so the stored blob bytes equal the raw file.
+gzip and zstd remain properties of the CON bytes, recognised by content before ingest.
+The MPI paths are a single writer, which inserts in global frame order, and a sharded ingest.
+Section \ref{sec:perf-mpi} measures both.
+Two behaviours of the bindings are part of the same test, and both are visible in the evaluation record.
+Python \texttt{ConCorpus.select} always applies an atom-count range, including the default range from 0 to \(2^{32}-1\), so a Python query walks the atom-count index.
+The timed queries use the Rust select and do not add that predicate.
+\texttt{readcon.iter\_con} skips a leading newline, so an empty user line shifts the header and the parse fails.
+\texttt{read\_con} on one frame keeps that empty line.
+The specification says an empty first header line is the user line and is kept.
+The evaluation writes the user line \texttt{cpc-eval} so the iterator can read the corpus.
+\texttt{from\_ase} leaves the user line empty, which is legal CON.
+
 \section{Case studies}
 \label{sec:cases}
-\subsection{A band resumed through each format}
-\label{sec:org7ef780f}
-We test a restart state by resuming from it.
-We use an EMT Pt(100) slab of \(3\times3\times3\) atoms with its bottom layer fixed on every axis, and one adatom held in \(z\) hops between neighbouring hollows.
-The endpoints were relaxed to \(0.002\,\mathrm{eV/\text{\AA}}\).
-A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} is driven by fixed-step steepest descent on the projected force.
-That optimiser stores no history, so a difference after a resume comes from the file and from nothing else.
-Uninterrupted, the band converges to \(0.01\,\mathrm{eV/\text{\AA}}\) in 60 steps with a barrier of \(0.644561\,\mathrm{eV}\).
-Each interrupted band stops at step 25, is written and read back through one route, and continues under the same rule.
-Table \ref{tab:restartfmt} and Figure \ref{fig:restartfmt} are the result.
+Every route below uses one protocol.
+An EMT Pt(100) slab, three layers of \(3\times3\), has its bottom layer held on every axis and one adatom held in \(z\).
+The adatom hops between neighbouring hollows.
+Endpoints were relaxed to \(0.002\,\mathrm{eV/\text{\AA}}\).
+A climbing-image band of five movable images uses the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} and fixed-step steepest descent on the projected force.
+Steepest descent stores no step history, so a difference after the resume comes from the file.
+The band is interrupted after 25 steps, written, read back, and resumed to \(0.01\,\mathrm{eV/\text{\AA}}\).
+Uninterrupted, it converges in 60 steps with barrier \(0.644561366\,\mathrm{eV}\) and 56 free modes on the middle image.
+Table \ref{tab:restartfmt} is every completed route.
+Figure \ref{fig:restartfmt} is the three bands whose geometries are in the committed figure.
+The 25 language pairs are Table \ref{tab:restart-pairs}.
 
-\input{figures/generated/restartfmt_table}
+\input{figures/generated/restart_main}
 
-The CON 3.1 resume reads back the written coordinates bit for bit and ends within \(2.7\times10^{-15}\,\text{\AA}\) and \(6\times10^{-14}\,\mathrm{eV}\) of the uninterrupted band.
-The ASE trajectory reaches the same floor.
-That floor is not the file: a fresh force-field object on identical coordinates already differs at that level.
-Six decimals move the band by \(6.2\times10^{-7}\,\text{\AA}\) and extended XYZ by \(4.9\times10^{-9}\,\text{\AA}\); both still converge in 60 steps.
-The ASE POSCAR route is the instructive failure.
-Its coordinates are exact to \(5\times10^{-17}\,\text{\AA}\), and the adatom's height constraint is gone, so the middle image gains a mode.
-The band relaxes the adatom toward the surface and converges in 98 steps to a barrier \(70\,\mathrm{meV}\) lower, a different saddle on a different surface.
-The ASE eon reader removes two modes, by freezing the adatom laterally, and makes the slab a finite cluster.
-That band does not converge in 4000 steps.
-With the periodicity put back by hand, the mask collapse alone takes 127 steps and ends \(0.042\,\text{\AA}\) away, at a barrier within \(3\times10^{-6}\,\mathrm{eV}\), because the straight line of this symmetric hop passes through the saddle.
+The shortest CON round trip changes no coordinate.
+The barrier moves by \(-5.68\times10^{-14}\,\mathrm{eV}\) and the images by at most \(2.66\times10^{-15}\,\text{\AA}\).
+Each of the 25 language pairs also changes no coordinate, keeps 56 modes, and finishes in 60 steps at the same printed barrier.
+Their barrier shift is \(-2.31\times10^{-14}\,\mathrm{eV}\) and their largest displacement is \(3.55\times10^{-15}\,\text{\AA}\).
+The two floors are both at the level of rebuilding the calculator.
+They are different numbers, and the table keeps them separate.
+Six decimals move the file by \(4.90\times10^{-7}\,\text{\AA}\), the barrier by \(-4.14\times10^{-7}\,\mathrm{eV}\), and the images by \(6.22\times10^{-7}\,\text{\AA}\), and the band still converges in 60 steps with 56 modes.
+Extended XYZ moves the file by \(5.00\times10^{-9}\,\text{\AA}\) and the barrier by \(+1.09\times10^{-9}\,\mathrm{eV}\), with the same step count and the same mode count.
+The ASE trajectory matches the language-pair floor.
+An extra id array on that trajectory does not survive the round trip, and the mode count stays 56 because the mask does.
+
+POSCAR moves the file by \(4.90\times10^{-17}\,\text{\AA}\) and drops the height constraint, so the middle image has 57 free modes.
+The band converges in 98 steps, \(0.160\,\text{\AA}\) away, with a barrier \(7.02\times10^{-2}\,\mathrm{eV}\) lower.
+That is the \(70.2\,\mathrm{meV}\) in the abstract.
+The legacy ASE eon writer raises \texttt{TypeError} because \texttt{FixCartesian} is not a per-axis constraint in that writer, and there is no file to resume.
+The ASE eon reader keeps 54 modes, runs to the 4000-step cap without converging, and finishes \(0.352\,\mathrm{eV}\) and \(5.43\,\text{\AA}\) away.
+Restoring periodicity by hand leaves the mask collapse in place: 54 modes, 127 steps, a barrier shift of \(-2.93\times10^{-6}\,\mathrm{eV}\), and a displacement of \(4.21\times10^{-2}\,\text{\AA}\).
+
+The H5MD block in the table is a second measurement, distinct from the survey row.
+The writer attaches \texttt{/particles/trajectory/fixed} as a Boolean \(N\times3\) array, an \texttt{id} array, the velocity unit \(\text{\AA}\,\mathrm{ps}^{-1}\), and the boundary \texttt{[periodic, periodic, none]}.
+MDAnalysis reading that file, whether it wrote the file or h5py did, returns 84 free modes and a barrier \(7.07\times10^{-2}\,\mathrm{eV}\) lower, with a file shift of \(4.60\times10^{-7}\,\text{\AA}\).
+The mode count is the loss of the mask and the id.
+h5py reading the MDAnalysis file keeps 56 modes, finishes in 60 steps, and moves the barrier by \(-1.98\times10^{-7}\,\mathrm{eV}\).
+h5py reading its own file is bit-exact and lands on the language-pair floor.
+The coordinate gap between the MDAnalysis file and the h5py file is the single-precision write.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
-\caption{Resumed climbing-image bands of the EMT Pt(100) hop on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}, each on the energy surface of its own band.
+\caption{Resumed climbing-image bands of the EMT Pt(100) hop on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
+Each panel is the energy surface of its own band.
 (a) Uninterrupted, with the CON 3.1 resume as crosses.
-(b) POSCAR resume, height constraint dropped: barrier \(70\,\mathrm{meV}\) lower.
-(c) ASE eon reader resume with the periodicity restored: adatom frozen on every axis.
-Each panel marks its own saddle (SP, star) and the saddles of the other panels.
-At this projection the saddles fall within a marker of each other; the routes differ in energy and in free modes.}
+(b) POSCAR, height constraint dropped.
+(c) ASE eon reader with periodicity restored by hand.
+The projection puts the saddles near one another.
+The routes differ in barrier and in free modes, as Table \ref{tab:restartfmt} records.}
 \label{fig:restartfmt}
 \end{figure}
+
+The Fortran rows in Table \ref{tab:restart-pairs} call \path{rkr_frame_add_atom_full} in the C header order \((x, y, z, f_x, f_y, f_z, \mathrm{id}, \mathrm{mass})\), with velocity and force.
+Those rows pass.
+The public Fortran \path{add_atom} binds \path{rkr_frame_add_atom_with_fixed_mask} as \((x, y, z, \mathrm{id}, \mathrm{mass}, f_x, f_y, f_z)\).
+The C function takes \((x, y, z, f_x, f_y, f_z, \mathrm{id}, \mathrm{mass})\).
+A write through the public wrapper returns status \(-4\), with atom id 1 repeated, and the wrapper has no velocity argument.
+The in-repository Fortran module was left unchanged.
+The passing Fortran rows are the full C entry point.
+The public wrapper is a failed write, measured the same way as the legacy ASE writer that produced no file.
+
 \subsection{The mask and the prefactor}
-\label{sec:orgda08f31}
-The symmetric hop hides what a frozen axis does to a rate.
-A climbing-image band of seven images on the \(2\times2\times2\) slab was converged to \(0.01\,\mathrm{eV/\text{\AA}}\) once with the intended masks and once with the adatom frozen, as the ASE eon reader returns it, interpolated with the constraints ignored.
-With the height held, the barrier is \(0.366598\,\mathrm{eV}\) on a path of \(2.90040\,\text{\AA}\), and one imaginary mode of \(-4.08\,\mathrm{meV}\) has 0.987 of its weight on the lateral motion.
-The Vineyard prefactor of that constrained EMT Hessian is \(3.24\times10^{10}\,\mathrm{Hz}\) \cite{vineyardFrequencyFactorsIsotope1957}, which is separate from a measured rate of Pt self-diffusion on this face \cite{kelloggSurfaceSelfdiffusionPt0011990}.
-Frozen, the barrier is \(0.366584\,\mathrm{eV}\) on \(2.95955\,\text{\AA}\), the saddle geometries differ by \(7.78\times10^{-4}\,\text{\AA}\), and there is no imaginary mode, so the prefactor is undefined.
-The barrier alone would not reveal the error.
-Figure \ref{fig:asemask} places both bands on the \((s, d)\) plane.
+The symmetric hop can sit on the straight line, so a lost lateral constraint need not move the barrier by much.
+A second band, seven images on the smaller slab, was converged with FIRE to \(0.01\,\mathrm{eV/\text{\AA}}\) twice \cite{bitzekStructuralRelaxationMade2006}.
+ASE 3.29.0 has no eOn Morse calculator here, so the relaxation, the band and the Hessian use EMT.
+With the height held, the barrier is \(0.36659812266626624\,\mathrm{eV}\) on a path of \(2.9004016648060382\,\text{\AA}\).
+The middle image has 56 free modes and one imaginary mode, \(-4.076276454192005\,\mathrm{meV}\), with \(0.9872893953755115\) of its weight on the adatom's lateral motion.
+The Vineyard prefactor of that Hessian is \(3.2438730218892426\times10^{10}\,\mathrm{Hz}\) \cite{vineyardFrequencyFactorsIsotope1957}.
+Kellogg's measured Pt(001) self-diffusion rate is a different quantity, an experimental rate on this face \cite{kelloggSurfaceSelfdiffusionPt0011990}.
+FIRE took 26 steps and then 16 climbing steps.
+
+The ASE eon reader turns the height-held column into \texttt{FixAtoms}, so the adatom is frozen on every axis.
+The default interpolation then raises \texttt{RuntimeError} because the constraints change the path, and the band was built with the constraints ignored during interpolation.
+FIRE took 26 steps and then 14 climbing steps, reached \(0.007095\,\mathrm{eV/\text{\AA}}\), and left the adatom on the straight interpolation.
+The relative peak is \(0.3665836803750313\,\mathrm{eV}\) on a path of \(2.9595547559012947\,\text{\AA}\).
+The middle image has 54 free modes and no imaginary mode, so the Vineyard ratio is undefined.
+Figure \ref{fig:asemask} is the two bands.
+The barriers differ in the fifth digit.
+The prefactor exists for one reading and does not exist for the other.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Climbing-image bands for a Pt adatom hop on Pt(100) with EMT, each mask on its own \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
-Height held: \(0.366598\,\mathrm{eV}\) on \(2.90040\,\text{\AA}\).
-Frozen: \(0.366584\,\mathrm{eV}\) on \(2.95955\,\text{\AA}\).
-The saddle geometries differ by \(7.78\times10^{-4}\,\text{\AA}\), and the frozen middle image has no imaginary mode.}
+\caption{EMT climbing-image bands for a Pt adatom hop on Pt(100), each mask on its own \((s, d)\) map \cite{goswamiTwodimensionalRmsdProjections2026}.
+Height held: \(0.366598\,\mathrm{eV}\), 56 free modes, one imaginary mode.
+ASE eon reading: \(0.366584\,\mathrm{eV}\), 54 free modes, no imaginary mode.}
 \label{fig:asemask}
 \end{figure}
-\subsection{eOn resuming its own band}
-\label{sec:orgd0eb8ec}
-The production path is eOn writing and reading CON through readcon-core.
-An eOn 3.6.0 client ran the Morse Pt potential on a 28-atom slab with the bottom nine atoms at mask 7, and a band of five movable images, again under steepest descent \cite{rohitgoswamiTheochemuieonV3602026,goswamiEnhancedClimbingImage2026}.
-Both the uninterrupted job and each resume take five steps and stop at that cap, so the band has not converged; the force at the last step is \(0.83265\,\mathrm{eV/\text{\AA}}\).
-Both resumes reproduce the printed table of the uninterrupted job, maximum force \(3.0658\), \(1.2007\) and \(0.59762\,\mathrm{eV/\text{\AA}}\) and highest image \(0.8305\), \(0.6911\) and \(0.6417\,\mathrm{eV}\).
-After five steps the round-trip barrier is \(0.63493\,\mathrm{eV}\), identical to the uninterrupted band, with a largest minimum-image displacement of \(8.9\times10^{-15}\,\text{\AA}\).
-Six decimals shift the barrier by \(+1.0\times10^{-6}\,\mathrm{eV}\) and the images by up to \(4.9\times10^{-7}\,\text{\AA}\).
-Figure \ref{fig:restart} shows the three bands, and Section \ref{sec:supp-restart} the per-image displacement at each step.
-An L-BFGS resume, eOn's default band optimiser, ends at \(0.6707\,\mathrm{eV}\) against \(0.6336\,\mathrm{eV}\) for both printers, because the history is not in either file.
-A dimer from the round-trip geometry reproduces the uninterrupted saddle energy, \(-112.618941\,\mathrm{eV}\), and curvature, \(-10.613681\), and six decimals shift that energy by \(-3.0\times10^{-6}\,\mathrm{eV}\) \cite{goswamiEfficientExplorationChemical2025}.
+
+\subsection{eOn resuming a Morse band}
+An eOn 3.6.0 client ran a Morse Pt potential on a 28-atom slab, bottom atoms at mask 7, five movable images, steepest descent \cite{rohitgoswamiTheochemuieonV3602026}.
+The band section selects the optimiser.
+This run sets steepest descent there.
+When the total number of optimiser steps matches, the shortest round trip reproduces the uninterrupted barrier, \(0.63493\,\mathrm{eV}\), with barrier difference 0 and a largest minimum-image displacement of \(8.881784197001252\times10^{-15}\,\text{\AA}\).
+Six decimals give barrier \(0.634931\,\mathrm{eV}\) and a largest minimum-image displacement of \(4.918050526825368\times10^{-7}\,\text{\AA}\).
+Figure \ref{fig:restart} is that comparison.
+Section \ref{sec:supp-restart} gives the per-image displacement.
+
+A control file left the default band optimiser in place.
+Its recorded optimiser field is \texttt{sd}.
+The file note names the default as L-BFGS and says the iteration tables were not stored \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}.
+Both printers of that control finish at \(0.670723\,\mathrm{eV}\).
+The uninterrupted barrier in the same file is \(0.63361\,\mathrm{eV}\), so the difference is \(0.037113\,\mathrm{eV}\).
+The two printers agree with each other.
+They do not agree with the uninterrupted barrier.
+The checkpoint does not carry the history that would make the next step the uninterrupted step.
+
+A dimer started from the round-trip geometry stops for the same reason as the uninterrupted dimer, too many iterations.
+Both report saddle energy \(-112.618941\,\mathrm{eV}\) and curvature \(-10.613681\).
+Six decimals give \(-112.618944\,\mathrm{eV}\) and \(-10.613677\), an energy shift of \(-3\times10^{-6}\,\mathrm{eV}\).
+The comparison is of the stopped search.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{Final bands of the interrupted Morse band on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026,rohitgoswamiTheochemuieonV3602026,goswamiEnhancedClimbingImage2026}.
-The round-trip barrier is \(0.63493\,\mathrm{eV}\), identical to the uninterrupted band.
-The job stops at five steepest-descent steps.}
+\caption{Final images of the Morse band on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}.
+With the step count matched, the shortest round trip returns the uninterrupted barrier, \(0.63493\,\mathrm{eV}\).}
 \label{fig:restart}
 \end{figure}
-\subsection{An asymmetric band resumed}
-\label{sec:org35036bb}
-The Pt hops above are symmetric, so a band can pass through the saddle on the straight line.
-A palladium adatom on a \(3\times3\times3\) Al(111) slab with EMT moves from an fcc hollow to an hcp hollow, and the endpoints differ by \(-11.3\,\mathrm{meV}\).
-Mask 7 fixes the lowest aluminium layer, and the fast inertial relaxation engine (FIRE) drives a band of five movable images with a spring of \(0.1\,\mathrm{eV/\text{\AA}^2}\) to \(0.02\,\mathrm{eV/\text{\AA}}\) \cite{bitzekStructuralRelaxationMade2006}.
-With the palladium free the band converges in 31 steps to a forward barrier of \(19.85\,\mathrm{meV}\) and a reverse barrier of \(31.18\,\mathrm{meV}\).
-With its height held by mask 4 it converges in 26 steps to \(15.02\) and \(21.51\,\mathrm{meV}\), so a lost or added height constraint moves the forward barrier by \(4.83\,\mathrm{meV}\), a quarter of its value.
-The converged free band, written through the canonical writer and read back, returns every coordinate bit for bit.
-Resumed from it at the same threshold, FIRE takes no step, the positions stay bit-identical, and the energy differs from the pre-restart value by \(8.9\times10^{-15}\,\mathrm{eV}\), at the rounding level of the force field.
+
 \subsection{The velocity unit and identity}
-\label{sec:org5135454}
-On the 28-atom slab the kinetic energy is \(0.888\,\mathrm{eV}\) in the natural unit and \(92.02\,\mathrm{eV}\) if the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of 103.64.
-One velocity Verlet step of \(1\,\mathrm{fs}\) then misplaces atoms by an RMSD of \(0.096\,\text{\AA}\) (Section \ref{sec:supp-velocity}).
-For identity, the public HCN and HNC endpoints were written with ids 2, 0 and 1 and an \(x\)-only mask on hydrogen \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
-readcon-core returns that mask, those ids and the declared unit.
-The ASE eon reader does not accept a velocity block and, on the coordinate block, reports hydrogen frozen on every axis with no id (Section \ref{sec:supp-fidelity}).
+On the 28-atom slab the kinetic energy is \(0.8878595057627452\,\mathrm{eV}\) in the natural unit and \(92.0201533142073\,\mathrm{eV}\) when those numbers are read as \(\text{\AA}/\mathrm{fs}\).
+The ratio is \(103.64269652680504\).
+One velocity Verlet step of \(1\,\mathrm{fs}\) then moves the atoms by an RMSD of \(0.09556596694568728\,\text{\AA}\), maximum \(0.31544697368347396\,\text{\AA}\) \cite{swopeComputerSimulationMethod1982}.
+The same factor appears on a separate \(10{,}001\)-atom slab at \(300\,\mathrm{K}\): the natural unit is \(10.1805056712\,\mathrm{fs}\), the kinetic energy is \(390.085819\,\mathrm{eV}\), and the misread value is \(40429.545793\,\mathrm{eV}\), a factor \(103.642696\).
+Section \ref{sec:supp-velocity} plots the step.
+
+The public HCN and HNC endpoints carry the unit and the identity in one file \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
+readcon-core on frame 2 returns masks \texttt{000 000 100}, ids \texttt{2 0 1}, and the declared natural unit.
+The ASE eon reader stops on the velocity block with \texttt{ValueError} at the word \texttt{Velocities}.
+Given coordinates only, it returns the three atoms as free, free, and fixed on every axis, and it returns no ids.
+
 \section{Performance}
 \label{sec:performance}
-\subsection{Cost of a read}
+Timings below are medians.
+Where a bias-corrected and accelerated interval is reported, it uses 9999 resamples \cite{efronBetterBootstrapConfidence1987}.
+The host, the compiler and the thread pin are part of the result, because a changed stack changes the number \cite{mytkowiczProducingWrongData2009,kaliberaRigorousBenchmarkingReasonable2013}.
+Parallel runs are compared at fixed work or fixed work per rank, with the binding named \cite{hoeflerScientificBenchmarkingParallel2015}.
+Several peer ratios are tested together, and the \(p\) values are Holm-adjusted \cite{holmSimpleSequentiallyRejective1979}.
+Every row of the thirty-pair table has Holm \(p = 0.0016\).
+
+\subsection{Threads}
 \label{sec:perf-read}
-A resume reads its checkpoint once per force call at most, so a read has to stay cheap beside that call.
-The timings use one file on one Intel Xeon processor of family 6, model 207, with 8 hardware threads, rustc 1.88, g++ 13.3 and Python 3.12.
-The layer and thread timings use a \(167.71\,\mathrm{MB}\) file of 10,000 copies of one 218-atom frame, read from a warm page cache, so the rate is the cost of this frame.
-The peer comparison and the readcon-db ingest use a 10,000-frame velocity Verlet EMT trajectory of the same frame at \(1\,\mathrm{fs}\) and \(300\,\mathrm{K}\), in which the two free hydrogen atoms move and every frame is distinct; its CON file is \(92.03\,\mathrm{MB}\).
-An interval is a bias-corrected and accelerated 95 percent interval of the median \cite{efronBetterBootstrapConfidence1987,kaliberaRigorousBenchmarkingReasonable2013,mytkowiczProducingWrongData2009,hoeflerScientificBenchmarkingParallel2015}.
-Table \ref{tab:perf} and Figure \ref{fig:layers} give the layers.
+The file is \(10{,}000\) copies of one 218-atom frame, \(167{,}710{,}000\) bytes, on an Intel Xeon, family 6, model 207, with 8 hardware threads.
+The timed binary was built with rustc 1.88.0.
+OpenMP and BLAS are pinned to one thread outside the pool under test.
+Table \ref{tab:perf} is the warm-cache read.
+The native Rust pool finishes in \(0.125501\,\mathrm{s}\), \(1336\,\mathrm{MB/s}\), \(79681\) frames/s, which is \(12.6\,\mu\mathrm{s}\) per frame.
+The C++ wrapper eOn calls finishes in \(0.13315\,\mathrm{s}\).
+The Rust-to-C++ ratio of those medians is \(0.904\), with interval \([0.815, 0.993]\).
+At one thread the two medians are \(0.483641\,\mathrm{s}\) and \(0.484879\,\mathrm{s}\), ratio \(0.991\).
+Building a Python object per frame takes \(1.234571\,\mathrm{s}\).
+An estimate of the object construction alone is \(0.754\,\mathrm{s}\) of that.
+One EMT force call on this host has median \(5.2623\times10^{-5}\,\mathrm{s}\), so the native read of the whole file is about \(2385\) such calls, \(0.24\) calls per frame.
+The in-process Morse timing from the band study is \(3.036\times10^{-4}\,\mathrm{s}\) per call, and the same file is about \(413\) of those calls.
+i-PI's force engine is the setting in which that comparison matters: the client pays a force call on every step and a file read when the job stops \cite{litmanIpi30Flexible2024}.
 
 \begin{table}[ht]
 \centering
 \small
-\caption{Median timings on the 10{,}000-frame file.
-Frames per second are 10{,}000 divided by the median.
-The automatic Rust interval is \([0.115, 0.137]\,\mathrm{s}\) and the Python interval is \([1.216, 1.304]\,\mathrm{s}\).}
+\caption{Warm read of \(10{,}000\) frames, \(167{,}710{,}000\) bytes.
+Native rows are 15 repeats.
+The Python row is 9 repeats.
+The interval is a bias-corrected and accelerated 95 percent interval of the median.}
 \label{tab:perf}
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrl}
 \toprule
-Layer & Threads & Time (s) & MB/s & frames/s \\
+Reader & Median (s) & MB/s & Interval (s) \\
 \midrule
-Rust core & automatic & 0.126 & 1{,}336 & 79{,}681 \\
-C++ wrapper & automatic & 0.133 & 1{,}260 & 75{,}103 \\
-Rust core & 1 & 0.484 & 347 & 20{,}676 \\
-C++ wrapper & 1 & 0.485 & 346 & 20{,}624 \\
-Python objects & 1 & 1.235 & 136 & 8{,}100 \\
+Rust, automatic pool & 0.125501 & 1336 & [0.115354, 0.137084] \\
+C++ wrapper, automatic pool & 0.13315 & 1260 & [0.120279, 0.153288] \\
+Rust, 1 thread & 0.483641 & 346.8 & [0.473807, 0.486509] \\
+C++ wrapper, 1 thread & 0.484879 & 345.9 & [0.480843, 0.537422] \\
+Python, full objects & 1.234571 & 135.8 & [1.216353, 1.303821] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+A separate five-repeat sweep on the same file sets the pool size.
+Rust goes from \(0.50026\,\mathrm{s}\) at one thread to \(0.11503\,\mathrm{s}\) at eight, a speedup of \(4.35\).
+C++ goes from \(0.50177\,\mathrm{s}\) to \(0.12793\,\mathrm{s}\), a speedup of \(3.92\).
+Python full objects go from \(1.2755\,\mathrm{s}\) to \(1.1070\,\mathrm{s}\), a speedup of \(1.15\).
+The file read itself, measured by sending the bytes to the null device, has median \(0.018511\,\mathrm{s}\), \(9059.8\,\mathrm{MB/s}\).
+Reading the bytes in the process takes \(0.094482\,\mathrm{s}\), and scanning frame boundaries takes \(0.034420\,\mathrm{s}\).
+Those two stages are \(0.267\) of the one-thread native median.
+Figure \ref{fig:layers} is the automatic-pool rates.
+Figure \ref{fig:roofline} places the scaling-block rates under that read rate.
+The serial fraction drawn there is \((\text{file read}+\text{boundary scan})/(\text{one-thread native read})\).
+
+A second Python sweep, thirty interleaved pairs on the same \(10{,}000\)-frame file, is a different campaign from the five-repeat block.
+Its one-thread median is \(1.35258\,\mathrm{s}\).
+Two threads give speedup \(1.148\) with interval \([1.126, 1.157]\), four give \(1.209\) with \([1.194, 1.223]\), and eight give \(1.284\) with \([1.263, 1.313]\).
+Hashes of the returned fields at 1, 2, 3, 4 and 8 threads are identical.
+The \(1.15\) and the \(1.28\) are different experiments, and the text keeps both.
+
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.86\textwidth]{figures/generated/layers.pdf}
-\caption{Median throughput on the \(167.71\,\mathrm{MB}\) file, warm cache.
-The Rust core and the C++ wrapper use the automatic policy.
-The Python bar includes one object per atom.}
+\includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf}
+\caption{Warm-cache rate for the automatic Rust pool, the C++ wrapper and the Python full-object read, from the medians in Table \ref{tab:perf}.}
 \label{fig:layers}
 \end{figure}
 
-The C++ wrapper eOn calls costs nothing measurable over the core: the automatic Rust time is 0.904 of the C++ time, interval 0.815 to 0.993, and on one thread the ratio is 0.991.
-One frame at the automatic rate costs \(12.6\,\mu\mathrm{s}\), against \(0.304\,\mathrm{ms}\) for one Morse call and \(52.6\,\mu\mathrm{s}\) for one EMT call on the 28-atom slab, so the whole file costs about 413 Morse calls; the i-PI 3.0 measurements use the same force-call framing \cite{litmanIpi30Flexible2024}.
-Table \ref{tab:stages} times each stage of the read on its own, 30 repeats per thread count with 90 at one thread.
-The full read falls from \(0.445\,\mathrm{s}\) on one thread to \(0.126\,\mathrm{s}\) on eight, a speedup of 3.53 with interval 3.48 to 3.56, and the in-memory parse alone reaches 4.83, interval 4.71 to 4.89.
-The token walk and the numeric parse scale to 7.55 and 7.60, the boundary scan stays at \(0.033\,\mathrm{s}\) on every thread count, and assembly peaks at 2.77 on four threads.
-The Amdahl bound we drew earlier counted the string load and the boundary scan as the serial fraction, \(f=(0.0824+0.0332)/0.445=0.260\), which gives 2.84 on 8 threads.
-That bound is conservative: the timed read maps the file and validates it in place, so the string load is not on its path.
-The boundary scan alone gives \(f=0.075\) and a bound of 5.25, and the measured speedup implies an effective serial fraction of 0.181.
-Every thread count returns the same frames.
-Python flattens at 1.00, 1.22, 1.27 and 1.15, because object construction takes the interpreter lock.
-
-\begin{table}[ht]
-\centering
-\small
-\caption{Warm-cache stage timings on the 10{,}000-frame repeated file: median at one thread and speedup at 8 threads with its interval.
-The full read is the library call; the other rows are isolated passes.}
-\label{tab:stages}
-\begin{tabular}{lrrl}
-\toprule
-Stage & 1 thread (s) & Speedup at 8 & Interval \\
-\midrule
-full read & 0.4449 & 3.53 & [3.48, 3.56] \\
-in-memory parse & 0.4255 & 4.83 & [4.71, 4.89] \\
-numeric parse & 0.3477 & 7.60 & [7.01, 7.70] \\
-token walk & 0.1679 & 7.55 & [7.09, 7.67] \\
-string load & 0.0824 & 0.93 & [0.92, 0.94] \\
-assembly & 0.0394 & 2.43 & [2.39, 2.46] \\
-boundary scan & 0.0332 & 0.99 & [0.99, 1.00] \\
-library file load & 0.0262 & 1.01 & [1.01, 1.02] \\
-UTF-8 validation & 0.0203 & 0.76 & [0.75, 0.79] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.78\textwidth]{figures/generated/roofline.pdf}
-\caption{Parse throughput at 1, 2, 4 and 8 threads on the repeated 218-atom frame.
-The dashed line is the hot-cache memory copy at 9.06\,GB/s.
-Points are the layer timings of Table \ref{tab:perf}.
-The Amdahl curve counts the string load and the boundary scan as serial, and is a conservative bound because the string load is not on the timed path.
-Triangles mark the string-load and boundary-scan rates.}
+\includegraphics[width=0.85\textwidth]{figures/generated/roofline.pdf}
+\caption{Scaling-block rates for Rust, C++ and Python.
+The dashed line is the hot-cache copy to the null device, \(9.06\,\mathrm{GB/s}\).
+The curve is Amdahl's law anchored at the one-thread Rust rate of the scaling block.
+Its serial fraction is \(0.267\), the in-process file read plus the boundary scan, divided by the one-thread native median.
+The filled triangle is the string-load rate and the open triangle is the boundary-scan rate.}
 \label{fig:roofline}
 \end{figure}
-\subsection{Peers on the same frames}
+
+\subsection{Peers}
 \label{sec:perf-peers}
-Table \ref{tab:peers} sets the one-worker Python read and write beside five peers on the 10,000-frame trajectory, as 30 interleaved pairs per cell with a Holm adjustment, from a cold and a warm page cache \cite{holmSimpleSequentiallyRejective1979,michaudagrawalMdanalysisToolkitAnalysis2011,jakupovicMpiparallelMolecularDynamics2021,gowersMdanalysismdanalysisRelease21002025,colletteH5pyh5py3702022}.
-Each ratio is the readcon-core time over the peer time, so a value below 1 means readcon-core finished sooner, and every adjusted p-value is 0.002.
-The peers return different amounts of the frame.
-readcon-core parses the CON text and returns one object per atom with the mask, the id and the declared units, in \(1.22\,\mathrm{s}\) cold and \(1.15\) to \(1.20\,\mathrm{s}\) warm.
-h5py returns the binary64 position array without parsing anything, and the ratios of 37.2 cold and 87.2 warm are the distance between a text parse and a binary load.
-chemfiles parses XYZ text with symbols and coordinates only, at 2.49 cold and 2.44 warm.
-The ASE trajectory is binary and returns ASE atoms with the mask and without ids, at 0.960 cold and 0.940 warm.
-MDAnalysis returns single-precision coordinates with the declared unit from H5MD, at 0.208 and 0.200, and ASE returns ASE atoms with the mask and ids by column convention from extended XYZ, at 0.282 and 0.281.
-Writing from objects already in memory, readcon-core takes \(1.55\) to \(1.62\,\mathrm{s}\), 0.19 to 0.24 of the ASE extended XYZ and MDAnalysis writers, about twice chemfiles and the ASE trajectory, and about 60 times h5py writing one array.
-On the repeated file the ratios are within 0.16 of these except the ASE trajectory read, at 1.40 cold and 1.31 warm, and h5py.
-Table \ref{tab:ratios} in the supplement lists the earlier payloads.
+Table \ref{tab:peers} is readcon-core through its Python binding at one worker, divided by the peer, so a ratio below 1 means readcon-core finished sooner.
+Campaign A, rustc 1.88, thirty interleaved pairs, compares the ASE eon reader, chemfiles XYZ, h5py and MDAnalysis H5MD.
+On \(10{,}000\) frames the ratios are \(0.337\) against ASE eon (readcon-core \(1.269\,\mathrm{s}\), ASE \(3.745\,\mathrm{s}\)), \(2.15\) against chemfiles XYZ, \(67.1\) against h5py (peer \(0.01899\,\mathrm{s}\)), and \(0.207\) against MDAnalysis H5MD (peer \(6.179\,\mathrm{s}\)).
+h5py returns one numeric array.
+The CON reader returns the mask, the id, the cell and the periodic flags.
+The ratio is the cost of that parse against a raw array read.
+Campaign B, rustc 1.99, adds ASE extended XYZ and the ASE trajectory on a second host pass.
+The ASE eon ratio on the same \(10{,}000\)-frame file is \(0.348\), against \(0.337\) in campaign A.
+Absolute readcon-core times differ between the campaigns, near \(2.0\,\mathrm{s}\) in B and \(1.27\,\mathrm{s}\) in A, so only the reproduced ratio is compared.
+XYZ and H5MD peers receive coordinates of the same frames, written before the timed loop.
+Section \ref{sec:appendix-peers} extends the table to the 1-frame and 100-frame files.
+On one frame the open dominates, and h5py and chemfiles lose the lead they have on the long file.
 
-\begin{table}[ht]
-\centering
-\small
-\caption{Paired ratios on the 10{,}000-frame trajectory, readcon-core time over peer time, one worker.
-Each cell is the median of 30 interleaved pairs with its bias-corrected and accelerated 95 percent interval.
-Cold repeats drop the page cache before each call.}
-\label{tab:peers}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lllll}
-\toprule
-Peer & Returns & & Cold & Warm \\
-\midrule
-ASE extended XYZ & ASE atoms & read & 0.282 [0.280, 0.283] & 0.281 [0.281, 0.281] \\
- & & write & 0.196 [0.194, 0.197] & 0.188 [0.187, 0.190] \\
-ASE trajectory & ASE atoms & read & 0.960 [0.952, 0.964] & 0.940 [0.936, 0.948] \\
- & & write & 2.06 [2.05, 2.08] & 2.02 [2.00, 2.04] \\
-chemfiles XYZ & parsed XYZ & read & 2.49 [2.47, 2.51] & 2.44 [2.44, 2.45] \\
- & & write & 1.99 [1.98, 2.00] & 1.98 [1.97, 1.99] \\
-h5py H5MD & raw array & read & 37.2 [35.5, 37.7] & 87.2 [86.1, 88.1] \\
- & & write & 64.4 [63.6, 65.2] & 59.1 [58.7, 59.3] \\
-MDAnalysis H5MD & float32 array & read & 0.208 [0.204, 0.210] & 0.200 [0.198, 0.201] \\
- & & write & 0.235 [0.233, 0.236] & 0.225 [0.223, 0.227] \\
-\bottomrule
-\end{tabular}
-\end{table}
-\subsection{Parallel read, write and ingest}
+\input{figures/generated/peer_table}
+
+\subsection{MPI}
 \label{sec:perf-mpi}
-The output of every parallel path is independent of the rank count: each file read or written has the sha256 of the serial one, and each ingested store has the canonical dump of the serial ingest, on every rank count measured.
-The MPI paths take the caller's communicator and give each rank a contiguous block of frames, so the rank-ordered concatenation is the serial read.
-On a \(1.07\,\mathrm{GB}\) file of 3,167,382 frames, with MPICH 4.2.3 and one thread per rank, a read with every rank mapping a shared file falls from \(9.39\,\mathrm{s}\) on one rank to \(1.63\,\mathrm{s}\) on eight, a speedup of 5.74, and rank 0 scattering byte ranges reaches 4.71 (Figure \ref{fig:mpi}a).
-The collective write places each rank's bytes at an exclusive-scan offset; through MPI-IO it falls from \(7.94\,\mathrm{s}\) to \(1.22\,\mathrm{s}\), a speedup of 6.52, and gathered to rank 0 it reaches 4.25.
-readcon-db \cite{goswamiReadcondbMmapCon2026} ingests four copies of a \(1.07\,\mathrm{GB}\) trajectory, batch 4096, in Table \ref{tab:dbmpi} and Figure \ref{fig:mpi}b.
-With one writer the ingest falls from \(30.6\,\mathrm{s}\) on one rank to \(15.3\,\mathrm{s}\) on eight, a speedup of 2.00, and with four shards from \(32.5\,\mathrm{s}\) to \(17.1\,\mathrm{s}\), a speedup of 1.90.
-At 16 ranks the two modes take \(35.2\,\mathrm{s}\) and \(43.5\,\mathrm{s}\); the serial ingest on the same host takes \(22.8\) to \(25.9\,\mathrm{s}\) up to eight ranks and \(51.6\,\mathrm{s}\) at 16.
+The MPI campaign ran on the same Xeon family, 8 cores, about \(47\,\mathrm{GB}\), a virtio block device with ext4.
+Ranks 16 and 32 were not run.
+MPICH 4.2.3 used the ch4:ofi device, \texttt{mpiexec -bind-to core}, with UCX and libfabric on TCP.
+\texttt{RAYON\_NUM\_THREADS} and \texttt{OMP\_NUM\_THREADS} were 1, so a rank does not spawn a second pool.
+rustc was 1.99.0.
+readcon-core was 0.17.0 at \texttt{af8aabb}.
+readcon-db was 0.1.8 at \texttt{55214d1}.
+Each cell is five repeats.
+Cold repeats drop the page cache.
+Warm repeats follow an untimed warmup.
+The median is the third of the five sorted times.
+Every one of the 480 repeats matched the serial bytes.
+The tables report the harness time of the distributed section.
 
-\input{figures/generated/dbmpi_table}
+Strong scaling holds the file fixed.
+The CON file is \(1{,}583{,}691\) copies of a small frame, \(3{,}167{,}382\) frames, \(1{,}073{,}742{,}498\) bytes.
+The database file is \(30{,}965\) frames of \(1{,}000\) atoms, \(1{,}074{,}071{,}389\) bytes, ingested four times (\(4{,}296{,}284{,}756\) bytes) with batch \(4096\).
+The sharded path uses four shards.
+Table \ref{tab:mpi-strong} is the warm medians.
+Shared read goes from \(9.088\,\mathrm{s}\) to \(1.504\,\mathrm{s}\), a ratio \(6.04\).
+Scatter goes from \(9.223\,\mathrm{s}\) to \(1.836\,\mathrm{s}\), ratio \(5.02\).
+MPI-IO write goes from \(8.369\,\mathrm{s}\) to \(1.416\,\mathrm{s}\), ratio \(5.91\).
+Gather write goes from \(9.490\,\mathrm{s}\) to \(2.152\,\mathrm{s}\), ratio \(4.41\).
+One-writer ingest goes from \(31.699\,\mathrm{s}\) to \(16.810\,\mathrm{s}\), ratio \(1.89\).
+Four-shard ingest goes from \(32.549\,\mathrm{s}\) to \(18.805\,\mathrm{s}\), ratio \(1.73\).
+Cold shared read goes from \(9.904\,\mathrm{s}\) to \(2.113\,\mathrm{s}\).
+Figure \ref{fig:mpi-strong} is the warm speedup.
+The full rank list, cold and warm, is in Section \ref{sec:supp-mpi}.
 
-On one thread, readcon-db ingests the 10,000-frame trajectory in \(0.579\,\mathrm{s}\), 17,260 frames per second, against 3,373 for the ASE database in one transaction and 592 when it commits every row; the paired ratios are 0.193, interval 0.190 to 0.196, and 0.0337, interval 0.0324 to 0.0346.
-An ingest of 80,000 distinct frames, \(1.34\,\mathrm{GB}\), grows the store past its \(2\,\mathrm{GiB}\) default map without intervention, at 12,344 frames per second.
-
-Weak scaling, at a fixed number of frames per rank, is \pending{weak scaling, cloud run 04}.
+\input{figures/generated/mpi_strong_warm}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
-\caption{Strong scaling with MPICH 4.2.3, one thread per rank, medians of five runs for readcon-core and means of five for readcon-db.
-(a) Read and write of a \(1.07\,\mathrm{GB}\) file of 3{,}167{,}382 frames.
-(b) Ingest of four copies of a \(1.07\,\mathrm{GB}\) trajectory into readcon-db \cite{goswamiReadcondbMmapCon2026} with one writer or four shards.
-The dashed line is ideal speedup.
-Every output has the bytes of the serial one.}
-\label{fig:mpi}
+\caption{Strong-scaling speedup from the warm medians in Table \ref{tab:mpi-strong}.
+The dashed line is \(t(1)/t(R) = R\).
+Ranks 1, 2, 4 and 8 on an 8-core host.
+Every output matched the serial bytes.}
+\label{fig:mpi-strong}
 \end{figure}
+
+Weak scaling gives every rank the same frame count as the one-rank run.
+readcon-core holds \(400{,}000\) frames per rank, \(135{,}600{,}000\) bytes at one rank.
+readcon-db ingests \(7{,}700\) frames of \(1{,}000\) atoms per rank, four copies, \(30{,}800\) frames per rank.
+Table \ref{tab:mpi-weak} is the warm medians, and the ratio is the eight-rank time over the one-rank time.
+Shared read grows by \(1.36\), scatter by \(1.61\), MPI-IO write by \(1.33\), and gather write by \(1.78\).
+One-writer ingest grows by \(3.77\), from \(7.841\,\mathrm{s}\) to \(29.594\,\mathrm{s}\).
+Four-shard ingest grows by \(4.68\), from \(7.465\,\mathrm{s}\) to \(34.899\,\mathrm{s}\).
+The read and the MPI-IO write stay near the one-rank time.
+The ingest does not: eight ranks take several times as long as one rank on the same work per rank.
+Figure \ref{fig:mpi-weak} is that growth.
+An earlier campaign with a different host and with means rather than medians is not this table.
+
+\input{figures/generated/mpi_weak_warm}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
+\caption{Weak scaling from the warm medians in Table \ref{tab:mpi-weak}.
+The dashed line is a ratio of 1, the same time as one rank.
+The ingest ratios lie above that line.}
+\label{fig:mpi-weak}
+\end{figure}
+
+\subsection{The store}
+\label{sec:perf-db}
+The store measurements are the readcon-db evaluation at commit \path{6146c3b}, copied into \path{paper/cpc/data/db}.
+The host is an Intel Xeon, 8 CPUs, \(47.07\,\mathrm{GiB}\).
+The software is Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.
+Threads are pinned to 1 so the three stores run under one cap.
+Five repeats are interleaved.
+Cold is a \texttt{posix\_fadvise} \texttt{DONTNEED} hint and then a fresh process; the run did not drop the page cache.
+Warm is the next query in that process.
+The timed corpora have \(1{,}000\) and \(10{,}000\) frames, and every frame has its own xxHash3-128, so the ingest timing is not a deduplication win.
+The frames come from ASE EMT searches: an HCN/HNC band of 157 frames, a Cu adatom band of 159, a Pt--H band of 83, and a Pt adatom dimer of 71, plus an adaptive kinetic Monte Carlo trace of \(4{,}000\) steps on three systems.
+EMT on H, C and N is not a quantitative barrier.
+The HCN saddle in that trace is \(197.6\,\mathrm{eV}\) with no hops, the Cu saddle is \(5.23\,\mathrm{eV}\) with barrier about \(1.09\,\mathrm{eV}\) and no hops, and the Pt--H trace has \(1{,}664\) hops and a barrier about \(0.03\,\mathrm{eV}\).
+eOn was not used for those searches.
+A \(100{,}000\)-frame ingest was not timed: ASE's database writes about \(200\) frames/s and does not finish in two minutes.
+One million frames does not fit the default \(2\,\mathrm{GiB}\) map.
+
+At \(10{,}000\) frames the ingest medians are \(0.311306\,\mathrm{s}\) for readcon-db (\(32{,}123\) frames/s, \(35.09\,\mathrm{MB/s}\)), \(48.411\,\mathrm{s}\) for ASE's database committing every write (\(206.6\) frames/s), and \(5.985\,\mathrm{s}\) for one ASE connection that still commits every \(5{,}000\) rows (\(1{,}671\) frames/s).
+The paired ratios are \(0.006800\) against the per-write commits and \(0.05283\) against the single connection.
+At \(1{,}000\) frames the readcon-db median is \(0.03289\,\mathrm{s}\) (\(30{,}403\) frames/s).
+The ingest table has 30 rows and the query table has 180, and every row passed the hit-count and index-sum check.
+The composition query is Cu with 9 atoms: 292 hits at \(1{,}000\) frames and \(2{,}542\) hits at \(10{,}000\) frames.
+
+At \(10{,}000\) frames the readcon-db query medians are \(8.14\,\mathrm{ms}\), \(10.1\,\mathrm{ms}\) and \(9.57\,\mathrm{ms}\) cold for composition, energy and maximum force, and \(0.176\,\mathrm{ms}\), \(0.211\,\mathrm{ms}\) and \(0.208\,\mathrm{ms}\) warm.
+ASE's database takes \(0.286\,\mathrm{s}\), \(0.223\,\mathrm{s}\) and \(0.225\,\mathrm{s}\) cold, and \(0.258\,\mathrm{s}\), \(0.203\,\mathrm{s}\) and \(0.206\,\mathrm{s}\) warm.
+A directory of the same text in 64-frame chunks takes \(0.193\,\mathrm{s}\), \(0.193\,\mathrm{s}\) and \(0.197\,\mathrm{s}\) cold, and \(0.140\,\mathrm{s}\), \(0.138\,\mathrm{s}\) and \(0.138\,\mathrm{s}\) warm.
+The index is what the warm readcon-db number measures.
+
+Allocated bytes at \(10{,}000\) frames are \(10{,}923{,}745\) for the raw CON text, \(3{,}241{,}302\) after gzip level 6, \(3{,}312{,}800\) after zstd level 3, \(11{,}501{,}568\) for the directory, \(27{,}340{,}800\) for readcon-db and \(8{,}929{,}280\) for ASE's database.
+readcon-db is \(2.503\) times the raw text: the text plus the indexes.
+The \(2\,\mathrm{GiB}\) figure is the map ceiling, not this file.
+At \(1{,}000\) frames zstd level 3 (\(270{,}863\) bytes) is smaller than gzip level 6 (\(277{,}258\) bytes).
+At \(10{,}000\) frames zstd is the larger of the two.
+The adaptive kinetic Monte Carlo trace has \(24{,}000\) frames and \(27{,}864{,}917\) stored blob bytes, equal to the raw file, and 7 unique hashes whose text is \(8{,}319\) bytes.
+A corpus of those seven texts allocates \(98{,}304\) bytes; the full trace allocates \(74{,}911{,}744\).
+The seven texts are the unhopped HCN state and its saddle, the unhopped Cu state and its saddle, and both Pt--H states with that saddle.
+Nine correctness checks pass: a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared flags, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
+Section \ref{sec:appendix-db} records the repeats and the figures.
+
 \section{Limitations}
 \label{sec:limitations}
-CON 3.1 is a text format for the frames a search checkpoints, not for analysis trajectories.
-Text costs space and a parse (Table \ref{tab:sizes}), which the core pays at \(1.3\,\mathrm{GB/s}\).
-Indexed random access and campaign storage are readcon-db's part of the design \cite{goswamiReadcondbMmapCon2026}.
-A frame specifies geometry and its labels, not optimiser state, so an L-BFGS resume restarts its history; a key for that history is the natural next minor version.
-The conformance corpus fixes what a conforming reader decides on each listed file, and it says nothing about a reader on files outside it.
-A single core behind every binding makes the bindings agree by construction, which is a property of this implementation and not evidence about a second one.
-The resume studies are one symmetric and one asymmetric EMT hop and one Morse band; they show what a lost field does to a saddle, and they are not a survey of reactions.
-The peer comparisons hold for the library versions named in Section \ref{sec:requirements}.
+A frame stores geometry and its labels.
+It does not store the short history of a quasi-Newton update or of a FIRE step.
+The control in Section \ref{sec:cases} is the measurement: both printers agree with each other at \(0.670723\,\mathrm{eV}\) and differ by \(0.037113\,\mathrm{eV}\) from the uninterrupted barrier.
+The corpus decides the listed files.
+Agreement among the language bindings is agreement of one core, and the public Fortran wrapper shows that a binding can still fail while that core is unchanged.
+The resumed bands are one EMT Pt hop and one Morse band.
+They show what a lost field does to those searches.
+The EMT energies quoted for H, C and N are recorded as the trace produced them: the HCN saddle is \(197.6\,\mathrm{eV}\), and that potential is not a quantitative barrier for those atoms.
+Peer ratios hold for the library versions named in Sections \ref{sec:requirements} and \ref{sec:perf-peers}.
+The MPI claim covers ranks 1 to 8 on the 8-core virtio host in Section \ref{sec:perf-mpi}.
+The default LMDB map is \(2\,\mathrm{GiB}\), and one million frames returns \texttt{MDB\_MAP\_FULL}.
+CON is the checkpoint record.
+H5MD is the trajectory record.
+The byte counts in Table \ref{tab:sizes} are the measured cost of the checkpoint text.
+
 \section{Conclusions}
 \label{sec:conclusions}
-A geometry file in a rare-event campaign is the restart state of the search, and it needs a per-axis mask, a persistent id, a declared time unit, binary64 coordinates with their periodicity, and a version two readers agree on.
-On one masked slab frame, no common format keeps all five, and the losses change the computed saddle: a POSCAR resume ends \(70\,\mathrm{meV}\) lower, and an ASE eon resume loses two modes and the periodicity.
-Five readers of one extended XYZ file give four answers.
-CON 3.1 specifies the text eOn already writes, its corpus decides what a reader must accept, and readcon-core gives every language the same parser.
-A band resumed through it matches the uninterrupted band to the floor set by restarting the force field, and a frame costs \(12.6\,\mu\mathrm{s}\) to read.
+The geometry file in a rare-event campaign is the restart state of the search.
+The resume reads a per-axis mask, a persistent id, a declared time unit, binary64 coordinates with their periodic flags, and a version two readers agree on.
+On one masked slab, every common format tested here drops at least one of those fields.
+The ASE POSCAR resume drops the height constraint and finishes \(70.2\,\mathrm{meV}\) lower.
+Five extended XYZ readers return four answers for one file.
+CON 3.1 states the grammar, the corpus decides the listed files, and one parser serves the five languages.
+Twenty-five language pairs resume the climbing-image band at the uninterrupted barrier.
+The public Fortran wrapper, tested the same way, returns status \(-4\) and writes no usable frame.
+A warm read costs \(12.6\,\mu\mathrm{s}\) per 218-atom frame.
+Shared MPI reads and MPI-IO writes speed up across eight ranks on this host.
+The sharded ingest does not stay flat under weak scaling.
+readcon-db stores the CON text, indexes it, and ingests it in parallel; those are the operations Section \ref{sec:perf-db} and Section \ref{sec:perf-mpi} time.
+
 \section*{Data availability}
 \label{sec:data}
-The version 0.17.0 archive is \url{https://doi.org/10.5281/zenodo.23302640} \cite{goswamiReadconcoreConconvelReaderwriter2026}, and the concept record is \url{https://doi.org/10.5281/zenodo.18753567} \cite{goswamiReadconcoreConConvel2026}.
-A citation to the software is owed to that archived record \cite{smithSoftwareCitationPrinciples2016,wilkinsonFairGuidingPrinciples2016,barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020}.
-Publishing a finished saddle remains the job of a repository interface, a materials archive or a reaction database, downstream of this checkpoint \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}.
-The HCN coordinates used in the cross-reader check are the public endpoints of that isomerisation \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
-The specification, the grammar, the corpus, the failure-case scripts and their outputs are the supplementary material.
-The accompanying notes record the restart displacements, the format round trips, the frame bytes, the velocity step, the illegal-file classes, the database hashes, and the stored ingest timings.
+Version 0.17.0 of the reader is \url{https://doi.org/10.5281/zenodo.23302640} \cite{goswamiReadconcoreConconvelReaderwriter2026}.
+The concept record is \url{https://doi.org/10.5281/zenodo.18753567} \cite{goswamiReadconcoreConConvel2026}.
+Version 0.16.2, used by the store evaluation, is \url{https://doi.org/10.5281/zenodo.23264985} \cite{goswamiReadconcoreV0162Conconvel2026}.
+The software citation points at those archived records \cite{smithSoftwareCitationPrinciples2016,wilkinsonFairGuidingPrinciples2016,barkerIntroducingFairPrinciples2022,lamprechtTowardsFairPrinciples2020}.
+The store is archived separately \cite{goswamiReadcondbMmapCon2026}.
+Publishing a finished saddle remains the job of a repository, a materials archive or a reaction database, downstream of this checkpoint \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021,ongMaterialsApplicationProgramming2015}.
+The HCN coordinates are the public endpoints of that isomerisation \cite{vanmourikAbInitioGlobal2001,goswamiReproducibleOrchestrationBest2026}.
+The specification, the grammar, the corpus and the campaign files are the supplementary material.
+The \((s, d)\) figures use the projection defined for comparing bands that share atom identity \cite{goswamiTwodimensionalRmsdProjections2026}.
+
 \section*{CRediT authorship contribution statement}
 \label{sec:credit}
-Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing - Original draft preparation, Writing - Reviewing and Editing.
+Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing -- original draft, Writing -- review and editing.
+
 \section*{Declaration of competing interest}
 \label{sec:competing}
 The author declares that he has no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
 \section*{Funding}
 \label{sec:funding}
 This work received no funding.
+
 \section*{Acknowledgements}
 \label{sec:acknowledgements}
-The author thanks Hannes Jónsson for long discussions on saddle searches and on what an eOn checkpoint has to carry, and Miha Gunde for discussions on matching atoms along a reaction path.
+The author thanks Hannes J\'onsson for discussions on saddle searches and on what an eOn checkpoint has to carry, and Miha Gunde for discussions on matching atoms along a reaction path.
 Ruhila Goswami designed the colour palette of the figures.
-The library was written with the patience of the author's family, in the company of the turtles, the garden cats, the birds and the rest of the household.
+The library was written with the patience of the author's family.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{rg_main}

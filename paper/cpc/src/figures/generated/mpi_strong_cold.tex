@@ -1,0 +1,37 @@
+% Written by paper/cpc/scripts/gen_cloud_tables.py.
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{Strong scaling, cold page cache. Each repeat drops the page cache before the timed call. Median, minimum and maximum of five repeats.}
+\label{tab:mpi-strong-cold}
+\begin{tabular}{llrrrrr}
+\toprule
+Path & Ranks & Median (s) & Min & Max & Frames/rank & SHA \\
+\midrule
+read, shared file & 1 & 9.904 & 9.438 & 11.857 & 3167380 & match \\
+read, shared file & 2 & 5.677 & 5.282 & 5.829 & 1583690 & match \\
+read, shared file & 4 & 3.220 & 3.105 & 3.367 & 791846 & match \\
+read, shared file & 8 & 2.113 & 2.015 & 2.341 & 395923 & match \\
+read, scatter & 1 & 9.949 & 9.704 & 10.123 & 3167380 & match \\
+read, scatter & 2 & 5.594 & 5.473 & 5.694 & 1583690 & match \\
+read, scatter & 4 & 3.517 & 3.483 & 3.616 & 791846 & match \\
+read, scatter & 8 & 2.438 & 2.355 & 2.498 & 395923 & match \\
+write, MPI-IO & 1 & 8.721 & 8.240 & 8.975 & 3167380 & match \\
+write, MPI-IO & 2 & 4.288 & 4.217 & 4.385 & 1583690 & match \\
+write, MPI-IO & 4 & 2.304 & 2.269 & 2.350 & 791846 & match \\
+write, MPI-IO & 8 & 1.477 & 1.383 & 2.765 & 395923 & match \\
+write, gather & 1 & 9.233 & 8.917 & 9.606 & 3167380 & match \\
+write, gather & 2 & 5.442 & 5.210 & 5.613 & 1583690 & match \\
+write, gather & 4 & 3.051 & 3.030 & 3.399 & 791846 & match \\
+write, gather & 8 & 2.118 & 2.112 & 2.174 & 395923 & match \\
+ingest, one writer & 1 & 33.552 & 31.287 & 34.367 & 123860 & match \\
+ingest, one writer & 2 & 24.208 & 23.934 & 25.860 & 61930 & match \\
+ingest, one writer & 4 & 19.760 & 19.195 & 28.385 & 30965 & match \\
+ingest, one writer & 8 & 18.133 & 17.182 & 21.784 & 15482 & match \\
+ingest, four shards & 1 & 33.348 & 32.918 & 39.840 & 123860 & match \\
+ingest, four shards & 2 & 25.548 & 25.153 & 41.806 & 61930 & match \\
+ingest, four shards & 4 & 22.145 & 21.005 & 22.502 & 30965 & match \\
+ingest, four shards & 8 & 19.078 & 18.912 & 23.929 & 15482 & match \\
+\bottomrule
+\end{tabular}
+\end{table}

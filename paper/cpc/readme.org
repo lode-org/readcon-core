@@ -3,6 +3,9 @@
 The source of truth is =src/rg_main.tex= and =src/rg_supp.tex=.
 =src/rg_main.org= predates the shortened manuscript and is kept only for its long-form methods text; do not export it over the TeX files.
 Tables and figures are written by =scripts/gen_tables.py= from the CSV files under =data/= and =bench/results/=.
+The MPI and restart tables from the cloud campaign are written by =scripts/gen_cloud_tables.py=, and the MPI figures by =scripts/plot_mpi_cloud.py=.
+=org2tex.el= exports =rg_main.org= over =rg_main.tex=.
+The TeX files are the draft. Do not run that export.
 
 * Build
 
