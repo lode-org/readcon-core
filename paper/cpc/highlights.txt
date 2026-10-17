@@ -1,5 +1,5 @@
-A checkpoint needs masks, ids, a time unit, binary64 coordinates and a version
-One masked slab frame loses part of that state in every common format
-An ASE POSCAR resume drops a height constraint and ends 70 meV lower
-Five extended XYZ readers return four different answers for one file
-CON 3.1 adds a version, a conformance corpus and one shared parser
+A restart file needs a mask, an id, a time unit, binary64 coordinates and a version
+One masked slab loses part of that state in every common format tested
+An ASE POSCAR resume drops a height constraint and ends 70.2 meV lower
+Five extended XYZ readers return four answers for one file
+Twenty-five CON language pairs resume the uninterrupted barrier

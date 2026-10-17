@@ -76,15 +76,15 @@ belowskip=0.4em
 \begin{frontmatter}
 \input{authors.tex}
 \begin{abstract}
-These notes record the measurements behind the figures that accompany the CON 3.1 paper.
+These notes record the measurements behind the CON 3.1 paper.
 The restart displacements, the format matrix, the frame bytes, the velocity step and the illegal-file classes are reads of the campaign files and the conformance corpus.
-The hash figure is a query of those bands.
-The ingest tables are the stored five-repeat measurements of that store.
+The language-pair table and the MPI rank tables are the cloud campaign.
+The ingest tables are the readcon-db evaluation at commit \texttt{6146c3b}.
 \end{abstract}
 \end{frontmatter}
 \section{Restart difference}
 \label{sec:supp-restart}
-The interrupted band in Section \ref{sec:validation} writes a checkpoint and then continues.
+The interrupted band in Section \ref{sec:cases} writes a checkpoint and then continues.
 Figure \ref{fig:supp-restart} compares each resumed movie with the uninterrupted movie at the same index.
 Column 3 is that checkpoint.
 The final column is the band after the five steepest-descent steps.
@@ -142,7 +142,7 @@ Masks and ids share the coordinate line, so their parse time is inside that \(13
 \end{figure}
 \section{Velocity mislabel}
 \label{sec:supp-velocity}
-The kinetic energies and the Verlet step are the illustration in Section \ref{sec:validation}.
+The kinetic energies and the Verlet step are the illustration in Section \ref{sec:cases}.
 The conversion from the natural unit to femtoseconds is the factor used for that illustration.
 The cell is the slab cell of the file.
 
@@ -157,7 +157,7 @@ The arrows are drawn at 10 times that displacement.}
 \end{figure}
 \section{Illegal-file classes}
 \label{sec:supp-errors}
-The eight illegal files are the conformance corpus named in Section \ref{sec:validation}.
+The eight illegal files are the conformance corpus named in Section \ref{sec:cases}.
 readcon raises a message that names the class.
 ASE 3.29.0 reads the same files with its eon reader.
 
@@ -173,7 +173,7 @@ The ASE eon reader accepts seven of the files and stops without a class on the p
 \label{sec:supp-dedup}
 The hashes are a query against readcon-db 0.1.8.
 The five bands were appended as stored trajectories, and each frame hash was read back by the same query.
-The bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section \ref{sec:validation}.
+The bands are the uninterrupted Morse restart, its round-trip resume, its six-decimal resume, and the two EMT mask bands of Section \ref{sec:cases}.
 The query returns 35 images and 35 hashes.
 Every returned hash locates the frame that was stored.
 Endpoint coordinates of the uninterrupted band and the round-trip resume agree: the maximum absolute component is 0 at both endpoints and \(8.9\times10^{-15}\,\text{\AA}\) over the seven images.
@@ -280,21 +280,25 @@ On one frame the fixed cost of opening the file dominates, which is why h5py and
 \input{figures/generated/ratio_table}
 \section{Stored ingest timings}
 \label{sec:appendix-db}
-readcon-db answers composition, energy and maximum-force queries over CON frames that an adaptive kinetic Monte Carlo campaign has already written.
-The frame defined in the main text is unchanged.
-The numbers in this section are the stored five-repeat measurements.
-They were not remeasured for this manuscript.
-The machine for those measurements was an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
+readcon-db answers composition, energy and maximum-force queries over CON frames.
+The numbers are the evaluation at commit \texttt{6146c3b}: five interleaved repeats, median then minimum and maximum.
+The machine was an Intel Xeon with 8 CPUs and 47.07 GiB of memory.
 The software was Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0 and numpy 2.5.4.
-Threads were pinned to one.
-Five repeats were interleaved, and each value is the median, followed by the minimum and the maximum.
+Threads were pinned to one so that readcon-db, ASE's database and the CON directory ran under the same cap.
+The parallel ingest is the MPI campaign in Section \ref{sec:supp-mpi}.
 A megabyte is \(10^{6}\) bytes.
-A cold query follows a hint that cached pages are not needed, and then runs in a fresh process.
+A cold query follows \texttt{posix\_fadvise} with \texttt{DONTNEED}, then runs in a fresh process.
+The run did not drop the page cache.
 A warm query is the next query in that same process.
 The timed corpora repeat ASE effective-medium searches: a hydrogen cyanide band, a copper adatom band, a platinum-hydrogen band and a platinum adatom dimer.
-Every frame in those corpora has its own hash, at both 1,000 and 10,000 frames.
+Every frame in those corpora has its own xxHash3-128, at both 1,000 and 10,000 frames, so the ingest timing is the cost of storing distinct texts.
 The clock starts before the write and stops after a composition check.
-Every timed query was kept only after the hit count and the sum of frame indexes matched an oracle.
+The ingest table has 30 rows and the query table has 180, and every row matched the hit count and the sum of frame indexes.
+Python \texttt{ConCorpus.select} always applies an atom-count range, including the default from 0 to \(2^{32}-1\), so a Python query walks that index.
+The timed queries use the Rust select and do not add the predicate.
+\texttt{readcon.iter\_con} skips a leading newline, so an empty user line shifts the header.
+The evaluation writes the user line \texttt{cpc-eval}.
+\texttt{read\_con} on one frame keeps an empty user line, which the grammar allows.
 
 Table \ref{tab:db-ingest} is the ingest of 10,000 frames.
 Inside a single ASE transaction the writer still commits every 5,000 rows, so 1,000 frames is one commit and 10,000 frames is two commits, plus the commit that closes the block.
@@ -382,7 +386,27 @@ The right panel is allocated bytes for the full corpus and for a corpus of the u
 
 Nine correctness checks pass on that store.
 They cover a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared mask, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
-The map is capped at 2 GiB, and one million frames does not fit.
+The default LMDB map is 2 GiB.
+One million frames returns \texttt{MDB\_MAP\_FULL}.
+A \(100{,}000\)-frame ingest was not timed, because the ASE database at about 200 frames/s does not finish in two minutes.
+gzip and zstd in Figure \ref{fig:db-disk} are wrappers of the CON text.
+The store keeps each text, so the stored blob bytes of the \(24{,}000\)-frame trace equal the raw file, and the indexes sit beside that text.
+\section{Language pairs}
+\label{sec:supp-pairs}
+Table \ref{tab:restart-pairs} is the climbing-image band through each writer and reader among Python, C, C++, Fortran and Julia.
+The Fortran rows call \path{rkr_frame_add_atom_full} in the C header order.
+The public Fortran \path{add_atom} wrapper binds a different argument order, returns status \(-4\), and is not one of these rows.
+\input{figures/generated/restart_pairs}
+\section{MPI ranks}
+\label{sec:supp-mpi}
+Tables \ref{tab:mpi-strong} and \ref{tab:mpi-weak} in the main text are the warm medians.
+The tables here list every rank that was run, cold and warm.
+Ranks 16 and 32 were not run.
+Every repeat matched the serial bytes.
+\input{figures/generated/mpi_strong_cold}
+\input{figures/generated/mpi_strong_warm_full}
+\input{figures/generated/mpi_weak_cold}
+\input{figures/generated/mpi_weak_warm_full}
 \section{ABNF of one frame}
 \label{sec:appendix-abnf}
 The non-normative ABNF of one frame follows.

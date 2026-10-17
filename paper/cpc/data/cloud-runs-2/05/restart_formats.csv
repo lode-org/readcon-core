@@ -1,0 +1,40 @@
+route,steps,converged,barrier_eV,d_barrier_eV,max_disp_A,file_dpos_A,free_modes_mid,error,notes
+uninterrupted,60,True,0.644561366,0,0,,56,,
+"CON 3.1, shortest round trip",60,True,0.644561366,-5.68e-14,2.66e-15,0.0e+00,56,,
+"CON 3.1, six decimals",60,True,0.644560952,-4.14e-07,6.22e-07,4.9e-07,56,,
+CON 3.1 read by the ASE eon reader,4000,False,0.292282514,-3.52e-01,5.43e+00,0.0e+00,54,,
+"same, periodicity restored by hand",127,True,0.644558431,-2.93e-06,4.21e-02,0.0e+00,54,,
+extended XYZ (ASE),60,True,0.644561367,1.09e-09,4.94e-09,5.0e-09,56,,
+ASE trajectory,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,
+POSCAR (ASE),98,True,0.574323914,-7.02e-02,1.60e-01,4.9e-17,57,,
+legacy CON (ASE eon writer),,,,,,,,"TypeError: category must be a Warning subclass, not 'FixCartesian'",
+"ASE trajectory, id array",60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,id array did not survive the traj round trip; FixCartesian is whatever free_modes_mid shows
+CON 3.1 Python to Python,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Python to C,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Python to C++,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Python to Fortran,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Python to Julia,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C to Python,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C to C,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C to C++,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C to Fortran,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C to Julia,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C++ to Python,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C++ to C,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C++ to C++,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C++ to Fortran,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 C++ to Julia,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Fortran to Python,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,Fortran calls rkr_frame_add_atom_full; the public module add_atom binding does not match the C header
+CON 3.1 Fortran to C,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,Fortran calls rkr_frame_add_atom_full; the public module add_atom binding does not match the C header
+CON 3.1 Fortran to C++,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,Fortran calls rkr_frame_add_atom_full; the public module add_atom binding does not match the C header
+CON 3.1 Fortran to Fortran,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,Fortran calls rkr_frame_add_atom_full; the public module add_atom binding does not match the C header
+CON 3.1 Fortran to Julia,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,Fortran calls rkr_frame_add_atom_full; the public module add_atom binding does not match the C header
+CON 3.1 Julia to Python,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Julia to C,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Julia to C++,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Julia to Fortran,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+CON 3.1 Julia to Julia,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,cross-binding
+H5MD MDAnalysis to MDAnalysis,97,True,0.573837081,-7.07e-02,1.43e-01,4.6e-07,84,,"writer then h5py attaches fixed, id, and boundary; MDAnalysis reader ignores fixed and id"
+H5MD MDAnalysis to h5py,60,True,0.644561168,-1.98e-07,3.67e-07,4.6e-07,56,,fixed is by convention
+H5MD h5py to h5py,60,True,0.644561366,-2.31e-14,3.55e-15,0.0e+00,56,,"fixed is by convention; id, unit and boundary follow H5MD"
+H5MD h5py to MDAnalysis,97,True,0.573837081,-7.07e-02,1.43e-01,4.6e-07,84,,MDAnalysis reader ignores fixed and id

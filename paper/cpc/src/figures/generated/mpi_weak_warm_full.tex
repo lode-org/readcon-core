@@ -1,0 +1,37 @@
+% Written by paper/cpc/scripts/gen_cloud_tables.py.
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{Weak scaling, warm page cache, every rank count. Median, minimum and maximum of five repeats.}
+\label{tab:mpi-weak-full}
+\begin{tabular}{llrrrrr}
+\toprule
+Path & Ranks & Median (s) & Min & Max & Frames/rank & SHA \\
+\midrule
+read, shared file & 1 & 1.161 & 1.149 & 1.189 & 400000 & match \\
+read, shared file & 2 & 1.208 & 1.165 & 1.235 & 400000 & match \\
+read, shared file & 4 & 1.355 & 1.311 & 1.366 & 400000 & match \\
+read, shared file & 8 & 1.581 & 1.573 & 1.792 & 400000 & match \\
+read, scatter & 1 & 1.218 & 1.169 & 1.242 & 400000 & match \\
+read, scatter & 2 & 1.278 & 1.277 & 1.382 & 400000 & match \\
+read, scatter & 4 & 1.525 & 1.478 & 1.561 & 400000 & match \\
+read, scatter & 8 & 1.962 & 1.949 & 2.264 & 400000 & match \\
+write, MPI-IO & 1 & 1.037 & 1.032 & 1.088 & 400000 & match \\
+write, MPI-IO & 2 & 1.085 & 1.075 & 1.103 & 400000 & match \\
+write, MPI-IO & 4 & 1.199 & 1.190 & 1.227 & 400000 & match \\
+write, MPI-IO & 8 & 1.382 & 1.365 & 1.446 & 400000 & match \\
+write, gather & 1 & 1.211 & 1.164 & 1.238 & 400000 & match \\
+write, gather & 2 & 1.317 & 1.309 & 1.322 & 400000 & match \\
+write, gather & 4 & 1.572 & 1.507 & 1.613 & 400000 & match \\
+write, gather & 8 & 2.161 & 2.097 & 2.296 & 400000 & match \\
+ingest, one writer & 1 & 7.841 & 7.701 & 7.923 & 30800 & match \\
+ingest, one writer & 2 & 11.518 & 11.392 & 11.854 & 30800 & match \\
+ingest, one writer & 4 & 18.902 & 18.720 & 19.846 & 30800 & match \\
+ingest, one writer & 8 & 29.594 & 28.943 & 30.364 & 30800 & match \\
+ingest, four shards & 1 & 7.465 & 7.452 & 7.497 & 30800 & match \\
+ingest, four shards & 2 & 10.856 & 10.821 & 10.891 & 30800 & match \\
+ingest, four shards & 4 & 18.375 & 18.172 & 19.113 & 30800 & match \\
+ingest, four shards & 8 & 34.899 & 34.807 & 36.533 & 30800 & match \\
+\bottomrule
+\end{tabular}
+\end{table}

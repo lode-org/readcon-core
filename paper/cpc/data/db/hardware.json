@@ -1,0 +1,26 @@
+{
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "ncpu": 8,
+  "mem_gb": 47.07,
+  "python": "3.12.3",
+  "rustc": "rustc 1.88.0 (6b00bc388 2025-06-23)",
+  "readcon_db": "0.1.8",
+  "readcon_core": "0.16.2",
+  "ase": "3.29.0",
+  "numpy": "2.5.4",
+  "matplotlib": "3.11.2",
+  "zstandard": "0.25.0",
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "page_cache_drop": false,
+  "repeats": 5,
+  "summary": "median, minimum, and maximum of the paired interleaved repeats",
+  "megabyte": "1e6 bytes",
+  "repeats_are_paired_and_interleaved": true
+}
