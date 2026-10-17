@@ -73,6 +73,30 @@ path = "valid/zero_atom_then_frame.con"
 clause = "legal zero-atom frame"
 notes = "A zero-atom frame with lines 8 and 9, then one normal frame."
 
+[[valid]]
+id = "empty-user-line"
+path = "valid/empty_user_line.con"
+clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+notes = "Line 1 is empty and line 2 is version 2 JSON."
+
+[[valid]]
+id = "empty-user-line-two"
+path = "valid/empty_user_line_two.con"
+clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+notes = "Two frames, each with an empty line 1."
+
+[[valid]]
+id = "empty-line2"
+path = "valid/empty_line2.con"
+clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+notes = "Line 2 is empty, so the frame is implicit version 1."
+
+[[valid]]
+id = "empty-header-both"
+path = "valid/empty_header_both.con"
+clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+notes = "Line 1 and line 2 are both empty, so the frame is implicit version 1."
+
 [[invalid]]
 id = "missing-spec-version"
 path = "invalid/missing_spec_version.con"

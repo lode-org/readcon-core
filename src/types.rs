@@ -917,11 +917,10 @@ pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
     let a = vecs[0];
     let b = vecs[1];
     let c = vecs[2];
-    ([len(a), len(b), len(c)], [
-        angle_deg(b, c),
-        angle_deg(a, c),
-        angle_deg(a, b),
-    ])
+    (
+        [len(a), len(b), len(c)],
+        [angle_deg(b, c), angle_deg(a, c), angle_deg(a, b)],
+    )
 }
 
 /// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
@@ -3911,10 +3910,10 @@ mod tests {
     fn builder_set_atom_id_out_of_bounds_is_loud() {
         let mut b = three_atom_builder();
         let err = b.set_atom_id(99, 0).unwrap_err();
-        assert!(matches!(err, crate::error::ParseError::IndexOutOfBounds {
-            index: 99,
-            len: 3
-        }));
+        assert!(matches!(
+            err,
+            crate::error::ParseError::IndexOutOfBounds { index: 99, len: 3 }
+        ));
     }
 
     #[test]

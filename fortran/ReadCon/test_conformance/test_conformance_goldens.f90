@@ -196,6 +196,19 @@ contains
         nfail = nfail + 1
       end if
     end do
+    block
+      type(frame_t), allocatable :: frames(:)
+      integer :: j
+      frames = read_all_frames(trim(fixture))
+      if (size(frames) < 1) then
+        print *, "FAIL ", trim(c%id), ": read_all_frames returned no frames"
+        nfail = nfail + 1
+      else
+        do j = 1, size(frames)
+          call frames(j)%free()
+        end do
+      end if
+    end block
     call fr%free()
   end function
 
