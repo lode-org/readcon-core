@@ -431,7 +431,7 @@ fn project_storage_displacements_section() {
     assert_eq!(frame.displacements.kind(), ElementKind::Float32);
     assert_eq!(frame.displacements.nrows(), 4);
     frame.sync_atom_data_from_arrays();
-    assert_eq!(frame.atom_data[2].displacement, Some([0.125, -0.25, 0.0]));
+    assert_eq!(frame.atom_data[2].displacement(), Some([0.125, -0.25, 0.0]));
 }
 
 #[test]
@@ -454,7 +454,7 @@ fn project_storage_spreads_section() {
     assert_eq!(frame.spreads.kind(), ElementKind::Float32);
     assert_eq!(frame.spreads.nrows(), 4);
     frame.sync_atom_data_from_arrays();
-    assert_eq!(frame.atom_data[2].spread, Some([0.125, 0.25, 0.0]));
+    assert_eq!(frame.atom_data[2].spread(), Some([0.125, 0.25, 0.0]));
 }
 
 #[test]

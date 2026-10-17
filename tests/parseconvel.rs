@@ -26,11 +26,11 @@ fn test_convel_single_frame() {
     assert!(first_atom.is_fixed());
 
     // Check velocity data
-    assert_eq!(first_atom.velocity, Some([0.001234, 0.002345, -0.003456]));
+    assert_eq!(first_atom.velocity(), Some([0.001234, 0.002345, -0.003456]));
 
     let last_atom = &frame.atom_data[3];
     assert_eq!(&*last_atom.symbol, "H");
-    assert_eq!(last_atom.velocity, Some([0.045678, -0.056789, -0.06789]));
+    assert_eq!(last_atom.velocity(), Some([0.045678, -0.056789, -0.06789]));
     assert!(!last_atom.is_fixed());
 }
 
@@ -51,13 +51,13 @@ fn test_convel_multi_frame() {
 
     // Frame 1 velocities
     assert_eq!(
-        frames[0].atom_data[0].velocity,
+        frames[0].atom_data[0].velocity(),
         Some([0.001234, 0.002345, -0.003456])
     );
 
     // Frame 2 velocities (different from frame 1)
     assert_eq!(
-        frames[1].atom_data[0].velocity,
+        frames[1].atom_data[0].velocity(),
         Some([0.001111, 0.002222, -0.003333])
     );
 
@@ -78,7 +78,7 @@ fn test_con_files_have_no_velocities() {
     assert!(!frames[0].has_velocities());
 
     for atom in &frames[0].atom_data {
-        assert_eq!(atom.velocity, None);
+        assert_eq!(atom.velocity(), None);
         assert!(!atom.has_velocity());
     }
 }
@@ -100,7 +100,7 @@ fn test_convel_forward_skip() {
     let frame = second.unwrap().expect("second frame should parse");
     assert!(frame.has_velocities());
     assert_eq!(
-        frame.atom_data[0].velocity,
+        frame.atom_data[0].velocity(),
         Some([0.001111, 0.002222, -0.003333])
     );
 

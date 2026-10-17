@@ -1,6 +1,6 @@
 [package]
 name = "readcon-core"
-version = "0.17.0"
+version = "0.17.1"
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage. Implements CON spec v3."
@@ -41,6 +41,9 @@ rpc = [
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
 python = ["dep:pyo3", "dep:numpy", "parallel"]
 zstd = ["dep:zstd"]
+# Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
+# MPI implementation and libclang at build time. See src/distrib.rs.
+mpi = ["dep:mpi", "parallel"]
 metatensor = ["dep:metatensor"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).
 # Off by default so lean builds / conda C-only consumers do not pull
@@ -76,12 +79,14 @@ dlpk = { version = "0.1.5", features = ["ndarray", "half"] }
 half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
+ryu = "1.0"
 flate2 = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
+mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
 tokio = { version = "1", features = [
@@ -118,6 +123,22 @@ tempfile = "3"
 name = "rust_usage"
 
 [[example]]
+name = "mpi_smoke"
+required-features = ["mpi"]
+
+[[example]]
+name = "mpi_read_check"
+required-features = ["mpi"]
+
+[[example]]
+name = "mpi_write_check"
+required-features = ["mpi"]
+
+[[example]]
+name = "rcidx_bench"
+required-features = ["parallel"]
+
+[[example]]
 name = "wall_scale_harness"
 required-features = ["parallel"]
 
@@ -128,6 +149,14 @@ required-features = ["rpc"]
 [[bench]]
 name = "iterator_bench"
 harness = false
+
+[[bench]]
+name = "traj10k"
+harness = false
+
+# Match release so the 10k-frame numbers are the ones a user binary gets.
+[profile.bench]
+inherits = "release"
 
 [build-dependencies]
 capnpc = { version = "0.20", optional = true }
@@ -165,3 +194,7 @@ strip = "symbols"
 [[example]]
 name = "cachegrind_harness"
 path = "examples/cachegrind_harness.rs"
+
+[[example]]
+name = "chemfiles_xyz_time"
+required-features = ["chemfiles"]

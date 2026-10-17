@@ -1,0 +1,16 @@
+x
+{"con_spec_version":3,"con_spec_minor":0,"units":{"energy":"eV","length":"angstrom","mass":"amu","time":"fs"}}
+10 10 10
+90 90 90
+
+
+1
+1
+1.008
+H
+Coordinates of Component 1
+0 0 0 0 0
+
+H
+Velocities of Component 1
+0.1 0 0 0 0

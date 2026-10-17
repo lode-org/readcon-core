@@ -1,0 +1,136 @@
+name: MPI
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "perf/**"
+      - "ci/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mpi:
+    name: ${{ matrix.mpi }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mpi: mpich
+            packages: mpich libmpich-dev
+            cc: mpicc.mpich
+            cxx: mpicxx.mpich
+            probe: mpiexec.mpich
+            launcher: mpiexec.mpich -n
+          - mpi: openmpi
+            packages: openmpi-bin libopenmpi-dev
+            cc: mpicc.openmpi
+            cxx: mpicxx.openmpi
+            probe: mpiexec.openmpi
+            launcher: mpiexec.openmpi --oversubscribe -n
+    env:
+      CARGO_TERM_COLOR: always
+      # Ubuntu runners expose a verbs device UCX cannot use.
+      # ibv_create_srq returns ENOTSUP and MPICH aborts in MPI_Init.
+      # TCP is selected before any mpiexec.
+      UCX_TLS: tcp
+      UCX_SOCKADDR_TLS_PRIORITY: tcp
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install MPI and libclang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.packages }} libclang-dev clang
+          if [[ "${{ matrix.mpi }}" == mpich ]]; then
+            # Noble's mpich 4.2.0-5build3 is built for PMIx, but its hydra
+            # launcher only provides PMI. mpiexec then starts every process
+            # as its own job, so MPI_Comm_size is 1 (Launchpad 2072338).
+            # 4.2.0-5.1 links the PMI server back in. It is newer than the
+            # archive package, so apt upgrades rather than the other way.
+            tmp=$(mktemp -d)
+            base=https://launchpad.net/ubuntu/+source/mpich/4.2.0-5.1/+build/28285882/+files
+            declare -A sums=(
+              [libmpich12_4.2.0-5.1_amd64.deb]=13a233b7dd6d8a51eccf58d981cdb1ae110b673e4dfdeb607fe439918340238f
+              [libmpich-dev_4.2.0-5.1_amd64.deb]=35cebdadbe718a7ee0fa402d0db157e5a471e3d373822b6f42445019be33c4b2
+              [mpich_4.2.0-5.1_amd64.deb]=c696dff0975f1857faaae0e450ce6262d13693a7894e523741e6b7581beee0ad
+            )
+            for f in "${!sums[@]}"; do
+              curl -fsSL -o "$tmp/$f" "$base/$f"
+              echo "${sums[$f]}  $tmp/$f" | sha256sum -c -
+            done
+            sudo apt-get install -y \
+              "$tmp/libmpich12_4.2.0-5.1_amd64.deb" \
+              "$tmp/mpich_4.2.0-5.1_amd64.deb" \
+              "$tmp/libmpich-dev_4.2.0-5.1_amd64.deb"
+          fi
+          ${{ matrix.probe }} --version | head -1
+      - name: Default build has no MPI dependency
+        run: |
+          cargo tree -e normal --prefix none | grep -E '^mpi(-sys)? ' && exit 1 || true
+      - name: Unit tests with the mpi feature
+        env:
+          MPICC: ${{ matrix.cc }}
+        run: cargo test --features mpi --lib distrib
+      - name: Build Rust smoke test and C library
+        env:
+          MPICC: ${{ matrix.cc }}
+        run: |
+          cargo build --features mpi --example mpi_smoke --example mpi_read_check
+          cargo build --features mpi --lib
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_read.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_read
+          ${{ matrix.cxx }} -fsyntax-only -Iinclude -x c++ include/readcon-core-mpi.h
+      - name: Run on 1 to 4 ranks
+        env:
+          LD_LIBRARY_PATH: target/debug
+        run: |
+          for n in 1 2 3 4; do
+            ${{ matrix.launcher }} $n target/debug/examples/mpi_smoke
+            ${{ matrix.launcher }} $n target/test_mpi_shim
+            ${{ matrix.launcher }} $n target/test_mpi_read resources/test/tiny_multi_cuh2.con
+          done
+      - name: Distributed read is byte-identical to serial (sha256, 1 to 4 ranks)
+        run: |
+          scripts/mpi_read_check.sh "${{ matrix.launcher }}" \
+            target/debug/examples/mpi_read_check target/mpi-read-check
+      - name: Build collective write checks
+        env:
+          MPICC: ${{ matrix.cc }}
+        run: |
+          cargo build --features mpi --lib --example mpi_write_check
+          ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_write.c \
+            -Ltarget/debug -lreadcon_core -o target/test_mpi_write
+      - name: Collective write is byte-identical to serial (sha256, 1 to 4 ranks)
+        env:
+          LD_LIBRARY_PATH: target/debug
+        run: |
+          for n in 1 2 3 4; do
+            ${{ matrix.launcher }} $n target/test_mpi_write \
+              resources/test/tiny_multi_cuh2.con target/mpi-write-c
+          done
+          scripts/mpi_write_check.sh "${{ matrix.launcher }}" \
+            target/debug/examples/mpi_write_check target/mpi-write-check
+      - name: Install Fortran compiler and Python MPI tooling
+        run: |
+          sudo apt-get install -y gfortran
+          python3 -m venv target/pyenv
+          target/pyenv/bin/pip install maturin mpi4py numpy
+      - name: Build Python extension with the mpi feature
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/target/pyenv
+          CARGO_TARGET_DIR: target/py
+        run: |
+          PATH="$VIRTUAL_ENV/bin:$PATH" maturin develop --features python,mpi
+          target/pyenv/bin/python -c "import readcon; assert readcon.has_mpi_support()"
+      - name: C++, Fortran and Python bindings match serial (sha256, 1 to 4 ranks)
+        run: |
+          cargo build --features mpi --lib
+          scripts/mpi_bindings_check.sh "${{ matrix.launcher }}" target/debug \
+            target/mpi-bindings target/pyenv/bin/python
