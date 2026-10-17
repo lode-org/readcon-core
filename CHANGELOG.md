@@ -2,6 +2,56 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.17.1 - 2026-10-15
+#### Features
+- (**index**) checked .rcidx frame index and sliced UTF-8 validation - (7f30b3a) - *HaoZeke*
+- (**mpi**) C++, Fortran and Python bindings, docs and eOn example - (c9c611f) - *HaoZeke*
+- (**mpi**) collective write with MPI-IO and gather modes - (a794f1f) - *HaoZeke*
+- (**mpi**) distributed block read with shared and scatter modes - (d39e70a) - *HaoZeke*
+- (**mpi**) optional mpi feature skeleton and shared C shim - (837ba79) - *HaoZeke*
+- (**python**) iterate a ConFrame as its atoms - (9e265e8) - *HaoZeke*
+#### Bug Fixes
+- (**ci**) select each MPI with MPICC and its launcher - (03af68e) - *HaoZeke*
+- (**ci**) launch each MPI job with its own binary - (b29de34) - *HaoZeke*
+- (**mpi**) skip vendor C++ bindings and rename the serial path - (265ee54) - *HaoZeke*
+- (**parser**) ignore trailing whitespace in parallel byte scans - (971c2d7) - *HaoZeke*
+- (**parser**) read multi-frame files whose frames have an empty line 1 - (32b6034) - *HaoZeke*
+- (**python**) retain blank CON preambles during iteration - (89118d7) - *HaoZeke*
+- (**python**) honor CON units and periodic cell metadata in ASE - (49d7a0f) - *HaoZeke*
+- (**python**) relabel 3.0 velocities and stop using repeated tags as ids - (293ded8) - *HaoZeke*
+- (**python**) pass stored energy and forces to ASE by keyword - (0964687) - *HaoZeke*
+#### Performance
+- (**parse**) fuse the coordinate scan and round-trip with ryu - (8fc2db2) - *HaoZeke*
+#### Documentation
+- (**dist**) pin cxx wrap hash to the published v0.17.0 tarball - (d8c523d) - *HaoZeke*
+- (**release**) regenerate the 0.17.1 changelog - (5306c20) - *HaoZeke*
+#### Tests
+- (**python**) preserve blank preambles across frame iteration - (469314e) - *HaoZeke*
+- (**reader**) cover byte buffers and numeric field contracts - (94e2a66) - *HaoZeke*
+- (**restart**) cover empty-line1 skip errors, masks, and velocity edges - (6734797) - *HaoZeke*
+#### CI
+- (**mpi**) keep MPICH off the verbs transport - (3f4c909) - *HaoZeke*
+- (**mpi**) install MPICH 4.2.0-5.1 on the mpich leg - (79b09a9) - *HaoZeke*
+- (**mpi**) install MPICH 4.2.0-5.1 on the mpich leg - (b794ac8) - *HaoZeke*
+#### Chores
+- (**bench**) refresh Cachegrind I-refs for docs - (a5f8a2f) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (926a2f2) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (694e808) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (96fd38f) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (c5e5aa5) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (af8aabb) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (8c87894) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (513e04e) - github-actions[bot]
+- (**bench**) refresh Cachegrind I-refs for docs - (6016213) - github-actions[bot]
+- (**release**) prepare readcon-core 0.17.1 - (a9fcdde) - *HaoZeke*
+- integrate current CON reader changes - (3180f1a) - *HaoZeke*
+#### Style
+- (**mpi**) spell the serial byte buffer out - (809cf67) - *HaoZeke*
+- (**python**) format ASE conversion and unit tests - (b9c9148) - *HaoZeke*
+- (**python**) ruff-format ASE SinglePointResults regression test - (ff326de) - *HaoZeke*
+- (**test**) format parallel whitespace regression - (9c1ee06) - *HaoZeke*
+- (**test**) format reader contract cases - (3d34928) - *HaoZeke*
+
 ## v0.17.0 - 2026-10-11
 
 ### Breaking

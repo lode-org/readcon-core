@@ -227,7 +227,7 @@ velocities of component   1
 0.1 0.2 0.3 0 0
 ";
     let frame = parse_one(text).unwrap();
-    assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.2, 0.3]));
+    assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
 }
 
 /// CON-units.13, CON-units.14.
@@ -696,16 +696,18 @@ fn digest(frames: &[ConFrame]) -> u64 {
             atom.z.to_bits().hash(&mut hasher);
             atom.fixed.hash(&mut hasher);
             atom.atom_id.hash(&mut hasher);
-            atom.velocity.map(|v| v.map(f64::to_bits)).hash(&mut hasher);
-            atom.force.map(|v| v.map(f64::to_bits)).hash(&mut hasher);
-            atom.energy.map(f64::to_bits).hash(&mut hasher);
-            atom.charge.map(f64::to_bits).hash(&mut hasher);
-            atom.spin.map(f64::to_bits).hash(&mut hasher);
-            atom.magmom.map(|v| v.map(f64::to_bits)).hash(&mut hasher);
-            atom.displacement
+            atom.velocity()
                 .map(|v| v.map(f64::to_bits))
                 .hash(&mut hasher);
-            atom.spread.map(|v| v.map(f64::to_bits)).hash(&mut hasher);
+            atom.force().map(|v| v.map(f64::to_bits)).hash(&mut hasher);
+            atom.energy().map(f64::to_bits).hash(&mut hasher);
+            atom.charge().map(f64::to_bits).hash(&mut hasher);
+            atom.spin().map(f64::to_bits).hash(&mut hasher);
+            atom.magmom().map(|v| v.map(f64::to_bits)).hash(&mut hasher);
+            atom.displacement()
+                .map(|v| v.map(f64::to_bits))
+                .hash(&mut hasher);
+            atom.spread().map(|v| v.map(f64::to_bits)).hash(&mut hasher);
         }
     }
     hasher.finish()
@@ -982,7 +984,7 @@ Velocities of Component 1
 0.1 0 0 0 0
 ";
     let frame = parse_one(minor0).unwrap();
-    assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.0, 0.0]));
 
     let minor1_no_time = "\
 PRE
@@ -1005,7 +1007,7 @@ Velocities of Component 1
     assert_eq!(class_of(minor1_no_time), "InvalidUnits");
     let with_time = minor1_no_time.replace(r#""energy":"eV""#, r#""energy":"eV","time":"fs""#);
     let frame = parse_one(&with_time).unwrap();
-    assert_eq!(frame.atom_data[0].velocity, Some([0.1, 0.0, 0.0]));
+    assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.0, 0.0]));
 
     let no_velocities = "\
 PRE

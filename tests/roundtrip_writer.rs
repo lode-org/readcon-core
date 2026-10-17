@@ -66,21 +66,21 @@ fn round_trip_preserves_every_numeric_section() {
             let expected = [value, -value, -0.0];
             for vector in [
                 stored,
-                atom.force.unwrap(),
-                atom.velocity.unwrap(),
-                atom.magmom.unwrap(),
-                atom.displacement.unwrap(),
+                atom.force().unwrap(),
+                atom.velocity().unwrap(),
+                atom.magmom().unwrap(),
+                atom.displacement().unwrap(),
             ] {
                 assert_eq!(vector.map(f64::to_bits), expected.map(f64::to_bits));
             }
             assert_eq!(
-                atom.spread.unwrap().map(f64::to_bits),
+                atom.spread().unwrap().map(f64::to_bits),
                 [value.abs(), value.abs(), 0.0].map(f64::to_bits)
             );
             for scalar in [
-                atom.energy.unwrap(),
-                atom.charge.unwrap(),
-                atom.spin.unwrap(),
+                atom.energy().unwrap(),
+                atom.charge().unwrap(),
+                atom.spin().unwrap(),
                 actual.header.energy().unwrap(),
             ] {
                 assert_eq!(scalar.to_bits(), value.to_bits());

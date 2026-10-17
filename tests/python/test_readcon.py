@@ -151,6 +151,21 @@ class TestAtomConstructor:
 
 
 class TestConFrameConstructor:
+    def test_frame_iterates_its_atoms(self):
+        atoms = [
+            readcon.Atom(symbol="Cu", x=0.25, y=1.5, z=2.5, atom_id=0),
+            readcon.Atom(symbol="H", x=3.0, y=4.0, z=5.0, atom_id=1),
+        ]
+        frame = readcon.ConFrame(
+            cell=[10.0, 10.0, 10.0],
+            angles=[90.0, 90.0, 90.0],
+            atoms=atoms,
+        )
+        assert [atom.symbol for atom in frame] == ["Cu", "H"]
+        assert frame[0].x == pytest.approx(0.25)
+        assert frame[-1].symbol == "H"
+        assert len(frame) == 2
+
     def test_build_frame(self):
         atoms = [
             readcon.Atom(
@@ -406,6 +421,29 @@ class TestConFrameConstructor:
             assert len(a) == len(b)
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
+
+    def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
+        frames = [
+            readcon.ConFrame(
+                cell=frame.cell,
+                angles=frame.angles,
+                atoms=frame.atoms,
+                prebox_header=["", ""],
+            )
+            for frame in readcon.read_all_frames(_resource("tiny_multi_cuh2.con"))
+        ]
+        path = tmp_path / "blank-preambles.con"
+        path.write_text(readcon.write_con_string(frames))
+
+        streamed = list(readcon.iter_con(str(path)))
+        assert len(streamed) == len(frames) == 2
+        for expected, actual in zip(frames, streamed):
+            assert len(actual.atoms) == len(expected.atoms)
+            assert actual.cell == pytest.approx(expected.cell)
+            assert actual.coords_array() == pytest.approx(expected.coords_array())
+            assert [atom.atom_id for atom in actual.atoms] == [
+                atom.atom_id for atom in expected.atoms
+            ]
 
     def test_xyz_matches_coords_and_soa(self):
         path = _resource("tiny_cuh2.con")

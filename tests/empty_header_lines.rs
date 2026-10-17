@@ -74,3 +74,51 @@ fn empty_second_header_line_is_implicit_version_one() {
     assert_eq!(parsed[0].header.spec_version, 1);
     assert_eq!(parsed[0].atom_data.len(), 1);
 }
+
+/// A case-folded velocity label is still a section (CON-file.5).
+/// The blank after that block is line 1 of the next frame.
+#[test]
+fn case_folded_velocity_label_keeps_the_following_empty_user_line() {
+    let text = "\
+generator
+
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 1 0
+
+Cu
+velocities of component 1
+0.1 0.2 0.3 1 0
+
+{\"con_spec_version\":2}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+1.0 0.0 0.0 7 1
+";
+    let parsed = all_frames(text);
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[0].header.spec_version, 1);
+    assert_eq!(parsed[0].atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
+    assert_eq!(parsed[1].header.prebox_header.user, "");
+    assert_eq!(parsed[1].header.spec_version, 2);
+    assert!(parsed[1].atom_data[0].velocity().is_none());
+
+    let mut iter = ConFrameIterator::new(text);
+    assert!(iter.forward_fast().unwrap().is_ok());
+    assert!(iter.forward_fast().unwrap().is_ok());
+    assert!(iter.forward_fast().is_none());
+}

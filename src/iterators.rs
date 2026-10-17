@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{LineStream, parse_declared_sections, parse_single_frame};
+use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
 use std::path::Path;
 
@@ -16,20 +16,39 @@ pub struct MemchrLines<'a> {
     bytes: &'a [u8],
     pos: usize,
     peeked: Option<&'a str>,
+    /// When the buffer was not already a `&str`, header lines are checked
+    /// as they are tokenized. Coordinate rows stay on the byte parser.
+    check_utf8: bool,
+    utf8_bad: bool,
 }
 
 impl<'a> MemchrLines<'a> {
     pub fn new(text: &'a str) -> Self {
+        Self::from_parts(text.as_bytes(), false)
+    }
+
+    /// Cursor over bytes that are not yet known to be UTF-8.
+    ///
+    /// ASCII coordinate rows are accepted by the numeric scan. Text lines
+    /// are validated when they are materialized, so there is no separate
+    /// whole-buffer UTF-8 pass.
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        Self::from_parts(bytes, true)
+    }
+
+    fn from_parts(bytes: &'a [u8], check_utf8: bool) -> Self {
         Self {
-            bytes: text.as_bytes(),
+            bytes,
             pos: 0,
             peeked: None,
+            check_utf8,
+            utf8_bad: false,
         }
     }
 
     #[inline]
     fn read_one(&mut self) -> Option<&'a str> {
-        if self.pos >= self.bytes.len() {
+        if self.utf8_bad || self.pos >= self.bytes.len() {
             return None;
         }
         let rest = &self.bytes[self.pos..];
@@ -37,14 +56,29 @@ impl<'a> MemchrLines<'a> {
             Some(i) => (&rest[..i], i + 1),
             None => (rest, rest.len()),
         };
-        self.pos += advance;
         let trimmed = if line_bytes.last() == Some(&b'\r') {
             &line_bytes[..line_bytes.len() - 1]
         } else {
             line_bytes
         };
-        // SAFETY: source was `&str`; line is a UTF-8 prefix cut on ASCII `\n`/`\r`.
-        Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
+        if self.check_utf8 {
+            match std::str::from_utf8(trimmed) {
+                Ok(s) => {
+                    self.pos += advance;
+                    Some(s)
+                }
+                Err(_) => {
+                    // Stay on the rejected line. Moving past it makes a
+                    // whitespace tail look like a clean end of file.
+                    self.utf8_bad = true;
+                    None
+                }
+            }
+        } else {
+            self.pos += advance;
+            // SAFETY: source was `&str`; line is a UTF-8 prefix cut on ASCII `\n`/`\r`.
+            Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
+        }
     }
 
     #[inline]
@@ -71,6 +105,19 @@ impl<'a> MemchrLines<'a> {
             self.pos = start;
         }
     }
+
+    fn utf8_error(&self) -> Option<error::ParseError> {
+        self.utf8_bad.then(invalid_utf8)
+    }
+
+    /// Keep `err` unless this cursor already rejected a line as UTF-8.
+    fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
+        if self.utf8_bad { invalid_utf8() } else { err }
+    }
+}
+
+fn invalid_utf8() -> error::ParseError {
+    error::ParseError::ValidationError("invalid UTF-8".into())
 }
 
 impl<'a> Iterator for MemchrLines<'a> {
@@ -89,10 +136,33 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
     fn peek_line(&mut self) -> Option<&'a str> {
         MemchrLines::peek_line(self)
     }
+    #[inline]
+    fn next_coord_row(
+        &mut self,
+        spec_version: u32,
+        default_id: u64,
+    ) -> Result<([f64; 3], [bool; 3], u64), crate::error::ParseError> {
+        if let Some(p) = self.peeked.take() {
+            return crate::parser::parse_coord_row_at(p.as_bytes(), 0, spec_version, default_id)
+                .map(|(row, _)| row);
+        }
+        let (row, pos) =
+            crate::parser::parse_coord_row_at(self.bytes, self.pos, spec_version, default_id)?;
+        self.pos = pos;
+        Ok(row)
+    }
     fn remainder_is_whitespace(&mut self) -> bool {
+        if self.utf8_bad {
+            return false;
+        }
         if let Some(line) = self.peek_line()
             && !line.trim().is_empty()
         {
+            return false;
+        }
+        // `peek_line` may have rejected a line. That is a decode error,
+        // including when every byte after it is ASCII whitespace.
+        if self.utf8_bad {
             return false;
         }
         self.bytes[self.pos..]
@@ -107,7 +177,23 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         if !peeked.trim().is_empty() {
             return false;
         }
-        blank_opens_section(&self.bytes[self.pos..])
+        match probe_section(&self.bytes[self.pos..]) {
+            SectionProbe::Opens => true,
+            SectionProbe::Closed => false,
+            // Leave the rejected bytes on the cursor. `prefer_utf8` then
+            // reports the decode error instead of a missing section.
+            SectionProbe::InvalidUtf8 => {
+                self.utf8_bad = true;
+                false
+            }
+        }
+    }
+
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        match self.peek_line() {
+            Some(line) if line.trim().is_empty() => self.blank_line_opens_section(),
+            _ => true,
+        }
     }
 }
 
@@ -129,30 +215,43 @@ fn strip_cr(line: &[u8]) -> &[u8] {
     }
 }
 
-/// A blank line opens a section only when the next line is a symbol and
-/// the line after that is a component label. Otherwise the blank is line 1
-/// of the next frame.
-fn blank_opens_section(after_blank: &[u8]) -> bool {
+enum SectionProbe {
+    Opens,
+    Closed,
+    InvalidUtf8,
+}
+
+/// A blank line opens a section when the next line is a symbol and the
+/// line after that is a component label (CON-file.5, CON-header.4).
+fn probe_section(after_blank: &[u8]) -> SectionProbe {
     let Some((raw1, after1)) = split_raw_line(after_blank) else {
-        return false;
+        return SectionProbe::Closed;
     };
     let line1 = strip_cr(raw1);
     if line1.iter().all(|b| matches!(b, b' ' | b'\t')) {
-        return false;
+        return SectionProbe::Closed;
     }
     let Ok(text1) = std::str::from_utf8(line1) else {
-        return false;
+        return SectionProbe::InvalidUtf8;
     };
     if text1.trim_start().starts_with('{') {
-        return false;
+        return SectionProbe::Closed;
     }
     let Some((raw2, _)) = split_raw_line(after1) else {
-        return false;
+        return SectionProbe::Closed;
     };
     let Ok(text2) = std::str::from_utf8(strip_cr(raw2)) else {
-        return false;
+        return SectionProbe::InvalidUtf8;
     };
-    crate::parser::line_has_component_label(text2)
+    if crate::parser::line_has_component_label(text2) {
+        SectionProbe::Opens
+    } else {
+        SectionProbe::Closed
+    }
+}
+
+fn blank_opens_section(after_blank: &[u8]) -> bool {
+    matches!(probe_section(after_blank), SectionProbe::Opens)
 }
 
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
@@ -181,10 +280,25 @@ impl<'a> ConFrameIterator<'a> {
         }
     }
 
+    /// Like [`Self::new`] for a buffer that has not been UTF-8 validated.
+    ///
+    /// Text lines are checked as they are tokenized. Numeric rows reject a
+    /// non-ASCII byte during the fused parse, which is the UTF-8 check for
+    /// those lines.
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        ConFrameIterator {
+            lines: MemchrLines::from_bytes(bytes),
+        }
+    }
+
     /// Bulk-skips `n` lines from the shared memchr cursor.
+    ///
+    /// A final line with no trailing newline still counts when it is the
+    /// last line this call needs and its bytes are present. The full
+    /// parser accepts that line. Further lines after it are missing.
     fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
         self.lines.clear_peek();
-        for _ in 0..n {
+        for i in 0..n {
             let rest = &self.lines.bytes[self.lines.pos..];
             match memchr::memchr(b'\n', rest) {
                 Some(pos) => self.lines.pos += pos + 1,
@@ -193,6 +307,9 @@ impl<'a> ConFrameIterator<'a> {
                         return Err(error::ParseError::IncompleteFrame);
                     }
                     self.lines.pos = self.lines.bytes.len();
+                    if i + 1 == n {
+                        return Ok(());
+                    }
                     return Err(error::ParseError::IncompleteFrame);
                 }
             }
@@ -373,19 +490,31 @@ impl<'a> Iterator for ConFrameIterator<'a> {
     ///
     /// This method will return `None` only when there are no more lines to consume.
     /// If there are lines but they do not form a complete frame, it will return
-    /// `Some(Err(ParseError::...))`.
+    /// `Some(Err(ParseError::...))`. Invalid UTF-8 is a validation error, not
+    /// the end of the stream.
     fn next(&mut self) -> Option<Self::Item> {
+        // A line rejected earlier in this cursor (for example while probing
+        // for a velocity block) must not be reported as a clean EOF.
+        if let Some(err) = self.lines.utf8_error() {
+            return Some(Err(err));
+        }
         // Trailing whitespace after the last complete frame is not a frame
         // (CON-frame.1, D2). An empty line that is followed by more text is
         // line 1 of the next frame (CON-frame.7).
         if self.lines.remainder_is_whitespace() {
+            if let Some(err) = self.lines.utf8_error() {
+                return Some(Err(err));
+            }
             while self.lines.next_line().is_some() {}
             return None;
         }
+        if let Some(err) = self.lines.utf8_error() {
+            return Some(Err(err));
+        }
         // Otherwise, attempt to parse the next frame from the available lines.
-        let mut frame = match parse_single_frame(&mut self.lines) {
+        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines) {
             Ok(f) => f,
-            Err(e) => return Some(Err(e)),
+            Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
         };
         // Optional sections mutate AoS; only re-sync section SoA when needed.
         // Plain .con assembly already filled positions/ids/masses (no O(N)
@@ -394,7 +523,9 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data)
             {
                 Ok(n) => n,
-                Err(e) => return Some(Err(e)),
+                // A section line that failed UTF-8 makes `next_line` return
+                // `None`. That must not surface as `IncompleteSection`.
+                Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
             };
         if sections > 0 {
             frame.sync_arrays_from_atom_data();
@@ -420,8 +551,8 @@ mod aos_soa_agreement_tests {
         let n = fr.atom_data.len();
         assert!(n > 0);
         assert_eq!(fr.positions.nrows(), n);
-        let has_vel = fr.atom_data.iter().any(|a| a.velocity.is_some());
-        let has_frc = fr.atom_data.iter().any(|a| a.force.is_some());
+        let has_vel = fr.atom_data.iter().any(|a| a.velocity().is_some());
+        let has_frc = fr.atom_data.iter().any(|a| a.force().is_some());
         if has_vel {
             assert_eq!(
                 fr.velocities.nrows(),
@@ -435,10 +566,10 @@ mod aos_soa_agreement_tests {
         for (i, a) in fr.atom_data.iter().enumerate() {
             let p = fr.positions.as_f64_row(i);
             assert_eq!([a.x, a.y, a.z], p);
-            if let Some(v) = a.velocity {
+            if let Some(v) = a.velocity() {
                 assert_eq!(v, fr.velocities.as_f64_row(i));
             }
-            if let Some(f) = a.force {
+            if let Some(f) = a.force() {
                 assert_eq!(f, fr.forces.as_f64_row(i));
             }
         }
@@ -467,7 +598,7 @@ mod aos_soa_agreement_tests {
         assert_eq!(fr2.forces.nrows(), n);
         assert_eq!(
             fr2.forces.as_f64_row(0),
-            fr2.atom_data[0].force.expect("force")
+            fr2.atom_data[0].force().expect("force")
         );
     }
 }
@@ -535,8 +666,98 @@ pub fn read_all_frames_with_threads(
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
-    let text = contents.as_str()?;
-    Ok(frames_from_text(text, num_threads)?)
+    match contents {
+        crate::compression::FileContents::Owned(text) => Ok(frames_from_text(&text, num_threads)?),
+        // Mapped bytes are not pre-validated. The cursor checks UTF-8 on
+        // text lines and the coordinate scan rejects non-ASCII tokens.
+        crate::compression::FileContents::Mapped(map) => Ok(frames_from_bytes(&map, num_threads)?),
+    }
+}
+
+/// [`frames_from_text`] for bytes that may not be UTF-8 yet.
+pub fn frames_from_bytes(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::ParseError> {
+    #[cfg(feature = "parallel")]
+    {
+        let use_parallel = match num_threads {
+            Some(1) => false,
+            Some(n) if n >= 2 => true,
+            _ => bytes.len() >= PARALLEL_BYTES_THRESHOLD,
+        };
+        if use_parallel {
+            let pool = num_threads.filter(|&n| n >= 2);
+            let parts = parse_frames_parallel_bytes(bytes, pool);
+            let mut frames = Vec::with_capacity(parts.len());
+            for r in parts {
+                frames.push(r?);
+            }
+            return Ok(frames);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    let mut frames = Vec::new();
+    for r in ConFrameIterator::from_bytes(bytes) {
+        frames.push(r?);
+    }
+    Ok(frames)
+}
+
+#[cfg(feature = "parallel")]
+fn parse_frames_parallel_bytes(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    use rayon::prelude::*;
+
+    let mut scanner = ConFrameIterator::from_bytes(bytes);
+    let mut boundaries = Vec::new();
+    loop {
+        scanner.lines.clear_peek();
+        let start = scanner.lines.pos;
+        // Whitespace after the final frame does not open another frame.
+        if start >= bytes.len() || bytes[start..].iter().all(u8::is_ascii_whitespace) {
+            break;
+        }
+        boundaries.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            Some(Err(_)) | None => break,
+        }
+    }
+    let parse_chunks = || {
+        let num_frames = boundaries.len();
+        (0..num_frames)
+            .into_par_iter()
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < num_frames {
+                    boundaries[i + 1]
+                } else {
+                    bytes.len()
+                };
+                let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+                match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                }
+            })
+            .collect()
+    };
+    match num_threads {
+        None => parse_chunks(),
+        Some(n) => {
+            let n = n.max(1);
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => pool.install(parse_chunks),
+                Err(_) => parse_chunks(),
+            }
+        }
+    }
 }
 
 /// Count frames without building atom payloads (uses [`ConFrameIterator::forward_fast`]
@@ -602,6 +823,34 @@ pub fn read_nth_frame_from_text(
     }
 }
 
+/// Reads all frames using the checked `.rcidx` sidecar next to `path`.
+///
+/// Uncompressed input uses (and refreshes) `path.rcidx`; compressed
+/// input is scanned in memory each time. UTF-8 is validated in
+/// newline-aligned slices.
+#[cfg(feature = "parallel")]
+pub fn read_all_frames_indexed(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let text = contents.as_str_sliced()?;
+    let idx = match contents {
+        crate::compression::FileContents::Mapped(_) => {
+            crate::frame_index::load_or_build(path, text, true)?
+        }
+        crate::compression::FileContents::Owned(_) => {
+            let on_disk = std::fs::metadata(path)?.len();
+            crate::frame_index::load_or_build(path, text, on_disk == text.len() as u64)?
+        }
+    };
+    let offs: Vec<usize> = idx.offsets.iter().map(|&o| o as usize).collect();
+    parse_frames_at_offsets(text, &offs, num_threads)
+        .into_iter()
+        .map(|r| r.map_err(|e| Box::new(e) as Box<dyn std::error::Error>))
+        .collect()
+}
+
 /// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
 /// Stops at the first skip error (that start is still included).
 pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
@@ -656,10 +905,26 @@ pub fn parse_frames_parallel_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    use rayon::prelude::*;
-
     // Phase 1: skip walk (no atom parse) for frame start offsets.
     let boundaries = frame_start_offsets(file_contents);
+    parse_frames_at_offsets(file_contents, &boundaries, num_threads)
+}
+
+/// Phase 2 of [`parse_frames_parallel_with_threads`]: parse the frames
+/// that start at `boundaries` (strictly increasing byte offsets into
+/// `file_contents`; frame `i` ends where frame `i + 1` starts).
+///
+/// Offsets may come from [`frame_start_offsets`] or from a checked
+/// [`crate::frame_index::FrameIndex`]. Results are ordered by frame index.
+///
+/// Requires the `parallel` feature.
+#[cfg(feature = "parallel")]
+pub fn parse_frames_at_offsets(
+    file_contents: &str,
+    boundaries: &[usize],
+    num_threads: Option<usize>,
+) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    use rayon::prelude::*;
 
     let parse_chunks = || {
         let num_frames = boundaries.len();

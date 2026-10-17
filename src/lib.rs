@@ -2,8 +2,14 @@ pub mod array;
 pub mod compression;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
+pub mod distrib;
+#[cfg(feature = "mpi")]
+pub mod distrib_read;
+#[cfg(feature = "mpi")]
+pub mod distrib_write;
 pub mod error;
 pub mod ffi;
+pub mod frame_index;
 #[cfg(feature = "grammar")]
 pub mod grammar;
 pub mod helpers;
@@ -75,6 +81,6 @@ mod tests {
 
     #[test]
     fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.17.0");
+        assert_eq!(VERSION, "0.17.1");
     }
 }

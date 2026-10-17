@@ -23,10 +23,10 @@ fn test_forces_only() {
 
     // Check force values
     assert_eq!(
-        frame.atom_data[0].force,
+        frame.atom_data[0].force(),
         Some([0.123456, 0.234567, -0.345678])
     );
-    assert_eq!(frame.atom_data[3].force.unwrap()[0], 4.567890);
+    assert_eq!(frame.atom_data[3].force().unwrap()[0], 4.567890);
 
     // SoA forces filled on shipped iterator path (sync after sections; positions SoA-primary)
     let n = frame.atom_data.len();
@@ -34,7 +34,7 @@ fn test_forces_only() {
     assert_eq!(frame.forces.nrows(), n);
     assert_eq!(
         frame.forces.as_f64_row(0),
-        frame.atom_data[0].force.unwrap()
+        frame.atom_data[0].force().unwrap()
     );
     assert_eq!(
         frame.positions.as_f64_row(0),
@@ -65,9 +65,9 @@ fn test_velocities_and_forces() {
     assert_eq!(frame.header.sections, vec!["velocities", "forces"]);
 
     // Velocity values
-    assert_eq!(frame.atom_data[0].velocity.unwrap()[0], 0.001234);
+    assert_eq!(frame.atom_data[0].velocity().unwrap()[0], 0.001234);
     // Force values
-    assert_eq!(frame.atom_data[0].force.unwrap()[0], 0.123456);
+    assert_eq!(frame.atom_data[0].force().unwrap()[0], 0.123456);
     // Both present on same atom
     assert!(frame.atom_data[0].has_velocity());
     assert!(frame.atom_data[0].has_forces());
@@ -176,7 +176,7 @@ fn test_energies_roundtrip() {
         .with_energy(0.07);
     let frame = builder.build().unwrap();
     assert!(frame.has_energies());
-    assert_eq!(frame.atom_data[0].energy, Some(-0.42));
+    assert_eq!(frame.atom_data[0].energy(), Some(-0.42));
 
     let tmp = tempfile::NamedTempFile::with_suffix(".con").unwrap();
     let path = tmp.path().to_owned();
@@ -194,8 +194,8 @@ fn test_energies_roundtrip() {
     assert!(rt.has_energies());
     assert_eq!(rt.atom_data.len(), 3);
     for (orig, rt_atom) in frame.atom_data.iter().zip(rt.atom_data.iter()) {
-        assert_eq!(orig.energy, rt_atom.energy);
-        assert_eq!(orig.force, rt_atom.force);
+        assert_eq!(orig.energy(), rt_atom.energy());
+        assert_eq!(orig.force(), rt_atom.force());
         assert_eq!(orig.atom_id, rt_atom.atom_id);
     }
 }
@@ -238,8 +238,8 @@ fn test_builder_with_forces() {
     assert!(frame.has_forces());
     assert!(!frame.has_velocities());
     assert_eq!(frame.header.sections, vec!["forces"]);
-    assert_eq!(frame.atom_data[0].force.unwrap()[0], 1.0);
-    assert_eq!(frame.atom_data[1].force.unwrap()[2], 6.0);
+    assert_eq!(frame.atom_data[0].force().unwrap()[0], 1.0);
+    assert_eq!(frame.atom_data[1].force().unwrap()[2], 6.0);
 }
 
 #[test]

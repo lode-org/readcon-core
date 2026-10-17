@@ -820,8 +820,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         .iter()
         .zip(masses_iter)
         .map(|(atom_datum, mass)| {
-            let [vx, vy, vz] = atom_datum.velocity.unwrap_or([0.0; 3]);
-            let [fx, fy, fz] = atom_datum.force.unwrap_or([0.0; 3]);
+            let [vx, vy, vz] = atom_datum.velocity().unwrap_or([0.0; 3]);
+            let [fx, fy, fz] = atom_datum.force().unwrap_or([0.0; 3]);
             CAtom {
                 atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
                 x: atom_datum.x,
@@ -841,7 +841,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
                 fy,
                 fz,
                 has_forces: atom_datum.has_forces(),
-                energy: atom_datum.energy.unwrap_or(0.0),
+                energy: atom_datum.energy().unwrap_or(0.0),
                 has_energy: atom_datum.has_energy(),
             }
         })
@@ -3626,7 +3626,10 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
 }
 
 /// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
-fn pack_frame_handles(frames: Vec<ConFrame>, num_frames: *mut usize) -> *mut *mut RKRConFrame {
+pub(crate) fn pack_frame_handles(
+    frames: Vec<ConFrame>,
+    num_frames: *mut usize,
+) -> *mut *mut RKRConFrame {
     let count = frames.len();
     let mut handles: Vec<*mut RKRConFrame> = frames
         .into_iter()
@@ -4492,7 +4495,7 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let v = a.velocity.unwrap_or([0.0; 3]);
+        let v = a.velocity().unwrap_or([0.0; 3]);
         data.extend_from_slice(&v);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4532,7 +4535,7 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let f = a.force.unwrap_or([0.0; 3]);
+        let f = a.force().unwrap_or([0.0; 3]);
         data.extend_from_slice(&f);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4583,7 +4586,7 @@ pub unsafe extern "C" fn rkr_frame_displacements_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let d = a.displacement.unwrap_or([0.0; 3]);
+        let d = a.displacement().unwrap_or([0.0; 3]);
         data.extend_from_slice(&d);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4634,7 +4637,7 @@ pub unsafe extern "C" fn rkr_frame_spreads_dlpack_ex(
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        let d = a.spread.unwrap_or([0.0; 3]);
+        let d = a.spread().unwrap_or([0.0; 3]);
         data.extend_from_slice(&d);
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
@@ -4674,7 +4677,7 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
     let data: Vec<f64> = frame
         .atom_data
         .iter()
-        .map(|a| a.energy.unwrap_or(0.0))
+        .map(|a| a.energy().unwrap_or(0.0))
         .collect();
     let arr = ndarray::ArcArray1::from_vec(data);
     export_owned_array1_f64_dlpack_opts(&arr, &o, out_tensor)
