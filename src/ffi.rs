@@ -5565,12 +5565,14 @@ mod tests {
         let c_frame_ref = unsafe { &*c_frame };
         assert_eq!(c_frame_ref.num_atoms, 2);
         let atoms = unsafe { std::slice::from_raw_parts(c_frame_ref.atoms, c_frame_ref.num_atoms) };
-        assert_eq!([atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z], [
-            true, true, true
-        ]);
-        assert_eq!([atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z], [
-            false, false, false
-        ]);
+        assert_eq!(
+            [atoms[0].fixed_x, atoms[0].fixed_y, atoms[0].fixed_z],
+            [true, true, true]
+        );
+        assert_eq!(
+            [atoms[1].fixed_x, atoms[1].fixed_y, atoms[1].fixed_z],
+            [false, false, false]
+        );
         unsafe { free_c_frame(c_frame) };
         unsafe { free_rkr_frame(frame) };
     }

@@ -36,11 +36,14 @@ fn test_forces_only() {
         frame.forces.as_f64_row(0),
         frame.atom_data[0].force().unwrap()
     );
-    assert_eq!(frame.positions.as_f64_row(0), [
-        frame.atom_data[0].x,
-        frame.atom_data[0].y,
-        frame.atom_data[0].z
-    ]);
+    assert_eq!(
+        frame.positions.as_f64_row(0),
+        [
+            frame.atom_data[0].x,
+            frame.atom_data[0].y,
+            frame.atom_data[0].z
+        ]
+    );
 
     // Check metadata helpers
     assert_eq!(frame.header.energy(), Some(-42.5));
