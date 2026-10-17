@@ -386,9 +386,10 @@ The right panel is allocated bytes for the full corpus and for a corpus of the u
 
 Nine correctness checks pass on that store.
 They cover a round trip, identical bytes sharing one hash entry, a one-digit coordinate change, a missing force or velocity section, periodicity taken only from the declared mask, a rebuild of the indexes from the stored text, a second rebuild, an ignored numeric cache, and a hash entry that remains after a duplicate is rewritten.
-The default LMDB map is 2 GiB.
-One million frames returns \texttt{MDB\_MAP\_FULL}.
-A \(100{,}000\)-frame ingest was not timed, because the ASE database at about 200 frames/s does not finish in two minutes.
+In readcon-db 0.1.8 the LMDB map defaults to 2 GiB (\texttt{DEFAULT\_MAP\_SIZE}).
+\texttt{open\_with\_map\_size} and \texttt{READCON\_DB\_MAP\_SIZE} raise it, and a full map grows and retries.
+The tables in this note were collected at commit \texttt{6146c3b}, where the map was that 2 GiB constant, so one million frames returned \texttt{MDB\_MAP\_FULL}.
+A \(100{,}000\)-frame ingest was left out of the timed table, because the ASE database at about 200 frames/s exceeds two minutes.
 gzip and zstd in Figure \ref{fig:db-disk} are wrappers of the CON text.
 The store keeps each text, so the stored blob bytes of the \(24{,}000\)-frame trace equal the raw file, and the indexes sit beside that text.
 \section{Language pairs}

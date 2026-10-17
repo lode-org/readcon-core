@@ -426,8 +426,7 @@ CMakeUserPresets.json
 __MACOSX/
 .AppleDouble
 .LSOverride
-Icon[
-]
+Icon[]
 
 # Thumbnails
 ._*

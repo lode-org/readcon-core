@@ -1,0 +1,22 @@
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{Warm weak scaling on one virtio ext4 device. The aggregate rate is \texttt{bytes\_total} divided by the median, and a megabyte is $10^{6}$ bytes. The ratio is the median at that rank count divided by the one-rank median of the same path. Shared read and MPI-IO write are the endpoints. Both ingest paths are the full rank list, which is where the rate flattens.}
+\label{tab:weak-io}
+\begin{tabular}{lrrrrr}
+\toprule
+Path & Ranks & Time (s) & Bytes & MB/s & $t(R)/t(1)$ \\
+\midrule
+shared read & 1 & 1.161 & 135,600,000 & 116.8 & 1.00 \\
+shared read & 8 & 1.5815 & 1,084,800,000 & 685.9 & 1.36 \\
+MPI-IO write & 1 & 1.0369 & 135,600,000 & 130.8 & 1.00 \\
+MPI-IO write & 8 & 1.3821 & 1,084,800,000 & 784.9 & 1.33 \\
+one-writer ingest & 1 & 7.841 & 1,068,323,900 & 136.2 & 1.00 \\
+one-writer ingest & 8 & 29.594 & 8,546,831,576 & 288.8 & 3.77 \\
+four-shard ingest & 1 & 7.465 & 1,068,323,900 & 143.1 & 1.00 \\
+four-shard ingest & 2 & 10.856 & 2,136,675,340 & 196.8 & 1.45 \\
+four-shard ingest & 4 & 18.375 & 4,273,391,820 & 232.6 & 2.46 \\
+four-shard ingest & 8 & 34.899 & 8,546,831,576 & 244.9 & 4.68 \\
+\bottomrule
+\end{tabular}
+\end{table}

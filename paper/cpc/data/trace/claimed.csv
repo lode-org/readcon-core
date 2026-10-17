@@ -1,0 +1,9 @@
+quantity,value,unit,source,derivation
+lbfgs_printer_barrier,0.670723,eV,evidence/results/e1_restart_lbfgs_control.json,neb.resume_roundtrip.barrier_eV and neb.resume_fixed6.barrier_eV
+lbfgs_barrier_delta,0.037113,eV,evidence/results/e1_restart_lbfgs_control.json,"format(neb.resume_roundtrip.barrier_delta_eV, '.6f'); also 0.670723 - 0.63361"
+ke_natural_10001,390.085819,eV,bench/results/velocity_case.csv,ke_natural_eV on the 10001-atom slab
+ke_misread_10001,40429.545793,eV,bench/results/velocity_case.csv,ke_if_read_as_fs_eV on the 10001-atom slab
+readcon_db_over_raw,2.503,ratio,data/db/sizes.csv,"27340800/10923745 at 10000 frames, format '.3f'"
+query_energy_warm,0.211,ms,data/db/summary.csv,"0.000210673 s * 1000, format '.3f'"
+query_fmax_warm,0.208,ms,data/db/summary.csv,"0.000207737 s * 1000, format '.3f'"
+morse_colorbar_tick,0.6152,eV,src/figures/generated/restart.pdf,"pdftotext label on the fitted-surface colour bar; image energies are evidence/work/e1/neb/full/neb.dat, max 0.634930"
