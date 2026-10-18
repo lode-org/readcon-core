@@ -5,8 +5,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use readcon_core::ffi::{
-    RKRStatus, free_rkr_frame, rkr_clear_error, rkr_last_error, rkr_read_first_frame,
-    rkr_read_nth_frame,
+    RKRStatus, con_frame_iterator_forward, con_frame_iterator_next, con_frame_iterator_skip,
+    free_con_frame_iterator, free_rkr_frame, read_con_string_iterator, rkr_clear_error,
+    rkr_count_frames, rkr_last_error, rkr_read_first_frame, rkr_read_nth_frame,
 };
 use readcon_core::iterators::{
     ConFrameIterator, LoadError, count_frames, frames_from_bytes, frames_from_text_located,
@@ -33,6 +34,14 @@ fn one_atom(coord: &str) -> String {
     format!(
         "seed\n{{\"con_spec_version\":2}}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n{coord}\n"
     )
+}
+
+fn bad_count_frame() -> String {
+    "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n".into()
+}
+
+fn two_frames_bad_second() -> String {
+    format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame())
 }
 
 #[test]
@@ -118,6 +127,67 @@ fn parallel_workers_do_not_share_the_error_slot() {
     assert_ne!(sa, sb);
     let _ = fs::remove_file(path_for("thr-a"));
     let _ = fs::remove_file(path_for("thr-b"));
+}
+
+fn assert_later_frame(line: u32, frame: u64) {
+    let err = unsafe { &*rkr_last_error() };
+    assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
+    assert_eq!(err.line, line);
+    assert_eq!(err.frame_index, frame);
+    let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+    assert!(message.contains("InvalidCount"), "{message}");
+}
+
+/// `con_frame_iterator_next`, `forward`, and `skip` record the frame that
+/// failed, not frame 0. The bad count is line 8 of frame 1, file line 20.
+#[test]
+fn c_iterator_next_forward_and_skip_locate_the_later_frame() {
+    let text = two_frames_bad_second();
+    let c_text = CString::new(text.clone()).unwrap();
+
+    rkr_clear_error();
+    let it = unsafe { read_con_string_iterator(c_text.as_ptr()) };
+    assert!(!it.is_null());
+    let frame = unsafe { con_frame_iterator_next(it) };
+    assert!(!frame.is_null());
+    unsafe { free_rkr_frame(frame) };
+    assert!(unsafe { con_frame_iterator_next(it) }.is_null());
+    assert_later_frame(20, 1);
+    unsafe { free_con_frame_iterator(it) };
+
+    rkr_clear_error();
+    let it = unsafe { read_con_string_iterator(c_text.as_ptr()) };
+    assert_eq!(
+        unsafe { con_frame_iterator_forward(it) },
+        RKRStatus::RKR_STATUS_SUCCESS
+    );
+    assert_eq!(
+        unsafe { con_frame_iterator_forward(it) },
+        RKRStatus::RKR_STATUS_PARSE_ERROR
+    );
+    assert_later_frame(20, 1);
+    unsafe { free_con_frame_iterator(it) };
+
+    rkr_clear_error();
+    let it = unsafe { read_con_string_iterator(c_text.as_ptr()) };
+    assert_eq!(unsafe { con_frame_iterator_skip(it, 3) }, usize::MAX);
+    assert_later_frame(20, 1);
+    unsafe { free_con_frame_iterator(it) };
+
+    let path = write("c-count-later", &text);
+    rkr_clear_error();
+    assert_eq!(unsafe { rkr_count_frames(path.as_ptr()) }, usize::MAX);
+    assert_later_frame(20, 1);
+    let err = count_frames(path_for("c-count-later").as_path()).unwrap_err();
+    match err {
+        LoadError::Parse(located) => {
+            assert_eq!(located.line, 20, "{located}");
+            assert_eq!(located.frame_index, 1, "{located}");
+            assert_eq!(located.error.class_name(), "InvalidCount");
+        }
+        other => panic!("expected a located parse error, got {other}"),
+    }
+    let _ = fs::remove_file(path_for("c-count-later"));
 }
 
 #[test]
