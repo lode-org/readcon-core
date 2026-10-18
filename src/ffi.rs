@@ -598,6 +598,20 @@ fn note_boxed(err: Box<dyn std::error::Error>) {
         set_last_error(RKRStatus::RKR_STATUS_IO_ERROR as i32, &io.to_string(), 0, 0);
         return;
     }
+    let err = match err.downcast::<crate::iterators::LoadError>() {
+        Ok(load) => {
+            note_load(*load);
+            return;
+        }
+        Err(err) => err,
+    };
+    let err = match err.downcast::<crate::error::LocatedParseError>() {
+        Ok(located) => {
+            note_located(&located);
+            return;
+        }
+        Err(err) => err,
+    };
     if let Some(parse) = err.downcast_ref::<crate::error::ParseError>() {
         let located = crate::error::LocatedParseError::new(parse.clone(), parse.line(), 0);
         note_located(&located);
@@ -896,7 +910,8 @@ pub unsafe extern "C" fn con_frame_iterator_next(
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
-            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            let located =
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
             null_located(&located)
         }
         None => ptr::null_mut(),
@@ -914,7 +929,8 @@ pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIter
     match iter.forward() {
         Some(Ok(())) => RKRStatus::RKR_STATUS_SUCCESS,
         Some(Err(e)) => {
-            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            let located =
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
             note_located(&located)
         }
         None => note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -936,7 +952,8 @@ pub unsafe extern "C" fn con_frame_iterator_skip(
     match iter.skip_frames(n) {
         Ok(skipped) => skipped,
         Err(e) => {
-            let located = crate::error::LocatedParseError::new(e, iter.lines.line_no(), 0);
+            let located =
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
             note_located(&located);
             usize::MAX
         }
@@ -956,9 +973,9 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
     match iter.skip_frames_counted(index) {
         Ok(skipped) if skipped == index => {}
         Ok(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
-        Err((failed_at, e)) => {
+        Err((_failed_at, e)) => {
             let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), failed_at as u64);
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
             return null_located(&located);
         }
     }
@@ -966,7 +983,7 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
             let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), index as u64);
+                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
             null_located(&located)
         }
         None => null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -995,7 +1012,7 @@ pub unsafe extern "C" fn rkr_count_frames(filename_c: *const c_char) -> usize {
     match crate::iterators::count_frames(Path::new(filename)) {
         Ok(n) => n,
         Err(e) => {
-            note_boxed(e);
+            note_load(e);
             usize::MAX
         }
     }
