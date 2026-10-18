@@ -809,9 +809,10 @@ Coordinates of Component 2
     let frame = parse_one(unique).unwrap();
     let ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
     assert_eq!(ids, vec![2, 0, 1], "reader keeps file order");
-    assert_eq!(readcon_core::types::pre_grouping_indices(&ids), vec![
-        1, 2, 0
-    ]);
+    assert_eq!(
+        readcon_core::types::pre_grouping_indices(&ids),
+        vec![1, 2, 0]
+    );
 
     let repeated = "\
 PRE
@@ -832,9 +833,10 @@ Coordinates of Component 1
     let frame = parse_one(repeated).unwrap();
     let ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
     assert_eq!(ids, vec![1, 1, 0]);
-    assert_eq!(readcon_core::types::pre_grouping_indices(&ids), vec![
-        0, 1, 2
-    ]);
+    assert_eq!(
+        readcon_core::types::pre_grouping_indices(&ids),
+        vec![0, 1, 2]
+    );
 }
 
 /// CON-error.4. The earliest frame's class wins at 1, 2, 3, and 8 threads.

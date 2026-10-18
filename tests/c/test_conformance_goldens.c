@@ -491,6 +491,15 @@ static int check_valid(const char *root, const Case *c) {
     free_golden(&g);
     free_c_frame(cf);
     free_rkr_frame(frame);
+
+    uintptr_t nframes = 0;
+    struct RKRConFrame **all = rkr_read_all_frames(fixture, &nframes);
+    if (all == NULL || nframes < 1) {
+        fprintf(stderr, "FAIL %s: rkr_read_all_frames failed\n", c->id);
+        nfail++;
+    } else {
+        free_rkr_frame_array(all, nframes);
+    }
     return nfail;
 }
 

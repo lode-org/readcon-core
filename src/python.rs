@@ -1398,8 +1398,8 @@ impl PyConFrameIterator {
         if self.pos >= self.contents.len() {
             return Ok(None);
         }
-        // Blank preamble lines belong to the frame; the core iterator owns
-        // frame boundaries and trailing whitespace detection.
+        // An empty line 1 is the user line (CON-header.4). The core iterator
+        // owns that boundary and trailing whitespace.
         let slice = &self.contents[self.pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {

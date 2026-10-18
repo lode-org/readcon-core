@@ -23,9 +23,16 @@ pub trait LineStream<'a> {
     fn remainder_is_whitespace(&mut self) -> bool {
         false
     }
-    /// With a blank line peeked, true unless the stream can see that the
-    /// line two past the blank is not a `Velocities of Component` label.
-    /// Default is true, which keeps the legacy blank-separator rule.
+    /// Called while a blank line is peeked. True when that blank begins a
+    /// section: the next line is a symbol and the line after it is a
+    /// component label. A blank that does not is line 1 of the next frame.
+    fn blank_line_opens_section(&mut self) -> bool {
+        false
+    }
+
+    /// With a blank line peeked, true when [`Self::blank_line_opens_section`]
+    /// is true. A stream that cannot look ahead keeps the legacy rule and
+    /// returns true.
     fn blank_opens_velocity_block(&mut self) -> bool {
         true
     }
@@ -47,7 +54,7 @@ pub trait LineStream<'a> {
 
 impl<'a, I> LineStream<'a> for Peekable<I>
 where
-    I: Iterator<Item = &'a str>,
+    I: Iterator<Item = &'a str> + Clone,
 {
     #[inline]
     fn next_line(&mut self) -> Option<&'a str> {
@@ -57,6 +64,51 @@ where
     fn peek_line(&mut self) -> Option<&'a str> {
         Peekable::peek(self).copied()
     }
+    fn blank_line_opens_section(&mut self) -> bool {
+        let mut probe = self.clone();
+        let Some(blank) = probe.next_line() else {
+            return false;
+        };
+        if !blank.trim().is_empty() {
+            return false;
+        }
+        section_follows(&mut probe)
+    }
+
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        match self.peek_line() {
+            Some(line) if line.trim().is_empty() => self.blank_line_opens_section(),
+            _ => true,
+        }
+    }
+}
+
+/// True when `line` has the words `of` and `Component` in that order.
+pub(crate) fn line_has_component_label(line: &str) -> bool {
+    let mut words = line.split_ascii_whitespace();
+    while let Some(word) = words.next() {
+        if word.eq_ignore_ascii_case("of")
+            && words
+                .next()
+                .is_some_and(|next| next.eq_ignore_ascii_case("component"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn section_follows<'a>(lines: &mut impl LineStream<'a>) -> bool {
+    let Some(symbol) = lines.next_line() else {
+        return false;
+    };
+    if symbol.trim().is_empty() || symbol.trim_start().starts_with('{') {
+        return false;
+    }
+    let Some(label) = lines.next_line() else {
+        return false;
+    };
+    line_has_component_label(label)
 }
 
 /// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
@@ -1361,8 +1413,36 @@ pub fn parse_frame_header<'a>(
 pub fn parse_single_frame<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<ConFrame, ParseError> {
-    let mut peekable = lines.peekable();
-    parse_single_frame_ls(&mut peekable)
+    // The caller owns the iterator and may not be able to clone it. Section
+    // detection, which needs a lookahead clone, runs later on a `LineStream`
+    // that can probe (`MemchrLines`, or a `Peekable` whose source is `Clone`).
+    parse_single_frame_ls(&mut IterStream(lines))
+}
+
+/// Iterator adapter so [`parse_single_frame`] can satisfy [`LineStream`]
+/// without requiring [`Clone`].
+struct IterStream<I>(I);
+
+impl<'a, I> Iterator for IterStream<I>
+where
+    I: Iterator<Item = &'a str>,
+{
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        self.0.next()
+    }
+}
+
+impl<'a, I> LineStream<'a> for IterStream<I>
+where
+    I: Iterator<Item = &'a str>,
+{
+    fn next_line(&mut self) -> Option<&'a str> {
+        Iterator::next(self)
+    }
+    fn peek_line(&mut self) -> Option<&'a str> {
+        None
+    }
 }
 
 /// Frame parse over a [`LineStream`].
@@ -1673,6 +1753,12 @@ pub fn parse_velocity_section<'a>(
     match lines.peek_line() {
         Some(line) if line.trim().is_empty() => {
             if lines.remainder_is_whitespace() {
+                return Ok(false);
+            }
+            // CON-section.2 / the legacy fallback: the blank counts only
+            // when it begins a complete velocity block. Otherwise it is
+            // line 1 of the next frame (CON-frame.7, CON-header.4).
+            if !lines.blank_line_opens_section() {
                 return Ok(false);
             }
             lines.next_line();

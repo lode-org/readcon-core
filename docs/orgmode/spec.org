@@ -71,11 +71,14 @@ A stray blank therefore shifts that header and fails at its line 3.
 |    9 | Masses in =units.mass=, empty when line 7 is 0       |
 
 Line 1 and lines 5-6 have no semantics.
+Line 1 may be empty, and parsers keep that empty line.
+Line 2 may be empty. An empty line 2 does not start with ={=, so the frame is implicit version 1.
 Angstrom and amu apply when =units= or that key is absent.
 
 - CON-header.1 :: MAY :: Writers MAY leave lines 5 and 6 empty.
 - CON-header.2 :: MUST :: Parsers MUST preserve line 1 and lines 5 and 6.
 - CON-header.3 :: MUST :: Line 3 and the coordinate columns MUST be read in =units.length=, and line 9 in =units.mass=. Absent =units= or an absent key means angstrom and amu.
+- CON-header.4 :: MUST :: Parsers MUST accept an empty line 1 and an empty line 2. An empty line 1 is preserved. An empty line 2 is implicit version 1.
 
 ** Line 2: Metadata
 :PROPERTIES:
@@ -196,7 +199,8 @@ v3.4.0 has the same function.
 A section is present exactly when its name is in =sections=.
 An empty =sections= array means no section follows, and it disables the
 legacy velocity fallback. With no =sections= key, one blank line that
-begins a complete velocity block is a velocity section. That fallback
+begins a complete velocity block is a velocity section. A blank line
+that does not begin that block is line 1 of the next frame. That fallback
 is the only undeclared section, and =CON-frame.5= limits it.
 Minor 1 reserves the names in the table below.
 A vector row has arity 3 and a scalar row has arity 1.

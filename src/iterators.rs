@@ -191,34 +191,98 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             .iter()
             .all(|b| b.is_ascii_whitespace())
     }
+    fn blank_line_opens_section(&mut self) -> bool {
+        // `peek_line` has already moved `pos` to the line after the peek.
+        let Some(peeked) = self.peeked else {
+            return false;
+        };
+        if !peeked.trim().is_empty() {
+            return false;
+        }
+        match probe_section(&self.bytes[self.pos..]) {
+            SectionProbe::Opens => true,
+            SectionProbe::Closed => false,
+            // Leave the rejected bytes on the cursor. `prefer_utf8` then
+            // reports the decode error instead of a missing section.
+            SectionProbe::InvalidUtf8 => {
+                self.utf8_bad = true;
+                false
+            }
+        }
+    }
+
     fn blank_opens_velocity_block(&mut self) -> bool {
         match self.peek_line() {
-            Some(line) if line.trim().is_empty() => {}
-            _ => return true,
+            Some(line) if line.trim().is_empty() => self.blank_line_opens_section(),
+            _ => true,
         }
-        // `pos` sits just past the peeked blank line.
-        second_line_is_component_label(&self.bytes[self.pos..])
     }
 }
 
-/// True when the second line of `after` is a `<Name> of Component N`
-/// label, the shape of a section block and never of a frame header.
-fn second_line_is_component_label(after: &[u8]) -> bool {
-    let Some(i) = memchr::memchr(b'\n', after) else {
-        return false;
+fn split_raw_line(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
+    if bytes.is_empty() {
+        return None;
+    }
+    match memchr::memchr(b'\n', bytes) {
+        Some(i) => Some((&bytes[..i], &bytes[i + 1..])),
+        None => Some((bytes, &[])),
+    }
+}
+
+fn strip_cr(line: &[u8]) -> &[u8] {
+    if line.last() == Some(&b'\r') {
+        &line[..line.len() - 1]
+    } else {
+        line
+    }
+}
+
+enum SectionProbe {
+    Opens,
+    Closed,
+    InvalidUtf8,
+}
+
+/// A blank line opens a section when the next line is a symbol and the
+/// line after that is a component label (CON-file.5, CON-header.4).
+fn probe_section(after_blank: &[u8]) -> SectionProbe {
+    let Some((raw1, after1)) = split_raw_line(after_blank) else {
+        return SectionProbe::Closed;
     };
-    let rest = &after[i + 1..];
-    let end = memchr::memchr(b'\n', rest).unwrap_or(rest.len());
-    std::str::from_utf8(&rest[..end]).is_ok_and(|label| label.contains(" of Component"))
+    let line1 = strip_cr(raw1);
+    if line1.iter().all(|b| matches!(b, b' ' | b'\t')) {
+        return SectionProbe::Closed;
+    }
+    let Ok(text1) = std::str::from_utf8(line1) else {
+        return SectionProbe::InvalidUtf8;
+    };
+    if text1.trim_start().starts_with('{') {
+        return SectionProbe::Closed;
+    }
+    let Some((raw2, _)) = split_raw_line(after1) else {
+        return SectionProbe::Closed;
+    };
+    let Ok(text2) = std::str::from_utf8(strip_cr(raw2)) else {
+        return SectionProbe::InvalidUtf8;
+    };
+    if crate::parser::line_has_component_label(text2) {
+        SectionProbe::Opens
+    } else {
+        SectionProbe::Closed
+    }
+}
+
+fn blank_opens_section(after_blank: &[u8]) -> bool {
+    matches!(probe_section(after_blank), SectionProbe::Opens)
 }
 
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
 /// file's contents.
 ///
 /// This struct wraps a memchr line cursor over the file buffer and, upon each
-/// iteration, attempts to parse a complete `ConFrame`. Velocity sections are
-/// detected automatically: if a blank line follows the coordinate blocks, the
-/// velocity data is parsed into the atoms.
+/// iteration, attempts to parse a complete `ConFrame`. A blank line after the
+/// coordinates is a velocity section only when it begins a complete velocity
+/// block. Otherwise that line is line 1 of the next frame, and it may be empty.
 ///
 /// The iterator yields items of type `Result<ConFrame, ParseError>`, allowing for
 /// robust error handling for each frame.
@@ -361,10 +425,9 @@ impl<'a> ConFrameIterator<'a> {
                 self.lines.pos = self.lines.bytes.len();
                 break;
             }
-            // A blank line followed by a header is the empty line 1 of the
-            // next frame. A section block has a component label on its
-            // second line; a frame header has the cell lengths there.
-            if !second_line_is_component_label(after) {
+            // A blank that does not begin a section is line 1 of the next
+            // frame, including an empty user line (CON-frame.7, CON-header.4).
+            if !blank_opens_section(after) {
                 break;
             }
             // Consume the blank separator and the section block.
