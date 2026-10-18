@@ -2468,6 +2468,11 @@ fn read_con_string(
 #[pyclass(name = "ConFrameIterator")]
 struct PyConFrameIterator {
     source: FrameSource,
+    /// Newlines before the next frame. A fresh cursor on the remainder
+    /// reports a line within that slice; this offset makes it a file line.
+    line_base: u32,
+    /// 0-based index of the frame the cursor points at.
+    frame_index: u64,
 }
 
 enum FrameSource {
@@ -2478,12 +2483,30 @@ enum FrameSource {
     Stream(std::sync::Mutex<crate::stream::ConFrameReader<Box<dyn std::io::Read + Send>>>),
 }
 
-fn stream_error(py: Python<'_>, what: &str, e: crate::stream::StreamError) -> PyErr {
+fn stream_error(
+    py: Python<'_>,
+    what: &str,
+    e: crate::stream::StreamError,
+    frame_index: u64,
+) -> PyErr {
     if let Some(parse) = e.downcast_ref::<ParseError>() {
-        parse_err_to_py(py, parse, parse.line(), 0)
+        parse_err_to_py(py, parse, parse.line(), frame_index)
     } else {
         PyIOError::new_err(format!("{what} error: {e}"))
     }
+}
+
+/// 1-based file line for a cursor whose slice starts after `line_base` newlines.
+fn file_line(line_base: u32, cursor_line: u32) -> u32 {
+    if cursor_line == 0 {
+        line_base.saturating_add(1)
+    } else {
+        line_base.saturating_add(cursor_line)
+    }
+}
+
+fn newlines_in(text: &str) -> u32 {
+    text.bytes().filter(|&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -2498,8 +2521,11 @@ impl PyConFrameIterator {
             FrameSource::Stream(reader) => {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
-                    Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
-                    Some(Err(e)) => Err(stream_error(py, "parse", e)),
+                    Some(Ok(frame)) => {
+                        self.frame_index = self.frame_index.saturating_add(1);
+                        Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
+                    }
+                    Some(Err(e)) => Err(stream_error(py, "parse", e, self.frame_index)),
                     None => Ok(None),
                 };
             }
@@ -2508,22 +2534,26 @@ impl PyConFrameIterator {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
-        // owns that boundary and trailing whitespace.
+        // owns that boundary and trailing whitespace. The cursor is rebuilt
+        // on the remainder, so the file line is `line_base` plus its line.
         let slice = &contents.as_str()[*pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
                 let consumed =
                     (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
+                let lines = newlines_in(span);
                 *pos += consumed;
+                self.line_base = self.line_base.saturating_add(lines);
+                self.frame_index = self.frame_index.saturating_add(1);
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
             Some(Err(e)) => {
-                let line = iter.lines.line_no();
-                Err(parse_err_to_py(py, &e, line, 0))
+                let line = file_line(self.line_base, iter.lines.line_no());
+                Err(parse_err_to_py(py, &e, line, self.frame_index))
             }
             None => {
                 *pos = contents.as_str().len();
@@ -2539,8 +2569,11 @@ impl PyConFrameIterator {
             FrameSource::Stream(reader) => {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.forward()) {
-                    Some(Ok(())) => Ok(true),
-                    Some(Err(e)) => Err(stream_error(py, "skip", e)),
+                    Some(Ok(())) => {
+                        self.frame_index = self.frame_index.saturating_add(1);
+                        Ok(true)
+                    }
+                    Some(Err(e)) => Err(stream_error(py, "skip", e, self.frame_index)),
                     None => Ok(false),
                 };
             }
@@ -2552,13 +2585,20 @@ impl PyConFrameIterator {
         let mut iter = ConFrameIterator::new(slice);
         match iter.forward() {
             Some(Ok(())) => {
-                *pos += iter.byte_pos();
+                let consumed = iter.byte_pos();
+                let lines = newlines_in(&slice[..consumed]);
+                *pos += consumed;
+                self.line_base = self.line_base.saturating_add(lines);
+                self.frame_index = self.frame_index.saturating_add(1);
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
-            Some(Err(e)) => Err(parse_err_to_py(py, &e, iter.lines.line_no(), 0)),
+            Some(Err(e)) => {
+                let line = file_line(self.line_base, iter.lines.line_no());
+                Err(parse_err_to_py(py, &e, line, self.frame_index))
+            }
             None => Ok(false),
         }
     }
@@ -2621,41 +2661,19 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
             .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    Ok(PyConFrameIterator { source })
+    Ok(PyConFrameIterator {
+        source,
+        line_base: 0,
+        frame_index: 0,
+    })
 }
 
 /// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| {
-        crate::iterators::count_frames(Path::new(&path_owned)).map_err(|err| {
-            if err.downcast_ref::<std::io::Error>().is_some()
-                || err.downcast_ref::<std::str::Utf8Error>().is_some()
-            {
-                CountFail::Io(err.to_string())
-            } else if let Some(parse) = err.downcast_ref::<ParseError>() {
-                CountFail::Parse {
-                    class: parse.class_name(),
-                    message: parse.to_string(),
-                    line: parse.line(),
-                }
-            } else {
-                CountFail::Other(err.to_string())
-            }
-        })
-    })
-    .map_err(|err| {
-        Python::attach(|py| match err {
-            CountFail::Io(msg) => PyIOError::new_err(msg),
-            CountFail::Parse {
-                class,
-                message,
-                line,
-            } => class_err_to_py(py, class, message, line, 0),
-            CountFail::Other(msg) => class_err_to_py(py, "ValidationError", msg, 0, 0),
-        })
-    })
+    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)))
+        .map_err(load_err_to_py)
 }
 
 /// Skip `index` frames (no atom parse), then return that frame.
