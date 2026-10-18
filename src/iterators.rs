@@ -288,6 +288,10 @@ fn blank_opens_section(after_blank: &[u8]) -> bool {
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
     pub(crate) lines: MemchrLines<'a>,
+    /// 0-based index of the frame the cursor is about to read.
+    /// Successful `next` and `forward_fast` advance it. A failure leaves
+    /// it on the frame that failed.
+    frame_index: u64,
 }
 
 impl<'a> ConFrameIterator<'a> {
@@ -299,6 +303,7 @@ impl<'a> ConFrameIterator<'a> {
     pub fn new(file_contents: &'a str) -> Self {
         ConFrameIterator {
             lines: MemchrLines::new(file_contents),
+            frame_index: 0,
         }
     }
 
@@ -310,7 +315,21 @@ impl<'a> ConFrameIterator<'a> {
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
         ConFrameIterator {
             lines: MemchrLines::from_bytes(bytes),
+            frame_index: 0,
         }
+    }
+
+    /// 0-based index of the frame the cursor is on.
+    ///
+    /// This is the frame a following error belongs to. It is not the
+    /// number of frames still ahead.
+    pub(crate) fn frame_index(&self) -> u64 {
+        self.frame_index
+    }
+
+    fn note_skipped_frame(&mut self) -> Option<Result<(), error::ParseError>> {
+        self.frame_index = self.frame_index.saturating_add(1);
+        Some(Ok(()))
     }
 
     /// Bulk-skips `n` lines from the shared memchr cursor.
@@ -375,7 +394,10 @@ impl<'a> ConFrameIterator<'a> {
         if natm_types == 0 {
             // Lines 8 and 9 are whitespace, or absent at EOF. Do not scan
             // for coordinates or a legacy velocity block (CON-count.1).
-            return Some(crate::parser::read_zero_atom_tail(|| self.read_line_str()));
+            return match crate::parser::read_zero_atom_tail(|| self.read_line_str()) {
+                Ok(()) => self.note_skipped_frame(),
+                Err(e) => Some(Err(e)),
+            };
         }
         // Line 8: natms_per_type.
         let natms_per_type: Vec<usize> = match self.read_line_str() {
@@ -431,12 +453,15 @@ impl<'a> ConFrameIterator<'a> {
                 break;
             }
             // Consume the blank separator and the section block.
+            // The separator is a file line. Skipping it without counting
+            // shifts every later frame's reported line.
             self.lines.pos += next_eol.map(|p| p + 1).unwrap_or(rest.len());
+            self.lines.line_no = self.lines.line_no.saturating_add(1);
             if let Err(e) = self.advance_lines(coord_block_lines) {
                 return Some(Err(e));
             }
         }
-        Some(Ok(()))
+        self.note_skipped_frame()
     }
 
     /// Skips the next frame without fully parsing its atomic data.
@@ -569,6 +594,7 @@ impl<'a> Iterator for ConFrameIterator<'a> {
         if sections > 0 {
             frame.sync_arrays_from_atom_data();
         }
+        self.frame_index = self.frame_index.saturating_add(1);
         Some(Ok(frame))
     }
 }
@@ -803,15 +829,23 @@ fn parse_frames_parallel_bytes(
 /// when possible, else [`ConFrameIterator::forward`]).
 ///
 /// Prefer this over `read_all_frames(...).len()` when only the frame count is needed.
-pub fn count_frames(path: &Path) -> Result<usize, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    let text = contents.as_str()?;
+/// A rejected frame is [`LoadError::Parse`] with that frame's file line and
+/// 0-based index, including when the failure is after the first frame.
+pub fn count_frames(path: &Path) -> Result<usize, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
     let mut n = 0usize;
     let mut iter = ConFrameIterator::new(text);
     loop {
         match iter.forward_fast() {
             Some(Ok(())) => n += 1,
-            Some(Err(e)) => return Err(Box::new(e)),
+            Some(Err(e)) => {
+                return Err(LoadError::Parse(error::LocatedParseError::new(
+                    e,
+                    iter.lines.line_no(),
+                    iter.frame_index(),
+                )));
+            }
             None => break,
         }
     }
@@ -1255,5 +1289,91 @@ mod parallel_strong_scale_tests {
             .map(|r| frames_payload_key(&r.expect("par")))
             .collect();
         assert_eq!(def_keys, seq_keys);
+    }
+}
+
+#[cfg(test)]
+mod later_frame_location_tests {
+    use super::*;
+    use std::fs;
+
+    fn one_atom(coord: &str) -> String {
+        format!(
+            "seed\n{{\"con_spec_version\":2}}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n{coord}\n"
+        )
+    }
+
+    fn bad_count_frame() -> String {
+        "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n".into()
+    }
+
+    fn two_frames() -> String {
+        format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame())
+    }
+
+    fn assert_later_count(
+        err: &error::ParseError,
+        line: u32,
+        frame: u64,
+        iter: &ConFrameIterator<'_>,
+    ) {
+        assert_eq!(err.class_name(), "InvalidCount", "{err}");
+        assert_eq!(iter.lines.line_no(), line, "{err}");
+        assert_eq!(iter.frame_index(), frame, "{err}");
+    }
+
+    /// An error in the second frame keeps that frame's index and file line.
+    #[test]
+    fn next_forward_and_skip_locate_the_later_frame() {
+        let text = two_frames();
+
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.next().unwrap().is_ok());
+        let err = iter.next().unwrap().unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.forward().unwrap().is_ok());
+        let err = iter.forward().unwrap().unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+
+        let mut iter = ConFrameIterator::new(&text);
+        let err = iter.skip_frames(3).unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+    }
+
+    /// The blank line that opens a velocity block is a file line. A later
+    /// frame's error must include it. 12 coordinate lines, the separator,
+    /// and 3 velocity lines put the next frame's line 8 at file line 24.
+    #[test]
+    fn skip_after_a_velocity_frame_keeps_the_separator_line() {
+        let text = format!(
+            "{}\nH\nVelocities of Component 1\n0 0 0 0 0\n{}",
+            one_atom("0 0 0 0 0"),
+            bad_count_frame()
+        );
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.forward().unwrap().is_ok());
+        let err = iter.forward().unwrap().unwrap_err();
+        assert_later_count(&err, 24, 1, &iter);
+    }
+
+    #[test]
+    fn count_frames_locates_the_later_frame() {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-later-frame-count-{}.con",
+            std::process::id()
+        ));
+        fs::write(&path, two_frames()).unwrap();
+        let err = count_frames(&path).unwrap_err();
+        let _ = fs::remove_file(&path);
+        match err {
+            LoadError::Parse(located) => {
+                assert_eq!(located.error.class_name(), "InvalidCount");
+                assert_eq!(located.line, 20, "{located}");
+                assert_eq!(located.frame_index, 1, "{located}");
+            }
+            other => panic!("expected a located parse error, got {other}"),
+        }
     }
 }

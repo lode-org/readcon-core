@@ -1342,6 +1342,25 @@ struct PyConFrameIterator {
     contents: String,
     /// Byte offset of the next frame start within `contents`.
     pos: usize,
+    /// Newlines before `pos`. Each step parses a fresh cursor on the
+    /// remainder, so this offset turns that cursor's line number into a
+    /// file line.
+    line_base: u32,
+    /// 0-based index of the frame `pos` points at.
+    frame_index: u64,
+}
+
+/// 1-based file line for a cursor whose slice starts after `line_base` newlines.
+fn file_line(line_base: u32, cursor_line: u32) -> u32 {
+    if cursor_line == 0 {
+        line_base.saturating_add(1)
+    } else {
+        line_base.saturating_add(cursor_line)
+    }
+}
+
+fn newlines_in(text: &str) -> u32 {
+    text.bytes().filter(|&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -1355,20 +1374,32 @@ impl PyConFrameIterator {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
-        // owns that boundary and trailing whitespace.
-        let slice = &self.contents[self.pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.next_with_raw_span(slice) {
-            Some(Ok((frame, span))) => {
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
+        // owns that boundary and trailing whitespace. The cursor is rebuilt
+        // on the remainder, so the file line is `line_base` plus its line.
+        let parsed = {
+            let slice = &self.contents[self.pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.next_with_raw_span(slice) {
+                Some(Ok((frame, span))) => {
+                    let consumed = (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize)
+                        + span.len();
+                    Some(Ok((frame, consumed, newlines_in(span))))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Some(Err(parse_err_to_py(py, &e, line, self.frame_index)))
+                }
+                None => None,
+            }
+        };
+        match parsed {
+            Some(Ok((frame, consumed, lines))) => {
+                self.line_base = self.line_base.saturating_add(lines);
                 self.pos += consumed;
+                self.frame_index = self.frame_index.saturating_add(1);
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
-            Some(Err(e)) => {
-                let line = iter.lines.line_no();
-                Err(parse_err_to_py(py, &e, line, 0))
-            }
+            Some(Err(err)) => Err(err),
             None => {
                 self.pos = self.contents.len();
                 Ok(None)
@@ -1381,14 +1412,29 @@ impl PyConFrameIterator {
         if self.pos >= self.contents.len() {
             return Ok(false);
         }
-        let slice = &self.contents[self.pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.forward() {
-            Some(Ok(())) => {
-                self.pos += iter.byte_pos();
+        let advanced = {
+            let slice = &self.contents[self.pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.forward() {
+                Some(Ok(())) => {
+                    let consumed = iter.byte_pos();
+                    Some(Ok((consumed, newlines_in(&slice[..consumed]))))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Some(Err(parse_err_to_py(py, &e, line, self.frame_index)))
+                }
+                None => None,
+            }
+        };
+        match advanced {
+            Some(Ok((consumed, lines))) => {
+                self.line_base = self.line_base.saturating_add(lines);
+                self.pos += consumed;
+                self.frame_index = self.frame_index.saturating_add(1);
                 Ok(true)
             }
-            Some(Err(e)) => Err(parse_err_to_py(py, &e, iter.lines.line_no(), 0)),
+            Some(Err(err)) => Err(err),
             None => Ok(false),
         }
     }
@@ -1435,6 +1481,8 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     Ok(PyConFrameIterator {
         contents: text,
         pos: 0,
+        line_base: 0,
+        frame_index: 0,
     })
 }
 
@@ -1442,34 +1490,8 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| {
-        crate::iterators::count_frames(Path::new(&path_owned)).map_err(|err| {
-            if err.downcast_ref::<std::io::Error>().is_some()
-                || err.downcast_ref::<std::str::Utf8Error>().is_some()
-            {
-                CountFail::Io(err.to_string())
-            } else if let Some(parse) = err.downcast_ref::<ParseError>() {
-                CountFail::Parse {
-                    class: parse.class_name(),
-                    message: parse.to_string(),
-                    line: parse.line(),
-                }
-            } else {
-                CountFail::Other(err.to_string())
-            }
-        })
-    })
-    .map_err(|err| {
-        Python::attach(|py| match err {
-            CountFail::Io(msg) => PyIOError::new_err(msg),
-            CountFail::Parse {
-                class,
-                message,
-                line,
-            } => class_err_to_py(py, class, message, line, 0),
-            CountFail::Other(msg) => class_err_to_py(py, "ValidationError", msg, 0, 0),
-        })
-    })
+    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)))
+        .map_err(load_err_to_py)
 }
 
 /// Skip `index` frames (no atom parse), then return that frame.
@@ -2182,16 +2204,6 @@ fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
             Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
         }
     }
-}
-
-enum CountFail {
-    Io(String),
-    Parse {
-        class: &'static str,
-        message: String,
-        line: u32,
-    },
-    Other(String),
 }
 
 enum OpenFail {
