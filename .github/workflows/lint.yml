@@ -21,7 +21,8 @@ jobs:
     - name: Conventional commits check
       # A pull request checks base.sha..head.sha.
       # A push checks github.event.before..github.sha.
-      # An all-zero before starts at the merge-base with origin/main.
+      # An all-zero before, or a before sha missing from the clone
+      # (a rewritten push), starts at the merge-base with origin/main.
       # The script skips merge commits.
       env:
         RANGE_START: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
