@@ -208,6 +208,36 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     assert_eq!(left.atom_data[0].force(), Some([1.0, 0.0, -1.0]));
 }
 
+#[test]
+fn compressed_path_writers_round_trip_a_frame() {
+    use readcon_core::types::ConFrameBuilder;
+    let mut builder = ConFrameBuilder::new([10.0, 11.0, 12.0], [90.0, 90.0, 90.0]);
+    builder.add_atom("Cu", 1.0, 2.0, 3.0, [false; 3], 7, 63.546);
+    let frame = builder.build().expect("plain frame");
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    let gz = dir.path().join("frame.con.gz");
+    {
+        let mut writer = ConFrameWriter::from_path_gzip(&gz).expect("gzip writer");
+        writer.extend(std::iter::once(&frame)).expect("write gzip");
+    }
+    let read = read_all_frames(&gz).expect("read gzip");
+    assert_eq!(read.len(), 1);
+    assert_eq!(read[0].atom_data[0].atom_id, 7);
+
+    #[cfg(feature = "zstd")]
+    {
+        let zs = dir.path().join("frame.con.zst");
+        {
+            let mut writer = ConFrameWriter::from_path_zstd(&zs).expect("zstd writer");
+            writer.extend(std::iter::once(&frame)).expect("write zstd");
+        }
+        let read = read_all_frames(&zs).expect("read zstd");
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].atom_data[0].atom_id, 7);
+    }
+}
+
 fn tool_runs(name: &str) -> bool {
     Command::new(name)
         .arg("--version")
