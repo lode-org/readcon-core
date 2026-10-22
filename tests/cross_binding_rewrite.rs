@@ -114,6 +114,100 @@ fn binding_rewrite_emits_con_spec_minor_for_every_accepted_file() {
     }
 }
 
+fn frame_with_every_section() -> readcon_core::types::ConFrame {
+    use readcon_core::types::ConFrameBuilder;
+    let mut builder = ConFrameBuilder::new([10.0, 11.0, 12.0], [90.0, 90.0, 90.0]);
+    builder
+        .add_atom("Cu", 1.0, 2.0, 3.0, [false, false, true], 7, 63.546)
+        .with_velocity([0.1, 0.2, 0.3])
+        .with_force([1.0, 0.0, -1.0])
+        .with_energy(-1.5)
+        .with_charge(0.25)
+        .with_spin(0.5)
+        .with_magmom([0.0, 0.0, 1.25])
+        .with_displacement([0.01, 0.02, 0.03])
+        .with_spread([0.04, 0.05, 0.06]);
+    builder.build().expect("section frame")
+}
+
+fn time_label(frame: &readcon_core::types::ConFrame) -> Option<&str> {
+    use readcon_core::types::meta;
+    frame
+        .header
+        .metadata
+        .get(meta::UNITS)
+        .and_then(|units| units.get("time"))
+        .and_then(|time| time.as_str())
+}
+
+#[test]
+fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
+    use readcon_core::types::meta;
+    use readcon_core::units::NATURAL_TIME_UNIT;
+    use serde_json::json;
+
+    let built = frame_with_every_section();
+    let atom = &built.atom_data[0];
+    assert_eq!(atom.velocity(), Some([0.1, 0.2, 0.3]));
+    // v3 minor 1 already carries the label contract, so the stamp returns.
+    let kept = binding_rewrite_frame(&built).expect("rewrite minor 1");
+    let kept_atom = &kept.atom_data[0];
+    assert_eq!(kept_atom.velocity(), Some([0.1, 0.2, 0.3]));
+    assert_eq!(kept_atom.force(), Some([1.0, 0.0, -1.0]));
+    assert_eq!(kept_atom.energy(), Some(-1.5));
+    assert_eq!(kept_atom.charge(), Some(0.25));
+    assert_eq!(kept_atom.spin(), Some(0.5));
+    assert_eq!(kept_atom.magmom(), Some([0.0, 0.0, 1.25]));
+    assert_eq!(kept_atom.displacement(), Some([0.01, 0.02, 0.03]));
+    assert_eq!(kept_atom.spread(), Some([0.04, 0.05, 0.06]));
+    assert_eq!(time_label(&kept), None);
+
+    let mut legacy = built.clone();
+    legacy.header.spec_version = 2;
+    legacy
+        .header
+        .metadata
+        .insert(meta::CON_SPEC_MINOR.into(), json!(0));
+    legacy.header.metadata.insert(
+        meta::UNITS.into(),
+        json!({"length": "angstrom", "energy": "eV", "mass": "amu"}),
+    );
+    let stamped = binding_rewrite_frame(&legacy).expect("rewrite v2 units object");
+    assert_eq!(time_label(&stamped), Some(NATURAL_TIME_UNIT));
+    assert_eq!(
+        stamped
+            .header
+            .metadata
+            .get(meta::CON_SPEC_MINOR)
+            .and_then(|minor| minor.as_u64()),
+        Some(1)
+    );
+    assert_eq!(stamped.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
+
+    let mut bare = built.clone();
+    bare.header.spec_version = 1;
+    bare.header.metadata.remove(meta::UNITS);
+    bare.header.metadata.remove(meta::CON_SPEC_MINOR);
+    let filled = binding_rewrite_frame(&bare).expect("rewrite without units");
+    assert_eq!(time_label(&filled), Some(NATURAL_TIME_UNIT));
+
+    let mut odd = built.clone();
+    odd.header.spec_version = 2;
+    odd.header
+        .metadata
+        .insert(meta::CON_SPEC_MINOR.into(), json!(0));
+    odd.header.metadata.insert(meta::UNITS.into(), json!("fs"));
+    let left = binding_rewrite_frame(&odd).expect("rewrite non-object units");
+    assert_eq!(
+        left.header
+            .metadata
+            .get(meta::UNITS)
+            .and_then(|units| units.as_str()),
+        Some("fs")
+    );
+    assert_eq!(left.atom_data[0].force(), Some([1.0, 0.0, -1.0]));
+}
+
 fn tool_runs(name: &str) -> bool {
     Command::new(name)
         .arg("--version")
