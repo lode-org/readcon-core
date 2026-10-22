@@ -2,8 +2,10 @@
 # Check conventional commit subjects on one revision range.
 # A pull request sets RANGE_START to the base sha and RANGE_END to the head sha.
 # A push sets RANGE_START to github.event.before and RANGE_END to github.sha.
-# An all-zero RANGE_START means the branch is new, so the range starts at
-# the merge-base with origin/main. Merge commits are skipped.
+# An all-zero RANGE_START means the branch is new. A RANGE_START that is not
+# a commit in this clone is a rewritten push whose previous tip was not
+# fetched. Both start at the merge-base with origin/main.
+# Merge commits are skipped.
 # Git default `Revert "..."` subjects are accepted.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,10 +15,13 @@ zeros=0000000000000000000000000000000000000000
 start=${RANGE_START:-}
 end=${RANGE_END:-HEAD}
 
-if [[ -z "$start" || "$start" == "$zeros" ]]; then
+if [[ -z "$start" || "$start" == "$zeros" ]] || ! git rev-parse --verify --quiet "${start}^{commit}" >/dev/null; then
   if [[ "$end" == "$zeros" ]]; then
     echo "ERROR: range end is empty" >&2
     exit 1
+  fi
+  if [[ -n "$start" && "$start" != "$zeros" ]]; then
+    echo "RANGE_START ${start} is not in this clone; using merge-base with origin/main" >&2
   fi
   start=$(git merge-base origin/main "$end")
 fi
