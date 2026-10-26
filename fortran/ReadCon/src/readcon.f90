@@ -10,7 +10,7 @@ module readcon
   public :: rkr_status_invalid_utf8, rkr_status_invalid_json, rkr_status_io_error
   public :: rkr_status_index_out_of_bounds, rkr_status_buffer_too_small
   public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_validation_error
-  public :: rkr_status_feature_disabled
+  public :: rkr_status_feature_disabled, rkr_status_parse_error
   public :: catom_t, cframe_t
   public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
   public :: dlpack_inspect, dlpack_data_ptr
