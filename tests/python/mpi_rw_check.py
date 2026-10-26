@@ -40,6 +40,30 @@ def main():
     else:
         raise AssertionError("bad path did not raise on every rank")
 
+    # A bad number in the last frame is a parse failure on every rank, as
+    # in the serial read: ConError, not OSError. The rank that owns that
+    # frame reports its global index.
+    bad = f"{out}.badnum.con"
+    if comm.Get_rank() == 0:
+        readcon.write_con(bad, serial)
+        with open(bad) as f:
+            lines = f.read().splitlines()
+        last = lines[-1].split()
+        last[0] = "bogus"
+        lines[-1] = " ".join(last)
+        with open(bad, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    comm.Barrier()
+    owner = max(k for k, c in enumerate(counts) if c > 0)
+    try:
+        readcon.read_con(bad, comm=comm)
+    except readcon.ConError as err:
+        if comm.Get_rank() == owner:
+            assert type(err) is not readcon.ConError, type(err)
+            assert err.frame_index == len(serial) - 1, err.frame_index
+    else:
+        raise AssertionError("bad number did not raise ConError on every rank")
+
     if comm.Get_rank() == 0:
         readcon.write_con(f"{out}.serial", serial)
         digests = {sha(f"{out}.{m}") for m in ("mpiio", "gather", "serial")}

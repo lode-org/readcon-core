@@ -1284,8 +1284,18 @@ fn read_con_mpi(
     };
     let c = comm_from_py(comm)?;
     // MPI handles are not Send, so the GIL stays held for the collective.
-    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
-        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    // Parse failures keep the ConError contract of the serial read: the
+    // rank that met the failure raises its class with the global frame
+    // index, the other ranks raise ConError; everything else is I/O.
+    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads).map_err(
+        |e| match e.downcast::<crate::error::LocatedParseError>() {
+            Ok(located) => located_to_py(*located),
+            Err(e) if e.is::<crate::distrib_read::PeerParseError>() => {
+                ConError::new_err(e.to_string())
+            }
+            Err(e) => PyIOError::new_err(e.to_string()),
+        },
+    )?;
     rf.frames
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
