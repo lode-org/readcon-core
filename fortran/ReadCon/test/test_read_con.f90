@@ -287,6 +287,7 @@ program test_read_con
       if (fr%valid()) then
         st5 = wr%extend_one(fr)
         print *, "wr_extend_one st=", st5
+        if (st5 /= 0) print *, "wr_extend_one msg=", trim(last_error_message())
       end if
       call wr%free()
     else
