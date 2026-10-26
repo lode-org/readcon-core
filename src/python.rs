@@ -1133,7 +1133,7 @@ impl PyConFrame {
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
         // The builder writes minor 1, which requires units.time (CON-units.11).
-        stamp_legacy_velocity_time(
+        crate::writer::stamp_legacy_velocity_time(
             &mut meta,
             self.spec_version,
             atoms.iter().any(PyAtomDatum::has_velocity),
@@ -1205,50 +1205,6 @@ impl PyConFrame {
         builder
             .build()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-}
-
-/// Record `units.time` for a v1 or v2 frame that carries velocities.
-///
-/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
-/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
-/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
-/// A 3.0 frame is treated the same way, overwriting any `units.time`
-/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
-fn stamp_legacy_velocity_time(
-    meta: &mut BTreeMap<String, Value>,
-    spec_version: u32,
-    has_velocity: bool,
-) {
-    if !has_velocity {
-        return;
-    }
-    let minor = meta
-        .get(meta::CON_SPEC_MINOR)
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if spec_version >= 3 && minor >= 1 {
-        return;
-    }
-    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
-    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
-    // the label authoritative (CON-units.10), so replace any label rather
-    // than keep one the old file never honoured.
-    let mut units = match meta.get(meta::UNITS).cloned() {
-        Some(Value::Object(map)) => Value::Object(map),
-        Some(_) => return,
-        None => crate::units::default_v3_units_json(),
-    };
-    if let Some(object) = units.as_object_mut() {
-        object.insert(
-            "time".to_string(),
-            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
-        );
-        meta.insert(meta::UNITS.to_string(), units);
-        // The label now holds, so the frame is written as minor 1.
-        if meta.contains_key(meta::CON_SPEC_MINOR) {
-            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
-        }
     }
 }
 
