@@ -4,17 +4,39 @@
 program test_add_atom_roundtrip
   use readcon
   use, intrinsic :: iso_fortran_env, only: real64, int64
+  use, intrinsic :: iso_c_binding, only: c_associated, c_char, c_int, c_null_char, c_ptr
   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_negative_zero
   implicit none
+  interface
+    function c_mkdtemp(template) bind(C, name="mkdtemp") result(p)
+      import :: c_char, c_ptr
+      character(kind=c_char), intent(inout) :: template(*)
+      type(c_ptr) :: p
+    end function
+    function c_unlink(path) bind(C, name="unlink") result(rc)
+      import :: c_char, c_int
+      character(kind=c_char), intent(in) :: path(*)
+      integer(c_int) :: rc
+    end function
+    function c_rmdir(path) bind(C, name="rmdir") result(rc)
+      import :: c_char, c_int
+      character(kind=c_char), intent(in) :: path(*)
+      integer(c_int) :: rc
+    end function
+  end interface
   integer :: nfail
   real(real64) :: neg0, subnormal
+  character(len=:), allocatable :: work
 
   nfail = 0
   neg0 = ieee_value(0.0_real64, ieee_negative_zero)
   subnormal = transfer(1_int64, 0.0_real64)
 
-  call check_repeated_id()
-  call check_roundtrip()
+  call make_work_dir(work)
+  if (.not. allocated(work)) error stop 1
+  call check_repeated_id(work)
+  call check_roundtrip(work)
+  call remove_work_dir(work)
 
   if (nfail /= 0) then
     print *, "FAIL", nfail
@@ -88,7 +110,8 @@ contains
     call check_bits(real(at%mass, real64), mass, trim(what) // " mass")
   end subroutine
 
-  subroutine check_repeated_id()
+  subroutine check_repeated_id(work)
+    character(len=*), intent(in) :: work
     type(builder_t) :: bd
     type(writer_t) :: wr
     type(frame_t) :: fr
@@ -117,7 +140,7 @@ contains
       call bd%free()
       return
     end if
-    wr = open_writer("/tmp/readcon_fortran_add_atom_dup.con")
+    wr = open_writer(work // "/dup.con")
     if (.not. wr%valid()) then
       nfail = nfail + 1
       print *, "FAIL dup writer"
@@ -147,7 +170,8 @@ contains
     call bd%free()
   end subroutine
 
-  subroutine check_roundtrip()
+  subroutine check_roundtrip(work)
+    character(len=*), intent(in) :: work
     type(builder_t) :: bd
     type(writer_t) :: wr
     type(frame_t) :: built, got
@@ -190,7 +214,7 @@ contains
       call bd%free()
       return
     end if
-    wr = open_writer("/tmp/readcon_fortran_add_atom_rt.con")
+    wr = open_writer(work // "/rt.con")
     if (.not. wr%valid()) then
       nfail = nfail + 1
       print *, "FAIL writer"
@@ -214,7 +238,7 @@ contains
     call wr%free()
     call built%free()
 
-    got = read_first_frame("/tmp/readcon_fortran_add_atom_rt.con")
+    got = read_first_frame(work // "/rt.con")
     if (.not. got%valid()) then
       nfail = nfail + 1
       print *, "FAIL read"
@@ -287,4 +311,71 @@ contains
     end if
     call got%free()
   end subroutine
+
+  subroutine make_work_dir(dir)
+    character(len=:), allocatable, intent(out) :: dir
+    character(len=*), parameter :: raw = "/tmp/readcon_fortran_add_atom_XXXXXX"
+    character(kind=c_char) :: tmpl(len(raw) + 1)
+    type(c_ptr) :: p
+    integer :: i
+    do i = 1, len(raw)
+      tmpl(i) = raw(i:i)
+    end do
+    tmpl(len(raw) + 1) = c_null_char
+    p = c_mkdtemp(tmpl)
+    if (.not. c_associated(p)) then
+      nfail = nfail + 1
+      print *, "FAIL mkdtemp"
+      return
+    end if
+    allocate(character(len=len(raw)) :: dir)
+    do i = 1, len(raw)
+      dir(i:i) = tmpl(i)
+    end do
+  end subroutine
+
+  subroutine remove_work_dir(dir)
+    character(len=*), intent(in) :: dir
+    integer(c_int) :: rc
+    call unlink_path(dir // "/dup.con")
+    call unlink_path(dir // "/rt.con")
+    rc = rmdir_path(dir)
+    if (rc /= 0) then
+      nfail = nfail + 1
+      print *, "FAIL rmdir ", dir
+    end if
+  end subroutine
+
+  subroutine unlink_path(path)
+    character(len=*), intent(in) :: path
+    character(kind=c_char) :: buf(256)
+    integer(c_int) :: rc
+    integer :: i, n
+    n = len(path)
+    if (n >= 256) then
+      nfail = nfail + 1
+      print *, "FAIL path too long ", path
+      return
+    end if
+    do i = 1, n
+      buf(i) = path(i:i)
+    end do
+    buf(n + 1) = c_null_char
+    rc = c_unlink(buf)
+  end subroutine
+
+  function rmdir_path(path) result(rc)
+    character(len=*), intent(in) :: path
+    character(kind=c_char) :: buf(256)
+    integer(c_int) :: rc
+    integer :: i, n
+    n = len(path)
+    rc = 1
+    if (n >= 256) return
+    do i = 1, n
+      buf(i) = path(i:i)
+    end do
+    buf(n + 1) = c_null_char
+    rc = c_rmdir(buf)
+  end function
 end program
