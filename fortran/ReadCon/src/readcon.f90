@@ -18,6 +18,7 @@ module readcon
   public :: frame_metatensor_forces_block, frame_metatensor_atom_energies_block
   public :: mts_block_free_rkr
   public :: library_version, con_spec_version, has_chemfiles_support, status_message
+  public :: last_error_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, read_all_frames, read_nth_frame, count_frames
@@ -169,6 +170,7 @@ module readcon
     procedure :: valid => bd_valid
     procedure :: free => bd_free
     procedure :: add_atom => bd_add_atom
+    procedure :: add_atom_full => bd_add_atom_full
     procedure :: set_energy => bd_set_energy
     procedure :: set_metadata_json => bd_set_meta
     procedure :: set_frame_index => bd_set_fidx
@@ -212,6 +214,10 @@ module readcon
       import :: c_int, c_ptr
       integer(c_int), value :: st
       type(c_ptr) :: c_rkr_status_message
+    end function
+    function c_rkr_last_error_message() bind(C, name="rkr_last_error_message")
+      import :: c_ptr
+      type(c_ptr) :: c_rkr_last_error_message
     end function
     function c_rkr_read_first_frame(fn) bind(C, name="rkr_read_first_frame")
       import :: c_char, c_ptr
@@ -519,7 +525,8 @@ module readcon
       type(c_ptr), value :: pb0, pb1, pob0, pob1
       type(c_ptr) :: c_rkr_frame_new
     end function
-    function c_rkr_frame_add_atom_with_fixed_mask(b, sym, x, y, z, aid, mass, fx, fy, fz) &
+    ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass.
+    function c_rkr_frame_add_atom_with_fixed_mask(b, sym, x, y, z, fx, fy, fz, aid, mass) &
          bind(C, name="rkr_frame_add_atom_with_fixed_mask")
       import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
       type(c_ptr), value :: b
@@ -528,6 +535,18 @@ module readcon
       integer(c_int64_t), value :: aid
       logical(c_bool), value :: fx, fy, fz
       integer(c_int) :: c_rkr_frame_add_atom_with_fixed_mask
+    end function
+    ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
+    function c_rkr_frame_add_atom_full(b, sym, x, y, z, fx, fy, fz, aid, mass, vel, frc) &
+         bind(C, name="rkr_frame_add_atom_full")
+      import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
+      type(c_ptr), value :: b
+      character(kind=c_char), intent(in) :: sym(*)
+      real(c_double), value :: x, y, z, mass
+      integer(c_int64_t), value :: aid
+      logical(c_bool), value :: fx, fy, fz
+      type(c_ptr), value :: vel, frc
+      integer(c_int) :: c_rkr_frame_add_atom_full
     end function
     function c_rkr_frame_builder_set_energy(b, e) bind(C, name="rkr_frame_builder_set_energy")
       import :: c_ptr, c_double, c_int
@@ -747,6 +766,13 @@ contains
     integer, intent(in) :: st
     character(len=:), allocatable :: s
     s = from_c(c_rkr_status_message(int(st, c_int)), .false.)
+  end function
+
+  ! Underlying text from the most recent failing writer call on this thread.
+  ! Empty when that call succeeded. rkr_status_message stays the generic code.
+  function last_error_message() result(s)
+    character(len=:), allocatable :: s
+    s = from_c(c_rkr_last_error_message(), .false.)
   end function
 
   integer(int64) function symbol_to_z(sym)
@@ -1304,8 +1330,39 @@ contains
     if (.not. c_associated(self%b)) return
     call to_c(symbol, cs)
     bd_add_atom = int(c_rkr_frame_add_atom_with_fixed_mask(self%b, cs, &
-         real(x,c_double), real(y,c_double), real(z,c_double), int(atom_id,c_int64_t), &
-         real(mass,c_double), logical(fixed_x,c_bool), logical(fixed_y,c_bool), logical(fixed_z,c_bool)))
+         real(x, c_double), real(y, c_double), real(z, c_double), &
+         logical(fixed_x, c_bool), logical(fixed_y, c_bool), logical(fixed_z, c_bool), &
+         int(atom_id, c_int64_t), real(mass, c_double)))
+  end function
+
+  integer function bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
+       fixed_x, fixed_y, fixed_z, velocity, force)
+    class(builder_t), intent(inout) :: self
+    character(len=*), intent(in) :: symbol
+    real(real64), intent(in) :: x, y, z, mass
+    integer(int64), intent(in) :: atom_id
+    logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    real(real64), intent(in), optional :: velocity(3), force(3)
+    character(kind=c_char), allocatable :: cs(:)
+    real(c_double), target :: vv(3), ff(3)
+    type(c_ptr) :: vptr, fptr
+    bd_add_atom_full = rkr_status_null_pointer
+    if (.not. c_associated(self%b)) return
+    call to_c(symbol, cs)
+    vptr = c_null_ptr
+    fptr = c_null_ptr
+    if (present(velocity)) then
+      vv = real(velocity, c_double)
+      vptr = c_loc(vv)
+    end if
+    if (present(force)) then
+      ff = real(force, c_double)
+      fptr = c_loc(ff)
+    end if
+    bd_add_atom_full = int(c_rkr_frame_add_atom_full(self%b, cs, &
+         real(x, c_double), real(y, c_double), real(z, c_double), &
+         logical(fixed_x, c_bool), logical(fixed_y, c_bool), logical(fixed_z, c_bool), &
+         int(atom_id, c_int64_t), real(mass, c_double), vptr, fptr))
   end function
 
   integer function bd_set_energy(self, energy)
