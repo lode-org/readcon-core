@@ -34,6 +34,22 @@ use crate::types::ConFrame;
 
 type BoxErr = Box<dyn std::error::Error>;
 
+/// A frame of the collective read failed to parse on another rank.
+///
+/// The rank that met the failure returns a [`crate::error::LocatedParseError`]
+/// for it; every other rank returns this, so callers on all ranks can tell
+/// a parse failure from an I/O failure.
+#[derive(Debug)]
+pub struct PeerParseError;
+
+impl std::fmt::Display for PeerParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("frame parse failed on another rank")
+    }
+}
+
+impl std::error::Error for PeerParseError {}
+
 /// How frame bytes reach each rank.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
@@ -108,26 +124,37 @@ fn bcast_result(comm: &Comm, r: Result<Vec<u8>, String>) -> Result<Vec<u8>, BoxE
 }
 
 /// Parse `bytes` (frames starting at `local_offsets`, relative to the
-/// slice) and agree collectively on success.
+/// slice; the first is global frame `first`) and agree collectively on
+/// success. A parse failure keeps its type and global frame index.
 fn parse_local(
     comm: &Comm,
     bytes: &[u8],
     local_offsets: &[usize],
+    first: usize,
     threads: Option<usize>,
 ) -> Result<Vec<ConFrame>, BoxErr> {
     let parsed: Result<Vec<ConFrame>, BoxErr> = std::str::from_utf8(bytes)
-        .map_err(BoxErr::from)
+        .map_err(|e| BoxErr::from(format!("rank {}: {e}", comm.rank())))
         .and_then(|text| {
             parse_frames_at_offsets(text, local_offsets, threads)
                 .into_iter()
-                .map(|r| r.map_err(BoxErr::from))
+                .enumerate()
+                .map(|(i, r)| {
+                    r.map_err(|e| {
+                        BoxErr::from(crate::error::LocatedParseError::new(
+                            e,
+                            0,
+                            (first + i) as u64,
+                        ))
+                    })
+                })
                 .collect()
         });
     let ok = agree(comm, parsed.is_ok());
     match (parsed, ok) {
         (Ok(f), true) => Ok(f),
-        (Err(e), _) => Err(format!("rank {}: {e}", comm.rank()).into()),
-        (Ok(_), false) => Err("frame parse failed on another rank".into()),
+        (Err(e), _) => Err(e),
+        (Ok(_), false) => Err(Box::new(PeerParseError)),
     }
 }
 
@@ -308,7 +335,7 @@ fn read_tiled(
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
     let offs: Vec<usize> = (0..r.len()).map(|i| i * span).collect();
-    let frames = parse_local(comm, &bytes, &offs, threads)?;
+    let frames = parse_local(comm, &bytes, &offs, r.start, threads)?;
     Ok(Some(RankFrames {
         first: r.start,
         n_total: n,
@@ -346,7 +373,7 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
         (Err(e), _) => return Err(format!("rank {}: {e}", comm.rank()).into()),
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
-    let frames = parse_local(comm, &bytes, &offs, threads)?;
+    let frames = parse_local(comm, &bytes, &offs, r.start, threads)?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
@@ -492,7 +519,7 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
         }
     }
     drop(root_data);
-    let frames = parse_local(comm, buf, &offs, threads)?;
+    let frames = parse_local(comm, buf, &offs, r.start, threads)?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
