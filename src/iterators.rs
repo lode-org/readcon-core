@@ -1376,4 +1376,22 @@ mod later_frame_location_tests {
             other => panic!("expected a located parse error, got {other}"),
         }
     }
+
+    /// Metadata on line 2 of the second frame is file line 14, not line 2.
+    /// This is the serial contract the collective reader matches.
+    #[test]
+    fn metadata_in_a_later_frame_reports_that_frames_line() {
+        let bad = "seed\n{not-json\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let text = format!("{}{}", one_atom("0 0 0 0 0"), bad);
+        for threads in [Some(1usize), Some(2)] {
+            let err = frames_from_text_located(&text, threads).unwrap_err();
+            assert_eq!(
+                err.error.class_name(),
+                "InvalidMetadataJson",
+                "{threads:?}: {err}"
+            );
+            assert_eq!(err.frame_index, 1, "{threads:?}");
+            assert_eq!(err.line, 14, "{threads:?}: {err}");
+        }
+    }
 }

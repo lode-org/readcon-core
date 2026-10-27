@@ -121,13 +121,65 @@ fn bcast_result(comm: &Comm, r: Result<Vec<u8>, String>) -> Result<Vec<u8>, BoxE
     }
 }
 
+/// Newlines in `bytes[..at]`.
+fn newlines_before(bytes: &[u8], at: usize) -> u32 {
+    let end = at.min(bytes.len());
+    bytes[..end].iter().filter(|&&b| b == b'\n').count() as u32
+}
+
+/// 1-based file line of a cursor inside a frame whose first line is `frame_line`.
+///
+/// The iterator counts from 1 inside the frame slice. A cursor that never
+/// moved still names the frame's first line, which is what a metadata
+/// helper would otherwise pin to line 2 of the file.
+fn cursor_file_line(chunk: &str, frame_line: u32) -> u32 {
+    let mut iter = crate::iterators::ConFrameIterator::new(chunk);
+    let local = match iter.next() {
+        Some(Err(_)) => iter.lines.line_no(),
+        _ => 0,
+    };
+    if local == 0 {
+        frame_line
+    } else {
+        frame_line.saturating_add(local - 1)
+    }
+}
+
+/// Newline count before the block owned by `rank`.
+fn block_line_offset(text: &[u8], idx: &FrameIndex, n_ranks: usize, rank: usize) -> u32 {
+    let range = block_range(idx.len(), n_ranks, rank);
+    if range.is_empty() {
+        return 0;
+    }
+    newlines_before(text, idx.offsets[range.start] as usize)
+}
+
+/// Broadcast each rank's block line offset from rank 0, which holds `text`.
+fn bcast_line_offsets(comm: &Comm, text: Option<&[u8]>, idx: &FrameIndex) -> Result<u32, BoxErr> {
+    let n = comm.size();
+    let packed = if comm.rank() == 0 {
+        let text = text.ok_or("rank 0 missing file text")?;
+        let offsets: Vec<u64> = (0..n)
+            .map(|rank| u64::from(block_line_offset(text, idx, n, rank)))
+            .collect();
+        Ok(encode_u64s(&offsets))
+    } else {
+        Ok(Vec::new())
+    };
+    let got = decode_u64s(&bcast_result(comm, packed)?);
+    Ok(got.get(comm.rank()).copied().unwrap_or(0) as u32)
+}
+
 /// Parse `bytes` (frames starting at `local_offsets`, relative to the
 /// slice; the first is global frame `first`) and agree collectively on
-/// success. A parse failure keeps its type and global frame index.
+/// success. A parse failure keeps its type, global frame index, and
+/// 1-based file line. `line_offset` is the number of newlines before
+/// `bytes` in the original file.
 fn parse_local(
     comm: &Comm,
     bytes: &[u8],
     local_offsets: &[usize],
+    line_offset: u32,
     first: usize,
     threads: Option<usize>,
 ) -> Result<Vec<ConFrame>, BoxErr> {
@@ -139,9 +191,14 @@ fn parse_local(
                 .enumerate()
                 .map(|(i, r)| {
                     r.map_err(|e| {
+                        let start = local_offsets[i];
+                        let end = local_offsets.get(i + 1).copied().unwrap_or(text.len());
+                        let frame_line = line_offset
+                            .saturating_add(1)
+                            .saturating_add(newlines_before(text.as_bytes(), start));
                         BoxErr::from(crate::error::LocatedParseError::new(
                             e,
-                            0,
+                            cursor_file_line(&text[start..end], frame_line),
                             (first + i) as u64,
                         ))
                     })
@@ -265,7 +322,15 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
     let (lo, hi, offs) = block_bytes(&idx, &r);
-    let frames = parse_local(comm, &bytes_of(&fc)[lo..hi], &offs, r.start, threads)?;
+    let line_offset = newlines_before(bytes_of(&fc), lo);
+    let frames = parse_local(
+        comm,
+        &bytes_of(&fc)[lo..hi],
+        &offs,
+        line_offset,
+        r.start,
+        threads,
+    )?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
@@ -296,6 +361,8 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
     let idx = unpack_index(&bcast_result(comm, packed)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
+    let line_offset =
+        bcast_line_offsets(comm, root_data.as_ref().map(|(fc, _)| bytes_of(fc)), &idx)?;
     // Keep a real allocation even for an empty block: Open MPI rejects
     // the dangling pointer of an empty Vec as a receive buffer.
     let mut store = vec![0u8; (hi - lo).max(1)];
@@ -332,7 +399,7 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
         }
     }
     drop(root_data);
-    let frames = parse_local(comm, buf, &offs, r.start, threads)?;
+    let frames = parse_local(comm, buf, &offs, line_offset, r.start, threads)?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
@@ -386,5 +453,68 @@ pub unsafe extern "C" fn rkr_mpi_read_block_f(
             crate::ffi::pack_frame_handles(rf.frames, num_frames)
         },
         Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn two_frames() -> String {
+        let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let bad = "seed\n{not-json\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        format!("{good}{bad}")
+    }
+
+    fn second_frame_at(text: &str) -> usize {
+        text[1..].find("seed\n").expect("second frame") + 1
+    }
+
+    /// The second frame starts after 12 lines. Its metadata line is file line 14.
+    #[test]
+    fn later_frame_line_offset_is_past_the_first_frame() {
+        let text = two_frames();
+        let second = second_frame_at(&text);
+        let idx = FrameIndex {
+            offsets: vec![0, second as u64],
+            data_len: text.len() as u64,
+        };
+        assert_eq!(block_line_offset(text.as_bytes(), &idx, 1, 0), 0);
+        assert_eq!(block_line_offset(text.as_bytes(), &idx, 2, 1), 12);
+        assert_eq!(cursor_file_line(&text[second..], 13), 14);
+    }
+
+    /// Collective read of the same file. The owning rank reports line 14.
+    /// The serial reader covers this text when the MPI feature is off.
+    #[test]
+    fn distrib_later_frame_metadata_reports_its_file_line() {
+        let universe = ::mpi::initialize().expect("MPI_Init");
+        let comm = crate::distrib::Comm::dup_of(&universe.world());
+        let owned = if comm.rank() == 0 {
+            let path = std::env::temp_dir()
+                .join(format!("readcon-mpi-later-line-{}.con", std::process::id()));
+            std::fs::write(&path, two_frames()).unwrap();
+            path.to_string_lossy().into_owned().into_bytes()
+        } else {
+            Vec::new()
+        };
+        let path =
+            PathBuf::from(String::from_utf8(bcast_result(&comm, Ok(owned)).unwrap()).unwrap());
+        for mode in [ReadMode::Shared, ReadMode::Scatter] {
+            let err = read_block(&comm, &path, mode, Some(1)).expect_err("malformed frame");
+            match err.downcast::<crate::error::LocatedParseError>() {
+                Ok(located) => {
+                    assert_eq!(located.error.class_name(), "InvalidMetadataJson");
+                    assert_eq!(located.frame_index, 1, "{mode:?} {located}");
+                    assert_eq!(located.line, 14, "{mode:?} {located}");
+                }
+                Err(err) if err.is::<PeerParseError>() => {}
+                Err(err) => panic!("mode {mode:?}: {err}"),
+            }
+        }
+        if comm.rank() == 0 {
+            let _ = std::fs::remove_file(&path);
+        }
     }
 }
