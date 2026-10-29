@@ -1291,13 +1291,22 @@ contains
     end if
   end subroutine
 
-  function new_builder(cell, angles) result(bd)
+  ! header is the text of line 1 of the frame. Without it line 1 is empty.
+  function new_builder(cell, angles, header) result(bd)
     real(real64), intent(in) :: cell(3), angles(3)
+    character(len=*), intent(in), optional :: header
     type(builder_t) :: bd
     real(c_double) :: cc(3), aa(3)
+    character(kind=c_char), allocatable, target :: c(:)
+    type(c_ptr) :: pb0
     cc = real(cell, c_double)
     aa = real(angles, c_double)
-    bd%b = c_rkr_frame_new(cc, aa, c_null_ptr, c_null_ptr, c_null_ptr, c_null_ptr)
+    pb0 = c_null_ptr
+    if (present(header)) then
+      call to_c(header, c)
+      pb0 = c_loc(c)
+    end if
+    bd%b = c_rkr_frame_new(cc, aa, pb0, c_null_ptr, c_null_ptr, c_null_ptr)
   end function
 
   logical function bd_valid(self)

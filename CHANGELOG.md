@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file. See [conven
 ### Added
 
 - Fortran `builder%add_atom` takes an optional `velocity(3)`, as the C++ `add_atom` does. Calls without it are unchanged.
+- Fortran `new_builder` takes an optional `header`, the text of line 1 of the frame. Without it line 1 stays empty.
 - Fortran `builder%add_atom_full` takes optional velocity and force. `last_error_message()` returns the writer's underlying error text.
 - `test_add_atom_restart` writes a restart frame through `builder%add_atom` and checks every field bit for bit after reading it back.
 

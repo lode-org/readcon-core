@@ -10,7 +10,7 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 | `dl_managed_tensor_versioned_t` / `dl_tensor_t` | DLPack C header layout (`dlpack.h`) for field inspect |
 | `frame_t` | Owns `RKRConFrame*`; atoms, cell, **metadata_json**, energy, potential, time, NEB, bonds, **select** |
 | `iterator_t` | Lazy multi-frame via `read_con_file_iterator` |
-| `builder_t` | `rkr_frame_new` + `add_atom` (per-axis fixed mask, optional `velocity(3)`) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
+| `builder_t` | `rkr_frame_new` (`new_builder` takes an optional line 1 `header`) + `add_atom` (per-axis fixed mask, optional `velocity(3)`) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
 | `writer_t` | `create_writer_from_path_c` + extend |
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
