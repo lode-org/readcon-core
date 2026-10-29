@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## Unreleased
+
+### Added
+
+- `ConFrameIterator::next_located`, `locate_first_error` and `locate_first_error_in_file` report the frame, line, column and byte offset of the first parse error. Python gets `readcon.locate_error(path)`, which returns a dict or `None`. Plain `next()` and the other readers are unchanged.
+- An unknown declared section and a missing `units.time` point at the metadata line of their frame. A bad `section_arity` entry points at its integer. A component symbol error points at the symbol line.
+
 ## v0.17.2 - 2026-10-29
 
 ### Fixed
