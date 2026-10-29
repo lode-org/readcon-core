@@ -433,9 +433,9 @@ class TestConFrameConstructor:
         err = readcon.locate_error(str(bad))
         assert err["kind"] == "InvalidNumberFormat"
         assert (err["frame"], err["line"], err["column"]) == (1, 29, 4)
-        assert err["byte_offset"] == sum(len(l) + 1 for l in lines[:28])
+        assert err["byte_offset"] == sum(len(line) + 1 for line in lines[:28])
         assert "0.63x4" in err["message"]
-        with pytest.raises(IOError):
+        with pytest.raises(OSError):
             readcon.read_con(str(bad))
 
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
