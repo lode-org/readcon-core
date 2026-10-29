@@ -530,17 +530,6 @@ module readcon
       type(c_ptr), value :: pb0, pb1, pob0, pob1
       type(c_ptr) :: c_rkr_frame_new
     end function
-    ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass.
-    function c_rkr_frame_add_atom_with_fixed_mask(b, sym, x, y, z, fx, fy, fz, aid, mass) &
-         bind(C, name="rkr_frame_add_atom_with_fixed_mask")
-      import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
-      type(c_ptr), value :: b
-      character(kind=c_char), intent(in) :: sym(*)
-      real(c_double), value :: x, y, z, mass
-      integer(c_int64_t), value :: aid
-      logical(c_bool), value :: fx, fy, fz
-      integer(c_int) :: c_rkr_frame_add_atom_with_fixed_mask
-    end function
     ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
     function c_rkr_frame_add_atom_full(b, sym, x, y, z, fx, fy, fz, aid, mass, vel, frc) &
          bind(C, name="rkr_frame_add_atom_full")
@@ -1302,13 +1291,22 @@ contains
     end if
   end subroutine
 
-  function new_builder(cell, angles) result(bd)
+  ! header is the text of line 1 of the frame. Without it line 1 is empty.
+  function new_builder(cell, angles, header) result(bd)
     real(real64), intent(in) :: cell(3), angles(3)
+    character(len=*), intent(in), optional :: header
     type(builder_t) :: bd
     real(c_double) :: cc(3), aa(3)
+    character(kind=c_char), allocatable, target :: c(:)
+    type(c_ptr) :: pb0
     cc = real(cell, c_double)
     aa = real(angles, c_double)
-    bd%b = c_rkr_frame_new(cc, aa, c_null_ptr, c_null_ptr, c_null_ptr, c_null_ptr)
+    pb0 = c_null_ptr
+    if (present(header)) then
+      call to_c(header, c)
+      pb0 = c_loc(c)
+    end if
+    bd%b = c_rkr_frame_new(cc, aa, pb0, c_null_ptr, c_null_ptr, c_null_ptr)
   end function
 
   logical function bd_valid(self)
@@ -1324,20 +1322,16 @@ contains
     end if
   end subroutine
 
-  integer function bd_add_atom(self, symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
+  integer function bd_add_atom(self, symbol, x, y, z, atom_id, mass, &
+       fixed_x, fixed_y, fixed_z, velocity)
     class(builder_t), intent(inout) :: self
     character(len=*), intent(in) :: symbol
     real(real64), intent(in) :: x, y, z, mass
     integer(int64), intent(in) :: atom_id
     logical, intent(in) :: fixed_x, fixed_y, fixed_z
-    character(kind=c_char), allocatable :: cs(:)
-    bd_add_atom = rkr_status_null_pointer
-    if (.not. c_associated(self%b)) return
-    call to_c(symbol, cs)
-    bd_add_atom = int(c_rkr_frame_add_atom_with_fixed_mask(self%b, cs, &
-         real(x, c_double), real(y, c_double), real(z, c_double), &
-         logical(fixed_x, c_bool), logical(fixed_y, c_bool), logical(fixed_z, c_bool), &
-         int(atom_id, c_int64_t), real(mass, c_double)))
+    real(real64), intent(in), optional :: velocity(3)
+    bd_add_atom = bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
+         fixed_x, fixed_y, fixed_z, velocity=velocity)
   end function
 
   integer function bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &

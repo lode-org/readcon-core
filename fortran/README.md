@@ -10,7 +10,7 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 | `dl_managed_tensor_versioned_t` / `dl_tensor_t` | DLPack C header layout (`dlpack.h`) for field inspect |
 | `frame_t` | Owns `RKRConFrame*`; atoms, cell, **metadata_json**, energy, potential, time, NEB, bonds, **select** |
 | `iterator_t` | Lazy multi-frame via `read_con_file_iterator` |
-| `builder_t` | `rkr_frame_new` + `add_atom` (per-axis fixed mask) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
+| `builder_t` | `rkr_frame_new` (`new_builder` takes an optional line 1 `header`) + `add_atom` (per-axis fixed mask, optional `velocity(3)`) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
 | `writer_t` | `create_writer_from_path_c` + extend |
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
@@ -34,7 +34,7 @@ CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via th
 Release tarball instead of `target/release`:
 
 ```bash
-VER=0.17.1
+VER=0.17.2
 TARGET=x86_64-unknown-linux-gnu
 curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
 tar -xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"
