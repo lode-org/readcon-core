@@ -108,7 +108,68 @@ end
     end
 
     @testset "Error handling" begin
-        @test_throws ErrorException read_con("/nonexistent/path.con")
+        @test_throws ReadCon.ReadConError read_con("/nonexistent/path.con")
+    end
+
+    @testset "v3.0 velocity rewrite stamps natural time" begin
+        natural = "(amu*angstrom^2/eV)^0.5"
+        function velocity_frame(metadata_line::String)
+            lines = [
+                "seed",
+                metadata_line,
+                "10 10 10",
+                "90 90 90",
+                "0 0",
+                "0 0 0",
+                "1",
+                "1",
+                "1.0",
+                "H",
+                "Coordinates of Component 1",
+                "0 0 0 0 0",
+                "",
+                "H",
+                "Velocities of Component 1",
+                "0.1 0.2 0.3 0 0",
+            ]
+            return join(lines, '\n') * "\n"
+        end
+        function round_trip(metadata_line::String)
+            mktemp() do src, io
+                write(io, velocity_frame(metadata_line))
+                close(io)
+                frames = read_con(src)
+                mktemp() do dst, out
+                    close(out)
+                    write_con(dst, frames)
+                    return (read(dst, String), read_con(dst))
+                end
+            end
+        end
+
+        missing = "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+        written, reread = round_trip(missing)
+        @test occursin("\"time\":\"$natural\"", written)
+        @test occursin("\"con_spec_minor\":1", written)
+        @test reread[1].atoms[1].vx ≈ 0.1
+
+        labelled = "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        written_fs, reread_fs = round_trip(labelled)
+        @test occursin("\"time\":\"$natural\"", written_fs)
+        @test !occursin("\"time\":\"fs\"", written_fs)
+        @test reread_fs[1].atoms[1].vx ≈ 0.1
+
+        minor0 = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        written0, reread0 = round_trip(minor0)
+        @test occursin("\"time\":\"$natural\"", written0)
+        @test occursin("\"con_spec_minor\":1", written0)
+        @test !occursin("\"con_spec_minor\":0", written0)
+        @test reread0[1].atoms[1].vx ≈ 0.1
+
+        minor1 = "{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        written_minor, _ = round_trip(minor1)
+        @test occursin("\"time\":\"fs\"", written_minor)
+        @test !occursin(natural, written_minor)
     end
 
     @testset "Header strings" begin

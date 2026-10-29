@@ -121,9 +121,53 @@ function _status_message(status::Cint)
     return unsafe_string(c_str)
 end
 
+struct RkrError
+    code::Int32
+    message::Ptr{UInt8}
+    line::UInt32
+    frame_index::UInt64
+end
+
+struct ReadConError <: Exception
+    operation::String
+    code::Int32
+    message::String
+    line::UInt32
+    frame_index::UInt64
+end
+
+function Base.showerror(io::IO, err::ReadConError)
+    print(io, err.operation, ": ", err.message, " (line ", err.line, ", frame ", err.frame_index, ")")
+end
+
+function last_error()
+    ptr = ccall(_lib_symbol(:rkr_last_error), Ptr{RkrError}, ())
+    ptr == C_NULL && return nothing
+    err = unsafe_load(ptr)
+    message = err.message == C_NULL ? "unknown status" : unsafe_string(err.message)
+    return (code=err.code, message=message, line=err.line, frame_index=err.frame_index)
+end
+
+function clear_error()
+    ccall(_lib_symbol(:rkr_clear_error), Cvoid, ())
+    return nothing
+end
+
+function _throw_last(operation::String)
+    err = last_error()
+    if err === nothing
+        throw(ReadConError(operation, Int32(-7), operation, UInt32(0), UInt64(0)))
+    end
+    throw(ReadConError(operation, err.code, err.message, err.line, err.frame_index))
+end
+
 function _check_status(status::Cint, operation::String)
     status == RKR_STATUS_SUCCESS && return nothing
-    error("$operation: $(_status_message(status))")
+    err = last_error()
+    if err === nothing
+        throw(ReadConError(operation, status, _status_message(status), UInt32(0), UInt64(0)))
+    end
+    throw(ReadConError(operation, err.code, err.message, err.line, err.frame_index))
 end
 
 """
@@ -166,7 +210,7 @@ function select_on_frame(frame::ConFrame, selection::String)
         )
         _check_status(status, "rkr_frame_select")
         result_handle = out[]
-        result_handle == C_NULL && error("rkr_frame_select returned null result")
+        result_handle == C_NULL && _throw_last("rkr_frame_select returned null result")
         try
             n = ccall(
                 _lib_symbol(:rkr_selection_result_match_count),
@@ -299,7 +343,7 @@ function read_con(path::String)
         _lib_symbol(:read_con_file_iterator),
         Ptr{Cvoid}, (Cstring,), path
     )
-    iter_ptr == C_NULL && error("Failed to open file: $path")
+    iter_ptr == C_NULL && _throw_last("Failed to open file: $path")
 
     frames = ConFrame[]
 
@@ -396,7 +440,7 @@ function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Noth
             Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
         )
     end
-    writer == C_NULL && error("failed to create writer for file: $path")
+    writer == C_NULL && _throw_last("failed to create writer for file: $path")
 
     handles = Ptr{Cvoid}[]
     try
@@ -438,9 +482,11 @@ function _units_declares_time(metadata_json::AbstractString)
     return occursin(r"\"time\"\s*:\s*\"[^\"]+\"", String(take!(buf)))
 end
 
+const _NATURAL_TIME_UNIT = "(amu*angstrom^2/eV)^0.5"
+
 # Insert units.time into an existing units object. An empty object gets one field.
 function _inject_units_time(metadata_json::AbstractString)
-    time = "(amu*angstrom^2/eV)^0.5"
+    time = _NATURAL_TIME_UNIT
     replaced = replace(
         metadata_json,
         r"(\"units\"\s*:\s*)\{\s*\}" => SubstitutionString("\\1{\"time\":\"$time\"}"),
@@ -454,11 +500,80 @@ function _inject_units_time(metadata_json::AbstractString)
     )
 end
 
-# v1 and v2 velocities are in the natural time unit (CON-units.8).
+# Inclusive bounds of the units object, or nothing when it is absent.
+function _units_object_bounds(metadata_json::AbstractString)
+    m = match(r"\"units\"\s*:\s*\{", metadata_json)
+    m === nothing && return nothing
+    open = findnext(==('{'), metadata_json, m.offset)
+    open === nothing && return nothing
+    depth = 0
+    for i in open:lastindex(metadata_json)
+        c = metadata_json[i]
+        if c == '{'
+            depth += 1
+        elseif c == '}'
+            depth -= 1
+            depth == 0 && return (open, i)
+        end
+    end
+    return nothing
+end
+
+# v3.0 stores velocities in the natural unit whatever units.time says
+# (CON-units.9). Writing minor 1 makes that label authoritative, so replace
+# a present label and insert one when it is missing.
+function _ensure_natural_time(metadata_json::AbstractString)
+    _units_declares_time(metadata_json) || return _inject_units_time(metadata_json)
+    bounds = _units_object_bounds(metadata_json)
+    bounds === nothing && return metadata_json
+    open, close = bounds
+    body = metadata_json[nextind(metadata_json, open):prevind(metadata_json, close)]
+    time = _NATURAL_TIME_UNIT
+    body = replace(
+        body,
+        r"(\"time\"\s*:\s*)\"[^\"]*\"" => SubstitutionString("\\1\"$time\""),
+        count=1,
+    )
+    return metadata_json[begin:prevind(metadata_json, open)] *
+        "{" * body * "}" *
+        metadata_json[nextind(metadata_json, close):end]
+end
+
+function _json_u64(metadata_json::AbstractString, key::AbstractString)
+    m = match(Regex("\"$(key)\"\\s*:\\s*(\\d+)"), metadata_json)
+    m === nothing && return UInt64(0)
+    return parse(UInt64, m.captures[1])
+end
+
+# v1, v2, and v3.0 velocities are in the natural time unit (CON-units.8, CON-units.9).
 # Returns the metadata to store, and whether the caller must set default units.
 function _legacy_velocity_units(frame::ConFrame)
     metadata_json = frame.metadata_json
-    if frame.spec_version >= 3 || !frame.has_velocities || _units_declares_time(metadata_json)
+    if !frame.has_velocities
+        return metadata_json, false
+    end
+    minor = _json_u64(metadata_json, "con_spec_minor")
+    # Minor 1 and later name the time unit. Do not invent or replace it.
+    if frame.spec_version >= 3 && minor >= 1
+        return metadata_json, false
+    end
+    # A v3.0 frame with velocities is rebuilt as minor 1. Stamp the natural
+    # unit, and promote an explicit minor of 0 so that label is authoritative.
+    # This matches Python's stamp_legacy_velocity_time.
+    if frame.spec_version >= 3
+        stamped = if _units_object_bounds(metadata_json) !== nothing
+            _ensure_natural_time(metadata_json)
+        else
+            metadata_json
+        end
+        stamped = replace(
+            stamped,
+            r"(\"con_spec_minor\"\s*:\s*)0+\b" => SubstitutionString("\\g<1>1"),
+            count=1,
+        )
+        return stamped, _units_object_bounds(metadata_json) === nothing
+    end
+    if _units_declares_time(metadata_json)
         return metadata_json, false
     end
     if occursin(r"\"units\"\s*:", metadata_json)
@@ -478,7 +593,7 @@ function _build_frame_handle(frame::ConFrame)
         frame.prebox_header[1], frame.prebox_header[2],
         frame.postbox_header[1], frame.postbox_header[2],
     )
-    builder == C_NULL && error("failed to create frame builder")
+    builder == C_NULL && _throw_last("failed to create frame builder")
 
     try
         metadata_json, stamp_default_units = _legacy_velocity_units(frame)
@@ -490,7 +605,7 @@ function _build_frame_handle(frame::ConFrame)
             _check_status(status, "failed to set frame metadata")
         end
         if stamp_default_units
-            # v1 and v2 velocities are in the natural time unit (CON-units.8).
+            # v1, v2, and v3.0 velocities are in the natural time unit.
             # The builder writes minor 1, which requires units.time (CON-units.11).
             status = ccall(
                 _lib_symbol(:rkr_frame_builder_set_units),
@@ -507,7 +622,7 @@ function _build_frame_handle(frame::ConFrame)
 
         handle = ccall(_lib_symbol(:rkr_frame_builder_build), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
         builder = C_NULL
-        handle == C_NULL && error("failed to build frame")
+        handle == C_NULL && _throw_last("failed to build frame")
         return handle
     finally
         builder != C_NULL && ccall(_lib_symbol(:free_rkr_frame_builder), Cvoid, (Ptr{Cvoid},), builder)

@@ -10,6 +10,7 @@ use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
@@ -1046,7 +1047,7 @@ impl PyConFrame {
             .canonical(canonical);
         writer
             .write_frame(&frame)
-            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+            .map_err(|e| write_err_to_py(py, e))?;
         Ok(())
     }
 }
@@ -1204,7 +1205,7 @@ impl PyConFrame {
 
         builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+            .map_err(|e| parse_err_to_py(py, &e, e.line(), 0))
     }
 }
 
@@ -1246,11 +1247,8 @@ fn read_con(
     // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
     let path_owned = path.to_owned();
     let frames = py
-        .detach(|| {
-            crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_all_frames_located(Path::new(&path_owned), n_threads))
+        .map_err(load_err_to_py)?;
     frames
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
@@ -1286,8 +1284,18 @@ fn read_con_mpi(
     };
     let c = comm_from_py(comm)?;
     // MPI handles are not Send, so the GIL stays held for the collective.
-    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
-        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    // Parse failures keep the ConError contract of the serial read: the
+    // rank that met the failure raises its class with the global frame
+    // index, the other ranks raise ConError; everything else is I/O.
+    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads).map_err(
+        |e| match e.downcast::<crate::error::LocatedParseError>() {
+            Ok(located) => located_to_py(*located),
+            Err(e) if e.is::<crate::distrib_read::PeerParseError>() => {
+                ConError::new_err(e.to_string())
+            }
+            Err(e) => PyIOError::new_err(e.to_string()),
+        },
+    )?;
     rf.frames
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
@@ -1312,10 +1320,8 @@ fn read_con_mpi(
 fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_first_frame(Path::new(&path_owned)).map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_first_frame_located(Path::new(&path_owned)))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -1330,8 +1336,8 @@ fn read_con_string(
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
     let owned = contents.to_owned();
     let frames = py
-        .detach(|| crate::iterators::frames_from_text(&owned, n_threads).map_err(|e| e.to_string()))
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::frames_from_text_located(&owned, n_threads))
+        .map_err(located_to_py)?;
     frames
         .iter()
         .map(|frame| PyConFrame::from_con_frame(py, frame))
@@ -1346,6 +1352,25 @@ struct PyConFrameIterator {
     contents: String,
     /// Byte offset of the next frame start within `contents`.
     pos: usize,
+    /// Newlines before `pos`. Each step parses a fresh cursor on the
+    /// remainder, so this offset turns that cursor's line number into a
+    /// file line.
+    line_base: u32,
+    /// 0-based index of the frame `pos` points at.
+    frame_index: u64,
+}
+
+/// 1-based file line for a cursor whose slice starts after `line_base` newlines.
+fn file_line(line_base: u32, cursor_line: u32) -> u32 {
+    if cursor_line == 0 {
+        line_base.saturating_add(1)
+    } else {
+        line_base.saturating_add(cursor_line)
+    }
+}
+
+fn newlines_in(text: &str) -> u32 {
+    text.bytes().filter(|&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -1359,17 +1384,32 @@ impl PyConFrameIterator {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
-        // owns that boundary and trailing whitespace.
-        let slice = &self.contents[self.pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.next_with_raw_span(slice) {
-            Some(Ok((frame, span))) => {
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
+        // owns that boundary and trailing whitespace. The cursor is rebuilt
+        // on the remainder, so the file line is `line_base` plus its line.
+        let parsed = {
+            let slice = &self.contents[self.pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.next_with_raw_span(slice) {
+                Some(Ok((frame, span))) => {
+                    let consumed = (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize)
+                        + span.len();
+                    Some(Ok((frame, consumed, newlines_in(span))))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Some(Err(parse_err_to_py(py, &e, line, self.frame_index)))
+                }
+                None => None,
+            }
+        };
+        match parsed {
+            Some(Ok((frame, consumed, lines))) => {
+                self.line_base = self.line_base.saturating_add(lines);
                 self.pos += consumed;
+                self.frame_index = self.frame_index.saturating_add(1);
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
+            Some(Err(err)) => Err(err),
             None => {
                 self.pos = self.contents.len();
                 Ok(None)
@@ -1378,27 +1418,42 @@ impl PyConFrameIterator {
     }
 
     /// Skip one frame without building a `ConFrame`. False at EOF.
-    fn forward(&mut self) -> PyResult<bool> {
+    fn forward(&mut self, py: Python<'_>) -> PyResult<bool> {
         if self.pos >= self.contents.len() {
             return Ok(false);
         }
-        let slice = &self.contents[self.pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.forward() {
-            Some(Ok(())) => {
-                self.pos += iter.byte_pos();
+        let advanced = {
+            let slice = &self.contents[self.pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.forward() {
+                Some(Ok(())) => {
+                    let consumed = iter.byte_pos();
+                    Some(Ok((consumed, newlines_in(&slice[..consumed]))))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Some(Err(parse_err_to_py(py, &e, line, self.frame_index)))
+                }
+                None => None,
+            }
+        };
+        match advanced {
+            Some(Ok((consumed, lines))) => {
+                self.line_base = self.line_base.saturating_add(lines);
+                self.pos += consumed;
+                self.frame_index = self.frame_index.saturating_add(1);
                 Ok(true)
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("skip error: {e}"))),
+            Some(Err(err)) => Err(err),
             None => Ok(false),
         }
     }
 
     /// Skip `n` frames without parsing atoms. Returns how many were skipped.
-    fn skip(&mut self, n: usize) -> PyResult<usize> {
+    fn skip(&mut self, py: Python<'_>, n: usize) -> PyResult<usize> {
         let mut skipped = 0usize;
         for _ in 0..n {
-            if !self.forward()? {
+            if !self.forward(py)? {
                 break;
             }
             skipped += 1;
@@ -1408,7 +1463,7 @@ impl PyConFrameIterator {
 
     /// Skip `index` frames, then parse the next.
     fn nth(&mut self, py: Python<'_>, index: usize) -> PyResult<Option<PyConFrame>> {
-        self.skip(index)?;
+        self.skip(py, index)?;
         self.__next__(py)
     }
 }
@@ -1423,16 +1478,21 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     let text = py
         .detach(|| {
             let contents = crate::compression::read_file_contents(Path::new(&path_owned))
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| OpenFail::Io(e.to_string()))?;
             contents
                 .as_str()
                 .map(|s| s.to_owned())
-                .map_err(|e| e.to_string())
+                .map_err(|e| OpenFail::Utf8(e.to_string()))
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(|err| match err {
+            OpenFail::Io(msg) => PyIOError::new_err(msg),
+            OpenFail::Utf8(msg) => PyIOError::new_err(msg),
+        })?;
     Ok(PyConFrameIterator {
         contents: text,
         pos: 0,
+        line_base: 0,
+        frame_index: 0,
     })
 }
 
@@ -1440,8 +1500,8 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string()))
-        .map_err(PyIOError::new_err)
+    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)))
+        .map_err(load_err_to_py)
 }
 
 /// Skip `index` frames (no atom parse), then return that frame.
@@ -1449,11 +1509,8 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
 fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_nth_frame(Path::new(&path_owned), index)
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_nth_frame_located(Path::new(&path_owned), index))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -1528,7 +1585,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     } else {
         let mut writer = match precision {
             Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
@@ -1539,7 +1596,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     Ok(())
 }
@@ -1606,7 +1663,7 @@ fn write_con_string(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))
 }
@@ -1716,7 +1773,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
-    // Set velocities if present
+    // Set velocities if present. ASE stores the natural time unit (D10).
     if frame.has_velocities(py)? {
         let time_unit = crate::units::velocity_file_time_unit(
             frame.spec_version,
@@ -1849,15 +1906,19 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .call_method0("tolist")?
         .extract()?;
 
-    // Extract cell parameters (lengths + angles)
+    // Prefer the 3x3 cell. Lines 3-4 stay consistent with that matrix (D12).
     let cell_obj = ase_atoms.call_method0("get_cell")?;
-    let cellpar: Vec<f64> = cell_obj
-        .call_method0("cellpar")?
-        .call_method0("tolist")?
-        .extract()?;
-
-    let cell = [cellpar[0], cellpar[1], cellpar[2]];
-    let angles = [cellpar[3], cellpar[4], cellpar[5]];
+    let rows: Vec<Vec<f64>> = cell_obj.call_method0("tolist")?.extract()?;
+    if rows.len() != 3 || rows.iter().any(|row| row.len() != 3) {
+        return Err(PyValueError::new_err("ASE cell must be a 3x3 matrix"));
+    }
+    let lattice = [
+        [rows[0][0], rows[0][1], rows[0][2]],
+        [rows[1][0], rows[1][1], rows[1][2]],
+        [rows[2][0], rows[2][1], rows[2][2]],
+    ];
+    let (cell, angles) = crate::types::lengths_and_angles(lattice);
+    let pbc = ase_pbc(ase_atoms)?;
 
     // Extract fixed atom info from constraints
     let n_atoms = symbols.len();
@@ -2031,6 +2092,22 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
     })
 }
 
+fn ase_pbc(ase_atoms: &Bound<'_, PyAny>) -> PyResult<[bool; 3]> {
+    let pbc = ase_atoms.getattr("pbc")?;
+    if let Ok(flag) = pbc.extract::<bool>() {
+        return Ok([flag, flag, flag]);
+    }
+    let values: Vec<bool> = if let Ok(list) = pbc.call_method0("tolist") {
+        list.extract()?
+    } else {
+        pbc.extract()?
+    };
+    if values.len() != 3 {
+        return Err(PyValueError::new_err("ASE pbc must have length 3"));
+    }
+    Ok([values[0], values[1], values[2]])
+}
+
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.
 ///
 /// Coverage is hydrogen through uranium (Z = 92) plus the hydrogen
@@ -2059,9 +2136,131 @@ fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
     crate::helpers::atomic_number_to_symbol(atomic_number)
 }
 
+pyo3::create_exception!(readcon, ConError, pyo3::exceptions::PyValueError);
+pyo3::create_exception!(readcon, NonFiniteValue, ConError);
+pyo3::create_exception!(readcon, InvalidFixedFlag, ConError);
+pyo3::create_exception!(readcon, InvalidCount, ConError);
+pyo3::create_exception!(readcon, InvalidUnits, ConError);
+pyo3::create_exception!(readcon, IncompleteHeader, ConError);
+pyo3::create_exception!(readcon, IncompleteFrame, ConError);
+pyo3::create_exception!(readcon, IncompleteSection, ConError);
+pyo3::create_exception!(readcon, IncompleteVelocitySection, ConError);
+pyo3::create_exception!(readcon, IncompleteForceSection, ConError);
+pyo3::create_exception!(readcon, IncompleteEnergySection, ConError);
+pyo3::create_exception!(readcon, InvalidNumberFormat, ConError);
+pyo3::create_exception!(readcon, InvalidVectorLength, ConError);
+pyo3::create_exception!(readcon, UnknownSection, ConError);
+pyo3::create_exception!(readcon, UnsupportedVersion, ConError);
+pyo3::create_exception!(readcon, ValidationError, ConError);
+pyo3::create_exception!(readcon, MissingSpecVersion, ConError);
+pyo3::create_exception!(readcon, InvalidMetadataJson, ConError);
+pyo3::create_exception!(readcon, IndexOutOfBounds, ConError);
+pyo3::create_exception!(readcon, MassMismatch, ConError);
+
+fn class_err_to_py(
+    py: Python<'_>,
+    class_name: &str,
+    message: String,
+    line: u32,
+    frame_index: u64,
+) -> PyErr {
+    let ty = match class_name {
+        "NonFiniteValue" => py.get_type::<NonFiniteValue>().into_any(),
+        "InvalidFixedFlag" => py.get_type::<InvalidFixedFlag>().into_any(),
+        "InvalidCount" => py.get_type::<InvalidCount>().into_any(),
+        "InvalidUnits" => py.get_type::<InvalidUnits>().into_any(),
+        "IncompleteHeader" => py.get_type::<IncompleteHeader>().into_any(),
+        "IncompleteFrame" => py.get_type::<IncompleteFrame>().into_any(),
+        "IncompleteSection" => py.get_type::<IncompleteSection>().into_any(),
+        "IncompleteVelocitySection" => py.get_type::<IncompleteVelocitySection>().into_any(),
+        "IncompleteForceSection" => py.get_type::<IncompleteForceSection>().into_any(),
+        "IncompleteEnergySection" => py.get_type::<IncompleteEnergySection>().into_any(),
+        "InvalidNumberFormat" => py.get_type::<InvalidNumberFormat>().into_any(),
+        "InvalidVectorLength" => py.get_type::<InvalidVectorLength>().into_any(),
+        "UnknownSection" => py.get_type::<UnknownSection>().into_any(),
+        "UnsupportedVersion" => py.get_type::<UnsupportedVersion>().into_any(),
+        "ValidationError" => py.get_type::<ValidationError>().into_any(),
+        "MissingSpecVersion" => py.get_type::<MissingSpecVersion>().into_any(),
+        "InvalidMetadataJson" => py.get_type::<InvalidMetadataJson>().into_any(),
+        "IndexOutOfBounds" => py.get_type::<IndexOutOfBounds>().into_any(),
+        "MassMismatch" => py.get_type::<MassMismatch>().into_any(),
+        _ => py.get_type::<ConError>().into_any(),
+    };
+    match ty.call1((message,)) {
+        Ok(inst) => {
+            let _ = inst.setattr("line", line);
+            let _ = inst.setattr("frame_index", frame_index);
+            PyErr::from_value(inst)
+        }
+        Err(err) => err,
+    }
+}
+
+fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
+    class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
+}
+
+fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
+    Python::attach(|py| parse_err_to_py(py, &err.error, err.line, err.frame_index))
+}
+
+fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
+    use crate::iterators::LoadError;
+    match err {
+        LoadError::Io(io) => PyIOError::new_err(io.to_string()),
+        LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
+        LoadError::Parse(located) => located_to_py(located),
+        LoadError::Empty => {
+            Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
+        }
+    }
+}
+
+enum OpenFail {
+    Io(String),
+    Utf8(String),
+}
+
+fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
+    match err {
+        crate::writer::WriteError::Io(io) => PyIOError::new_err(io.to_string()),
+        crate::writer::WriteError::Format(parse) => parse_err_to_py(py, &parse, parse.line(), 0),
+    }
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    m.add("ConError", py.get_type::<ConError>())?;
+    m.add("NonFiniteValue", py.get_type::<NonFiniteValue>())?;
+    m.add("InvalidFixedFlag", py.get_type::<InvalidFixedFlag>())?;
+    m.add("InvalidCount", py.get_type::<InvalidCount>())?;
+    m.add("InvalidUnits", py.get_type::<InvalidUnits>())?;
+    m.add("IncompleteHeader", py.get_type::<IncompleteHeader>())?;
+    m.add("IncompleteFrame", py.get_type::<IncompleteFrame>())?;
+    m.add("IncompleteSection", py.get_type::<IncompleteSection>())?;
+    m.add(
+        "IncompleteVelocitySection",
+        py.get_type::<IncompleteVelocitySection>(),
+    )?;
+    m.add(
+        "IncompleteForceSection",
+        py.get_type::<IncompleteForceSection>(),
+    )?;
+    m.add(
+        "IncompleteEnergySection",
+        py.get_type::<IncompleteEnergySection>(),
+    )?;
+    m.add("InvalidNumberFormat", py.get_type::<InvalidNumberFormat>())?;
+    m.add("InvalidVectorLength", py.get_type::<InvalidVectorLength>())?;
+    m.add("UnknownSection", py.get_type::<UnknownSection>())?;
+    m.add("UnsupportedVersion", py.get_type::<UnsupportedVersion>())?;
+    m.add("ValidationError", py.get_type::<ValidationError>())?;
+    m.add("MissingSpecVersion", py.get_type::<MissingSpecVersion>())?;
+    m.add("InvalidMetadataJson", py.get_type::<InvalidMetadataJson>())?;
+    m.add("IndexOutOfBounds", py.get_type::<IndexOutOfBounds>())?;
+    m.add("MassMismatch", py.get_type::<MassMismatch>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
@@ -2337,11 +2536,13 @@ fn evaluate_selection_on_frames(
 /// Atom-context multi-frame selection: positions of selected atoms per frame.
 ///
 /// Errors if the selection is not atom context (size 1) on the first frame.
-/// Typical use::
+/// Typical use:
 ///
-///     frames = readcon.read_all_frames("traj.con")
-///     out = readcon.select_atom_positions_on_frames("name H", frames)
-///     # out["frames"][i]["positions"] — H xyz on frame i
+/// ```python
+/// frames = readcon.read_all_frames("traj.con")
+/// out = readcon.select_atom_positions_on_frames("name H", frames)
+/// # out["frames"][i]["positions"] — H xyz on frame i
+/// ```
 #[pyfunction]
 fn select_atom_positions_on_frames(
     py: Python<'_>,
