@@ -28,6 +28,11 @@ source-dir = "test"
 main = "test_add_atom_roundtrip.f90"
 
 [[test]]
+name = "test_add_atom_restart"
+source-dir = "test"
+main = "test_add_atom_restart.f90"
+
+[[test]]
 name = "test_conformance_goldens"
 source-dir = "test_conformance"
 main = "test_conformance_goldens.f90"
