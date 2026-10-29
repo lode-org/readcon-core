@@ -422,6 +422,22 @@ class TestConFrameConstructor:
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
+    def test_locate_error(self, tmp_path):
+        path = _resource("tiny_multi_cuh2.con")
+        assert readcon.locate_error(path) is None
+        with open(path) as fh:
+            lines = fh.read().splitlines()
+        lines[28] = "   0.63x4    0.9045    6.9752 7    0"
+        bad = tmp_path / "bad.con"
+        bad.write_text("\n".join(lines) + "\n")
+        err = readcon.locate_error(str(bad))
+        assert err["kind"] == "InvalidNumberFormat"
+        assert (err["frame"], err["line"], err["column"]) == (1, 29, 4)
+        assert err["byte_offset"] == sum(len(l) + 1 for l in lines[:28])
+        assert "0.63x4" in err["message"]
+        with pytest.raises(IOError):
+            readcon.read_con(str(bad))
+
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
         frames = [
             readcon.ConFrame(

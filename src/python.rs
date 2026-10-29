@@ -1457,6 +1457,35 @@ fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFra
     PyConFrame::from_con_frame(py, &frame)
 }
 
+/// First parse error in a CON or convel file, or ``None`` when every frame
+/// parses.
+///
+/// Returns a dict with ``kind`` (the error class), ``message``, ``frame``
+/// (0-based), ``line`` (1-based), ``column`` (1-based, or ``None`` when
+/// the field is not known), and ``byte_offset`` of that line. Compressed
+/// input is located in its decompressed text.
+#[pyfunction]
+fn locate_error(py: Python<'_>, path: &str) -> PyResult<Option<Py<PyDict>>> {
+    let path_owned = path.to_owned();
+    let found = py
+        .detach(|| {
+            crate::iterators::locate_first_error_in_file(Path::new(&path_owned))
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    let Some(err) = found else {
+        return Ok(None);
+    };
+    let dict = PyDict::new(py);
+    dict.set_item("kind", err.error.class_name())?;
+    dict.set_item("message", err.error.to_string())?;
+    dict.set_item("frame", err.location.frame)?;
+    dict.set_item("line", err.location.line)?;
+    dict.set_item("column", err.location.column)?;
+    dict.set_item("byte_offset", err.location.byte_offset)?;
+    Ok(Some(dict.unbind()))
+}
+
 /// Convert a structure/trajectory path to CON (migration one-liner).
 ///
 /// - ``.con`` / ``.convel`` (optional ``.gz`` / ``.zst``): native reader
@@ -2074,6 +2103,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
     m.add_function(wrap_pyfunction!(count_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
+    m.add_function(wrap_pyfunction!(locate_error, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
