@@ -1,6 +1,7 @@
 ! Build a restart frame only through builder%add_atom, write it, read it back.
 ! Every atom has a distinct id, a per-axis fixed mask and a velocity.
 ! A second frame uses the nine-argument call and must carry no velocities.
+! The first frame sets line 1 with new_builder's header; the second leaves it empty.
 program test_add_atom_restart
   use readcon
   use, intrinsic :: iso_fortran_env, only: real64, int64
@@ -112,7 +113,7 @@ contains
     character(len=:), allocatable :: md
     integer(int64) :: seen(n)
     integer :: i, j, k
-    bd = new_builder(cell, ang)
+    bd = new_builder(cell, ang, header="image 3")
     call check_true(bd%valid(), "new_builder")
     do i = 1, n
       call require_ok(bd%add_atom(trim(sym(i)), pos(1, i), pos(2, i), pos(3, i), ids(i), &
@@ -123,6 +124,7 @@ contains
          '"mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}}'), "set_metadata_json")
     call require_ok(bd%set_energy(energy), "set_energy")
     call write_one(bd, path)
+    call check_true(first_line(path) == "image 3", "header line 1")
 
     got = read_first_frame(path)
     call check_true(got%valid(), "read_first_frame")
@@ -177,6 +179,7 @@ contains
     call require_ok(bd%add_atom("Cu", 1.5_real64, 1.25_real64, 1.125_real64, 9_int64, &
          63.546_real64, .true., .false., .true.), "plain add_atom 2")
     call write_one(bd, path)
+    call check_true(len(first_line(path)) == 0, "plain line 1 empty")
     got = read_first_frame(path)
     call check_true(got%valid(), "plain read")
     if (.not. got%valid()) return
@@ -190,6 +193,20 @@ contains
          at%fixed_z, "plain atom 2")
     call got%free()
   end subroutine
+
+  function first_line(path) result(line)
+    character(len=*), intent(in) :: path
+    character(len=:), allocatable :: line
+    character(len=256) :: buf
+    integer :: u, ios, sz
+    line = "<unreadable>"
+    open(newunit=u, file=path, status="old", action="read", iostat=ios)
+    if (ios /= 0) return
+    read(u, '(A)', advance="no", size=sz, iostat=ios) buf
+    close(u)
+    if (ios > 0) return
+    line = buf(:sz)
+  end function
 
   subroutine remove(path)
     character(len=*), intent(in) :: path
