@@ -1,5 +1,5 @@
 name = "ReadCon"
-version = "0.17.1"
+version = "0.17.2"
 license = "MIT"
 author = "LODE developers"
 maintainer = "LODE developers"
@@ -26,6 +26,11 @@ main = "test_read_con.f90"
 name = "test_add_atom_roundtrip"
 source-dir = "test"
 main = "test_add_atom_roundtrip.f90"
+
+[[test]]
+name = "test_add_atom_restart"
+source-dir = "test"
+main = "test_add_atom_restart.f90"
 
 [[test]]
 name = "test_conformance_goldens"
