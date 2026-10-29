@@ -2,6 +2,22 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.17.2 - 2026-10-29
+
+### Fixed
+
+- Fortran `builder%add_atom` passes the fixed flags, atom id and mass in the C header order. In 0.17.1 it passed the id and mass first, so distinct ids collapsed and every write returned status -4 (`RKR_STATUS_IO_ERROR`).
+- The Fortran writer and the C++ MPI writer rebuild each frame before writing, so `con_spec_minor` matches the other bindings.
+- Readers keep an empty first header line as the user line and read an empty second line as implicit version 1.
+- Invalid UTF-8 is reported as a validation error instead of end of file.
+- The checked `.rcidx` scan accepts a final line with no trailing newline.
+
+### Added
+
+- Fortran `builder%add_atom` takes an optional `velocity(3)`, as the C++ `add_atom` does. Calls without it are unchanged.
+- Fortran `builder%add_atom_full` takes optional velocity and force. `last_error_message()` returns the writer's underlying error text.
+- `test_add_atom_restart` writes a restart frame through `builder%add_atom` and checks every field bit for bit after reading it back.
+
 ## v0.17.1 - 2026-10-15
 #### Features
 - (**index**) checked .rcidx frame index and sliced UTF-8 validation - (7f30b3a) - *HaoZeke*
