@@ -97,6 +97,14 @@ impl<'a> MemchrLines<'a> {
         self.peeked
     }
 
+    /// Byte offset where the next line handed out begins.
+    fn next_start(&self) -> usize {
+        match self.peeked {
+            Some(p) => p.as_ptr() as usize - self.bytes.as_ptr() as usize,
+            None => self.pos,
+        }
+    }
+
     /// Drop any peek buffer (required before bulk cursor advances).
     fn clear_peek(&mut self) {
         if let Some(p) = self.peeked.take() {
@@ -477,6 +485,67 @@ impl<'a> ConFrameIterator<'a> {
         debug_assert!(end >= start && end <= file_contents.len());
         Some(Ok((frame, &file_contents[start..end])))
     }
+
+    /// [`Iterator::next`] with the frame, line, and column of a failure.
+    ///
+    /// Lines count from 1 at the start of the buffer this iterator was
+    /// built on. Success is the plain parse. A failure parses that one
+    /// frame again with a line reader that records line starts, so callers
+    /// of [`Iterator::next`] pay nothing for this.
+    pub fn next_located(&mut self) -> Option<Result<types::ConFrame, error::LocatedParseError>> {
+        let start = self.lines.next_start();
+        match self.next()? {
+            Ok(frame) => Some(Ok(frame)),
+            Err(error) => {
+                let location = self.locate(start, &error);
+                Some(Err(error::LocatedParseError { error, location }))
+            }
+        }
+    }
+
+    fn locate(&self, start: usize, error: &error::ParseError) -> error::ErrorLocation {
+        let bytes = self.lines.bytes;
+        let check_utf8 = self.lines.check_utf8;
+        let mut inner = MemchrLines::from_parts(bytes, check_utf8);
+        inner.pos = start;
+        let mut tracked = TrackedLines { inner, last: start };
+        let _ = parse_frame(&mut tracked);
+        let last = tracked.last.min(bytes.len());
+        let metadata =
+            memchr::memchr(b'\n', &bytes[start..]).map_or(bytes.len(), |i| start + i + 1);
+        let at = match error {
+            // Declared sections and units are checked after the body.
+            error::ParseError::UnknownSection(_) | error::ParseError::InvalidUnits(_) => metadata,
+            // A component symbol is checked after its label line is read.
+            error::ParseError::ValidationError(_) if error.offending_token().is_some() => {
+                memchr::memrchr(b'\n', &bytes[..last.saturating_sub(1)]).map_or(0, |i| i + 1)
+            }
+            _ => last,
+        };
+        let mut line = 1 + memchr::memchr_iter(b'\n', &bytes[..at]).count() as u64;
+        if at == bytes.len() && bytes.last().is_some_and(|b| *b != b'\n') {
+            line += 1;
+        }
+        let end = memchr::memchr(b'\n', &bytes[at..]).map_or(bytes.len(), |i| at + i);
+        let text = String::from_utf8_lossy(strip_cr(&bytes[at..end]));
+        let mut scan = ConFrameIterator {
+            lines: MemchrLines::from_parts(bytes, check_utf8),
+        };
+        let mut frame = 0usize;
+        while scan.lines.pos < start && matches!(scan.forward_fast(), Some(Ok(()))) {
+            frame += 1;
+        }
+        error::ErrorLocation {
+            frame,
+            line,
+            column: if at == metadata {
+                metadata_column(&text, error)
+            } else {
+                field_column(&text, error)
+            },
+            byte_offset: at,
+        }
+    }
 }
 
 impl<'a> Iterator for ConFrameIterator<'a> {
@@ -511,27 +580,145 @@ impl<'a> Iterator for ConFrameIterator<'a> {
         if let Some(err) = self.lines.utf8_error() {
             return Some(Err(err));
         }
-        // Otherwise, attempt to parse the next frame from the available lines.
-        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines) {
-            Ok(f) => f,
-            Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
-        };
-        // Optional sections mutate AoS; only re-sync section SoA when needed.
-        // Plain .con assembly already filled positions/ids/masses (no O(N)
-        // post-scan when no velocity/force sections were applied).
-        let sections =
-            match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data)
-            {
-                Ok(n) => n,
-                // A section line that failed UTF-8 makes `next_line` return
-                // `None`. That must not surface as `IncompleteSection`.
-                Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
-            };
-        if sections > 0 {
-            frame.sync_arrays_from_atom_data();
-        }
-        Some(Ok(frame))
+        // A line that failed UTF-8 makes `next_line` return `None`. That
+        // must not surface as `IncompleteFrame` or `IncompleteSection`.
+        Some(parse_frame(&mut self.lines).map_err(|e| self.lines.prefer_utf8(e)))
     }
+}
+
+/// Header, coordinate blocks, then declared sections of one frame.
+#[inline(always)]
+fn parse_frame<'a, L>(lines: &mut L) -> Result<types::ConFrame, error::ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
+    let mut frame = crate::parser::parse_single_frame_ls(lines)?;
+    // Optional sections mutate AoS; only re-sync section SoA when needed.
+    // Plain .con assembly already filled positions/ids/masses (no O(N)
+    // post-scan when no velocity/force sections were applied).
+    let sections = parse_declared_sections(lines, &mut frame.header, &mut frame.atom_data)?;
+    if sections > 0 {
+        frame.sync_arrays_from_atom_data();
+    }
+    Ok(frame)
+}
+
+/// Line stream that records where the last line it read or peeked begins.
+/// Only the error path of [`ConFrameIterator::next_located`] uses it.
+struct TrackedLines<'a> {
+    inner: MemchrLines<'a>,
+    last: usize,
+}
+
+impl<'a> Iterator for TrackedLines<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        LineStream::next_line(self)
+    }
+}
+
+impl<'a> LineStream<'a> for TrackedLines<'a> {
+    fn next_line(&mut self) -> Option<&'a str> {
+        self.last = self.inner.next_start();
+        self.inner.next_line()
+    }
+    fn peek_line(&mut self) -> Option<&'a str> {
+        self.last = self.inner.next_start();
+        self.inner.peek_line()
+    }
+    fn next_coord_row(
+        &mut self,
+        spec_version: u32,
+        default_id: u64,
+    ) -> Result<([f64; 3], [bool; 3], u64), error::ParseError> {
+        self.last = self.inner.next_start();
+        self.inner.next_coord_row(spec_version, default_id)
+    }
+    fn remainder_is_whitespace(&mut self) -> bool {
+        self.inner.remainder_is_whitespace()
+    }
+    fn blank_line_opens_section(&mut self) -> bool {
+        self.inner.blank_line_opens_section()
+    }
+    fn blank_opens_velocity_block(&mut self) -> bool {
+        self.inner.blank_opens_velocity_block()
+    }
+}
+
+/// 1-based column of the field `error` names. A named token counts only
+/// when it occurs once on the line, so the column is never a guess.
+fn field_column(line: &str, error: &error::ParseError) -> Option<u64> {
+    let extra = match error {
+        error::ParseError::InvalidVectorLength { expected, found } if found > expected => {
+            Some(*expected)
+        }
+        _ => None,
+    };
+    let token = error.offending_token();
+    let mut hit = None;
+    let mut rest = line;
+    let mut index = 0usize;
+    loop {
+        let field = rest.trim_start_matches(|c: char| c.is_ascii_whitespace());
+        if field.is_empty() {
+            break;
+        }
+        let begin = line.len() - field.len();
+        let end = field
+            .find(|c: char| c.is_ascii_whitespace())
+            .unwrap_or(field.len());
+        let column = line[..begin].chars().count() as u64 + 1;
+        if extra == Some(index) {
+            return Some(column);
+        }
+        if token == Some(&field[..end]) {
+            if hit.is_some() {
+                return None;
+            }
+            hit = Some(column);
+        }
+        rest = &field[end..];
+        index += 1;
+    }
+    hit
+}
+
+/// 1-based column of the metadata value `error` names: the arity of a
+/// reserved section, or an unknown section name. Only a value that is the
+/// one match in the JSON gets a column.
+fn metadata_column(line: &str, error: &error::ParseError) -> Option<u64> {
+    use serde_json::value::RawValue;
+    type Members<'a> = std::collections::BTreeMap<String, &'a RawValue>;
+    let members: Members = serde_json::from_str(line.trim()).ok()?;
+    let mut hits: Vec<&RawValue> = match error {
+        error::ParseError::InvalidVectorLength { expected, found } => {
+            let arity = members.get(types::meta::SECTION_ARITY)?.get();
+            let arity: Members = serde_json::from_str(arity).ok()?;
+            arity
+                .into_iter()
+                .filter(|(name, value)| {
+                    types::reserved_section_value_arity(name)
+                        .is_some_and(|n| usize::try_from(n).ok() == Some(*expected))
+                        && value.get().parse::<usize>().ok() == Some(*found)
+                })
+                .map(|(_, value)| value)
+                .collect()
+        }
+        error::ParseError::UnknownSection(name) => {
+            let sections = members.get(types::meta::SECTIONS)?.get();
+            let sections: Vec<&RawValue> = serde_json::from_str(sections).ok()?;
+            sections
+                .into_iter()
+                .filter(|value| {
+                    serde_json::from_str::<String>(value.get()).is_ok_and(|s| s == *name)
+                })
+                .collect()
+        }
+        _ => return None,
+    };
+    let value = hits.pop().filter(|_| hits.is_empty())?;
+    let begin = value.get().as_ptr() as usize - line.as_ptr() as usize;
+    Some(line[..begin].chars().count() as u64 + 1)
 }
 
 #[cfg(test)]
@@ -821,6 +1008,33 @@ pub fn read_nth_frame_from_text(
         Some(Err(e)) => Err(Box::new(e)),
         None => Err(format!("frame {index} out of range").into()),
     }
+}
+
+/// First parse error in `bytes` with its location, or `None` when every
+/// frame parses.
+///
+/// The scan is sequential, so the error is the one with the lowest line
+/// (CON-error.4) whatever worker count the failing read used.
+pub fn locate_first_error(bytes: &[u8]) -> Option<error::LocatedParseError> {
+    let mut iter = ConFrameIterator::from_bytes(bytes);
+    loop {
+        if let Err(e) = iter.next_located()? {
+            return Some(e);
+        }
+    }
+}
+
+/// [`locate_first_error`] on a file path. Compressed input is located in
+/// its decompressed text.
+pub fn locate_first_error_in_file(
+    path: &Path,
+) -> Result<Option<error::LocatedParseError>, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let bytes = match &contents {
+        crate::compression::FileContents::Owned(text) => text.as_bytes(),
+        crate::compression::FileContents::Mapped(map) => &map[..],
+    };
+    Ok(locate_first_error(bytes))
 }
 
 /// Reads all frames using the checked `.rcidx` sidecar next to `path`.

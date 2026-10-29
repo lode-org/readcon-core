@@ -182,6 +182,71 @@ impl ParseError {
     }
 }
 
+impl ParseError {
+    /// Field text the error names, when the message carries one.
+    pub(crate) fn offending_token(&self) -> Option<&str> {
+        match self {
+            ParseError::NonFiniteValue(token) => Some(token),
+            ParseError::InvalidNumberFormat(msg) => msg
+                .strip_prefix("invalid float: ")
+                .or_else(|| msg.strip_prefix("invalid integer: "))
+                .or_else(|| msg.strip_prefix("integer out of range 0..=2^64-1: ")),
+            ParseError::InvalidCount(msg) => msg
+                .strip_prefix("count field is not an unsigned integer: ")
+                .or_else(|| msg.strip_prefix("count field is out of range: ")),
+            ParseError::InvalidFixedFlag(msg) => {
+                msg.strip_prefix("column 4 flag \"")?.split('"').next()
+            }
+            ParseError::ValidationError(msg) => match msg.split_once(" symbol mismatch: ") {
+                Some((_, rest)) => rest.split_once(", found ").map(|(_, symbol)| symbol),
+                None => msg.strip_prefix("unknown component symbol "),
+            },
+            _ => None,
+        }
+    }
+}
+
+/// Where in a buffer a [`ParseError`] was detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorLocation {
+    /// 0-based index of the frame that failed.
+    pub frame: usize,
+    /// 1-based line in the buffer (CON-error.2). A missing line at end of
+    /// input is the line after the last one.
+    pub line: u64,
+    /// 1-based character column of the offending field, when the error
+    /// names one.
+    pub column: Option<u64>,
+    /// Byte offset of the start of that line.
+    pub byte_offset: usize,
+}
+
+/// A [`ParseError`] with its [`ErrorLocation`]. Opt-in through
+/// [`crate::iterators::ConFrameIterator::next_located`] and
+/// [`crate::iterators::locate_first_error`].
+#[derive(Debug)]
+pub struct LocatedParseError {
+    pub error: ParseError,
+    pub location: ErrorLocation,
+}
+
+impl fmt::Display for LocatedParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let loc = &self.location;
+        write!(f, "line {}", loc.line)?;
+        if let Some(column) = loc.column {
+            write!(f, ", column {column}")?;
+        }
+        write!(f, " (frame {}): {}", loc.frame, self.error)
+    }
+}
+
+impl std::error::Error for LocatedParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
 impl From<ParseFloatError> for ParseError {
     fn from(e: ParseFloatError) -> Self {
         ParseError::InvalidNumberFormat(e.to_string())
