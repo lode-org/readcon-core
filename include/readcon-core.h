@@ -3,9 +3,9 @@
  *
  * Memory ownership
  *   - Opaque handles (RKRConFrame, RKRConFrameWriter, RKRConFrameBuilder,
- *     CConFrameIterator) are caller-owned. Free each with its dedicated
- *     destructor: free_rkr_frame, free_rkr_frame_writer,
- *     free_rkr_frame_builder, free_con_frame_iterator.
+ *     CConFrameIterator, RKRTrajectory) are caller-owned. Free each with
+ *     its dedicated destructor: free_rkr_frame, free_rkr_frame_writer,
+ *     free_rkr_frame_builder, free_con_frame_iterator, rkr_trajectory_free.
  *   - rkr_read_all_frames returns a heap-allocated array of RKRConFrame*
  *     handles together with the frame count via the *num_frames out-param.
  *     The array's capacity equals the count (shrunk to fit). Free with
@@ -18,8 +18,8 @@
  *   - const char* returned by rkr_library_version and rkr_status_message
  *     is process-static; do NOT free it.
  *   - const char* returned by rkr_last_error_message is thread-local.
- *     It stays valid until the next rkr_writer_extend or rkr_writer_flush
- *     on that thread. Do NOT free it. NULL means no detail was recorded.
+ *     It stays valid until the next rkr_writer_extend, rkr_writer_flush,
+ *     rkr_trajectory_open or rkr_trajectory_read_frame on that thread. Do NOT free it. NULL means no detail was recorded.
  *   - rkr_frame_*_view / rkr_frame_xyz_f64 borrow the frame SoA. The
  *     pointer is valid until free_rkr_frame. Prefer these over
  *     rkr_frame_to_c_frame (which allocates an AoS copy).
@@ -348,6 +348,11 @@ typedef struct CFrame {
 typedef struct RKRConFrameWriter RKRConFrameWriter;
 
 /**
+ * An opaque random-access handle over one file. Free with `rkr_trajectory_free`.
+ */
+typedef struct RKRTrajectory RKRTrajectory;
+
+/**
  * An opaque handle to a Rust `ConFrameBuilder` object.
  */
 typedef struct RKRConFrameBuilder RKRConFrameBuilder;
@@ -634,8 +639,9 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Detailed message from the most recent failing `rkr_writer_extend` or
- * `rkr_writer_flush` on this thread.
+ * Detailed message from the most recent failing `rkr_writer_extend`,
+ * `rkr_writer_flush`, `rkr_trajectory_open` or `rkr_trajectory_read_frame`
+ * on this thread.
  *
  * `rkr_status_message` stays a fixed string per status code. This pointer
  * carries the underlying I/O or format text, for example
@@ -722,6 +728,41 @@ uintptr_t rkr_count_frames(const char *filename_c);
  */
 struct RKRConFrame *rkr_read_nth_frame(const char *filename_c,
                                        uintptr_t index);
+
+/**
+ * Open a file for reads by frame number.
+ *
+ * The file is read once and its frame index is kept. An uncompressed file
+ * reuses a valid `<path>.rcidx`; a nonzero `write_index` writes a fresh scan
+ * there. gzip and zstd input is indexed in memory only. Returns NULL on
+ * error, and `rkr_last_error_message` gives the reason.
+ */
+struct RKRTrajectory *rkr_trajectory_open(const char *filename_c,
+                                          int32_t write_index);
+
+/**
+ * Number of frames in the handle, or `usize::MAX` for a NULL handle.
+ */
+uintptr_t rkr_trajectory_len(const struct RKRTrajectory *handle);
+
+/**
+ * Parse frame `index` into `*out_frame`, which the caller frees with
+ * `free_rkr_frame`.
+ *
+ * Returns `RKR_STATUS_INDEX_OUT_OF_BOUNDS` when `index` is not below
+ * `rkr_trajectory_len`, and `RKR_STATUS_IO_ERROR` when the frame does not
+ * parse. A NULL argument returns `RKR_STATUS_NULL_POINTER` and records
+ * `null argument`. `*out_frame` is NULL unless the status is success, and
+ * on failure `rkr_last_error_message` gives the reason.
+ */
+enum RKRStatus rkr_trajectory_read_frame(const struct RKRTrajectory *handle,
+                                         uintptr_t index,
+                                         struct RKRConFrame **out_frame);
+
+/**
+ * Free a handle from `rkr_trajectory_open`. NULL is a no-op.
+ */
+void rkr_trajectory_free(struct RKRTrajectory *handle);
 
 /**
  * Frees the memory for an opaque `RKRConFrame` handle.
