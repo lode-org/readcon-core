@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file. See [conven
 - An uncompressed file reuses a valid `.rcidx` sidecar. gzip and zstd input is indexed in memory only.
 - `benches/trajectory_random_access.py` times K scattered reads through `ConTrajectory` against repeated `read_nth_frame`.
 
+### Fixed
+
+- The `.rcidx` fingerprint is the data length and a hash of every byte, and the sidecar format is now version 2. An edit that kept the size, both 4 KiB edges and a restored mtime used to reuse a stale index. It now forces a rescan. Version 1 sidecars are rebuilt once.
+
 ## v0.17.2 - 2026-10-29
 
 ### Fixed

@@ -117,3 +117,40 @@ fn empty_file_and_bad_frame() {
     assert!(traj.frame(1).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An edit that keeps the size, both 4 KiB edges and the mtime, but moves
+/// frame starts, must not reuse the old sidecar.
+#[test]
+fn edit_with_same_edges_and_restored_mtime_rebuilds() {
+    let dir = scratch("mtime");
+    let path = dir.join("edit.con");
+    let one = std::fs::read_to_string(test_case!("tiny_cuh2.con")).unwrap();
+    let text = one.repeat(40);
+    std::fs::write(&path, &text).unwrap();
+    assert_eq!(ConTrajectory::open(&path, true).unwrap().len(), 40);
+    assert!(read_sidecar(&path).unwrap().is_some());
+    let mtime = std::fs::metadata(&path).unwrap().modified().unwrap();
+
+    let pad = one.find("Component 1\n").unwrap() + "Component 1\n".len();
+    assert_eq!(&one[pad..pad + 1], " ");
+    let mut edited = text.clone();
+    edited.remove(30 * one.len() + pad);
+    edited.insert(20 * one.len(), ' ');
+    assert_eq!(edited.len(), text.len());
+    assert_ne!(edited, text);
+    let edge = 4096;
+    assert_eq!(edited[..edge], text[..edge]);
+    assert_eq!(edited[text.len() - edge..], text[text.len() - edge..]);
+    std::fs::write(&path, &edited).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(mtime)
+        .unwrap();
+    assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), mtime);
+
+    assert!(read_sidecar(&path).unwrap().is_none());
+    assert_matches_read_all(&path, false);
+    let _ = std::fs::remove_dir_all(&dir);
+}
