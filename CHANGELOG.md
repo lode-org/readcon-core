@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file. See [conven
 - A `.rcidx` sidecar is used only when its offsets are the frame starts a scan finds: the frame skip from each offset must end at the next one. A checksum-valid table with one offset dropped used to make `frame(6)` return frame 7. It is now rescanned, including tables stored by `write_sidecar` or the MPI writer.
 - Reusing a `.rcidx` sidecar no longer hashes the data file, since the offset check alone decides whether a table is the scan. The stored size is still compared first. Writers still store the hash, so the format stays version 2 and earlier version 2 readers keep working. The check counts the newlines of each coordinate block up to the next stored offset at once, instead of searching line by line.
 - `rkr_trajectory_len(NULL)` records `null argument` for `rkr_last_error_message`, as the other NULL paths of the trajectory calls do.
+- `readcon.iter_con` reads an uncompressed file once into its own buffer. It used to map the file and copy the mapping, so its peak memory was about twice the file size. gzip and zstd input is still decompressed whole.
 
 ## v0.17.2 - 2026-10-29
 

@@ -1422,12 +1422,7 @@ fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
     let path_owned = path.to_owned();
     let text = py
         .detach(|| {
-            let contents = crate::compression::read_file_contents(Path::new(&path_owned))
-                .map_err(|e| e.to_string())?;
-            contents
-                .as_str()
-                .map(|s| s.to_owned())
-                .map_err(|e| e.to_string())
+            crate::compression::read_file_text(Path::new(&path_owned)).map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
     Ok(PyConFrameIterator {

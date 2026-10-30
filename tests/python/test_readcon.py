@@ -422,6 +422,28 @@ class TestConFrameConstructor:
             assert a.atoms[0].symbol == b.atoms[0].symbol
             assert a.atoms[0].x == pytest.approx(b.atoms[0].x)
 
+    def test_iter_con_reads_a_file_above_the_map_size(self, tmp_path):
+        with open(_resource("cuh2.con"), "rb") as fh:
+            frame = fh.read()
+        path = tmp_path / "large.con"
+        path.write_bytes(frame * 5)
+        assert path.stat().st_size >= 64 * 1024
+        batch = readcon.read_con(str(path))
+        it = readcon.iter_con(str(path))
+        assert it.skip(2) == 2
+        streamed = list(it)
+        assert len(streamed) == 3
+        assert readcon.write_con_string(streamed) == readcon.write_con_string(batch[2:])
+
+        bad = bytearray(frame * 5)
+        bad[-40] = 0xFF
+        path.write_bytes(bytes(bad))
+        index = len(bad) - 40
+        with pytest.raises(
+            IOError, match=f"invalid utf-8 sequence of 1 bytes from index {index}$"
+        ):
+            readcon.iter_con(str(path))
+
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
         frames = [
             readcon.ConFrame(

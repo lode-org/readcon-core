@@ -72,6 +72,23 @@ pub fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::erro
 pub fn read_file_contents_detected(
     path: &Path,
 ) -> Result<(FileContents, Compression), Box<dyn std::error::Error>> {
+    read_contents(path, true)
+}
+
+/// [`read_file_contents`] as one owned `String`. An uncompressed file is
+/// read into it at any size instead of being mapped, so the text is held
+/// once and later changes to the file do not reach it.
+pub fn read_file_text(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    match read_contents(path, false)?.0 {
+        FileContents::Owned(text) => Ok(text),
+        FileContents::Mapped(_) => unreachable!("read_contents maps only when asked to"),
+    }
+}
+
+fn read_contents(
+    path: &Path,
+    map_large: bool,
+) -> Result<(FileContents, Compression), Box<dyn std::error::Error>> {
     let file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
 
@@ -107,21 +124,26 @@ pub fn read_file_contents_detected(
                 .into());
             }
         }
+        Compression::None if metadata.len() < MMAP_THRESHOLD => {
+            let mut bytes = Vec::with_capacity(metadata.len() as usize);
+            stream.read_to_end(&mut bytes)?;
+            let contents = String::from_utf8(bytes).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8",
+                )
+            })?;
+            FileContents::Owned(contents)
+        }
+        Compression::None if map_large => {
+            let mmap = unsafe { memmap2::Mmap::map(&file)? };
+            FileContents::Mapped(mmap)
+        }
         Compression::None => {
-            if metadata.len() < MMAP_THRESHOLD {
-                let mut bytes = Vec::with_capacity(metadata.len() as usize);
-                stream.read_to_end(&mut bytes)?;
-                let contents = String::from_utf8(bytes).map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "stream did not contain valid UTF-8",
-                    )
-                })?;
-                FileContents::Owned(contents)
-            } else {
-                let mmap = unsafe { memmap2::Mmap::map(&file)? };
-                FileContents::Mapped(mmap)
-            }
+            let mut bytes = Vec::with_capacity(metadata.len() as usize);
+            stream.read_to_end(&mut bytes)?;
+            // The message `as_str` gives for the same bytes when mapped.
+            FileContents::Owned(String::from_utf8(bytes).map_err(|e| e.utf8_error())?)
         }
     };
     Ok((contents, compression))
@@ -180,4 +202,58 @@ pub fn zstd_writer(
     // Level 3 is the zstd CLI default; balances ratio against speed.
     let encoder = zstd::stream::write::Encoder::new(file, 3)?;
     Ok(encoder.auto_finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn large_text() -> Vec<u8> {
+        let frame = include_bytes!("../resources/test/tiny_cuh2.con");
+        let copies = MMAP_THRESHOLD as usize / frame.len() + 2;
+        frame.repeat(copies)
+    }
+
+    fn mapped_text(path: &Path) -> Result<String, String> {
+        let contents = read_file_contents(path).map_err(|e| e.to_string())?;
+        contents
+            .as_str()
+            .map(str::to_owned)
+            .map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn file_text_matches_the_mapped_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let small = dir.path().join("small.con");
+        std::fs::write(&small, include_bytes!("../resources/test/tiny_cuh2.con")).unwrap();
+        let large = dir.path().join("large.con");
+        std::fs::write(&large, large_text()).unwrap();
+        assert!(matches!(
+            read_file_contents(&large).unwrap(),
+            FileContents::Mapped(_)
+        ));
+        let gz = dir.path().join("large.con.gz");
+        let mut enc = gzip_writer(&gz).unwrap();
+        enc.write_all(&large_text()).unwrap();
+        enc.finish().unwrap();
+        for path in [&small, &large, &gz] {
+            let text = read_file_text(path).unwrap();
+            assert_eq!(Ok(text), mapped_text(path), "{}", path.display());
+        }
+    }
+
+    #[test]
+    fn file_text_reports_invalid_utf8_as_the_mapped_read() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, len) in [("small.con", 100), ("large.con", large_text().len())] {
+            let mut bytes = large_text()[..len].to_vec();
+            bytes[len - 40] = 0xff;
+            let path = dir.path().join(name);
+            std::fs::write(&path, &bytes).unwrap();
+            let err = read_file_text(&path).unwrap_err().to_string();
+            assert_eq!(Err(err), mapped_text(&path), "{name}");
+        }
+    }
 }
