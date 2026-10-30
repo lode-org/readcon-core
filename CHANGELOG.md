@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## Unreleased
+
+### Added
+
+- `readcon.ConTrajectory(path, write_index=True)` reads a file once and keeps its frame index. It supports `len`, negative indices, slices and iteration. Each access parses only the frames it returns.
+- The C API adds `rkr_trajectory_open`, `rkr_trajectory_len`, `rkr_trajectory_read_frame` and `rkr_trajectory_free`. The C++ wrapper adds `readcon::Trajectory`, and the Rust type is `trajectory::ConTrajectory`. The symbols are additive, so `RKR_ABI_VERSION_MINOR` stays 1.
+- An uncompressed file reuses a valid `.rcidx` sidecar. gzip and zstd input is indexed in memory only.
+- `benches/trajectory_random_access.py` times K scattered reads through `ConTrajectory` against repeated `read_nth_frame`.
+
 ## v0.17.2 - 2026-10-29
 
 ### Fixed
