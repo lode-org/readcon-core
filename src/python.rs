@@ -1457,6 +1457,98 @@ fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFra
     PyConFrame::from_con_frame(py, &frame)
 }
 
+/// Random access to the frames of one file: ``len(t)``, ``t[i]``,
+/// ``t[-1]``, ``t[a:b:c]`` and ``for f in t``.
+///
+/// The file is read once and its frame index is kept, so ``t[i]`` parses
+/// only frame ``i``. An uncompressed file reuses a valid ``path.rcidx``;
+/// with ``write_index=True`` a fresh scan is written there. gzip and zstd
+/// input is indexed in memory only.
+#[pyclass(name = "ConTrajectory", frozen)]
+struct PyConTrajectory {
+    inner: crate::trajectory::ConTrajectory,
+}
+
+fn frame_out_of_range(index: impl std::fmt::Display, len: usize) -> PyErr {
+    pyo3::exceptions::PyIndexError::new_err(format!(
+        "frame index {index} is out of range for a trajectory of {len} frames"
+    ))
+}
+
+impl PyConTrajectory {
+    fn frame_at(&self, py: Python<'_>, i: usize) -> PyResult<PyConFrame> {
+        let frame = py.detach(|| self.inner.frame(i)).map_err(|e| match e {
+            crate::error::ParseError::IndexOutOfBounds { index, len } => {
+                frame_out_of_range(index, len)
+            }
+            e => PyIOError::new_err(format!("parse error in frame {i}: {e}")),
+        })?;
+        PyConFrame::from_con_frame(py, &frame)
+    }
+}
+
+#[pymethods]
+impl PyConTrajectory {
+    #[new]
+    #[pyo3(signature = (path, write_index=true))]
+    fn new(py: Python<'_>, path: std::path::PathBuf, write_index: bool) -> PyResult<Self> {
+        let inner = py
+            .detach(|| {
+                crate::trajectory::ConTrajectory::open(&path, write_index)
+                    .map_err(|e| e.to_string())
+            })
+            .map_err(PyIOError::new_err)?;
+        Ok(Self { inner })
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let n = self.inner.len();
+        if let Ok(slice) = key.cast::<pyo3::types::PySlice>() {
+            let ind = slice.indices(n as isize)?;
+            let frames = (0..ind.slicelength as isize)
+                .map(|k| self.frame_at(py, (ind.start + k * ind.step) as usize))
+                .collect::<PyResult<Vec<_>>>()?;
+            return frames.into_py_any(py);
+        }
+        let i: isize = key.extract()?;
+        let j = if i < 0 { i + n as isize } else { i };
+        if j < 0 || j as usize >= n {
+            return Err(frame_out_of_range(i, n));
+        }
+        self.frame_at(py, j as usize)?.into_py_any(py)
+    }
+
+    fn __iter__(slf: Py<Self>) -> PyConTrajectoryIter {
+        PyConTrajectoryIter { traj: slf, pos: 0 }
+    }
+}
+
+#[pyclass(name = "ConTrajectoryIterator")]
+struct PyConTrajectoryIter {
+    traj: Py<PyConTrajectory>,
+    pos: usize,
+}
+
+#[pymethods]
+impl PyConTrajectoryIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<PyConFrame>> {
+        let traj = self.traj.get();
+        if self.pos >= traj.inner.len() {
+            return Ok(None);
+        }
+        self.pos += 1;
+        traj.frame_at(py, self.pos - 1).map(Some)
+    }
+}
+
 /// Convert a structure/trajectory path to CON (migration one-liner).
 ///
 /// - ``.con`` / ``.convel`` (optional ``.gz`` / ``.zst``): native reader
@@ -2067,6 +2159,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
+    m.add_class::<PyConTrajectory>()?;
+    m.add_class::<PyConTrajectoryIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
     // Ergonomic alias for multi-language matrix (batch all frames).
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
