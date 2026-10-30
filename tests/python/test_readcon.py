@@ -439,10 +439,27 @@ class TestConFrameConstructor:
         bad[-40] = 0xFF
         path.write_bytes(bytes(bad))
         index = len(bad) - 40
-        with pytest.raises(
-            IOError, match=f"invalid utf-8 sequence of 1 bytes from index {index}$"
-        ):
-            readcon.iter_con(str(path))
+        for mmap in (False, True):
+            with pytest.raises(
+                IOError, match=f"invalid utf-8 sequence of 1 bytes from index {index}$"
+            ):
+                readcon.iter_con(str(path), mmap=mmap)
+
+    def test_iter_con_mmap_matches_the_default(self, tmp_path):
+        with open(_resource("cuh2.con"), "rb") as fh:
+            frame = fh.read()
+        n = (40 << 20) // len(frame)
+        path = tmp_path / "large.con"
+        path.write_bytes(frame * n)
+        for name in ("large", "tiny"):
+            p = str(path) if name == "large" else _resource("tiny_multi_cuh2.con")
+            plain = readcon.iter_con(p)
+            mapped = readcon.iter_con(p, mmap=True)
+            half = readcon.count_frames(p) // 2
+            assert mapped.skip(half) == plain.skip(half) == half
+            for a, b in zip(plain, mapped, strict=True):
+                assert readcon.write_con_string([b]) == readcon.write_con_string([a])
+            assert next(mapped, None) is None
 
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
         frames = [

@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file. See [conven
 - The C API adds `rkr_trajectory_open`, `rkr_trajectory_len`, `rkr_trajectory_read_frame` and `rkr_trajectory_free`. The C++ wrapper adds `readcon::Trajectory`, and the Rust type is `trajectory::ConTrajectory`. The symbols are additive, so `RKR_ABI_VERSION_MINOR` stays 1.
 - An uncompressed file reuses a valid `.rcidx` sidecar. gzip and zstd input is indexed in memory only.
 - `benches/trajectory_random_access.py` times K scattered reads through `ConTrajectory` against repeated `read_nth_frame`.
+- `readcon.iter_con(path, mmap=True)` keeps an uncompressed file of 64 KiB or more mapped. It releases the pages it has read. On Linux about 32 MiB of the file stays resident. On macOS the release does not discard pages, and outside Unix it is a no-op, so memory can grow to the file size. The file must not change while the iterator is alive, and a truncation can end the process with `SIGBUS` instead of raising `OSError`. The default is unchanged.
 
 ### Fixed
 

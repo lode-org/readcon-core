@@ -180,6 +180,97 @@ impl FileContents {
     }
 }
 
+/// Mapped bytes between two releases of the pages already read.
+const RELEASE_STEP: usize = 32 << 20;
+
+/// The text of one file, read from the front.
+///
+/// With `map`, an uncompressed file of 64 KiB or more stays mapped, and
+/// [`Self::release_before`] advises `MADV_DONTNEED` for the pages before the
+/// read position. On Linux that drops the file pages, so resident memory
+/// stays near [`RELEASE_STEP`] instead of the file size. macOS gets the same
+/// call, but its `MADV_DONTNEED` does not discard pages. Outside Unix the
+/// release is a no-op. On those systems the whole file can become resident.
+/// A mapped file is not a snapshot and must not change while it is read; a
+/// truncation can end the process with `SIGBUS`.
+pub struct ForwardText {
+    contents: FileContents,
+    released: usize,
+}
+
+impl ForwardText {
+    /// The text of `path`. Without `map` it is [`read_file_text`].
+    pub fn open(path: &Path, map: bool) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = if map {
+            read_file_contents(path)?
+        } else {
+            FileContents::Owned(read_file_text(path)?)
+        };
+        if let FileContents::Mapped(m) = &contents {
+            let mut start = 0;
+            while start < m.len() {
+                let target = (start + RELEASE_STEP).min(m.len());
+                let end = memchr::memchr(b'\n', &m[target..]).map_or(m.len(), |p| target + p + 1);
+                if crate::frame_index::validate_utf8_sliced(&m[start..end]).is_err() {
+                    std::str::from_utf8(m)?;
+                }
+                release(m, start, end)?;
+                start = end;
+            }
+        }
+        Ok(Self {
+            contents,
+            released: 0,
+        })
+    }
+
+    pub fn as_str(&self) -> &str {
+        match &self.contents {
+            FileContents::Owned(s) => s,
+            // SAFETY: `open` checked every byte, in slices that end after a
+            // newline. A mapped file must not change while mapped, as for
+            // every mapped reader in this crate.
+            FileContents::Mapped(m) => unsafe { std::str::from_utf8_unchecked(m) },
+        }
+    }
+
+    /// Release the mapped pages before byte `pos` once [`RELEASE_STEP`]
+    /// bytes have been read since the last release. A later read of them
+    /// maps them in again. A `pos` past the end counts as the end.
+    pub fn release_before(&mut self, pos: usize) -> io::Result<()> {
+        if let FileContents::Mapped(m) = &self.contents
+            && pos >= self.released + RELEASE_STEP
+        {
+            let pos = pos.min(m.len());
+            release(m, self.released, pos)?;
+            self.released = pos;
+        }
+        Ok(())
+    }
+}
+
+/// Advise `MADV_DONTNEED` for the whole 64 KiB blocks of the map that
+/// `start..end` reaches, cut at the map end.
+fn release(map: &memmap2::Mmap, start: usize, end: usize) -> io::Result<()> {
+    // A multiple of every Linux page size. The map starts on a page, so the
+    // range stays inside it, and the page that contains `end` stays mapped.
+    const BLOCK: usize = 64 * 1024;
+    let start = start & !(BLOCK - 1);
+    let end = end.min(map.len()) & !(BLOCK - 1);
+    if end <= start {
+        return Ok(());
+    }
+    // SAFETY: `start..end` lies inside the map, which is shared and read
+    // only, so dropped pages read back from the file.
+    #[cfg(unix)]
+    unsafe {
+        map.unchecked_advise_range(memmap2::UncheckedAdvice::DontNeed, start, end - start)?;
+    }
+    #[cfg(not(unix))]
+    let _ = map;
+    Ok(())
+}
+
 /// Creates a gzip-compressed writer wrapping a file at the given path.
 pub fn gzip_writer(path: &Path) -> io::Result<flate2::write::GzEncoder<std::fs::File>> {
     let file = std::fs::File::create(path)?;
@@ -209,10 +300,13 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn large_text() -> Vec<u8> {
+    fn text_of_at_least(len: usize) -> Vec<u8> {
         let frame = include_bytes!("../resources/test/tiny_cuh2.con");
-        let copies = MMAP_THRESHOLD as usize / frame.len() + 2;
-        frame.repeat(copies)
+        frame.repeat(len / frame.len() + 2)
+    }
+
+    fn large_text() -> Vec<u8> {
+        text_of_at_least(MMAP_THRESHOLD as usize)
     }
 
     fn mapped_text(path: &Path) -> Result<String, String> {
@@ -254,6 +348,121 @@ mod tests {
             std::fs::write(&path, &bytes).unwrap();
             let err = read_file_text(&path).unwrap_err().to_string();
             assert_eq!(Err(err), mapped_text(&path), "{name}");
+        }
+    }
+
+    #[test]
+    fn forward_text_reads_back_released_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = text_of_at_least(RELEASE_STEP + (200 << 10));
+        let path = dir.path().join("two-steps.con");
+        std::fs::write(&path, &bytes).unwrap();
+        let mut mapped = ForwardText::open(&path, true).unwrap();
+        assert!(matches!(mapped.contents, FileContents::Mapped(_)));
+        assert_eq!(mapped.as_str().as_bytes(), bytes.as_slice());
+        for pos in (0..=bytes.len()).step_by(1 << 20) {
+            mapped.release_before(pos).unwrap();
+        }
+        assert_eq!(mapped.released, RELEASE_STEP);
+        assert_eq!(mapped.as_str().as_bytes(), bytes.as_slice());
+        let owned = ForwardText::open(&path, false).unwrap();
+        assert!(matches!(owned.contents, FileContents::Owned(_)));
+        assert_eq!(owned.as_str(), mapped.as_str());
+    }
+
+    /// The guard is private anonymous memory right after the file map, which
+    /// `MADV_DONTNEED` would zero.
+    ///
+    /// The kernel puts a new map at the top of the highest free gap that fits
+    /// it. The test frees the space below the guard after it fills every gap
+    /// above, so the file map must end at the guard. A map made by another
+    /// test thread in between would take that space, so the test body runs
+    /// alone in a child process of this test binary.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn release_before_past_the_end_leaves_the_next_mapping_alone() {
+        const NAME: &str =
+            "compression::tests::release_before_past_the_end_leaves_the_next_mapping_alone";
+        const CHILD: &str = "READCON_RELEASE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([NAME, "--exact", "--test-threads=1"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                out.status.success() && stdout.contains("test result: ok. 1 passed;"),
+                "{stdout}{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            return;
+        }
+        const GUARD: usize = 1 << 20;
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = text_of_at_least(3 * MMAP_THRESHOLD as usize);
+        let path = dir.path().join("short.con");
+        std::fs::write(&path, &bytes).unwrap();
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        let map_len = bytes.len().next_multiple_of(page);
+        let anonymous = |len: usize| {
+            let map = unsafe {
+                libc::mmap(
+                    std::ptr::null_mut(),
+                    len,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                )
+            };
+            assert_ne!(map, libc::MAP_FAILED);
+            map
+        };
+        let region = anonymous(map_len + GUARD);
+        let guard =
+            unsafe { std::slice::from_raw_parts_mut(region.cast::<u8>().add(map_len), GUARD) };
+        guard.fill(0xab);
+        // Each filler takes the highest gap that fits the file map. The first
+        // one below the region shows that no such gap is left above it.
+        let mut fillers = Vec::new();
+        loop {
+            let filler = anonymous(map_len);
+            if filler < region {
+                unsafe { libc::munmap(filler, map_len) };
+                break;
+            }
+            fillers.push(filler);
+        }
+        unsafe { libc::munmap(region, map_len) };
+        let mut text = ForwardText::open(&path, true).unwrap();
+        assert!(
+            std::ptr::eq(text.as_str().as_ptr(), region.cast::<u8>()),
+            "the file map does not end at the guard"
+        );
+        for pos in [bytes.len() + RELEASE_STEP, 3 * RELEASE_STEP, usize::MAX] {
+            text.release_before(pos).unwrap();
+        }
+        assert_eq!(text.released, bytes.len());
+        assert!(guard.iter().all(|&b| b == 0xab));
+        assert_eq!(text.as_str().as_bytes(), bytes.as_slice());
+        unsafe { libc::munmap(guard.as_mut_ptr().cast(), GUARD) };
+        for filler in fillers {
+            unsafe { libc::munmap(filler, map_len) };
+        }
+    }
+
+    #[test]
+    fn forward_text_reports_invalid_utf8_as_the_mapped_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut bytes = text_of_at_least(RELEASE_STEP + (200 << 10));
+        let at = bytes.len() - 100;
+        bytes[at] = 0xc3;
+        let path = dir.path().join("bad.con");
+        std::fs::write(&path, &bytes).unwrap();
+        for map in [true, false] {
+            let err = ForwardText::open(&path, map).err().unwrap().to_string();
+            assert_eq!(Err(err), mapped_text(&path), "map {map}");
         }
     }
 }

@@ -1342,8 +1342,8 @@ fn read_con_string(
 /// materialize the full trajectory as `PyConFrame` up front).
 #[pyclass(name = "ConFrameIterator")]
 struct PyConFrameIterator {
-    /// Full file text (owned so the iterator is independent of the caller's path).
-    contents: String,
+    /// Full file text: owned, or mapped with `iter_con(path, mmap=True)`.
+    contents: crate::compression::ForwardText,
     /// Byte offset of the next frame start within `contents`.
     pos: usize,
 }
@@ -1355,23 +1355,26 @@ impl PyConFrameIterator {
     }
 
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<PyConFrame>> {
-        if self.pos >= self.contents.len() {
+        if self.pos >= self.contents.as_str().len() {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
         // owns that boundary and trailing whitespace.
-        let slice = &self.contents[self.pos..];
+        let slice = &self.contents.as_str()[self.pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
                 let consumed =
                     (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
                 self.pos += consumed;
+                self.contents
+                    .release_before(self.pos)
+                    .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
             Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
             None => {
-                self.pos = self.contents.len();
+                self.pos = self.contents.as_str().len();
                 Ok(None)
             }
         }
@@ -1379,14 +1382,17 @@ impl PyConFrameIterator {
 
     /// Skip one frame without building a `ConFrame`. False at EOF.
     fn forward(&mut self) -> PyResult<bool> {
-        if self.pos >= self.contents.len() {
+        if self.pos >= self.contents.as_str().len() {
             return Ok(false);
         }
-        let slice = &self.contents[self.pos..];
+        let slice = &self.contents.as_str()[self.pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.forward() {
             Some(Ok(())) => {
                 self.pos += iter.byte_pos();
+                self.contents
+                    .release_before(self.pos)
+                    .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
             Some(Err(e)) => Err(PyIOError::new_err(format!("skip error: {e}"))),
@@ -1417,18 +1423,25 @@ impl PyConFrameIterator {
 ///
 /// Prefer this over [`read_all_frames`] when you process frames one at a time:
 /// only one `ConFrame` / `PyConFrame` is built per `__next__` call.
+///
+/// The file is read into memory once. With ``mmap=True`` an uncompressed
+/// file of 64 KiB or more is mapped instead, and the pages already read are
+/// released. On Linux about 32 MiB of the file then stays resident. On macOS
+/// the release does not discard pages, and outside Unix it is a no-op, so
+/// there memory can grow to the file size. The mapped file must not change
+/// until the iterator is dropped. A truncation can end the process with
+/// ``SIGBUS``, which is a signal and not an ``OSError``.
 #[pyfunction]
-fn iter_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameIterator> {
+#[pyo3(signature = (path, *, mmap=false))]
+fn iter_con(py: Python<'_>, path: &str, mmap: bool) -> PyResult<PyConFrameIterator> {
     let path_owned = path.to_owned();
-    let text = py
+    let contents = py
         .detach(|| {
-            crate::compression::read_file_text(Path::new(&path_owned)).map_err(|e| e.to_string())
+            crate::compression::ForwardText::open(Path::new(&path_owned), mmap)
+                .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    Ok(PyConFrameIterator {
-        contents: text,
-        pos: 0,
-    })
+    Ok(PyConFrameIterator { contents, pos: 0 })
 }
 
 /// Count frames without building atom / Python objects (skip walk).
