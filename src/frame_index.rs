@@ -105,6 +105,7 @@ fn no_frame_at(text: &str, pos: usize) -> bool {
 /// The first offset must be 0, and the skip from each offset must end at
 /// the next one, or at the end of the data for the last. A skip reads no
 /// state from earlier frames, so the frames are checked independently.
+/// The skip gets the next offset as a hint, which changes only its speed.
 fn offsets_match_scan(text: &str, offsets: &[u64]) -> bool {
     let Some(&first) = offsets.first() else {
         return no_frame_at(text, 0);
@@ -116,8 +117,9 @@ fn offsets_match_scan(text: &str, offsets: &[u64]) -> bool {
         if !starts_line || no_frame_at(text, start) {
             return false;
         }
+        let end = offsets.get(i + 1).map_or(text.len(), |&o| o as usize);
         let mut skip = ConFrameIterator::starting_at(text, start);
-        if !matches!(skip.forward_fast(), Some(Ok(()))) {
+        if !matches!(skip.forward_fast_to(Some(end)), Some(Ok(()))) {
             return false;
         }
         match offsets.get(i + 1) {
@@ -764,6 +766,41 @@ mod tests {
         assert!(checked >= 10, "{checked} fixtures");
         assert!(offsets_match_scan(" \n\n", &[]));
         assert!(!offsets_match_scan(&fixture(1), &[]));
+    }
+
+    #[test]
+    fn end_hint_never_changes_the_skip() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/test");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(one) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let text = one.repeat(3);
+            let line_starts: Vec<usize> = std::iter::once(0)
+                .chain(text.match_indices('\n').map(|(i, _)| i + 1))
+                .collect();
+            let mut starts = crate::iterators::frame_start_offsets(&text);
+            starts.extend(line_starts.iter().copied().take(40));
+            starts.retain(|&s| s < text.len());
+            for start in starts {
+                let mut plain = ConFrameIterator::starting_at(&text, start);
+                let want = format!("{:?}", plain.forward_fast());
+                let end = plain.byte_pos();
+                let mut hints = vec![None, Some(0), Some(text.len() + 1)];
+                hints.extend([end.saturating_sub(1), end + 1].map(Some));
+                hints.extend(line_starts.iter().map(|&s| Some(s)));
+                for &hint in &hints {
+                    let mut hinted = ConFrameIterator::starting_at(&text, start);
+                    let got = format!("{:?}", hinted.forward_fast_to(hint));
+                    assert_eq!(got, want, "{} at {start}, hint {hint:?}", path.display());
+                    assert_eq!(hinted.byte_pos(), plain.byte_pos());
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked >= 10, "{checked} fixtures");
     }
 
     #[test]

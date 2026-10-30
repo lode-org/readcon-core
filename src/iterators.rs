@@ -328,6 +328,27 @@ impl<'a> ConFrameIterator<'a> {
         Ok(())
     }
 
+    /// [`Self::advance_lines`] for `n` lines expected to end at `end`.
+    ///
+    /// When `end` follows a `\n` and exactly `n` newlines lie before it,
+    /// the per-line search would stop at `end` too, so one vectorized
+    /// count replaces it. Any other case takes the per-line search.
+    fn advance_lines_to(&mut self, n: usize, end: Option<usize>) -> Result<(), error::ParseError> {
+        self.lines.clear_peek();
+        let pos = self.lines.pos;
+        let bytes = self.lines.bytes;
+        if let Some(end) = end
+            && pos < end
+            && end <= bytes.len()
+            && bytes[end - 1] == b'\n'
+            && memchr::memchr_iter(b'\n', &bytes[pos..end]).count() == n
+        {
+            self.lines.pos = end;
+            return Ok(());
+        }
+        self.advance_lines(n)
+    }
+
     /// One line from the shared cursor (same as full-parse path).
     fn read_line_str(&mut self) -> Option<&'a str> {
         self.lines.clear_peek();
@@ -338,6 +359,17 @@ impl<'a> ConFrameIterator<'a> {
     /// frame without fully parsing its atom data. Shares the same line
     /// cursor as [`Iterator::next`], so skip and full parse interleave safely.
     pub fn forward_fast(&mut self) -> Option<Result<(), error::ParseError>> {
+        self.forward_fast_to(None)
+    }
+
+    /// [`Self::forward_fast`] for a frame expected to end at byte `end`.
+    ///
+    /// The result and the new position are the same as without `end`.
+    /// Line blocks that end exactly at `end` are counted, not searched.
+    pub(crate) fn forward_fast_to(
+        &mut self,
+        end: Option<usize>,
+    ) -> Option<Result<(), error::ParseError>> {
         self.lines.clear_peek();
         if self.lines.pos >= self.lines.bytes.len() {
             return None;
@@ -378,7 +410,7 @@ impl<'a> ConFrameIterator<'a> {
         }
         let total_atoms: usize = natms_per_type.iter().sum();
         let coord_block_lines = total_atoms + natm_types * 2;
-        if let Err(e) = self.advance_lines(coord_block_lines) {
+        if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
             return Some(Err(e));
         }
         // Optional sections: blank line + same-shape block, repeated.
@@ -414,7 +446,7 @@ impl<'a> ConFrameIterator<'a> {
             }
             // Consume the blank separator and the section block.
             self.lines.pos += next_eol.map(|p| p + 1).unwrap_or(rest.len());
-            if let Err(e) = self.advance_lines(coord_block_lines) {
+            if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
                 return Some(Err(e));
             }
         }

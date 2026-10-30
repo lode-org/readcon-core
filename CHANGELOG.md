@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file. See [conven
 - `read_file_contents`, and so `ConTrajectory::open`, opens the path once and reads every byte through that handle. A pipe now reads correctly, and opening a trajectory no longer reopens the file for the magic bytes or the sidecar check.
 - `ConTrajectory::frame` relies on the UTF-8 check made at open and no longer checks each frame again. A sidecar offset that does not start a line is rejected, so frames are always cut at character boundaries.
 - A `.rcidx` sidecar is used only when its offsets are the frame starts a scan finds: the frame skip from each offset must end at the next one. A checksum-valid table with one offset dropped used to make `frame(6)` return frame 7. It is now rescanned, including tables stored by `write_sidecar` or the MPI writer.
-- Reusing a `.rcidx` sidecar no longer hashes the data file, since the offset check alone decides whether a table is the scan. The stored size is still compared first. Writers still store the hash, so the format stays version 2 and earlier version 2 readers keep working.
+- Reusing a `.rcidx` sidecar no longer hashes the data file, since the offset check alone decides whether a table is the scan. The stored size is still compared first. Writers still store the hash, so the format stays version 2 and earlier version 2 readers keep working. The check counts the newlines of each coordinate block up to the next stored offset at once, instead of searching line by line.
 - `rkr_trajectory_len(NULL)` records `null argument` for `rkr_last_error_message`, as the other NULL paths of the trajectory calls do.
 
 ## v0.17.2 - 2026-10-29
