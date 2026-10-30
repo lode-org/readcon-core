@@ -133,6 +133,13 @@ impl FileContents {
         }
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            FileContents::Owned(s) => s.as_bytes(),
+            FileContents::Mapped(m) => m,
+        }
+    }
+
     /// Like [`Self::as_str`], but validates mapped files in newline-aligned
     /// slices (in parallel with the `parallel` feature).
     pub fn as_str_sliced(&self) -> Result<&str, std::str::Utf8Error> {

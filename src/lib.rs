@@ -20,6 +20,7 @@ pub mod parser;
 /// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
 pub mod rcso;
 pub mod storage_dtype;
+pub mod trajectory;
 pub mod types;
 pub mod units;
 pub mod writer;
