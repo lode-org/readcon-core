@@ -6,6 +6,7 @@
 //! (its length and a hash of every byte) and its own checksum
 //! is intact; any mismatch rebuilds the index instead. The mtime is not
 //! part of the fingerprint, so restoring it cannot revive a stale index.
+//! Every stored offset must also start a line of the data.
 //!
 //! Layout (all integers little-endian):
 //!
@@ -240,16 +241,20 @@ impl Fingerprint {
     }
 }
 
-/// Fingerprint of the bytes now at `path`.
-fn fingerprint(path: &Path) -> io::Result<Fingerprint> {
+/// Call `f` on the bytes now at `path`.
+fn with_mapped<T>(path: &Path, f: impl FnOnce(&[u8]) -> T) -> io::Result<T> {
     let file = std::fs::File::open(path)?;
     if file.metadata()?.len() == 0 {
-        return Ok(Fingerprint::of(&[]));
+        return Ok(f(&[]));
     }
     // SAFETY: as for every mapped reader in this crate, the file must not
     // be truncated or rewritten while the map is alive.
     let map = unsafe { memmap2::Mmap::map(&file)? };
-    Ok(Fingerprint::of(&map))
+    Ok(f(&map))
+}
+
+fn fingerprint(path: &Path) -> io::Result<Fingerprint> {
+    with_mapped(path, Fingerprint::of)
 }
 
 fn encode(fp: Fingerprint, idx: &FrameIndex) -> Vec<u8> {
@@ -272,8 +277,9 @@ fn u64_at(b: &[u8], at: usize) -> u64 {
     u64::from_le_bytes(b[at..at + 8].try_into().unwrap())
 }
 
-/// Decode a sidecar and check it against `fp`; `None` means stale or corrupt.
-fn decode(bytes: &[u8], fp: Fingerprint) -> Option<FrameIndex> {
+/// Decode a sidecar and check it against `fp` and `data`, the bytes `fp`
+/// describes; `None` means stale or corrupt.
+fn decode(bytes: &[u8], fp: Fingerprint, data: &[u8]) -> Option<FrameIndex> {
     if bytes.len() < HEADER_LEN + 8 || &bytes[..8] != MAGIC {
         return None;
     }
@@ -302,6 +308,12 @@ fn decode(bytes: &[u8], fp: Fingerprint) -> Option<FrameIndex> {
     if !ordered || offsets.last().is_some_and(|&o| o >= fp.size) {
         return None;
     }
+    // Readers slice the text at these offsets without a new UTF-8 check.
+    // A byte after `\n` always starts a character.
+    let starts_line = |o: u64| o == 0 || data.get(o as usize - 1) == Some(&b'\n');
+    if !offsets.iter().all(|&o| starts_line(o)) {
+        return None;
+    }
     Some(FrameIndex {
         offsets,
         data_len: fp.size,
@@ -315,7 +327,7 @@ pub fn read_sidecar(path: &Path) -> io::Result<Option<FrameIndex>> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e),
     };
-    Ok(decode(&bytes, fingerprint(path)?))
+    with_mapped(path, |data| decode(&bytes, Fingerprint::of(data), data))
 }
 
 fn write_encoded(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -359,7 +371,7 @@ pub fn load_or_build(path: &Path, text: &str, write_back: bool) -> Result<FrameI
     let mut fp = None;
     if let Ok(bytes) = std::fs::read(sidecar_path(path)) {
         let fp = *fp.insert(Fingerprint::of(text.as_bytes()));
-        if let Some(idx) = decode(&bytes, fp) {
+        if let Some(idx) = decode(&bytes, fp, text.as_bytes()) {
             return Ok(idx);
         }
     }
@@ -608,7 +620,7 @@ mod tests {
         let mut bytes = encode(fp, &idx);
         bytes[8..12].copy_from_slice(&1u32.to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp), None);
+        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
     }
 
     fn rechecksum(bytes: &mut [u8]) {
@@ -626,7 +638,7 @@ mod tests {
         let n = (idx.len() as u64).saturating_add(1);
         bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&n.to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp), None);
+        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
     }
 
     #[test]
@@ -641,6 +653,6 @@ mod tests {
         assert!(n > idx.len());
         bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&(n as u64).to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp), None);
+        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
     }
 }

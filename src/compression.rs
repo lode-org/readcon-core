@@ -57,66 +57,74 @@ const MMAP_THRESHOLD: u64 = 64 * 1024;
 /// Reads file contents, decompressing if needed.
 ///
 /// Detection strategy:
-/// 1. Read first 2 bytes to check magic bytes.
-/// 2. If gzip: decompress entire file to a String.
-/// 3. If uncompressed and < 64 KiB: `read_to_string`.
+/// 1. Read the first 4 bytes to check magic bytes.
+/// 2. If gzip or zstd: decompress entire file to a String.
+/// 3. If uncompressed and < 64 KiB: read the rest into a String.
 /// 4. If uncompressed and >= 64 KiB: memory-mapped I/O.
+///
+/// The path is opened once and every byte comes from that handle, so a
+/// pipe works and a file replaced during the call is not mixed in.
 pub fn read_file_contents(path: &Path) -> Result<FileContents, Box<dyn std::error::Error>> {
+    read_file_contents_detected(path).map(|(contents, _)| contents)
+}
+
+/// [`read_file_contents`], also returning the compression it detected.
+pub fn read_file_contents_detected(
+    path: &Path,
+) -> Result<(FileContents, Compression), Box<dyn std::error::Error>> {
     let file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
 
-    // Read first 4 bytes for magic detection (gzip needs 2, zstd needs 4)
-    let mut magic = [0u8; 4];
-    let bytes_read = {
-        let mut f = &file;
-        f.read(&mut magic)?
-    };
+    // gzip needs 2 magic bytes and zstd needs 4. They stay in front of the
+    // rest of the stream, since a pipe cannot seek back.
+    let mut magic = Vec::with_capacity(4);
+    (&file).take(4).read_to_end(&mut magic)?;
+    let compression = detect_compression(&magic);
+    let mut stream = magic.as_slice().chain(&file);
 
-    let compression = if bytes_read > 0 {
-        detect_compression(&magic[..bytes_read])
-    } else {
-        Compression::None
-    };
-
-    match compression {
+    let contents = match compression {
         Compression::Gzip => {
-            // Re-open and decompress the entire file
-            let file = std::fs::File::open(path)?;
             // Every gzip member, in order (CON-compress.1, D16).
-            let mut decoder = flate2::read::MultiGzDecoder::new(file);
+            let mut decoder = flate2::read::MultiGzDecoder::new(stream);
             let mut contents = String::new();
             decoder.read_to_string(&mut contents)?;
-            Ok(FileContents::Owned(contents))
+            FileContents::Owned(contents)
         }
         Compression::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                let file = std::fs::File::open(path)?;
-                let mut decoder = zstd::stream::read::Decoder::new(file)?;
+                let mut decoder = zstd::stream::read::Decoder::new(stream)?;
                 let mut contents = String::new();
                 decoder.read_to_string(&mut contents)?;
-                Ok(FileContents::Owned(contents))
+                FileContents::Owned(contents)
             }
             #[cfg(not(feature = "zstd"))]
             {
-                Err(io::Error::new(
+                return Err(io::Error::new(
                     io::ErrorKind::Unsupported,
                     "zstd-compressed input detected; rebuild readcon-core with --features zstd",
                 )
-                .into())
+                .into());
             }
         }
         Compression::None => {
             if metadata.len() < MMAP_THRESHOLD {
-                let contents = std::fs::read_to_string(path)?;
-                Ok(FileContents::Owned(contents))
+                let mut bytes = Vec::with_capacity(metadata.len() as usize);
+                stream.read_to_end(&mut bytes)?;
+                let contents = String::from_utf8(bytes).map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "stream did not contain valid UTF-8",
+                    )
+                })?;
+                FileContents::Owned(contents)
             } else {
-                let file = std::fs::File::open(path)?;
                 let mmap = unsafe { memmap2::Mmap::map(&file)? };
-                Ok(FileContents::Mapped(mmap))
+                FileContents::Mapped(mmap)
             }
         }
-    }
+    };
+    Ok((contents, compression))
 }
 
 /// Holds file contents either as an owned String or a memory-mapped region.

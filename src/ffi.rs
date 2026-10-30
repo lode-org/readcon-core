@@ -480,7 +480,7 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
 
 /// Detailed message from the most recent failing `rkr_writer_extend`,
 /// `rkr_writer_flush`, `rkr_trajectory_open` or `rkr_trajectory_read_frame`
-/// on this thread.
+/// on this thread, or from `rkr_trajectory_len` on a NULL handle.
 ///
 /// `rkr_status_message` stays a fixed string per status code. This pointer
 /// carries the underlying I/O or format text, for example
@@ -852,7 +852,10 @@ pub unsafe extern "C" fn rkr_trajectory_open(
     }
 }
 
-/// Number of frames in the handle, or `usize::MAX` for a NULL handle.
+/// Number of frames in the handle.
+///
+/// A NULL handle returns `usize::MAX` and records `null argument`. A live
+/// handle leaves `rkr_last_error_message` as it was.
 ///
 /// # Safety
 /// `handle` must be NULL or a live handle from `rkr_trajectory_open`.
@@ -860,7 +863,10 @@ pub unsafe extern "C" fn rkr_trajectory_open(
 pub unsafe extern "C" fn rkr_trajectory_len(handle: *const RKRTrajectory) -> usize {
     match unsafe { (handle as *const crate::trajectory::ConTrajectory).as_ref() } {
         Some(traj) => traj.len(),
-        None => usize::MAX,
+        None => {
+            set_last_error("null argument");
+            usize::MAX
+        }
     }
 }
 

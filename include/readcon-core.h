@@ -641,7 +641,7 @@ const char *rkr_status_message(enum RKRStatus status);
 /**
  * Detailed message from the most recent failing `rkr_writer_extend`,
  * `rkr_writer_flush`, `rkr_trajectory_open` or `rkr_trajectory_read_frame`
- * on this thread.
+ * on this thread, or from `rkr_trajectory_len` on a NULL handle.
  *
  * `rkr_status_message` stays a fixed string per status code. This pointer
  * carries the underlying I/O or format text, for example
@@ -741,7 +741,10 @@ struct RKRTrajectory *rkr_trajectory_open(const char *filename_c,
                                           int32_t write_index);
 
 /**
- * Number of frames in the handle, or `usize::MAX` for a NULL handle.
+ * Number of frames in the handle.
+ *
+ * A NULL handle returns `usize::MAX` and records `null argument`. A live
+ * handle leaves `rkr_last_error_message` as it was.
  */
 uintptr_t rkr_trajectory_len(const struct RKRTrajectory *handle);
 

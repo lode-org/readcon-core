@@ -148,6 +148,10 @@ int main(int argc, char **argv) {
     CHECK(out_of_range_is_reported(t, n));
     CHECK(rkr_trajectory_read_frame(NULL, 0, NULL) == RKR_STATUS_NULL_POINTER);
     CHECK(last_error_is("null argument"));
+    CHECK(out_of_range_is_reported(t, n));
+    CHECK(rkr_trajectory_len(NULL) == SIZE_MAX);
+    CHECK(last_error_is("null argument"));
+    CHECK(rkr_trajectory_len(t) == n && last_error_is("null argument"));
     CHECK(rkr_trajectory_read_frame(t, 0, &f) == RKR_STATUS_SUCCESS);
     CHECK(f != NULL && rkr_last_error_message() == NULL);
     free_rkr_frame(f);

@@ -1,5 +1,5 @@
 use readcon_core::error::ParseError;
-use readcon_core::frame_index::{read_sidecar, sidecar_path};
+use readcon_core::frame_index::{FrameIndex, read_sidecar, sidecar_path, write_sidecar};
 use readcon_core::iterators::read_all_frames;
 use readcon_core::trajectory::ConTrajectory;
 use std::io::Write;
@@ -116,6 +116,65 @@ fn empty_file_and_bad_frame() {
     assert!(traj.frame(0).is_ok());
     assert!(traj.frame(1).is_err());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A pipe gives its bytes to one reader only, so a second open sees the
+/// rest of the stream or nothing.
+#[cfg(target_os = "linux")]
+#[test]
+fn open_reads_the_file_once() {
+    use std::os::fd::AsRawFd;
+    let text = std::fs::read_to_string(test_case!("tiny_multi_cuh2.con"))
+        .unwrap()
+        .repeat(3);
+    let expected = readcon_core::iterators::ConFrameIterator::new(&text)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gz.write_all(text.as_bytes()).unwrap();
+    for bytes in [text.clone().into_bytes(), gz.finish().unwrap()] {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        writer.write_all(&bytes).unwrap();
+        drop(writer);
+        let path = PathBuf::from(format!("/proc/self/fd/{}", reader.as_raw_fd()));
+        let traj = ConTrajectory::open(&path, false).unwrap();
+        assert_eq!(traj.len(), expected.len());
+        for (i, want) in expected.iter().enumerate() {
+            assert_eq!(&traj.frame(i).unwrap(), want, "frame {i}");
+        }
+    }
+}
+
+/// `frame` relies on the open-time UTF-8 check, so a sidecar offset that
+/// splits a character must send the reader back to a scan.
+#[test]
+fn sidecar_offset_inside_a_character_is_rescanned() {
+    let dir = scratch("boundary");
+    let path = dir.join("utf8.con");
+    let one = std::fs::read_to_string(test_case!("tiny_cuh2.con")).unwrap();
+    let text = format!("é{one}").repeat(3);
+    std::fs::write(&path, &text).unwrap();
+    let mut bogus = FrameIndex::scan(&text).unwrap();
+    bogus.offsets[1] += 1;
+    assert!(!text.is_char_boundary(bogus.offsets[1] as usize));
+    write_sidecar(&path, &bogus).unwrap();
+    assert_matches_read_all(&path, false);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn null_handle_len_records_null_argument() {
+    use readcon_core::ffi::{rkr_last_error_message, rkr_trajectory_len};
+    let last = || {
+        let msg = rkr_last_error_message();
+        (!msg.is_null())
+            .then(|| unsafe { std::ffi::CStr::from_ptr(msg) }.to_str().unwrap().to_owned())
+    };
+    let missing = c"/nonexistent/x.con";
+    assert!(unsafe { readcon_core::ffi::rkr_trajectory_open(missing.as_ptr(), 0) }.is_null());
+    assert!(last().is_some_and(|m| m != "null argument"));
+    assert_eq!(unsafe { rkr_trajectory_len(std::ptr::null()) }, usize::MAX);
+    assert_eq!(last().as_deref(), Some("null argument"));
 }
 
 /// An edit that keeps the size, both 4 KiB edges and the mtime, but moves

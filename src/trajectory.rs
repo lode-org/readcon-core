@@ -1,6 +1,5 @@
 //! Random access to the frames of one CON file.
 
-use std::io::Read;
 use std::path::Path;
 
 use crate::compression::{self, Compression, FileContents};
@@ -21,13 +20,14 @@ pub struct ConTrajectory {
 }
 
 impl ConTrajectory {
+    /// Read `path` once, check it as UTF-8 and load or scan its index.
     pub fn open(path: &Path, write_index: bool) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = compression::read_file_contents(path)?;
+        let (contents, compression) = compression::read_file_contents_detected(path)?;
         let text = contents.as_str_sliced()?;
-        let index = if is_compressed(path)? {
-            FrameIndex::scan(text)?
-        } else {
+        let index = if compression == Compression::None {
             frame_index::load_or_build(path, text, write_index)?
+        } else {
+            FrameIndex::scan(text)?
         };
         Ok(Self { contents, index })
     }
@@ -48,21 +48,35 @@ impl ConTrajectory {
             len: self.len(),
         };
         let range = self.index.range(i).ok_or(out_of_range)?;
-        let bytes = self
-            .contents
-            .as_bytes()
-            .get(range)
-            .ok_or(ParseError::IncompleteFrame)?;
-        let text = std::str::from_utf8(bytes)
-            .map_err(|e| ParseError::ValidationError(format!("invalid UTF-8 in frame {i}: {e}")))?;
+        let text = self.text().get(range).ok_or(ParseError::IncompleteFrame)?;
         ConFrameIterator::new(text)
             .next()
             .unwrap_or(Err(ParseError::IncompleteFrame))
     }
+
+    fn text(&self) -> &str {
+        // SAFETY: `open` checked every byte with `as_str_sliced` and the
+        // contents are never written. A mapped file must not change while
+        // mapped, as for every mapped reader in this crate.
+        unsafe { std::str::from_utf8_unchecked(self.contents.as_bytes()) }
+    }
 }
 
-fn is_compressed(path: &Path) -> std::io::Result<bool> {
-    let mut magic = Vec::with_capacity(4);
-    std::fs::File::open(path)?.take(4).read_to_end(&mut magic)?;
-    Ok(compression::detect_compression(&magic) != Compression::None)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offset_inside_a_character_is_an_error() {
+        let text = "é\n".repeat(4);
+        let traj = ConTrajectory {
+            contents: FileContents::Owned(text.clone()),
+            index: FrameIndex {
+                offsets: vec![0, 1],
+                data_len: text.len() as u64,
+            },
+        };
+        assert!(matches!(traj.frame(0), Err(ParseError::IncompleteFrame)));
+        assert!(matches!(traj.frame(1), Err(ParseError::IncompleteFrame)));
+    }
 }
