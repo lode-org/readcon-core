@@ -280,6 +280,17 @@ impl<'a> ConFrameIterator<'a> {
         }
     }
 
+    /// Like [`Self::new`], but reading from byte `pos` of `file_contents`.
+    ///
+    /// `pos` must be 0 or follow a `\n`. The iterator keeps no state from
+    /// earlier frames, so skipping from `pos` sees what a scan sees there.
+    pub(crate) fn starting_at(file_contents: &'a str, pos: usize) -> Self {
+        debug_assert!(pos == 0 || file_contents.as_bytes()[pos - 1] == b'\n');
+        let mut it = Self::new(file_contents);
+        it.lines.pos = pos;
+        it
+    }
+
     /// Like [`Self::new`] for a buffer that has not been UTF-8 validated.
     ///
     /// Text lines are checked as they are tokenized. Numeric rows reject a

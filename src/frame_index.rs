@@ -6,7 +6,10 @@
 //! (its length and a hash of every byte) and its own checksum
 //! is intact; any mismatch rebuilds the index instead. The mtime is not
 //! part of the fingerprint, so restoring it cannot revive a stale index.
-//! Every stored offset must also start a line of the data.
+//! The stored offsets must also be the ones a scan finds: the frame skip
+//! from each offset must end at the next. That check runs per frame, in
+//! parallel with the `parallel` feature, and a table that fails it is
+//! rebuilt.
 //!
 //! Layout (all integers little-endian):
 //!
@@ -80,7 +83,7 @@ pub fn frame_start_offsets_checked(text: &str) -> Result<Vec<usize>, ParseError>
     let mut scanner = ConFrameIterator::new(text);
     loop {
         let start = scanner.byte_pos();
-        if start >= text.len() || text.as_bytes()[start..].iter().all(u8::is_ascii_whitespace) {
+        if no_frame_at(text, start) {
             break;
         }
         out.push(start);
@@ -91,6 +94,51 @@ pub fn frame_start_offsets_checked(text: &str) -> Result<Vec<usize>, ParseError>
         }
     }
     Ok(out)
+}
+
+/// True when the scan ends at `pos`: nothing or only whitespace follows.
+fn no_frame_at(text: &str, pos: usize) -> bool {
+    pos >= text.len() || text.as_bytes()[pos..].iter().all(u8::is_ascii_whitespace)
+}
+
+/// True when `offsets` is exactly what [`frame_start_offsets_checked`]
+/// returns for `text`.
+///
+/// The first offset must be 0, and the skip from each offset must end at
+/// the next one, or at the end of the data for the last. A skip reads no
+/// state from earlier frames, so the frames are checked independently.
+fn offsets_match_scan(text: &str, offsets: &[u64]) -> bool {
+    let Some(&first) = offsets.first() else {
+        return no_frame_at(text, 0);
+    };
+    let frame_ok = |i: usize| {
+        let start = offsets[i] as usize;
+        // Also starts the skip on a character boundary.
+        let starts_line = start == 0 || text.as_bytes().get(start - 1) == Some(&b'\n');
+        if !starts_line || no_frame_at(text, start) {
+            return false;
+        }
+        let mut skip = ConFrameIterator::starting_at(text, start);
+        if !matches!(skip.forward_fast(), Some(Ok(()))) {
+            return false;
+        }
+        match offsets.get(i + 1) {
+            Some(&next) => skip.byte_pos() as u64 == next,
+            None => no_frame_at(text, skip.byte_pos()),
+        }
+    };
+    if first != 0 {
+        return false;
+    }
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        (0..offsets.len()).into_par_iter().all(frame_ok)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        (0..offsets.len()).all(frame_ok)
+    }
 }
 
 /// Smallest slice before UTF-8 validation is split on newlines.
@@ -277,9 +325,9 @@ fn u64_at(b: &[u8], at: usize) -> u64 {
     u64::from_le_bytes(b[at..at + 8].try_into().unwrap())
 }
 
-/// Decode a sidecar and check it against `fp` and `data`, the bytes `fp`
+/// Decode a sidecar and check it against `fp` and `text`, the data `fp`
 /// describes; `None` means stale or corrupt.
-fn decode(bytes: &[u8], fp: Fingerprint, data: &[u8]) -> Option<FrameIndex> {
+fn decode(bytes: &[u8], fp: Fingerprint, text: &str) -> Option<FrameIndex> {
     if bytes.len() < HEADER_LEN + 8 || &bytes[..8] != MAGIC {
         return None;
     }
@@ -308,10 +356,9 @@ fn decode(bytes: &[u8], fp: Fingerprint, data: &[u8]) -> Option<FrameIndex> {
     if !ordered || offsets.last().is_some_and(|&o| o >= fp.size) {
         return None;
     }
-    // Readers slice the text at these offsets without a new UTF-8 check.
-    // A byte after `\n` always starts a character.
-    let starts_line = |o: u64| o == 0 || data.get(o as usize - 1) == Some(&b'\n');
-    if !offsets.iter().all(|&o| starts_line(o)) {
+    // A checksum cannot catch a table that was written whole but wrong.
+    // Readers also slice the text here without a new UTF-8 check.
+    if !offsets_match_scan(text, &offsets) {
         return None;
     }
     Some(FrameIndex {
@@ -327,7 +374,11 @@ pub fn read_sidecar(path: &Path) -> io::Result<Option<FrameIndex>> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e),
     };
-    with_mapped(path, |data| decode(&bytes, Fingerprint::of(data), data))
+    with_mapped(path, |data| {
+        let fp = Fingerprint::of(data);
+        let text = validate_utf8_sliced(data).ok()?;
+        decode(&bytes, fp, text)
+    })
 }
 
 fn write_encoded(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -347,8 +398,9 @@ fn write_encoded(path: &Path, bytes: &[u8]) -> io::Result<()> {
 ///
 /// The fingerprint describes `path` as it exists at this call. Scanning
 /// an earlier buffer and then calling this can store that fingerprint
-/// with stale offsets. [`load_or_build`] fingerprints the scanned buffer
-/// itself, so its sidecar only matches those bytes.
+/// with stale offsets. Readers then reject the table, since it is not a
+/// scan of the data, and rescan. [`load_or_build`] fingerprints the
+/// scanned buffer itself, so its sidecar only matches those bytes.
 pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
     let fp = fingerprint(path)?;
     if fp.size != idx.data_len {
@@ -365,13 +417,13 @@ pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
 /// Uses the sidecar when it matches `text`; otherwise scans and, when
 /// `write_back` is set, refreshes the sidecar. The data file is not read
 /// again: the fingerprint is taken from `text`, so a sidecar written for
-/// a buffer that `path` no longer holds is rejected by the next reader.
+/// bytes other than those now at `path` is rejected by the next reader.
 /// Write errors are ignored, so read-only directories still work.
 pub fn load_or_build(path: &Path, text: &str, write_back: bool) -> Result<FrameIndex, ParseError> {
     let mut fp = None;
     if let Ok(bytes) = std::fs::read(sidecar_path(path)) {
         let fp = *fp.insert(Fingerprint::of(text.as_bytes()));
-        if let Some(idx) = decode(&bytes, fp, text.as_bytes()) {
+        if let Some(idx) = decode(&bytes, fp, text) {
             return Ok(idx);
         }
     }
@@ -613,6 +665,40 @@ mod tests {
     }
 
     #[test]
+    fn only_the_scanned_table_matches() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/test");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(one) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let text = one.repeat(3);
+            let Ok(scan) = frame_start_offsets_checked(&text) else {
+                continue;
+            };
+            let good: Vec<u64> = scan.iter().map(|&o| o as u64).collect();
+            assert!(offsets_match_scan(&text, &good), "{}", path.display());
+            for drop in 0..good.len() {
+                let mut t = good.clone();
+                t.remove(drop);
+                assert!(
+                    !offsets_match_scan(&text, &t),
+                    "{} drop {drop}",
+                    path.display()
+                );
+            }
+            let mut longer = good.clone();
+            longer.push(text.len() as u64);
+            assert!(!offsets_match_scan(&text, &longer), "{}", path.display());
+            checked += 1;
+        }
+        assert!(checked >= 10, "{checked} fixtures");
+        assert!(offsets_match_scan(" \n\n", &[]));
+        assert!(!offsets_match_scan(&fixture(1), &[]));
+    }
+
+    #[test]
     fn version_1_sidecar_is_rebuilt() {
         let text = fixture(2);
         let idx = FrameIndex::scan(&text).unwrap();
@@ -620,7 +706,7 @@ mod tests {
         let mut bytes = encode(fp, &idx);
         bytes[8..12].copy_from_slice(&1u32.to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
+        assert_eq!(decode(&bytes, fp, &text), None);
     }
 
     fn rechecksum(bytes: &mut [u8]) {
@@ -638,7 +724,7 @@ mod tests {
         let n = (idx.len() as u64).saturating_add(1);
         bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&n.to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
+        assert_eq!(decode(&bytes, fp, &text), None);
     }
 
     #[test]
@@ -653,6 +739,6 @@ mod tests {
         assert!(n > idx.len());
         bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&(n as u64).to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp, text.as_bytes()), None);
+        assert_eq!(decode(&bytes, fp, &text), None);
     }
 }

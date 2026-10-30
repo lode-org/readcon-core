@@ -162,6 +162,57 @@ fn sidecar_offset_inside_a_character_is_rescanned() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Every stored offset starts a line and the checksum and fingerprint are
+/// valid, but the table is not the scan of the data. Each frame must come
+/// back right or as an error, never as another frame with `Ok`. The tables
+/// are stored with `write_sidecar`, as rank 0 of the MPI writer does.
+#[test]
+fn sidecar_with_a_dropped_or_extra_offset_is_rescanned() {
+    let dir = scratch("dropped");
+    let path = dir.join("ten.con");
+    let one = std::fs::read_to_string(test_case!("tiny_cuh2.con")).unwrap();
+    let x = "0.63940000000000108";
+    let text: String = (0..10)
+        .map(|i| one.replacen(x, &format!("{i}.25"), 1))
+        .collect();
+    std::fs::write(&path, &text).unwrap();
+    let expected = read_all_frames(&path).unwrap();
+    let good = FrameIndex::scan(&text).unwrap();
+    assert_eq!(good.len(), 10);
+
+    let mut tables = Vec::new();
+    for drop in 0..good.len() {
+        let mut t = good.clone();
+        t.offsets.remove(drop);
+        tables.push(t);
+    }
+    let frame3 = good.offsets[3] as usize;
+    let coords = frame3 + text[frame3..].find("Coordinates of Component 2").unwrap();
+    let mut extra = good.clone();
+    extra.offsets.insert(4, coords as u64);
+    tables.push(extra);
+
+    let starts_line = |&o: &u64| o == 0 || text.as_bytes()[o as usize - 1] == b'\n';
+    for bogus in tables {
+        write_sidecar(&path, &bogus).unwrap();
+        assert!(bogus.offsets.iter().all(starts_line));
+        assert_eq!(read_sidecar(&path).unwrap(), None, "{:?}", bogus.offsets);
+        let traj = ConTrajectory::open(&path, false).unwrap();
+        for (i, want) in expected.iter().enumerate().take(traj.len()) {
+            if let Ok(f) = traj.frame(i) {
+                assert_eq!(&f, want, "frame {i} of {:?}", bogus.offsets);
+            }
+        }
+        assert_matches_read_all(&path, false);
+        assert_eq!(read_sidecar(&path).unwrap(), None);
+        assert_matches_read_all(&path, true);
+        assert_eq!(read_sidecar(&path).unwrap().as_ref(), Some(&good));
+    }
+    write_sidecar(&path, &good).unwrap();
+    assert_eq!(read_sidecar(&path).unwrap(), Some(good));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn null_handle_len_records_null_argument() {
     use readcon_core::ffi::{rkr_last_error_message, rkr_trajectory_len};

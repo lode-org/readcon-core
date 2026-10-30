@@ -13,9 +13,10 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Fixed
 
-- The `.rcidx` fingerprint is the data length and a hash of every byte, and the sidecar format is now version 2. An edit that kept the size, both 4 KiB edges and a restored mtime used to reuse a stale index. It now forces a rescan. Version 1 sidecars are rebuilt once.
+- The `.rcidx` fingerprint is the data length and a hash of every byte, and the sidecar format is now version 2. An edit that kept the size, both 4 KiB edges and a restored mtime used to reuse a stale index. It now forces a rescan. Version 1 sidecars are rebuilt once. With `write_index` false, a version 1 sidecar is rescanned on every open and left in place.
 - `read_file_contents`, and so `ConTrajectory::open`, opens the path once and reads every byte through that handle. A pipe now reads correctly, and opening a trajectory no longer reopens the file for the magic bytes or the sidecar check.
 - `ConTrajectory::frame` relies on the UTF-8 check made at open and no longer checks each frame again. A sidecar offset that does not start a line is rejected, so frames are always cut at character boundaries.
+- A `.rcidx` sidecar is used only when its offsets are the frame starts a scan finds: the frame skip from each offset must end at the next one. A checksum-valid table with one offset dropped used to make `frame(6)` return frame 7. It is now rescanned, including tables stored by `write_sidecar` or the MPI writer.
 - `rkr_trajectory_len(NULL)` records `null argument` for `rkr_last_error_message`, as the other NULL paths of the trajectory calls do.
 
 ## v0.17.2 - 2026-10-29
