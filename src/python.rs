@@ -1475,14 +1475,18 @@ impl PyConFrameStream {
 }
 
 /// Return an iterator that reads ``path`` while it parses, one frame at a
-/// time. gzip and zstd input is decompressed as it is read, so memory
-/// follows the frame size and not the file size. The frames and the first
-/// error are those of ``iter_con``, with two exceptions where ``iter_con``
+/// time. The iterator decompresses gzip and zstd input as it reads it.
+/// Memory follows the frame size and a 1 MiB read. The frames and the first
+/// error match ``iter_con``, with two exceptions. In both, ``iter_con``
 /// raises before the first frame. Invalid UTF-8 raises at the frame that
-/// contains it. A decoder error, such as a truncated gzip file, raises after
-/// every frame decoded before it, in place of the parse error of a last
-/// frame it cuts short. A parse error in an earlier frame raises first. The
-/// iterator ends after an error.
+/// contains it. A decoder error raises after every frame decoded before it.
+/// A truncated gzip file is one cause. The decoder error also replaces the
+/// parse error of a last frame it cuts short. A parse error in an earlier
+/// frame raises first. The iterator ends after an error.
+///
+/// A read or decoder error can end the input in the middle of a number. The
+/// iterator then returns the last frame before the error as a normal frame.
+/// Parsing the decoded prefix whole gives that frame too.
 #[pyfunction]
 fn stream_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameStream> {
     let path = path.to_owned();

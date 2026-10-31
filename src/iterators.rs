@@ -581,29 +581,37 @@ impl<'a> Iterator for ConFrameIterator<'a> {
 /// Bytes [`ConFrameReader`] reads from its source at a time.
 const READ_SIZE: usize = 1 << 20;
 
-/// Whole lines that must follow the point where a parse stopped before its
-/// result is final. A parse looks at most three lines past the next frame
-/// start: a blank line, a symbol line and a component label.
+/// A parse result is final once this many whole lines follow the point where
+/// the parse stopped. The lookahead reaches at most three lines past the next
+/// frame start. Those are a blank line, a symbol line and a component label.
 const LOOKAHEAD_LINES: usize = 4;
 
-/// Frames parsed one at a time from a byte stream, such as a gzip or zstd
-/// decoder, keeping only a window of the text.
+/// Parses frames one at a time from a byte stream, such as a gzip or zstd
+/// decoder.
 ///
-/// Each item is the item [`ConFrameIterator::from_bytes`] gives at the same
-/// frame of the whole text. The window keeps the next frame, the lines the
-/// parse looks ahead at and up to one read, so memory follows the frame
-/// size and not the file size. The first error ends the iteration. Invalid
-/// UTF-8 is an error at the frame that contains it, as for a mapped file,
-/// while reading compressed input whole fails before the first frame.
+/// The reader keeps only a window of the text. The window has the next
+/// frame, a few lines of lookahead and up to one read. Memory follows the
+/// frame size and the read size. Each item matches what
+/// [`ConFrameIterator::from_bytes`] gives for that frame of the whole text.
+/// The first error ends the iteration. Invalid UTF-8 is an error at the
+/// frame that contains it, as for a mapped file. A whole read of compressed
+/// input fails before the first frame.
 ///
-/// A read error from the source, such as a truncated gzip file, ends the
-/// text where it occurs. The frames of the bytes read before it come first,
-/// then the read error. A parse error comes first only when the bytes after
-/// it settle it, so the read error replaces the error of a cut last frame.
-/// Reading compressed input whole gives the read error and no frames.
+/// A read error ends the text where it occurs. A truncated gzip file is one
+/// cause. The reader yields every frame read before the error, then the
+/// error. A parse error comes first only if four whole lines and a non-blank
+/// byte follow it. Otherwise the read error replaces the parse error of the
+/// cut last frame. A whole read of compressed input gives the read error and
+/// no frames.
+///
+/// A read error can end the text in the middle of a number. The reader then
+/// returns the last frame before the error as a normal frame. Parsing the
+/// text read before the error whole gives that frame too. An atom index of
+/// 217 cut to 21 is one example.
 pub struct ConFrameReader<R> {
     src: R,
-    /// Text from `start`, the next frame start, is not yet returned.
+    /// The text window. `start` marks the next frame, and the reader has yet
+    /// to return the text from there on.
     buf: Vec<u8>,
     start: usize,
     read_size: usize,
@@ -639,10 +647,10 @@ impl<R: Read> ConFrameReader<R> {
         }
     }
 
-    /// Drop the returned text and read `read_size` bytes more, or the window
-    /// length when that is larger, so a long frame is parsed again only a
-    /// logarithmic number of times. `read_to_end` keeps the bytes it read
-    /// before an error, so those stay in the window.
+    /// Drops the returned text and reads more. Each read takes `read_size`
+    /// bytes, or the window length when that is larger. A long frame is then
+    /// parsed again only a logarithmic number of times. `read_to_end` keeps
+    /// the bytes it read before an error, so those stay in the window.
     fn fill(&mut self) {
         self.buf.drain(..self.start);
         self.start = 0;
@@ -657,9 +665,10 @@ impl<R: Read> ConFrameReader<R> {
     }
 }
 
-/// True when `rest`, the text after the point where a parse stopped, contains
-/// every byte the parse could have read: [`LOOKAHEAD_LINES`] whole lines,
-/// then a byte that ends any scan for a whitespace tail.
+/// `rest` is the text after the point where a parse stopped. Returns true
+/// when `rest` contains every byte the parse could have read. That is
+/// [`LOOKAHEAD_LINES`] whole lines, then a byte that ends any scan for a
+/// whitespace tail.
 fn settled(rest: &[u8]) -> bool {
     memchr::memchr_iter(b'\n', rest)
         .nth(LOOKAHEAD_LINES - 1)
