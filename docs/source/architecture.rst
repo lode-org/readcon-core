@@ -337,7 +337,7 @@ What is frozen in 0.14.x \*\*
 What is not a 1.0 freeze \*\*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The crate, wheels, and Fortran package are 0.17.2. PyPI still reports
+The crate, wheels, and Fortran package are 0.17.3. PyPI still reports
 ``Development Status :: 4 - Beta``. A ``1.0.0`` cut is the production
 classifier and the SONAME/semver major bump. Until that tag:
 
