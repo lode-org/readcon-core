@@ -27,6 +27,11 @@ if get_option('with_cpp')
             'cpp_spreads_roundtrip.cpp',
             meson.current_build_dir() / 'cpp_spreads_roundtrip.con',
         ],
+        [
+            'cpp_trajectory',
+            'cpp_trajectory.cpp',
+            f'@_msproot@/resources/test/tiny_multi_cuh2.con',
+        ],
     ]
 endif
 foreach exmpl : examples_array

@@ -242,6 +242,7 @@ class ConFrame {
     friend class ConFrameBuilder;
     friend ConFrame read_first_frame(const std::filesystem::path &);
     friend ConFrame read_nth_frame(const std::filesystem::path &, std::size_t);
+    friend class Trajectory;
     friend std::vector<ConFrame> read_all_frames(const std::filesystem::path &);
     friend ConFrame read_chemfiles_first(const std::filesystem::path &);
     friend ConFrame read_chemfiles_nth(const std::filesystem::path &,
@@ -1091,6 +1092,50 @@ inline ConFrame read_nth_frame(const std::filesystem::path &path,
     }
     return ConFrame(handle);
 }
+
+/**
+ * @brief Random access to the frames of one file (`rkr_trajectory_*`).
+ *
+ * The file is read once and its frame index is kept. An uncompressed file
+ * reuses a valid `<path>.rcidx`; `write_index` writes a fresh scan there.
+ */
+class Trajectory {
+  public:
+    explicit Trajectory(const std::filesystem::path &path,
+                        bool write_index = true)
+        : handle_(rkr_trajectory_open(path.string().c_str(),
+                                      write_index ? 1 : 0)) {
+        if (!handle_) {
+            const char *msg = rkr_last_error_message();
+            throw std::runtime_error("Failed to open " + path.string() +
+                                     (msg ? std::string(": ") + msg : ""));
+        }
+    }
+
+    std::size_t size() const { return rkr_trajectory_len(handle_.get()); }
+
+    /// @throws std::out_of_range past the end, std::runtime_error when the
+    /// frame does not parse.
+    ConFrame at(std::size_t index) const {
+        RKRConFrame *frame = nullptr;
+        RKRStatus st = rkr_trajectory_read_frame(handle_.get(), index, &frame);
+        if (st == RKRStatus::RKR_STATUS_SUCCESS)
+            return ConFrame(frame);
+        const char *msg = rkr_last_error_message();
+        std::string what = msg ? msg : rkr_status_message(st);
+        if (st == RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS)
+            throw std::out_of_range(what);
+        throw std::runtime_error(what);
+    }
+
+    ConFrame operator[](std::size_t index) const { return at(index); }
+
+  private:
+    struct Deleter {
+        void operator()(RKRTrajectory *ptr) const { rkr_trajectory_free(ptr); }
+    };
+    std::unique_ptr<RKRTrajectory, Deleter> handle_;
+};
 
 inline ConFrame read_chemfiles_first(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_chemfiles_first(path.string().c_str());

@@ -2,34 +2,36 @@
 //!
 //! The sidecar stores the byte offset of every frame start in an
 //! uncompressed CON file, so later reads skip the offset scan.
-//! A sidecar is only used when its fingerprint matches the data file
-//! (size, mtime, and a hash of the first and last 4 KiB) and its own
-//! checksum is intact; any mismatch rebuilds the index instead.
+//! A sidecar is only used when its checksum is intact, its stored size
+//! matches the data, and its offsets are the ones a scan finds: the frame
+//! skip from each offset must end at the next. A table that passes is the
+//! scan of the data however old the sidecar is, so neither the mtime nor
+//! a content hash is compared. The check runs per frame, in parallel with
+//! the `parallel` feature, and a table that fails it is rebuilt.
 //!
 //! Layout (all integers little-endian):
 //!
 //! | bytes | field                                  |
 //! |-------|----------------------------------------|
 //! | 8     | magic `RCIDX\0\0\0`                    |
-//! | 4     | format version (1)                     |
+//! | 4     | format version (2)                     |
 //! | 4     | reserved (0)                           |
 //! | 8     | data file size in bytes                |
-//! | 8     | data file mtime, ns since UNIX epoch   |
-//! | 8     | FNV-1a 64 of first and last 4 KiB      |
+//! | 8     | content hash of every data byte, written for earlier version 2 readers and not read here |
 //! | 8     | frame count `n`                        |
 //! | 8 n   | frame start offsets                    |
 //! | 8     | FNV-1a 64 of every preceding byte      |
 
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
 
 const MAGIC: &[u8; 8] = b"RCIDX\0\0\0";
-const VERSION: u32 = 1;
-const EDGE: u64 = 4096;
-const HEADER_LEN: usize = 8 + 4 + 4 + 8 + 8 + 8 + 8;
+const VERSION: u32 = 2;
+const HEADER_LEN: usize = 8 + 4 + 4 + 8 + 8 + 8;
+const COUNT_AT: usize = HEADER_LEN - 8;
 
 /// Frame start offsets for one data file, plus its total length.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,7 +81,7 @@ pub fn frame_start_offsets_checked(text: &str) -> Result<Vec<usize>, ParseError>
     let mut scanner = ConFrameIterator::new(text);
     loop {
         let start = scanner.byte_pos();
-        if start >= text.len() || text.as_bytes()[start..].iter().all(u8::is_ascii_whitespace) {
+        if no_frame_at(text, start) {
             break;
         }
         out.push(start);
@@ -90,6 +92,53 @@ pub fn frame_start_offsets_checked(text: &str) -> Result<Vec<usize>, ParseError>
         }
     }
     Ok(out)
+}
+
+/// True when the scan ends at `pos`: nothing or only whitespace follows.
+fn no_frame_at(text: &str, pos: usize) -> bool {
+    pos >= text.len() || text.as_bytes()[pos..].iter().all(u8::is_ascii_whitespace)
+}
+
+/// True when `offsets` is exactly what [`frame_start_offsets_checked`]
+/// returns for `text`.
+///
+/// The first offset must be 0, and the skip from each offset must end at
+/// the next one, or at the end of the data for the last. A skip reads no
+/// state from earlier frames, so the frames are checked independently.
+/// The skip gets the next offset as a hint, which changes only its speed.
+fn offsets_match_scan(text: &str, offsets: &[u64]) -> bool {
+    let Some(&first) = offsets.first() else {
+        return no_frame_at(text, 0);
+    };
+    let frame_ok = |i: usize| {
+        let start = offsets[i] as usize;
+        // Also starts the skip on a character boundary.
+        let starts_line = start == 0 || text.as_bytes().get(start - 1) == Some(&b'\n');
+        if !starts_line || no_frame_at(text, start) {
+            return false;
+        }
+        let end = offsets.get(i + 1).map_or(text.len(), |&o| o as usize);
+        let mut skip = ConFrameIterator::starting_at(text, start);
+        if !matches!(skip.forward_fast_to(Some(end)), Some(Ok(()))) {
+            return false;
+        }
+        match offsets.get(i + 1) {
+            Some(&next) => skip.byte_pos() as u64 == next,
+            None => no_frame_at(text, skip.byte_pos()),
+        }
+    };
+    if first != 0 {
+        return false;
+    }
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        (0..offsets.len()).into_par_iter().all(frame_ok)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        (0..offsets.len()).all(frame_ok)
+    }
 }
 
 /// Smallest slice before UTF-8 validation is split on newlines.
@@ -190,77 +239,70 @@ fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
 }
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 
+/// Bytes per block of [`content_hash`]. Blocks are hashed on their own and
+/// folded in order, so the value does not depend on the thread count.
+const HASH_BLOCK: usize = 1 << 20;
+
+/// Eight independent multiply and rotate lanes over 64-byte strides.
+///
+/// Each step is a bijection of its lane for a fixed word, so changing any
+/// one word of a block always changes that lane.
+fn block_hash(block: &[u8]) -> u64 {
+    const K: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut lanes: [u64; 8] = std::array::from_fn(|k| FNV_OFFSET ^ k as u64);
+    let (strides, rest) = block.as_chunks::<64>();
+    for stride in strides {
+        for (lane, w) in lanes.iter_mut().zip(stride.as_chunks::<8>().0) {
+            *lane = (*lane ^ u64::from_le_bytes(*w)).wrapping_mul(K).rotate_left(31);
+        }
+    }
+    let tail = fnv1a(FNV_OFFSET, rest);
+    lanes.iter().fold(tail, |h, l| fnv1a(h, &l.to_le_bytes()))
+}
+
+/// Hash of every byte: [`block_hash`] per [`HASH_BLOCK`], folded with the
+/// length by FNV-1a. Not cryptographic; it detects edits, not attacks.
+fn content_hash(bytes: &[u8]) -> u64 {
+    #[cfg(feature = "parallel")]
+    let blocks: Vec<u64> = {
+        use rayon::prelude::*;
+        bytes.par_chunks(HASH_BLOCK).map(block_hash).collect()
+    };
+    #[cfg(not(feature = "parallel"))]
+    let blocks: Vec<u64> = bytes.chunks(HASH_BLOCK).map(block_hash).collect();
+    let seed = fnv1a(FNV_OFFSET, &(bytes.len() as u64).to_le_bytes());
+    blocks.iter().fold(seed, |h, b| fnv1a(h, &b.to_le_bytes()))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Fingerprint {
     size: u64,
-    mtime_ns: u64,
-    edges: u64,
+    content: u64,
 }
 
-fn modified_ns(meta: &std::fs::Metadata) -> u64 {
-    meta.modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0)
+impl Fingerprint {
+    fn of(data: &[u8]) -> Self {
+        Fingerprint {
+            size: data.len() as u64,
+            content: content_hash(data),
+        }
+    }
 }
 
-fn hash_edges(head: &[u8], tail: &[u8]) -> u64 {
-    fnv1a(fnv1a(FNV_OFFSET, head), tail)
-}
-
-/// FNV-1a of the first and last 4 KiB, matching [`fingerprint`].
-fn edge_hash(bytes: &[u8]) -> u64 {
-    let n = bytes.len();
-    let head_n = (EDGE as usize).min(n);
-    let tail_n = (EDGE as usize).min(n);
-    hash_edges(&bytes[..head_n], &bytes[n - tail_n..])
+/// Call `f` on the bytes now at `path`.
+fn with_mapped<T>(path: &Path, f: impl FnOnce(&[u8]) -> T) -> io::Result<T> {
+    let file = std::fs::File::open(path)?;
+    if file.metadata()?.len() == 0 {
+        return Ok(f(&[]));
+    }
+    // SAFETY: as for every mapped reader in this crate, the file must not
+    // be truncated or rewritten while the map is alive.
+    let map = unsafe { memmap2::Mmap::map(&file)? };
+    Ok(f(&map))
 }
 
 fn fingerprint(path: &Path) -> io::Result<Fingerprint> {
-    let mut f = std::fs::File::open(path)?;
-    let meta = f.metadata()?;
-    let size = meta.len();
-    let head_n = EDGE.min(size) as usize;
-    let tail_n = EDGE.min(size) as usize;
-    let mut head = vec![0u8; head_n];
-    f.read_exact(&mut head)?;
-    f.seek(SeekFrom::Start(size - tail_n as u64))?;
-    let mut tail = vec![0u8; tail_n];
-    f.read_exact(&mut tail)?;
-    Ok(Fingerprint {
-        size,
-        mtime_ns: modified_ns(&meta),
-        edges: hash_edges(&head, &tail),
-    })
-}
-
-/// Fingerprint of the inode opened here when its bytes are exactly `text`.
-///
-/// `None` means `path` is no longer that buffer. The size and edge hash
-/// describe `text`; mtime is from the same snapshot, so a later replace
-/// cannot be stored under this index.
-fn fingerprint_if_same(path: &Path, text: &[u8]) -> io::Result<Option<Fingerprint>> {
-    let mut file = std::fs::File::open(path)?;
-    let meta = file.metadata()?;
-    if meta.len() != text.len() as u64 {
-        return Ok(None);
-    }
-    let mut offset = 0usize;
-    let mut buf = [0u8; 64 * 1024];
-    while offset < text.len() {
-        let want = (text.len() - offset).min(buf.len());
-        let n = file.read(&mut buf[..want])?;
-        if n == 0 || text[offset..offset + n] != buf[..n] {
-            return Ok(None);
-        }
-        offset += n;
-    }
-    Ok(Some(Fingerprint {
-        size: meta.len(),
-        mtime_ns: modified_ns(&meta),
-        edges: edge_hash(text),
-    }))
+    with_mapped(path, Fingerprint::of)
 }
 
 fn encode(fp: Fingerprint, idx: &FrameIndex) -> Vec<u8> {
@@ -269,8 +311,7 @@ fn encode(fp: Fingerprint, idx: &FrameIndex) -> Vec<u8> {
     out.extend_from_slice(&VERSION.to_le_bytes());
     out.extend_from_slice(&0u32.to_le_bytes());
     out.extend_from_slice(&fp.size.to_le_bytes());
-    out.extend_from_slice(&fp.mtime_ns.to_le_bytes());
-    out.extend_from_slice(&fp.edges.to_le_bytes());
+    out.extend_from_slice(&fp.content.to_le_bytes());
     out.extend_from_slice(&(idx.offsets.len() as u64).to_le_bytes());
     for o in &idx.offsets {
         out.extend_from_slice(&o.to_le_bytes());
@@ -284,8 +325,10 @@ fn u64_at(b: &[u8], at: usize) -> u64 {
     u64::from_le_bytes(b[at..at + 8].try_into().unwrap())
 }
 
-/// Decode a sidecar and check it against `fp`; `None` means stale or corrupt.
-fn decode(bytes: &[u8], fp: Fingerprint) -> Option<FrameIndex> {
+/// Decode a sidecar and check it against `text`; `None` means stale or
+/// corrupt. The stored size is a fast reject and the content hash is not
+/// read, since [`offsets_match_scan`] alone decides the table.
+fn decode(bytes: &[u8], text: &str) -> Option<FrameIndex> {
     if bytes.len() < HEADER_LEN + 8 || &bytes[..8] != MAGIC {
         return None;
     }
@@ -296,15 +339,11 @@ fn decode(bytes: &[u8], fp: Fingerprint) -> Option<FrameIndex> {
     if fnv1a(FNV_OFFSET, body) != u64_at(bytes, bytes.len() - 8) {
         return None;
     }
-    let stored = Fingerprint {
-        size: u64_at(bytes, 16),
-        mtime_ns: u64_at(bytes, 24),
-        edges: u64_at(bytes, 32),
-    };
-    if stored != fp {
+    let size = u64_at(bytes, 16);
+    if size != text.len() as u64 {
         return None;
     }
-    let n = usize::try_from(u64_at(bytes, 40)).ok()?;
+    let n = usize::try_from(u64_at(bytes, COUNT_AT)).ok()?;
     let table = n.checked_mul(8)?;
     let expected = HEADER_LEN.checked_add(table)?;
     if body.len() != expected {
@@ -312,12 +351,17 @@ fn decode(bytes: &[u8], fp: Fingerprint) -> Option<FrameIndex> {
     }
     let offsets: Vec<u64> = (0..n).map(|i| u64_at(bytes, HEADER_LEN + i * 8)).collect();
     let ordered = offsets.windows(2).all(|w| w[0] < w[1]);
-    if !ordered || offsets.last().is_some_and(|&o| o >= fp.size) {
+    if !ordered || offsets.last().is_some_and(|&o| o >= size) {
+        return None;
+    }
+    // A checksum cannot catch a table that was written whole but wrong.
+    // Readers also slice the text here without a new UTF-8 check.
+    if !offsets_match_scan(text, &offsets) {
         return None;
     }
     Some(FrameIndex {
         offsets,
-        data_len: fp.size,
+        data_len: size,
     })
 }
 
@@ -328,7 +372,9 @@ pub fn read_sidecar(path: &Path) -> io::Result<Option<FrameIndex>> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e),
     };
-    Ok(decode(&bytes, fingerprint(path)?))
+    with_mapped(path, |data| {
+        decode(&bytes, validate_utf8_sliced(data).ok()?)
+    })
 }
 
 fn write_encoded(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -346,10 +392,10 @@ fn write_encoded(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
 /// Write the sidecar for `path` atomically (temp file plus rename).
 ///
-/// The fingerprint describes `path` as it exists at this call. Scanning
-/// an earlier buffer and then calling this can store that fingerprint
-/// with stale offsets. [`load_or_build`] writes only when the file still
-/// matches the scanned buffer.
+/// The size and content hash describe `path` as it exists at this call.
+/// Scanning an earlier buffer and then calling this can store them with
+/// stale offsets. Readers then reject the table, since it is not a scan
+/// of the data, and rescan.
 pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
     let fp = fingerprint(path)?;
     if fp.size != idx.data_len {
@@ -361,39 +407,22 @@ pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
     write_encoded(path, &encode(fp, idx))
 }
 
-/// Publish `idx` only when `path` still contains exactly `text`.
-fn write_sidecar_for_text(path: &Path, text: &str, idx: &FrameIndex) -> io::Result<()> {
-    if idx.data_len != text.len() as u64 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "frame index length does not match the data file size",
-        ));
-    }
-    let Some(fp) = fingerprint_if_same(path, text.as_bytes())? else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "frame index does not match the data file contents",
-        ));
-    };
-    write_encoded(path, &encode(fp, idx))
-}
-
 /// Return a trusted index for `text` (the contents of `path`).
 ///
-/// Uses the sidecar when it is valid; otherwise scans and, when
-/// `write_back` is set, refreshes the sidecar. The refresh is skipped
-/// when `path` no longer contains `text`, so a same-length replace cannot
-/// be stored with these offsets. Write errors are ignored, so read-only
-/// directories still work.
+/// Uses the sidecar when its table is the scan of `text`; otherwise scans
+/// and, when `write_back` is set, refreshes the sidecar. The data file is
+/// not read again, and the hash for a write is taken from `text`.
+/// Write errors are ignored, so read-only directories still work.
 pub fn load_or_build(path: &Path, text: &str, write_back: bool) -> Result<FrameIndex, ParseError> {
-    if let Ok(Some(idx)) = read_sidecar(path) {
-        if idx.data_len == text.len() as u64 {
-            return Ok(idx);
-        }
+    if let Ok(bytes) = std::fs::read(sidecar_path(path))
+        && let Some(idx) = decode(&bytes, text)
+    {
+        return Ok(idx);
     }
     let idx = FrameIndex::scan(text)?;
     if write_back {
-        let _ = write_sidecar_for_text(path, text, &idx);
+        let fp = Fingerprint::of(text.as_bytes());
+        let _ = write_encoded(path, &encode(fp, &idx));
     }
     Ok(idx)
 }
@@ -562,7 +591,7 @@ mod tests {
         b[HEADER_LEN] ^= 1;
         std::fs::write(&side, &b).unwrap();
         assert_eq!(read_sidecar(&con).unwrap(), None);
-        // Change the data file: fingerprint must reject the old sidecar.
+        // Change the data file: the size check must reject the old sidecar.
         write_sidecar(&con, &idx).unwrap();
         let text2 = fixture(6);
         std::fs::write(&con, &text2).unwrap();
@@ -572,48 +601,218 @@ mod tests {
     }
 
     #[test]
-    fn edge_hash_matches_file_fingerprint() {
-        let dir = std::env::temp_dir().join(format!("rcidx-edge-{}", std::process::id()));
+    fn content_hash_matches_file_fingerprint() {
+        let dir = std::env::temp_dir().join(format!("rcidx-hash-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
-        let text = fixture(40);
-        assert!(text.len() > (EDGE as usize) * 2);
-        std::fs::write(&con, &text).unwrap();
-        let fp = fingerprint(&con).unwrap();
-        assert_eq!(fp.size, text.len() as u64);
-        assert_eq!(fp.edges, edge_hash(text.as_bytes()));
+        for text in [String::new(), fixture(40)] {
+            std::fs::write(&con, &text).unwrap();
+            assert_eq!(fingerprint(&con).unwrap(), Fingerprint::of(text.as_bytes()));
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn same_length_middle_change_is_not_published() {
-        let dir = std::env::temp_dir().join(format!("rcidx-stale-{}", std::process::id()));
+    fn content_hash_sees_every_byte_and_block_order() {
+        let base: Vec<u8> = (0..HASH_BLOCK * 3 + 77).map(|i| (i % 251) as u8).collect();
+        let h = content_hash(&base);
+        for at in [0, 63, 64, HASH_BLOCK - 1, HASH_BLOCK, 2 * HASH_BLOCK + 5, base.len() - 1] {
+            let mut b = base.clone();
+            b[at] ^= 0x20;
+            assert_ne!(content_hash(&b), h, "byte {at}");
+        }
+        let mut swapped = base.clone();
+        swapped[..2 * HASH_BLOCK].rotate_left(HASH_BLOCK);
+        assert_ne!(content_hash(&swapped), h);
+        assert_ne!(content_hash(&base[..base.len() - 1]), h);
+        let serial = base.chunks(HASH_BLOCK).map(block_hash).fold(
+            fnv1a(FNV_OFFSET, &(base.len() as u64).to_le_bytes()),
+            |acc, b| fnv1a(acc, &b.to_le_bytes()),
+        );
+        assert_eq!(serial, h);
+    }
+
+    /// Frames parsed from the ranges of `idx`, in order.
+    fn frames_via(idx: &FrameIndex, text: &str) -> Vec<crate::types::ConFrame> {
+        (0..idx.len())
+            .map(|i| {
+                let r = idx.range(i).unwrap();
+                ConFrameIterator::new(&text[r]).next().unwrap().unwrap()
+            })
+            .collect()
+    }
+
+    fn scanned_frames(text: &str) -> Vec<crate::types::ConFrame> {
+        ConFrameIterator::new(text)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    }
+
+    /// Publish a sidecar scanned from `old`, then put `new` (same length)
+    /// on disk and open it with and without write-back.
+    fn reopen_after_edit(name: &str, old: &str, new: &str) -> Vec<FrameIndex> {
+        assert_eq!(old.len(), new.len());
+        let dir = std::env::temp_dir().join(format!("rcidx-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
+        std::fs::write(&con, old).unwrap();
+        load_or_build(&con, old, true).unwrap();
+        assert!(read_sidecar(&con).unwrap().is_some());
+        std::fs::write(&con, new).unwrap();
+        let opened = vec![
+            load_or_build(&con, new, false).unwrap(),
+            load_or_build(&con, new, true).unwrap(),
+            load_or_build(&con, new, true).unwrap(),
+        ];
+        let _ = std::fs::remove_dir_all(&dir);
+        opened
+    }
+
+    #[test]
+    fn same_length_middle_change_reads_match_a_scan() {
         let text = fixture(40);
-        std::fs::write(&con, &text).unwrap();
-        let idx = FrameIndex::scan(&text).unwrap();
         let mut changed = text.as_bytes().to_vec();
-        let at = (EDGE as usize..changed.len() - EDGE as usize)
+        let at = (4096..changed.len() - 4096)
             .find(|&i| changed[i].is_ascii_alphabetic())
             .expect("middle of the file has a letter");
         changed[at] = if changed[at] == b'A' { b'B' } else { b'A' };
-        assert_eq!(edge_hash(text.as_bytes()), edge_hash(&changed));
-        assert_ne!(text.as_bytes(), changed.as_slice());
-        std::fs::write(&con, &changed).unwrap();
-        let err = write_sidecar_for_text(&con, &text, &idx).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
-        assert_eq!(read_sidecar(&con).unwrap(), None);
-        assert_eq!(
-            load_or_build(&con, &text, true).unwrap().offsets,
-            idx.offsets
-        );
-        assert_eq!(read_sidecar(&con).unwrap(), None);
         let new_text = std::str::from_utf8(&changed).unwrap();
-        let published = load_or_build(&con, new_text, true).unwrap();
-        assert_eq!(published, FrameIndex::scan(new_text).unwrap());
-        assert_eq!(read_sidecar(&con).unwrap(), Some(published));
-        let _ = std::fs::remove_dir_all(&dir);
+        let scan = FrameIndex::scan(new_text).unwrap();
+        let expected = scanned_frames(new_text);
+        assert_ne!(expected, scanned_frames(&text));
+        for idx in reopen_after_edit("letter", &text, new_text) {
+            assert_eq!(idx, scan);
+            assert_eq!(frames_via(&idx, new_text), expected);
+        }
+    }
+
+    #[test]
+    fn same_length_change_that_moves_a_boundary_is_rescanned() {
+        let text = fixture(40);
+        let old = FrameIndex::scan(&text).unwrap();
+        let frame = |i: usize| &text[old.range(i).unwrap()];
+        // Move the first H row of frame 21 to the end of frame 20 and fix
+        // both H counts. The length and the line starts stay the same.
+        let row_at = frame(21).find("Coordinates of Component 2\n").unwrap()
+            + "Coordinates of Component 2\n".len();
+        let row_len = frame(21)[row_at..].find('\n').unwrap() + 1;
+        let row = &frame(21)[row_at..row_at + row_len];
+        let mut moved = String::new();
+        for i in 0..old.len() {
+            let f = frame(i);
+            match i {
+                20 => {
+                    moved.push_str(&f.replacen("\n2 2\n", "\n2 3\n", 1));
+                    moved.push_str(row);
+                }
+                21 => {
+                    let f = f.replacen("\n2 2\n", "\n2 1\n", 1);
+                    let at = f.find(row).unwrap();
+                    moved.push_str(&f[..at]);
+                    moved.push_str(&f[at + row_len..]);
+                }
+                _ => moved.push_str(f),
+            }
+        }
+        let scan = FrameIndex::scan(&moved).unwrap();
+        assert_eq!(scan.len(), old.len());
+        assert_ne!(scan, old);
+        assert!(
+            old.offsets
+                .iter()
+                .all(|&o| o == 0 || moved.as_bytes()[o as usize - 1] == b'\n')
+        );
+        assert!(!offsets_match_scan(&moved, &old.offsets));
+        let fp = Fingerprint::of(moved.as_bytes());
+        assert_eq!(decode(&encode(fp, &old), &moved), None);
+        let expected = scanned_frames(&moved);
+        assert_eq!(expected[20].atom_data.len(), 5);
+        assert_eq!(expected[21].atom_data.len(), 3);
+        for idx in reopen_after_edit("moved", &text, &moved) {
+            assert_eq!(idx, scan);
+            assert_eq!(frames_via(&idx, &moved), expected);
+        }
+    }
+
+    #[test]
+    fn only_the_scanned_table_matches() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/test");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(one) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let text = one.repeat(3);
+            let Ok(scan) = frame_start_offsets_checked(&text) else {
+                continue;
+            };
+            let good: Vec<u64> = scan.iter().map(|&o| o as u64).collect();
+            assert!(offsets_match_scan(&text, &good), "{}", path.display());
+            for drop in 0..good.len() {
+                let mut t = good.clone();
+                t.remove(drop);
+                assert!(
+                    !offsets_match_scan(&text, &t),
+                    "{} drop {drop}",
+                    path.display()
+                );
+            }
+            let mut longer = good.clone();
+            longer.push(text.len() as u64);
+            assert!(!offsets_match_scan(&text, &longer), "{}", path.display());
+            checked += 1;
+        }
+        assert!(checked >= 10, "{checked} fixtures");
+        assert!(offsets_match_scan(" \n\n", &[]));
+        assert!(!offsets_match_scan(&fixture(1), &[]));
+    }
+
+    #[test]
+    fn end_hint_never_changes_the_skip() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/test");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(one) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let text = one.repeat(3);
+            let line_starts: Vec<usize> = std::iter::once(0)
+                .chain(text.match_indices('\n').map(|(i, _)| i + 1))
+                .collect();
+            let mut starts = crate::iterators::frame_start_offsets(&text);
+            starts.extend(line_starts.iter().copied().take(40));
+            starts.retain(|&s| s < text.len());
+            for start in starts {
+                let mut plain = ConFrameIterator::starting_at(&text, start);
+                let want = format!("{:?}", plain.forward_fast());
+                let end = plain.byte_pos();
+                let mut hints = vec![None, Some(0), Some(text.len() + 1)];
+                hints.extend([end.saturating_sub(1), end + 1].map(Some));
+                hints.extend(line_starts.iter().map(|&s| Some(s)));
+                for &hint in &hints {
+                    let mut hinted = ConFrameIterator::starting_at(&text, start);
+                    let got = format!("{:?}", hinted.forward_fast_to(hint));
+                    assert_eq!(got, want, "{} at {start}, hint {hint:?}", path.display());
+                    assert_eq!(hinted.byte_pos(), plain.byte_pos());
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked >= 10, "{checked} fixtures");
+    }
+
+    #[test]
+    fn version_1_sidecar_is_rebuilt() {
+        let text = fixture(2);
+        let idx = FrameIndex::scan(&text).unwrap();
+        let fp = Fingerprint::of(text.as_bytes());
+        let mut bytes = encode(fp, &idx);
+        assert_eq!(decode(&bytes, &text), Some(idx.clone()));
+        bytes[8..12].copy_from_slice(&1u32.to_le_bytes());
+        rechecksum(&mut bytes);
+        assert_eq!(decode(&bytes, &text), None);
     }
 
     fn rechecksum(bytes: &mut [u8]) {
@@ -626,34 +825,26 @@ mod tests {
     fn checksum_valid_short_table_is_rejected() {
         let text = fixture(2);
         let idx = FrameIndex::scan(&text).unwrap();
-        let fp = Fingerprint {
-            size: text.len() as u64,
-            mtime_ns: 0,
-            edges: edge_hash(text.as_bytes()),
-        };
+        let fp = Fingerprint::of(text.as_bytes());
         let mut bytes = encode(fp, &idx);
         let n = (idx.len() as u64).saturating_add(1);
-        bytes[40..48].copy_from_slice(&n.to_le_bytes());
+        bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&n.to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp), None);
+        assert_eq!(decode(&bytes, &text), None);
     }
 
     #[test]
     fn wrapping_frame_count_is_rejected() {
         let text = fixture(2);
         let idx = FrameIndex::scan(&text).unwrap();
-        let fp = Fingerprint {
-            size: text.len() as u64,
-            mtime_ns: 0,
-            edges: edge_hash(text.as_bytes()),
-        };
+        let fp = Fingerprint::of(text.as_bytes());
         let mut bytes = encode(fp, &idx);
         let payload = bytes.len() - 8 - HEADER_LEN;
         let n = (1usize << (usize::BITS - 3)).wrapping_add(payload / 8);
         assert_eq!(8usize.wrapping_mul(n), payload);
         assert!(n > idx.len());
-        bytes[40..48].copy_from_slice(&(n as u64).to_le_bytes());
+        bytes[COUNT_AT..COUNT_AT + 8].copy_from_slice(&(n as u64).to_le_bytes());
         rechecksum(&mut bytes);
-        assert_eq!(decode(&bytes, fp), None);
+        assert_eq!(decode(&bytes, &text), None);
     }
 }

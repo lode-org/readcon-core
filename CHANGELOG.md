@@ -2,6 +2,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## Unreleased
+
+### Added
+
+- `readcon.ConTrajectory(path, write_index=True)` reads a file once and keeps its frame index. It supports `len`, negative indices, slices and iteration. Each access parses only the frames it returns.
+- The C API adds `rkr_trajectory_open`, `rkr_trajectory_len`, `rkr_trajectory_read_frame` and `rkr_trajectory_free`. The C++ wrapper adds `readcon::Trajectory`, and the Rust type is `trajectory::ConTrajectory`. The symbols are additive, so `RKR_ABI_VERSION_MINOR` stays 1.
+- An uncompressed file reuses a valid `.rcidx` sidecar. gzip and zstd input is indexed in memory only.
+- `benches/trajectory_random_access.py` times K scattered reads through `ConTrajectory` against repeated `read_nth_frame`.
+- `readcon.iter_con(path, mmap=True)` keeps an uncompressed file of 64 KiB or more mapped. It releases the pages it has read. On Linux about 32 MiB of the file stays resident. On macOS the release does not discard pages, and outside Unix it is a no-op, so memory can grow to the file size. The file must not change while the iterator is alive, and a truncation can end the process with `SIGBUS` instead of raising `OSError`. The default is unchanged.
+
+### Fixed
+
+- The `.rcidx` fingerprint is the data length and a hash of every byte, and the sidecar format is now version 2. An edit that kept the size, both 4 KiB edges and a restored mtime used to reuse a stale index. It now forces a rescan. Version 1 sidecars are rebuilt once. With `write_index` false, a version 1 sidecar is rescanned on every open and left in place.
+- `read_file_contents`, and so `ConTrajectory::open`, opens the path once and reads every byte through that handle. A pipe now reads correctly, and opening a trajectory no longer reopens the file for the magic bytes or the sidecar check.
+- `ConTrajectory::frame` relies on the UTF-8 check made at open and no longer checks each frame again. A sidecar offset that does not start a line is rejected, so frames are always cut at character boundaries.
+- A `.rcidx` sidecar is used only when its offsets are the frame starts a scan finds: the frame skip from each offset must end at the next one. A checksum-valid table with one offset dropped used to make `frame(6)` return frame 7. It is now rescanned, including tables stored by `write_sidecar` or the MPI writer.
+- Reusing a `.rcidx` sidecar no longer hashes the data file, since the offset check alone decides whether a table is the scan. The stored size is still compared first. Writers still store the hash, so the format stays version 2 and earlier version 2 readers keep working. The check counts the newlines of each coordinate block up to the next stored offset at once, instead of searching line by line.
+- `rkr_trajectory_len(NULL)` records `null argument` for `rkr_last_error_message`, as the other NULL paths of the trajectory calls do.
+- `readcon.iter_con` reads an uncompressed file once into its own buffer. It used to map the file and copy the mapping, so its peak memory was about twice the file size. gzip and zstd input is still decompressed whole.
+
 ## v0.17.2 - 2026-10-29
 
 ### Fixed
