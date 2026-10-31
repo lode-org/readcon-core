@@ -4,6 +4,7 @@
 
 use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
+use std::io::{self, Read};
 use std::path::Path;
 
 /// memchr-backed line cursor for the full parse path (not only frame skip).
@@ -574,6 +575,126 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             frame.sync_arrays_from_atom_data();
         }
         Some(Ok(frame))
+    }
+}
+
+/// Bytes [`ConFrameReader`] reads from its source at a time.
+const READ_SIZE: usize = 1 << 20;
+
+/// Whole lines that must follow the point where a parse stopped before its
+/// result is final. A parse looks at most three lines past the next frame
+/// start: a blank line, a symbol line and a component label.
+const LOOKAHEAD_LINES: usize = 4;
+
+/// Frames parsed one at a time from a byte stream, such as a gzip or zstd
+/// decoder, keeping only a window of the text.
+///
+/// Each item is the item [`ConFrameIterator::from_bytes`] gives at the same
+/// frame of the whole text. The window keeps the next frame, the lines the
+/// parse looks ahead at and up to one read, so memory follows the frame
+/// size and not the file size. The first error ends the iteration. Invalid
+/// UTF-8 is an error at the frame that contains it, as for a mapped file,
+/// while reading compressed input whole fails before the first frame.
+///
+/// A read error from the source, such as a truncated gzip file, ends the
+/// text where it occurs. The frames of the bytes read before it come first,
+/// then the read error. A parse error comes first only when the bytes after
+/// it settle it, so the read error replaces the error of a cut last frame.
+/// Reading compressed input whole gives the read error and no frames.
+pub struct ConFrameReader<R> {
+    src: R,
+    /// Text from `start`, the next frame start, is not yet returned.
+    buf: Vec<u8>,
+    start: usize,
+    read_size: usize,
+    eof: bool,
+    /// Read error that ended the source, returned after the last frame.
+    error: Option<io::Error>,
+    done: bool,
+}
+
+impl ConFrameReader<Box<dyn Read + Send>> {
+    /// Frames of the file at `path`, decompressed as they are read when it
+    /// is gzip or zstd ([`crate::compression::open_decoded`]).
+    pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self::new(crate::compression::open_decoded(path)?))
+    }
+}
+
+impl<R: Read> ConFrameReader<R> {
+    pub fn new(src: R) -> Self {
+        Self::with_read_size(src, READ_SIZE)
+    }
+
+    /// Like [`Self::new`], reading at least `read_size` bytes at a time.
+    pub fn with_read_size(src: R, read_size: usize) -> Self {
+        Self {
+            src,
+            buf: Vec::new(),
+            start: 0,
+            read_size: read_size.max(1),
+            eof: false,
+            error: None,
+            done: false,
+        }
+    }
+
+    /// Drop the returned text and read `read_size` bytes more, or the window
+    /// length when that is larger, so a long frame is parsed again only a
+    /// logarithmic number of times. `read_to_end` keeps the bytes it read
+    /// before an error, so those stay in the window.
+    fn fill(&mut self) {
+        self.buf.drain(..self.start);
+        self.start = 0;
+        let want = self.read_size.max(self.buf.len()) as u64;
+        match (&mut self.src).take(want).read_to_end(&mut self.buf) {
+            Ok(got) => self.eof = (got as u64) < want,
+            Err(e) => {
+                self.eof = true;
+                self.error = Some(e);
+            }
+        }
+    }
+}
+
+/// True when `rest`, the text after the point where a parse stopped, contains
+/// every byte the parse could have read: [`LOOKAHEAD_LINES`] whole lines,
+/// then a byte that ends any scan for a whitespace tail.
+fn settled(rest: &[u8]) -> bool {
+    memchr::memchr_iter(b'\n', rest)
+        .nth(LOOKAHEAD_LINES - 1)
+        .is_some_and(|i| rest[i + 1..].iter().any(|b| !b.is_ascii_whitespace()))
+}
+
+impl<R: Read> Iterator for ConFrameReader<R> {
+    type Item = Result<types::ConFrame, Box<dyn std::error::Error + Send + Sync>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.done {
+            let window = &self.buf[self.start..];
+            let mut it = ConFrameIterator::from_bytes(window);
+            let item = it.next();
+            it.lines.clear_peek();
+            let end = it.lines.pos;
+            let settled = settled(&window[end..]);
+            if !self.eof && !settled {
+                self.fill();
+                continue;
+            }
+            match item {
+                Some(Ok(frame)) => {
+                    self.start += end;
+                    return Some(Ok(frame));
+                }
+                Some(Err(e)) if settled || self.error.is_none() => {
+                    self.done = true;
+                    self.error = None;
+                    return Some(Err(e.into()));
+                }
+                _ => self.done = true,
+            }
+        }
+        self.error.take().map(|e| Err(e.into()))
     }
 }
 
