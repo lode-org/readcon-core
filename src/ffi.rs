@@ -478,8 +478,9 @@ pub extern "C" fn rkr_status_message(status: RKRStatus) -> *const c_char {
     }
 }
 
-/// Detailed message from the most recent failing `rkr_writer_extend` or
-/// `rkr_writer_flush` on this thread.
+/// Detailed message from the most recent failing `rkr_writer_extend`,
+/// `rkr_writer_flush`, `rkr_trajectory_open` or `rkr_trajectory_read_frame`
+/// on this thread, or from `rkr_trajectory_len` on a NULL handle.
 ///
 /// `rkr_status_message` stays a fixed string per status code. This pointer
 /// carries the underlying I/O or format text, for example
@@ -799,6 +800,134 @@ pub unsafe extern "C" fn rkr_read_nth_frame(
     match crate::iterators::read_nth_frame(Path::new(filename), index) {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Err(_) => ptr::null_mut(),
+    }
+}
+
+/// An opaque random-access handle over one file. Free with `rkr_trajectory_free`.
+// No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
+// accept under -pedantic. The zero-length field keeps it unconstructible.
+pub struct RKRTrajectory {
+    _private: [u8; 0],
+}
+
+/// Open a file for reads by frame number.
+///
+/// The file is read once and its frame index is kept. An uncompressed file
+/// reuses a valid `<path>.rcidx`; a nonzero `write_index` writes a fresh scan
+/// there. gzip and zstd input is indexed in memory only. Returns NULL on
+/// error, and `rkr_last_error_message` gives the reason.
+///
+/// # Safety
+/// `filename_c` must be NULL or a valid null-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_trajectory_open(
+    filename_c: *const c_char,
+    write_index: i32,
+) -> *mut RKRTrajectory {
+    if filename_c.is_null() {
+        set_last_error("filename is NULL");
+        return ptr::null_mut();
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(_) => {
+            set_last_error("filename is not valid UTF-8");
+            return ptr::null_mut();
+        }
+    };
+    let opened = std::panic::catch_unwind(|| {
+        crate::trajectory::ConTrajectory::open(Path::new(filename), write_index != 0)
+            .map_err(|e| e.to_string())
+    })
+    .unwrap_or_else(|_| Err("internal error while opening the file".to_owned()));
+    match opened {
+        Ok(traj) => {
+            clear_last_error();
+            Box::into_raw(Box::new(traj)) as *mut RKRTrajectory
+        }
+        Err(msg) => {
+            set_last_error(&msg);
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Number of frames in the handle.
+///
+/// A NULL handle returns `usize::MAX` and records `null argument`. A live
+/// handle leaves `rkr_last_error_message` as it was.
+///
+/// # Safety
+/// `handle` must be NULL or a live handle from `rkr_trajectory_open`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_trajectory_len(handle: *const RKRTrajectory) -> usize {
+    match unsafe { (handle as *const crate::trajectory::ConTrajectory).as_ref() } {
+        Some(traj) => traj.len(),
+        None => {
+            set_last_error("null argument");
+            usize::MAX
+        }
+    }
+}
+
+/// Parse frame `index` into `*out_frame`, which the caller frees with
+/// `free_rkr_frame`.
+///
+/// Returns `RKR_STATUS_INDEX_OUT_OF_BOUNDS` when `index` is not below
+/// `rkr_trajectory_len`, and `RKR_STATUS_IO_ERROR` when the frame does not
+/// parse. A NULL argument returns `RKR_STATUS_NULL_POINTER` and records
+/// `null argument`. `*out_frame` is NULL unless the status is success, and
+/// on failure `rkr_last_error_message` gives the reason.
+///
+/// # Safety
+/// `handle` must be NULL or a live handle; `out_frame` must be NULL or
+/// valid for one pointer write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_trajectory_read_frame(
+    handle: *const RKRTrajectory,
+    index: usize,
+    out_frame: *mut *mut RKRConFrame,
+) -> RKRStatus {
+    if !out_frame.is_null() {
+        unsafe { *out_frame = ptr::null_mut() };
+    }
+    if handle.is_null() || out_frame.is_null() {
+        set_last_error("null argument");
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let traj = unsafe { &*(handle as *const crate::trajectory::ConTrajectory) };
+    let parsed = std::panic::catch_unwind(|| traj.frame(index));
+    let (status, msg) = match parsed {
+        Ok(Ok(frame)) => {
+            clear_last_error();
+            unsafe { *out_frame = Box::into_raw(Box::new(frame)) as *mut RKRConFrame };
+            return RKRStatus::RKR_STATUS_SUCCESS;
+        }
+        Ok(Err(crate::error::ParseError::IndexOutOfBounds { index, len })) => (
+            RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS,
+            format!("frame index {index} is out of range for a trajectory of {len} frames"),
+        ),
+        Ok(Err(e)) => (
+            RKRStatus::RKR_STATUS_IO_ERROR,
+            format!("frame {index}: {e}"),
+        ),
+        Err(_) => (
+            RKRStatus::RKR_STATUS_INTERNAL_ERROR,
+            format!("internal error while reading frame {index}"),
+        ),
+    };
+    set_last_error(&msg);
+    status
+}
+
+/// Free a handle from `rkr_trajectory_open`. NULL is a no-op.
+///
+/// # Safety
+/// `handle` must be NULL or a live handle that is not used afterwards.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_trajectory_free(handle: *mut RKRTrajectory) {
+    if !handle.is_null() {
+        let _ = unsafe { Box::from_raw(handle as *mut crate::trajectory::ConTrajectory) };
     }
 }
 /// Frees the memory for an opaque `RKRConFrame` handle.

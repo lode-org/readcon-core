@@ -183,6 +183,20 @@ if get_option('with_tests')
         },
         timeout: 120,
     )
+    c_trajectory = executable(
+        'test_trajectory',
+        files('tests/c/test_trajectory.c'),
+        dependencies: readcon_dep,
+        include_directories: _incdir,
+        build_rpath: meson.project_build_root(),
+    )
+    test(
+        'c-trajectory',
+        c_trajectory,
+        args: [_msproot, meson.current_build_dir()],
+        env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+        timeout: 120,
+    )
 endif
 
 if get_option('with_examples')
