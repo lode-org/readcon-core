@@ -4,6 +4,7 @@
 
 use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
+use std::io::{self, Read};
 use std::path::Path;
 
 /// memchr-backed line cursor for the full parse path (not only frame skip).
@@ -574,6 +575,135 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             frame.sync_arrays_from_atom_data();
         }
         Some(Ok(frame))
+    }
+}
+
+/// Bytes [`ConFrameReader`] reads from its source at a time.
+const READ_SIZE: usize = 1 << 20;
+
+/// A parse result is final once this many whole lines follow the point where
+/// the parse stopped. The lookahead reaches at most three lines past the next
+/// frame start. Those are a blank line, a symbol line and a component label.
+const LOOKAHEAD_LINES: usize = 4;
+
+/// Parses frames one at a time from a byte stream, such as a gzip or zstd
+/// decoder.
+///
+/// The reader keeps only a window of the text. The window has the next
+/// frame, a few lines of lookahead and up to one read. Memory follows the
+/// frame size and the read size. Each item matches what
+/// [`ConFrameIterator::from_bytes`] gives for that frame of the whole text.
+/// The first error ends the iteration. Invalid UTF-8 is an error at the
+/// frame that contains it, as for a mapped file. A whole read of compressed
+/// input fails before the first frame.
+///
+/// A read error ends the text where it occurs. A truncated gzip file is one
+/// cause. The reader yields every frame read before the error, then the
+/// error. A parse error comes first only if four whole lines and a non-blank
+/// byte follow it. Otherwise the read error replaces the parse error of the
+/// cut last frame. A whole read of compressed input gives the read error and
+/// no frames.
+///
+/// A read error can end the text in the middle of a number. The reader then
+/// returns the last frame before the error as a normal frame. Parsing the
+/// text read before the error whole gives that frame too. An atom index of
+/// 217 cut to 21 is one example.
+pub struct ConFrameReader<R> {
+    src: R,
+    /// The text window. `start` marks the next frame, and the reader has yet
+    /// to return the text from there on.
+    buf: Vec<u8>,
+    start: usize,
+    read_size: usize,
+    eof: bool,
+    /// Read error that ended the source, returned after the last frame.
+    error: Option<io::Error>,
+    done: bool,
+}
+
+impl ConFrameReader<Box<dyn Read + Send>> {
+    /// Frames of the file at `path`, decompressed as they are read when it
+    /// is gzip or zstd ([`crate::compression::open_decoded`]).
+    pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self::new(crate::compression::open_decoded(path)?))
+    }
+}
+
+impl<R: Read> ConFrameReader<R> {
+    pub fn new(src: R) -> Self {
+        Self::with_read_size(src, READ_SIZE)
+    }
+
+    /// Like [`Self::new`], reading at least `read_size` bytes at a time.
+    pub fn with_read_size(src: R, read_size: usize) -> Self {
+        Self {
+            src,
+            buf: Vec::new(),
+            start: 0,
+            read_size: read_size.max(1),
+            eof: false,
+            error: None,
+            done: false,
+        }
+    }
+
+    /// Drops the returned text and reads more. Each read takes `read_size`
+    /// bytes, or the window length when that is larger. A long frame is then
+    /// parsed again only a logarithmic number of times. `read_to_end` keeps
+    /// the bytes it read before an error, so those stay in the window.
+    fn fill(&mut self) {
+        self.buf.drain(..self.start);
+        self.start = 0;
+        let want = self.read_size.max(self.buf.len()) as u64;
+        match (&mut self.src).take(want).read_to_end(&mut self.buf) {
+            Ok(got) => self.eof = (got as u64) < want,
+            Err(e) => {
+                self.eof = true;
+                self.error = Some(e);
+            }
+        }
+    }
+}
+
+/// `rest` is the text after the point where a parse stopped. Returns true
+/// when `rest` contains every byte the parse could have read. That is
+/// [`LOOKAHEAD_LINES`] whole lines, then a byte that ends any scan for a
+/// whitespace tail.
+fn settled(rest: &[u8]) -> bool {
+    memchr::memchr_iter(b'\n', rest)
+        .nth(LOOKAHEAD_LINES - 1)
+        .is_some_and(|i| rest[i + 1..].iter().any(|b| !b.is_ascii_whitespace()))
+}
+
+impl<R: Read> Iterator for ConFrameReader<R> {
+    type Item = Result<types::ConFrame, Box<dyn std::error::Error + Send + Sync>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.done {
+            let window = &self.buf[self.start..];
+            let mut it = ConFrameIterator::from_bytes(window);
+            let item = it.next();
+            it.lines.clear_peek();
+            let end = it.lines.pos;
+            let settled = settled(&window[end..]);
+            if !self.eof && !settled {
+                self.fill();
+                continue;
+            }
+            match item {
+                Some(Ok(frame)) => {
+                    self.start += end;
+                    return Some(Ok(frame));
+                }
+                Some(Err(e)) if settled || self.error.is_none() => {
+                    self.done = true;
+                    self.error = None;
+                    return Some(Err(e.into()));
+                }
+                _ => self.done = true,
+            }
+        }
+        self.error.take().map(|e| Err(e.into()))
     }
 }
 

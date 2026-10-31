@@ -1444,6 +1444,60 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool) -> PyResult<PyConFrameIterat
     Ok(PyConFrameIterator { contents, pos: 0 })
 }
 
+type FrameReader = crate::iterators::ConFrameReader<Box<dyn std::io::Read + Send>>;
+
+/// Iterator from [`stream_con`]. The mutex only makes the reader `Sync`.
+#[pyclass(name = "ConFrameStream")]
+struct PyConFrameStream {
+    reader: std::sync::Mutex<FrameReader>,
+}
+
+#[pymethods]
+impl PyConFrameStream {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<PyConFrame>> {
+        let reader = self
+            .reader
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match py.detach(|| reader.next()) {
+            Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
+            Some(Err(e)) if e.is::<crate::error::ParseError>() => {
+                Err(PyIOError::new_err(format!("parse error: {e}")))
+            }
+            Some(Err(e)) => Err(PyIOError::new_err(e.to_string())),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Return an iterator that reads ``path`` while it parses, one frame at a
+/// time. The iterator decompresses gzip and zstd input as it reads it.
+/// Memory follows the frame size and a 1 MiB read. The frames and the first
+/// error match ``iter_con``, with two exceptions. In both, ``iter_con``
+/// raises before the first frame. Invalid UTF-8 raises at the frame that
+/// contains it. A decoder error raises after every frame decoded before it.
+/// A truncated gzip file is one cause. The decoder error also replaces the
+/// parse error of a last frame it cuts short. A parse error in an earlier
+/// frame raises first. The iterator ends after an error.
+///
+/// A read or decoder error can end the input in the middle of a number. The
+/// iterator then returns the last frame before the error as a normal frame.
+/// Parsing the decoded prefix whole gives that frame too.
+#[pyfunction]
+fn stream_con(py: Python<'_>, path: &str) -> PyResult<PyConFrameStream> {
+    let path = path.to_owned();
+    let reader = py
+        .detach(|| FrameReader::open(Path::new(&path)).map_err(|e| e.to_string()))
+        .map_err(PyIOError::new_err)?;
+    Ok(PyConFrameStream {
+        reader: std::sync::Mutex::new(reader),
+    })
+}
+
 /// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
@@ -2167,6 +2221,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
+    m.add_class::<PyConFrameStream>()?;
     m.add_class::<PyConTrajectory>()?;
     m.add_class::<PyConTrajectoryIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
@@ -2174,6 +2229,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
+    m.add_function(wrap_pyfunction!(stream_con, m)?)?;
     m.add_function(wrap_pyfunction!(count_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;

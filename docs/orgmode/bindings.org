@@ -245,6 +245,19 @@ readcon.atomic_number_to_symbol(93)     # "X"
 - =readcon.iter_con(path)= :: Return a Python iterator over frames.
   The iterator API avoids indexing into =read_con(path)= for
   first-frame and loop-based workflows.
+- =readcon.stream_con(path)= :: Return an iterator that reads the file
+  while it parses. The iterator decompresses gzip and zstd input as it
+  reads it. Memory follows the frame size and a 1 MiB read. Frames and
+  the first error match =iter_con=, with two exceptions. In both,
+  =iter_con= raises before the first frame. Invalid UTF-8 raises at
+  the frame that contains it. A decoder error raises after every frame
+  decoded before it. A truncated gzip file is one cause. The decoder
+  error also replaces the parse error of a last frame it cuts short. A
+  parse error in an earlier frame raises first. A read or decoder error
+  can end the input in the middle of a number. The iterator then
+  returns the last frame before the error as a normal frame. Parsing
+  the decoded prefix whole gives that frame too. The iterator ends
+  after an error.
 - =readcon.symbol_to_atomic_number(symbol)= :: Atomic number for a
   chemical symbol, or the sentinel 0 if unknown. Coverage is Z = 1
   through the Z = 92 ceiling (H through U) plus D and T (both Z = 1).

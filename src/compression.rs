@@ -100,29 +100,10 @@ fn read_contents(
     let mut stream = magic.as_slice().chain(&file);
 
     let contents = match compression {
-        Compression::Gzip => {
-            // Every gzip member, in order (CON-compress.1, D16).
-            let mut decoder = flate2::read::MultiGzDecoder::new(stream);
+        Compression::Gzip | Compression::Zstd => {
             let mut contents = String::new();
-            decoder.read_to_string(&mut contents)?;
+            decoder(compression, stream)?.read_to_string(&mut contents)?;
             FileContents::Owned(contents)
-        }
-        Compression::Zstd => {
-            #[cfg(feature = "zstd")]
-            {
-                let mut decoder = zstd::stream::read::Decoder::new(stream)?;
-                let mut contents = String::new();
-                decoder.read_to_string(&mut contents)?;
-                FileContents::Owned(contents)
-            }
-            #[cfg(not(feature = "zstd"))]
-            {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "zstd-compressed input detected; rebuild readcon-core with --features zstd",
-                )
-                .into());
-            }
         }
         Compression::None if metadata.len() < MMAP_THRESHOLD => {
             let mut bytes = Vec::with_capacity(metadata.len() as usize);
@@ -147,6 +128,38 @@ fn read_contents(
         }
     };
     Ok((contents, compression))
+}
+
+/// The text of `path` as a stream. gzip and zstd are detected as in
+/// [`read_file_contents`] and decompressed as they are read.
+pub fn open_decoded(path: &Path) -> Result<Box<dyn Read + Send>, Box<dyn std::error::Error>> {
+    let mut file = std::fs::File::open(path)?;
+    let mut magic = Vec::with_capacity(4);
+    (&mut file).take(4).read_to_end(&mut magic)?;
+    let compression = detect_compression(&magic);
+    // An owned Read over the magic bytes, since the stream outlives `magic`.
+    let magic = std::collections::VecDeque::from(magic);
+    Ok(decoder(compression, magic.chain(file))?)
+}
+
+fn decoder<'a>(
+    compression: Compression,
+    stream: impl Read + Send + 'a,
+) -> io::Result<Box<dyn Read + Send + 'a>> {
+    Ok(match compression {
+        // Every gzip member, in order (CON-compress.1, D16).
+        Compression::Gzip => Box::new(flate2::read::MultiGzDecoder::new(stream)),
+        #[cfg(feature = "zstd")]
+        Compression::Zstd => Box::new(zstd::stream::read::Decoder::new(stream)?),
+        #[cfg(not(feature = "zstd"))]
+        Compression::Zstd => {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "zstd-compressed input detected; rebuild readcon-core with --features zstd",
+            ));
+        }
+        Compression::None => Box::new(stream),
+    })
 }
 
 /// Holds file contents either as an owned String or a memory-mapped region.
