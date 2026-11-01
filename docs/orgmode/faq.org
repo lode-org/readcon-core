@@ -313,6 +313,22 @@ Campaign field projection helpers live in
 [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]]
 (same meanings =readcon-db= indexes).
 
+* Which part of the stack does each task use?
+
+| Task | Path |
+|------+------|
+| Read or write .con files | =readcon= / =readcon-core= |
+| Link from Fortran, C or C++ | Hourglass =rkr_*= application binary interface (ABI) |
+| Install readcon-db | =cargo add readcon-db= / =pip install readcon-db= |
+| Many trajectories, many readers | [[https://lode-org.github.io/readcon-db/docs/][readcon-db docs]] (the .con text stays authoritative) |
+| Campaign field projection | [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][index_proj]] (same meanings as the readcon-db indexes) |
+| Structure file in another format to .con | Optional chemfiles build |
+| Atomic Simulation Environment (ASE) calculator hand-off | Optional =to_ase= / =from_ase= |
+| Move a stack from other formats onto .con | @@rst::doc:`The migration guide <migrate>`@@ describes =convert= on the command line and =convert_to_con= |
+| Speed checks for pull requests and continuous integration (CI) | @@rst::doc:`benchmarks`@@ (airspeed velocity (ASV) and Cachegrind) |
+
+The library layout is on @@rst::doc:`the architecture page <architecture>`@@.
+
 * Are ASE adapters the primary API?
 
 No. Optional =to_ase= / =from_ase= support calculator hand-off. Interchange

@@ -152,18 +152,4 @@ Documentation follows [[https://diataxis.fr/][Diátaxis]]. Use one quadrant at a
 | API tables | [[file:bindings.org][bindings]] | Reference |
 | Measurements (ASV / Cachegrind / peers) | [[file:benchmarks.org][benchmarks]] | Explanation |
 
-* Scope (map of the stack)
-
-| Task | Path |
-|------+------|
-| Read / write CON | =readcon= / =readcon-core= |
-| Link from Fortran / C / C++ | Hourglass =rkr_*= ABI |
-| readcon-db (install) | =cargo add readcon-db= / =pip install readcon-db= |
-| Many trajectories, multi-reader | [[https://lode-org.github.io/readcon-db/docs/][readcon-db docs]] (CON text authoritative) |
-| Campaign field projection | [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][=index_proj=]] (same meanings as db indexes) |
-| Foreign structure file → CON | Optional chemfiles build |
-| ASE calculator hand-off | Optional =to_ase= / =from_ase= |
-| Migrate foreign stack → CON | [[file:migrate.org][migrate]] (CLI =convert=, =convert_to_con=) |
-| PR / CI speed gates | [[file:benchmarks.org][benchmarks]] (ASV + Cachegrind) |
-
-Library layout: [[file:architecture.org][architecture]].
+See @@rst::doc:`the frequently asked questions <faq>`@@ for the package or optional feature that each task needs and for the library layout.
