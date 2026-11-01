@@ -481,12 +481,15 @@ Each tool can use the library types and helpers instead of converting coordinate
 
 - C ABI: ``rkr_frame_*`` so Fortran and C++ do not reimplement the table
 
+Selection needs a chemfiles build such as the ``readcon-chemfiles`` wheel, and the plain ``readcon`` wheel raises ``RuntimeError`` on the ``select_atoms`` line below.
+
 .. code:: python
 
     import readcon
 
     frame = readcon.read_first_frame("structure.con")
     h_idx = frame.select_atoms("name H")
+    print(h_idx)
     # topology: frame.select("angles: all") when metadata bonds are present
 
 Recipes are in :doc:`chemfiles-howto`, :doc:`howto` and :doc:`bindings`.
