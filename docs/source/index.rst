@@ -89,7 +89,6 @@ Site map
    :maxdepth: 1
    :caption: Tutorials
 
-   getting-started
    tutorial
    chemfiles-tutorial
    chemfiles-notebook
@@ -98,6 +97,7 @@ Site map
    :maxdepth: 1
    :caption: How-to guides
 
+   getting-started
    howto
    migrate
    chemfiles-howto
