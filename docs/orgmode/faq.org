@@ -114,6 +114,9 @@ CI: Cachegrind I-refs (=ci_cachegrind.yml=). PRs: Python ASV + spyglass
 =h5md_vs_con.py=. How to re-run and what each gate means:
 [[file:benchmarks.org][benchmarks.org]].
 
+Uncompressed files under 64 kibibytes (KiB) are read into memory, and larger ones can use the optional mmap.
+With the =parallel= feature, Rayon parses multi-frame text of 48 KiB or more in parallel.
+
 
 * What is the sections mechanism?
 
@@ -328,6 +331,77 @@ Campaign field projection helpers live in
 | Speed checks for pull requests and continuous integration (CI) | @@rst::doc:`benchmarks`@@ (airspeed velocity (ASV) and Cachegrind) |
 
 The library layout is on @@rst::doc:`the architecture page <architecture>`@@.
+
+* What does a code gain by moving onto .con?
+
+A code that moves onto .con can use a maintained library with a frame application programming interface (API) instead of its own parser for .xyz files and its own atoms type.
+=readcon-core= reads and writes frames with typed metadata, optional sections, validation, compression, lazy iteration over many frames and atom selection.
+It has hourglass bindings in Fortran, C, C++, Python, Julia and Rust, campaign storage through =readcon-db= and plotting through chemparseplot.
+All of them share one interchange file and one API.
+
+On disk, the .con file is the checkpoint: the cell, the coordinates grouped by element, the constraints, =atom_id=, optional sections and the JavaScript Object Notation (JSON) metadata.
+The library is worth using even from one code in one language, because the code then does not convert atoms, constraint masks, selections or energy fields itself.
+
+| Layer | What you get |
+|-------+--------------|
+| Frame API | Read, write and builders; =energy=, sections, fixed masks and =atom_id= without new types |
+| Many frames and compression | Lazy iterators, gzip and zstd, a fast parse path; a trajectory stays a sequence of .con frames |
+| Selection | =select_atoms= / =rkr_frame_select= (=name H=, bonds and angles when the frame has topology) |
+| Hourglass =rkr_*= | The same behaviour in Fortran, C, C++, Python, Julia and Rust as the stack grows |
+| =readcon-db= | Lightning Memory-Mapped Database (LMDB) collections of .con text: energy, formula and section indexes, deduplication, many readers |
+| Plotting | [[https://chemparseplot.rgoswami.me][chemparseplot]] / [[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] on the same checkpoints |
+| Ingress | Chemfiles: .xyz, Protein Data Bank (PDB), .gro and other formats to .con through one convert path |
+| Performance checks | Cachegrind instruction counts on =main=; Python ASV and asv-spyglass on pull requests; peer scripts under =benches/= |
+
+After the move, the structure object, the selector, =readcon-db= and the plots all read .con files.
+The format rules are in @@rst::doc:`the specification <spec>`@@.
+
+** What readcon-db adds
+
+=readcon-core= decodes and writes .con files.
+[[https://github.com/lode-org/readcon-db][readcon-db]] is the collection layer on top, and it treats the .con text as authoritative:
+
+| Capability | What you get once the files are .con |
+|------------+--------------------------------------|
+| Indexed collections | Energy, formula and section presence flags, from the same projection that [[https://docs.rs/readcon-core/latest/readcon_core/index_proj/][index_proj]] uses |
+| Deduplication | A content hash on each frame, so images ingested twice are stored once |
+| Many readers | Single-writer, many-reader LMDB access, so screening jobs do not queue behind one process |
+| Join, split, reindex | Collection operations stay on 8-bit Unicode Transformation Format (UTF-8) .con text, so there is no binary copy of the structure |
+
+The install commands and links are in the answer to "Why is readcon-db a separate package?" below.
+Multi-frame .con files, compressed or not, feed the same collection together with selection and =index_proj=.
+Trajectories and screening sets therefore need no second structure format.
+
+** What the frame API saves you
+
+Each tool can use the library types and helpers instead of converting coordinates, masks and metadata by hand:
+
+- Frames: =read_con= / =iter_con= / =write_con= / =convert_to_con= / builders
+- Per-atom: symbols, positions, fixed masks, =atom_id=, optional force/velocity/charge fields
+- Frame-level: =energy=, units, reserved JSON keys, =validate=
+- Selection: =frame.select_atoms("name H")= (topology selectors when bonds exist)
+- C ABI: =rkr_frame_*= so Fortran and C++ do not reimplement the table
+
+#+begin_src python
+import readcon
+
+frame = readcon.read_first_frame("structure.con")
+h_idx = frame.select_atoms("name H")
+# topology: frame.select("angles: all") when metadata bonds are present
+#+end_src
+
+Recipes are in @@rst::doc:`chemfiles-howto`@@, @@rst::doc:`howto`@@ and @@rst::doc:`bindings`@@.
+
+** What the plotting tools add
+
+[[https://chemparseplot.rgoswami.me][chemparseplot]] plots and analyses the geometry of the same .con files.
+Structures and reaction paths, such as nudged elastic band (NEB) paths, can be stored as .con checkpoints.
+The same files feed two-dimensional reaction valley figures and geometry plots without an exporter for each code.
+[[https://rgpycrumbs.rgoswami.me][rgpycrumbs]] provides the companion command line tools.
+
+Files in other formats, such as .xyz and Protein Data Bank (PDB) files, still go through chemfiles into .con first.
+The plots then read the shared .con files and =readcon-db= selections, so no code needs a private output format for them.
+The *Ecosystem* menu of this site and @@rst::doc:`the chemfiles explanation <chemfiles-explain>`@@ place these tools in the wider stack.
 
 * Are ASE adapters the primary API?
 
