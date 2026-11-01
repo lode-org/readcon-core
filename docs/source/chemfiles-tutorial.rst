@@ -5,13 +5,7 @@ Convert other formats into CON
 
 .. note::
 
-   **Executable Org Babel source** (Python only) is :doc:`chemfiles-notebook`.
-   CI runs ``scripts/run-chemfiles-notebook.sh`` (tangle + drift check +
-   ``python3 docs/notebooks/chemfiles_ingress.py``). Rust and other language
-   snippets on *this* page are prose only — they are **not** Babel-run in CI.
-
-   Do not hand-edit the tangled ``.py``; update the notebook Org source and
-   re-tangle with ``READCON_TANGLE_UPDATE=1``.
+   Which blocks of this page run in continuous integration (CI) is described in :doc:`the contributing guide <contributing>`.
 
    Diátaxis companions: :doc:`chemfiles-howto` (tasks),
    :doc:`chemfiles-explain` (why), :doc:`chemfiles-reference` (API tables).

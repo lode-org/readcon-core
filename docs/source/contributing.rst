@@ -243,6 +243,16 @@ The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
 :doc:`benchmarks` (``benchmarks/``, ``asv.conf.json``).
 
+Executable chemfiles pages
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:doc:`The chemfiles notebook <chemfiles-notebook>` is the executable Org Babel source of the chemfiles tutorial, for Python only.
+Continuous integration (CI) runs ``scripts/run-chemfiles-notebook.sh`` from ``ci_python.yml``.
+The script tangles the notebook into ``docs/notebooks/chemfiles_ingress.py``, fails if the committed file differs from the new tangle, and runs it with ``python3``.
+The Rust blocks and the blocks in other languages on :doc:`the chemfiles tutorial page <chemfiles-tutorial>` are prose only, and CI does not run them.
+Do not edit the tangled ``.py`` file by hand.
+Change the notebook Org source instead, and tangle it again with ``READCON_TANGLE_UPDATE=1 scripts/run-chemfiles-notebook.sh``.
+
 Release process
 ---------------
 
