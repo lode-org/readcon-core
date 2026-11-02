@@ -12,6 +12,7 @@
 | 5 | =benches/ase_traj_vs_con.py= | ASE =.traj= / NetCDF / XYZ vs =readcon.read_chemfiles= vs native CON |
 | 6 | =benches/h5md_vs_con.py= | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ |
 | local | =cargo bench= (Criterion) | Rust microbench latency; optional PR job saves baselines |
+| local | =benches/stream_compressed.py= | Peak resident memory and wall time of Python =iter_con= by mode, plain and gzip |
 
 Regression gates in CI:
 
@@ -199,6 +200,16 @@ for result in iter {
 Per frame the library keeps type symbols as shared =Arc<str>= (per type, not
 per atom), pre-sized atom storage from headers, and parses floats from borrowed
 line slices (no intermediate atom-line =String=).
+
+In Python, =iter_con(path)= keeps the whole decompressed file in memory while it iterates.
+=iter_con(path, stream=True)= keeps about one frame plus 1 MiB (mebibyte), and =mmap=True= keeps about 32 MiB of an uncompressed file resident on Linux.
+=benches/stream_compressed.py= runs each mode in a fresh process over a plain and a gzip file and records its wall time and peak resident set size.
+The peak is read from =VmHWM=, so the script needs Linux.
+
+#+begin_src shell
+maturin develop --release --features python
+python benches/stream_compressed.py --frames 10000 --repeats 5 --out stream.json
+#+end_src
 
 #+CAPTION: Peak RSS plot (from historical peer JSON; re-run =make_plots.py= to refresh)
 [[file:img/memory_usage.svg]]

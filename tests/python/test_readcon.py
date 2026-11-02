@@ -461,6 +461,73 @@ class TestConFrameConstructor:
                 assert readcon.write_con_string([b]) == readcon.write_con_string([a])
             assert next(mapped, None) is None
 
+    def test_iter_con_stream_matches_the_default(self, tmp_path):
+        import gzip
+
+        with open(_resource("cuh2.con"), "rb") as fh:
+            frame = fh.read()
+        multi = open(_resource("tiny_multi_cuh2.convel"), "rb").read()
+        text = (frame * 3 + multi) * 40
+        plain = tmp_path / "t.con"
+        plain.write_bytes(text)
+        packed = tmp_path / "t.con.gz"
+        packed.write_bytes(gzip.compress(text[:5000]) + gzip.compress(text[5000:]))
+        for path in (str(plain), str(packed)):
+            want = readcon.write_con_string(list(readcon.iter_con(path)))
+            got = list(readcon.iter_con(path, stream=True))
+            assert readcon.write_con_string(got) == want
+            it = readcon.iter_con(path, stream=True)
+            assert it.skip(7) == 7
+            assert it.forward() is True
+            rest = readcon.write_con_string(list(it))
+            assert rest == readcon.write_con_string(list(readcon.iter_con(path))[8:])
+            assert next(it, None) is None
+        with pytest.raises(ValueError, match="cannot both be true"):
+            readcon.iter_con(str(plain), mmap=True, stream=True)
+
+    def test_iter_con_stream_raises_at_the_bad_frame(self, tmp_path):
+        import gzip
+
+        frame = open(_resource("tiny_cuh2.con"), "rb").read()
+        rows = frame.split(b"\n")
+        rows[11] = b"   1.0 nope 2.0 7 0"
+        plain = tmp_path / "bad.con"
+        path = tmp_path / "bad.con.gz"
+        for text in (
+            frame * 3 + b"\n".join(rows) + frame,
+            frame * 3 + frame[: len(frame) // 2],
+            frame * 3 + frame[:200],
+            frame * 3 + frame.replace(b"Cu", b"C\xff", 1),
+        ):
+            plain.write_bytes(text)
+            path.write_bytes(gzip.compress(text))
+            try:
+                list(readcon.iter_con(str(plain)))
+                message = None
+            except IOError as e:
+                message = str(e)
+            if message.startswith("stream did not contain valid UTF-8"):
+                message = "parse error: CON validation failed: invalid UTF-8"
+            it = readcon.iter_con(str(path), stream=True)
+            assert len([next(it) for _ in range(3)]) == 3
+            with pytest.raises(IOError) as raised:
+                next(it)
+            assert str(raised.value) == message
+            assert next(it, None) is None
+        path.write_bytes(gzip.compress(frame * 3)[:-30])
+        it = readcon.iter_con(str(path), stream=True)
+        with pytest.raises(IOError, match="read error: "):
+            list(it)
+        # Without its trailer the gzip stream fails after the last frame.
+        path.write_bytes(gzip.compress(frame * 3)[:-8])
+        it = readcon.iter_con(str(path), stream=True)
+        assert len([next(it) for _ in range(3)]) == 3
+        with pytest.raises(IOError, match="read error: "):
+            next(it)
+        assert next(it, None) is None
+        with pytest.raises(IOError):
+            readcon.iter_con(str(tmp_path / "missing.con.gz"), stream=True)
+
     def test_iterator_preserves_blank_frame_preambles(self, tmp_path):
         frames = [
             readcon.ConFrame(
