@@ -406,6 +406,24 @@ for frame in frames:
         print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
 #+end_src
 
+** Streaming a large or compressed trajectory
+
+=iter_con(path)= reads the whole file into memory before the first frame, and decompresses a gzip file whole.
+For a long run, ask it to stream:
+
+#+begin_src python
+import readcon
+
+energies = []
+for frame in readcon.iter_con("long_run.con.gz", stream=True):
+    energies.append(frame.energy)
+#+end_src
+
+Memory then stays near one frame plus 1 MiB, whatever the file size.
+The frames are the same as without =stream=True=.
+The loop raises =OSError= at a damaged frame, after it has processed the frames before it.
+Without =stream=True=, invalid UTF-8 (Unicode Transformation Format, 8-bit) is raised by =iter_con= itself, before any frame.
+
 ** Working with convel velocity data
 
 #+begin_src python
