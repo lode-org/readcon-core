@@ -745,6 +745,9 @@ read and return =io::ErrorKind::Unsupported= pointing at the feature
 flag, so consumers never see a corrupt parse on a zstd file produced
 by another tool.
 
+The path readers decompress the whole file into memory before they parse it.
+=compression::open_decoded(path)= returns the decoded bytes as a stream instead, and =stream::ConFrameReader= parses frames from any =std::io::Read= with about one frame buffered.
+
 
 ** Fortran (fpm ReadCon, ISO_C_BINDING)
 
