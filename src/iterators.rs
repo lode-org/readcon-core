@@ -520,6 +520,21 @@ impl<'a> ConFrameIterator<'a> {
         debug_assert!(end >= start && end <= file_contents.len());
         Some(Ok((frame, &file_contents[start..end])))
     }
+
+    /// [`Iterator::next`] plus the byte offset where the frame ends.
+    pub(crate) fn next_with_end(
+        &mut self,
+    ) -> Option<Result<(types::ConFrame, usize), error::ParseError>> {
+        let frame = match self.next()? {
+            Ok(f) => f,
+            Err(e) => return Some(Err(e)),
+        };
+        let end = match self.lines.peek_line() {
+            Some(line) => line.as_ptr() as usize - self.lines.bytes.as_ptr() as usize,
+            None => self.lines.pos,
+        };
+        Some(Ok((frame, end)))
+    }
 }
 
 impl<'a> Iterator for ConFrameIterator<'a> {
