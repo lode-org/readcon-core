@@ -88,12 +88,14 @@ uvx --from "git+https://github.com/airspeed-velocity/asv_spyglass.git" \
 
 Config: =asv.conf.json=. Results: =.asv/= (gitignored).
 
-* Peer scripts (named host)
+* Peer scripts (host field)
 
-Cite only JSON that records host, UTC date, commit, and Cargo features.
-=benches/results/*_terra.json= and the =host= / =date_utc= fields in
-=ase_traj_vs_con.json= and =h5md_vs_con.json= are the paper-facing
-artifacts. A number without those fields is a local plot, not a table.
+Cite only JSON that records a host, a UTC date, a commit, and Cargo features.
+The host field is the CPU model when the run stored one, and =unrecorded=
+when it did not.
+=benches/results/multiformat_traj.json=, =ase_traj_vs_con.json=, and
+=h5md_vs_con.json= are the paper-facing artifacts. A number without those
+fields is a local plot, not a table.
 
 Chemfiles ingress vs native CON is an equal-geometry wall comparison:
 same atoms and frame count, XYZ through =readcon.read_chemfiles= versus

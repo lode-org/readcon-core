@@ -21,6 +21,28 @@ fn read_repo(rel: &str) -> String {
     fs::read_to_string(&p).unwrap_or_else(|e| panic!("missing {}: {e}", p.display()))
 }
 
+/// Machine names of the host running the test: `/etc/hostname` and `$HOSTNAME`.
+/// `localhost` and empty values are skipped.
+fn machine_names() -> Vec<String> {
+    let mut names = Vec::new();
+    let file = match fs::read_to_string("/etc/hostname") {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => panic!("reading /etc/hostname failed: {err}"),
+    };
+    for raw in [file, std::env::var("HOSTNAME").unwrap_or_default()] {
+        let node = raw.trim().to_string();
+        if !node.is_empty() && node != "localhost" && !names.contains(&node) {
+            names.push(node);
+        }
+    }
+    names
+}
+
+fn names_machine(t: &str) -> bool {
+    machine_names().iter().any(|n| t.contains(n.as_str()))
+}
+
 fn assert_no_ai_tells(t: &str, file: &str) {
     let banned = [
         "not \"fastest",
@@ -410,7 +432,7 @@ fn benchmarks_what_we_measure() {
     );
     assert!(!t.contains("2.7M atoms/s"));
     assert!(
-        !t.contains("rgam5terra") && !t.contains("9.2×") && !t.contains("3.3 ms"),
+        !names_machine(&t) && !t.contains("9.2×") && !t.contains("3.3 ms"),
         "benchmarks must not paste host wall-clock snapshot tables as doctrine"
     );
     assert_no_ai_tells(&t, "benchmarks.org");
@@ -484,7 +506,7 @@ fn index_and_readme_src() {
         "readme must point at peer script compare_readers and CI measurement gates (ASV/Cachegrind), not host-diary wall-clock snapshots"
     );
     assert!(
-        !readme.contains("3.3 ms") && !readme.contains("9.2×") && !readme.contains("rgam5terra"),
+        !readme.contains("3.3 ms") && !readme.contains("9.2×") && !names_machine(&readme),
         "readme must not embed host wall-clock snapshot numbers as product doctrine"
     );
     assert!(!readme.contains("H5MD"));

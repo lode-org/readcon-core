@@ -9,6 +9,7 @@
 //!
 //! Same fixture and repeat count as `wall_scale_harness`. Does not invent numbers.
 
+use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::frames_from_text;
 use readcon_core::rcso::{Rcso, encode_batch};
 use readcon_core::rpc::client::RpcClient;
@@ -56,16 +57,6 @@ fn git_commit() -> String {
     Command::new("git")
         .args(["rev-parse", "--short=8", "HEAD"])
         .current_dir(repo_root())
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "unknown".into())
-}
-
-fn hostname() -> String {
-    Command::new("hostname")
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
@@ -203,7 +194,7 @@ fn main() {
     let mut json = String::new();
     json.push_str("{\n");
     json.push_str("  \"protocol\": \"cuh2.con x100: CON parse vs RCSO encode/decode; one-frame RpcClient parse_bytes Unix vs TCP loopback\",\n");
-    json.push_str(&format!("  \"host\": \"{}\",\n", hostname()));
+    json.push_str(&format!("  \"host\": \"{}\",\n", cpu_model()));
     json.push_str(&format!("  \"date_utc\": \"{}\",\n", chrono_like_utc()));
     json.push_str(&format!("  \"commit\": \"{}\",\n", git_commit()));
     json.push_str("  \"features\": \"rpc\",\n");

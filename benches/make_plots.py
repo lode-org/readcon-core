@@ -215,7 +215,7 @@ def plot_feature_matrix():
 
 def plot_pareto():
     # Measured timings only for 100 frames × 218 atoms (cuh2-class).
-    # ASE CON / ASE extXYZ / readcon from multiformat_traj_terra.json (equal geometry).
+    # ASE CON / ASE extXYZ / readcon from multiformat_traj.json (equal geometry).
     # C sscanf from compare_readers.py on the same atom×frame product (CON workload).
     # Never label ASE CON as extxyz — that was a historical proxy mistake.
     # (name, feature_count, parse_time_ms, color)

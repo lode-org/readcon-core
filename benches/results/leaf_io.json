@@ -1,6 +1,6 @@
 {
   "protocol": "cuh2.con x100: CON parse vs RCSO encode/decode; one-frame RpcClient parse_bytes Unix vs TCP loopback",
-  "host": "rgam5terra",
+  "host": "unrecorded",
   "date_utc": "2026-08-24T13:01Z",
   "commit": "9b94ca5c",
   "features": "rpc",

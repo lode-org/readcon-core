@@ -66,5 +66,5 @@ Do not change the uuid after the first General registration.
 
 Workflow `.github/workflows/ci_julia.yml` runs when Julia is available on the
 runner: builds `libreadcon_core` with `chemfiles`, exports `READCON_CORE_LIB`,
-then `Pkg.test()`. Agents without Julia should treat missing `julia` as an
+then `Pkg.test()`. Users without Julia should treat missing `julia` as an
 environment limit, not an API gap—the package sources and tests remain in-tree.

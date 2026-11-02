@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
-import socket
 import statistics
 import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+from cpu_model import cpu_model, platform_label
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -350,8 +350,8 @@ def main():
     # Flat rows for simple consumers
     result["rows"] = [r for b in suite_rows for r in b["rows"]]
 
-    result["host"] = socket.gethostname()
-    result["platform"] = platform.platform()
+    result["host"] = cpu_model()
+    result["platform"] = platform_label()
     result["date_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     try:
         result["commit"] = subprocess.check_output(

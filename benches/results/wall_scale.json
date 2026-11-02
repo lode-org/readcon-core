@@ -1,6 +1,6 @@
 {
   "protocol": "sequential vs Rayon n-thread parse of repeated cuh2.con; write-path is ConFrameWriter to an in-memory buffer; skip/nth/span use the same payload",
-  "host": "rgam5terra",
+  "host": "unrecorded",
   "date_utc": "2026-08-24T22:18Z",
   "commit": "3c63b806",
   "features": "parallel",

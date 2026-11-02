@@ -79,7 +79,7 @@ def gen_macros(traj: dict, h5: dict, wall_scale: dict, cmp: dict, cg: dict) -> s
         speedup,
         traj["commit"],
         wall_scale["commit"],
-        wall_scale["host"],
+        "" if wall_scale["host"] == "unrecorded" else wall_scale["host"],
         wall_scale["ncpus"],
         cg["generated_at"],
         cg["git_sha"],
@@ -179,16 +179,24 @@ def gen_wall(traj: dict, h5: dict, cmp: dict) -> str:
     )
 
 
+def _host_phrase(host: str) -> str:
+    """TeX for a recorded host. An unrecorded host contributes nothing."""
+    if host == "unrecorded":
+        return ""
+    return rf"host \texttt{{{host}}}, "
+
+
 def gen_io(ws: dict) -> str:
     par = ws["parallel"]
+    host = _host_phrase(str(ws["host"]))
     return "\n".join(
         [
             r"\begin{table}[ht]",
             r"\centering",
             r"\caption{Median wall times, 100 frames of the 218-atom",
             r"\texttt{cuh2.con} geometry, five repeats",
-            rf"(\texttt{{benches/results/wall\_scale.json}}, {ws['date_utc']}, host",
-            rf"\texttt{{{ws['host']}}}, {ws['ncpus']} CPUs, tree \texttt{{{ws['commit']}}},",
+            rf"(\texttt{{benches/results/wall\_scale.json}}, {ws['date_utc']}, {host}{ws['ncpus']} CPUs,",
+            rf"tree \texttt{{{ws['commit']}}},",
             r"\texttt{wall\_scale\_harness --features parallel}).",
             r"Sequential is \texttt{n=1}. Auto is the $48$\,KiB Rayon policy.",
             r"Write is \texttt{ConFrameWriter} to a memory buffer.",
@@ -322,7 +330,7 @@ def gen_fair(payload: dict) -> str:
             )
         )
     body = "\n".join(rows)
-    host = payload["host"]
+    host = _host_phrase(str(payload["host"]))
     date_utc = payload["date_utc"]
     commit = payload["commit"]
     return rf"""\begin{{table}}[ht]
@@ -330,7 +338,7 @@ def gen_fair(payload: dict) -> str:
 \caption{{Fair campaign-store comparison on a concatenated
 \texttt{{tiny\_cuh2.con}} ladder
 (\texttt{{paper/cpc/freeze/ase\_fair\_campaign\_1.json}},
-{date_utc}, host \texttt{{{host}}}, tree \texttt{{{commit}}}).
+{date_utc}, {host}tree \texttt{{{commit}}}).
 The same CON frames enter both stores. Insert and extract are
 frames per second; Cu select and eight-reader extract are wall
 seconds. Hit counts agree on symbol, natoms, mass, and volume.

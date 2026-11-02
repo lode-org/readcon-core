@@ -92,8 +92,6 @@ def accept_version(text: str) -> str:
 def read_version() -> str:
     """Return the package version from VERSION."""
     text = VERSION_PATH.read_text(encoding="utf-8")
-    if text.endswith("\r\n"):
-        text = text[:-2] + "\n"
     if text.count("\n") != 1 or not text.endswith("\n"):
         raise SystemExit("VERSION must be one line ending in a single newline")
     version = text[:-1]

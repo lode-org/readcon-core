@@ -353,7 +353,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**bench**) restamp wall_scale from the write-path harness - (1ef4946) - *HaoZeke*
 - (**bench**) refresh Cachegrind I-refs for docs - (98248b1) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (2c75e8e) - github-actions[bot]
-- (**bench**) stamp leaf I/O walls from rgam5terra - (8b51faf) - *HaoZeke*
+- (**bench**) stamp leaf I/O walls - (8b51faf) - *HaoZeke*
 - (**bench**) refresh Cachegrind I-refs for docs - (89ace10) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (79d764a) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (89d5f2b) - github-actions[bot]
@@ -361,14 +361,14 @@ All notable changes to this project will be documented in this file. See [conven
 - (**bench**) refresh Cachegrind I-refs for docs - (2c18a52) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (dd46329) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (596fb8e) - github-actions[bot]
-- (**bench**) restamp wall_scale with skip and nth on terra - (13b3316) - *HaoZeke*
+- (**bench**) restamp wall_scale with skip and nth - (13b3316) - *HaoZeke*
 - (**bench**) refresh Cachegrind I-refs for docs - (e5aeaa1) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (bd16d7a) - github-actions[bot]
-- (**bench**) record Rayon scale walls from rgam5terra - (2a048d5) - *HaoZeke*
+- (**bench**) record Rayon scale walls - (2a048d5) - *HaoZeke*
 - (**bench**) refresh Cachegrind I-refs for docs - (b194bd3) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (d5b596f) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (e0a3cdd) - github-actions[bot]
-- (**bench**) record rgam5terra equal-geometry wall timings - (f584990) - *HaoZeke*
+- (**bench**) record equal-geometry wall timings - (f584990) - *HaoZeke*
 - (**bench**) refresh Cachegrind I-refs for docs - (4ae7048) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (9b3ae43) - github-actions[bot]
 - (**bench**) refresh Cachegrind I-refs for docs - (c94b4ec) - github-actions[bot]
@@ -425,7 +425,7 @@ All notable changes to this project will be documented in this file. See [conven
 ## v0.14.1 - 2026-08-15
 #### Benchmarks
 - ASV Python surface + spyglass PR compare - (4795333) - *HaoZeke*
-- terra release profile of efficiency APIs - (e5919ff) - *HaoZeke*
+- release profile of efficiency APIs - (e5919ff) - *HaoZeke*
 - fair multi-format trajectory harness (CON vs ASE XYZ/CON) - (913ed36) - *HaoZeke*
 #### Features
 - (**bench**) report CON.gz and CON.zst next to H5MD peers - (af1ec62) - *HaoZeke*
@@ -460,7 +460,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**parser**) memchr line cursor, coords-only assemble, skip section sync - (33a0c68) - *HaoZeke*
 - (**parser**) profile-guided flat f64 SoA fill; add PGO harness - (17f2dfe) - *HaoZeke*
 - (**parser**) byte-scan atom lines with parse_partial + contiguous SoA - (1f3e66d) - *HaoZeke*
-- (**python**) prove detach+bulk SoA via same-session terra A/B - (0831da4) - *HaoZeke*
+- (**python**) prove detach+bulk SoA via same-session A/B - (0831da4) - *HaoZeke*
 - (**python**) detach GIL for parse; bulk SoA positions; cache coords - (df2a3c8) - *HaoZeke*
 - restore internal parse opts without extra public API - (7d76127) - *HaoZeke*
 - stream Python iter, positions-only load, size-only parallel gate - (5cf84c1) - *HaoZeke*

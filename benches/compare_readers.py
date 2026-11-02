@@ -17,14 +17,14 @@ eOn Python reader: uses ~/Git/Github/TheochemUI/eOn if present.
 import argparse
 import json
 import os
-import platform
-import socket
 import subprocess
 import sys
 import time
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from cpu_model import cpu_model, platform_label
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -302,8 +302,8 @@ def main():
             print(f"{label_clean:<25} {t:>10.1f} {speedup:>9.1f}x")
 
         payload = {
-            "host": socket.gethostname(),
-            "platform": platform.platform(),
+            "host": cpu_model(),
+            "platform": platform_label(),
             "date_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
             "commit": _git_commit(),
             "n_frames": args.frames,

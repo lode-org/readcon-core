@@ -13,6 +13,7 @@ pub mod frame_index;
 #[cfg(feature = "grammar")]
 pub mod grammar;
 pub mod helpers;
+pub mod hostlabel;
 /// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
 pub mod index_proj;
 pub mod iterators;

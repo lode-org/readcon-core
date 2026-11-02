@@ -10,20 +10,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
-import socket
 import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cpu_model import cpu_model, platform_label
+
 REPO = Path(__file__).resolve().parent.parent
 
 
 def _stamp(res: dict) -> dict:
-    res["host"] = socket.gethostname()
-    res["platform"] = platform.platform()
+    res["host"] = cpu_model()
+    res["platform"] = platform_label()
     res["date_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     try:
         res["commit"] = subprocess.check_output(

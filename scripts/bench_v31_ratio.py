@@ -7,7 +7,6 @@ kept in the CSV and omitted from the ratio interval.
 
 import csv
 import math
-import platform
 import random
 import statistics
 import subprocess
@@ -16,6 +15,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "benches"))
+from cpu_model import cpu_model  # noqa: E402
+
 OUT = ROOT / "benches" / "results" / "v31_parse_ratio.csv"
 REPEATS = 30
 SEED = 20261011
@@ -110,16 +112,6 @@ def bca_median(samples, alpha=0.05, nboot=4000):
     return theta, lo, hi
 
 
-def cpu_model():
-    try:
-        for line in Path("/proc/cpuinfo").read_text().splitlines():
-            if line.lower().startswith("model name"):
-                return line.split(":", 1)[1].strip()
-    except OSError:
-        pass
-    return platform.processor() or "unknown"
-
-
 def main():
     if len(sys.argv) != 3:
         print("usage: bench_v31_ratio.py BASE_BIN BRANCH_BIN", file=sys.stderr)
@@ -146,8 +138,8 @@ def main():
         lines.append(f"{i * 0.001:.8f} 0.0 0.0 0 {i}")
     (data / "atoms10000.con").write_text("\n".join(lines) + "\n")
 
-    host = platform.node()
     cpu = cpu_model()
+    host = cpu
     day = date.today().isoformat()
     rustc = subprocess.check_output(["rustc", "--version"], text=True).strip()
     commit = subprocess.check_output(

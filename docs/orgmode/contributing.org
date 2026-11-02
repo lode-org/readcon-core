@@ -376,7 +376,8 @@ output. The Fortran parameter does not repeat =public=, because the
 module already lists =readcon_version=. Python =__version__= follows
 the Cargo package version, which cogapp stamps from =VERSION=. A
 Windows checkout may store a carriage return before the newline in
-=VERSION=. The build and =readcon_meta= strip that carriage return.
+=VERSION=. =build.rs= strips that carriage return. Python reads
+=VERSION= in text mode, which already drops it.
 Tool versions are pinned in =requirements-version.txt=.
 
 Published pages stay on the org-to-rst export (=emacs --batch -l docs/export.el=

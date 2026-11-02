@@ -10,7 +10,7 @@
   ],
   "fair": true,
   "note": "Shared CON ladder; ASE Atoms from readcon geometry (not legacy Cu2 stand-in)",
-  "host": "rgam5terra",
+  "host": "unrecorded",
   "date_utc": "2026-08-25T00:30Z",
   "commit": "b76b891",
   "readcon_db": [

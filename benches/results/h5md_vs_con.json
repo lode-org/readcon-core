@@ -31,10 +31,10 @@
   "ratio_con_gz_over_con": 1.1906775673232186,
   "ratio_con_gz_size_over_h5md": 0.8630645800316957,
   "ratio_con_zst_size_over_h5md": 0.06492670364500792,
-  "host": "rgam5terra",
-  "platform": "Linux-7.0.13-arch1-1-rg-x86_64-with-glibc2.43",
+  "host": "unrecorded",
+  "platform": "Linux-x86_64-with-glibc2.43",
   "date_utc": "2026-08-19T22:56Z",
   "commit": "8ce95a56",
   "features": "python,chemfiles (maturin develop --release)",
-  "source_note": "wall times measured on rgam5terra 2026-08-19T22:56Z; commit field is the haozeke/main tree that supplied the harness"
+  "source_note": "wall times measured 2026-08-19T22:56Z; commit field is the haozeke/main tree that supplied the harness"
 }

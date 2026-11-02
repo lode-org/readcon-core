@@ -1,5 +1,5 @@
 {
-  "host": "rgam5terra",
+  "host": "unrecorded",
   "date_utc": "2026-07-08",
   "protocol": "equal geometry multi-frame; ASE XYZ traj vs readcon.read_chemfiles vs readcon.read_con",
   "n_frames": 100,
