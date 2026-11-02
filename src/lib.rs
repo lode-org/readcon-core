@@ -68,7 +68,8 @@ pub const CON_SPEC_VERSION: u32 = 3;
 /// (CON-section.8, CON-section.12, D14).
 pub const CON_SPEC_MINOR: u32 = 1;
 
-/// Library version string, injected from Cargo.toml at compile time.
+/// Library version string, taken from the package version at compile time.
+/// `build.rs` checks that it matches the `VERSION` file.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
@@ -82,7 +83,9 @@ mod tests {
     }
 
     #[test]
-    fn test_version_matches_cargo() {
-        assert_eq!(VERSION, "0.17.3");
+    fn test_version_matches_source() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("VERSION");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text, format!("{VERSION}\n"));
     }
 }

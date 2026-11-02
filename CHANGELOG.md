@@ -2,6 +2,8 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+
+<!-- towncrier release notes start -->
 ## v0.17.3 - 2026-10-31
 
 ### Added
@@ -1196,3 +1198,56 @@ All notable changes to this project will be documented in this file. See [conven
 - Import lint and coverage - (36a3a54) - *HaoZeke*
 #### Chores
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
+
+<!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.17.3]: https://github.com/lode-org/readcon-core/compare/v0.17.2...v0.17.3
+[v0.17.2]: https://github.com/lode-org/readcon-core/compare/v0.17.1...v0.17.2
+[v0.17.1]: https://github.com/lode-org/readcon-core/compare/v0.17.0...v0.17.1
+[v0.17.0]: https://github.com/lode-org/readcon-core/compare/v0.16.2...v0.17.0
+[v0.16.2]: https://github.com/lode-org/readcon-core/compare/v0.16.1...v0.16.2
+[v0.16.1]: https://github.com/lode-org/readcon-core/compare/v0.16.0...v0.16.1
+[v0.16.0]: https://github.com/lode-org/readcon-core/compare/v0.15.0...v0.16.0
+[v0.15.0]: https://github.com/lode-org/readcon-core/compare/v0.14.11...v0.15.0
+[v0.14.11]: https://github.com/lode-org/readcon-core/compare/v0.14.10...v0.14.11
+[v0.14.10]: https://github.com/lode-org/readcon-core/compare/v0.14.9...v0.14.10
+[v0.14.9]: https://github.com/lode-org/readcon-core/compare/v0.14.8...v0.14.9
+[v0.14.8]: https://github.com/lode-org/readcon-core/compare/v0.14.7...v0.14.8
+[v0.14.7]: https://github.com/lode-org/readcon-core/compare/v0.14.6...v0.14.7
+[v0.14.6]: https://github.com/lode-org/readcon-core/compare/v0.14.5...v0.14.6
+[v0.14.5]: https://github.com/lode-org/readcon-core/compare/v0.14.4...v0.14.5
+[v0.14.4]: https://github.com/lode-org/readcon-core/compare/v0.14.3...v0.14.4
+[v0.14.3]: https://github.com/lode-org/readcon-core/compare/v0.14.2...v0.14.3
+[v0.14.2]: https://github.com/lode-org/readcon-core/compare/v0.14.1...v0.14.2
+[v0.14.1]: https://github.com/lode-org/readcon-core/compare/v0.14.0...v0.14.1
+[v0.14.0]: https://github.com/lode-org/readcon-core/compare/v0.13.1...v0.14.0
+[v0.13.1]: https://github.com/lode-org/readcon-core/compare/v0.13.0...v0.13.1
+[v0.13.0]: https://github.com/lode-org/readcon-core/compare/v0.12.0...v0.13.0
+[v0.12.0]: https://github.com/lode-org/readcon-core/compare/v0.11.4...v0.12.0
+[v0.11.4]: https://github.com/lode-org/readcon-core/compare/v0.11.3...v0.11.4
+[v0.11.3]: https://github.com/lode-org/readcon-core/compare/v0.11.2...v0.11.3
+[v0.11.2]: https://github.com/lode-org/readcon-core/compare/v0.11.1...v0.11.2
+[v0.11.1]: https://github.com/lode-org/readcon-core/compare/v0.11.0...v0.11.1
+[v0.11.0]: https://github.com/lode-org/readcon-core/compare/v0.10.0...v0.11.0
+[v0.10.0]: https://github.com/lode-org/readcon-core/compare/v0.9.0...v0.10.0
+[v0.9.0]: https://github.com/lode-org/readcon-core/compare/v0.8.0...v0.9.0
+[v0.8.0]: https://github.com/lode-org/readcon-core/compare/v0.7.3...v0.8.0
+[v0.7.3]: https://github.com/lode-org/readcon-core/compare/v0.7.2...v0.7.3
+[v0.7.2]: https://github.com/lode-org/readcon-core/compare/v0.7.1...v0.7.2
+[v0.7.1]: https://github.com/lode-org/readcon-core/compare/v0.7.0...v0.7.1
+[v0.7.0]: https://github.com/lode-org/readcon-core/compare/v0.6.0...v0.7.0
+[v0.6.0]: https://github.com/lode-org/readcon-core/compare/v0.5.2...v0.6.0
+[v0.5.2]: https://github.com/lode-org/readcon-core/compare/v0.5.1...v0.5.2
+[v0.5.1]: https://github.com/lode-org/readcon-core/compare/v0.5.0...v0.5.1
+[v0.5.0]: https://github.com/lode-org/readcon-core/compare/v0.4.4...v0.5.0
+[v0.4.4]: https://github.com/lode-org/readcon-core/compare/v0.4.3...v0.4.4
+[v0.4.3]: https://github.com/lode-org/readcon-core/compare/v0.4.2...v0.4.3
+[v0.4.2]: https://github.com/lode-org/readcon-core/compare/v0.4.1...v0.4.2
+[v0.4.1]: https://github.com/lode-org/readcon-core/compare/v0.4.0...v0.4.1
+[v0.4.0]: https://github.com/lode-org/readcon-core/compare/v0.3.2...v0.4.0
+[v0.3.2]: https://github.com/lode-org/readcon-core/compare/v0.3.1...v0.3.2
+[v0.3.1]: https://github.com/lode-org/readcon-core/compare/v0.3.0...v0.3.1
+[v0.3.0]: https://github.com/lode-org/readcon-core/compare/v0.2.0...v0.3.0
+[v0.2.0]: https://github.com/lode-org/readcon-core/compare/v0.1.1...v0.2.0
+[v0.1.1]: https://github.com/lode-org/readcon-core/compare/v0.1.0...v0.1.1
+[v0.1.0]: https://github.com/lode-org/readcon-core/releases/tag/v0.1.0
+<!-- [[[end]]] -->

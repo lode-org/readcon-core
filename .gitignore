@@ -124,6 +124,9 @@ Testing/
 
 # Prerequisites
 *.d
+# Towncrier news fragments. The pattern above also matches this directory.
+!changelog.d/
+!changelog.d/**
 
 # Object files
 *.o

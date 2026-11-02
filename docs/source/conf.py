@@ -1,7 +1,13 @@
+from pathlib import Path
+
 project = "readcon-core"
 copyright = "2025--present, LODE developers"
 author = "LODE developers"
-release = "0.17.3"
+_version_path = Path(__file__).resolve().parents[2] / "VERSION"
+_version_text = _version_path.read_text(encoding="utf-8")
+if _version_text.count("\n") != 1 or not _version_text.endswith("\n"):
+    raise SystemExit(f"{_version_path} must be one line ending in a single newline")
+release = _version_text[:-1]
 
 extensions = [
     "sphinx.ext.autodoc",

@@ -16,7 +16,9 @@ Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` (or wait
 for the `release` hook) and unpack the matching asset:
 
 ```bash
+# [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "VER={v}")]]]
 VER=0.17.3
+# [[[end]]]
 TARGET=x86_64-unknown-linux-gnu   # or aarch64-unknown-linux-gnu, *-apple-darwin
 curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
 tar -xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"

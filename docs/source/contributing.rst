@@ -14,7 +14,13 @@ Prerequisites
 
 - `pixi <https://pixi.sh>`_ for environment management
 
-- `cocogitto <https://github.com/cocogitto/cocogitto>`_ (``cog``) for conventional commits and changelog
+- `cocogitto <https://github.com/cocogitto/cocogitto>`_ (``cog``) for conventional commits and the git changelog
+
+- `cogapp <https://cog.readthedocs.io/en/latest/>`_ (``python -m cogapp``) to stamp generated copies of the package version
+
+- `towncrier <https://towncrier.readthedocs.io/en/stable/>`_ for news fragments under ``changelog.d/``
+
+- Pins for those two tools: ``requirements-version.txt``
 
 - `prek <https://prek.j178.dev>`_ for git hooks (``prek.toml``)
 
@@ -66,9 +72,8 @@ The project uses `conventional commits <https://www.conventionalcommits.org/>`_ 
 The CI lint check rejects non-conforming commit messages on the PR
 range. Some historical commits use ``docs+bench:`` or untyped merges;
 ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
-``scripts/release-prep.sh`` runs ``cog changelog`` from the previous tag
-and retitles ``Unreleased`` to ``## vX.Y.Z`` so shipped tags have no
-Unreleased dump.
+``scripts/release-prep.sh`` calls ``scripts/bump-version.sh``, so towncrier
+writes the ``## vX.Y.Z`` heading from the fragments in ``changelog.d/``.
 
 Recognized commit types (from ``cog.toml``):
 
@@ -241,7 +246,7 @@ Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 
 The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
-:doc:`benchmarks` (``benchmarks/``, ``asv.conf.json``).
+`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
 
 Executable chemfiles pages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -267,7 +272,7 @@ Mental model (new contributor)
 ::
 
     scripts/release-prep.sh X.Y.Z
-          │  prek, pixi docbld + lychee, version bump, cog CHANGELOG,
+          │  prek, pixi docbld + lychee, version bump, towncrier CHANGELOG,
           │  cxx-dist gate; cbindgen optional
           ▼
     commit: maint: bump to vX.Y.Z   ──►  open Pull Request to main
@@ -289,7 +294,7 @@ Mental model (new contributor)
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Layer       | What                                   | Workflow / tool                                                                                     |
     +=============+========================================+=====================================================================================================+
-    | Prep        | Hooks + docs + versions + changelog    | ``prek``, ``pixi r -e docs docbld``, ``lychee``, ``scripts/release-prep.sh``, ``cog``               |
+    | Prep        | Hooks + docs + versions + changelog    | ``prek``, ``pixi r -e docs docbld``, ``lychee``, ``scripts/release-prep.sh``, ``towncrier build``   |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Release PR  | Validate dist plan before a tag exists | ``.github/workflows/release.yml`` (cargo-dist; ``pr-run-mode = "plan"`` in ``dist-workspace.toml``) |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
@@ -357,10 +362,11 @@ Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit
 
 .. code:: shell
 
-    # cargo-dist 0.28 from the sha256-pinned archive
+    # cargo-dist 0.28 from the sha256-pinned archive (scripts/install-cargo-dist-ci.sh)
     bash scripts/install-cargo-dist-ci.sh
     dist generate --mode=ci
-    # Re-apply action SHA pins and the checksummed install steps.
+    # Re-apply action SHA pins and the checksummed install steps. dist generate
+    # rewrites release.yml to mutable tags and curl|sh.
     git add .github/workflows/release.yml dist-workspace.toml scripts/install-cargo-dist-ci.sh
 
 crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
@@ -421,33 +427,59 @@ maturin retry; tag runs are not cancelled mid-flight by concurrency.
 Version files
 ~~~~~~~~~~~~~
 
-Versions are tracked in the files ``scripts/check_version_lockstep.sh`` gates:
+The package version is the single line in ``VERSION`` at the repository root.
+That is the only hand-written copy.
 
-1. ``Cargo.toml`` (``version = "X.Y.Z"``)
+Bump with ``scripts/bump-version.sh X.Y.Z`` (or ``cog bump``).
+``scripts/stamp-version.sh`` only restamps cogapp copies. It does not write
+the towncrier heading or refresh the exported pins.
 
-2. ``meson.build`` (``version: 'X.Y.Z'``)
+.. code:: shell
 
-3. ``pyproject.toml`` (package version and ``readcon-chemfiles==X.Y.Z``)
+    scripts/bump-version.sh X.Y.Z
+    # scripts/stamp-version.sh
+    # restamp only, after VERSION and the heading exist
 
-4. ``pyproject.chemfiles.toml``
+``scripts/bump-version.sh X.Y.Z`` (also ``scripts/set-version.sh``) writes
+``VERSION``, runs ``python -m towncrier build --yes --version X.Y.Z``, then
+``scripts/stamp-version.sh``. Towncrier is the only writer of ``## vX.Y.Z``
+headings. ``cog.toml`` sets ``disable_changelog = true`` and its
+``pre_bump_hooks`` call ``bump-version.sh``, so a ``cog bump`` commit already
+contains the heading and the compare links.
+CMake reads ``VERSION`` and sets ``CMAKE_CONFIGURE_DEPENDS``. Meson passes
+``files('VERSION')`` to ``project()``
+(`https://mesonbuild.com/Reference-manual_functions.html#project <https://mesonbuild.com/Reference-manual_functions.html#project>`_).
+Sphinx (``docs/source/conf.py``) reads ``VERSION`` at configure time.
+The C and Fortran strings, the Python and Julia and Fortran package
+files, citation metadata, and the changelog compare links are cogapp
+output. The Fortran parameter does not repeat ``public``, because the
+module already lists ``readcon_version``. Python ``__version__`` follows
+the Cargo package version, which cogapp stamps from ``VERSION``. A
+Windows checkout may store a carriage return before the newline in
+``VERSION``. The build and ``readcon_meta`` strip that carriage return.
+Tool versions are pinned in ``requirements-version.txt``.
 
-5. ``pixi.toml``
+Published pages stay on the org-to-rst export (``emacs --batch -l docs/export.el``
+or ``pixi r -e docs orgbld``). Org sources mark each install pin with an
+at-sign placeholder named READCON\_VERSION. The exporter reads ``VERSION``
+and does not take a version argument. Do not type the version into
+``docs/source/*.rst``.
 
-6. ``docs/source/conf.py`` (``release = "X.Y.Z"``)
+News for a release is a fragment under ``changelog.d/``, collected by
+`towncrier <https://towncrier.readthedocs.io/en/stable/>`_. The towncrier
+config imports ``readcon_meta.__version__``, which reads ``VERSION``.
+Do not hand-edit the generated release section of ``CHANGELOG.md``.
+Cocogitto still checks commit subjects and can render the git changelog;
+it is a separate program from cogapp, so version stamps call
+``python -m cogapp``.
 
-7. ``src/lib.rs`` (``assert_eq!(VERSION, "X.Y.Z")``)
-
-8. ``julia/ReadCon/Project.toml``
-
-9. ``fortran/ReadCon/fpm.toml``
-
-10. ``CITATION.cff``
-
-11. ``codemeta.json``
-
-12. ``.zenodo.json``
-
-``scripts/release-prep.sh X.Y.Z`` bumps that set.
+``scripts/check_version_sot.sh`` greps every copy of the version string and
+compares it to ``VERSION``. CI runs ``python -m cogapp --check`` on the stamp
+file list and that script. The ``cog`` executable is cocogitto, so the drift
+job does not call it.
+``scripts/release-prep.sh X.Y.Z`` is the release path: it calls
+``scripts/bump-version.sh`` and then the org export.
+``scripts/set-version.sh`` is only an alias for ``bump-version.sh``.
 
 Complete release checklist
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -482,9 +514,12 @@ Manual equivalent of the script:
        pixi r -e docs docbld
        pixi r -e docs linkcheck
 
-2. Bump the version in every file listed above (``scripts/release-prep.sh``).
+2. Run ``scripts/bump-version.sh X.Y.Z``. That writes ``VERSION``, lets towncrier
+   write the release heading, then runs cogapp. Re-export the docs with the
+   org-to-rst pipeline so the published pages match.
 
-3. Regenerate ``Cargo.lock`` after the version bump (``cargo test --locked``).
+3. Check the lock with ``cargo test --locked``. ``scripts/bump-version.sh``
+   already rewrites the ``readcon-core`` entry in ``Cargo.lock``.
 
 4. Regenerate the README from ``readme_src.org`` when the user-facing docs changed
    (optional for patch releases that only touch the crate version). Use the
@@ -495,21 +530,10 @@ Manual equivalent of the script:
 
        ./scripts/export-readme.sh
 
-5. Regenerate ``CHANGELOG.md`` with ``cog``.
-   Do not hand-edit the generated release section (extend ``cog.toml``
-   ``[commit_types]`` if a historical type blocks ``cog changelog``).
-
-   .. code:: shell
-
-       prev="$(git describe --tags --abbrev=0)"
-       {
-         sed -n '1,3p' CHANGELOG.md
-         cog changelog "${prev}.." \
-           | sed "s/^## Unreleased.*/## vX.Y.Z - $(date +%F)/"
-         echo
-         awk '/^## v/{found=1} found' CHANGELOG.md
-       } > /tmp/CHANGELOG.md
-       mv /tmp/CHANGELOG.md CHANGELOG.md
+5. The release heading comes from towncrier, which ``bump-version.sh`` already
+   ran. Do not rebuild ``CHANGELOG.md`` with ``cog changelog``; that drops the
+   towncrier marker. Add a fragment under ``changelog.d/`` before the bump.
+   Do not hand-edit the generated release section.
 
 6. If the FFI surface changed, run ``scripts/regen-capi-headers.sh`` and commit
    ``include/readcon-core.h`` (CI ``build_test.yml`` runs ``--check``).

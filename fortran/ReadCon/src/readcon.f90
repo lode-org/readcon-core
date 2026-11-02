@@ -17,7 +17,7 @@ module readcon
   public :: frame_metatensor_positions_block, frame_metatensor_velocities_block
   public :: frame_metatensor_forces_block, frame_metatensor_atom_energies_block
   public :: mts_block_free_rkr
-  public :: library_version, con_spec_version, has_chemfiles_support, status_message
+  public :: library_version, readcon_version, con_spec_version, has_chemfiles_support, status_message
   public :: last_error_message
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
@@ -42,6 +42,12 @@ module readcon
   integer(c_int), parameter :: rkr_status_validation_error = -9
   integer(c_int), parameter :: rkr_status_selection_error = -10
   integer(c_int), parameter :: rkr_status_feature_disabled = -11
+
+  ! Package version. Stamped by cogapp from VERSION.
+  ! https://cog.readthedocs.io/en/latest/
+  ! [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, '  character(len=*), parameter :: readcon_version = "{v}"')]]]
+  character(len=*), parameter :: readcon_version = "0.17.3"
+  ! [[[end]]]
 
   type, bind(C), public :: catom_t
     integer(c_int64_t) :: atomic_number = 0_c_int64_t

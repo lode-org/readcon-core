@@ -7,10 +7,13 @@ authors:
     family-names: Goswami
     email: rgoswami@ieee.org
     orcid: "https://orcid.org/0000-0002-2393-8056"
+    affiliation: "TurtleTech ehf"
 license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
+# [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "version: {v}")]]]
 version: 0.17.3
+# [[[end]]]
 date-released: "2026-10-31"
 identifiers:
   - type: doi

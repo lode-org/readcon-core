@@ -12,10 +12,9 @@ shipped headers, so wrapdb does **not** need a `packagefiles/` meson patch.
 From the repository root, after `scripts/package-cxx.sh /tmp/cxx --vendor`:
 
 ```bash
-VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
-SHA=$(cut -d' ' -f1 /tmp/cxx/readcon-core-cxx-${VERSION}.tar.gz.sha256)
-sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
-  packaging/wrapdb/readcon-core.wrap.in > packaging/wrapdb/readcon-core.wrap
+# Record the tarball digest, then restamp. VERSION supplies the release.
+printf '%s\n' "$SHA" > packaging/wrapdb/readcon-core.sha256
+scripts/stamp-version.sh
 ```
 
 Attach the tarball to the GitHub Release for `v$VERSION` so `source_url` resolves.

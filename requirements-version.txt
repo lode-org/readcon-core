@@ -1,0 +1,2 @@
+cogapp==3.6.0
+towncrier==26.9.0

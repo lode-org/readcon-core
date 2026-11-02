@@ -27,6 +27,10 @@ fixed = re.sub(
 )
 # ox-md pads blank lines inside indented examples with trailing spaces.
 fixed = "\n".join(line.rstrip() for line in fixed.splitlines()) + "\n"
+version = Path("VERSION").read_text(encoding="utf-8")
+if version.count("\n") != 1 or not version.endswith("\n"):
+    raise SystemExit("VERSION must be one line ending in a single newline")
+fixed = fixed.replace("@READCON_VERSION@", version[:-1])
 p.write_text(fixed)
 if fixed != text:
     print("export-readme: normalized hrefs and trailing whitespace")
