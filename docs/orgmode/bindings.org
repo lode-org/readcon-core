@@ -22,6 +22,7 @@ task.
 |---------+------+--------+-------+---------+---+-----|
 | Lazy frame iterator | yes | yes (streaming ~iter_con~) | yes | ~open_iterator~ / ~iterator_t~ | yes | yes |
 | Skip without atoms | ~forward~ / ~skip~ / ~read_nth_frame~ | ~iter.forward~ / ~skip~ / ~nth~ / ~read_nth_frame~ | n/a | ~iterator_t%forward~ / ~skip~ / ~nth~ / ~read_nth_frame~ | ~con_frame_iterator_forward~ / ~nth~ / ~rkr_read_nth_frame~ | ~forward~ / ~nth~ / ~read_nth_frame~ |
+| Bounded-memory stream, gzip and Zstandard (zstd) decoded while read | ~stream::ConFrameReader~ | ~iter_con(path, stream=True)~ | n/a | n/a | n/a | n/a |
 | Random access by frame number (kept ~.rcidx~ index) | ~trajectory::ConTrajectory~ | ~readcon.ConTrajectory~ (~len~, ~t[i]~, ~t[-1]~, slices, iteration) | n/a | n/a | ~rkr_trajectory_open~ / ~_len~ / ~_read_frame~ / ~_free~ | ~readcon::Trajectory~ |
 | Read-all-frames helper | ~iterators::read_all_frames~ | ~readcon.read_all_frames~ | ~read_all_frames~ | ~rkr_read_all_frames~ | ~rkr_read_all_frames~ | ~readcon::read_all_frames~ |
 | Count frames (skip walk) | ~iterators::count_frames~ | ~readcon.count_frames~ | n/a | ~count_frames~ | ~rkr_count_frames~ | ~count_frames~ |
@@ -47,6 +48,8 @@ task.
 | metatensor ~TensorBlock~ export | yes (~metatensor~ feature) | n/a | n/a | yes (opaque ~c_ptr~; link fat lib) | yes (gated C ABI) | yes (same C ABI) |
 | Optional frame ~bonds~ topology | yes | ~PyConFrame.bonds~ / ~has_bonds~ | ~metadata_json~ + ~frame_bond_count~ | ~rkr_frame_bond_*~ | ~rkr_frame_bond_*~ | ~ConFrame::bonds()~ |
 | Chemfiles import / selection | yes (~chemfiles~ feature) | ~select_on_frame~ / ~select_atom_indices~ | ~select_on_frame~ / ~select_atom_indices~ (FFI; chemfiles lib) | ~rkr_frame_select~ / ~read_chemfiles_first~ | ~rkr_frame_select~ | ~ConFrame::select~ |
+
+The Rust and Python stream readers decode zstd input only when compiled with the ~zstd~ feature.
 
 *Selection (shared evaluator).* One evaluator core; every
 surface is a pass-through (~evaluate_selection_on_con_frame~ → chemfiles
@@ -242,9 +245,16 @@ readcon.atomic_number_to_symbol(93)     # "X"
   energies_array() (v0.10.0+), atom_ids_array() (v0.10.0+).
 - =readcon.read_first_frame(path)= :: Parse and return only the first
   frame.
-- =readcon.iter_con(path)= :: Return a Python iterator over frames.
-  The iterator API avoids indexing into =read_con(path)= for
-  first-frame and loop-based workflows.
+- =readcon.iter_con(path, *, mmap=False, stream=False)= :: Return a Python iterator over frames, with =forward()=, =skip(n)= and =nth(i)=.
+
+  The iterator API avoids indexing into =read_con(path)= for first-frame and loop-based workflows.
+  By default the whole file is read, and decompressed, into memory first.
+  =mmap=True= maps an uncompressed file instead.
+  =stream=True= decompresses and parses the file as it is read, so memory stays near one frame plus 1 MiB (mebibyte).
+  This applies to plain and gzip input, and to zstd input in a build with the =zstd= feature.
+  With =stream=True=, the iterator raises =OSError= for a parse error or invalid UTF-8 (Unicode Transformation Format, 8-bit) when it reaches the bad frame, after the frames before it.
+  An input or output error from the file or the decoder raises =OSError= with a message that starts with =read error:=, after the frames in the bytes read before it.
+  Setting both =mmap= and =stream= raises =ValueError=.
 - =readcon.symbol_to_atomic_number(symbol)= :: Atomic number for a
   chemical symbol, or the sentinel 0 if unknown. Coverage is Z = 1
   through the Z = 92 ceiling (H through U) plus D and T (both Z = 1).
@@ -747,6 +757,7 @@ by another tool.
 
 The path readers decompress the whole file into memory before they parse it.
 =compression::open_decoded(path)= returns the decoded bytes as a stream instead, and =stream::ConFrameReader= parses frames from any =std::io::Read= with about one frame buffered.
+Python reaches the same reader through =iter_con(path, stream=True)=.
 
 
 ** Fortran (fpm ReadCon, ISO_C_BINDING)

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file. See [conven
 - An uncompressed file reuses a valid `.rcidx` sidecar. gzip and zstd input is indexed in memory only.
 - `benches/trajectory_random_access.py` times K scattered reads through `ConTrajectory` against repeated `read_nth_frame`.
 - `readcon.iter_con(path, mmap=True)` keeps an uncompressed file of 64 KiB or more mapped. It releases the pages it has read. On Linux about 32 MiB of the file stays resident. On macOS the release does not discard pages, and outside Unix it is a no-op, so memory can grow to the file size. The file must not change while the iterator is alive, and a truncation can end the process with `SIGBUS` instead of raising `OSError`. The default is unchanged.
+- `readcon.iter_con(path, stream=True)` decompresses and parses a plain or gzip file as it reads, so memory stays near one frame plus 1 MiB (mebibyte) instead of the decompressed size.
+  Zstandard (zstd) input works the same in a build with the `zstd` feature.
+  Frames are the same as without it.
+  A parse error or invalid UTF-8 (Unicode Transformation Format, 8-bit) is raised when the loop reaches it, after the frames before it.
+  The default is unchanged.
 - The Rust type `stream::ConFrameReader` parses frames from any `std::io::Read` with about one frame buffered, and `compression::open_decoded` opens a path as one decoded stream.
   Frames and errors are those of `ConFrameIterator::from_bytes` over the whole stream, up to the first error.
   When the source fails, the frames in the bytes read before the failure come first, then the input or output error.

@@ -1342,10 +1342,23 @@ fn read_con_string(
 /// materialize the full trajectory as `PyConFrame` up front).
 #[pyclass(name = "ConFrameIterator")]
 struct PyConFrameIterator {
-    /// Full file text: owned, or mapped with `iter_con(path, mmap=True)`.
-    contents: crate::compression::ForwardText,
-    /// Byte offset of the next frame start within `contents`.
-    pos: usize,
+    source: FrameSource,
+}
+
+enum FrameSource {
+    /// Full file text: owned, or mapped with `iter_con(path, mmap=True)`,
+    /// and the byte offset of the next frame start within it.
+    Text(crate::compression::ForwardText, usize),
+    /// Decoded and parsed as it is read, with `iter_con(path, stream=True)`.
+    Stream(std::sync::Mutex<crate::stream::ConFrameReader<Box<dyn std::io::Read + Send>>>),
+}
+
+fn stream_error(what: &str, e: crate::stream::StreamError) -> PyErr {
+    if e.is::<crate::error::ParseError>() {
+        PyIOError::new_err(format!("{what} error: {e}"))
+    } else {
+        PyIOError::new_err(format!("read error: {e}"))
+    }
 }
 
 #[pymethods]
@@ -1355,43 +1368,65 @@ impl PyConFrameIterator {
     }
 
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<PyConFrame>> {
-        if self.pos >= self.contents.as_str().len() {
+        let (contents, pos) = match &mut self.source {
+            FrameSource::Text(contents, pos) => (contents, pos),
+            FrameSource::Stream(reader) => {
+                let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
+                return match py.detach(|| reader.next()) {
+                    Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
+                    Some(Err(e)) => Err(stream_error("parse", e)),
+                    None => Ok(None),
+                };
+            }
+        };
+        if *pos >= contents.as_str().len() {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
         // owns that boundary and trailing whitespace.
-        let slice = &self.contents.as_str()[self.pos..];
+        let slice = &contents.as_str()[*pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
                 let consumed =
                     (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
-                self.pos += consumed;
-                self.contents
-                    .release_before(self.pos)
+                *pos += consumed;
+                contents
+                    .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
             Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
             None => {
-                self.pos = self.contents.as_str().len();
+                *pos = contents.as_str().len();
                 Ok(None)
             }
         }
     }
 
     /// Skip one frame without building a `ConFrame`. False at EOF.
-    fn forward(&mut self) -> PyResult<bool> {
-        if self.pos >= self.contents.as_str().len() {
+    fn forward(&mut self, py: Python<'_>) -> PyResult<bool> {
+        let (contents, pos) = match &mut self.source {
+            FrameSource::Text(contents, pos) => (contents, pos),
+            FrameSource::Stream(reader) => {
+                let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
+                return match py.detach(|| reader.forward()) {
+                    Some(Ok(())) => Ok(true),
+                    Some(Err(e)) => Err(stream_error("skip", e)),
+                    None => Ok(false),
+                };
+            }
+        };
+        if *pos >= contents.as_str().len() {
             return Ok(false);
         }
-        let slice = &self.contents.as_str()[self.pos..];
+        let slice = &contents.as_str()[*pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.forward() {
             Some(Ok(())) => {
-                self.pos += iter.byte_pos();
-                self.contents
-                    .release_before(self.pos)
+                *pos += iter.byte_pos();
+                contents
+                    .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
@@ -1401,10 +1436,10 @@ impl PyConFrameIterator {
     }
 
     /// Skip `n` frames without parsing atoms. Returns how many were skipped.
-    fn skip(&mut self, n: usize) -> PyResult<usize> {
+    fn skip(&mut self, py: Python<'_>, n: usize) -> PyResult<usize> {
         let mut skipped = 0usize;
         for _ in 0..n {
-            if !self.forward()? {
+            if !self.forward(py)? {
                 break;
             }
             skipped += 1;
@@ -1414,7 +1449,7 @@ impl PyConFrameIterator {
 
     /// Skip `index` frames, then parse the next.
     fn nth(&mut self, py: Python<'_>, index: usize) -> PyResult<Option<PyConFrame>> {
-        self.skip(index)?;
+        self.skip(py, index)?;
         self.__next__(py)
     }
 }
@@ -1431,17 +1466,34 @@ impl PyConFrameIterator {
 /// there memory can grow to the file size. The mapped file must not change
 /// until the iterator is dropped. A truncation can end the process with
 /// ``SIGBUS``, which is a signal and not an ``OSError``.
+///
+/// With ``stream=True`` the file is decompressed and parsed as it is read,
+/// so memory stays near one frame plus 1 MiB, for gzip input as for plain.
+/// Frames are the same.
+/// The iterator raises a parse error or invalid UTF-8 (Unicode
+/// Transformation Format, 8-bit) at the bad frame.
+/// The error comes after the frames before it, not when the iterator is
+/// opened.
 #[pyfunction]
-#[pyo3(signature = (path, *, mmap=false))]
-fn iter_con(py: Python<'_>, path: &str, mmap: bool) -> PyResult<PyConFrameIterator> {
+#[pyo3(signature = (path, *, mmap=false, stream=false))]
+fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<PyConFrameIterator> {
+    if mmap && stream {
+        return Err(PyValueError::new_err("mmap and stream cannot both be true"));
+    }
     let path_owned = path.to_owned();
-    let contents = py
+    let source = py
         .detach(|| {
-            crate::compression::ForwardText::open(Path::new(&path_owned), mmap)
-                .map_err(|e| e.to_string())
+            let path = Path::new(&path_owned);
+            if stream {
+                crate::stream::ConFrameReader::open(path)
+                    .map(|r| FrameSource::Stream(std::sync::Mutex::new(r)))
+            } else {
+                crate::compression::ForwardText::open(path, mmap).map(|t| FrameSource::Text(t, 0))
+            }
+            .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    Ok(PyConFrameIterator { contents, pos: 0 })
+    Ok(PyConFrameIterator { source })
 }
 
 /// Count frames without building atom / Python objects (skip walk).
