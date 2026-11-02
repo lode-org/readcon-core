@@ -9,7 +9,7 @@ fail=0
 die() { echo "check-cxx-dist: $*" >&2; fail=1; }
 
 # Shipped headers exist
-for h in include/readcon-core.h include/readcon-core.hpp include/readcon-metatensor.h; do
+for h in include/readcon-core.h include/readcon-core.hpp include/readcon-metatensor.h include/readcon-core-version.h; do
     [[ -f "$h" ]] || die "missing shipped header $h"
 done
 

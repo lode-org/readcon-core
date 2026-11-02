@@ -78,9 +78,9 @@ if [[ ! -f "$ROOT_DIR/Cargo.toml" ]]; then
     exit 1
 fi
 
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -1)"
+VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
 if [[ -z "$VERSION" ]]; then
-    echo "package-clib: could not parse version from $ROOT_DIR/Cargo.toml" >&2
+    echo "package-clib: could not read $ROOT_DIR/VERSION" >&2
     exit 1
 fi
 

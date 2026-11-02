@@ -1,6 +1,8 @@
 [package]
 name = "readcon-core"
+# [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
 version = "0.17.3"
+# [[[end]]]
 edition = "2024"
 rust-version = "1.88"
 description = "An oxidized single and multiple CON file reader and writer with FFI bindings for ergonomic C/C++ usage. Implements CON spec v3."
@@ -182,6 +184,7 @@ asset = [
   { from = "include/readcon-core.h" },
   { from = "include/readcon-core.hpp" },
   { from = "include/readcon-metatensor.h" },
+  { from = "include/readcon-core-version.h" },
 ]
 
 [profile.release]

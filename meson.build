@@ -1,7 +1,8 @@
 project(
     'readcon-core',
     'c',
-    version: '0.17.3',
+    # One line of text. https://mesonbuild.com/Reference-manual_functions.html#project
+    version: files('VERSION'),
     meson_version: '>=1.3.0',
     default_options: [
         'buildtype=debugoptimized',
@@ -107,6 +108,7 @@ install_headers(
     'include/readcon-core.h',
     'include/readcon-core.hpp',
     'include/readcon-metatensor.h',
+    'include/readcon-core-version.h',
 )
 
 # link_args carries the cargo archive; Meson must not

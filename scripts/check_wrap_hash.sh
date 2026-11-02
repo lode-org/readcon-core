@@ -15,8 +15,8 @@ WRAP_IN="$ROOT/packaging/wrapdb/readcon-core.wrap.in"
 [[ -f "$WRAP" ]] || die "missing packaging/wrapdb/readcon-core.wrap"
 [[ -f "$WRAP_IN" ]] || die "missing packaging/wrapdb/readcon-core.wrap.in"
 
-cargo_ver="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
-[[ -n "$cargo_ver" ]] || die "could not read Cargo.toml version"
+cargo_ver="$(cd "$ROOT" && python3 -c 'import sys; sys.path.insert(0, "scripts"); from version_sot import read_version; print(read_version(), end="")')"
+[[ -n "$cargo_ver" ]] || die "could not read VERSION"
 
 wrap_kv() {
   local key="$1"
@@ -54,6 +54,13 @@ else
   die "wrap source_hash '${source_hash_raw}' is not a 64-char sha256"
 fi
 
+sidecar="$(tr -d '[:space:]' < "$ROOT/packaging/wrapdb/readcon-core.sha256")"
+if [[ "$sidecar" == "$source_hash" ]]; then
+  ok "sha256 sidecar matches the wrap"
+else
+  die "sha256 sidecar '${sidecar}' does not match wrap '${source_hash}'"
+fi
+
 if command -v curl >/dev/null 2>&1; then
   live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
   if [[ -z "$live" ]]; then
@@ -86,10 +93,15 @@ for rel in "${DOC_FILES[@]}"; do
   else
     die "$rel does not document the wrap source_hash ${source_hash}"
   fi
-  if grep -q "readcon-core-cxx-${cargo_ver}.tar.gz" "$f"; then
-    ok "$rel names the v${cargo_ver} cxx tarball"
+  if [[ "$rel" == docs/orgmode/* ]]; then
+    name_pat="readcon-core-cxx-@READCON_VERSION@.tar.gz"
   else
-    die "$rel does not name readcon-core-cxx-${cargo_ver}.tar.gz"
+    name_pat="readcon-core-cxx-${cargo_ver}.tar.gz"
+  fi
+  if grep -q -F "$name_pat" "$f"; then
+    ok "$rel names the cxx tarball (${name_pat})"
+  else
+    die "$rel does not name ${name_pat}"
   fi
 done
 

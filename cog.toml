@@ -1,12 +1,17 @@
 from_latest_tag = false
 ignore_merge_commits = true
-disable_changelog = false
+# Towncrier writes ## release headings. Cocogitto must not write a second set.
+disable_changelog = true
 disable_bump_commit = false
 generate_mono_repository_global_tag = true
 branch_whitelist = []
 skip_ci = "[skip ci]"
 skip_untracked = false
-pre_bump_hooks = ["bash scripts/set-version.sh {{version}}"]
+# Runs after the new version is chosen and before the bump commit.
+# bump-version.sh writes the towncrier heading, then stamps cogapp copies.
+# https://towncrier.readthedocs.io/en/stable/
+# https://cog.readthedocs.io/en/latest/
+pre_bump_hooks = ["bash scripts/bump-version.sh {{version}}"]
 post_bump_hooks = []
 pre_package_bump_hooks = []
 post_package_bump_hooks = []

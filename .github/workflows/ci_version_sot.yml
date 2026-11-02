@@ -1,0 +1,34 @@
+name: Version source
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  version-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install cogapp and towncrier
+        run: python -m pip install -r requirements-version.txt
+
+      - name: python -m cogapp --check
+        run: |
+          # Same file list as scripts/stamp-version.sh.
+          # https://cog.readthedocs.io/en/latest/
+          # The cog executable in this repo is cocogitto.
+          mapfile -t files < <(python -c 'import sys; sys.path.insert(0, "scripts"); from version_sot import marker_files; print("\n".join(marker_files()))')
+          python -m cogapp --check "${files[@]}"
+          while IFS=$'\t' read -r out src; do
+            python -m cogapp --check -d -o "$out" "$src"
+          done < <(python -c 'import sys; sys.path.insert(0, "scripts"); from version_sot import generated_targets; print("\n".join(f"{out}\t{src}" for out, src in generated_targets()))')
+
+      - name: Compare version strings to VERSION
+        run: bash scripts/check_version_sot.sh

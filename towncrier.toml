@@ -1,0 +1,10 @@
+[tool.towncrier]
+name = "readcon-core"
+package = "readcon_meta"
+package_dir = "."
+filename = "CHANGELOG.md"
+directory = "changelog.d"
+title_format = "## v{version} - {project_date}"
+underlines = ["", "", ""]
+wrap = true
+all_bullets = true

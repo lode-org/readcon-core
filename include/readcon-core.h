@@ -59,6 +59,7 @@ typedef struct DLManagedTensorVersioned RKRDLManagedTensorVersioned;
 struct mts_block_t;
 typedef struct mts_block_t mts_block_t;
 
+#include "readcon-core-version.h"
 
 #ifndef READCON_H
 #define READCON_H

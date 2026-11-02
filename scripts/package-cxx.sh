@@ -4,7 +4,7 @@
 #
 # Layout (featomic / metatensor-core-cxx convention):
 #   readcon-core-cxx-$VERSION/
-#     Cargo.toml Cargo.lock src/ include/ build.rs
+#     Cargo.toml Cargo.lock VERSION src/ include/ build.rs
 #     CMakeLists.txt cmake/ meson.build meson_options.txt
 #     scripts/meson_cargo_build.py
 #     examples/c_api_sample.c examples/cpp_api_sample.cpp examples/meson.build
@@ -32,7 +32,7 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -1)"
+VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
 if [[ "$VENDOR" -eq 1 ]]; then
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}-vendor"
 else
@@ -59,6 +59,7 @@ cp -a "${CRATE_DIR}/." "$DEST/"
 rm -f "$DEST/cbindgen.toml"
 
 # Overlay the C/C++ distribution files (always, even if cargo package omitted them).
+cp -a "$ROOT_DIR/VERSION" "$DEST/"
 cp -a "$ROOT_DIR/CMakeLists.txt" "$DEST/"
 cp -a "$ROOT_DIR/cmake/." "$DEST/cmake/"
 cp -a "$ROOT_DIR/meson.build" "$DEST/"

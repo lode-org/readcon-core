@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "readcon-core.h"
+#include "readcon-core-version.h"
 
 namespace readcon {
 

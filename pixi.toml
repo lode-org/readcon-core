@@ -1,6 +1,8 @@
 [workspace]
 name = "readcon-core"
+# [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
 version = "0.17.3"
+# [[[end]]]
 description = "CON/convel file reader and writer with FFI, Python, Julia bindings"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64"]

@@ -29,16 +29,14 @@ if (POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW)
 endif()
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml" CARGO_TOML_CONTENT)
-set(READCON_CORE_VERSION "")
-foreach(line ${CARGO_TOML_CONTENT})
-    if (line MATCHES "^version = \"([0-9]+\\.[0-9]+\\.[0-9]+.*)\"")
-        set(READCON_CORE_VERSION "${CMAKE_MATCH_1}")
-        break()
-    endif()
-endforeach()
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" READCON_CORE_VERSION_RAW)
+string(STRIP "${READCON_CORE_VERSION_RAW}" READCON_CORE_VERSION)
+set_property(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    APPEND
+    PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 if (READCON_CORE_VERSION STREQUAL "")
-    message(FATAL_ERROR "could not parse version from ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml")
+    message(FATAL_ERROR "could not read version from ${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 endif()
 
 string(REGEX REPLACE "([0-9]*)\\.([0-9]*)\\.([0-9]*).*" "\\1.\\2.\\3" READCON_CORE_CMAKE_VERSION ${READCON_CORE_VERSION})
@@ -90,6 +88,7 @@ endif()
 set(READCON_CORE_C_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/readcon-core.h")
 set(READCON_CORE_CXX_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/readcon-core.hpp")
 set(READCON_CORE_MTS_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/readcon-metatensor.h")
+set(READCON_CORE_VERSION_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/readcon-core-version.h")
 if (NOT EXISTS ${READCON_CORE_C_HEADER})
     message(FATAL_ERROR
         "missing shipped C header ${READCON_CORE_C_HEADER}. "
@@ -294,6 +293,7 @@ set(READCON_CORE_HEADERS
     ${READCON_CORE_C_HEADER}
     ${READCON_CORE_CXX_HEADER}
     ${READCON_CORE_MTS_HEADER}
+    ${READCON_CORE_VERSION_HEADER}
 )
 set(READCON_CORE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/)
 
