@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file. See [conven
   Frames and errors are those of `ConFrameIterator::from_bytes` over the whole stream, up to the first error.
   When the source fails, the frames in the bytes read before the failure come first, then the input or output error.
   The buffer grows only to fit the unread bytes plus one read, so its capacity stays near the largest frame plus one read.
+- `benches/stream_compressed.py` measures the peak resident memory and the time of `iter_con` over plain and gzip files in its default, `mmap=True` and `stream=True` modes.
 
 ### Fixed
 
