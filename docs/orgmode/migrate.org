@@ -1,6 +1,6 @@
 #+title: How-to — migrate a stack onto CON
 #+options: toc:nil num:nil ^:nil
-#+description: Task guide: foreign formats to .con, ASE hand-off, multi-language link.
+#+description: Task guide: foreign formats to .con, Atomic Simulation Environment (ASE) hand-off, multi-language link.
 
 #+begin_export rst
 .. note::
