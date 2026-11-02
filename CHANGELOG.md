@@ -2,7 +2,7 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
-## Unreleased
+## v0.17.3 - 2026-10-31
 
 ### Added
 
