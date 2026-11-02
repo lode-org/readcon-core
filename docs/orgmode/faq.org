@@ -393,7 +393,7 @@ print(h_idx)
 # topology: frame.select("angles: all") when metadata bonds are present
 #+end_src
 
-Recipes are in @@rst::doc:`chemfiles-howto`@@, @@rst::doc:`howto`@@ and @@rst::doc:`bindings`@@.
+Recipes are in [[./chemfiles-howto.org][chemfiles-howto]], [[./howto.org][howto]] and [[./bindings.org][bindings]].
 
 ** What the plotting tools add
 
