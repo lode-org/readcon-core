@@ -26,7 +26,7 @@ XYZ, PDB, and GRO in; DLPack and metatensor export the same arrays out.
 CON corpora.
 
 :doc:`getting-started` · :doc:`tutorial` · :doc:`migrate` · :doc:`spec` ·
-:doc:`faq` · :doc:`benchmarks`
+:doc:`faq` · :doc:`benchmarks` · :doc:`conbin-mmap`
 
 .. code-block:: shell
 
@@ -110,6 +110,8 @@ Site map
    evolution
    architecture
    benchmarks
+   conbin-mmap
+   conbin-mmap-constants
    chemfiles-explain
 
 .. toctree::

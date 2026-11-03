@@ -10,23 +10,25 @@ What we measure
 .. table::
 
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | Rank   | Command / artifact                                                         | Answers                                                                           |
+    |   Rank | Command / artifact                                                         | Answers                                                                           |
     +========+============================================================================+===================================================================================+
     | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths          |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
     | 2 (PR) | ``benchmarks/`` + ``asv.conf.json`` (ASV) → ``asv-spyglass compare``       | Python surface wall-time on PR vs base                                            |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | 3      | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                        |
+    |      3 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                        |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | 4      | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                      |
+    |      4 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                      |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | 5      | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON          |
+    |      5 | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON          |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | 6      | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                           |
+    |      6 | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                           |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | local  | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                          |
+    |      7 | ``benches/conbin_mmap_vs_h5py.py``                                         | CON-bin mapped columns vs ``pread`` fill vs h5py, guest drop and warm             |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | local  | ``benches/stream_compressed.py``                                           | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
+    |  local | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                          |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    |  local | ``benches/stream_compressed.py``                                           | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
     +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
 
 Regression gates in CI:
@@ -169,6 +171,31 @@ Report all three; do not drop H5MD.
     python benches/h5md_vs_con.py --frames 100 --repeats 5
     # writes h5md_size_bytes, con_size_bytes, con_gz_size_bytes, con_zst_size_bytes,
     # readcon_con_ms, readcon_con_gz_ms, readcon_con_zst_ms (null if zstd feature off)
+
+CON-bin columns against h5py.
+Build the extension first.
+
+.. code:: shell
+
+    cargo build --release --features python
+    python benches/conbin_mmap_vs_h5py.py
+
+10^6 atoms, 100 frames.
+Guest drop is drop\_caches 3, then the read.
+The host cache is not controlled.
+Warm is the next read in that process.
+Six repeats.
+Each reader is timed plain and with a float64 sum of both columns.
+
+Plain map, queue readahead, and O\_DIRECT.
+The sum is inside the clock.
+
+.. code:: shell
+
+    cargo build --release --bin conbin_scale
+    python benches/conbin_scale.py
+
+Files go to ``$WORKDIR``, or ``benches/work`` when ``WORKDIR`` is unset.
 
 Implementation details that show up in Cachegrind and peer scripts
 (facts about the code, not a promise about every host):

@@ -315,6 +315,44 @@ files.
     let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
     println!("Loaded {} frames", frames.len());
 
+Reading CON-bin columns
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A CON-bin file starts with one host page.
+The first 40 bytes are the magic ``CONBIN01``, the version, the flags, the
+frame count, the atom count and the payload offset.
+Positions of every frame follow as one little-endian run, then
+velocities.
+``read_conbin`` returns those runs as writable arrays over a ``MAP_PRIVATE``
+mapping.
+A store copies the page and leaves the file unchanged.
+``mmap(2)`` leaves it unspecified whether a later write to the file shows
+up in a page the caller has not stored to.
+Truncating the file can raise ``SIGBUS``.
+The map is the NumPy base of both arrays and is dropped when both are
+freed.
+
+.. code:: python
+
+    import readcon
+
+    positions, velocities, n_atoms = readcon.read_conbin("traj.conbin", n_threads=1)
+    positions[0, 0] = 0.0  # copies one page; the file is unchanged
+
+``read_conbin_copy`` fills a new array with ``pread`` instead.
+``benches/conbin_mmap_vs_h5py.py`` times both against h5py, plain and with
+a float64 sum of both columns inside the clock.
+``sum_mapped`` sums those columns.
+The default is one ``readahead`` stream.
+Two sessions on one boot compared one stream with a stream per span.
+Neither plan won at every thread count in both.
+The host cache was not controlled.
+The default stays one stream, the simpler plan.
+Workers fault a piece with ``MADV_POPULATE_READ``, then sum it.
+``mincore`` only decides whether the whole file is already resident.
+The mapped CON-bin page records that rule, the large-page advice and
+``benches/conbin_scale.py``.
+
 Reading a compressed trajectory in bounded memory
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
