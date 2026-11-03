@@ -111,7 +111,13 @@ fn section_follows<'a>(lines: &mut impl LineStream<'a>) -> bool {
     line_has_component_label(label)
 }
 
-/// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
+/// Length of the stack buffer of [`parse_line_of_range_f64_stack`]: the most
+/// columns an atom line has, which are x, y, z, the flag and the optional id
+/// (spec "Coordinates").
+pub const NUMERIC_STACK_WIDTH: usize = COORD_ROW_MIN_COLUMNS + 1;
+
+/// Hot-path: parse up to [`NUMERIC_STACK_WIDTH`] whitespace-separated f64s
+/// into a stack buffer.
 /// Returns count of tokens actually present (before padding).
 /// Pads `out[found..max]` from `defaults` when `found < max` and `found >= min`.
 ///
@@ -125,9 +131,9 @@ pub fn parse_line_of_range_f64_stack(
     min: usize,
     max: usize,
     defaults: &[f64],
-    out: &mut [f64; 5],
+    out: &mut [f64; NUMERIC_STACK_WIDTH],
 ) -> Result<usize, ParseError> {
-    debug_assert!(max <= 5 && min <= max && defaults.len() >= max);
+    debug_assert!(max <= NUMERIC_STACK_WIDTH && min <= max && defaults.len() >= max);
     let bytes = line.as_bytes();
     let n = bytes.len();
     let mut i = 0usize;
@@ -199,9 +205,9 @@ pub fn parse_line_of_range_f64_stack(
 /// * `line` - A string slice representing a single line of data.
 /// * `n` - The exact number of f64 values expected on the line.
 pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
-    if n <= 5 {
-        let defaults = [0.0f64; 5];
-        let mut buf = [0.0f64; 5];
+    if n <= NUMERIC_STACK_WIDTH {
+        let defaults = [0.0f64; NUMERIC_STACK_WIDTH];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, n, n, &defaults, &mut buf)?;
         return Ok(buf[..n].to_vec());
     }
@@ -224,15 +230,16 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
 /// padding with values from `defaults` when fewer than `max` are present.
 ///
 /// Used for atom lines where column 5 (atom_index) is optional.
-/// Prefer [`parse_line_of_range_f64_stack`] on the atom hot path (`max <= 5`).
+/// Prefer [`parse_line_of_range_f64_stack`] on the atom hot path
+/// (`max <= NUMERIC_STACK_WIDTH`).
 pub fn parse_line_of_range_f64(
     line: &str,
     min: usize,
     max: usize,
     defaults: &[f64],
 ) -> Result<Vec<f64>, ParseError> {
-    if max <= 5 {
-        let mut buf = [0.0f64; 5];
+    if max <= NUMERIC_STACK_WIDTH {
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, min, max, defaults, &mut buf)?;
         return Ok(buf[..max].to_vec());
     }
@@ -3219,7 +3226,7 @@ Coordinates of Component 1
         // Typical CON atom line: x y z fixed_mask [atom_id]
         let line = "   0.63939999999999997    0.90449999999999997   -0.00009999999999977 1    0";
         let defaults = [0.0, 0.0, 0.0, 0.0, 99.0];
-        let mut buf = [0.0f64; 5];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         let n = parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
         assert_eq!(n, 5);
         assert!((buf[0] - 0.6394).abs() < 1e-4);
@@ -3238,7 +3245,7 @@ Coordinates of Component 1
     fn test_parse_line_of_range_f64_stack_matches_vec_api() {
         let defaults = [0.0, 0.0, 0.0, 0.0, 7.0];
         let line = "1.0 2.0 3.0 0.0";
-        let mut buf = [0.0f64; 5];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
         let via_vec = parse_line_of_range_f64(line, 4, 5, &defaults).unwrap();
         assert_eq!(&buf[..5], via_vec.as_slice());

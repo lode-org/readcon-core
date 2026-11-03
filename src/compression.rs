@@ -51,16 +51,17 @@ pub fn detect_compression_from_extension(path: &Path) -> Compression {
     }
 }
 
-/// Size threshold below which we use `read_to_string` instead of mmap.
-const MMAP_THRESHOLD: u64 = 64 * 1024;
+/// Size in bytes from which [`read_file_contents`] maps an uncompressed file.
+/// A smaller one is read into a `String`.
+pub const MMAP_THRESHOLD: u64 = 64 * 1024;
 
 /// Reads file contents, decompressing if needed.
 ///
 /// Detection strategy:
 /// 1. Read the first 4 bytes to check magic bytes.
 /// 2. If gzip or zstd: decompress entire file to a String.
-/// 3. If uncompressed and < 64 KiB: read the rest into a String.
-/// 4. If uncompressed and >= 64 KiB: memory-mapped I/O.
+/// 3. If uncompressed and smaller than [`MMAP_THRESHOLD`]: read the rest into a String.
+/// 4. If uncompressed and at least [`MMAP_THRESHOLD`]: memory-mapped I/O.
 ///
 /// The path is opened once and every byte comes from that handle, so a
 /// pipe works and a file replaced during the call is not mixed in.
