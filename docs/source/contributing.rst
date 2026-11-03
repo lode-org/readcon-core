@@ -69,15 +69,14 @@ Commit conventions
 ------------------
 
 The project uses `conventional commits <https://www.conventionalcommits.org/>`_ enforced by cocogitto.
-The CI lint check rejects non-conforming commit messages on the PR
-range. Some historical commits use ``docs+bench:`` or untyped merges;
-``cog check --from-latest-tag`` is the local equivalent of the PR gate.
-``scripts/release-prep.sh`` calls ``scripts/bump-version.sh``, so towncrier
-writes the ``## vX.Y.Z`` heading from the fragments in ``changelog.d/``.
+The CI lint check rejects non-conforming commit messages on the PR range.
+Some historical commits use ``docs+bench:`` or untyped merges; ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
+``scripts/release-prep.sh`` calls ``scripts/bump-version.sh``, so towncrier writes the ``## vX.Y.Z`` heading from the fragments in ``changelog.d/``.
 
 Recognized commit types (from ``cog.toml``):
 
 .. table::
+    :name: commit-types
 
     +-------+-------------------+----------------------------------------+
     | Type  | Changelog section | Use for                                |
@@ -119,19 +118,17 @@ Examples:
 Branching and workflow
 ----------------------
 
-- ``main`` is the release branch. All PRs target ``main``.
+- ``main`` is the release branch.
+  All PRs target ``main``.
 
 - Feature branches: ``feat/<description>``
 
 - Bugfix branches: ``fix/<description>``
 
-- Keep commits logical and atomic. Soft-reset and rebase as needed
-  (never on ``main``).
+- Keep commits logical and atomic.
+  Soft-reset and rebase as needed (never on ``main``).
 
-- The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
-  Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean
-  and chemfiles features), and benchmark regression (Python ASV +
-  ``asv-spyglass`` + asv-perch; optional Criterion baselines).
+- The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests, Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean and chemfiles features), and benchmark regression (Python ASV + ``asv-spyglass`` + asv-perch; optional Criterion baselines).
 
 Testing
 -------
@@ -152,17 +149,15 @@ Testing
     cargo bench
     # or: pixi r bench
 
-Test data lives in ``resources/test/``. Use the ``test_case!`` macro in
-integration tests to locate test files.
+Test data lives in ``resources/test/``.
+Use the ``test_case!`` macro in integration tests to locate test files.
 
 Profile-guided optimisation (PGO)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The ``release`` and ``dist`` profiles in ``Cargo.toml`` already enable
-``lto = "thin"`` / ``lto = "fat"`` and ``codegen-units = 1``. PGO can give
-another 5--15% on parser hot paths by feeding the optimiser a real
-profile from the Criterion benchmarks. It is opt-in because the build
-takes 2--3x longer.
+The ``release`` and ``dist`` profiles in ``Cargo.toml`` already enable ``lto = "thin"`` / ``lto = "fat"`` and ``codegen-units = 1``.
+PGO can give another 5--15% on parser hot paths by feeding the optimiser a real profile from the Criterion benchmarks.
+It is opt-in because the build takes 2--3x longer.
 
 Three-step workflow (Linux, ``rustc`` 1.88+):
 
@@ -184,9 +179,7 @@ Three-step workflow (Linux, ``rustc`` 1.88+):
     RUSTFLAGS="-Cprofile-use=/tmp/readcon-pgo/merged.profdata" \
       cargo build --release --features parallel,zstd,rpc
 
-The same flow works for ``cargo cinstall`` when you want PGO-optimised
-``libreadcon_core.so`` for distribution; substitute ``cargo cinstall``
-for ``cargo build --release`` in step 3.
+The same flow works for ``cargo cinstall`` when you want PGO-optimised ``libreadcon_core.so`` for distribution; substitute ``cargo cinstall`` for ``cargo build --release`` in step 3.
 
 Continuous integration
 ----------------------
@@ -195,6 +188,7 @@ Workflows
 ~~~~~~~~~
 
 .. table::
+    :name: ci-workflows
 
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
     | Workflow                  | File                       | Trigger                                    | Purpose                                                    |
@@ -229,24 +223,16 @@ Benchmark regression detection
 
 Two-workflow pattern for safe PR comments (eOn-style Python ASV):
 
-1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with
-   ``maturin develop --features python,chemfiles --release``, then
-   ``asv run -E existing:… --set-commit-hash $sha --quick``. Results upload as
-   artifacts. A Criterion job may save ``iterator_bench`` baselines
-   (``continue-on-error: true``) so a Rust microbench miss does not fail the
-   workflow conclusion that the commenter requires.
+1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with ``maturin develop --features python,chemfiles --release``, then ``asv run -E existing:… --set-commit-hash $sha --quick``.
+   Results upload as artifacts.
+   A Criterion job may save ``iterator_bench`` baselines (``continue-on-error: true``) so a Rust microbench miss does not fail the workflow conclusion that the commenter requires.
 
-2. The ``asv-combine`` job runs
-   `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs →
-   ``results/comparison.txt`` (fails if that file is empty).
+2. The ``asv-combine`` job runs `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs → ``results/comparison.txt`` (fails if that file is empty).
 
-3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion when the
-   Benchmark PR conclusion is ``success``, downloads ``benchmark-results``, and
-   posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
+3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion when the Benchmark PR conclusion is ``success``, downloads ``benchmark-results``, and posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
 
-The ``workflow_run`` split is required for fork PRs to have write access for
-posting comments (GitHub security model). Suite and local reproduce:
-`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
+The ``workflow_run`` split is required for fork PRs to have write access for posting comments (GitHub security model).
+Suite and local reproduce: `benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
 
 Executable chemfiles pages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -261,10 +247,8 @@ Change the notebook Org source instead, and tangle it again with ``READCON_TANGL
 Release process
 ---------------
 
-This section is the only guide a new contributor needs to **cut a release**
-without reading CI YAML. Three layers work together; use all of them and do
-**not** short-circuit with a local-only ``cargo publish`` unless CI secrets are
-broken (fallback is documented below).
+This section is the only guide a new contributor needs to **cut a release** without reading CI YAML.
+Three layers work together; use all of them and do **not** short-circuit with a local-only ``cargo publish`` unless CI secrets are broken (fallback is documented below).
 
 Mental model (new contributor)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -290,6 +274,7 @@ Mental model (new contributor)
           └─► workflow "C ABI library tarball": prebuilt clib (or dispatch tag later)
 
 .. table::
+    :name: release-layers
 
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Layer       | What                                   | Workflow / tool                                                                                     |
@@ -312,37 +297,30 @@ Mental model (new contributor)
 Attach prebuilt C ABI to an existing tag
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``: ``release``
-published, or ``workflow_dispatch`` with required ``inputs.tag``. Use this
-to put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
-workflow (for example ``v0.14.7``).
+``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``: ``release`` published, or ``workflow_dispatch`` with required ``inputs.tag``.
+Use this to put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the workflow (for example ``v0.14.7``).
 
 1. Open Actions → **C ABI library tarball**.
 
-2. Run the workflow from a branch that **has** ``scripts/package-clib.sh``
-   (usually ``main`` after this lands).
+2. Run the workflow from a branch that **has** ``scripts/package-clib.sh`` (usually ``main`` after this lands).
 
 3. Set ``tag`` to the existing Git tag (``v0.14.7``).
 
-The packager comes from the selected workflow ref. Sources and the
-GitHub Release come from ``inputs.tag``. Windows + chemfiles is an
-**explicit skip** (Python wheel path only).
+The packager comes from the selected workflow ref.
+Sources and the GitHub Release come from ``inputs.tag``.
+Windows + chemfiles is an **explicit skip** (Python wheel path only).
 
 cargo-dist release-PR path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. Do **not** push a version tag from a laptop until the version-bump commit is
-   on ``main`` (via PR). That PR is the **release PR**: it should contain only the
-   ``maint: bump to vX.Y.Z`` (and any intentional release-note / header sync)
-   produced by ``scripts/release-prep.sh`` or the manual checklist below.
+1. Do **not** push a version tag from a laptop until the version-bump commit is on ``main`` (via PR).
+   That PR is the **release PR**: it should contain only the ``maint: bump to vX.Y.Z`` (and any intentional release-note / header sync) produced by ``scripts/release-prep.sh`` or the manual checklist below.
 
-2. On every PR, GitHub Actions runs the workflow named **Release** (file
-   ``release.yml``). With ``pr-run-mode = "plan"`` it runs ``dist plan`` only: it
-   checks that cargo-dist can announce this version and list artifacts. It
-   does **not** publish crates or create a GitHub Release on the PR.
+2. On every PR, GitHub Actions runs the workflow named **Release** (file ``release.yml``).
+   With ``pr-run-mode = "plan"`` it runs ``dist plan`` only: it checks that cargo-dist can announce this version and list artifacts.
+   It does **not** publish crates or create a GitHub Release on the PR.
 
-3. If the plan job is red, fix ``dist-workspace.toml`` / version alignment and
-   push; do not tag yet.
+3. If the plan job is red, fix ``dist-workspace.toml`` / version alignment and push; do not tag yet.
 
 4. After the PR is merged, on a clean ``main``:
 
@@ -352,13 +330,9 @@ cargo-dist release-PR path
        git tag -s vX.Y.Z -m "vX.Y.Z"
        git push origin vX.Y.Z
 
-5. On the tag push, the **same** ``Release`` workflow switches to publishing mode:
-   builds platform archives for the ``readcon-core`` CLI binary and creates (or
-   updates) the GitHub Release with those artifacts and notes derived from
-   the changelog.
+5. On the tag push, the **same** ``Release`` workflow switches to publishing mode: builds platform archives for the ``readcon-core`` CLI binary and creates (or updates) the GitHub Release with those artifacts and notes derived from the changelog.
 
-Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit
-``release.yml`` long-term):
+Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit ``release.yml`` long-term):
 
 .. code:: shell
 
@@ -374,21 +348,15 @@ crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
 
 Workflow file: ``.github/workflows/crates_publish.yml`` (name: **Publish to crates.io**).
 
-- **Trigger**: push of tags matching ``v*``, or ``workflow_dispatch`` on a branch
-  (uses ``Cargo.toml`` package version; on a ``v*`` tag the tag must match that
-  version or the job fails fast).
+- **Trigger**: push of tags matching ``v*``, or ``workflow_dispatch`` on a branch (uses ``Cargo.toml`` package version; on a ``v*`` tag the tag must match that version or the job fails fast).
 
 - **Action**: ``cargo publish --locked`` for the ``readcon-core`` crate.
 
-- **Idempotent skip**: if ``https://crates.io/api/v1/crates/readcon-core/<version>``
-  already returns 200, the job logs “already published” and does **not** call
-  ``cargo publish`` (avoids “crate already exists” on re-runs).
+- **Idempotent skip**: if ``https://crates.io/api/v1/crates/readcon-core/<version>`` already returns 200, the job logs “already published” and does **not** call ``cargo publish`` (avoids “crate already exists” on re-runs).
 
-- **Secret**: repository secret **exactly named** ``CARGO_REGISTRY_TOKEN``. Value is
-  a crates.io API token for an account allowed to publish ``readcon-core``
-  (create at `https://crates.io/settings/tokens <https://crates.io/settings/tokens>`_ ). Without it, the publish
-  step fails with “please provide a non-empty token” / our explicit empty-secret
-  guard.
+- **Secret**: repository secret **exactly named** ``CARGO_REGISTRY_TOKEN``.
+  Value is a crates.io API token for an account allowed to publish ``readcon-core`` (create at `https://crates.io/settings/tokens <https://crates.io/settings/tokens>`_ ).
+  Without it, the publish step fails with “please provide a non-empty token” / our explicit empty-secret guard.
 
 Set or rotate the secret (example using ``pass`` and ``gh``; run as a repo admin):
 
@@ -410,19 +378,14 @@ Local fallback only if CI is red and you must unblock users:
 
     CARGO_REGISTRY_TOKEN="$(pass show crates-io/readcon-core)" cargo publish --locked
 
-Prefer fixing the secret and re-running the workflow over making local publish
-the default path.
+Prefer fixing the secret and re-running the workflow over making local publish the default path.
 
 PyPI (wheels) on the same tag
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``python_wheels.yml`` builds sdist + manylinux/macOS/Windows wheels with maturin
-(``--features python``, **not** ``chemfiles`` by default) and publishes with
-``pypa/gh-action-pypi-publish`` using OIDC trusted publishing (environment
-``pypi``). No password secret is required once the trusted publisher is
-configured (see **Initial PyPI setup** below). Transient crates.io network
-errors are mitigated with ``CARGO_HTTP_MULTIPLEXING=false`` and a one-shot
-maturin retry; tag runs are not cancelled mid-flight by concurrency.
+``python_wheels.yml`` builds sdist + manylinux/macOS/Windows wheels with maturin (``--features python``, **not** ``chemfiles`` by default) and publishes with ``pypa/gh-action-pypi-publish`` using OIDC trusted publishing (environment ``pypi``).
+No password secret is required once the trusted publisher is configured (see **Initial PyPI setup** below).
+Transient crates.io network errors are mitigated with ``CARGO_HTTP_MULTIPLEXING=false`` and a one-shot maturin retry; tag runs are not cancelled mid-flight by concurrency.
 
 Version files
 ~~~~~~~~~~~~~
@@ -431,8 +394,8 @@ The package version is the single line in ``VERSION`` at the repository root.
 That is the only hand-written copy.
 
 Bump with ``scripts/bump-version.sh X.Y.Z`` (or ``cog bump``).
-``scripts/stamp-version.sh`` only restamps cogapp copies. It does not write
-the towncrier heading or refresh the exported pins.
+``scripts/stamp-version.sh`` only restamps cogapp copies.
+It does not write the towncrier heading or refresh the exported pins.
 
 .. code:: shell
 
@@ -440,46 +403,34 @@ the towncrier heading or refresh the exported pins.
     # scripts/stamp-version.sh
     # restamp only, after VERSION and the heading exist
 
-``scripts/bump-version.sh X.Y.Z`` (also ``scripts/set-version.sh``) writes
-``VERSION``, runs ``python -m towncrier build --yes --version X.Y.Z``, then
-``scripts/stamp-version.sh``. Towncrier is the only writer of ``## vX.Y.Z``
-headings. ``cog.toml`` sets ``disable_changelog = true`` and its
-``pre_bump_hooks`` call ``bump-version.sh``, so a ``cog bump`` commit already
-contains the heading and the compare links.
-CMake reads ``VERSION`` and sets ``CMAKE_CONFIGURE_DEPENDS``. Meson passes
-``files('VERSION')`` to ``project()``
-(`https://mesonbuild.com/Reference-manual_functions.html#project <https://mesonbuild.com/Reference-manual_functions.html#project>`_).
+``scripts/bump-version.sh X.Y.Z`` (also ``scripts/set-version.sh``) writes ``VERSION``, runs ``python -m towncrier build --yes --version X.Y.Z``, then ``scripts/stamp-version.sh``.
+Towncrier is the only writer of ``## vX.Y.Z`` headings.
+``cog.toml`` sets ``disable_changelog = true`` and its ``pre_bump_hooks`` call ``bump-version.sh``, so a ``cog bump`` commit already contains the heading and the compare links.
+CMake reads ``VERSION`` and sets ``CMAKE_CONFIGURE_DEPENDS``.
+Meson passes ``files('VERSION')`` to ``project()`` (`https://mesonbuild.com/Reference-manual_functions.html#project <https://mesonbuild.com/Reference-manual_functions.html#project>`_).
 Sphinx (``docs/source/conf.py``) reads ``VERSION`` at configure time.
-The C and Fortran strings, the Python and Julia and Fortran package
-files, citation metadata, and the changelog compare links are cogapp
-output. The Fortran parameter does not repeat ``public``, because the
-module already lists ``readcon_version``. Python ``__version__`` follows
-the Cargo package version, which cogapp stamps from ``VERSION``. A
-Windows checkout may store a carriage return before the newline in
-``VERSION``. ``build.rs`` strips that carriage return. Python reads
-``VERSION`` in text mode, which already drops it.
+The C and Fortran strings, the Python and Julia and Fortran package files, citation metadata, and the changelog compare links are cogapp output.
+The Fortran parameter does not repeat ``public``, because the module already lists ``readcon_version``.
+Python ``__version__`` follows the Cargo package version, which cogapp stamps from ``VERSION``.
+A Windows checkout may store a carriage return before the newline in ``VERSION``.
+``build.rs`` strips that carriage return.
+Python reads ``VERSION`` in text mode, which already drops it.
 Tool versions are pinned in ``requirements-version.txt``.
 
-Published pages stay on the org-to-rst export (``emacs --batch -l docs/export.el``
-or ``pixi r -e docs orgbld``). Org sources mark each install pin with an
-at-sign placeholder named READCON\_VERSION. The exporter reads ``VERSION``
-and does not take a version argument. Do not type the version into
-``docs/source/*.rst``.
+Published pages stay on the org-to-rst export (``emacs --batch -l docs/export.el`` or ``pixi r -e docs orgbld``).
+Org sources mark each install pin with an at-sign placeholder named READCON\_VERSION.
+The exporter reads ``VERSION`` and does not take a version argument.
+Do not type the version into ``docs/source/*.rst``.
 
-News for a release is a fragment under ``changelog.d/``, collected by
-`towncrier <https://towncrier.readthedocs.io/en/stable/>`_. The towncrier
-config imports ``readcon_meta.__version__``, which reads ``VERSION``.
+News for a release is a fragment under ``changelog.d/``, collected by `towncrier <https://towncrier.readthedocs.io/en/stable/>`_.
+The towncrier config imports ``readcon_meta.__version__``, which reads ``VERSION``.
 Do not hand-edit the generated release section of ``CHANGELOG.md``.
-Cocogitto still checks commit subjects and can render the git changelog;
-it is a separate program from cogapp, so version stamps call
-``python -m cogapp``.
+Cocogitto still checks commit subjects and can render the git changelog; it is a separate program from cogapp, so version stamps call ``python -m cogapp``.
 
-``scripts/check_version_sot.sh`` greps every copy of the version string and
-compares it to ``VERSION``. CI runs ``python -m cogapp --check`` on the stamp
-file list and that script. The ``cog`` executable is cocogitto, so the drift
-job does not call it.
-``scripts/release-prep.sh X.Y.Z`` is the release path: it calls
-``scripts/bump-version.sh`` and then the org export.
+``scripts/check_version_sot.sh`` greps every copy of the version string and compares it to ``VERSION``.
+CI runs ``python -m cogapp --check`` on the stamp file list and that script.
+The ``cog`` executable is cocogitto, so the drift job does not call it.
+``scripts/release-prep.sh X.Y.Z`` is the release path: it calls ``scripts/bump-version.sh`` and then the org export.
 ``scripts/set-version.sh`` is only an alias for ``bump-version.sh``.
 
 Complete release checklist
@@ -515,47 +466,43 @@ Manual equivalent of the script:
        pixi r -e docs docbld
        pixi r -e docs linkcheck
 
-2. Run ``scripts/bump-version.sh X.Y.Z``. That writes ``VERSION``, lets towncrier
-   write the release heading, then runs cogapp. Re-export the docs with the
-   org-to-rst pipeline so the published pages match.
+2. Run ``scripts/bump-version.sh X.Y.Z``.
+   That writes ``VERSION``, lets towncrier write the release heading, then runs cogapp.
+   Re-export the docs with the org-to-rst pipeline so the published pages match.
 
-3. Check the lock with ``cargo test --locked``. ``scripts/bump-version.sh``
-   already rewrites the ``readcon-core`` entry in ``Cargo.lock``.
+3. Check the lock with ``cargo test --locked``.
+   ``scripts/bump-version.sh`` already rewrites the ``readcon-core`` entry in ``Cargo.lock``.
 
-4. Regenerate the README from ``readme_src.org`` when the user-facing docs changed
-   (optional for patch releases that only touch the crate version). Use the
-   project script so ``docs/orgmode/*.org`` links stay ``.org`` (plain ``ox-md``
-   rewrites them to missing ``.md`` paths):
+4. Regenerate the README from ``readme_src.org`` when the user-facing docs changed (optional for patch releases that only touch the crate version).
+   Use the project script so ``docs/orgmode/*.org`` links stay ``.org`` (plain ``ox-md`` rewrites them to missing ``.md`` paths):
 
    .. code:: shell
 
        ./scripts/export-readme.sh
 
-5. The release heading comes from towncrier, which ``bump-version.sh`` already
-   ran. Do not rebuild ``CHANGELOG.md`` with ``cog changelog``; that drops the
-   towncrier marker. Add a fragment under ``changelog.d/`` before the bump.
+5. The release heading comes from towncrier, which ``bump-version.sh`` already ran.
+   Do not rebuild ``CHANGELOG.md`` with ``cog changelog``; that drops the towncrier marker.
+   Add a fragment under ``changelog.d/`` before the bump.
    Do not hand-edit the generated release section.
 
-6. If the FFI surface changed, run ``scripts/regen-capi-headers.sh`` and commit
-   ``include/readcon-core.h`` (CI ``build_test.yml`` runs ``--check``).
+6. If the FFI surface changed, run ``scripts/regen-capi-headers.sh`` and commit ``include/readcon-core.h`` (CI ``build_test.yml`` runs ``--check``).
 
-7. Commit the release preparation (``maint: bump to vX.Y.Z``) and open the
-   **release PR** (cargo-dist plans on PRs). After merge:
+7. Commit the release preparation (``maint: bump to vX.Y.Z``) and open the **release PR** (cargo-dist plans on PRs).
+   After merge:
 
    .. code:: shell
 
        git tag -s vX.Y.Z -m "vX.Y.Z"
        git push origin vX.Y.Z
 
-8. Do **not** rely on a local ``cargo publish`` unless CI is red; prefer
-   ``crates_publish.yml`` with ``CARGO_REGISTRY_TOKEN`` set. Local fallback:
+8. Do **not** rely on a local ``cargo publish`` unless CI is red; prefer ``crates_publish.yml`` with ``CARGO_REGISTRY_TOKEN`` set.
+   Local fallback:
 
    .. code:: shell
 
        CARGO_REGISTRY_TOKEN="$(pass show crates-io/readcon-core)" cargo publish --locked
 
-9. Tag CI also runs ``python_wheels.yml`` (PyPI) and cargo-dist ``Release``
-   (CLI tarballs + GitHub Release body from the changelog).
+9. Tag CI also runs ``python_wheels.yml`` (PyPI) and cargo-dist ``Release`` (CLI tarballs + GitHub Release body from the changelog).
 
 10. Verify all distribution channels:
 
@@ -563,18 +510,15 @@ Manual equivalent of the script:
 
     - `PyPI <https://pypi.org/project/readcon/>`_ shows the new version (wait for CI)
 
-    - `GitHub Releases <https://github.com/lode-org/readcon-core/releases>`_ has cargo-dist archives
-      (and any prior C ABI tarballs if still attached)
+    - `GitHub Releases <https://github.com/lode-org/readcon-core/releases>`_ has cargo-dist archives (and any prior C ABI tarballs if still attached)
 
-Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or
-``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
+Optional local C ABI tarball for consumers that do not use cargo-dist CLI archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or ``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
 
 Initial PyPI setup (first release only)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For the very first release, PyPI trusted publisher is not yet
-configured. Publish manually:
+For the very first release, PyPI trusted publisher is not yet configured.
+Publish manually:
 
 .. code:: shell
 
@@ -588,6 +532,7 @@ configured. Publish manually:
 Python ships **two** distributions from ``python_wheels.yml``:
 
 .. table::
+    :name: pypi-distributions
 
     +-----------------------+--------------------------------------------+-------------------------------------------------------+
     | PyPI name             | Features                                   | Import                                                |
@@ -597,12 +542,10 @@ Python ships **two** distributions from ``python_wheels.yml``:
     | ``readcon-chemfiles`` | ``python,chemfiles`` (libchemfiles linked) | ``import readcon`` (``has_chemfiles_support()`` True) |
     +-----------------------+--------------------------------------------+-------------------------------------------------------+
 
-Configure a trusted publisher on **each** PyPI project (same workflow
-``python_wheels.yml``, environment ``pypi``). Do not install both wheels in one
-venv (both export the ``readcon`` module). Prefer ``pip install readcon-chemfiles``
-when selection/import are required; lean ``readcon`` for CON I/O only.
-``pip install 'readcon[chemfiles]'`` depends on ``readcon-chemfiles==X.Y.Z`` (pin
-updated by ``scripts/release-prep.sh``).
+Configure a trusted publisher on **each** PyPI project (same workflow ``python_wheels.yml``, environment ``pypi``).
+Do not install both wheels in one venv (both export the ``readcon`` module).
+Prefer ``pip install readcon-chemfiles`` when selection/import are required; lean ``readcon`` for CON I/O only.
+``pip install 'readcon[chemfiles]'`` depends on ``readcon-chemfiles==X.Y.Z`` (pin updated by ``scripts/release-prep.sh``).
 
 Then configure trusted publisher on PyPI:
 
@@ -629,6 +572,7 @@ Feature gates
 Optional functionality is gated behind Cargo features:
 
 .. table::
+    :name: cargo-features
 
     +----------+-------------------------------+----------------------------+
     | Feature  | Dependencies                  | Purpose                    |
@@ -645,8 +589,7 @@ Add new optional features in ``Cargo.toml`` under ``[features]``.
 Adding a new binding
 ~~~~~~~~~~~~~~~~~~~~
 
-1. Add the binding source under ``src/`` (e.g., ``src/python.rs``) or as
-   a separate package (e.g., ``julia/ReadCon/``).
+1. Add the binding source under ``src/`` (e.g., ``src/python.rs``) or as a separate package (e.g., ``julia/ReadCon/``).
 
 2. Gate behind a feature flag if it adds dependencies.
 
@@ -659,15 +602,11 @@ Adding a new binding
 Updating the C header
 ~~~~~~~~~~~~~~~~~~~~~
 
-The C header ``include/readcon-core.h`` is the shipped ABI, the same
-model as metatensor/metatomic. CMake, Meson, cargo-c, CI, and the
-cxx tarball **never** run cbindgen. Edit the header (or optionally
-draft with ``scripts/regen-capi-headers.sh``) and commit it with the
-FFI change. CI compiles C/C++ against that file and checks symbols
-in the built library.
+The C header ``include/readcon-core.h`` is the shipped ABI, the same model as metatensor/metatomic.
+CMake, Meson, cargo-c, CI, and the cxx tarball **never** run cbindgen.
+Edit the header (or optionally draft with ``scripts/regen-capi-headers.sh``) and commit it with the FFI change.
+CI compiles C/C++ against that file and checks symbols in the built library.
 
 ``ci_cxx.yml`` installs no cbindgen and must stay green.
 
-The C++ header ``include/readcon-core.hpp`` is hand-maintained and must
-be updated manually to match any changes to ``CAtom``, ``CFrame``, or
-the FFI function signatures.
+The C++ header ``include/readcon-core.hpp`` is hand-maintained and must be updated manually to match any changes to ``CAtom``, ``CFrame``, or the FFI function signatures.
