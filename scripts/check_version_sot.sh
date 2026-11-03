@@ -177,6 +177,7 @@ allow_exact = {
     "VERSION",
     "CHANGELOG.md",
     "Cargo.lock",
+    "fuzz/Cargo.lock",
     "Cargo.toml",
     "pyproject.toml",
     "pyproject.chemfiles.toml",

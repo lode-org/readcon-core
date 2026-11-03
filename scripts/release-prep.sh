@@ -59,7 +59,7 @@ else
 fi
 
 echo "==> stage release files"
-git add VERSION Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemfiles.toml \
+git add VERSION Cargo.toml Cargo.lock fuzz/Cargo.lock meson.build pyproject.toml pyproject.chemfiles.toml \
   pixi.toml docs/source/conf.py src/lib.rs build.rs CHANGELOG.md changelog.d \
   include/readcon-core.h include/readcon-core-version.h include/readcon-core.hpp \
   cmake/ fortran/ReadCon/fpm.toml fortran/ReadCon/src/readcon.f90 fortran/README.md \

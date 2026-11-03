@@ -97,6 +97,16 @@ impl<'a> MemchrLines<'a> {
         self.peeked
     }
 
+    /// Bytes from the start of the next line, a peeked one included, to the
+    /// end of the buffer.
+    pub(crate) fn unread_len(&self) -> usize {
+        let start = match self.peeked {
+            Some(p) => p.as_ptr() as usize - self.bytes.as_ptr() as usize,
+            None => self.pos,
+        };
+        self.bytes.len() - start
+    }
+
     /// Drop any peek buffer (required before bulk cursor advances).
     fn clear_peek(&mut self) {
         if let Some(p) = self.peeked.take() {
@@ -254,6 +264,28 @@ fn blank_opens_section(after_blank: &[u8]) -> bool {
     matches!(probe_section(after_blank), SectionProbe::Opens)
 }
 
+/// True when [`ConFrameIterator`] yields nothing from byte `pos` of `bytes`
+/// on, because only whitespace is left (CON-frame.1). Frame scans stop
+/// here, so they find the frames that the iterator yields.
+pub(crate) fn no_frame_at(bytes: &[u8], pos: usize) -> bool {
+    match bytes.get(pos) {
+        None => true,
+        // A line that opens with a printable ASCII byte is not blank.
+        Some(b) if b.is_ascii_graphic() => false,
+        Some(_) => MemchrLines::from_bytes(&bytes[pos..]).remainder_is_whitespace(),
+    }
+}
+
+/// The blank test of the full parse: `line` is UTF-8 and [`str::trim`]
+/// leaves nothing of it. A line that opens with a printable ASCII byte is
+/// not blank, so that byte settles it without a decode.
+fn is_blank_line(line: &[u8]) -> bool {
+    match line.first() {
+        Some(b) if b.is_ascii_graphic() => false,
+        _ => std::str::from_utf8(line).is_ok_and(|s| s.trim().is_empty()),
+    }
+}
+
 /// An iterator that lazily parses simulation frames from a `.con` or `.convel`
 /// file's contents.
 ///
@@ -408,8 +440,12 @@ impl<'a> ConFrameIterator<'a> {
         if let Err(e) = self.advance_lines(1) {
             return Some(Err(e));
         }
-        let total_atoms: usize = natms_per_type.iter().sum();
-        let coord_block_lines = total_atoms + natm_types * 2;
+        // A block longer than `usize::MAX` lines never fits the buffer, so a
+        // saturated length ends in `IncompleteFrame` as the exact one would.
+        let total_atoms = natms_per_type
+            .iter()
+            .fold(0usize, |sum, &n| sum.saturating_add(n));
+        let coord_block_lines = total_atoms.saturating_add(natm_types * 2);
         if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
             return Some(Err(e));
         }
@@ -425,8 +461,9 @@ impl<'a> ConFrameIterator<'a> {
                 Some(pos) => &rest[..pos],
                 None => rest,
             };
-            let is_blank = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
-            if !is_blank {
+            // The blank test of the full parse, so both end a frame at the
+            // same line.
+            if !is_blank_line(line) {
                 break;
             }
             let after = match next_eol {
@@ -570,7 +607,8 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             return Some(Err(err));
         }
         // Otherwise, attempt to parse the next frame from the available lines.
-        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines) {
+        let max_rows = Some(self.lines.unread_len() / crate::parser::MIN_COORD_ROW_BYTES);
+        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines, max_rows) {
             Ok(f) => f,
             Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
         };
@@ -777,8 +815,7 @@ fn parse_frames_parallel_bytes(
     loop {
         scanner.lines.clear_peek();
         let start = scanner.lines.pos;
-        // Whitespace after the final frame does not open another frame.
-        if start >= bytes.len() || bytes[start..].iter().all(u8::is_ascii_whitespace) {
+        if no_frame_at(bytes, start) {
             break;
         }
         boundaries.push(start);
@@ -911,13 +948,14 @@ pub fn read_all_frames_indexed(
 
 /// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
 /// Stops at the first skip error (that start is still included).
+/// Whitespace after the last frame starts no frame (CON-frame.1).
 pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
     let mut boundaries = Vec::new();
     let mut scanner = ConFrameIterator::new(file_contents);
     loop {
         scanner.lines.clear_peek();
         let start = scanner.lines.pos;
-        if start >= scanner.lines.bytes.len() {
+        if no_frame_at(file_contents.as_bytes(), start) {
             break;
         }
         boundaries.push(start);
