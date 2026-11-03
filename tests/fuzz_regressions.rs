@@ -9,6 +9,7 @@
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::parser::{parse_line_of_n_f64, parse_single_frame};
+use readcon_core::stream::ConFrameReader;
 use readcon_core::types::AtomDatum;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -73,6 +74,22 @@ fn frame_declaring_atoms(atoms: u64) -> String {
     )
 }
 
+/// A legacy two-type frame whose counts sum past `usize::MAX`.
+fn frame_whose_counts_overflow() -> String {
+    format!(
+        "\n\n10 10 10\n90 90 90\n\n\n2\n{} 1\n1.008 12.011\nH\nCoordinates of Component 1\n\
+         0 0 0 0 1\n1 1 1 0 2\n",
+        usize::MAX
+    )
+}
+
+/// Every frame above that declares more atoms than it holds.
+fn short_frames() -> Vec<String> {
+    let mut frames: Vec<String> = DECLARED.into_iter().map(frame_declaring_atoms).collect();
+    frames.push(frame_whose_counts_overflow());
+    frames
+}
+
 /// A legacy frame that declares `types` types and lists one count.
 fn frame_declaring_types(types: u64) -> String {
     format!(
@@ -117,6 +134,50 @@ fn more_atoms_than_the_input_holds_is_an_incomplete_frame() {
             largest <= bound,
             "{atoms} atoms from lines: {largest} bytes"
         );
+    }
+}
+
+#[test]
+fn counts_that_sum_past_usize_max_are_an_incomplete_frame() {
+    let text = frame_whose_counts_overflow();
+    let (parsed, largest) = largest_request(|| ConFrameIterator::new(&text).next());
+    assert!(
+        matches!(parsed, Some(Err(ParseError::IncompleteFrame))),
+        "{parsed:?}"
+    );
+    assert!(largest <= input_bound(&text), "{largest} bytes");
+}
+
+#[test]
+fn a_skip_over_a_short_frame_is_an_incomplete_frame() {
+    for text in short_frames() {
+        let skipped = ConFrameIterator::new(&text).forward();
+        assert!(
+            matches!(skipped, Some(Err(ParseError::IncompleteFrame))),
+            "{text:?}: {skipped:?}"
+        );
+        let skipped = ConFrameIterator::new(&text).skip_frames(1);
+        assert!(
+            matches!(skipped, Err(ParseError::IncompleteFrame)),
+            "{text:?}: {skipped:?}"
+        );
+    }
+}
+
+#[test]
+fn the_stream_reader_reports_a_short_frame_as_incomplete() {
+    for text in short_frames() {
+        let mut reader = ConFrameReader::with_read_size(text.as_bytes(), 1);
+        let (item, largest) = largest_request(|| reader.next());
+        let err = item.expect("one item").expect_err("an error");
+        assert!(
+            matches!(
+                err.downcast_ref::<ParseError>(),
+                Some(ParseError::IncompleteFrame)
+            ),
+            "{text:?}: {err}"
+        );
+        assert!(largest <= input_bound(&text), "{text:?}: {largest} bytes");
     }
 }
 

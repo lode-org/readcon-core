@@ -1489,7 +1489,12 @@ where
 {
     let header = parse_frame_header(lines)?;
     let validate = header.strict_validation;
-    let total_atoms: usize = header.natms_per_type.iter().sum();
+    // More than `usize::MAX` atoms never fit the input, so a saturated total
+    // ends in `IncompleteFrame` as the exact one would.
+    let total_atoms = header
+        .natms_per_type
+        .iter()
+        .fold(0usize, |sum, &n| sum.saturating_add(n));
     let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();

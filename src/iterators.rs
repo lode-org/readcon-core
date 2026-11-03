@@ -418,8 +418,12 @@ impl<'a> ConFrameIterator<'a> {
         if let Err(e) = self.advance_lines(1) {
             return Some(Err(e));
         }
-        let total_atoms: usize = natms_per_type.iter().sum();
-        let coord_block_lines = total_atoms + natm_types * 2;
+        // A block longer than `usize::MAX` lines never fits the buffer, so a
+        // saturated length ends in `IncompleteFrame` as the exact one would.
+        let total_atoms = natms_per_type
+            .iter()
+            .fold(0usize, |sum, &n| sum.saturating_add(n));
+        let coord_block_lines = total_atoms.saturating_add(natm_types * 2);
         if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
             return Some(Err(e));
         }
