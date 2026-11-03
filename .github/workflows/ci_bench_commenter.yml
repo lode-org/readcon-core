@@ -9,7 +9,7 @@ jobs:
   comment:
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Download benchmark results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: benchmark-results
           path: results/
@@ -26,12 +26,17 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Post benchmark comment
-        uses: HaoZeke/asv-perch@v1
+        uses: HaoZeke/asv-perch@3910616093eb463672fec90a2011ff71bfdff071
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comparison-text-file: results/comparison.txt
           metadata-file: results/metadata.txt
-          regression-threshold: '10'
+          pr-sha: ${{ github.event.workflow_run.head_sha }}
+          # Every row upper is at least 1. A timing upper is exp(t*scale)
+          # with scale >= 0. A memory upper is at least 1 + granule/peak,
+          # and the granule is at least 1 byte. A slowed ratio is above its
+          # own upper, so it is above 1, and this constant still drafts it.
+          regression-threshold: '1'
           auto-draft-on-regression: 'true'
           label-before: main
           label-after: pr
