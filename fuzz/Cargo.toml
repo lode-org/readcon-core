@@ -70,6 +70,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "conbin-reader"
+path = "fuzz_targets/conbin_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "index-proj"
 path = "fuzz_targets/index_proj.rs"
 test = false

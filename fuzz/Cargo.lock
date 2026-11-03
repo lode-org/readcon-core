@@ -484,6 +484,7 @@ dependencies = [
  "fast-float2",
  "flate2",
  "half",
+ "libc",
  "memchr",
  "memmap2",
  "ndarray",
