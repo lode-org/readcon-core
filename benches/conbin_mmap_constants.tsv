@@ -1,0 +1,42 @@
+constant	value	justification	where
+field_bytes	40	field_bytes. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+header_page	sysconf(SC_PAGESIZE); 4096 bytes on this host	header_page. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+madv_sequential	MADV_SEQUENTIAL	madv_sequential. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+madv_willneed	MADV_WILLNEED	madv_willneed. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+madv_hugepage	MADV_HUGEPAGE	madv_hugepage. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+madv_populate_read	MADV_POPULATE_READ	madv_populate_read. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+map_flags	MAP_PRIVATE, PROT_READ|PROT_WRITE	map_flags. paper/cpc/src/conbin-mmap.tex	src/conbin.rs
+max_sectors_kb	1280	max_sectors_kb. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits
+max_request	max_sectors_kb * 1024	max_request. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits
+nr_requests	256	nr_requests. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits
+nr_hw_queues	1	nr_hw_queues. paper/cpc/src/conbin-mmap.tex	src/conbin.rs hw_queue_count
+read_ahead	read_ahead_kb * 1024	read_ahead. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits
+worker_span	max(1, nr_requests/workers) * max_request, at least read_ahead, aligned down to the page	worker_span. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits::worker_span
+rotational	1	rotational. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits
+one_stream	default	one_stream. paper/cpc/src/conbin-mmap.tex	src/conbin.rs sum_mapped
+split_streams	measured, not the default	split_streams. paper/cpc/src/conbin-mmap.tex	src/conbin.rs sum_split_streams
+queue_missing	page size, nr_requests 1	queue_missing. paper/cpc/src/conbin-mmap.tex	src/conbin.rs QueueLimits::page_default
+threads	1..physical_cores	threads. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+repeats	6	repeats. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+drop_caches	3	drop_caches. paper/cpc/src/conbin-mmap.tex	benches/conbin_mmap_vs_h5py.py
+frames	100	frames. paper/cpc/src/conbin-mmap.tex	benches/conbin_mmap_vs_h5py.py
+atoms	1000000	atoms. paper/cpc/src/conbin-mmap.tex	benches/conbin_mmap_vs_h5py.py
+payload_bytes	4800000000	payload_bytes. paper/cpc/src/conbin-mmap.tex	benches/conbin_mmap_vs_h5py.py
+eagain_retries	pages in the madvise range, at least 1	eagain_retries. paper/cpc/src/conbin-mmap.tex	src/conbin.rs wait_resident
+warmup	none	warmup. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+order_seed	/proc/sys/kernel/random/boot_id	order_seed. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+rss_column	VmHWM, kB	rss_column. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+sum_exact	assert_eq	sum_exact. paper/cpc/src/conbin-mmap.tex	src/conbin.rs tests
+pid_read_bytes	64	pid_read_bytes. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+pss_poll_s	removed	pss_poll_s. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+handshake_child_s	removed	handshake_child_s. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+handshake_parent_tries	removed	handshake_parent_tries. paper/cpc/src/conbin-mmap.tex	benches/conbin_scale.py
+disk_cache_mode	write through	disk_cache_mode. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+guest_drop	guest page cache dropped (host cache not controlled)	guest_drop. paper/cpc/src/conbin-mmap.tex	paper/cpc/src/conbin-mmap.tex
+probe_size	1073741824	probe_size. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_chunk	1048576	probe_chunk. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_read_block	8388608	probe_read_block. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_seed_buffered	0xA11CE	probe_seed_buffered. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_seed_direct	0xD1CEC7	probe_seed_direct. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_seed_dsync	0xBEEF	probe_seed_dsync. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py
+probe_weyl	0x9E3779B97F4A7C15	probe_weyl. paper/cpc/src/conbin-mmap.tex	benches/cache_probe.py

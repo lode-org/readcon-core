@@ -86,6 +86,7 @@ flate2 = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"
+libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
 mpi = { version = "0.8", optional = true, default-features = false }
@@ -120,6 +121,9 @@ cog = "0.1.0"
 criterion = { version = "0.6.0", features = ["html_reports"] }
 jsonschema = { version = "0.46.9", default-features = false }
 tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation"] }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 libc = "0.2"

@@ -1,0 +1,280 @@
+#+title: CON-bin measurement constants
+
+#+options: toc:nil num:nil ^:nil
+
+The rows of =benches/conbin_mmap_constants.tsv= point at these sections.
+The paper is =paper/cpc/src/conbin-mmap.tex=.
+
+* field_bytes
+
+Magic, version, flags, frames, atoms and offset use 8+4+4+8+8+8 bytes.
+
+* header_page
+
+The payload starts on a page boundary.
+The stored offset equals that one host page.
+On this host sysconf(SC_PAGESIZE) returns 4096 bytes.
+
+* madv_sequential
+
+MADV_SEQUENTIAL marks one forward pass over the mapping.
+man 2 madvise defines that advice.
+
+* madv_willneed
+
+MADV_WILLNEED asks the kernel to fault the pages ahead.
+The caller is about to read those pages.
+man 2 madvise names that advice.
+
+* madv_hugepage
+
+MADV_HUGEPAGE requests pages of Hugepagesize.
+Transparent pages are in madvise mode on this kernel.
+That mode is CONFIG_TRANSPARENT_HUGEPAGE_MADVISE.
+File-backed pages of that size also need CONFIG_READ_ONLY_THP_FOR_FS.
+/proc/config.gz leaves that option unset.
+Documentation/admin-guide/mm/transhuge.rst records the option.
+FilePmdMapped stayed 0.
+The advice is the documented switch.
+The advice changes nothing while that option is unset.
+
+* madv_populate_read
+
+Linux 5.14 added MADV_POPULATE_READ.
+The call waits until the pages are resident.
+The call returns an error on failure.
+man 2 madvise says MAP_POPULATE hides errors.
+MADV_POPULATE_READ applies to a span after mmap returns.
+
+* map_flags
+
+memmap2 map_copy uses MAP_PRIVATE and PROT_READ|PROT_WRITE.
+A store copies the page and leaves the file bytes unchanged.
+mmap(2) defines MAP_PRIVATE.
+
+* max_sectors_kb
+
+queue/max_sectors_kb reads 1280 on this host.
+The sysfs-block ABI calls that the largest request, in kibibytes.
+Times 1024 is one readahead piece.
+The ABI text is the sysfs-block page for max_sectors_kb.
+
+* max_request
+
+That request is max_sectors_kb times 1024 bytes.
+On this host 1280 * 1024 = 1310720.
+The piece is then aligned down to the page.
+
+* nr_requests
+
+queue/nr_requests reads 256 on this host.
+blk-mq applies this depth to each hardware queue.
+The depth is one pool per queue, not one pool for the device.
+The ABI text is the sysfs-block page for nr_requests.
+
+* nr_hw_queues
+
+queue/nr_hw_queues is absent on this host.
+/sys/block device mq/ has one directory.
+That directory is one hardware queue.
+
+* read_ahead
+
+The kernel readahead window is read_ahead_kb times 1024.
+A shorter hint still pulls this window.
+On this host read_ahead_kb is 128.
+
+* worker_span
+
+The explicit chunked prefetch modes use this span.
+At 8 workers on this host the span is 41943040 bytes.
+sum_mapped reads the file as one stream.
+
+* rotational
+
+queue/rotational on this host reads 1.
+The row records that value.
+The plan stays one stream.
+A virtio disk can report 1.
+A sequential read can still run far above spinning-disk rates.
+
+* one_stream
+
+Two sessions on one boot compared one stream with a stream per span.
+Neither plan won at every thread count in both.
+The host cache was not controlled.
+The default stays one stream, the simpler plan.
+
+* split_streams
+
+Each worker readaheads its own span.
+The one_stream section records the comparison and the default.
+
+* queue_missing
+
+A partition is walked to the parent disk.
+That disk is the sysfs node for queue/.
+The queue file can still be absent on btrfs, tmpfs or overlayfs.
+It can also be absent on Network File System (NFS).
+The byte sizes are then the host page.
+The unit is the one madvise accepts, and the depth is 1.
+
+* threads
+
+os.sched_getaffinity(0) lists the allowed CPUs.
+The key is physical_package_id and core_id from cpu topology sysfs.
+Every integer from 1 through that count is a thread count.
+The count uses no host literal.
+
+* repeats
+
+1 - 2**(1-n) >= 0.95 at n = 6.
+The reported sample is the upper median, sorted index n//2.
+
+* drop_caches
+
+Documentation/admin-guide/sysctl/vm.rst defines the bit mask.
+The value 3 drops the page cache, dentries and inodes.
+
+* frames
+
+The frame count is 100 at every size in the paper size series.
+
+* atoms
+
+The million-atom file in that size series has 1000000 atoms.
+
+* payload_bytes
+
+The shared rate numerator is frames times atoms times 3 times 8 times 2.
+That product is 4800000000 bytes.
+
+* eagain_retries
+
+man 2 madvise defines EAGAIN.
+EAGAIN means a kernel resource was temporarily unavailable.
+One retry per page is the fault work that advice was asked to do.
+
+* warmup
+
+Repeat 0 is the first touch of that cell.
+Repeat 0 is kept.
+The upper median is sorted index n//2.
+The same rule applies to every reader.
+
+* order_seed
+
+random.Random(boot_id) shuffles modes and thread counts.
+The shuffle is inside each repeat.
+The seed is the boot, and the JSON records it.
+
+* rss_column
+
+The kernel high-water mark of each reader process is VmHWM, in kB.
+The mark comes from /proc/self/status.
+There is no sampling interval.
+An h5py pool adds the parent's mark and each worker's mark.
+That sum is an upper bound on the concurrent peak.
+VmHWM omits page cache that no process maps.
+The cgroup high-water mark is recorded beside it as cgroup_peak_kb.
+proc.html and the cgroup-v2 page on docs.kernel.org describe the files.
+
+* sum_exact
+
+write_known stores i/4 and -i/2.
+Every value and partial sum is a multiple of 2^-2.
+The magnitude is at most sum|x| = 13752.
+That magnitude is far below 2^51.
+2^51 equals 2^53 times 2^-2.
+Every binary64 addition is therefore exact.
+
+* pid_read_bytes
+
+The parent reads the child's pid until a newline.
+64 bytes covers one pid line.
+The loop stops at the newline.
+A smaller buffer yields the same pid.
+
+* pss_poll_s
+
+The removed reader loop slept 0.02 s between smaps_rollup reads.
+That interval had no derivation.
+The reader now reports VmHWM after the process exits.
+No poll remains.
+
+* handshake_child_s
+
+The removed reader loop slept 0.005 s.
+The child was waiting for a flag file.
+The child now blocks in read on a pipe until the parent writes one byte.
+POSIX read is the wait.
+No sleep remains.
+
+* handshake_parent_tries
+
+The removed reader loop polled a pid file 500 times.
+It slept 0.01 s between polls.
+The parent now blocks in read until the child writes its pid.
+No poll remains, and no sleep remains.
+
+* disk_cache_mode
+
+The probe discovers the disk from st_dev of the work directory.
+It then reads queue/write_cache and cache_type.
+Both read write through on this boot.
+The boot id is 7d1fc2c7-0885-41f6-9949-83f54b109ae2.
+That read was at unix time 1793667550.
+After drop_caches 3 the benchmark file read at 397.7 MB/s.
+An O_DIRECT write then read at 2934.1 MB/s buffered.
+The two O_DIRECT reads were 2188.4 MB/s and 2246.7 MB/s.
+
+* guest_drop
+
+drop_caches 3 clears the guest page cache.
+Documentation/admin-guide/sysctl/vm.rst defines that drop.
+The disk_cache_mode row leaves the host cache in the path.
+The JSON sample key is guest_drop.
+The later session has its first sample at unix time 1793662535.
+Its slowest sample is the first read of each file.
+No sample records whether a host cache served it.
+
+* probe_size
+
+1 GiB, 2^30 bytes, is a multiple of probe_chunk.
+time.perf_counter resolves 1 ns (time.get_clock_info).
+A read of at least 0.18 s resolves to better than 1 part in 10^8.
+The size is a measured length, above any timing floor.
+
+* probe_chunk
+
+1 MiB is 2^20 bytes.
+O_DIRECT requires a multiple of queue/logical_block_size.
+2^20 is a multiple of 512 and of 4096.
+The probe asserts that.
+
+* probe_read_block
+
+8 MiB is 2^23 bytes.
+The buffered read uses this multiple of the page.
+The block is the buffered read size.
+
+* probe_seed_buffered
+
+This is one of three distinct seeds.
+The three probe files then carry different bytes.
+
+* probe_seed_direct
+
+This is the second distinct seed.
+Its bytes differ from probe_seed_buffered.
+
+* probe_seed_dsync
+
+This is the third distinct seed.
+Its bytes differ from the other two probe files.
+
+* probe_weyl
+
+The value is the fractional part of the golden ratio, times 2^64.
+The Weyl increment makes successive 8-byte words differ.
+It only separates the byte patterns.

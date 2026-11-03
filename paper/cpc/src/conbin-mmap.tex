@@ -1,0 +1,311 @@
+\subsection{Mapped CON-bin columns} \label{sec:conbin-mmap}
+
+The mapping is \texttt{MAP\_PRIVATE}.
+The advice calls are \texttt{madvise}.
+\texttt{MADV\_} and \texttt{MAP\_} are the prefixes on those constants.
+Memory advice (MADV) names the \texttt{madvise} requests.
+The mapping flag (MAP) names the \texttt{mmap} flags.
+Non-uniform memory access (NUMA) names the machine layout.
+Tables~\ref{tab:conbin-mmap-sum} and \ref{tab:conbin-scale} report the
+resident set size (RSS) as \texttt{VmHWM}.
+\texttt{VmHWM} names the high-water mark the kernel keeps for each
+process.
+A CON-bin file begins with one host page.
+On this machine that page is 4096 bytes.
+The first 40 bytes hold the magic, the version, the flags, the frame
+count, the atom count and the payload offset.
+Positions of all 100 frames follow as one little-endian binary64 run,
+then velocities.
+The payload is
+\(100 \times 10^{6} \times 3 \times 8 \times 2 = 4\,800\,000\,000\)
+bytes.
+\texttt{read\_conbin} returns those two runs as writable NumPy arrays
+over a \texttt{MAP\_PRIVATE} mapping.
+A store copies the touched page and leaves the file unchanged.
+The map is the NumPy base of both arrays and is unmapped when both
+arrays are freed.
+\texttt{mmap(2)} leaves visibility of a later write by another process
+up to the implementation, for a page the caller has not stored to.
+Truncation of the file can raise \texttt{SIGBUS}.
+\texttt{read\_conbin\_copy} fills a caller-owned buffer with
+\texttt{pread}.
+h5py reads two contiguous datasets.
+The raw chunk cache stays unset, because those datasets are not chunked.
+
+Mapping advice lists \texttt{MADV\_SEQUENTIAL}, \texttt{MADV\_HUGEPAGE},
+\texttt{MADV\_WILLNEED}, then \texttt{MADV\_POPULATE\_READ}.
+HUGEPAGE applies when transparent large pages are in madvise mode.
+File-backed large pages also require
+\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS}
+(\texttt{Documentation/admin-guide/mm/transhuge.rst}).
+This kernel's \texttt{/proc/config.gz} has that option unset, and
+\texttt{FilePmdMapped} stayed 0.
+The population call still faults base pages.
+
+Those base pages are what Table~\ref{tab:conbin-mmap-nosum} times, each
+reader in a fresh process after \texttt{drop\_caches} 3.
+That drop clears the guest page cache.
+The host cache was not controlled.
+The warm sample in that table is the next read in that same process.
+Tables~\ref{tab:conbin-mmap-sum} and \ref{tab:conbin-scale} are the
+session with first sample at unix time 1793662535.
+Warm in that session is a new process.
+There is no untimed warm-up.
+Repeat 0 is the first touch of that cell and is kept.
+Six repeats.
+The reported value is the upper median, sorted index 3.
+The rate numerator is the \(4\,800\,000\,000\)-byte payload for every
+reader.
+Table~\ref{tab:conbin-mmap-nosum} stops when the arrays exist.
+The following table keeps a float64 sum of both columns inside the
+clock.
+Every sum in Table~\ref{tab:conbin-mmap-nosum} was
+\(-1.12499999625 \times 10^{16}\).
+
+The machine is an Intel Xeon, family 6, model 207, 8 cores, one NUMA
+node.
+Those fields are \texttt{/proc/cpuinfo} and
+\texttt{/sys/devices/system/node}.
+L3 is 320 MiB, and cpu0/cache/index3/size reads \texttt{327680K}.
+MemTotal is 49342768 kB.
+The kernel is Linux 6.12.94+.
+The file system is ext4, from \texttt{/proc/mounts}.
+The page size is 4096 bytes and \texttt{Hugepagesize} is 2048 kB, from
+\texttt{/proc/meminfo}.
+rustc is 1.88.0, Python is 3.12.3, h5py is 3.16.0 and NumPy is 1.26.4.
+The tree is \texttt{perf/conbin-mmap}.
+
+\begin{table}[ht] \centering
+
+\caption{CON-bin and h5py, clock stopped when the arrays exist.
+Upper median of six repeats, range in parentheses. h5py in this table is
+one reader.
+RSS is the resident set after that read, in kB.
+Guest drop means the guest page cache was dropped (host cache not
+controlled).}
+\label{tab:conbin-mmap-nosum}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
+\midrule
+pread & 1 & guest drop & 3.0708 (2.8267 to 3.8110) & 1563.1 & 4735008 \\
+pread & 1 & warm & 2.4222 (2.3441 to 2.6418) & 1981.7 & 4735012 \\
+mapped & 1 & guest drop & 1.8443 (1.7338 to 1.9078) & 2602.6 & 4734900 \\
+mapped & 1 & warm & 0.2415 (0.2307 to 0.2747) & 19871.9 & 4734904 \\
+h5py & 1 & guest drop & 3.0729 (2.6581 to 4.2668) & 1562.0 & 4735788 \\
+h5py & 1 & warm & 2.4124 (2.3719 to 2.5334) & 1989.8 & 4736300 \\
+pread & 8 & guest drop & 1.5140 (1.2922 to 1.8403) & 3170.4 & 4735264 \\
+pread & 8 & warm & 0.4114 (0.3843 to 0.4197) & 11668.2 & 4735264 \\
+mapped & 8 & guest drop & 1.5664 (1.3673 to 1.9114) & 3064.4 & 4735360 \\
+mapped & 8 & warm & 0.1101 (0.1072 to 0.1165) & 43582.0 & 4735360 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% Periods in the table are decimals.
+
+\begin{table}[ht]
+\centering
+\caption{pread, plain map, and h5py from the same session as
+Table~\ref{tab:conbin-scale}.
+The clock includes a float64 sum of both columns.
+Upper median of six repeats.
+Warm is a new process.
+RSS is \texttt{VmHWM}, in kB. h5py in this table is the 1-thread cell of
+that session.
+Guest drop means the guest page cache was dropped (host cache not
+controlled).}
+\label{tab:conbin-mmap-sum}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
+\midrule
+pread & 1 & guest drop & 3.2126 (2.8225 to 3.8666) & 1494.1 & 4689984 \\
+pread & 1 & warm & 2.9315 (2.7362 to 3.0299) & 1637.4 & 4690000 \\
+mapped & 1 & guest drop & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
+mapped & 1 & warm & 0.9173 (0.9140 to 0.9887) & 5232.5 & 4690016 \\
+h5py & 1 & guest drop & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
+h5py & 1 & warm & 2.7408 (2.6431 to 2.8928) & 1751.3 & 4736684 \\
+pread & 8 & guest drop & 2.0895 (2.0158 to 3.1192) & 2297.2 & 4690432 \\
+pread & 8 & warm & 1.1063 (1.0692 to 1.2108) & 4338.6 & 4690436 \\
+mapped & 8 & guest drop & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
+mapped & 8 & warm & 0.9293 (0.9121 to 0.9431) & 5165.2 & 4690424 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% Periods in the table are decimals.
+
+\subsection{Threaded readahead}
+\label{sec:conbin-scale}
+
+\texttt{max\_sectors\_kb} is 1280.
+The depth of each hardware queue, \texttt{nr\_requests}, is 256.
+This host has one hardware queue, counted from \texttt{mq/} because
+\texttt{nr\_hw\_queues} is absent.
+The default is one stream.
+Workers fault a piece with \texttt{MADV\_POPULATE\_READ}, then sum it.
+\texttt{mincore} only decides whether the whole file is already
+resident.
+The piece sums are added in file order.
+This disk records \texttt{queue/rotational} as 1.
+
+\texttt{read\_conbin} returns writable arrays over a
+\texttt{MAP\_PRIVATE} mapping (\texttt{memmap2} \texttt{map\_copy}).
+A store copies the page.
+The file bytes stay as written.
+The map is the NumPy base of both arrays and is unmapped when both are
+freed.
+A store test writes through the mapping and reads the file back
+unchanged.
+Its name is
+\texttt{conbin::tests::a\_store\_copies\_the\_page\_and\_leaves\_the\_file}.
+Advice \texttt{MADV\_HUGEPAGE} is requested.
+File \texttt{/proc/config.gz} has
+\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS} unset, which is the switch
+\texttt{Documentation/admin-guide/mm/transhuge.rst} requires before
+khugepaged can collapse file pages.
+\texttt{FilePmdMapped} stays 0.
+
+The plain map is one \texttt{MADV\_POPULATE\_READ} per worker.
+\texttt{O\_DIRECT} is the lazy two-buffer read.
+h5py 3.16.0 reads two contiguous datasets, then \texttt{numpy.sum}
+(NumPy 1.26.4).
+The datasets are not chunked, so the raw chunk cache is left unset.
+\texttt{H5is\_library\_threadsafe} returns 0 for this build, so each
+worker is a process with its own file handle.
+The readahead sum and the h5py sum are
+\(-1.12499999625 \times 10^{16}\).
+The plain map and \texttt{O\_DIRECT} add one running total and reach
+\(-1.1249999941777216 \times 10^{16}\).
+The last digits differ because floating-point addition depends on order.
+rustc is 1.88.0 and Python is 3.12.3.
+The clock includes the sum.
+Six repeats.
+The reported sample is the upper median, sorted index 3.
+The numerator is \(4800000000\) bytes.
+Every reader in the scale table runs in its own cgroup.
+The RSS column is \texttt{VmHWM} of the reader, in kB.
+For an h5py pool it is the parent's mark plus the sum of the workers'
+marks, an upper bound on the concurrent peak.
+\texttt{VmHWM} counts the pages a process maps.
+Page cache that no process maps stays outside that mark.
+The h5py guest-drop read fills the page cache and keeps its own arrays.
+At 1 thread that cgroup high-water mark reaches 9431144 kB.
+The mapped read of the same file reaches 4709088 kB.
+The JSON records that cgroup mark for every sample.
+The probe's queue and its cache type both read write through.
+\texttt{benches/cache\_probe.py} on this boot, boot id
+\texttt{7d1fc2c7-0885-41f6-9949-83f54b109ae2}, unix time 1793667550,
+read 1 GiB of the benchmark file at 397.7 MB/s after
+\texttt{drop\_caches} 3.
+After an \texttt{O\_DIRECT} write and the same drop, the buffered read
+was 2934.1 MB/s.
+The two later \texttt{O\_DIRECT} reads of that file were 2188.4
+MB/s and 2246.7 MB/s.
+The other two files' \texttt{O\_DIRECT} pairs were 5924.6
+MB/s then 2271.3 MB/s, and 2187.7 MB/s then 2158.6 MB/s.
+Guest drop in the tables means the guest page cache was dropped (host
+cache not controlled).
+The session JSON names that sample \texttt{guest\_drop}.
+Host RAM is unknown.
+A file written and never read, then read by one stream after that drop,
+took 1.831 s, then 1.758 s, then 1.609 s.
+A file read many times took 1.605 s and 1.708 s.
+Each recorded \texttt{read\_bytes} of the whole file.
+\texttt{Cached} was about 312000 kB before each of those reads.
+The never-read file's first read was the slowest of the five, 1.14 times
+the fastest.
+Those times are in \texttt{fresh-reads.json}, from an earlier check on
+this guest.
+That file records no boot id.
+In the session with first sample at unix time 1793662535 the files were
+already on disk.
+The guest page cache was dropped before every guest-drop sample.
+The first read of each file in this session is the slowest sample of its
+cell.
+h5py at 1 thread took 7.0523 s (680.6 MB/s), 2.13 times its upper
+median.
+One CON-bin stream at 6 threads took 7.2233 s (664.5 MB/s), 7.11 times
+its upper median.
+The next is O\_DIRECT at 2 threads, repeat 4, at 1.54 times.
+No sample records whether a host cache served it.
+The order seed is the boot id
+\texttt{7d1fc2c7-0885-41f6-9949-83f54b109ae2}.
+An earlier conbin\_scale.py session on this boot, first sample at unix
+time 1793658999, used that seed, so both sessions share one order.
+The shared first sample took 1.2492 s in that session and 7.2233 s in
+the session with first sample at unix time 1793662535.
+Repeat 0 of the other guest-drop h5py cells is 0.92 to 1.19 times its
+upper median.
+The samples are kept.
+The upper median absorbs the first reads.
+The fio unix time is 1793654445.
+This session's first sample is 1793662535.
+The gap is 8090 s, 134 minutes.
+That fio run recorded no boot id.
+\texttt{fio} 3.36 used \texttt{io\_uring}, \texttt{direct=1},
+\texttt{rw=read} and a 1310720-byte block.
+One job at depth 1 read at 1402.6 MB/s.
+One job at depth 256 read at 2680.0 MB/s.
+Eight jobs at depth 256, on disjoint spans, read at 3309.4 MB/s.
+One stream took 1.0515 s in the guest-drop column at 1 thread (4564.8
+MB/s) and 1.0217 s at 8 threads (4698.2 MB/s).
+The slowest one-stream rate in that column is 4424.9 MB/s, at 5 threads.
+A stream per span took 1.3572 s at 1 thread and 1.2101 s at 8 threads.
+The probe read the benchmark file at 397.7 MB/s after the same drop.
+The guest-drop rates above 4000 MB/s in Table~\ref{tab:conbin-scale}
+therefore came from a host cache.
+They are not device rates.
+Two sessions on this boot share one order.
+The session that started at unix time 1793658999 used the earlier reader
+loop, which polled smaps_rollup.
+Across the two sessions the guest-drop upper medians differ by 1.07 to
+1.45 times, and the warm upper medians by 1.02 to 1.35 times.
+That earlier session had split ahead at 2 and 8 threads after the drop.
+Its warm split led at 2, 3, 7 and 8 threads.
+No plan led at every thread count in both sessions.
+The default stays one stream, the simpler plan.
+Guest O\_DIRECT still meets a host cache.
+The measured rate is a cache rate.
+
+\begin{table}[ht] \centering \caption{Plain map, one stream, a stream per span, \texttt{O\_DIRECT}, and h5py.
+The session with first sample at unix time 1793662535, modes shuffled
+inside each repeat.
+Warm is a new process.
+The parent waits on a barrier after the h5py workers import, then starts
+the clock.
+Each h5py worker reads one slice.
+The resident set size (RSS) is \texttt{VmHWM}, in kB.
+An h5py pool adds the parent's mark and each worker's mark.
+The h5py 1-thread cell is the same cell as in
+Table~\ref{tab:conbin-mmap-sum}.
+Guest drop means the guest page cache was dropped (host cache not
+controlled).}
+\label{tab:conbin-scale}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
+\midrule
+plain map & 1 & guest drop & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
+readahead & 1 & guest drop & 1.0515 (0.9978 to 1.2141) & 4564.8 & 4690416 \\
+split & 1 & guest drop & 1.3572 (1.2174 to 1.4151) & 3536.7 & 4690240 \\
+O\_DIRECT & 1 & guest drop & 1.6519 (1.4851 to 1.9446) & 2905.7 & 4690128 \\
+h5py & 1 & guest drop & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
+plain map & 1 & warm & 0.9173 (0.9140 to 0.9887) & 5232.5 & 4690016 \\
+readahead & 1 & warm & 0.8734 (0.8521 to 0.9273) & 5495.9 & 4690272 \\
+split & 1 & warm & 0.9000 (0.8694 to 1.0086) & 5333.5 & 4690248 \\
+O\_DIRECT & 1 & warm & 1.7614 (1.4944 to 1.8873) & 2725.1 & 4690136 \\
+h5py & 1 & warm & 2.7408 (2.6431 to 2.8928) & 1751.3 & 4736684 \\
+plain map & 8 & guest drop & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
+readahead & 8 & guest drop & 1.0217 (0.9683 to 1.1867) & 4698.2 & 4690812 \\
+split & 8 & guest drop & 1.2101 (0.9608 to 1.4188) & 3966.5 & 4689924 \\
+O\_DIRECT & 8 & guest drop & 1.5320 (1.4677 to 1.5830) & 3133.2 & 4690436 \\
+h5py & 8 & guest drop & 1.4268 (1.2302 to 1.8428) & 3364.2 & 5124632 \\
+plain map & 8 & warm & 0.9293 (0.9121 to 0.9431) & 5165.2 & 4690424 \\
+readahead & 8 & warm & 0.1779 (0.1726 to 0.1870) & 26977.5 & 4690248 \\
+split & 8 & warm & 0.1821 (0.1733 to 0.1927) & 26363.2 & 4690372 \\
+O\_DIRECT & 8 & warm & 1.5250 (1.4656 to 1.6083) & 3147.6 & 4690436 \\
+h5py & 8 & warm & 0.3989 (0.3914 to 0.4091) & 12033.0 & 5126924 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% Periods in the table are decimals.

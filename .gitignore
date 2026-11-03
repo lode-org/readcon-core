@@ -481,3 +481,6 @@ docs/notebooks/out/
 .venv-coverage/
 
 .grok/
+
+# Generated CON-bin and HDF5 files for benches/conbin_scale.py
+benches/work/

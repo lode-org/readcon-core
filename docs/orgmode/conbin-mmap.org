@@ -1,0 +1,84 @@
+#+title: Mapped CON-bin columns
+#+options: toc:nil num:nil ^:nil
+
+* The file
+
+A CON-bin file starts with one host page.
+The first 40 bytes are the magic =CONBIN01=, the version, the flags, the
+frame count, the atom count and the payload offset.
+Positions of every frame follow as one little-endian binary64 run, then
+velocities.
+
+* The mapping
+
+=read_conbin= returns those two runs as writable NumPy arrays.
+The mapping is
+=MAP_PRIVATE= with =PROT_READ|PROT_WRITE= (=memmap2= =map_copy=).
+A store copies that page.
+The file bytes stay as written.
+=conbin::tests::a_store_copies_the_page_and_leaves_the_file= writes
+through the mapping and reads the file back unchanged.
+The map is the NumPy base of both arrays and is unmapped when both
+arrays are freed.
+=mmap(2)= leaves visibility of a later write by another process up to
+the implementation, for a page the caller has not stored to.
+Truncation of the file can raise =SIGBUS=.
+
+* Large pages
+
+The mapping is advised =MADV_SEQUENTIAL= and =MADV_HUGEPAGE=.
+=MADV_HUGEPAGE= is the request used when transparent large pages are in madvise mode (=CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=).
+File-backed large pages also require =CONFIG_READ_ONLY_THP_FOR_FS=
+(=Documentation/admin-guide/mm/transhuge.rst=).
+This kernel's =/proc/config.gz= has that option unset.
+A mapped read of the benchmark file showed =FilePmdMapped= 0.
+The advice is the documented switch.
+Without that option the mapping stays on base pages.
+
+* Readahead
+
+=sum_mapped= reads =queue/rotational=, =queue/max_sectors_kb=, =queue/nr_requests=
+and the hardware queue count for the device of the file.
+=max_sectors_kb= times 1024 is one request, the piece size
+([[https://docs.kernel.org/admin-guide/abi-stable.html#abi-sys-block-disk-queue-max-sectors-kb][sysfs-block ABI]]).
+=nr_requests= is the depth of each hardware queue.
+blk-mq applies that depth once per queue, and this host has one hardware
+queue.
+The default is one stream.
+Two sessions on one boot compared one stream with a stream per span.
+Neither plan won at every thread count in both.
+The host cache was not controlled.
+The default stays one stream, the simpler plan.
+Workers fault a piece with =MADV_POPULATE_READ=, then sum it.
+=mincore= only decides whether the whole file is already resident.
+The piece sums are added in file order.
+A mapping that is already resident skips =readahead= and sums the same
+pieces.
+
+* Benchmark
+
+The paired command is:
+
+#+begin_src shell
+cargo build -r
+python3 benches/conbin_scale.py
+#+end_src
+
+Files land in =$WORKDIR=, or in =benches/work= when =WORKDIR= is unset.
+The CON-bin payload and the HDF5 datasets are the same bytes.
+h5py sums each column with =numpy.sum= inside the clock.
+The plain map, the readahead sum and =O_DIRECT= sum those same bytes.
+Six repeats.
+The reported sample is the upper median, sorted index 3.
+The rate numerator is =4800000000= bytes.
+
+The table in =paper/cpc/src/conbin-mmap.tex= records two sessions.
+The earlier session has its first sample at unix time 1793658999.
+The later session's first sample is at unix time 1793662535.
+Both sessions read through a host cache, so these times are not device
+rates.
+The Readahead section keeps the one-stream default.
+The constant rows are explained in [[file:conbin-mmap-constants.org][the constants page]].
+An earlier fio run recorded no boot id.
+h5py is 3.16.0, NumPy is 1.26.4, Python is 3.12.3 and rustc is 1.88.0.
+The full paired table is in that file.
