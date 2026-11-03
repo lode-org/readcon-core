@@ -152,6 +152,42 @@ Testing
 Test data lives in ``resources/test/``.
 Use the ``test_case!`` macro in integration tests to locate test files.
 
+Fuzzing
+~~~~~~~
+
+The ``fuzz/`` crate defines `cargo-fuzz <https://github.com/rust-fuzz/cargo-fuzz>`_ targets for the line parsers, the frame readers, the frame index, the unit parser, the surface grammar and the bond metadata.
+Each target keeps its seed inputs in ``fuzz/corpus/<target>/``.
+The targets need a nightly toolchain and ``cargo install cargo-fuzz``.
+Most targets only check that the code returns without a panic.
+``frame-parser`` also checks that the frame iterator ends, and ``frame-parallel`` that two threads return the frames that one thread returns.
+
+libFuzzer adds every input that finds new coverage to the corpus directory it runs on.
+So the loop below runs each target on a scratch copy of its corpus, which keeps ``fuzz/corpus/`` as committed.
+It gives each target an equal share of 600 seconds, the default fuzzing time of a `ClusterFuzzLite <https://google.github.io/clusterfuzzlite/running-clusterfuzzlite/github-actions/>`_ pull request job.
+
+..
+   #skip_lint_start
+
+.. code:: shell
+
+    seed=$(cat fuzz/seed.txt)
+    targets=$(cargo +nightly fuzz list)
+    secs=$((600 / $(printf '%s\n' "$targets" | wc -l)))
+    for target in $targets; do
+      corpus=$(mktemp -d)
+      cp -a "fuzz/corpus/$target/." "$corpus/"
+      cargo +nightly fuzz run "$target" "$corpus" -- -seed="$seed" -max_total_time="$secs"
+      rm -rf "$corpus"
+    done
+
+..
+   #skip_lint_end
+
+A crash leaves its input in ``fuzz/artifacts/<target>/``, and ``cargo +nightly fuzz run <target> <input>`` runs that input again.
+``fuzz/seed.txt`` fixes the random choices of libFuzzer, but two runs on it can still try different inputs.
+The clock, address randomization, hash keys and threads all change which code a run reaches.
+So keep the input of a crash, since the seed alone may not find it again.
+
 Profile-guided optimisation (PGO)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -471,7 +507,7 @@ Manual equivalent of the script:
    Re-export the docs with the org-to-rst pipeline so the published pages match.
 
 3. Check the lock with ``cargo test --locked``.
-   ``scripts/bump-version.sh`` already rewrites the ``readcon-core`` entry in ``Cargo.lock``.
+   ``scripts/bump-version.sh`` already rewrites the ``readcon-core`` entry in ``Cargo.lock`` and ``fuzz/Cargo.lock``.
 
 4. Regenerate the README from ``readme_src.org`` when the user-facing docs changed (optional for patch releases that only touch the crate version).
    Use the project script so ``docs/orgmode/*.org`` links stay ``.org`` (plain ``ox-md`` rewrites them to missing ``.md`` paths):
