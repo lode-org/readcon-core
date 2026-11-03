@@ -121,6 +121,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    :caption: Reference
 
    spec
+   conbin-binary-spec
    implementation-notes
    bindings
    chemfiles-reference
