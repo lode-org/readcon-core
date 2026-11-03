@@ -51,6 +51,9 @@ jobs:
         # grammar is optional (not on hot path); still gate PR lockstep with prose/spec.
         run: cargo test --features grammar --lib grammar
 
+      - name: Parallel frame scans
+        run: cargo test --features parallel --test frame_scan_whitespace
+
       - name: Build and test FFI bindings
         id: btest_rust
         run: |
