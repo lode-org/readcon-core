@@ -9,6 +9,7 @@
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::parser::{parse_line_of_n_f64, parse_single_frame};
+use readcon_core::storage_dtype::ElementKind;
 use readcon_core::stream::ConFrameReader;
 use readcon_core::types::AtomDatum;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -74,6 +75,17 @@ fn frame_declaring_atoms(atoms: u64) -> String {
     )
 }
 
+/// A version 3 one-type frame that stores positions as `kind` and declares
+/// `atoms` atoms, of which it holds two.
+fn frame_declaring_atoms_as(kind: ElementKind, atoms: u64) -> String {
+    format!(
+        "\n{{\"con_spec_version\":3,\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\
+         \"storage_dtypes\":{{\"positions\":\"{}\"}}}}\n10 10 10\n90 90 90\n\n\n1\n{atoms}\n\
+         1.008\nH\nCoordinates of Component 1\n0 0 0 0 1\n1 1 1 0 2\n",
+        kind.as_str()
+    )
+}
+
 /// A legacy two-type frame whose counts sum past `usize::MAX`.
 fn frame_whose_counts_overflow() -> String {
     format!(
@@ -134,6 +146,24 @@ fn more_atoms_than_the_input_holds_is_an_incomplete_frame() {
             largest <= bound,
             "{atoms} atoms from lines: {largest} bytes"
         );
+    }
+}
+
+#[test]
+fn more_atoms_than_the_input_holds_is_an_incomplete_frame_in_every_dtype() {
+    for &kind in ElementKind::all_hosted() {
+        for atoms in DECLARED {
+            let text = frame_declaring_atoms_as(kind, atoms);
+            let (parsed, largest) = largest_request(|| ConFrameIterator::new(&text).next());
+            assert!(
+                matches!(parsed, Some(Err(ParseError::IncompleteFrame))),
+                "{kind:?}, {atoms} atoms: {parsed:?}"
+            );
+            assert!(
+                largest <= input_bound(&text),
+                "{kind:?}, {atoms} atoms: {largest} bytes"
+            );
+        }
     }
 }
 
