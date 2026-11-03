@@ -97,6 +97,16 @@ impl<'a> MemchrLines<'a> {
         self.peeked
     }
 
+    /// Bytes from the start of the next line, a peeked one included, to the
+    /// end of the buffer.
+    pub(crate) fn unread_len(&self) -> usize {
+        let start = match self.peeked {
+            Some(p) => p.as_ptr() as usize - self.bytes.as_ptr() as usize,
+            None => self.pos,
+        };
+        self.bytes.len() - start
+    }
+
     /// Drop any peek buffer (required before bulk cursor advances).
     fn clear_peek(&mut self) {
         if let Some(p) = self.peeked.take() {
@@ -570,7 +580,8 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             return Some(Err(err));
         }
         // Otherwise, attempt to parse the next frame from the available lines.
-        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines) {
+        let max_rows = Some(self.lines.unread_len() / crate::parser::MIN_COORD_ROW_BYTES);
+        let mut frame = match crate::parser::parse_single_frame_ls(&mut self.lines, max_rows) {
             Ok(f) => f,
             Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
         };
