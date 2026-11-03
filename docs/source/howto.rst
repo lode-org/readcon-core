@@ -8,23 +8,25 @@ How-to — CON I/O by language
    Diátaxis *how-to* (goal-oriented recipes). Learning path first:
    :doc:`tutorial`. Conversion tasks: :doc:`chemfiles-howto`.
 
-These pages answer **how do I …** once you already know the shape of a CON file
-from the :doc:\`tutorial\`. Pick a language section and copy the block that matches
-your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
+These pages answer **how do I …** once you already know the shape of a CON
+file from the :doc:\`tutorial\`.
+Pick a language section and copy the block that matches your task.
+For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
 
 Querying the spec version
 -------------------------
 
-/Added in v0.5.0. Per-frame spec\_version added in v0.6.0.
+/Added in v0.5.0.
+Per-frame spec\_version added in v0.6.0.
 
 There are two distinct version queries:
 
 1. **Library spec version**: the highest spec version the library
    implements (compile-time constant).
 
-2. **File spec version**: the version a particular file was written
-   with, parsed from the JSON metadata on line 2. Legacy files
-   without JSON metadata report version 1.
+2. **File spec version**: the version a particular file was written with,
+   parsed from the JSON metadata on line 2.
+   Legacy files without JSON metadata report version 1.
 
 Rust
 ~~~~
@@ -93,8 +95,9 @@ Working with JSON metadata
 
 /Added in v0.6.0.
 
-Line 2 of every v2 CON file contains a JSON object. The writer always
-stamps ``con_spec_version``; additional keys survive round-trips.
+Line 2 of every v2 CON file contains a JSON object.
+The writer always stamps ``con_spec_version``; additional keys survive
+round-trips.
 
 Rust: attaching custom metadata
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -232,20 +235,20 @@ Writing frames
         writer.write_frame(frame).unwrap();
     }
 
-Velocity data is written automatically when
-``frame.has_velocities()`` returns true.
+Velocity data is written automatically when ``frame.has_velocities()``
+returns true.
 
 Building frames from data
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 /Added in v0.4.0.
 
-Use ``ConFrameBuilder`` to construct frames programmatically. The
-``atom_id`` parameter (6th argument to ``add_atom``) is the original atom
-index -- the position of this atom in your input before type-based
-grouping. The builder groups atoms by symbol automatically, but
-preserves each atom's ``atom_id`` so the original ordering can be
-reconstructed.
+Use ``ConFrameBuilder`` to construct frames programmatically.
+The ``atom_id`` parameter (6th argument to ``add_atom``) is the original
+atom index -- the position of this atom in your input before type-based
+grouping.
+The builder groups atoms by symbol automatically, but preserves each
+atom's ``atom_id`` so the original ordering can be reconstructed.
 
 .. code:: rust
 
@@ -271,13 +274,13 @@ Control the number of decimal places in output coordinates:
     use std::fs::File;
     use readcon_core::writer::ConFrameWriter;
 
-   // Default text round-trips every finite binary64 value.
-   let file = File::create("output.con").unwrap();
-   let mut writer = ConFrameWriter::new(file);
+    // Default text round-trips every finite binary64 value.
+    let file = File::create("output.con").unwrap();
+    let mut writer = ConFrameWriter::new(file);
 
-   // Fixed decimals are lossy. Ask for them explicitly.
-   let file = File::create("fixed.con").unwrap();
-   let mut writer = ConFrameWriter::with_precision(file, 6);
+    // Fixed decimals are lossy. Ask for them explicitly.
+    let file = File::create("fixed.con").unwrap();
+    let mut writer = ConFrameWriter::with_precision(file, 6);
 
 Reading a single frame efficiently
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -285,8 +288,9 @@ Reading a single frame efficiently
 /Added in v0.4.3.
 
 When only the first frame is needed, ``read_first_frame`` stops after
-parsing it.  Files under 64 KiB are read into memory directly; larger
-files use memory-mapped I/O.
+parsing it.
+Files under 64 KiB are read into memory directly; larger files use
+memory-mapped I/O.
 
 .. code:: rust
 
@@ -299,9 +303,9 @@ files use memory-mapped I/O.
 Reading all frames from a file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For trajectory files with many frames, ``read_all_frames`` applies
-the same small-file optimization and uses memory-mapped I/O for
-larger files.
+For trajectory files with many frames, ``read_all_frames`` applies the
+same small-file optimization and uses memory-mapped I/O for larger
+files.
 
 .. code:: rust
 
@@ -311,13 +315,50 @@ larger files.
     let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
     println!("Loaded {} frames", frames.len());
 
+Reading a compressed trajectory in bounded memory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The path readers above decompress a ``.con.gz`` or ``.con.zst`` file into
+one buffer before parsing, so memory grows with the decompressed size.
+``ConFrameReader`` decodes and parses while it reads, and its buffer stays
+near one frame plus its read size (1 MiB, one mebibyte, by default).
+
+.. code:: rust
+
+    use readcon_core::stream::ConFrameReader;
+    use std::path::Path;
+
+    let mut atoms = 0;
+    for frame in ConFrameReader::open(Path::new("long_run.con.gz")).unwrap() {
+        atoms += frame.unwrap().atom_data.len();
+    }
+    println!("Atoms over all frames: {atoms}");
+
+``ConFrameReader::new`` takes any ``std::io::Read``, such as a socket or a
+decoder you have set up yourself.
+``forward()`` skips a frame without building it.
+Frames and parse errors are those of ``ConFrameIterator::from_bytes`` over
+the whole stream.
+The reader stops after the first error.
+When the source fails, the reader first returns the frames that
+``from_bytes`` finds in the bytes read before the failure, then the input
+or output error.
+A frame is returned once the stream has ended, or once a line with text
+and one more line follow it, because the parser looks that far ahead to
+decide where a frame ends.
+A frame larger than one read makes the buffer grow to that frame plus
+one read.
+For a frame longer than eight reads, an eighth of the frame takes the
+place of that read.
+
 Parallel parsing
 ~~~~~~~~~~~~~~~~
 
 Behind the ``parallel`` feature gate, multi-frame files can be parsed
-concurrently using rayon. ``read_all_frames`` (and the C symbol
-``rkr_read_all_frames``) turns that path on automatically for files of
-at least 48 KiB. ``read_all_frames_with_threads`` /
+concurrently using rayon.
+``read_all_frames`` (and the C symbol ``rkr_read_all_frames``) turns that
+path on automatically for files of at least 48 KiB.
+``read_all_frames_with_threads`` /
 ``rkr_read_all_frames_n_threads`` / ``readcon.read_con(..., n_threads=n)``
 pin the worker count: ``1`` is sequential, ``n >`` 2= is a Rayon pool,
 ``0=/=None`` is the automatic policy.
@@ -400,6 +441,28 @@ Reading and inspecting frames
             print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
             print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
 
+Streaming a large or compressed trajectory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``iter_con(path)`` reads the whole file into memory before the first
+frame, and decompresses a gzip file whole.
+For a long run, ask it to stream:
+
+.. code:: python
+
+    import readcon
+
+    energies = []
+    for frame in readcon.iter_con("long_run.con.gz", stream=True):
+        energies.append(frame.energy)
+
+Memory then stays near one frame plus 1 MiB, whatever the file size.
+The frames are the same as without ``stream=True``.
+The loop raises ``OSError`` at a damaged frame, after it has processed the
+frames before it.
+Without ``stream=True``, invalid UTF-8 (Unicode Transformation Format,
+8-bit) is raised by ``iter_con`` itself, before any frame.
+
 Working with convel velocity data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -470,23 +533,23 @@ Pass the ``precision`` keyword to control decimal places:
 
     import readcon
 
-   # Default text round-trips every finite binary64 value.
-   readcon.write_con("output.con", frames)
+    # Default text round-trips every finite binary64 value.
+    readcon.write_con("output.con", frames)
 
-   # Fixed decimals are lossy. Ask for them explicitly.
-   readcon.write_con("fixed.con", frames, precision=6)
-   output = readcon.write_con_string(frames, precision=17)
+    # Fixed decimals are lossy. Ask for them explicitly.
+    readcon.write_con("fixed.con", frames, precision=6)
+    output = readcon.write_con_string(frames, precision=17)
 
 ASE Atoms conversion
 ~~~~~~~~~~~~~~~~~~~~
 
-/Added in v0.4.0.  atom\_id, velocity, mass, forces, and per-axis
+/Added in v0.4.0. atom\_id, velocity, mass, forces, and per-axis
 fixed-mask transfer are preserved.
 
-Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE must be
-installed (it is an optional dependency).  The conversion preserves
-atom\_id (via a custom per-atom array), velocities, forces, masses,
-and per-axis fixed masks.
+Convert between ``ConFrame`` and ASE ``Atoms`` objects.
+ASE must be installed (it is an optional dependency).
+The conversion preserves atom\_id (via a custom per-atom array),
+velocities, forces, masses, and per-axis fixed masks.
 
 .. code:: python
 
@@ -505,9 +568,10 @@ and per-axis fixed masks.
 atom\_id in ASE roundtrips
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``to_ase()`` stores each atom's ``atom_id`` as a custom ``atom_id``
-per-atom array on the ASE ``Atoms`` object.  Tags are left untouched
-so they remain available for other uses (slab layers, etc.).
+``to_ase()`` stores each atom's ``atom_id`` as a custom ``atom_id`` per-atom
+array on the ASE ``Atoms`` object.
+Tags are left untouched so they remain available for other uses (slab
+layers, etc.).
 
 .. code:: python
 
@@ -524,17 +588,17 @@ so they remain available for other uses (slab layers, etc.).
     assert [a.atom_id for a in frame_back.atoms] == [3, 0, 1, 4, 2]
 
 When converting from an ASE ``Atoms`` object that was not created by
-readcon, ``from_ase()`` checks for the ``atom_id`` array first, then
-falls back to ``tags`` (if any are non-zero), and finally uses
-sequential indices.
+readcon, ``from_ase()`` checks for the ``atom_id`` array first, then falls
+back to ``tags`` (if any are non-zero), and finally uses sequential
+indices.
 
 Velocities and masses in ASE roundtrips
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Velocities from ``.convel`` files are transferred via
-``set_velocities()`` / ``get_velocities()``.  Custom masses (when present
-on the ``ConFrame``) override ASE's atomic-number defaults via
-``set_masses()``.
+``set_velocities()`` / ``get_velocities()``.
+Custom masses (when present on the ``ConFrame``) override ASE's
+atomic-number defaults via ``set_masses()``.
 
 .. code:: python
 
@@ -690,10 +754,12 @@ Memory management
 The C API uses two ownership patterns:
 
 1. **Opaque handles** (``RKRConFrame``): allocated by Rust, freed with
-   ``free_rkr_frame()``. Used for lossless frame manipulation.
+   ``free_rkr_frame()``.
+   Used for lossless frame manipulation.
 
 2. **Transparent structs** (``CFrame``): extracted copies freed with
-   ``free_c_frame()``. Used for direct data access.
+   ``free_c_frame()``.
+   Used for direct data access.
 
 Always free both the ``CFrame`` and the ``RKRConFrame`` separately.
 
@@ -777,13 +843,13 @@ Collecting and writing frames
         all_frames.push_back(std::move(frame));
     }
 
-   // Default text round-trips every finite binary64 value.
-   readcon::ConFrameWriter writer("output.con");
-   writer.extend(all_frames);
+    // Default text round-trips every finite binary64 value.
+    readcon::ConFrameWriter writer("output.con");
+    writer.extend(all_frames);
 
-   // Fixed decimals are lossy. Ask for them explicitly.
-   readcon::ConFrameWriter fixed_writer("fixed.con", 6);
-   fixed_writer.extend(all_frames);
+    // Fixed decimals are lossy. Ask for them explicitly.
+    readcon::ConFrameWriter fixed_writer("fixed.con", 6);
+    fixed_writer.extend(all_frames);
 
 Integration with eOn
 ~~~~~~~~~~~~~~~~~~~~
@@ -856,9 +922,9 @@ Writing frames
     write_con("roundtrip.con", frames)
     write_con("precise.con", frames; precision=17)
 
-Julia writes through the C FFI builder and writer. The path preserves
-velocities, forces, per-axis fixed masks, masses, atom ids, and JSON
-metadata exposed by ``metadata_json``.
+Julia writes through the C FFI builder and writer.
+The path preserves velocities, forces, per-axis fixed masks, masses,
+atom ids, and JSON metadata exposed by ``metadata_json``.
 
 Working with convel velocity data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -906,3 +972,15 @@ Foreign formats are a separate how-to track:
 - Explanation: :doc:`chemfiles-explain`
 
 - Reference: :doc:`chemfiles-reference`
+
+Exact numeric CON output from C
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``create_writer_from_path_round_trip_c(path)`` retains every finite
+binary64 value, including forces below the precision of fixed decimal
+output.
+Use ``rkr_writer_extend`` to append frames and ``rkr_writer_flush`` to check
+for write failures before calling ``free_rkr_writer``.
+Decimal-place formatting is available through
+``create_writer_from_path_with_precision_c``.
+Seventeen decimal places do not preserve every binary64 value.

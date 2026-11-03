@@ -9,42 +9,48 @@ What we measure
 
 .. table::
 
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |   Rank | Command / artifact                                                         | Answers                                                                  |
-    +========+============================================================================+==========================================================================+
-    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    | 2 (PR) | ``benchmarks/`` + ``asv.conf.json`` (ASV) → ``asv-spyglass compare``       | Python surface wall-time on PR vs base                                   |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      3 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      4 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON             |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      5 | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      6 | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                  |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |  local | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                 |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | Rank   | Command / artifact                                                         | Answers                                                                           |
+    +========+============================================================================+===================================================================================+
+    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths          |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 2 (PR) | ``benchmarks/`` + ``asv.conf.json`` (ASV) → ``asv-spyglass compare``       | Python surface wall-time on PR vs base                                            |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 3      | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                        |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 4      | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                      |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 5      | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON          |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 6      | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                           |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | local  | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                          |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | local  | ``benches/stream_compressed.py``                                           | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
+    +--------+----------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
 
 Regression gates in CI:
 
-- **Cachegrind I-refs** — path-filtered + weekly job (``ci_cachegrind.yml``); commits
-  ``docs/source/_generated/cachegrind_results.*`` on ``main`` when counts change.
+- **Cachegrind I-refs** — path-filtered + weekly job
+  (``ci_cachegrind.yml``); commits ``docs/source/_generated/cachegrind_results.*``
+  on ``main`` when counts change.
 
-- **Python ASV + spyglass** — every PR (``ci_benchmark.yml``); comment via asv-perch.
+- **Python ASV + spyglass** — every PR (``ci_benchmark.yml``); comment via
+  asv-perch.
 
-Peer scripts under ``benches/`` are for local re-runs. JSON under
-``benches/results/`` is what you produce when you run them — this page does not
-embed host wall-clock tables.
+Peer scripts under ``benches/`` are for local re-runs.
+JSON under ``benches/results/`` is what you produce when you run them —
+this page does not embed host wall-clock tables.
 
 CI Cachegrind (instruction-count gate)
 --------------------------------------
 
-Workflow ``ci_cachegrind.yml`` runs Valgrind **Cachegrind** on
-``examples/cachegrind_harness.rs`` when CON-path sources (or this doc) change on
-``main``, on a weekly schedule, or on manual dispatch. With
-``CACHEGRIND_FEATURES=chemfiles`` it also records conversion scenarios.
+Workflow
+``ci_cachegrind.yml`` runs Valgrind **Cachegrind** on ``examples/cachegrind_harness.rs``
+when CON-path sources (or this doc) change on ``main``, on a weekly
+schedule, or on manual dispatch.
+With ``CACHEGRIND_FEATURES=chemfiles`` it also records conversion
+scenarios.
 
 Current committed include (refreshed by that job):
 
@@ -57,9 +63,10 @@ Reproduce (needs Valgrind):
     scripts/run_cachegrind_bench.sh
     # writes docs/source/_generated/cachegrind_results.{json,rst}
 
-I-refs for a fixed binary are stable across noisy shared runners; wall-clock
-medians on GHA are not. That is why Cachegrind is the commit-stable gate and
-ASV is the PR Python surface compare.
+I-refs for a fixed binary are stable across noisy shared runners;
+wall-clock medians on GHA are not.
+That is why Cachegrind is the commit-stable gate and ASV is the PR
+Python surface compare.
 
 Python ASV (PR surface)
 -----------------------
@@ -72,13 +79,14 @@ Workflow ``Benchmark PR`` (``ci_benchmark.yml``):
 2. Runs `ASV <https://asv.readthedocs.io/>`_ on ``benchmarks/`` with
    ``-E existing:$(which python)`` (no re-install mid-bench).
 
-3. ``asv-spyglass compare`` writes ``results/comparison.txt`` (job fails if empty).
+3. ``asv-spyglass compare`` writes ``results/comparison.txt`` (job fails if
+   empty).
 
 4. ``ci_bench_commenter.yml`` posts that file via `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
 
-A separate ``criterion-benchmark`` job may save Criterion baselines; it uses
-``continue-on-error: true`` so a Rust microbench miss does not fail the workflow
-conclusion that asv-perch requires.
+A separate ``criterion-benchmark`` job may save Criterion baselines; it
+uses ``continue-on-error: true`` so a Rust microbench miss does not fail
+the workflow conclusion that asv-perch requires.
 
 Suite (calls shipped ``readcon`` only):
 
@@ -110,32 +118,37 @@ Local:
       .asv/results/benchmarks.json \
       --label-before main --label-after pr
 
-Config: ``asv.conf.json``. Results: ``.asv/`` (gitignored).
+Config: ``asv.conf.json``.
+Results: ``.asv/`` (gitignored).
 
 Peer scripts (host field)
 -------------------------
 
-Cite only JSON that records a host, a UTC date, a commit, and Cargo features.
-The host field is the CPU model when the run stored one, and ``unrecorded``
-when it did not.
+Cite only JSON that records a host, a UTC date, a commit, and Cargo
+features.
+The host field is the CPU model when the run stored one, and
+``unrecorded`` when it did not.
 ``benches/results/multiformat_traj.json``, ``ase_traj_vs_con.json``, and
-``h5md_vs_con.json`` are the paper-facing artifacts. A number without those
-fields is a local plot, not a table.
+``h5md_vs_con.json`` are the paper-facing artifacts.
+A number without those fields is a local plot, not a table.
 
 Chemfiles ingress vs native CON is an equal-geometry wall comparison:
-same atoms and frame count, XYZ through ``readcon.read_chemfiles`` versus
-``readcon.read_con`` on the CON text. Cachegrind already has
-``chemfiles_xyz_path`` / ``chemfiles_xyz_memory`` I-refs. The wall ratios
-live in ``ase_traj_vs_con.json`` (``ratio_chemfiles_to_con_over_con``) and
-``h5md_vs_con.json`` (``ratio_chemfiles_xyz_over_con``). That answers the
-ingress cost. It is not a "conversion atoms/s" vanity metric: XYZ has
-no constraints, ``atom_id``, or JSON, so the chemfiles path is a different
-payload.
+same atoms and frame count, XYZ through
+``readcon.read_chemfiles`` versus ``readcon.read_con`` on the CON text.
+Cachegrind already has ``chemfiles_xyz_path`` / ``chemfiles_xyz_memory``
+I-refs.
+The wall ratios live in
+``ase_traj_vs_con.json`` (``ratio_chemfiles_to_con_over_con``) and
+``h5md_vs_con.json`` (``ratio_chemfiles_xyz_over_con``).
+That answers the ingress cost.
+It is not a "conversion atoms/s" vanity metric: XYZ has no constraints,
+``atom_id``, or JSON, so the chemfiles path is a different payload.
 
 H5MD framing for the same geometry: ``h5py`` ``position/value`` is a dense
-coordinate array and is faster than a full CON parse. MDAnalysis H5MD
-cost is the Python ``Universe`` API, not the format. CON carries cell,
-constraints, ``atom_id``, and JSON. Report all three; do not drop H5MD.
+coordinate array and is faster than a full CON parse.
+MDAnalysis H5MD cost is the Python ``Universe`` API, not the format.
+CON carries cell, constraints, ``atom_id``, and JSON.
+Report all three; do not drop H5MD.
 
 .. code:: shell
 
@@ -157,8 +170,8 @@ constraints, ``atom_id``, and JSON. Report all three; do not drop H5MD.
     # writes h5md_size_bytes, con_size_bytes, con_gz_size_bytes, con_zst_size_bytes,
     # readcon_con_ms, readcon_con_gz_ms, readcon_con_zst_ms (null if zstd feature off)
 
-Implementation details that show up in Cachegrind and peer scripts (facts about
-the code, not a promise about every host):
+Implementation details that show up in Cachegrind and peer scripts
+(facts about the code, not a promise about every host):
 
 - Atom floats: `fast-float2 <https://github.com/aldanor/fast-float-rust>`_
   (``float_fast_float2`` vs ``float_std_parse`` Cachegrind scenarios)
@@ -167,46 +180,55 @@ the code, not a promise about every host):
 
 - Atom vectors: sized from the CON header before filling
 
-- File load: ``read_to_string`` below 64 KiB, mmap at/above (``MMAP_THRESHOLD`` in
-  ``src/compression.rs``)
+- File load: ``read_to_string`` below 64 KiB, mmap
+  at/above (``MMAP_THRESHOLD`` in ``src/compression.rs``)
 
-- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and ``parallel`` is on
-  (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``). Sequential vs
-  pinned workers: ``examples/wall_scale_harness.rs`` writes
-  ``benches/results/wall_scale.json`` (host, date, commit). That JSON is
-  Table io in ``paper/cpc/main.tex``. Do not mix it with the Python
-  ``readcon.read_con`` wall table.
+- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and ``parallel``
+  is on (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``).
+  Sequential vs pinned workers:
+  ``examples/wall_scale_harness.rs`` writes ``benches/results/wall_scale.json``
+  (host, date, commit).
+  That JSON is Table io in ``paper/cpc/main.tex``.
+  Do not mix it with the Python ``readcon.read_con`` wall table.
 
-- Skip without atoms: ``forward`` / ``forward_fast`` (Cachegrind ``forward_*``)
+- Skip without atoms: ``forward`` /
+  ``forward_fast`` (Cachegrind ``forward_*``)
 
-h5py ``position/value`` alone loads a coordinate array (not cell / constraints /
-``atom_id`` / JSON). ``benches/h5md_vs_con.py`` times MDAnalysis H5MD and h5py as
-**peer load paths** on equal geometry, and reports ****CON.gz / optional CON.zst****
-sizes and load times next to uncompressed CON. Gzip of multi-frame CON is often
-the same order as positions-only H5MD for near-repeated rare-event frames; that
-is a size fact, not advice to store campaigns as H5MD instead of CON +
-``readcon-db``. Compressed CON always fully decompresses before parse (no mmap);
+h5py ``position/value`` alone loads a coordinate array (not cell /
+constraints / ``atom_id`` / JSON).
+``benches/h5md_vs_con.py`` times MDAnalysis H5MD and h5py as
+**peer load paths** on equal geometry, and reports
+****CON.gz / optional CON.zst**** sizes and load times next to uncompressed
+CON.
+Gzip of multi-frame CON is often the same order as positions-only H5MD
+for near-repeated rare-event frames; that is a size fact, not advice to
+store campaigns as H5MD instead of CON + ``readcon-db``.
+Compressed CON always fully decompresses before parse (no mmap);
 uncompressed ≥ 64 KiB uses ``memmap2``.
 
-Plots under ``docs/orgmode/img/`` are produced by ``benches/make_plots.py`` from
-JSON you generate; regenerate after peer runs if you need them current.
+Plots under ``docs/orgmode/img/`` are produced by ``benches/make_plots.py``
+from JSON you generate; regenerate after peer runs if you need them
+current.
 
 .. figure:: img/parsing_throughput.svg
 
     Parsing throughput (from peer JSON via ``make_plots.py``)
 
+``make_plots.py``)
 .. figure:: img/pareto_features_vs_speed.svg
 
-    Feature coverage vs parse speed (from peer JSON via ``make_plots.py``)
+    Feature coverage vs parse speed (from peer JSON via
 
 Public API model and hot path
 -----------------------------
 
 ****Load (full frames)****
 
-- ``read_all_frames`` / ``ConFrameIterator`` / Python ``iter_con`` / ``read_first_frame``
+- ``read_all_frames`` / ``ConFrameIterator`` / Python
+  ``iter_con`` / ``read_first_frame``
 
-- Skip payload: ``count_frames`` / ``forward_fast`` when atoms are not needed
+- Skip payload: ``count_frames`` / ``forward_fast`` when atoms are not
+  needed
 
 - Coordinates on a **loaded** frame: SoA / Python ``coords_array()``
 
@@ -214,20 +236,23 @@ Public API model and hot path
 
 ****Python****
 
-Multi-frame parse paths release the GIL via ``py.detach`` (``src/python.rs``) around
-the Rust work; ``iter_con`` yields full frames.
+Multi-frame parse paths release the GIL via ``py.detach``
+(``src/python.rs``) around the Rust work; ``iter_con`` yields full frames.
 
 Criterion (local Rust latency)
 ------------------------------
 
-``cargo bench`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
-regressions and ASV for the Python PR surface. The PR Criterion job is optional
-artifact collection only; the posted comment is ASV/spyglass.
+``cargo bench`` runs ``benches/iterator_bench.rs``.
+Prefer Cachegrind for I-ref regressions and ASV for the Python PR
+surface.
+The PR Criterion job is optional artifact collection only; the posted
+comment is ASV/spyglass.
 
 Memory
 ------
 
-Peak RSS depends on host and whether all frames are materialised. Streaming:
+Peak RSS depends on host and whether all frames are materialised.
+Streaming:
 
 .. code:: rust
 
@@ -237,13 +262,29 @@ Peak RSS depends on host and whether all frames are materialised. Streaming:
         // process, then drop
     }
 
-Per frame the library keeps type symbols as shared ``Arc<str>`` (per type, not
-per atom), pre-sized atom storage from headers, and parses floats from borrowed
-line slices (no intermediate atom-line ``String``).
+Per frame the library keeps type symbols as shared ``Arc<str>`` (per type,
+not per atom), pre-sized atom storage from headers, and parses floats
+from borrowed line slices (no intermediate atom-line ``String``).
 
+In Python, ``iter_con(path)`` keeps the whole decompressed file in memory
+while it iterates.
+``iter_con(path, stream=True)`` keeps about one frame plus 1 MiB
+(mebibyte), and ``mmap=True`` keeps about 32 MiB of an uncompressed file
+resident on Linux.
+``benches/stream_compressed.py`` runs each mode in a fresh process over a
+plain and a gzip file and records its wall time and peak resident set
+size.
+The peak is read from ``VmHWM``, so the script needs Linux.
+
+.. code:: shell
+
+    maturin develop --release --features python
+    python benches/stream_compressed.py --frames 10000 --repeats 5 --out stream.json
+
+``make_plots.py`` to refresh)
 .. figure:: img/memory_usage.svg
 
-    Peak RSS plot (from historical peer JSON; re-run ``make_plots.py`` to refresh)
+    Peak RSS plot (from historical peer JSON; re-run
 
 Feature matrix plot
 -------------------
@@ -253,15 +294,15 @@ Feature matrix plot
     CON v2 feature matrix vs common formats (``make_plots.py``)
 
 CON v2 on the wire can carry positions, velocities, forces, unit cell,
-per-direction constraints, ``atom_id``, structured JSON, compression, multi-frame
-concatenation, and streaming iteration — see :doc:`spec`.
+per-direction constraints, ``atom_id``, structured JSON, compression,
+multi-frame concatenation, and streaming iteration — see :doc:`spec`.
 
 Statistical analysis (optional)
 -------------------------------
 
-`bayescomp <https://github.com/HaoZeke/bayescomp>`_ can fit Gamma-family models
-to Criterion JSON and ``compare_readers.py`` timings when you want credible
-intervals; it is not part of the PR gate.
+`bayescomp <https://github.com/HaoZeke/bayescomp>`_ can fit Gamma-family
+models to Criterion JSON and ``compare_readers.py`` timings when you want
+credible intervals; it is not part of the PR gate.
 
 Reproduce (one place)
 ---------------------

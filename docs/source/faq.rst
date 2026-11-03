@@ -202,7 +202,7 @@ sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
 Can I store forces, energies, charges, spins, magmoms, displacements, spreads?
----------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 Yes. Per-frame total energy lives in JSON under the ``energy`` key.
 Per-atom data uses declared ``sections``:
@@ -217,6 +217,7 @@ Per-atom data uses declared ``sections``:
 
 - **Displacement vectors** (3-vector, Angstrom, e.g. a normal mode):
   ``displacements``
+
 - **Spreads** (3-vector, Angstrom): ``spreads``, the root-mean-square
   spread of each atom along x, y, z about its written coordinates; a
   standard deviation, 0 for a classical point
