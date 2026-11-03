@@ -83,7 +83,7 @@ format diversity at the edge; this crate owns CON fidelity on the wire and in
 memory.
 
 Measurements: Cachegrind I-refs (`examples/cachegrind_harness.rs`);
-Python ASV + spyglass on PRs (`benchmarks/`); CON peers via
+Python ASV on PRs (`benchmarks/`, Snakemake, memray peaks); CON peers via
 `benches/compare_readers.py` (and other scripts under `benches/`).
 See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 
@@ -119,7 +119,7 @@ hand-rolling XYZ and a private atoms object.
 -   **Languages:** hourglass `rkr_*` in Fortran / C / C++ / Python / Julia / Rust (same semantics when you add a language)
 -   **Corpora:** [readcon-db](https://github.com/lode-org/readcon-db) on CON text (energy / formula / sections, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/docs/))
 -   **Plotting:** [chemparseplot](https://chemparseplot.rgoswami.me) (+ [rgpycrumbs](https://rgpycrumbs.rgoswami.me)) on the same files
--   **Measurements:** Cachegrind I-refs; PR ASV + spyglass; peer scripts in `benches/`. [benchmarks.org](docs/orgmode/benchmarks.org)
+-   **Measurements:** Cachegrind I-refs; PR ASV (one runner, memray peaks); peer scripts in `benches/`. [benchmarks.org](docs/orgmode/benchmarks.org)
 
     # foreign → CON (needs --features chemfiles)
     cargo run --release --features chemfiles -- convert structure.xyz structure.con
@@ -340,7 +340,7 @@ Same as CON, with an additional velocity section after each frame's coordinates:
 
 <tr>
 <td class="org-left">Measurements</td>
-<td class="org-left">Cachegrind I-refs; PR ASV + spyglass; <code>benches/compare_readers.py</code></td>
+<td class="org-left">Cachegrind I-refs; PR ASV (one runner, memray peaks); <code>benches/compare_readers.py</code></td>
 </tr>
 </tbody>
 </table>

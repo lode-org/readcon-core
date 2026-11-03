@@ -130,7 +130,7 @@ How fast is readcon-core?
 
 CON parse uses fast-float2, zero-copy line views, header-sized vectors,
 optional mmap, and ``forward`` / ``forward_fast`` when you only need counts.
-CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV + spyglass
+CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV on one runner, memray peaks
 (``ci_benchmark.yml``, suite in ``benchmarks/``). Local peer scripts:
 ``benches/compare_readers.py``, ``multiformat_traj.py``, ``ase_traj_vs_con.py``,
 ``h5md_vs_con.py``. How to re-run and what each gate means:
@@ -436,7 +436,8 @@ The library is worth using even from one code in one language, because the code 
     +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
     | Ingress                     | Chemfiles: .xyz, Protein Data Bank (PDB), .gro and other formats to .con through one convert path                                  |
     +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Performance checks          | Cachegrind instruction counts on ``main``; Python ASV and asv-spyglass on pull requests; peer scripts under ``benches/``           |
+    | Performance checks          | Cachegrind instruction counts on ``main``; Python ASV on one runner, memray peaks on pull requests; peer scripts under             |
+    |                             | ``benches/``                                                                                                                       |
     +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
 
 After the move, the structure object, the selector, ``readcon-db`` and the plots all read .con files.

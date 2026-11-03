@@ -14,7 +14,8 @@ What we measure
     +========+============================================================================+==========================================================================+
     | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    | 2 (PR) | ``benchmarks/`` + ``asv.conf.json`` (ASV) → ``asv-spyglass compare``       | Python surface wall-time on PR vs base                                   |
+    | 2 (PR) | ``benchmarks/workflow/Snakefile`` drives ``asv continuous``; memory via    | Python wall time and memray peak, base vs head, one runner               |
+    |        | ``asv_bench_memray``                                                       |                                                                          |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
     |      3 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
@@ -32,7 +33,7 @@ Regression gates in CI:
 - **Cachegrind I-refs** — path-filtered + weekly job (``ci_cachegrind.yml``); commits
   ``docs/source/_generated/cachegrind_results.*`` on ``main`` when counts change.
 
-- **Python ASV + spyglass** — every PR (``ci_benchmark.yml``); comment via asv-perch.
+- **Python ASV** — every PR (``ci_benchmark.yml``), one runner, comment via asv-perch.
 
 Peer scripts under ``benches/`` are for local re-runs. JSON under
 ``benches/results/`` is what you produce when you run them — this page does not
@@ -64,21 +65,70 @@ ASV is the PR Python surface compare.
 Python ASV (PR surface)
 -----------------------
 
-Workflow ``Benchmark PR`` (``ci_benchmark.yml``):
+Workflow ``Benchmark PR`` (``ci_benchmark.yml``) is one job. Snakemake
+(``benchmarks/workflow/Snakefile``) only launches asv; it does not time the
+benchmarks.
 
-1. Matrix builds **base** and **PR** with
-   ``maturin develop --features python,chemfiles --release``.
+1. asv virtualenv builds **base** and **head** with
+   ``maturin build --features python,chemfiles-from-sources --release``
+   (pinned in ``asv.conf.json`` and ``benchmarks/workflow/requirements.txt``).
+   ``ci_benchmark.yml`` pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
+   Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
 
-2. Runs `ASV <https://asv.readthedocs.io/>`_ on ``benchmarks/`` with
-   ``-E existing:$(which python)`` (no re-install mid-bench).
+2. Fifteen main-vs-main repetitions of the base commit, on that runner, set a
+   per-benchmark noise band. Each within-run ratio is median(later)/median(earlier).
+   That upper bound is the larger of the linear 99th percentile and median + 3*median
+   absolute deviation (MAD); that lower bound is the smaller of the 1st percentile and
+   median - 3*MAD when that bound is positive. Time uses ``asv run --interleave-rounds`` (twelve
+   rounds of six repeats, 72 samples). Odd rounds are one side and even rounds
+   the other, 36 samples a side, the same alternation as the comparison.
+   Each round is its own process of one installed build. A speed shift that
+   covers an odd round and the following even round cancels in their ratio,
+   so that bound sits closer to 1 than a ratio of two builds. Each repetition
+   also keeps the two side medians. A second timing upper bound is a Student t
+   prediction limit for a ratio of two of those medians, and the second lower
+   bound is the reciprocal. The false-slowdown budget is 0.01, the complement
+   of the within-run 99th percentile, split across the timing rows in this
+   one comparison. The timing noise band uses the wider upper bound
+   and the smaller lower bound. The limit describes a new ratio from the same
+   build. A rebuilt extension can move a short benchmark by more than that
+   limit even when that benchmark's source did not change. The log also records
+   the widest side-median ratio, the pairwise 99th percentile of the side-median
+   ratios, and the median + 3*MAD fence of those ratios. Three raw MADs are
+   about 2.02 standard deviations for a normal ratio. Those three recorded
+   numbers do not set the bound.
+   The timing comparison runs after the timing repetitions and before the
+   memory repetitions.
+   Timing classes do not set
+   ``number``. asv_runner's default sample time is 0.01 s.
+   Each sample targets that default.
+   Memory classes are separate and set ``number = 1``. Memory uses successive
+   one-round ``asv run`` calls, because a memray ``ray_*`` result is one peak
+   and asv does not keep that scalar in ``samples`` across rounds. Odd rounds
+   vs even rounds, six peaks a side. The memory upper bound is the within-run
+   bound widened by one allocator granule over the median base peak. The
+   granule is the usable size of a one-byte malloc. A one-byte peak change
+   is one granule or less, so it stays inside the band. One extra frame,
+   hundreds of bytes, is many granules and falls outside it. Timing does
+   not use the granule.
 
-3. ``asv-spyglass compare`` writes ``results/comparison.txt`` (job fails if empty).
+3. Wall time for base vs head is ``asv continuous --interleave-rounds`` (no
+   ``--quick``) in the same virtualenv, six rounds and six repeats (36 samples
+   a side). Memory is the same two commits, alternating one-round runs, base
+   then head.
 
-4. ``ci_bench_commenter.yml`` posts that file via `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
-
-A separate ``criterion-benchmark`` job may save Criterion baselines; it uses
-``continue-on-error: true`` so a Rust microbench miss does not fail the workflow
-conclusion that asv-perch requires.
+4. ``results/comparison.txt`` calls a change significant only when the head/base
+   median ratio is outside that benchmark's noise band. The table's Upper
+   column is that row's bound. The same row carries N, the base median, the
+   head median, and the base and head interquartile ranges.
+   ``results/row-bounds.txt`` records the benchmark,
+   the within-run upper, the between-run upper, and the upper used.
+   A blank mark is not significant. ``ci_bench_commenter.yml`` posts the file via
+   `asv-perch <https://github.com/HaoZeke/asv-perch>`_. Timing uses the timing
+   upper bound. A memory bound of 1 does not set the timing threshold.
+   The job refuses identical base and head commits. After the report is
+   written, the job exits non-zero when a row is a significant slowdown or
+   is missing samples. A significant speedup stays in the table.
 
 Suite (calls shipped ``readcon`` only):
 
@@ -96,21 +146,19 @@ Suite (calls shipped ``readcon`` only):
     | ``TimeSelectAtoms``  | ``frame.select_atoms("name Cu")`` (skipped if lean)                       |
     +----------------------+---------------------------------------------------------------------------+
 
-Local:
+Timing and memory are separate classes (``Time*`` and ``Ray*``) so ``number = 1``
+stays on ``ray_*`` only. Each ``time_*`` method has a matching ``ray_*`` method.
+That peak is memray (``asv_bench_memray``), not asv's ``peakmem_`` / ``mem_``.
+
+Local (same entry point as the PR job):
 
 .. code:: shell
 
-    maturin develop --features python,chemfiles --release
-    # uv pip install asv numpy ase
-    asv machine --yes
-    asv run -E "existing:$(which python)" --set-commit-hash "$(git rev-parse HEAD)" \
-      --record-samples --quick
-    uvx --from "git+https://github.com/airspeed-velocity/asv_spyglass.git" \
-      asv-spyglass compare .asv/results/*/<base>*.json .asv/results/*/<pr>*.json \
-      .asv/results/benchmarks.json \
-      --label-before main --label-after pr
+    # pins: benchmarks/workflow/requirements.txt
+    snakemake -s benchmarks/workflow/Snakefile --cores 1 \
+      --config base=HEAD~1 head=HEAD
 
-Config: ``asv.conf.json``. Results: ``.asv/`` (gitignored).
+Config: ``asv.conf.json``. Results: ``.asv/`` and ``results/`` (gitignored).
 
 Peer scripts (host field)
 -------------------------
@@ -221,8 +269,8 @@ Criterion (local Rust latency)
 ------------------------------
 
 ``cargo bench`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
-regressions and ASV for the Python PR surface. The PR Criterion job is optional
-artifact collection only; the posted comment is ASV/spyglass.
+regressions and ASV for the Python PR surface. The posted PR comment is the
+ASV table (``results/comparison.txt``).
 
 Memory
 ------
@@ -268,11 +316,9 @@ Reproduce (one place)
 
 .. code:: shell
 
-    # Python ASV (PR surface)
-    maturin develop --features python,chemfiles --release
-    asv machine --yes
-    asv run -E "existing:$(which python)" --set-commit-hash "$(git rev-parse HEAD)" \
-      --record-samples --quick
+    # Python ASV (PR surface). Same Snakemake entry point as ci_benchmark.yml.
+    snakemake -s benchmarks/workflow/Snakefile --cores 1 \
+      --config base=HEAD~1 head=HEAD
 
     # CON peers / multi-format / traj / H5MD — see Peer scripts above
 

@@ -130,8 +130,8 @@ Branching and workflow
 
 - The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
   Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean
-  and chemfiles features), and benchmark regression (Python ASV +
-  ``asv-spyglass`` + asv-perch; optional Criterion baselines).
+  and chemfiles features), and benchmark regression (one-runner ASV via
+  Snakemake, memray peaks, asv-perch).
 
 Testing
 -------
@@ -207,9 +207,9 @@ Workflows
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
     | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR                             | Build wheels for 5 platforms, publish to PyPI              |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main                                 | ASV on base+PR (Python); optional Criterion                |
+    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main                                 | ASV base vs head on one runner (Snakemake)                 |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete                         | Post ASV/spyglass table as PR comment                      |
+    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete                         | Post ASV table as PR comment                               |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
     | Coverage                  | ``coverage.yml``           | push, PR                                   | Code coverage via tarpaulin                                |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
@@ -227,26 +227,45 @@ Workflows
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Two-workflow pattern for safe PR comments (eOn-style Python ASV):
+Two-workflow pattern for safe PR comments:
 
-1. ``ci_benchmark.yml`` matrix builds **base** and **PR** with
-   ``maturin develop --features python,chemfiles --release``, then
-   ``asv run -E existing:… --set-commit-hash $sha --quick``. Results upload as
-   artifacts. A Criterion job may save ``iterator_bench`` baselines
-   (``continue-on-error: true``) so a Rust microbench miss does not fail the
-   workflow conclusion that the commenter requires.
+1. ``ci_benchmark.yml`` is one job. It runs
+   ``snakemake -s benchmarks/workflow/Snakefile``. asv builds and installs both
+   commits. Main-vs-main repetitions on that runner set a per-benchmark
+   noise band. For timing, one bound is the wider of the linear 99th
+   percentile and median + 3*median absolute deviation (MAD) of the
+   odd-round versus even-round ratios. A second bound is a Student t
+   prediction limit for a ratio of two side medians from those repetitions.
+   The timing upper bound is the wider of the two. The timing lower bound
+   uses the reciprocal when it is smaller. The false-slowdown budget is 0.01,
+   split across the timing rows in this comparison. Memory keeps the within-run
+   bound, widened by one allocator granule over the median base peak.
+   Base vs head wall time is ``asv continuous --interleave-rounds``
+   (no ``--quick``). Memory peaks are ``ray_*`` benchmarks
+   (``asv_bench_memray``). Tool versions are pinned in
+   ``benchmarks/workflow/requirements.txt`` and ``asv.conf.json``.
+   ``ci_benchmark.yml`` also pins rustc 1.88.0, Actions commits, uv 0.13.6,
+   Python 3.12.16, and exact cmake/gcc/g++ packages.
+   The job writes ``results/comparison.txt`` and
+   ``results/row-bounds.txt`` (benchmark, within upper, between upper, upper).
 
-2. The ``asv-combine`` job runs
-   `asv-spyglass <https://github.com/airspeed-velocity/asv_spyglass>`_ ``compare`` on the two result JSONs →
-   ``results/comparison.txt`` (fails if that file is empty).
-
-3. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion when the
-   Benchmark PR conclusion is ``success``, downloads ``benchmark-results``, and
-   posts the table with `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
+2. ``ci_bench_commenter.yml`` triggers on ``workflow_run`` completion when the
+   Benchmark PR conclusion is ``success`` or ``failure``, downloads
+   ``benchmark-results``, and posts the table with
+   `asv-perch <https://github.com/HaoZeke/asv-perch>`_.
+   A failed check does not meet the success condition.
+   The comment table shows each row's own upper bound, the sample count per
+   side, the base median, the head median, and the interquartile ranges.
+   A row is a slowdown when its ratio is above that bound. The comment step
+   passes a threshold of 1. Every row upper is at least 1, so a slowed row
+   still drafts. A blank mark in the table is not significant.
+   The job refuses identical base and head commits and exits non-zero when
+   a row is a significant slowdown or is missing samples.
 
 The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
-`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``).
+`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``,
+``benchmarks/workflow/Snakefile``).
 
 Executable chemfiles pages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -257,6 +276,7 @@ The script tangles the notebook into ``docs/notebooks/chemfiles_ingress.py``, fa
 The Rust blocks and the blocks in other languages on :doc:`the chemfiles tutorial page <chemfiles-tutorial>` are prose only, and CI does not run them.
 Do not edit the tangled ``.py`` file by hand.
 Change the notebook Org source instead, and tangle it again with ``READCON_TANGLE_UPDATE=1 scripts/run-chemfiles-notebook.sh``.
+
 
 Release process
 ---------------

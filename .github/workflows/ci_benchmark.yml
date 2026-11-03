@@ -1,197 +1,82 @@
 name: Benchmark PR
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: benchmark-pr-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 on:
   pull_request:
     branches: [main]
-
-env:
-  SCCACHE_GHA_ENABLED: "true"
+    paths:
+      - "src/**"
+      - "benchmarks/**"
+      - "benches/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "build.rs"
+      - "pyproject.toml"
+      - "CMakeLists.txt"
+      - "asv.conf.json"
+      - ".github/workflows/ci_benchmark.yml"
+      - ".github/workflows/ci_bench_commenter.yml"
 
 jobs:
-  # Python ASV + spyglass (primary PR surface — eOn-style)
+  # One job builds and measures base and head on the same runner.
+  # Snakemake only launches asv. Timings are asv. Memory is asv_bench_memray.
   asv-benchmark:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: main
-            sha: ${{ github.event.pull_request.base.sha }}
-          - label: pr
-            sha: ${{ github.event.pull_request.head.sha }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 0
 
-      - name: Checkout target commit (preserve ASV suite)
-        run: |
-          mkdir -p /tmp/_bench_preserve
-          cp -r benchmarks/ /tmp/_bench_preserve/
-          cp asv.conf.json /tmp/_bench_preserve/
-          git checkout -f ${{ matrix.sha }}
-          git clean -fd
-          rm -rf benchmarks
-          cp -r /tmp/_bench_preserve/benchmarks/ benchmarks/
-          cp /tmp/_bench_preserve/asv.conf.json asv.conf.json
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: mozilla-actions/sccache-action@v0.0.11
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
-          version: "v0.10.0"
+          toolchain: 1.88.0
 
-      - name: Setup sccache environment
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: "0.13.6"
 
-      - name: Install Python deps + maturin
+      - name: Install exact build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            'cmake=3.22.1-1ubuntu1.22.04.2' \
+            'gcc=4:11.2.0-1ubuntu1' \
+            'g++=4:11.2.0-1ubuntu1' \
+            'gcc-11=11.4.0-1ubuntu1~22.04.3' \
+            'g++-11=11.4.0-1ubuntu1~22.04.3' \
+            'make=4.3-4.1build1'
+
+      - name: Install pinned benchmark tools
         run: |
           uv venv .venv
-          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          uv pip install --python .venv/bin/python -r benchmarks/workflow/requirements.txt
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          # shellcheck disable=SC1091
-          source .venv/bin/activate
-          uv pip install maturin asv numpy ase
-          # chemfiles-sys needs cmake for build-from-sources
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake g++
 
-      - name: Build chemfiles-linked readcon
-        env:
-          RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
+      - name: Run ASV via Snakemake
         run: |
-          maturin develop --features python,chemfiles-from-sources --release
-          python -c "import readcon; assert readcon.has_chemfiles_support(); print(readcon.__version__)"
+          snakemake -s benchmarks/workflow/Snakefile --cores 1 \
+            --config base="${{ github.event.pull_request.base.sha }}" \
+                     head="${{ github.event.pull_request.head.sha }}"
 
-      - name: Run ASV
-        run: |
-          asv machine --yes
-          asv run -E "existing:$(which python)" \
-            --set-commit-hash ${{ matrix.sha }} \
-            --record-samples --quick
-
-      - name: Upload ASV results
-        uses: actions/upload-artifact@v6
-        with:
-          name: asv-${{ matrix.label }}
-          path: .asv/results/
-          retention-days: 7
-
-  asv-combine:
-    needs: asv-benchmark
-    runs-on: ubuntu-latest
-    steps:
-      - uses: astral-sh/setup-uv@v7
-
-      - name: Download main results
-        uses: actions/download-artifact@v7
-        with:
-          name: asv-main
-          path: results/
-
-      - name: Download PR results
-        uses: actions/download-artifact@v7
-        with:
-          name: asv-pr
-          path: results/
-
-      - name: asv-spyglass compare
-        run: |
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          PR_SHA="${{ github.event.pull_request.head.sha }}"
-          BASE_PREFIX="${BASE_SHA:0:8}"
-          PR_PREFIX="${PR_SHA:0:8}"
-          BASE_FILE=$(find results -name "${BASE_PREFIX}*.json" ! -name 'benchmarks.json' | head -1)
-          PR_FILE=$(find results -name "${PR_PREFIX}*.json" ! -name 'benchmarks.json' | head -1)
-          BCONF=$(find results -name "benchmarks.json" | head -1)
-          echo "Base file: $BASE_FILE"
-          echo "PR file: $PR_FILE"
-          echo "Benchmarks: $BCONF"
-          if [ -z "$BASE_FILE" ] || [ -z "$PR_FILE" ]; then
-            echo "::error::missing ASV result JSON for base or PR"
-            find results -type f
-            exit 1
-          fi
-          BCONF_ARG=""
-          if [ -n "$BCONF" ]; then
-            BCONF_ARG="$BCONF"
-          fi
-          # Exit code 1 = regressions detected (expected, not a hard error)
-          uvx --from "git+https://github.com/airspeed-velocity/asv_spyglass.git" \
-            asv-spyglass compare "$BASE_FILE" "$PR_FILE" $BCONF_ARG \
-            --label-before main --label-after pr \
-            > results/comparison.txt || true
-          if [ ! -s results/comparison.txt ]; then
-            echo "::error::asv-spyglass compare produced no output"
-            exit 1
-          fi
-          cat results/comparison.txt
-
-      - name: Write metadata
-        run: |
-          echo "main_sha=${{ github.event.pull_request.base.sha }}" > results/metadata.txt
-          echo "pr_sha=${{ github.event.pull_request.head.sha }}" >> results/metadata.txt
-
-      - name: Upload combined results
-        uses: actions/upload-artifact@v6
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: benchmark-results
-          path: results/
-          retention-days: 7
-
-  # Rust Criterion: local/microbench artifact only. Must not fail the
-  # workflow conclusion — asv-perch only runs when "Benchmark PR" succeeds,
-  # and the posted comment is ASV/spyglass (benchmark-results).
-  criterion-benchmark:
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: main
-            sha: ${{ github.event.pull_request.base.sha }}
-          - label: pr
-            sha: ${{ github.event.pull_request.head.sha }}
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Checkout target commit
-        run: |
-          mkdir -p /tmp/_bench_preserve
-          cp -r benches/ /tmp/_bench_preserve/ 2>/dev/null || true
-          git checkout -f ${{ matrix.sha }}
-          git clean -fd
-          if [ -d /tmp/_bench_preserve/benches ]; then
-            cp -r /tmp/_bench_preserve/benches/ benches/
-          fi
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: mozilla-actions/sccache-action@v0.0.11
-        with:
-          version: "v0.10.0"
-      - name: Setup sccache
-        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-
-      - name: Criterion iterator_bench
-        run: cargo bench --bench iterator_bench -- --save-baseline ${{ matrix.label }}
-
-      - name: Export Criterion results
-        run: tar czf criterion-${{ matrix.label }}.tar.gz -C target criterion/
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: criterion-${{ matrix.label }}
-          path: criterion-${{ matrix.label }}.tar.gz
+          path: |
+            results/comparison.txt
+            results/metadata.txt
+            results/row-bounds.txt
+            results/regression-threshold-time.txt
+            results/regression-threshold-memory.txt
+            results/commenter-decision.txt
+            results/aa-noise.json
+            results/asv-continuous.txt
+            results/calls.tsv
           retention-days: 7

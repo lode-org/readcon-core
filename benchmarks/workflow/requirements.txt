@@ -1,0 +1,9 @@
+asv==0.6.6
+asv-runner==0.3.2
+asv_bench_memray==0.1.2
+memray==1.20.0
+maturin==1.16.0
+numpy==2.5.4
+ase==3.29.0
+virtualenv==21.15.2
+snakemake==9.15.0

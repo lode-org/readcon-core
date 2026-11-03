@@ -1,0 +1,337 @@
+# PR benchmarks. Snakemake only launches asv. Timings are asv time
+# benchmarks. Memory is asv_bench_memray (ray_*). No benchmark: directive.
+
+import importlib.util
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location(
+    "pr_bench",
+    str(Path("benchmarks/workflow/pr_bench.py").resolve()),
+)
+pr_bench = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(pr_bench)
+
+config.setdefault("base", "HEAD~1")
+config.setdefault("head", "HEAD")
+
+AA_RUNS = pr_bench.AA_RUNS
+TIME_IDS = [f"{i:02d}" for i in range(1, AA_RUNS + 1)]
+MEM_ROUNDS = [f"{i:02d}" for i in range(1, pr_bench.MEM_AA_ROUNDS + 1)]
+CMP_ROUNDS = [f"{i:02d}" for i in range(1, pr_bench.COMPARE_ROUNDS + 1)]
+
+# asv chdirs to the config file's directory, so these stay at the repo root.
+AA_CONF = "asv.aa.conf.json"
+CMP_CONF = "asv.cmp.conf.json"
+MEM_CONF = "asv.mem.conf.json"
+
+
+rule all:
+    input:
+        "results/comparison.txt",
+        "results/metadata.txt",
+        "results/row-bounds.txt",
+        "results/regression-threshold-time.txt",
+        "results/regression-threshold-memory.txt",
+        "results/commenter-decision.txt",
+        "results/aa-noise.json",
+        "results/asv-continuous.txt",
+        "results/calls.tsv",
+        "results/check.ok",
+
+
+rule distinct_commits:
+    # Ready immediately, so a same-SHA pair fails before the noise study.
+    priority: 100
+    output:
+        touch("results/distinct-commits.ok"),
+    params:
+        base=config["base"],
+        head=config["head"],
+    shell:
+        """
+        set -euo pipefail
+        b=$(git rev-parse "{params.base}^{{commit}}")
+        h=$(git rev-parse "{params.head}^{{commit}}")
+        if [ "$b" = "$h" ]; then
+            echo "refusing to compare a commit with itself: $b" >&2
+            exit 1
+        fi
+        """
+
+
+rule derive_conf:
+    input:
+        "asv.conf.json",
+    output:
+        aa=AA_CONF,
+        cmp=CMP_CONF,
+        mem=MEM_CONF,
+    shell:
+        """
+        python benchmarks/workflow/pr_bench.py derive-conf {input} {output.aa} .asv/results-aa
+        python benchmarks/workflow/pr_bench.py derive-conf {input} {output.cmp} .asv/results-cmp
+        python benchmarks/workflow/pr_bench.py derive-conf {input} {output.mem} .asv/results-mem
+        """
+
+
+rule machine:
+    input:
+        AA_CONF,
+    output:
+        touch(".asv/machine-pr-bench.ok"),
+    params:
+        machine=pr_bench.MACHINE,
+    shell:
+        """
+        asv machine --yes --machine {params.machine} \
+            --os linux --arch x86_64 --cpu unspecified --num_cpu 1 --ram unspecified \
+            --config {input}
+        """
+
+
+rule aa_time:
+    input:
+        conf=AA_CONF,
+        machine=".asv/machine-pr-bench.ok",
+    output:
+        expand("results/aa/time-{i}.json", i=TIME_IDS),
+    params:
+        base=config["base"],
+        repeat=pr_bench.TIME_REPEAT,
+        rounds=pr_bench.TIME_AA_ROUNDS,
+        machine=pr_bench.MACHINE,
+        ids=" ".join(TIME_IDS),
+    shell:
+        """
+        set -euo pipefail
+        export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1
+        for id in {params.ids}; do
+            dest="results/aa/time-$id.json"
+            if [ -s "$dest" ]; then
+                echo "keep $dest"
+                continue
+            fi
+            echo "main-vs-main time $id"
+            asv run '{params.base}^!' \
+                --interleave-rounds \
+                --record-samples \
+                --bench '\\.time_' \
+                -a rounds={params.rounds} \
+                -a repeat={params.repeat} \
+                --machine {params.machine} \
+                --config {input.conf}
+            python benchmarks/workflow/pr_bench.py copy-result \
+                .asv/results-aa {params.base} "$dest"
+        done
+        """
+
+
+rule aa_memory:
+    # After the timing comparison. Memory repetitions must not sit between the
+    # timing repetitions and the base-vs-head timing measurement.
+    input:
+        conf=AA_CONF,
+        machine=".asv/machine-pr-bench.ok",
+        time=expand("results/aa/time-{i}.json", i=TIME_IDS),
+        compared="results/asv-continuous.txt",
+    output:
+        expand(
+            "results/aa/memory-{rep}-{rnd}.json",
+            rep=TIME_IDS,
+            rnd=MEM_ROUNDS,
+        ),
+    params:
+        base=config["base"],
+        machine=pr_bench.MACHINE,
+        reps=" ".join(TIME_IDS),
+        rounds=" ".join(MEM_ROUNDS),
+    shell:
+        """
+        set -euo pipefail
+        export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1
+        for rep in {params.reps}; do
+            for rnd in {params.rounds}; do
+                dest="results/aa/memory-$rep-$rnd.json"
+                if [ -s "$dest" ]; then
+                    echo "keep $dest"
+                    continue
+                fi
+                echo "main-vs-main memory rep $rep round $rnd"
+                asv run '{params.base}^!' \
+                    --record-samples \
+                    --bench '\\.ray_' \
+                    -a rounds=1 \
+                    --machine {params.machine} \
+                    --config {input.conf}
+                python benchmarks/workflow/pr_bench.py copy-result \
+                    .asv/results-aa {params.base} "$dest"
+            done
+        done
+        """
+
+
+rule noise_time:
+    input:
+        expand("results/aa/time-{i}.json", i=TIME_IDS),
+    output:
+        noise="results/aa-time-noise.json",
+        factor="results/asv-factor.txt",
+        time_threshold="results/regression-threshold-time.txt",
+    shell:
+        """
+        python benchmarks/workflow/pr_bench.py aa-noise results/aa \
+            --time-only \
+            --out {output.noise} \
+            --factor-out {output.factor} \
+            --threshold-out {output.time_threshold}
+        """
+
+
+rule noise:
+    input:
+        expand("results/aa/time-{i}.json", i=TIME_IDS),
+        expand(
+            "results/aa/memory-{rep}-{rnd}.json",
+            rep=TIME_IDS,
+            rnd=MEM_ROUNDS,
+        ),
+    output:
+        noise="results/aa-noise.json",
+        memory_threshold="results/regression-threshold-memory.txt",
+    shell:
+        """
+        python benchmarks/workflow/pr_bench.py aa-noise results/aa \
+            --out {output.noise} \
+            --memory-threshold-out {output.memory_threshold}
+        """
+
+
+rule compare_time:
+    input:
+        conf=CMP_CONF,
+        factor="results/asv-factor.txt",
+        machine=".asv/machine-pr-bench.ok",
+        distinct="results/distinct-commits.ok",
+    output:
+        "results/asv-continuous.txt",
+    params:
+        base=config["base"],
+        head=config["head"],
+        rounds=pr_bench.COMPARE_ROUNDS,
+        repeat=pr_bench.TIME_REPEAT,
+        machine=pr_bench.MACHINE,
+    shell:
+        """
+        set -euo pipefail
+        export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1
+        factor=$(cat {input.factor})
+        set +e
+        asv continuous {params.base} {params.head} \
+            --interleave-rounds \
+            --record-samples \
+            --no-only-changed \
+            --split \
+            --factor "$factor" \
+            --bench '\\.time_' \
+            -a rounds={params.rounds} \
+            -a repeat={params.repeat} \
+            --machine {params.machine} \
+            --config {input.conf} \
+            > {output}
+        code=$?
+        set -e
+        if [ "$code" -ge 2 ]; then
+            exit "$code"
+        fi
+        """
+
+
+rule compare_memory:
+    input:
+        conf=MEM_CONF,
+        machine=".asv/machine-pr-bench.ok",
+        noise="results/aa-noise.json",
+        time="results/asv-continuous.txt",
+        distinct="results/distinct-commits.ok",
+    output:
+        touch("results/cmp-mem.ok"),
+    params:
+        base=config["base"],
+        head=config["head"],
+        machine=pr_bench.MACHINE,
+        rounds=" ".join(CMP_ROUNDS),
+    shell:
+        """
+        set -euo pipefail
+        export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1
+        mkdir -p results/cmp-mem
+        for rnd in {params.rounds}; do
+            for commit in {params.base} {params.head}; do
+                prefix=$(git rev-parse "$commit^{{commit}}" | cut -c1-8)
+                dest="results/cmp-mem/${{prefix}}-r$rnd.json"
+                if [ -s "$dest" ]; then
+                    echo "keep $dest"
+                    continue
+                fi
+                echo "compare memory round $rnd $commit"
+                asv run "$commit^!" \
+                    --record-samples \
+                    --bench '\\.ray_' \
+                    -a rounds=1 \
+                    --machine {params.machine} \
+                    --config {input.conf}
+                python benchmarks/workflow/pr_bench.py copy-result \
+                    .asv/results-mem "$commit" "$dest"
+            done
+        done
+        """
+
+
+rule report:
+    input:
+        noise="results/aa-noise.json",
+        continuous="results/asv-continuous.txt",
+        mem="results/cmp-mem.ok",
+    output:
+        comparison="results/comparison.txt",
+        metadata="results/metadata.txt",
+        calls="results/calls.tsv",
+        check_status="results/check-status.txt",
+        bounds="results/row-bounds.txt",
+        decision="results/commenter-decision.txt",
+    params:
+        base=config["base"],
+        head=config["head"],
+    shell:
+        """
+        python benchmarks/workflow/pr_bench.py report \
+            --noise {input.noise} \
+            --results-dir .asv/results-cmp \
+            --mem-dir results/cmp-mem \
+            --base {params.base} \
+            --head {params.head} \
+            --out {output.comparison} \
+            --metadata {output.metadata} \
+            --calls {output.calls} \
+            --check-status {output.check_status} \
+            --bounds-out {output.bounds} \
+            --decision-out {output.decision}
+        """
+
+
+rule check:
+    input:
+        "results/comparison.txt",
+        "results/calls.tsv",
+        "results/check-status.txt",
+    output:
+        touch("results/check.ok"),
+    shell:
+        """
+        set -euo pipefail
+        code=$(tr -d '[:space:]' < results/check-status.txt)
+        if [ "$code" != "0" ]; then
+            echo "benchmark check failed (status $code)" >&2
+            exit 1
+        fi
+        """

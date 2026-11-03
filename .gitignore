@@ -477,6 +477,13 @@ docs/notebooks/out/
 # Airspeed Velocity
 .asv/
 
+# PR benchmark outputs (produced by benchmarks/workflow/Snakefile)
+/results/
+/.snakemake/
+/asv.aa.conf.json
+/asv.cmp.conf.json
+/asv.mem.conf.json
+
 # coverage instrumentation local venv
 .venv-coverage/
 

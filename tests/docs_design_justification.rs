@@ -423,8 +423,12 @@ fn benchmarks_what_we_measure() {
     assert!(t.contains("What we measure") || t.contains("Cachegrind"));
     assert!(t.contains("compare_readers") || t.contains("ase.io.eon"));
     assert!(
-        t.contains("ASV") && (t.contains("spyglass") || t.contains("asv-spyglass")),
-        "benchmarks must document Python ASV + spyglass PR path"
+        t.contains("Snakemake") && t.contains("asv") && t.contains("asv-perch"),
+        "benchmarks must document the Snakemake, asv, and asv-perch PR path"
+    );
+    assert!(
+        !t.contains("spyglass") && !t.contains("asv-spyglass"),
+        "benchmarks must reject the removed spyglass path"
     );
     assert!(
         t.contains("asv.conf.json") && t.contains("benchmarks/"),
