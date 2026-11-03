@@ -78,8 +78,8 @@ The tree is \texttt{perf/conbin-mmap}.
 \begin{table}[ht] \centering
 
 \caption{CON-bin and h5py, clock stopped when the arrays exist.
-Upper median of six repeats, range in parentheses. h5py in this table is
-one reader.
+Upper median of six repeats, range in parentheses.
+h5py in this table is one reader.
 RSS is the resident set after that read, in kB.
 Guest drop means the guest page cache was dropped (host cache not
 controlled).}
@@ -267,7 +267,8 @@ The default stays one stream, the simpler plan.
 Guest O\_DIRECT still meets a host cache.
 The measured rate is a cache rate.
 
-\begin{table}[ht] \centering \caption{Plain map, one stream, a stream per span, \texttt{O\_DIRECT}, and h5py.
+\begin{table}[ht] \centering
+\caption{Plain map, one stream, a stream per span, \texttt{O\_DIRECT}, and h5py.
 The session with first sample at unix time 1793662535, modes shuffled
 inside each repeat.
 Warm is a new process.
