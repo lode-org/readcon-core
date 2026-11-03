@@ -804,13 +804,14 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
         let path2 = CString::new("resources/test/tiny_multi_cuh2.con").unwrap();
         let mut n2 = 0usize;
         let arr = rkr_read_all_frames(path2.as_ptr(), &mut n2);
-        if !arr.is_null() && n2 >= 1 {
-            let first = *arr;
+        if !arr.is_null() {
+            for i in 0..n2 {
+                let frame_i = *arr.add(i);
+                if !frame_i.is_null() {
+                    free_rkr_frame(frame_i);
+                }
+            }
             free_rkr_frame_ptr_array(arr, n2);
-            free_rkr_frame(first);
-            // remaining frames leaked intentionally? free them if still owned
-            // Actually free_rkr_frame_ptr_array frees only the outer array - frames still owned
-            // We only freed first; for test hygiene free is partial OK in process exit
         }
         free_rkr_frame(frame);
 
