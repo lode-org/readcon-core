@@ -54,6 +54,9 @@ jobs:
       - name: Parallel frame scans
         run: cargo test --features parallel --test frame_scan_whitespace
 
+      - name: Page-aligned borrowed buffer
+        run: cargo test --features parallel --test page_aligned_buffer
+
       - name: Build and test FFI bindings
         id: btest_rust
         run: |
