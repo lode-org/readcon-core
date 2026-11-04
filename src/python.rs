@@ -366,6 +366,9 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub postbox_header: [String; 2],
     atoms: Py<PyList>,
+    /// Parsed frames leave this false and fill `atoms` on first use.
+    /// `xyz` reads `inner` and does not build the Python atom list.
+    atoms_ready: std::sync::atomic::AtomicBool,
     #[pyo3(get)]
     pub spec_version: u32,
     metadata: Py<PyDict>,
@@ -399,14 +402,16 @@ impl PyConFrame {
             postbox_header: postbox_header.unwrap_or_default(),
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
+            atoms_ready: std::sync::atomic::AtomicBool::new(true),
             metadata,
             inner: None,
         })
     }
 
     #[getter]
-    fn atoms(&self, py: Python<'_>) -> Py<PyList> {
-        self.atoms.clone_ref(py)
+    fn atoms(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        self.ensure_atoms(py)?;
+        Ok(self.atoms.clone_ref(py))
     }
 
     #[getter]
@@ -453,25 +458,46 @@ impl PyConFrame {
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let natoms = if !self
+            .atoms_ready
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            self.inner
+                .as_ref()
+                .map(|frame| frame.positions.nrows())
+                .unwrap_or(0)
+        } else {
+            self.atoms.bind(py).len()
+        };
         Ok(format!(
             "ConFrame(cell={:?}, angles={:?}, natoms={}, has_velocities={})",
             self.cell,
             self.angles,
-            self.atoms.bind(py).len(),
+            natoms,
             self.has_velocities(py)?
         ))
     }
 
     fn __len__(&self, py: Python<'_>) -> usize {
+        if !self
+            .atoms_ready
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            if let Some(frame) = self.inner.as_ref() {
+                return frame.positions.nrows();
+            }
+        }
         self.atoms.bind(py).len()
     }
 
     /// Atoms in file order. The file cursor is `iter_con`, not this.
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
+        self.ensure_atoms(py)?;
         self.atoms.bind(py).try_iter()
     }
 
     fn __getitem__<'py>(&self, py: Python<'py>, index: isize) -> PyResult<Bound<'py, PyAny>> {
+        self.ensure_atoms(py)?;
         let atoms = self.atoms.bind(py);
         let n = atoms.len() as isize;
         let resolved = if index < 0 { n + index } else { index };
@@ -1053,7 +1079,31 @@ impl PyConFrame {
 
 impl PyConFrame {
     fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
-        // Build per-atom mass lookup from per-type header data
+        Ok(PyConFrame {
+            cell: frame.header.boxl,
+            angles: frame.header.angles,
+            prebox_header: [
+                frame.header.prebox_header.user.clone(),
+                frame.header.prebox_header.metadata_line().to_string(),
+            ],
+            postbox_header: frame.header.postbox_header.clone(),
+            atoms: PyList::empty(py).unbind(),
+            atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            spec_version: frame.header.spec_version,
+            metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
+            inner: Some(frame.clone()),
+        })
+    }
+
+    fn ensure_atoms(&self, py: Python<'_>) -> PyResult<()> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            return Ok(());
+        }
+        let Some(frame) = self.inner.as_ref() else {
+            self.atoms_ready
+                .store(true, std::sync::atomic::Ordering::Release);
+            return Ok(());
+        };
         let mut per_atom_mass: Vec<f64> = Vec::with_capacity(frame.atom_data.len());
         for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
             let mass = frame
@@ -1066,33 +1116,18 @@ impl PyConFrame {
                 per_atom_mass.push(mass);
             }
         }
-
-        let atoms: Vec<PyAtomDatum> = frame
-            .atom_data
-            .iter()
-            .enumerate()
-            .map(|(i, atom)| {
-                let mass = per_atom_mass.get(i).copied().unwrap_or(0.0);
-                PyAtomDatum::from_atom_with_mass(atom, mass)
-            })
-            .collect();
-
-        Ok(PyConFrame {
-            cell: frame.header.boxl,
-            angles: frame.header.angles,
-            prebox_header: [
-                frame.header.prebox_header.user.clone(),
-                frame.header.prebox_header.metadata_line().to_string(),
-            ],
-            postbox_header: frame.header.postbox_header.clone(),
-            atoms: py_atoms_to_list(py, atoms)?,
-            spec_version: frame.header.spec_version,
-            metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
-            inner: Some(frame.clone()),
-        })
+        let list = self.atoms.bind(py);
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            let mass = per_atom_mass.get(i).copied().unwrap_or(0.0);
+            list.append(PyAtomDatum::from_atom_with_mass(atom, mass))?;
+        }
+        self.atoms_ready
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
     }
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
+        self.ensure_atoms(py)?;
         self.atoms
             .bind(py)
             .iter()
@@ -2177,6 +2212,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         prebox_header: Default::default(),
         postbox_header: Default::default(),
         atoms: py_atoms_to_list(py, atoms)?,
+        atoms_ready: std::sync::atomic::AtomicBool::new(true),
         spec_version: crate::CON_SPEC_VERSION,
         metadata: metadata.unbind(),
         inner: None,
