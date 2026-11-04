@@ -96,7 +96,7 @@ pub fn frame_start_offsets_checked(text: &str) -> Result<Vec<usize>, ParseError>
 
 /// True when the scan ends at `pos`: nothing or only whitespace follows.
 fn no_frame_at(text: &str, pos: usize) -> bool {
-    pos >= text.len() || text.as_bytes()[pos..].iter().all(u8::is_ascii_whitespace)
+    crate::iterators::no_frame_at(text.as_bytes(), pos)
 }
 
 /// True when `offsets` is exactly what [`frame_start_offsets_checked`]
