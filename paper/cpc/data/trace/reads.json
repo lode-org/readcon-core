@@ -1,0 +1,1106 @@
+{
+ "script": "paper/cpc/scripts/regen_paper.py",
+ "steps": [
+  {
+   "step": "scripts/gen_release.py",
+   "read": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "build.rs",
+    "include/readcon-core-mpi.h",
+    "include/readcon-core-version.h",
+    "include/readcon-core.h",
+    "include/readcon-core.hpp",
+    "include/readcon-metatensor.h",
+    "paper/cpc/bench/results/r0174/provenance.json",
+    "paper/cpc/src/commit.tex",
+    "pyproject.toml",
+    "src/array.rs",
+    "src/chemfiles_import.rs",
+    "src/chemfiles_import_imp.rs",
+    "src/chemfiles_selection.rs",
+    "src/chemfiles_selection_imp.rs",
+    "src/compression.rs",
+    "src/convert.rs",
+    "src/cuda_array.rs",
+    "src/distrib.rs",
+    "src/distrib_read.rs",
+    "src/distrib_write.rs",
+    "src/error.rs",
+    "src/ffi.rs",
+    "src/frame_index.rs",
+    "src/grammar.rs",
+    "src/helpers.rs",
+    "src/hostlabel.rs",
+    "src/index_proj.rs",
+    "src/iterators.rs",
+    "src/lib.rs",
+    "src/main.rs",
+    "src/metatensor_export.rs",
+    "src/parser.rs",
+    "src/python.rs",
+    "src/rcso.rs",
+    "src/replace_file.rs",
+    "src/rpc/client.rs",
+    "src/rpc/convert.rs",
+    "src/rpc/endpoint.rs",
+    "src/rpc/mod.rs",
+    "src/rpc/server.rs",
+    "src/soa_traj.rs",
+    "src/storage_dtype.rs",
+    "src/stream.rs",
+    "src/trajectory.rs",
+    "src/types.rs",
+    "src/units.rs",
+    "src/writer.rs"
+   ],
+   "wrote": {
+    "paper/cpc/src/release.tex": [
+     "Cargo.lock",
+     "Cargo.toml",
+     "build.rs",
+     "include/readcon-core-mpi.h",
+     "include/readcon-core-version.h",
+     "include/readcon-core.h",
+     "include/readcon-core.hpp",
+     "include/readcon-metatensor.h",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/src/commit.tex",
+     "pyproject.toml",
+     "src/array.rs",
+     "src/chemfiles_import.rs",
+     "src/chemfiles_import_imp.rs",
+     "src/chemfiles_selection.rs",
+     "src/chemfiles_selection_imp.rs",
+     "src/compression.rs",
+     "src/convert.rs",
+     "src/cuda_array.rs",
+     "src/distrib.rs",
+     "src/distrib_read.rs",
+     "src/distrib_write.rs",
+     "src/error.rs",
+     "src/ffi.rs",
+     "src/frame_index.rs",
+     "src/grammar.rs",
+     "src/helpers.rs",
+     "src/hostlabel.rs",
+     "src/index_proj.rs",
+     "src/iterators.rs",
+     "src/lib.rs",
+     "src/main.rs",
+     "src/metatensor_export.rs",
+     "src/parser.rs",
+     "src/python.rs",
+     "src/rcso.rs",
+     "src/replace_file.rs",
+     "src/rpc/client.rs",
+     "src/rpc/convert.rs",
+     "src/rpc/endpoint.rs",
+     "src/rpc/mod.rs",
+     "src/rpc/server.rs",
+     "src/soa_traj.rs",
+     "src/storage_dtype.rs",
+     "src/stream.rs",
+     "src/trajectory.rs",
+     "src/types.rs",
+     "src/units.rs",
+     "src/writer.rs"
+    ]
+   },
+   "ran": [
+    "git"
+   ]
+  },
+  {
+   "step": "scripts/src_anchors.py",
+   "read": [
+    "paper/cpc/data/src_anchors.toml",
+    "src/compression.rs",
+    "src/iterators.rs",
+    "src/parser.rs",
+    "src/replace_file.rs",
+    "src/soa_traj.rs",
+    "src/trajectory.rs"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/anchors_macros.tex": [
+     "paper/cpc/data/src_anchors.toml",
+     "src/compression.rs",
+     "src/iterators.rs",
+     "src/parser.rs",
+     "src/replace_file.rs",
+     "src/soa_traj.rs",
+     "src/trajectory.rs"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_failure_tables.py",
+   "read": [
+    "paper/cpc/data/failure/drift_extxyz.csv",
+    "paper/cpc/data/failure/matrix.csv",
+    "paper/cpc/data/failure/version_safety.csv",
+    "paper/cpc/evidence/results/e4_cells.csv"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/drift_table.tex": [
+     "paper/cpc/data/failure/drift_extxyz.csv"
+    ],
+    "paper/cpc/src/figures/generated/survey_compare.tex": [
+     "paper/cpc/evidence/results/e4_cells.csv"
+    ],
+    "paper/cpc/src/figures/generated/survey_table.tex": [
+     "paper/cpc/data/failure/matrix.csv"
+    ],
+    "paper/cpc/src/figures/generated/versionsafety_table.tex": [
+     "paper/cpc/data/failure/version_safety.csv"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/survey_listing.py --tables",
+   "read": [
+    "paper/cpc/data/survey_frame.json",
+    "paper/cpc/src/figures/generated/survey_frame.con"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/survey_listing.tex": [
+     "paper/cpc/data/survey_frame.json",
+     "paper/cpc/src/figures/generated/survey_frame.con"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/spec_corpus_recount.py --tables",
+   "read": [
+    "paper/cpc/data/spec/corpus_recount.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/corpus_recount_macros.tex": [
+     "paper/cpc/data/spec/corpus_recount.json"
+    ],
+    "paper/cpc/src/figures/generated/corpus_table.tex": [
+     "paper/cpc/data/spec/corpus_recount.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_cloud_tables.py",
+   "read": [
+    "paper/cpc/data/failure/restart_bands.json",
+    "paper/cpc/data/failure/restart_formats.csv",
+    "paper/cpc/data/failure/restart_formats.json",
+    "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+    "paper/cpc/data/failure/restart_kernels/haswell.json",
+    "paper/cpc/data/failure/restart_kernels/nehalem.json",
+    "paper/cpc/data/failure/restart_kernels/skylakex.json",
+    "paper/cpc/data/restart_walls/restart_walls.csv",
+    "paper/cpc/data/restart_walls/restart_walls.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/restart_kernels.tex": [
+     "paper/cpc/data/failure/restart_bands.json",
+     "paper/cpc/data/failure/restart_formats.csv",
+     "paper/cpc/data/failure/restart_formats.json",
+     "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+     "paper/cpc/data/failure/restart_kernels/haswell.json",
+     "paper/cpc/data/failure/restart_kernels/nehalem.json",
+     "paper/cpc/data/failure/restart_kernels/skylakex.json",
+     "paper/cpc/data/restart_walls/restart_walls.csv",
+     "paper/cpc/data/restart_walls/restart_walls.json"
+    ],
+    "paper/cpc/src/figures/generated/restart_main.tex": [
+     "paper/cpc/data/failure/restart_bands.json",
+     "paper/cpc/data/failure/restart_formats.csv",
+     "paper/cpc/data/failure/restart_formats.json",
+     "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+     "paper/cpc/data/failure/restart_kernels/haswell.json",
+     "paper/cpc/data/failure/restart_kernels/nehalem.json",
+     "paper/cpc/data/failure/restart_kernels/skylakex.json",
+     "paper/cpc/data/restart_walls/restart_walls.csv",
+     "paper/cpc/data/restart_walls/restart_walls.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "evidence/e5_prefactor.py --tables",
+   "read": [
+    "paper/cpc/evidence/results/e5_prefactor.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/e5_macros.tex": [
+     "paper/cpc/evidence/results/e5_prefactor.json"
+    ],
+    "paper/cpc/src/figures/generated/e5_routes.tex": [
+     "paper/cpc/evidence/results/e5_prefactor.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/velocity_case.py --tables",
+   "read": [
+    "paper/cpc/bench/results/velocity_case.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/velocity_case.tex": [
+     "paper/cpc/bench/results/velocity_case.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_case_macros.py",
+   "read": [
+    "paper/cpc/data/failure/drift_extxyz.csv",
+    "paper/cpc/data/failure/drift_extxyz.json",
+    "paper/cpc/data/failure/matrix.json",
+    "paper/cpc/data/failure/restart_formats.csv",
+    "paper/cpc/data/failure/restart_formats.json",
+    "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+    "paper/cpc/data/failure/restart_kernels/haswell.json",
+    "paper/cpc/data/failure/restart_kernels/nehalem.json",
+    "paper/cpc/data/failure/restart_kernels/skylakex.json",
+    "paper/cpc/data/restart_walls/restart_walls.json",
+    "paper/cpc/evidence/results/e1_restart.json",
+    "paper/cpc/evidence/results/e1_restart_lbfgs_control.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/case_macros.tex": [
+     "paper/cpc/data/failure/drift_extxyz.csv",
+     "paper/cpc/data/failure/drift_extxyz.json",
+     "paper/cpc/data/failure/matrix.json",
+     "paper/cpc/data/failure/restart_formats.csv",
+     "paper/cpc/data/failure/restart_formats.json",
+     "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+     "paper/cpc/data/failure/restart_kernels/haswell.json",
+     "paper/cpc/data/failure/restart_kernels/nehalem.json",
+     "paper/cpc/data/failure/restart_kernels/skylakex.json",
+     "paper/cpc/data/restart_walls/restart_walls.json",
+     "paper/cpc/evidence/results/e1_restart.json",
+     "paper/cpc/evidence/results/e1_restart_lbfgs_control.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_tables.py",
+   "read": [
+    "paper/cpc/bench/results/hcn_loss.csv"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/hcn_table.tex": [
+     "paper/cpc/bench/results/hcn_loss.csv"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/r0174_tables.py",
+   "read": [
+    "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+    "paper/cpc/bench/results/r0174/cpp/build.json",
+    "paper/cpc/bench/results/r0174/cpp/checks.json",
+    "paper/cpc/bench/results/r0174/memray.json",
+    "paper/cpc/bench/results/r0174/payloads.json",
+    "paper/cpc/bench/results/r0174/provenance.json",
+    "paper/cpc/bench/results/r0174/reads.json"
+   ],
+   "wrote": {
+    "paper/cpc/data/trace/r0174_numbers.tsv": [
+     "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+     "paper/cpc/bench/results/r0174/cpp/build.json",
+     "paper/cpc/bench/results/r0174/cpp/checks.json",
+     "paper/cpc/bench/results/r0174/memray.json",
+     "paper/cpc/bench/results/r0174/payloads.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/r0174_cachegrind.tex": [
+     "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+     "paper/cpc/bench/results/r0174/cpp/build.json",
+     "paper/cpc/bench/results/r0174/cpp/checks.json",
+     "paper/cpc/bench/results/r0174/memray.json",
+     "paper/cpc/bench/results/r0174/payloads.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/r0174_cpp.tex": [
+     "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+     "paper/cpc/bench/results/r0174/cpp/build.json",
+     "paper/cpc/bench/results/r0174/cpp/checks.json",
+     "paper/cpc/bench/results/r0174/memray.json",
+     "paper/cpc/bench/results/r0174/payloads.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/r0174_macros.tex": [
+     "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+     "paper/cpc/bench/results/r0174/cpp/build.json",
+     "paper/cpc/bench/results/r0174/cpp/checks.json",
+     "paper/cpc/bench/results/r0174/memray.json",
+     "paper/cpc/bench/results/r0174/payloads.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/r0174_table.tex": [
+     "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+     "paper/cpc/bench/results/r0174/cpp/build.json",
+     "paper/cpc/bench/results/r0174/cpp/checks.json",
+     "paper/cpc/bench/results/r0174/memray.json",
+     "paper/cpc/bench/results/r0174/payloads.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/h2h_tables.py",
+   "read": [
+    "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+    "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+    "paper/cpc/bench/results/r0174/h2h/payloads.json",
+    "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+    "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+    "paper/cpc/bench/results/r0174/provenance.json",
+    "paper/cpc/bench/results/r0174/reads.json"
+   ],
+   "wrote": {
+    "paper/cpc/data/trace/h2h_numbers.tsv": [
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/payloads.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/h2h_cpp.tex": [
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/payloads.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/h2h_macros.tex": [
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/payloads.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/h2h_python.tex": [
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/payloads.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/binary_formats_tables.py",
+   "read": [
+    "paper/cpc/bench/results/r0174/binary_formats/build.json",
+    "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+    "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+    "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+    "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+    "paper/cpc/bench/results/r0174/provenance.json",
+    "paper/cpc/bench/results/r0174/reads.json"
+   ],
+   "wrote": {
+    "paper/cpc/data/trace/bf_numbers.tsv": [
+     "paper/cpc/bench/results/r0174/binary_formats/build.json",
+     "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+     "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+     "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/bf_macros.tex": [
+     "paper/cpc/bench/results/r0174/binary_formats/build.json",
+     "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+     "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+     "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/bf_ratios.tex": [
+     "paper/cpc/bench/results/r0174/binary_formats/build.json",
+     "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+     "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+     "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/bf_table.tex": [
+     "paper/cpc/bench/results/r0174/binary_formats/build.json",
+     "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+     "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+     "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/provenance.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/ordering_tests.py",
+   "read": [
+    "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+    "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+    "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+    "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+    "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+    "paper/cpc/bench/results/r0174/reads.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/ordering_macros.tex": [
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ],
+    "paper/cpc/src/figures/generated/ordering_table.tex": [
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+     "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+     "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/corpus31_results.py --tables",
+   "read": [
+    "paper/cpc/data/corpus31-results.json",
+    "paper/cpc/data/corpus31/manifest.toml"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/corpus31_macros.tex": [
+     "paper/cpc/data/corpus31-results.json",
+     "paper/cpc/data/corpus31/manifest.toml"
+    ],
+    "paper/cpc/src/figures/generated/corpus31_table.tex": [
+     "paper/cpc/data/corpus31-results.json",
+     "paper/cpc/data/corpus31/manifest.toml"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/corpus_paths.py --tables",
+   "read": [
+    "paper/cpc/data/corpus_paths.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/corpus_paths_macros.tex": [
+     "paper/cpc/data/corpus_paths.json"
+    ],
+    "paper/cpc/src/figures/generated/corpus_paths_table.tex": [
+     "paper/cpc/data/corpus_paths.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/every_path_count.py --tables",
+   "read": [
+    "paper/cpc/data/every_path.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/every_path_macros.tex": [
+     "paper/cpc/data/every_path.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/corpus_crosscheck.py --tables",
+   "read": [
+    "paper/cpc/data/corpus_crosscheck.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/corpus_crosscheck.tex": [
+     "paper/cpc/data/corpus_crosscheck.json"
+    ],
+    "paper/cpc/src/figures/generated/corpus_macros.tex": [
+     "paper/cpc/data/corpus_crosscheck.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/clause_coverage.py",
+   "read": [
+    "docs/orgmode/spec.org",
+    "paper/cpc/data/corpus31/manifest.toml",
+    "paper/cpc/data/referee_probes.json",
+    "resources/conformance/manifest.toml",
+    "src/array.rs",
+    "src/chemfiles_import.rs",
+    "src/chemfiles_import_imp.rs",
+    "src/chemfiles_selection.rs",
+    "src/chemfiles_selection_imp.rs",
+    "src/compression.rs",
+    "src/convert.rs",
+    "src/cuda_array.rs",
+    "src/distrib.rs",
+    "src/distrib_read.rs",
+    "src/distrib_write.rs",
+    "src/error.rs",
+    "src/ffi.rs",
+    "src/frame_index.rs",
+    "src/grammar.rs",
+    "src/helpers.rs",
+    "src/hostlabel.rs",
+    "src/index_proj.rs",
+    "src/iterators.rs",
+    "src/lib.rs",
+    "src/main.rs",
+    "src/metatensor_export.rs",
+    "src/parser.rs",
+    "src/python.rs",
+    "src/rcso.rs",
+    "src/replace_file.rs",
+    "src/rpc/client.rs",
+    "src/rpc/convert.rs",
+    "src/rpc/endpoint.rs",
+    "src/rpc/mod.rs",
+    "src/rpc/server.rs",
+    "src/soa_traj.rs",
+    "src/storage_dtype.rs",
+    "src/stream.rs",
+    "src/trajectory.rs",
+    "src/types.rs",
+    "src/units.rs",
+    "src/writer.rs",
+    "tests/atomic_path_write.rs",
+    "tests/binding_atomic_write.rs",
+    "tests/builder_sections_coverage.rs",
+    "tests/byte_numeric_contract.rs",
+    "tests/ci_gates.rs",
+    "tests/clause_coverage.rs",
+    "tests/cli_gzip.rs",
+    "tests/codecov_config.rs",
+    "tests/common/mod.rs",
+    "tests/component_number_text.rs",
+    "tests/conformance_corpus.rs",
+    "tests/convelwriter.rs",
+    "tests/conwriter.rs",
+    "tests/coverage_boost.rs",
+    "tests/cross_binding_rewrite.rs",
+    "tests/docs_design_justification.rs",
+    "tests/empty_header_lines.rs",
+    "tests/every_path/mod.rs",
+    "tests/ffi_builder_bulk.rs",
+    "tests/ffi_compressed_writer.rs",
+    "tests/ffi_writer_roundtrip.rs",
+    "tests/field_whitespace.rs",
+    "tests/float_bits.rs",
+    "tests/frame_edit_roundtrip.rs",
+    "tests/frame_scan_whitespace.rs",
+    "tests/fuzz_regressions.rs",
+    "tests/invalid_utf8_entry_points.rs",
+    "tests/lattice_vectors_cell.rs",
+    "tests/legacy_velocity_block.rs",
+    "tests/lowest_error_line.rs",
+    "tests/metadata_sentinel.rs",
+    "tests/numeric_token_classes.rs",
+    "tests/page_aligned_buffer.rs",
+    "tests/parsecon.rs",
+    "tests/parseconvel.rs",
+    "tests/parseforces.rs",
+    "tests/parsesections_extra.rs",
+    "tests/proptest_roundtrip.rs",
+    "tests/reader_defects.rs",
+    "tests/restart_defects.rs",
+    "tests/roundtrip_writer.rs",
+    "tests/section_label_mismatch.rs",
+    "tests/spec_metadata_schema.rs",
+    "tests/spec_v31.rs",
+    "tests/spec_version_major.rs",
+    "tests/stream_reader.rs",
+    "tests/trajectory_handle.rs",
+    "tests/v31_conformance.rs",
+    "tests/writer_declared_sections.rs"
+   ],
+   "wrote": {
+    "paper/cpc/data/spec/clause_coverage.json": [
+     "docs/orgmode/spec.org",
+     "paper/cpc/data/corpus31/manifest.toml",
+     "paper/cpc/data/referee_probes.json",
+     "resources/conformance/manifest.toml",
+     "src/array.rs",
+     "src/chemfiles_import.rs",
+     "src/chemfiles_import_imp.rs",
+     "src/chemfiles_selection.rs",
+     "src/chemfiles_selection_imp.rs",
+     "src/compression.rs",
+     "src/convert.rs",
+     "src/cuda_array.rs",
+     "src/distrib.rs",
+     "src/distrib_read.rs",
+     "src/distrib_write.rs",
+     "src/error.rs",
+     "src/ffi.rs",
+     "src/frame_index.rs",
+     "src/grammar.rs",
+     "src/helpers.rs",
+     "src/hostlabel.rs",
+     "src/index_proj.rs",
+     "src/iterators.rs",
+     "src/lib.rs",
+     "src/main.rs",
+     "src/metatensor_export.rs",
+     "src/parser.rs",
+     "src/python.rs",
+     "src/rcso.rs",
+     "src/replace_file.rs",
+     "src/rpc/client.rs",
+     "src/rpc/convert.rs",
+     "src/rpc/endpoint.rs",
+     "src/rpc/mod.rs",
+     "src/rpc/server.rs",
+     "src/soa_traj.rs",
+     "src/storage_dtype.rs",
+     "src/stream.rs",
+     "src/trajectory.rs",
+     "src/types.rs",
+     "src/units.rs",
+     "src/writer.rs",
+     "tests/atomic_path_write.rs",
+     "tests/binding_atomic_write.rs",
+     "tests/builder_sections_coverage.rs",
+     "tests/byte_numeric_contract.rs",
+     "tests/ci_gates.rs",
+     "tests/clause_coverage.rs",
+     "tests/cli_gzip.rs",
+     "tests/codecov_config.rs",
+     "tests/common/mod.rs",
+     "tests/component_number_text.rs",
+     "tests/conformance_corpus.rs",
+     "tests/convelwriter.rs",
+     "tests/conwriter.rs",
+     "tests/coverage_boost.rs",
+     "tests/cross_binding_rewrite.rs",
+     "tests/docs_design_justification.rs",
+     "tests/empty_header_lines.rs",
+     "tests/every_path/mod.rs",
+     "tests/ffi_builder_bulk.rs",
+     "tests/ffi_compressed_writer.rs",
+     "tests/ffi_writer_roundtrip.rs",
+     "tests/field_whitespace.rs",
+     "tests/float_bits.rs",
+     "tests/frame_edit_roundtrip.rs",
+     "tests/frame_scan_whitespace.rs",
+     "tests/fuzz_regressions.rs",
+     "tests/invalid_utf8_entry_points.rs",
+     "tests/lattice_vectors_cell.rs",
+     "tests/legacy_velocity_block.rs",
+     "tests/lowest_error_line.rs",
+     "tests/metadata_sentinel.rs",
+     "tests/numeric_token_classes.rs",
+     "tests/page_aligned_buffer.rs",
+     "tests/parsecon.rs",
+     "tests/parseconvel.rs",
+     "tests/parseforces.rs",
+     "tests/parsesections_extra.rs",
+     "tests/proptest_roundtrip.rs",
+     "tests/reader_defects.rs",
+     "tests/restart_defects.rs",
+     "tests/roundtrip_writer.rs",
+     "tests/section_label_mismatch.rs",
+     "tests/spec_metadata_schema.rs",
+     "tests/spec_v31.rs",
+     "tests/spec_version_major.rs",
+     "tests/stream_reader.rs",
+     "tests/trajectory_handle.rs",
+     "tests/v31_conformance.rs",
+     "tests/writer_declared_sections.rs"
+    ],
+    "paper/cpc/src/figures/generated/clauses_macros.tex": [
+     "docs/orgmode/spec.org",
+     "paper/cpc/data/corpus31/manifest.toml",
+     "paper/cpc/data/referee_probes.json",
+     "resources/conformance/manifest.toml",
+     "src/array.rs",
+     "src/chemfiles_import.rs",
+     "src/chemfiles_import_imp.rs",
+     "src/chemfiles_selection.rs",
+     "src/chemfiles_selection_imp.rs",
+     "src/compression.rs",
+     "src/convert.rs",
+     "src/cuda_array.rs",
+     "src/distrib.rs",
+     "src/distrib_read.rs",
+     "src/distrib_write.rs",
+     "src/error.rs",
+     "src/ffi.rs",
+     "src/frame_index.rs",
+     "src/grammar.rs",
+     "src/helpers.rs",
+     "src/hostlabel.rs",
+     "src/index_proj.rs",
+     "src/iterators.rs",
+     "src/lib.rs",
+     "src/main.rs",
+     "src/metatensor_export.rs",
+     "src/parser.rs",
+     "src/python.rs",
+     "src/rcso.rs",
+     "src/replace_file.rs",
+     "src/rpc/client.rs",
+     "src/rpc/convert.rs",
+     "src/rpc/endpoint.rs",
+     "src/rpc/mod.rs",
+     "src/rpc/server.rs",
+     "src/soa_traj.rs",
+     "src/storage_dtype.rs",
+     "src/stream.rs",
+     "src/trajectory.rs",
+     "src/types.rs",
+     "src/units.rs",
+     "src/writer.rs",
+     "tests/atomic_path_write.rs",
+     "tests/binding_atomic_write.rs",
+     "tests/builder_sections_coverage.rs",
+     "tests/byte_numeric_contract.rs",
+     "tests/ci_gates.rs",
+     "tests/clause_coverage.rs",
+     "tests/cli_gzip.rs",
+     "tests/codecov_config.rs",
+     "tests/common/mod.rs",
+     "tests/component_number_text.rs",
+     "tests/conformance_corpus.rs",
+     "tests/convelwriter.rs",
+     "tests/conwriter.rs",
+     "tests/coverage_boost.rs",
+     "tests/cross_binding_rewrite.rs",
+     "tests/docs_design_justification.rs",
+     "tests/empty_header_lines.rs",
+     "tests/every_path/mod.rs",
+     "tests/ffi_builder_bulk.rs",
+     "tests/ffi_compressed_writer.rs",
+     "tests/ffi_writer_roundtrip.rs",
+     "tests/field_whitespace.rs",
+     "tests/float_bits.rs",
+     "tests/frame_edit_roundtrip.rs",
+     "tests/frame_scan_whitespace.rs",
+     "tests/fuzz_regressions.rs",
+     "tests/invalid_utf8_entry_points.rs",
+     "tests/lattice_vectors_cell.rs",
+     "tests/legacy_velocity_block.rs",
+     "tests/lowest_error_line.rs",
+     "tests/metadata_sentinel.rs",
+     "tests/numeric_token_classes.rs",
+     "tests/page_aligned_buffer.rs",
+     "tests/parsecon.rs",
+     "tests/parseconvel.rs",
+     "tests/parseforces.rs",
+     "tests/parsesections_extra.rs",
+     "tests/proptest_roundtrip.rs",
+     "tests/reader_defects.rs",
+     "tests/restart_defects.rs",
+     "tests/roundtrip_writer.rs",
+     "tests/section_label_mismatch.rs",
+     "tests/spec_metadata_schema.rs",
+     "tests/spec_v31.rs",
+     "tests/spec_version_major.rs",
+     "tests/stream_reader.rs",
+     "tests/trajectory_handle.rs",
+     "tests/v31_conformance.rs",
+     "tests/writer_declared_sections.rs"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/mutant_differential.py --tables",
+   "read": [
+    "paper/cpc/data/spec/mutant_differential.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/mutant_macros.tex": [
+     "paper/cpc/data/spec/mutant_differential.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/file_sizes.py --table",
+   "read": [
+    "paper/cpc/data/sizes.csv"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/sizes_macros.tex": [
+     "paper/cpc/data/sizes.csv"
+    ],
+    "paper/cpc/src/figures/generated/sizes_table.tex": [
+     "paper/cpc/data/sizes.csv"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/worked_example.py --tables",
+   "read": [
+    "paper/cpc/data/survey_frame.json",
+    "paper/cpc/data/worked_example.json",
+    "paper/cpc/src/figures/generated/survey_frame.con",
+    "paper/cpc/src/figures/generated/velocity_case.tex"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/worked_macros.tex": [
+     "paper/cpc/data/survey_frame.json",
+     "paper/cpc/data/worked_example.json",
+     "paper/cpc/src/figures/generated/survey_frame.con",
+     "paper/cpc/src/figures/generated/velocity_case.tex"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/test_run.py --tables",
+   "read": [
+    "paper/cpc/data/test_run.json",
+    "paper/cpc/data/worked_example.json",
+    "paper/cpc/src/commit.tex",
+    "paper/cpc/src/figures/generated/survey_frame.con"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/test_run.tex": [
+     "paper/cpc/data/test_run.json",
+     "paper/cpc/data/worked_example.json",
+     "paper/cpc/src/commit.tex",
+     "paper/cpc/src/figures/generated/survey_frame.con"
+    ],
+    "paper/cpc/src/figures/generated/test_run_macros.tex": [
+     "paper/cpc/data/test_run.json",
+     "paper/cpc/data/worked_example.json",
+     "paper/cpc/src/commit.tex",
+     "paper/cpc/src/figures/generated/survey_frame.con"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/sinum.py",
+   "read": [
+    "paper/cpc/src/figures/generated/anchors_macros.tex",
+    "paper/cpc/src/figures/generated/bf_macros.tex",
+    "paper/cpc/src/figures/generated/case_macros.tex",
+    "paper/cpc/src/figures/generated/clauses_macros.tex",
+    "paper/cpc/src/figures/generated/corpus31_macros.tex",
+    "paper/cpc/src/figures/generated/corpus_macros.tex",
+    "paper/cpc/src/figures/generated/corpus_paths_macros.tex",
+    "paper/cpc/src/figures/generated/corpus_recount_macros.tex",
+    "paper/cpc/src/figures/generated/e5_macros.tex",
+    "paper/cpc/src/figures/generated/every_path_macros.tex",
+    "paper/cpc/src/figures/generated/h2h_macros.tex",
+    "paper/cpc/src/figures/generated/mutant_macros.tex",
+    "paper/cpc/src/figures/generated/ordering_macros.tex",
+    "paper/cpc/src/figures/generated/r0174_macros.tex",
+    "paper/cpc/src/figures/generated/sizes_macros.tex",
+    "paper/cpc/src/figures/generated/spec_macros.tex",
+    "paper/cpc/src/figures/generated/test_run_macros.tex",
+    "paper/cpc/src/figures/generated/velocity_case.tex",
+    "paper/cpc/src/figures/generated/worked_macros.tex"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/si_macros.tex": [
+     "paper/cpc/src/figures/generated/anchors_macros.tex",
+     "paper/cpc/src/figures/generated/bf_macros.tex",
+     "paper/cpc/src/figures/generated/case_macros.tex",
+     "paper/cpc/src/figures/generated/clauses_macros.tex",
+     "paper/cpc/src/figures/generated/corpus31_macros.tex",
+     "paper/cpc/src/figures/generated/corpus_macros.tex",
+     "paper/cpc/src/figures/generated/corpus_paths_macros.tex",
+     "paper/cpc/src/figures/generated/corpus_recount_macros.tex",
+     "paper/cpc/src/figures/generated/e5_macros.tex",
+     "paper/cpc/src/figures/generated/every_path_macros.tex",
+     "paper/cpc/src/figures/generated/h2h_macros.tex",
+     "paper/cpc/src/figures/generated/mutant_macros.tex",
+     "paper/cpc/src/figures/generated/ordering_macros.tex",
+     "paper/cpc/src/figures/generated/r0174_macros.tex",
+     "paper/cpc/src/figures/generated/sizes_macros.tex",
+     "paper/cpc/src/figures/generated/spec_macros.tex",
+     "paper/cpc/src/figures/generated/test_run_macros.tex",
+     "paper/cpc/src/figures/generated/velocity_case.tex",
+     "paper/cpc/src/figures/generated/worked_macros.tex"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_figures.py",
+   "read": [],
+   "wrote": {
+    "paper/cpc/src/figures/generated/architecture.pdf": []
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/plot_perf.py",
+   "read": [
+    "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+    "paper/cpc/bench/results/r0174/reads.json"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/timing.pdf": [
+     "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+     "paper/cpc/bench/results/r0174/reads.json"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/gen_spec_supp.py --as-is",
+   "read": [
+    "docs/orgmode/spec.org",
+    "docs/source/references.bib",
+    "paper/cpc/data/spec/versions.json",
+    "paper/cpc/src/rg_main.bib"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/spec_macros.tex": [
+     "docs/orgmode/spec.org",
+     "docs/source/references.bib",
+     "paper/cpc/data/spec/versions.json",
+     "paper/cpc/src/rg_main.bib"
+    ],
+    "paper/cpc/src/figures/generated/spec_normative.tex": [
+     "docs/orgmode/spec.org",
+     "docs/source/references.bib",
+     "paper/cpc/data/spec/versions.json",
+     "paper/cpc/src/rg_main.bib"
+    ],
+    "paper/cpc/src/figures/generated/versions_table.tex": [
+     "docs/orgmode/spec.org",
+     "docs/source/references.bib",
+     "paper/cpc/data/spec/versions.json",
+     "paper/cpc/src/rg_main.bib"
+    ]
+   },
+   "ran": [
+    "$ENV/bin/pandoc",
+    "git"
+   ]
+  },
+  {
+   "step": "scripts/plot_figures.py",
+   "read": [
+    "paper/cpc/evidence/work/e1/neb/full/neb.con",
+    "paper/cpc/evidence/work/e1/neb/full/neb.dat",
+    "paper/cpc/evidence/work/e1/neb/resume_fixed6/neb.con",
+    "paper/cpc/evidence/work/e1/neb/resume_fixed6/neb.dat",
+    "paper/cpc/evidence/work/e1/neb/resume_round/neb.con",
+    "paper/cpc/evidence/work/e1/neb/resume_round/neb.dat",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/restart.pdf": [
+     "paper/cpc/evidence/work/e1/neb/full/neb.con",
+     "paper/cpc/evidence/work/e1/neb/full/neb.dat",
+     "paper/cpc/evidence/work/e1/neb/resume_fixed6/neb.con",
+     "paper/cpc/evidence/work/e1/neb/resume_fixed6/neb.dat",
+     "paper/cpc/evidence/work/e1/neb/resume_round/neb.con",
+     "paper/cpc/evidence/work/e1/neb/resume_round/neb.dat",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+    ]
+   },
+   "ran": []
+  },
+  {
+   "step": "scripts/plot_restart_formats.py",
+   "read": [
+    "paper/cpc/data/failure/bands/CON_3_1__shortest_round_trip.npz",
+    "paper/cpc/data/failure/bands/uninterrupted.npz",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/restart_formats.pdf": [
+     "paper/cpc/data/failure/bands/CON_3_1__shortest_round_trip.npz",
+     "paper/cpc/data/failure/bands/uninterrupted.npz",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+    ]
+   },
+   "ran": [
+    "uname"
+   ]
+  },
+  {
+   "step": "scripts/plot_structures.py",
+   "read": [
+    "paper/cpc/data/failure/bands/uninterrupted.npz",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf",
+    "paper/cpc/src/figures/generated/work",
+    "resources/test/cuh2.con"
+   ],
+   "wrote": {},
+   "ran": [
+    "$ENV/bin/gcc",
+    "ld",
+    "ldconfig",
+    "objdump"
+   ]
+  },
+  {
+   "step": "scripts/plot_supp.py",
+   "read": [
+    "paper/cpc/bench/results/velocity_case.json",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+    "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+   ],
+   "wrote": {
+    "paper/cpc/src/figures/generated/velocity_mislabel.pdf": [
+     "paper/cpc/bench/results/velocity_case.json",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf",
+     "paper/cpc/fonts/atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf"
+    ]
+   },
+   "ran": []
+  }
+ ]
+}

@@ -1,0 +1,2 @@
+hcn.con and hnc.con are the public HCN and HNC endpoints of doi:10.1016/j.mex.2026.103899.
+They are copied from the examples shipped with that study.

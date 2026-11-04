@@ -1,0 +1,90 @@
+# The environment and the tasks of the paper. This directory sits at paper/cpc of a readcon-core
+# checkout; the tasks run here, and cpc-readcon and cpc-clib build the checkout two levels up.
+# The conda chemparseplot does not pull in its polars, h5py and jax extras, so they are listed.
+# Atkinson Hyperlegible is not on conda-forge, so its TTFs and their OFL licence are under fonts/.
+[workspace]
+name = "readcon-cpc-paper"
+channels = ["conda-forge"]
+platforms = [{ name = "linux-64-glibc-2-34", platform = "linux-64", glibc = "2.34" }]
+
+[dependencies]
+python = "3.12.*"
+chemparseplot = "==1.11.0"
+rgpycrumbs = "==1.10.10"
+polars = "*"
+h5py = "==3.16.0"
+jax = "*"
+ase = "==3.29.0"
+numpy = "*"
+scipy = "*"
+matplotlib-base = "==3.11.2"
+cycler = "*"
+chemfiles-python = "==0.10.4"
+mdanalysis = "==2.10.0"
+openbabel = "==3.2.1"
+# ira provides the ira_mod module of the NEB figure.
+ira = "==2.2.0"
+rust = "==1.88.0"
+maturin = ">=1.5,<2"
+cxx-compiler = "*"
+pip = "*"
+zstandard = "==0.25.0"
+poppler = "*"
+pandoc = "==3.13"
+memray = "==1.20.0"
+valgrind = "*"
+
+[pypi-dependencies]
+ovito = "==3.16.1"
+xyzrender = "==0.3.8"
+abnf = "==2.9.1"
+extxyz = "==0.4.6"
+pyleri = "==1.5.1"
+
+[activation.env]
+SOURCE_DATE_EPOCH = "1793404800"
+FORCE_SOURCE_DATE = "1"
+
+[tasks]
+cpc-readcon = { cmd = "maturin develop --release --features python,zstd", cwd = "../..", description = "Build the readcon module of the checkout, with zstd input, into this environment" }
+cpc-clib = { cmd = "cargo build --release", cwd = "../..", description = "Build target/release/libreadcon_core.so of the checkout, which the C-interface rows of the survey load" }
+cpc-clib-parallel = { cmd = "cargo build --release --features parallel", cwd = "../..", env = { CARGO_TARGET_DIR = "target/clib-parallel" }, description = "Build target/clib-parallel/release/libreadcon_core.so with Rayon, as the release archives build the C library, for scripts/corpus_paths.py" }
+cpc-cli = { cmd = "cargo build --release --features zstd --bin readcon-core", cwd = "../..", env = { CARGO_TARGET_DIR = "target/cli" }, description = "Build target/cli/release/readcon-core with zstd input, as the release archives build the CLI, for scripts/referee_probes.py" }
+cpc-regen = { cmd = "python scripts/regen_paper.py", description = "Rewrite every table, figure and macro of the paper from the records; times and measures nothing" }
+cpc-tex = { cmd = "bash scripts/build_tex.sh", description = "Typeset rg_main.tex and rg_supp.tex" }
+cpc-tex-tectonic = { cmd = "bash scripts/build_tex_tectonic.sh", description = "Typeset rg_main.tex and rg_supp.tex with Tectonic 0.17.0 on PATH, for hosts without TeX Live" }
+cpc-trace = { cmd = "python scripts/trace_numbers.py --check", description = "Trace every printed number to its record; fail when a number has no rule or data/trace/numbers.csv differs from the records" }
+cpc-check = { cmd = "python scripts/check_manuscript.py", description = "Check the manuscript against the journal's form, the records, the ledger and the conformance records" }
+cpc-repro = { cmd = "python scripts/check_manuscript.py --rebuild", description = "Format and typeset twice, require byte-identical PDFs, then run every check" }
+cpc-packet = { cmd = "python packet/make_packet.py", description = "Write the submission packet from the sources and the PDFs, .aux and .bbl of cpc-tex" }
+cpc-measure = { cmd = "python scripts/regen_paper.py --measure", description = "Rerun the survey, drift, corpora, conformance, restart, prefactor and velocity measurements, then format" }
+cpc-probes = { cmd = "python scripts/referee_probes.py --check", description = "Run the reader probes and compare them with data/referee_probes.json" }
+cpc-crosscheck = { cmd = "python scripts/corpus_crosscheck.py", description = "Read both corpora with readcon and with the independent reader and write data/corpus_crosscheck.json" }
+cpc-corpus31 = { cmd = "python scripts/corpus31_results.py", description = "Read corpus31 at 1, 2, 8 and the default number of threads and write data/corpus31-results.json" }
+cpc-corpus-paths = { cmd = "python scripts/corpus_paths.py", description = "Read both corpora through every entry point of the readcon module and of the C library in its default and parallel builds, and write data/corpus_paths.json" }
+cpc-every-path = { cmd = "python scripts/every_path_count.py", description = "Run the tests that read each input on every reader path, count the inputs, and write data/every_path.json" }
+cpc-recount = { cmd = "python scripts/spec_corpus_recount.py", description = "Recount the conformance corpus by released clause" }
+cpc-clauses = { cmd = "python scripts/clause_coverage.py", description = "List the corpus files, probes and library tests that name each clause of spec.org, and write data/spec/clause_coverage.json and clauses_macros.tex" }
+cpc-mutants = { cmd = "python scripts/mutant_differential.py", description = "Read mutants of the small corpus31 files with readcon and with the independent reader, and write data/spec/mutant_differential.json and mutant_macros.tex" }
+cpc-drift = { cmd = "python scripts/spec_version_drift.py", description = "Read the drift probes with the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each given as --reader VERSION=WHEEL" }
+cpc-eon = { cmd = "python evidence/e1_restart.py", description = "Rerun the eOn Morse band with the eonclient of the eon environment (pixi install -e eon first)" }
+cpc-restart-walls = { cmd = "python scripts/run_restart_walls.py", description = "Wall times and force-call counts of the resumed legs" }
+cpc-sizes = { cmd = "python scripts/file_sizes.py", description = "Rewrite the format-size files and the size table" }
+cpc-bench-payloads = { cmd = "python bench/make_payloads.py", description = "Write the timed files of the performance records" }
+cpc-bench-reads = { cmd = "python bench/reads.py", description = "Time every Python and C++ read of the 0.17.4 tables in interleaved rounds of fresh processes, into bench/results/r0174/reads.json" }
+cpc-bench-memray = { cmd = "python bench/memray_peaks.py", description = "Peak heap of each timed cell, in interleaved rounds of fresh processes" }
+cpc-bench-cpp = { cmd = "python bench/cpp_reads.py", description = "Build the C++ readers of the timed cells and check one run of each against payloads.json" }
+cpc-bench-cachegrind = { cmd = "python bench/cachegrind.py", description = "Instruction counts of the readcon-core harness and of chemfiles C++, into bench/results/r0174/cachegrind" }
+cpc-bench-chemfiles = { cmd = "bash bench/build_chemfiles.sh", description = "Build chemfiles 0.10.4 with g++ and clang++ at -O2 and -O3 for the head-to-head C++ cells" }
+cpc-bench-h2h = { cmd = "python bench/h2h.py", description = "Head-to-head campaigns: .rcbin against h5py, read_con against ASE, C++ against chemfiles on XYZ and GRO" }
+cpc-bench-binary-formats = { cmd = "python bench/binary_formats.py", description = "A million-atom trajectory read by readcon-core and by the native XTC, TRR, DCD and TNG readers, into bench/results/r0174/binary_formats" }
+cpc-bench-settle = { cmd = "python bench/settle_period.py", description = "Measure on this host how long every CPU must be busy before a run of the native-reader campaign, into bench/results/r0174/binary_formats/settle.json" }
+cpc-bench-provenance = { cmd = "python bench/r0174.py", description = "Write bench/results/r0174/provenance.json" }
+cpc-env = { cmd = "python scripts/export_env.py", description = "Write environment/conda-linux-64.txt and environment/requirements.txt from the package records of this environment" }
+cpc-digest = { cmd = "python scripts/provenance.py --digest", description = "Print the library digest of the checkout, which release.tex and every record name" }
+
+[feature.eon.dependencies]
+eon = "==3.6.0"
+
+[environments]
+eon = { features = ["eon"], no-default-feature = true }

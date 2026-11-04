@@ -1,0 +1,15 @@
+[package]
+name = "readcon-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Timings and field hashes for the CPC manuscript benchmarks"
+
+[[bin]]
+name = "readcon-bench"
+path = "src/main.rs"
+
+[dependencies]
+readcon-core = { path = "../../../..", features = ["parallel"] }
+serde_json = "1"
+sha2 = "0.10"

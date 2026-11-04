@@ -1,0 +1,21 @@
+start: Wed Nov  4 10:45:04 AM UTC 2026
+hardware: uname -m x86_64; nproc 8; cpu_model Intel(R) Xeon(R) Processor
+record: $BENCH_RESULTS/binary_formats/timings.json sha256 36e86b2f28c1149251d4c83b17b9f68ec9c54628c9b5418d61adcd7729b13314
+band: 1.6113 %, the median IQR over median of 20 one-thread cells
+window: 44.517 ms, the median of libxtc-frames-8
+gap: 2.1289 s, the longest run of tng-frames; each trial then keeps every CPU busy for 2128.9 ms, 47 whole windows
+load average before: 0.65 0.38 0.22
+trial 1 of 11: level from window 2, 89.0 ms; first window, ratio over steady value per CPU: 0:0.991 1:1.007 2:0.992 3:0.992 4:0.994 5:1.028 6:1.007 7:1.006
+trial 2 of 11: level from window 1, 44.5 ms; first window, ratio over steady value per CPU: 0:0.996 1:1.002 2:0.996 3:1.000 4:0.994 5:0.996 6:1.105 7:1.097
+trial 3 of 11: level from window 1, 44.5 ms; first window, ratio over steady value per CPU: 0:0.985 1:1.001 2:0.999 3:1.007 4:1.112 5:1.004 6:0.997 7:0.996
+trial 4 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:1.000 1:0.999 2:0.996 3:0.997 4:0.996 5:0.999 6:1.009 7:1.006
+trial 5 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:0.996 1:0.998 2:0.993 3:1.011 4:1.002 5:1.000 6:1.001 7:1.010
+trial 6 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:0.978 1:0.998 2:1.005 3:1.006 4:1.011 5:1.001 6:0.998 7:1.001
+trial 7 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:0.999 1:1.001 2:0.999 3:1.002 4:0.995 5:1.000 6:0.996 7:1.016
+trial 8 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:0.908 1:1.005 2:1.001 3:0.996 4:1.001 5:0.999 6:1.000 7:1.000
+trial 9 of 11: level from window 4, 178.1 ms; first window, ratio over steady value per CPU: 0:0.977 1:1.000 2:1.002 3:0.999 4:1.006 5:1.000 6:1.201 7:1.000
+trial 10 of 11: level from window 0, 0.0 ms; first window, ratio over steady value per CPU: 0:1.005 1:0.997 2:0.996 3:0.998 4:1.004 5:1.001 6:0.999 7:1.009
+trial 11 of 11: level from window 5, 222.6 ms; first window, ratio over steady value per CPU: 0:0.986 1:0.998 2:1.001 3:0.999 4:1.597 5:0.999 6:1.001 7:1.513
+load average after: 3.13 1.07 0.47
+settle_ms: 222.6, trial 11, the longest settle time of the 11 trials
+end: Wed Nov  4 10:45:51 AM UTC 2026

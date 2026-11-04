@@ -1,0 +1,36 @@
+% Written by paper/cpc/scripts/gen_failure_tables.py.
+\begin{table}[tbp]
+\centering
+\small
+\caption{Seven XYZ reader paths on seven three-atom files.
+Five paths from four libraries document extended XYZ; the libAtoms package is one library with a C and a Python parser.
+A reader with an asterisk is a plain XYZ reader whose documentation does not claim extended XYZ.
+Each file departs from the reference frame in one respect.
+\checkmark: each position the binary64 value nearest its decimal, periodicity as written, mask and ids returned as written.
+E: the read failed.
+u: coordinates at most 2 units in the last place from the binary64 values nearest their decimals.
+f: single-precision coordinates.
+n: a coordinate returned as NaN.
+p: periodicity differs from the file, or from the grammar's default for a file without the key.
+b: the mask came back with different booleans.
+m, i: the result has no \texttt{move\_mask} or no \texttt{id} column.
+The grammar defines neither name and requires no reader to return either column.
+Both follow ASE's layout, so m and i mark a reader outside that convention.}
+\label{tab:drift}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+File & ASE & libAtoms C & libAtoms Py & chemfiles & OVITO & MDAnalysis\textsuperscript{*} & Open Babel\textsuperscript{*} \\
+\midrule
+reference frame & \checkmark & \checkmark & b & u & \checkmark & fmi & mi \\
+no pbc key & \checkmark & \checkmark & b & u & \checkmark & fmi & mi \\
+plain comment line & \checkmark & p & E & u & \checkmark & f & \checkmark \\
+Fortran exponent \texttt{6.0d0} & E & \checkmark & nb & E & \checkmark & E & mi \\
+\texttt{True}/\texttt{False} & \checkmark & \checkmark & b & u & E & fmi & mi \\
+quoted value with \texttt{=} & \checkmark & \checkmark & b & u & \checkmark & fmi & mi \\
+\texttt{units} key & \checkmark & \checkmark & b & u & \checkmark & fmi & mi \\
+\bottomrule
+\end{tabular}}
+\end{table}

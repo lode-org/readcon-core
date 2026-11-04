@@ -1,0 +1,4 @@
+readcon-core 0.17.2 commit 67a8d95d583a19f907fab5b317244d1c1fd2502a; its library and bindings are those of tag v0.17.2 (5c849d1b1d3dede45e20665c5730abe3d5f18f84), and the two commits differ only in fortran/ReadCon/test/test_add_atom_restart.f90
+gfortran: GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+julia: julia version 1.11.6
+restart walls: pixi run cpc-restart-walls (WALL_REPEATS=10)

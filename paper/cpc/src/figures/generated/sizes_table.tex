@@ -1,0 +1,24 @@
+% Written by paper/cpc/scripts/file_sizes.py from data/sizes.csv.
+\begin{table}[ht]
+\centering
+\small
+\caption{Bytes per atom of the payloads of Section~\ref{sec:performance}, raw and after gzip at level \sizeGzipLevel.
+Every file stores, for every frame, the species, the positions, the per-component fixed mask, the identifiers, the cell and the periodic flags, the timed trajectory stores the velocities as well, and no file stores another per-atom field.
+The first frame is frame 0 of the timed trajectory without velocities.
+The timed trajectory is the file the campaign reads, all \sizeFrames{} frames with velocities, per atom row.
+CON~\sizeConVersion{} is the default writer of readcon-core~\sizeWriter.
+Extended XYZ prints the shortest decimal that returns each binary64 value, H5MD~1.1 written by h5py stores every real value as binary64, and the ASE trajectory comes from the ASE writer, with the mask as a FixAtoms constraint and the identifiers as tags.}
+\label{tab:sizes}
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{First frame} & \multicolumn{2}{c}{Timed trajectory} \\
+\cmidrule(lr){2-3}\cmidrule(l){4-5}
+Format & raw & gzip & raw & gzip \\
+\midrule
+CON~\sizeConVersion & 50.74 & 19.44 & 94.54 & 30.84 \\
+extended XYZ & 52.70 & 18.89 & 90.66 & 29.54 \\
+ASE trajectory & 44.42 & 18.88 & 68.61 & 24.14 \\
+H5MD & 112.44 & 22.47 & 48.41 & 23.50 \\
+\bottomrule
+\end{tabular}
+\end{table}

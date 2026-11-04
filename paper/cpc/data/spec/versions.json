@@ -1,0 +1,1550 @@
+{
+  "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
+  "spec": "docs/orgmode/spec.org",
+  "tags": [
+    {
+      "tag": "v0.1.0",
+      "date": "2025-07-19",
+      "commit": "ded06518dbcdf775f4dd70d287dc3894dece81ae",
+      "spec_blob": null,
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.1.1",
+      "date": "2025-07-19",
+      "commit": "e5636d03dc8823441101c352a93340b74582b146",
+      "spec_blob": null,
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.2.0",
+      "date": "2025-08-14",
+      "commit": "9a8477a7cebe414ea2ac4948a6446a42319e366a",
+      "spec_blob": null,
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.3.0",
+      "date": "2026-02-24",
+      "commit": "9d99b7c6353807a97a7d992bcc656e0d2a0bc17c",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.3.1",
+      "date": "2026-02-24",
+      "commit": "93856354dfbeb1b1175c7480af9ea126f4029891",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.3.2",
+      "date": "2026-02-24",
+      "commit": "561ab69c3779954c9b86bd5277edb6205ca25705",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.4.0",
+      "date": "2026-02-24",
+      "commit": "20010e2e829941d60aadd4d137eec41a941de67d",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.4.1",
+      "date": "2026-02-24",
+      "commit": "b45605a5719031b556c1215ddd97c0b1b973b050",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.4.2",
+      "date": "2026-02-24",
+      "commit": "91551291fa648d922ae1bf9a51ee87382172e16f",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.4.3",
+      "date": "2026-02-24",
+      "commit": "83f6bb4f4063ba3321711e5c4b676aa4f24bbb5e",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.4.4",
+      "date": "2026-03-16",
+      "commit": "3529610593d10567313bcd041a24f2f0565962e3",
+      "spec_blob": "d150c117c5ea1dfd42c3491506e7963b3b11eb8e",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.5.0",
+      "date": "2026-03-22",
+      "commit": "3b943175283eb5c4d6b671116f61d288ea4bc902",
+      "spec_blob": "586989f193d2bed369faac6df7e1f068da89b8f7",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.5.1",
+      "date": "2026-03-25",
+      "commit": "2c95d04a897566086a37ca28c244f23687720b2a",
+      "spec_blob": "586989f193d2bed369faac6df7e1f068da89b8f7",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.5.2",
+      "date": "2026-03-25",
+      "commit": "8cf5038d22fa4d96b7992b1614c11cf61d48766b",
+      "spec_blob": "586989f193d2bed369faac6df7e1f068da89b8f7",
+      "history": [],
+      "clauses": []
+    },
+    {
+      "tag": "v0.6.0",
+      "date": "2026-03-25",
+      "commit": "357ef48997a0fb369baab070d69559b16b2e2f9d",
+      "spec_blob": "1b63981f2d59c0ffcccf762d7055c2a174c35878",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, semantics undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata on line 2. Column 5 defined as atom_index."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.7.0",
+      "date": "2026-03-25",
+      "commit": "a4bae5251f8dbf61f21d8f5aad18520dcaefdf39",
+      "spec_blob": "32b5a355b9c5438a706723d0345404b9a3dcb174",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.7.1",
+      "date": "2026-03-26",
+      "commit": "7820db97954bc03bf6e599319e020ea2c40b0350",
+      "spec_blob": "32b5a355b9c5438a706723d0345404b9a3dcb174",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.7.2",
+      "date": "2026-03-27",
+      "commit": "0555de2c1424f5d913757fa9c20db788f03b1c3c",
+      "spec_blob": "787f2b76b7d96193e48504c79bfba369f094333b",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.7.3",
+      "date": "2026-03-27",
+      "commit": "28054ac6fa8e69c89a4709184f58912f97ac8dc1",
+      "spec_blob": "787f2b76b7d96193e48504c79bfba369f094333b",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.8.0",
+      "date": "2026-04-20",
+      "commit": "c2c43ac2fa7dcccda01dcc3e0c2e536e5c51ccf7",
+      "spec_blob": "787f2b76b7d96193e48504c79bfba369f094333b",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.9.0",
+      "date": "2026-05-10",
+      "commit": "ef4a595222ca20c9216ae9ab29c9456a477a3e4f",
+      "spec_blob": "5e4f0a2bdbaf43f9b115151c859a222d675ea984",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.10.0",
+      "date": "2026-05-10",
+      "commit": "ea5cdd39c2528bbb4802fa9887005bfab749467b",
+      "spec_blob": "a2699749b7625f1cb508f6366bdae8724fe6648d",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.11.0",
+      "date": "2026-05-10",
+      "commit": "d332fa857476f28aa4ced97f1c706b728cc12a2b",
+      "spec_blob": "8aae7dd831dc7012f56d16ab9a332e0c055e17e2",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.11.1",
+      "date": "2026-05-10",
+      "commit": "afa4cf364225b53a926ee059c3388872965b251b",
+      "spec_blob": "8aae7dd831dc7012f56d16ab9a332e0c055e17e2",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.11.2",
+      "date": "2026-05-10",
+      "commit": "5e3bf56371e49f74c6c2e4573a465735f0828f77",
+      "spec_blob": "8aae7dd831dc7012f56d16ab9a332e0c055e17e2",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.11.3",
+      "date": "2026-05-10",
+      "commit": "fc9edb2d48ca9f9d161bc1888542b40d550296d1",
+      "spec_blob": "8aae7dd831dc7012f56d16ab9a332e0c055e17e2",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.11.4",
+      "date": "2026-05-10",
+      "commit": "2ac1d126f87ccb7c67f9fc01872d175d0ab95653",
+      "spec_blob": "a6547aac74742f1b9448d9184269d2ae172812e8",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.12.0",
+      "date": "2026-05-11",
+      "commit": "913b2d077787454e0e1bbdd29028c6abd4fd1721",
+      "spec_blob": "a6547aac74742f1b9448d9184269d2ae172812e8",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.13.0",
+      "date": "2026-06-26",
+      "commit": "64d9a3df4f48102e9371ac47b90af1bf559d02b1",
+      "spec_blob": "ca594045005942539aac9743968be57a7cf292a9",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.13.1",
+      "date": "2026-06-26",
+      "commit": "6346716273cd57582aeaab311246edaaf8f771c8",
+      "spec_blob": "ca594045005942539aac9743968be57a7cf292a9",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.0",
+      "date": "2026-06-28",
+      "commit": "2a5352972ad4a8e160856c9dcaf4698afa2285f4",
+      "spec_blob": "ffb63ff2b320eed1d9711ffd7e013e18a2de9f59",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.1",
+      "date": "2026-08-15",
+      "commit": "594b9a28121d08badcf7e0ed5c0ccd1a79606175",
+      "spec_blob": "05463f8dd34c5db935abebd0d48f083b29592662",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.2",
+      "date": "2026-08-15",
+      "commit": "b51240da1fd678a3aa9fa1c5f25d52da8e9d81f6",
+      "spec_blob": "abccc6f6247498028094c0b0309fba950f7bad5d",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.3",
+      "date": "2026-08-15",
+      "commit": "4774cf87f3a6d818c0009aea0fbf5710edf185cb",
+      "spec_blob": "58be92df26c287ef2bfac48bbb2828b60ee55496",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.4",
+      "date": "2026-08-15",
+      "commit": "3949435356c5b61c9730a18282d8663cfc581b65",
+      "spec_blob": "58be92df26c287ef2bfac48bbb2828b60ee55496",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.5",
+      "date": "2026-08-15",
+      "commit": "2516ec13403e7d523176c3f95e2b7f6022c591f6",
+      "spec_blob": "58be92df26c287ef2bfac48bbb2828b60ee55496",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.6",
+      "date": "2026-08-15",
+      "commit": "00052f0ad133e3e946991902581eb1812dd2d281",
+      "spec_blob": "58be92df26c287ef2bfac48bbb2828b60ee55496",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.7",
+      "date": "2026-08-15",
+      "commit": "750d95aa0397b1eb43d1119622958e00d1f39f3b",
+      "spec_blob": "58be92df26c287ef2bfac48bbb2828b60ee55496",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=). Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.8",
+      "date": "2026-08-24",
+      "commit": "d3c5a8415b8aabcc2693273200261d520dd3a5ba",
+      "spec_blob": "ef2eb2406fd6dd786e2b2e785a0b574bf2f87e69",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.9",
+      "date": "2026-08-24",
+      "commit": "973a141c55b35c70cabc06a8a072d5efb3013308",
+      "spec_blob": "ef2eb2406fd6dd786e2b2e785a0b574bf2f87e69",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.10",
+      "date": "2026-09-02",
+      "commit": "ec988e6c74ad48243215e671afccdf3285357225",
+      "spec_blob": "ef2eb2406fd6dd786e2b2e785a0b574bf2f87e69",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.14.11",
+      "date": "2026-09-27",
+      "commit": "aa4030110ccba6c389124f85e436289e13a9c666",
+      "spec_blob": "ef2eb2406fd6dd786e2b2e785a0b574bf2f87e69",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.15.0",
+      "date": "2026-09-30",
+      "commit": "c175a9bef6e823252e0ff4079cc9fd100177d038",
+      "spec_blob": "963bc8def6140bbdfc4b8cde089e53c7ab0d88dc",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.16.0",
+      "date": "2026-10-01",
+      "commit": "6183e294d14547a140b1342c42514efcfe6faece",
+      "spec_blob": "16f01b9090d8f9734671d3a196a91ed9160cc0ad",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.16.1",
+      "date": "2026-09-30",
+      "commit": "e7e23e66fd8470c80b32d685579a5d9a7fc5c185",
+      "spec_blob": "16f01b9090d8f9734671d3a196a91ed9160cc0ad",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.16.2",
+      "date": "2026-10-09",
+      "commit": "9e12ea9727d5f3c85d8eeb4d927beb634e1bdb59",
+      "spec_blob": "16f01b9090d8f9734671d3a196a91ed9160cc0ad",
+      "history": [
+        {
+          "version": "1",
+          "date": "(original)",
+          "release": null,
+          "change": "De facto format from eOn. Column 5 present, undefined."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON metadata. atom_id semantics. Per-direction constraints. Declared sections. Force blocks. Compression."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "Required =units= (=length=, =energy=) on line 2. Writers emit canonical names. Optional =storage_dtypes= for in-memory SoA element types (float32/float64)."
+        }
+      ],
+      "clauses": []
+    },
+    {
+      "tag": "v0.17.0",
+      "date": "2026-10-11",
+      "commit": "3e9a014ebdb016b93fe014fd238b09f38f4d1eb0",
+      "spec_blob": "4456cf4e74404d1b82cb22a488c8b395d6996cce",
+      "history": [
+        {
+          "version": "1",
+          "date": "original",
+          "release": null,
+          "change": "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON line 2, ids, bit masks, declared sections."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "=units.length= and =units.energy= required. Minor absent."
+        },
+        {
+          "version": "3.1",
+          "date": "2026-10-11",
+          "release": null,
+          "change": "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+        }
+      ],
+      "clauses": [
+        "CON-bonds.1",
+        "CON-bonds.2",
+        "CON-bonds.3",
+        "CON-cell.1",
+        "CON-cell.2",
+        "CON-cell.3",
+        "CON-cell.4",
+        "CON-cell.5",
+        "CON-cell.6",
+        "CON-compress.1",
+        "CON-compress.2",
+        "CON-compress.3",
+        "CON-count.1",
+        "CON-count.2",
+        "CON-count.3",
+        "CON-count.4",
+        "CON-count.5",
+        "CON-count.6",
+        "CON-count.7",
+        "CON-count.8",
+        "CON-error.1",
+        "CON-error.2",
+        "CON-error.3",
+        "CON-error.4",
+        "CON-file.1",
+        "CON-file.2",
+        "CON-file.3",
+        "CON-file.4",
+        "CON-file.5",
+        "CON-file.6",
+        "CON-frame.1",
+        "CON-frame.2",
+        "CON-frame.3",
+        "CON-frame.4",
+        "CON-frame.5",
+        "CON-frame.6",
+        "CON-frame.7",
+        "CON-header.1",
+        "CON-header.2",
+        "CON-header.3",
+        "CON-id.1",
+        "CON-id.2",
+        "CON-id.3",
+        "CON-id.4",
+        "CON-id.5",
+        "CON-id.6",
+        "CON-id.7",
+        "CON-id.8",
+        "CON-id.9",
+        "CON-line2.1",
+        "CON-line2.2",
+        "CON-line2.3",
+        "CON-line2.4",
+        "CON-line2.5",
+        "CON-line2.6",
+        "CON-line2.7",
+        "CON-line2.8",
+        "CON-line2.9",
+        "CON-line2.10",
+        "CON-line2.11",
+        "CON-line2.12",
+        "CON-line2.13",
+        "CON-mask.1",
+        "CON-mask.2",
+        "CON-mask.3",
+        "CON-mask.4",
+        "CON-mask.5",
+        "CON-mask.6",
+        "CON-mask.7",
+        "CON-num.1",
+        "CON-num.2",
+        "CON-num.3",
+        "CON-num.4",
+        "CON-num.5",
+        "CON-num.6",
+        "CON-num.7",
+        "CON-num.8",
+        "CON-num.9",
+        "CON-section.1",
+        "CON-section.2",
+        "CON-section.3",
+        "CON-section.4",
+        "CON-section.5",
+        "CON-section.6",
+        "CON-section.7",
+        "CON-section.8",
+        "CON-section.9",
+        "CON-section.10",
+        "CON-section.11",
+        "CON-section.12",
+        "CON-section.13",
+        "CON-section.14",
+        "CON-section.15",
+        "CON-section.16",
+        "CON-section.17",
+        "CON-section.18",
+        "CON-section.19",
+        "CON-section.20",
+        "CON-status.1",
+        "CON-status.2",
+        "CON-token.1",
+        "CON-token.2",
+        "CON-token.3",
+        "CON-token.4",
+        "CON-units.1",
+        "CON-units.2",
+        "CON-units.3",
+        "CON-units.4",
+        "CON-units.5",
+        "CON-units.6",
+        "CON-units.7",
+        "CON-units.8",
+        "CON-units.9",
+        "CON-units.10",
+        "CON-units.11",
+        "CON-units.12",
+        "CON-units.13",
+        "CON-units.14",
+        "CON-units.15",
+        "CON-units.16",
+        "CON-validate.1",
+        "CON-validate.2",
+        "CON-validate.3",
+        "CON-validate.4"
+      ]
+    },
+    {
+      "tag": "v0.17.1",
+      "date": "2026-10-15",
+      "commit": "6993e306e8b683ca75446ea31c3f151765e6da5d",
+      "spec_blob": "4456cf4e74404d1b82cb22a488c8b395d6996cce",
+      "history": [
+        {
+          "version": "1",
+          "date": "original",
+          "release": null,
+          "change": "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON line 2, ids, bit masks, declared sections."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "=units.length= and =units.energy= required. Minor absent."
+        },
+        {
+          "version": "3.1",
+          "date": "2026-10-11",
+          "release": null,
+          "change": "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+        }
+      ],
+      "clauses": [
+        "CON-bonds.1",
+        "CON-bonds.2",
+        "CON-bonds.3",
+        "CON-cell.1",
+        "CON-cell.2",
+        "CON-cell.3",
+        "CON-cell.4",
+        "CON-cell.5",
+        "CON-cell.6",
+        "CON-compress.1",
+        "CON-compress.2",
+        "CON-compress.3",
+        "CON-count.1",
+        "CON-count.2",
+        "CON-count.3",
+        "CON-count.4",
+        "CON-count.5",
+        "CON-count.6",
+        "CON-count.7",
+        "CON-count.8",
+        "CON-error.1",
+        "CON-error.2",
+        "CON-error.3",
+        "CON-error.4",
+        "CON-file.1",
+        "CON-file.2",
+        "CON-file.3",
+        "CON-file.4",
+        "CON-file.5",
+        "CON-file.6",
+        "CON-frame.1",
+        "CON-frame.2",
+        "CON-frame.3",
+        "CON-frame.4",
+        "CON-frame.5",
+        "CON-frame.6",
+        "CON-frame.7",
+        "CON-header.1",
+        "CON-header.2",
+        "CON-header.3",
+        "CON-id.1",
+        "CON-id.2",
+        "CON-id.3",
+        "CON-id.4",
+        "CON-id.5",
+        "CON-id.6",
+        "CON-id.7",
+        "CON-id.8",
+        "CON-id.9",
+        "CON-line2.1",
+        "CON-line2.2",
+        "CON-line2.3",
+        "CON-line2.4",
+        "CON-line2.5",
+        "CON-line2.6",
+        "CON-line2.7",
+        "CON-line2.8",
+        "CON-line2.9",
+        "CON-line2.10",
+        "CON-line2.11",
+        "CON-line2.12",
+        "CON-line2.13",
+        "CON-mask.1",
+        "CON-mask.2",
+        "CON-mask.3",
+        "CON-mask.4",
+        "CON-mask.5",
+        "CON-mask.6",
+        "CON-mask.7",
+        "CON-num.1",
+        "CON-num.2",
+        "CON-num.3",
+        "CON-num.4",
+        "CON-num.5",
+        "CON-num.6",
+        "CON-num.7",
+        "CON-num.8",
+        "CON-num.9",
+        "CON-section.1",
+        "CON-section.2",
+        "CON-section.3",
+        "CON-section.4",
+        "CON-section.5",
+        "CON-section.6",
+        "CON-section.7",
+        "CON-section.8",
+        "CON-section.9",
+        "CON-section.10",
+        "CON-section.11",
+        "CON-section.12",
+        "CON-section.13",
+        "CON-section.14",
+        "CON-section.15",
+        "CON-section.16",
+        "CON-section.17",
+        "CON-section.18",
+        "CON-section.19",
+        "CON-section.20",
+        "CON-status.1",
+        "CON-status.2",
+        "CON-token.1",
+        "CON-token.2",
+        "CON-token.3",
+        "CON-token.4",
+        "CON-units.1",
+        "CON-units.2",
+        "CON-units.3",
+        "CON-units.4",
+        "CON-units.5",
+        "CON-units.6",
+        "CON-units.7",
+        "CON-units.8",
+        "CON-units.9",
+        "CON-units.10",
+        "CON-units.11",
+        "CON-units.12",
+        "CON-units.13",
+        "CON-units.14",
+        "CON-units.15",
+        "CON-units.16",
+        "CON-validate.1",
+        "CON-validate.2",
+        "CON-validate.3",
+        "CON-validate.4"
+      ]
+    },
+    {
+      "tag": "v0.17.2",
+      "date": "2026-10-29",
+      "commit": "6fd6202960af0e9dcf3aa68434f3122811efc339",
+      "spec_blob": "ed3a1185239e682fd2bb73297bcd1ca9a3ec348c",
+      "history": [
+        {
+          "version": "1",
+          "date": "original",
+          "release": null,
+          "change": "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON line 2, ids, bit masks, declared sections."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "=units.length= and =units.energy= required. Minor absent."
+        },
+        {
+          "version": "3.1",
+          "date": "2026-10-11",
+          "release": null,
+          "change": "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+        }
+      ],
+      "clauses": [
+        "CON-bonds.1",
+        "CON-bonds.2",
+        "CON-bonds.3",
+        "CON-cell.1",
+        "CON-cell.2",
+        "CON-cell.3",
+        "CON-cell.4",
+        "CON-cell.5",
+        "CON-cell.6",
+        "CON-compress.1",
+        "CON-compress.2",
+        "CON-compress.3",
+        "CON-count.1",
+        "CON-count.2",
+        "CON-count.3",
+        "CON-count.4",
+        "CON-count.5",
+        "CON-count.6",
+        "CON-count.7",
+        "CON-count.8",
+        "CON-error.1",
+        "CON-error.2",
+        "CON-error.3",
+        "CON-error.4",
+        "CON-file.1",
+        "CON-file.2",
+        "CON-file.3",
+        "CON-file.4",
+        "CON-file.5",
+        "CON-file.6",
+        "CON-frame.1",
+        "CON-frame.2",
+        "CON-frame.3",
+        "CON-frame.4",
+        "CON-frame.5",
+        "CON-frame.6",
+        "CON-frame.7",
+        "CON-header.1",
+        "CON-header.2",
+        "CON-header.3",
+        "CON-header.4",
+        "CON-id.1",
+        "CON-id.2",
+        "CON-id.3",
+        "CON-id.4",
+        "CON-id.5",
+        "CON-id.6",
+        "CON-id.7",
+        "CON-id.8",
+        "CON-id.9",
+        "CON-line2.1",
+        "CON-line2.2",
+        "CON-line2.3",
+        "CON-line2.4",
+        "CON-line2.5",
+        "CON-line2.6",
+        "CON-line2.7",
+        "CON-line2.8",
+        "CON-line2.9",
+        "CON-line2.10",
+        "CON-line2.11",
+        "CON-line2.12",
+        "CON-line2.13",
+        "CON-mask.1",
+        "CON-mask.2",
+        "CON-mask.3",
+        "CON-mask.4",
+        "CON-mask.5",
+        "CON-mask.6",
+        "CON-mask.7",
+        "CON-num.1",
+        "CON-num.2",
+        "CON-num.3",
+        "CON-num.4",
+        "CON-num.5",
+        "CON-num.6",
+        "CON-num.7",
+        "CON-num.8",
+        "CON-num.9",
+        "CON-section.1",
+        "CON-section.2",
+        "CON-section.3",
+        "CON-section.4",
+        "CON-section.5",
+        "CON-section.6",
+        "CON-section.7",
+        "CON-section.8",
+        "CON-section.9",
+        "CON-section.10",
+        "CON-section.11",
+        "CON-section.12",
+        "CON-section.13",
+        "CON-section.14",
+        "CON-section.15",
+        "CON-section.16",
+        "CON-section.17",
+        "CON-section.18",
+        "CON-section.19",
+        "CON-section.20",
+        "CON-status.1",
+        "CON-status.2",
+        "CON-token.1",
+        "CON-token.2",
+        "CON-token.3",
+        "CON-token.4",
+        "CON-units.1",
+        "CON-units.2",
+        "CON-units.3",
+        "CON-units.4",
+        "CON-units.5",
+        "CON-units.6",
+        "CON-units.7",
+        "CON-units.8",
+        "CON-units.9",
+        "CON-units.10",
+        "CON-units.11",
+        "CON-units.12",
+        "CON-units.13",
+        "CON-units.14",
+        "CON-units.15",
+        "CON-units.16",
+        "CON-validate.1",
+        "CON-validate.2",
+        "CON-validate.3",
+        "CON-validate.4"
+      ],
+      "changes": [
+        {
+          "section": "Header",
+          "clauses_added": [
+            "CON-header.4"
+          ],
+          "clauses_dropped": [],
+          "clauses_reworded": [],
+          "sentences_added": [
+            "Line 1 may be empty, and parsers keep that empty line.",
+            "Line 2 may be empty.",
+            "An empty line 2 does not start with ={=, so the frame is implicit version 1."
+          ],
+          "sentences_dropped": []
+        },
+        {
+          "section": "Sections",
+          "clauses_added": [],
+          "clauses_dropped": [],
+          "clauses_reworded": [],
+          "sentences_added": [
+            "A blank line that does not begin that block is line 1 of the next frame."
+          ],
+          "sentences_dropped": []
+        }
+      ]
+    },
+    {
+      "tag": "v0.17.3",
+      "date": "2026-11-02",
+      "commit": "12ca800bc2212c565941e04094cba6b4d99a62e0",
+      "spec_blob": "ed3a1185239e682fd2bb73297bcd1ca9a3ec348c",
+      "history": [
+        {
+          "version": "1",
+          "date": "original",
+          "release": null,
+          "change": "eOn text. Column 5 present. Column 4 is 0 or 1. No JSON."
+        },
+        {
+          "version": "2",
+          "date": "2026-03-25",
+          "release": null,
+          "change": "JSON line 2, ids, bit masks, declared sections."
+        },
+        {
+          "version": "3.0",
+          "date": "2026-06-27",
+          "release": null,
+          "change": "=units.length= and =units.energy= required. Minor absent."
+        },
+        {
+          "version": "3.1",
+          "date": "2026-10-11",
+          "release": null,
+          "change": "Minor 1. =units.time= when velocities are present. Natural-unit rule."
+        }
+      ],
+      "clauses": [
+        "CON-bonds.1",
+        "CON-bonds.2",
+        "CON-bonds.3",
+        "CON-cell.1",
+        "CON-cell.2",
+        "CON-cell.3",
+        "CON-cell.4",
+        "CON-cell.5",
+        "CON-cell.6",
+        "CON-compress.1",
+        "CON-compress.2",
+        "CON-compress.3",
+        "CON-count.1",
+        "CON-count.2",
+        "CON-count.3",
+        "CON-count.4",
+        "CON-count.5",
+        "CON-count.6",
+        "CON-count.7",
+        "CON-count.8",
+        "CON-error.1",
+        "CON-error.2",
+        "CON-error.3",
+        "CON-error.4",
+        "CON-file.1",
+        "CON-file.2",
+        "CON-file.3",
+        "CON-file.4",
+        "CON-file.5",
+        "CON-file.6",
+        "CON-frame.1",
+        "CON-frame.2",
+        "CON-frame.3",
+        "CON-frame.4",
+        "CON-frame.5",
+        "CON-frame.6",
+        "CON-frame.7",
+        "CON-header.1",
+        "CON-header.2",
+        "CON-header.3",
+        "CON-header.4",
+        "CON-id.1",
+        "CON-id.2",
+        "CON-id.3",
+        "CON-id.4",
+        "CON-id.5",
+        "CON-id.6",
+        "CON-id.7",
+        "CON-id.8",
+        "CON-id.9",
+        "CON-line2.1",
+        "CON-line2.2",
+        "CON-line2.3",
+        "CON-line2.4",
+        "CON-line2.5",
+        "CON-line2.6",
+        "CON-line2.7",
+        "CON-line2.8",
+        "CON-line2.9",
+        "CON-line2.10",
+        "CON-line2.11",
+        "CON-line2.12",
+        "CON-line2.13",
+        "CON-mask.1",
+        "CON-mask.2",
+        "CON-mask.3",
+        "CON-mask.4",
+        "CON-mask.5",
+        "CON-mask.6",
+        "CON-mask.7",
+        "CON-num.1",
+        "CON-num.2",
+        "CON-num.3",
+        "CON-num.4",
+        "CON-num.5",
+        "CON-num.6",
+        "CON-num.7",
+        "CON-num.8",
+        "CON-num.9",
+        "CON-section.1",
+        "CON-section.2",
+        "CON-section.3",
+        "CON-section.4",
+        "CON-section.5",
+        "CON-section.6",
+        "CON-section.7",
+        "CON-section.8",
+        "CON-section.9",
+        "CON-section.10",
+        "CON-section.11",
+        "CON-section.12",
+        "CON-section.13",
+        "CON-section.14",
+        "CON-section.15",
+        "CON-section.16",
+        "CON-section.17",
+        "CON-section.18",
+        "CON-section.19",
+        "CON-section.20",
+        "CON-status.1",
+        "CON-status.2",
+        "CON-token.1",
+        "CON-token.2",
+        "CON-token.3",
+        "CON-token.4",
+        "CON-units.1",
+        "CON-units.2",
+        "CON-units.3",
+        "CON-units.4",
+        "CON-units.5",
+        "CON-units.6",
+        "CON-units.7",
+        "CON-units.8",
+        "CON-units.9",
+        "CON-units.10",
+        "CON-units.11",
+        "CON-units.12",
+        "CON-units.13",
+        "CON-units.14",
+        "CON-units.15",
+        "CON-units.16",
+        "CON-validate.1",
+        "CON-validate.2",
+        "CON-validate.3",
+        "CON-validate.4"
+      ]
+    }
+  ],
+  "tree": {
+    "release": "0.17.4",
+    "tagged": false
+  }
+}

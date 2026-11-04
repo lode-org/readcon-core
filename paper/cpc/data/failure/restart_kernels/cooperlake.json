@@ -1,0 +1,129 @@
+{
+ "script": "paper/cpc/scripts/restart_formats.py",
+ "kernel_set": "cooperlake",
+ "uninterrupted": {
+  "steps": 60,
+  "converged": true,
+  "barrier_eV": 0.644561365706048
+ },
+ "routes": {
+  "CON 3.1, shortest round trip": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.644561365706048,
+   "file_dpos_A": 0.0,
+   "d_barrier_eV": 0.0,
+   "max_disp_A": 0.0
+  },
+  "CON 3.1, six decimals": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.6445613776115753,
+   "file_dpos_A": 4.948768728590177e-07,
+   "d_barrier_eV": 1.1905527230737789e-08,
+   "max_disp_A": 5.689808819653308e-07
+  },
+  "extended XYZ (ASE)": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.6445613667942407,
+   "file_dpos_A": 4.990821089734254e-09,
+   "d_barrier_eV": 1.0881926471029146e-09,
+   "max_disp_A": 4.944323173106113e-09
+  },
+  "ASE trajectory, ids in tags": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.644561365706048,
+   "file_dpos_A": 0.0,
+   "d_barrier_eV": 0.0,
+   "max_disp_A": 0.0
+  },
+  "POSCAR (ASE), FixScaled z": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.6445613657060285,
+   "file_dpos_A": 4.85722573273506e-17,
+   "d_barrier_eV": -1.9539925233402755e-14,
+   "max_disp_A": 3.552713678800501e-15
+  },
+  "H5MD (h5py), private mask dataset": {
+   "steps": 60,
+   "converged": true,
+   "barrier_eV": 0.644561365706048,
+   "file_dpos_A": 0.0,
+   "d_barrier_eV": 0.0,
+   "max_disp_A": 0.0
+  }
+ },
+ "roundoff_host": {
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "family": "6",
+  "model": "207",
+  "kernel": "6.12.94+",
+  "machine": "x86_64",
+  "numpy": "2.5.4",
+  "numpy_blas_build": "blas 3.9.0",
+  "conda_packages": {
+   "libblas": "3.11.0 11_h4a7cf45_openblas",
+   "liblapack": "3.11.0 11_h47877c9_openblas",
+   "libopenblas": "0.3.34 pthreads_hf13c14d_2",
+   "numpy": "2.5.4 py312he827f4e_0"
+  },
+  "blas_runtime": [
+   "openblas 0.3.34, pthreads, Cooperlake kernels"
+  ],
+  "numeric_pins": {
+   "kernel_set": "cooperlake",
+   "environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "Cooperlake",
+    "NPY_DISABLE_CPU_FEATURES": ""
+   },
+   "numpy_dispatch": [
+    "X86_V3",
+    "X86_V4",
+    "AVX512_ICL",
+    "AVX512_SPR"
+   ],
+   "blas": [
+    "openblas Cooperlake kernels, 1 thread"
+   ]
+  }
+ },
+ "provenance": {
+  "build": {
+   "readcon_version": "0.17.4",
+   "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [],
+   "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+   "source_files": 47,
+   "source_tag": null,
+   "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+  },
+  "host": {
+   "kernel": "6.12.94+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel(R) Xeon(R) Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342768
+  },
+  "peers": {
+   "ase": "3.29.0",
+   "chemfiles": "0.10.4",
+   "MDAnalysis": "2.10.0",
+   "h5py": "3.16.0",
+   "numpy": "2.5.4",
+   "scipy": "1.18.1",
+   "ovito": "3.16.1",
+   "openbabel": "3.2.1",
+   "python": "3.12.16"
+  }
+ }
+}

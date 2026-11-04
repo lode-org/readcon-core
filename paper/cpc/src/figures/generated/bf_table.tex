@@ -1,0 +1,36 @@
+% Written by paper/cpc/scripts/binary_formats_tables.py from bench/results/r0174/binary_formats (build.json, payloads.json, checks.json, timings.json, settle.json).
+\begin{tabular}{@{}lllrrrrr@{}}
+\toprule
+Reader & File & Read & Threads & Median (s) & IQR (s) & Frames/s & Error (\AA)\\
+\midrule
+readcon-core & CON & by frame & 1 & 1.098 & 0.014 & 9.1 & \num{0}\\
+readcon-core & CON, six decimals & by frame & 1 & 0.864 & 0.012 & 11.6 & \num{5.0e-7}\\
+readcon-core & CON, two decimals & by frame & 1 & 0.776 & 0.010 & 12.9 & \num{5.0e-3}\\
+readcon-core & CON & all frames & 1 & 1.339 & 0.016 & 7.5 & \num{0}\\
+readcon-core & CON, six decimals & all frames & 1 & 1.107 & 0.034 & 9.0 & \num{5.0e-7}\\
+readcon-core & CON, two decimals & all frames & 1 & 1.035 & 0.081 & 9.7 & \num{5.0e-3}\\
+readcon-core & CON & all frames & 8 & 0.688 & 0.027 & 14.5 & \num{0}\\
+readcon-core & CON, six decimals & all frames & 8 & 0.526 & 0.011 & 19.0 & \num{5.0e-7}\\
+readcon-core & CON, two decimals & all frames & 8 & 0.466 & 0.007 & 21.4 & \num{5.0e-3}\\
+readcon-core & CON & columns & 1 & 1.111 & 0.010 & 9.0 & \num{0}\\
+readcon-core & CON, six decimals & columns & 1 & 0.819 & 0.008 & 12.2 & \num{5.0e-7}\\
+readcon-core & CON, two decimals & columns & 1 & 0.714 & 0.015 & 14.0 & \num{5.0e-3}\\
+readcon-core & \texttt{.rcbin} & image & 1 & 0.340 & 0.018 & 29.4 & \num{0}\\
+\addlinespace
+xdrfile & XTC & by frame & 1 & 0.219 & 0.001 & 45.6 & \num{5.0e-3}\\
+xdrfile & XTC & all frames & 1 & 0.255 & 0.003 & 39.2 & \num{5.0e-3}\\
+xdrfile & TRR & by frame & 1 & 0.325 & 0.008 & 30.7 & \num{9.5e-6}\\
+xdrfile & TRR & all frames & 1 & 0.359 & 0.007 & 27.9 & \num{9.5e-6}\\
+\addlinespace
+libxtc\textsuperscript{a} & XTC & by frame & 1 & 0.092 & 0.001 & 109 & \num{505}\\
+libxtc\textsuperscript{a} & XTC & all frames & 1 & 0.126 & 0.006 & 79.1 & \num{505}\\
+libxtc\textsuperscript{a} & XTC & by frame & 8 & 0.044 & 0.002 & 225 & \num{505}\\
+libxtc\textsuperscript{a} & XTC & all frames & 8 & 0.054 & 0.005 & 185 & \num{505}\\
+\addlinespace
+molfile & DCD & by frame & 1 & 0.030 & 0.001 & 333 & \num{1.5e-5}\\
+molfile & DCD & all frames & 1 & 0.066 & 0.003 & 152 & \num{1.5e-5}\\
+\addlinespace
+TNG & TNG & by frame & 1 & 2.115 & 0.047 & 4.7 & \num{5.0e-3}\\
+TNG & TNG & all frames & 1 & 0.852 & 0.034 & 11.7 & \num{5.0e-3}\\
+\bottomrule
+\end{tabular}

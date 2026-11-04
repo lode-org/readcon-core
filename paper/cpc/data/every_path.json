@@ -1,0 +1,117 @@
+{
+ "command": "cargo test --release --features zstd,parallel --test <file> -- --test-threads=1",
+ "features": [
+  "zstd",
+  "parallel"
+ ],
+ "map_bytes": null,
+ "thread_settings": [
+  "1",
+  "2",
+  "8",
+  "default"
+ ],
+ "files": [
+  "plain",
+  "gzip",
+  "zstd"
+ ],
+ "results": {
+  "totals": {
+   "tests": 47,
+   "ignored": 0,
+   "inputs": 694,
+   "reads": 1388,
+   "reads_from_64k": 694,
+   "given_from_64k": 0,
+   "test_files": 8
+  },
+  "test_files": {
+   "tests/clause_coverage.rs": {
+    "tests": 14,
+    "ignored": 0,
+    "inputs": 133,
+    "reads": 266,
+    "reads_from_64k": 133,
+    "given_from_64k": 0
+   },
+   "tests/component_number_text.rs": {
+    "tests": 2,
+    "ignored": 0,
+    "inputs": 150,
+    "reads": 300,
+    "reads_from_64k": 150,
+    "given_from_64k": 0
+   },
+   "tests/conformance_corpus.rs": {
+    "tests": 2,
+    "ignored": 0,
+    "inputs": 22,
+    "reads": 44,
+    "reads_from_64k": 22,
+    "given_from_64k": 0
+   },
+   "tests/lattice_vectors_cell.rs": {
+    "tests": 4,
+    "ignored": 0,
+    "inputs": 31,
+    "reads": 62,
+    "reads_from_64k": 31,
+    "given_from_64k": 0
+   },
+   "tests/legacy_velocity_block.rs": {
+    "tests": 7,
+    "ignored": 0,
+    "inputs": 74,
+    "reads": 148,
+    "reads_from_64k": 74,
+    "given_from_64k": 0
+   },
+   "tests/lowest_error_line.rs": {
+    "tests": 8,
+    "ignored": 0,
+    "inputs": 98,
+    "reads": 196,
+    "reads_from_64k": 98,
+    "given_from_64k": 0
+   },
+   "tests/numeric_token_classes.rs": {
+    "tests": 7,
+    "ignored": 0,
+    "inputs": 150,
+    "reads": 300,
+    "reads_from_64k": 150,
+    "given_from_64k": 0
+   },
+   "tests/spec_version_major.rs": {
+    "tests": 3,
+    "ignored": 0,
+    "inputs": 36,
+    "reads": 72,
+    "reads_from_64k": 36,
+    "given_from_64k": 0
+   }
+  }
+ },
+ "provenance": {
+  "build": {
+   "readcon_version": "0.17.4",
+   "cargo": "1.88.0 (873a06493 2025-05-10)",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+   "source_files": 47,
+   "source_tag": null,
+   "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+  },
+  "host": {
+   "kernel": "6.12.94+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel(R) Xeon(R) Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342768
+  }
+ }
+}

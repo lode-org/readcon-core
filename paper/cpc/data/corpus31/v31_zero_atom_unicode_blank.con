@@ -1,0 +1,22 @@
+corpus31 minor-1 header with units.time
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":[]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+1
+2
+195.084
+Pt
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+2.5 2.5 0.0 0 1
+corpus31 zero-atom frame, U+3000 and U+00A0 lines 8 and 9
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":[]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+0
+　
+ 

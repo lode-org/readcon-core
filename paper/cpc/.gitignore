@@ -6,4 +6,13 @@
 *.log
 *.out
 *.synctex.gz
+*.spl
+*.tectonic.txt
 auto/
+bench/work/
+src/figures/generated/work/
+src/figures/generated/*.aux
+evidence/work/
+.pixi/
+__pycache__/
+target/

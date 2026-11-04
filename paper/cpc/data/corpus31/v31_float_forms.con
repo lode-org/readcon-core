@@ -1,0 +1,15 @@
+corpus31 float spellings
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":[]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+1
+4
+195.084
+Pt
+Coordinates of Component 1
++1. .5 -0.0 0 0
+1E+01 2.5e-3 0.30000000000000004441 0 1
+3.141592653589793238462643383279 1e-400 -.25e2 0 2
+2.2250738585072011e-308 4.9406564584124654e-324 9007199254740993 0 3

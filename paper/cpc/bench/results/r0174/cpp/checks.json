@@ -1,0 +1,157 @@
+[
+  {
+    "cell": "readcon_cpp_moc_1",
+    "ready": "READY",
+    "printed": {
+      "seconds": 1.129040508,
+      "parse_seconds": 1.017527815,
+      "free_seconds": 0.111512693,
+      "contract": "moc",
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.21240281136969,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476,
+      "n_pbc": 30000,
+      "velocity_lookups": 0,
+      "threads": 1
+    },
+    "reference": {
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.21240281136969,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476.0,
+      "n_pbc": 30000
+    },
+    "disagreements": []
+  },
+  {
+    "cell": "readcon_cpp_moc_8",
+    "ready": "READY",
+    "printed": {
+      "seconds": 0.68958844,
+      "parse_seconds": 0.570865599,
+      "free_seconds": 0.118722841,
+      "contract": "moc",
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.21240281136969,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476,
+      "n_pbc": 30000,
+      "velocity_lookups": 0,
+      "threads": 8
+    },
+    "reference": {
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.21240281136969,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476.0,
+      "n_pbc": 30000
+    },
+    "disagreements": []
+  },
+  {
+    "cell": "chemfiles_cpp_moc_1",
+    "ready": "READY",
+    "printed": {
+      "seconds": 1.622373585,
+      "parse_seconds": 1.497299634,
+      "free_seconds": 0.125073951,
+      "contract": "moc",
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.2124028113697,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476,
+      "n_pbc": 30000,
+      "velocity_lookups": 2180000,
+      "threads": 1
+    },
+    "reference": {
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": -212.21240281136969,
+      "n_fixed": 3240000,
+      "sum_ids": 236530000,
+      "sum_numbers": 62660000,
+      "sum_cell": 1370476.0,
+      "n_pbc": 30000
+    },
+    "disagreements": []
+  },
+  {
+    "cell": "readcon_cpp_coords_1",
+    "ready": "READY",
+    "printed": {
+      "seconds": 0.561639619,
+      "parse_seconds": 0.51659979,
+      "free_seconds": 0.045039829,
+      "contract": "coords",
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": 0,
+      "n_fixed": 0,
+      "sum_ids": 0,
+      "sum_numbers": 62660000,
+      "sum_cell": 0,
+      "n_pbc": 0,
+      "velocity_lookups": 0,
+      "threads": 1
+    },
+    "reference": {
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_numbers": 62660000
+    },
+    "disagreements": []
+  },
+  {
+    "cell": "chemfiles_cpp_coords_1",
+    "ready": "READY",
+    "printed": {
+      "seconds": 0.562108591,
+      "parse_seconds": 0.529726687,
+      "free_seconds": 0.032381904,
+      "contract": "coords",
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_velocities": 0,
+      "n_fixed": 0,
+      "sum_ids": 0,
+      "sum_numbers": 62660000,
+      "sum_cell": 0,
+      "n_pbc": 0,
+      "velocity_lookups": 0,
+      "threads": 1
+    },
+    "reference": {
+      "frames": 10000,
+      "atoms": 2180000,
+      "sum_positions": 33589426.53065429,
+      "sum_numbers": 62660000
+    },
+    "disagreements": []
+  }
+]

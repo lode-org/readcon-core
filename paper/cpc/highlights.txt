@@ -1,0 +1,5 @@
+CON 3.1 states the eOn saddle-search checkpoint as a versioned text grammar.
+The format defines per-component masks, atom identifiers and velocity time units.
+Two corpora of legal and illegal files decide what a conforming reader accepts.
+A climbing-image band resumed from CON 3.1 repeats the uninterrupted run bit for bit.
+Read times are measured against ASE, chemfiles, h5py and native trajectory readers.

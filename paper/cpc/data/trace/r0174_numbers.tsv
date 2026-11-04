@@ -1,0 +1,155 @@
+macro	value	record	field
+\rcTimeAseEonOne	3.33	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrAseEonOne	0.031	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsAseEonOne	333	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakAseEonOne	108	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomAseEonOne	52	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeAseExtxyzOne	5.73	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrAseExtxyzOne	0.030	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsAseExtxyzOne	573	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakAseExtxyzOne	158	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomAseExtxyzOne	76	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeAseTrajOne	1.42	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrAseTrajOne	0.024	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsAseTrajOne	142	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakAseTrajOne	218	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomAseTrajOne	105	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeChemfilesOne	7.08	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrChemfilesOne	0.054	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsChemfilesOne	708	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakChemfilesOne	356	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomChemfilesOne	171	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeExtxyzCOne	1.46	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrExtxyzCOne	0.0100	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsExtxyzCOne	146	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakExtxyzCOne	220	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomExtxyzCOne	106	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeHfivepyOne	0.160	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrHfivepyOne	0.0026	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsHfivepyOne	16.0	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakHfivepyOne	141	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomHfivepyOne	68	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeMdaOne	5.67	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrMdaOne	0.12	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsMdaOne	567	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakMdaOne	55	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomMdaOne	26	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeOvitoOne	4.92	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrOvitoOne	0.34	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsOvitoOne	492	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakOvitoOne	242	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomOvitoOne	117	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeOvitoXyzOne	2.30	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrOvitoXyzOne	0.14	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsOvitoXyzOne	230	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakOvitoXyzOne	108	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomOvitoXyzOne	52	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcOne	2.62	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcOne	0.034	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcOne	262	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcOne	1803	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcOne	867	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcEight	2.39	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcEight	0.11	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcEight	239	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcEight	1801	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcEight	866	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcCoordsOne	1.35	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcCoordsOne	0.021	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcCoordsOne	135	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcCoordsOne	1237	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcCoordsOne	595	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcCoordsEight	1.15	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcCoordsEight	0.021	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcCoordsEight	115	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcCoordsEight	1233	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcCoordsEight	593	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcFramesOne	0.886	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcFramesOne	0.015	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcFramesOne	88.6	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcFramesOne	934	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcFramesOne	449	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcTimeRcFramesEight	0.459	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s
+\rcIqrRcFramesEight	0.025	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.iqr_s
+\rcUsRcFramesEight	45.9	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s over trajectory.frames of payloads.json
+\rcPeakRcFramesEight	953	bench/results/r0174/memray.json	cells.median_bytes, in MiB
+\rcPeakAtomRcFramesEight	458	bench/results/r0174/memray.json	cells.median_bytes over atoms_per_frame and frames of payloads.json
+\rcRatioAseExtxyz	0.46	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioExtxyzC	1.8	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioOvito	0.53	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioAseTraj	1.8	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioHfivepy	16	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioAseEon	0.40	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioChemfiles	0.19	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioOvitoXyz	0.59	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcRatioMda	0.46	bench/results/r0174/reads.json	cells.python:<reader>:1.median_s, readcon-core cell over the other reader's cell
+\rcSpeedupRc	1.09	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s, one thread over eight
+\rcSpeedupRcCoords	1.18	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s, one thread over eight
+\rcSpeedupRcFrames	1.93	bench/results/r0174/reads.json	cells.python:<reader>:<threads>.median_s, one thread over eight
+\rcCppChemfilesCoordsOne	0.559	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s
+\rcCppIqrChemfilesCoordsOne	0.013	bench/results/r0174/reads.json	cells.cpp:<cell>.iqr_s
+\rcCppUsChemfilesCoordsOne	55.9	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s over trajectory.frames of payloads.json
+\rcCppChemfilesMocOne	1.57	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s
+\rcCppIqrChemfilesMocOne	0.017	bench/results/r0174/reads.json	cells.cpp:<cell>.iqr_s
+\rcCppUsChemfilesMocOne	157	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s over trajectory.frames of payloads.json
+\rcCppReadconCoordsOne	0.554	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s
+\rcCppIqrReadconCoordsOne	0.021	bench/results/r0174/reads.json	cells.cpp:<cell>.iqr_s
+\rcCppUsReadconCoordsOne	55.4	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s over trajectory.frames of payloads.json
+\rcCppReadconMocOne	1.09	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s
+\rcCppIqrReadconMocOne	0.018	bench/results/r0174/reads.json	cells.cpp:<cell>.iqr_s
+\rcCppUsReadconMocOne	109	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s over trajectory.frames of payloads.json
+\rcCppReadconMocEight	0.661	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s
+\rcCppIqrReadconMocEight	0.026	bench/results/r0174/reads.json	cells.cpp:<cell>.iqr_s
+\rcCppUsReadconMocEight	66.1	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s over trajectory.frames of payloads.json
+\rcCppRatioChemfilesMocOne	0.69	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s, readcon-core cell over chemfiles cell
+\rcCppRatioChemfilesCoordsOne	0.99	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s, readcon-core cell over chemfiles cell
+\rcCppSpeedup	1.65	bench/results/r0174/reads.json	cells.cpp:<cell>.median_s, one-thread cell over eight-thread cell
+\rcVerChemfilesCpp	0.10.4	bench/results/r0174/cpp/build.json	chemfiles_version
+\rcCxx	15.3.0	bench/results/r0174/cpp/build.json	cxx
+\rcSeed	20261104	bench/results/r0174/reads.json	protocol.seed
+\rcRounds	11	bench/results/r0174/reads.json	protocol.rounds
+\rcWarmup	1	bench/results/r0174/reads.json	protocol.warmup_rounds
+\rcCells	20	bench/results/r0174/reads.json	cells, count
+\rcRelease	0.17.4	bench/results/r0174/provenance.json	build.release
+\rcBaseCommit	d0b7d3c7	bench/results/r0174/provenance.json	build.base
+\rcModuleVersion	0.17.4	bench/results/r0174/provenance.json	build.readcon_version
+\rcRustc	1.88.0	bench/results/r0174/provenance.json	build.rustc
+\rcFrames	10{,}000	bench/results/r0174/payloads.json	trajectory.frames
+\rcAtoms	218	bench/results/r0174/payloads.json	trajectory.atoms_per_frame
+\rcHeld	108	bench/results/r0174/payloads.json	trajectory.held_atoms
+\rcTrajBytes	206{,}095{,}637	bench/results/r0174/payloads.json	files.traj.con.bytes
+\rcTrajMiB	197	bench/results/r0174/payloads.json	files.traj.con.bytes
+\rcCoordsBytes	109{,}890{,}909	bench/results/r0174/payloads.json	files.traj_coords.con.bytes
+\rcExtxyzBytes	197{,}635{,}222	bench/results/r0174/payloads.json	files.traj.extxyz.bytes
+\rcXyzBytes	101{,}109{,}577	bench/results/r0174/payloads.json	files.traj.xyz.bytes
+\rcConVersion	3.1	bench/results/r0174/payloads.json	files.traj.con.con_version
+\rcWarmFrames	10	bench/results/r0174/payloads.json	files.warm.con.frames
+\rcTemperature	300	bench/results/r0174/payloads.json	trajectory.temperature_K
+\rcArch	x86\_64	bench/results/r0174/provenance.json	hardware.uname_m
+\rcCores	8	bench/results/r0174/provenance.json	hardware.nproc
+\rcCpu	Intel(R) Xeon(R) Processor	bench/results/r0174/provenance.json	hardware.cpu_model
+\rcFamily	6	bench/results/r0174/provenance.json	host
+\rcModel	207	bench/results/r0174/provenance.json	host
+\rcStepping	2	bench/results/r0174/provenance.json	host
+\rcMemGiB	47	bench/results/r0174/provenance.json	host
+\rcLtwo	16 MiB	bench/results/r0174/provenance.json	host
+\rcLtwoInstances	8	bench/results/r0174/provenance.json	host
+\rcLthree	320 MiB	bench/results/r0174/provenance.json	host
+\rcLthreeInstances	1	bench/results/r0174/provenance.json	host
+\rcHypervisor	KVM	bench/results/r0174/provenance.json	host
+\rcOs	Ubuntu 24.04.5 LTS	bench/results/r0174/provenance.json	host
+\rcKernel	6.12.94+	bench/results/r0174/provenance.json	host
+\rcPython	3.12.16	bench/results/r0174/provenance.json	tools.python
+\rcMemray	1.20.0	bench/results/r0174/provenance.json	tools.memray
+\rcValgrind	3.27.1	bench/results/r0174/provenance.json	tools.valgrind
+\rcVerAse	3.29.0	bench/results/r0174/provenance.json	peers
+\rcVerChemfiles	0.10.4	bench/results/r0174/provenance.json	peers
+\rcVerMda	2.10.0	bench/results/r0174/provenance.json	peers
+\rcVerHfivepy	3.16.0	bench/results/r0174/provenance.json	peers
+\rcVerOvito	3.16.1	bench/results/r0174/provenance.json	peers
+\rcVerNumpy	2.5.4	bench/results/r0174/provenance.json	peers
+\rcGrindParseFrame	10{,}445{,}209	bench/results/r0174/cachegrind/cachegrind_results.json	scenarios
+\rcGrindParseHundred	32{,}470{,}382	bench/results/r0174/cachegrind/cachegrind_results.json	scenarios
+\rcGrindForwardHundred	7{,}291{,}661	bench/results/r0174/cachegrind/cachegrind_results.json	scenarios
+\rcGrindWriteHundred	21{,}640{,}874	bench/results/r0174/cachegrind/cachegrind_results.json	scenarios
+\rcGrindChemPath	9{,}277{,}979	bench/results/r0174/cachegrind/cachegrind_results.json	scenarios

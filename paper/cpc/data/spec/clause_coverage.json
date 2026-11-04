@@ -1,0 +1,2162 @@
+{
+ "script": "paper/cpc/scripts/clause_coverage.py",
+ "spec": {
+  "path": "docs/orgmode/spec.org",
+  "sha256": "40d70b1ee9c90f42942ceebaf85a9d0980b1fc70b21a14d31b287b44e21e4ec1",
+  "clauses": 125
+ },
+ "sources": {
+  "corpus31": {
+   "path": "paper/cpc/data/corpus31/manifest.toml",
+   "entries": 143,
+   "naming": 143,
+   "clause_ids": 68,
+   "unknown_ids": []
+  },
+  "conformance": {
+   "path": "resources/conformance/manifest.toml",
+   "entries": 22,
+   "naming": 0,
+   "clause_ids": 0,
+   "unknown_ids": []
+  },
+  "probes": {
+   "path": "paper/cpc/data/referee_probes.json",
+   "probes": 167,
+   "naming": 165,
+   "clause_ids": 60,
+   "unknown_ids": []
+  },
+  "tests": {
+   "roots": [
+    "tests",
+    "src"
+   ],
+   "files": 108,
+   "rust_tests": 642,
+   "python_tests": 159,
+   "naming": 114,
+   "clause_ids": 109,
+   "unknown_ids": []
+  },
+  "indep_reader": {
+   "path": "paper/cpc/scripts/indep_reader.py",
+   "clause_ids": 55,
+   "unknown_ids": []
+  }
+ },
+ "totals": {
+  "clauses": 125,
+  "covered": 121,
+  "corpus": 68,
+  "corpus31": 68,
+  "conformance": 0,
+  "probes": 60,
+  "tests": 109,
+  "indep_reader": 55,
+  "uncovered": 4
+ },
+ "uncovered": [
+  "CON-count.5",
+  "CON-section.10",
+  "CON-section.11",
+  "CON-section.18"
+ ],
+ "clauses": [
+  {
+   "id": "CON-status.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v1_convel.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-file.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_utf8_line1.con",
+    "v31_utf8_number_token.con",
+    "v31_utf8_separator_line.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/iterators.rs::a_file_read_in_steps_stops_where_one_iterator_over_its_bytes_stops",
+    "src/iterators.rs::bytes_steps_stop_where_one_iterator_over_the_bytes_stops",
+    "src/stream.rs::a_decoded_skip_steps_as_the_skip_over_the_bytes_of_a_file",
+    "tests/invalid_utf8_entry_points.rs::the_c_file_iterator_yields_the_frames_before_the_bad_one"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.2",
+   "keyword": "MUST NOT",
+   "corpus31": [
+    "v31_bom.con",
+    "v31_bom_later_frame.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "bom/first-frame",
+    "bom/second-frame"
+   ],
+   "tests": [
+    "src/iterators.rs::only_file_line_1_is_checked_for_a_byte_order_mark",
+    "src/soa_traj.rs::streamed_reader_checks_the_byte_order_mark_on_file_line_1_only",
+    "tests/python/test_iter_con_parity.py::test_a_file_that_begins_with_a_byte_order_mark_is_rejected",
+    "tests/python/test_iter_con_parity.py::test_a_later_frame_may_start_with_a_byte_order_mark",
+    "tests/python/test_readcon.py::test_read_arrays_low_memory_checks_the_mark_on_file_line_1_only",
+    "tests/stream_reader.rs::only_line_1_of_the_stream_is_checked_for_a_byte_order_mark",
+    "tests/v31_conformance.rs::leading_bom_is_rejected"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_cr_separator.con",
+    "v31_crlf.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "whitespace/carriage-return-in-row"
+   ],
+   "tests": [
+    "src/iterators.rs::other_carriage_returns_are_text",
+    "tests/field_whitespace.rs::crlf_files_read",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "v31_trailing_ff.con",
+    "v31_trailing_ws.con",
+    "v31_unicode_blank_before_section.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id",
+    "labels/coordinates-case-and-spaces",
+    "line2/trailing-spaces-and-tab",
+    "whitespace/trailing-form-feed-line-2",
+    "whitespace/unicode-blank-before-section"
+   ],
+   "tests": [
+    "src/iterators.rs::separators_agree_at_every_thread_count",
+    "tests/field_whitespace.rs::trailing_form_feed_on_line_3_is_invalid_number_format",
+    "tests/field_whitespace.rs::trailing_spaces_and_tabs_are_ignored",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_case.convel",
+    "v31_label_case_coordinates.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/coordinates-01",
+    "labels/coordinates-case-and-spaces"
+   ],
+   "tests": [
+    "tests/empty_header_lines.rs::case_folded_velocity_label_keeps_the_following_empty_user_line",
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::writer_puts_no_blank_line_between_frames"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-frame.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "empty.con",
+    "ff_tail_610_frames.con",
+    "v31_trailing_ws.con",
+    "v31_unicode_tail.con",
+    "whitespace_only.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "threads/blank-tails-6000-frames",
+    "threads/form-feed-tail-610-frames",
+    "whitespace/unicode-tail"
+   ],
+   "tests": [
+    "tests/field_whitespace.rs::space_and_tab_tail_is_accepted_on_every_path",
+    "tests/field_whitespace.rs::whitespace_line_after_the_last_frame_is_a_tail",
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section",
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "c-iterator/statuses",
+    "cli/truncated-last-frame",
+    "truncation/cut-at-27",
+    "truncation/cut-at-32",
+    "truncation/cut-at-34"
+   ],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-frame.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_unicode_tail.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "truncation/trailing-garbage-line",
+    "whitespace/unicode-tail"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_atom_count_1e12.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/truncated-last-frame",
+    "hostile/atom-count-10^12",
+    "truncation/cut-at-27",
+    "truncation/cut-at-32",
+    "truncation/cut-at-34"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.5",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/field_whitespace.rs::space_and_tab_tail_is_accepted_on_every_path",
+    "tests/field_whitespace.rs::whitespace_line_where_the_section_blank_must_be_opens_the_section",
+    "tests/invalid_utf8_entry_points.rs::a_line_the_velocity_probe_cannot_decode_is_reported_on_that_line",
+    "tests/restart_defects.rs::blank_then_whitespace_eof_is_not_a_section_on_skip",
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "labels/velocities-0",
+    "labels/velocities-2",
+    "labels/velocities-no-index",
+    "labels/velocities-xyz"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::one_blank_line_opens_a_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "two_frames_blank.con",
+    "v1_then_json_frame_empty_title.con",
+    "v31_legacy_velocity_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "c-iterator/two-frames-blank",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [
+    "tests/clause_coverage.rs::writer_puts_no_blank_line_between_frames",
+    "tests/field_whitespace.rs::legacy_velocity_block_opens_only_on_a_blank_line",
+    "tests/field_whitespace.rs::streamed_columns_keep_blank_lines_at_a_window_edge",
+    "tests/invalid_utf8_entry_points.rs::a_line_the_velocity_probe_cannot_decode_is_reported_on_that_line",
+    "tests/legacy_velocity_block.rs::line_after_a_complete_block_starts_the_next_frame",
+    "tests/restart_defects.rs::skip_truncated_velocity_block_after_blank_errors",
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-header.1",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::writer_leaves_lines_5_and_6_empty"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-header.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_bom_later_frame.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "bom/second-frame",
+    "bom/second-frame-line-1-kept"
+   ],
+   "tests": [
+    "src/iterators.rs::only_file_line_1_is_checked_for_a_byte_order_mark",
+    "src/soa_traj.rs::streamed_reader_checks_the_byte_order_mark_on_file_line_1_only",
+    "tests/clause_coverage.rs::writer_leaves_lines_5_and_6_empty",
+    "tests/field_whitespace.rs::free_text_lines_keep_every_byte",
+    "tests/field_whitespace.rs::trailing_spaces_and_tabs_are_ignored",
+    "tests/python/test_iter_con_parity.py::test_a_later_frame_may_start_with_a_byte_order_mark",
+    "tests/python/test_readcon.py::test_read_arrays_low_memory_checks_the_mark_on_file_line_1_only",
+    "tests/reader_defects.rs::later_frame_byte_order_mark_is_header_text_when_indexed",
+    "tests/stream_reader.rs::only_line_1_of_the_stream_is_checked_for_a_byte_order_mark"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-header.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::coordinates_and_masses_use_declared_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-header.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "v1_then_json_frame_empty_title.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/field_whitespace.rs::legacy_velocity_block_opens_only_on_a_blank_line"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d10_json_depth_129.con",
+    "d15_json_depth_100001.con",
+    "v2_json_depth_127.con",
+    "v2_json_depth_128.con",
+    "v31_trailing_ff.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/json-depth-100001",
+    "acceptor/json-depth-129",
+    "line2/text-after-object",
+    "line2/trailing-spaces-and-tab",
+    "line2/two-objects",
+    "whitespace/trailing-form-feed-line-2"
+   ],
+   "tests": [
+    "src/iterators.rs::line_2_section_plan_matches_the_header_parser",
+    "tests/field_whitespace.rs::trailing_form_feed_on_line_2_is_invalid_metadata_json",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted",
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "d05_lattice_nan.con",
+    "d10_json_depth_129.con",
+    "d15_json_depth_100001.con",
+    "v2_json_depth_128.con",
+    "v31_trailing_ff.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/json-depth-100001",
+    "acceptor/json-depth-129",
+    "acceptor/lattice-nan",
+    "whitespace/trailing-form-feed-line-2"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_version_3_5.con",
+    "v31_version_3e0.con",
+    "v31_version_float.con",
+    "v31_version_string.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "line2/version-3.0",
+    "line2/version-3e0",
+    "line2/version-string"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "json_version_1.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "json_version_4.con",
+    "v31_version_3_5.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "d14_minor_2pow64.con",
+    "f27_minor2_no_ids.con",
+    "v2_minor_2pow64.con",
+    "v31_minor_2pow64_minus_1.con",
+    "v32_mixed_ids.con",
+    "v32_repeated_ids.con",
+    "v32_unknown_section_arity.con",
+    "v32_validate_count_change.con",
+    "v32_validate_repeated_ids.con",
+    "v32_validate_symbol_change.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/minor-2^64",
+    "ids/four-column-rows-minor-2",
+    "ids/last-row-four-columns/minor-2",
+    "ids/repeated/minor-2",
+    "ids/repeated/minor-2-validate",
+    "ids/second-frame-new-id/minor-2-validate",
+    "ids/second-frame-new-id/read-minor-2-validate",
+    "ids/second-frame-same-id/read-minor-2-validate",
+    "line2/minor-10^30",
+    "line2/minor-2^64-1-kept",
+    "line2/minor-2^64-kept",
+    "minor/2^64-v2",
+    "minor/2^64-v3",
+    "minor/later-minor-four-column-ids",
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "tests/reader_defects.rs::minor_2_pow_64_is_read_on_every_path_and_rewritten_as_written",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "tests/reader_defects.rs::unknown_keys_keep_their_number_literals_on_rewrite",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "d14_minor_2pow64.con",
+    "v2_minor_2pow64.con",
+    "v31_minor_2pow64_minus_1.con",
+    "v31_minor_string.con",
+    "v31_units_time.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/minor-2^64",
+    "line2/minor-10^30",
+    "line2/minor-2^64-1-kept",
+    "line2/minor-2^64-kept",
+    "line2/minor-fraction",
+    "line2/minor-negative",
+    "line2/minor-string",
+    "minor/2^64-v2",
+    "minor/2^64-v3",
+    "units/pre-3.1-minor-kept"
+   ],
+   "tests": [
+    "tests/reader_defects.rs::minor_2_pow_64_is_read_on_every_path_and_rewritten_as_written",
+    "tests/reader_defects.rs::minor_that_is_not_a_json_integer_is_invalid_metadata_json",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/reader_defects.rs::minor_that_is_not_a_json_integer_is_invalid_metadata_json",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.11",
+   "keyword": "MUST",
+   "corpus31": [
+    "d08_sections_null.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/sections-null"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.12",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_validate_string.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.13",
+   "keyword": "MUST",
+   "corpus31": [
+    "d06_lattice_1e999.con",
+    "v2_pbc_string.con",
+    "v31_energy_string.con",
+    "v31_lattice_string.con",
+    "v31_lattice_two_rows.con",
+    "v31_pbc_numbers.con",
+    "v31_pbc_two.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "line2/version-string",
+    "metadata/lattice-2x2",
+    "metadata/lattice-string",
+    "metadata/pbc-string",
+    "metadata/pbc-two",
+    "metadata/pbc-yes",
+    "pbc/numbers",
+    "pbc/string-yes"
+   ],
+   "tests": [
+    "tests/metadata_sentinel.rs::c_setters_refuse_an_infinity",
+    "tests/metadata_sentinel.rs::writer_refuses_a_reserved_number_that_is_not_finite",
+    "tests/reader_defects.rs::reserved_numbers_past_binary64_are_invalid_metadata_json"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_lattice_ok.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v2_pbc_absent.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "pbc/booleans-and-default",
+    "pbc/frame-attribute"
+   ],
+   "tests": [
+    "tests/python/test_readcon.py::test_pbc_is_periodic_when_absent_and_one_flag_per_axis",
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d11_validate_pbc_object.con",
+    "v2_pbc_string.con",
+    "v31_pbc_numbers.con",
+    "v31_pbc_slab.con",
+    "v31_pbc_two.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/validate-pbc-object",
+    "metadata/pbc-booleans",
+    "metadata/pbc-string",
+    "metadata/pbc-two",
+    "metadata/pbc-yes",
+    "pbc/booleans-and-default",
+    "pbc/frame-attribute",
+    "pbc/numbers",
+    "pbc/numbers-validate",
+    "pbc/slab-ase-round-trip",
+    "pbc/string-yes"
+   ],
+   "tests": [
+    "tests/python/test_readcon.py::test_pbc_is_periodic_when_absent_and_one_flag_per_axis",
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "d06_lattice_1e999.con",
+    "v31_lattice_ok.con",
+    "v31_lattice_string.con",
+    "v31_lattice_two_rows.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/lattice-1e999",
+    "metadata/lattice-2x2",
+    "metadata/lattice-string"
+   ],
+   "tests": [
+    "tests/lattice_vectors_cell.rs::malformed_lattice_vectors_is_line_2",
+    "tests/reader_defects.rs::reserved_numbers_past_binary64_are_invalid_metadata_json",
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "f26_cell_10_10_170.con",
+    "gram_170_v1.con",
+    "gram_170_v2.con",
+    "gram_170_v30.con",
+    "gram_170_v31_validate.con",
+    "gram_60_60_119_9.con",
+    "gram_60_60_119_9_validate.con",
+    "gram_60_60_120.con",
+    "gram_60_60_120_1.con",
+    "gram_60_60_120_1_validate.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cell/10-10-170/v2/validate",
+    "cell/130-130-130/v3.1",
+    "cell/130-130-130/v3.1/validate",
+    "cell/170-170-170/v1",
+    "cell/170-170-170/v2",
+    "cell/170-170-170/v3.0",
+    "cell/170-170-170/v3.0/validate",
+    "cell/170-170-170/v3.1",
+    "cell/170-170-170/v3.1/validate",
+    "cell/60-60-119.9/v2",
+    "cell/60-60-119.9/v2/validate",
+    "cell/60-60-119.9/v3.1",
+    "cell/60-60-119.9/v3.1/validate",
+    "cell/60-60-120.1/v2",
+    "cell/60-60-120.1/v2/validate",
+    "cell/60-60-120.1/v3.1",
+    "cell/60-60-120.1/v3.1/validate",
+    "cell/60-60-120/v2",
+    "cell/60-60-120/v2/validate",
+    "cell/60-60-120/v3.1",
+    "cell/60-60-120/v3.1/validate",
+    "cell/90-90-90/v3.1",
+    "cell/90-90-90/v3.1/validate",
+    "cell/c-z-never-nan",
+    "cell/constructed-frame-round-trip",
+    "cell/f26-gram-file",
+    "cell/f26-gram-no-validate",
+    "cell/f26-gram-v3-validate",
+    "cell/negative-gram-radicand",
+    "cell/tab-separated/10-10-170",
+    "cell/tab-separated/10-10-170/validate",
+    "cell/tab-separated/120-120-120",
+    "cell/tab-separated/120-120-120/validate",
+    "cell/tab-separated/150-150-100",
+    "cell/tab-separated/150-150-100/validate",
+    "cell/tab-separated/170-170-170",
+    "cell/tab-separated/170-170-170/validate",
+    "cell/tab-separated/90-90-90",
+    "cell/tab-separated/90-90-90/validate",
+    "cell/zero-gram-radicand-legal"
+   ],
+   "tests": [
+    "tests/lowest_error_line.rs::radicand_names_line_4_after_the_line_3_check",
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_zero_atom_unicode_blank.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "threads/blank-tails-6000-frames"
+   ],
+   "tests": [
+    "tests/field_whitespace.rs::zero_atom_lines_8_and_9_hold_no_fields",
+    "tests/lowest_error_line.rs::zero_atom_frame_with_sections_names_line_7",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "threads/blank-tails-6000-frames"
+   ],
+   "tests": [
+    "tests/field_whitespace.rs::zero_atom_lines_8_and_9_hold_no_fields",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.5",
+   "keyword": "SHOULD NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A SHOULD NOT that turns on the consumer a file is written for. No writer of the library, in Rust, Python or the C ABI, takes a consumer or a target version: the arguments name the destination, the frames, the float format or precision, compression, canonical order and the MPI settings, so no writer call states the clause."
+  },
+  {
+   "id": "CON-count.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::coordinate_blocks_follow_header_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_validate_count_change.con",
+    "v32_validate_count_change.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_coordinates_2.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/coordinates-01",
+    "labels/coordinates-2"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::spec_3_writer_emits_7_for_all_fixed",
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token",
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_masks_0to7.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::spec_3_writer_emits_7_for_all_fixed",
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_mask_8.con",
+    "v31_mask_float.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::spec_3_writer_emits_7_for_all_fixed"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::spec_3_writer_emits_7_for_all_fixed"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_id_2pow64.con",
+    "v31_ids_beyond_binary64.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-id.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::ids_need_not_start_at_0_or_1"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "cli/rewrite-refused",
+    "writers/c-path-writer-mid-write-failure",
+    "writers/python-mid-write-failure",
+    "writers/repeated-id-refused",
+    "writers/repeated-id-refused-gzip"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::writer_rejects_a_repeated_atom_id"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_repeated_ids.con",
+    "v31_validate_repeated_ids.con",
+    "v32_repeated_ids.con",
+    "v32_validate_repeated_ids.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/rewrite-refused",
+    "ids/repeated",
+    "ids/repeated/minor-2",
+    "ids/repeated/minor-2-validate",
+    "ids/repeated/validate",
+    "ids/second-frame-new-id"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::atoms_in_pre_grouping_order_follow_con_id_5",
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_ids_beyond_binary64.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "ids/second-frame-new-id",
+    "ids/second-frame-new-id/minor-1-validate",
+    "ids/second-frame-new-id/minor-2-validate"
+   ],
+   "tests": [
+    "tests/clause_coverage.rs::ids_need_not_start_at_0_or_1",
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float",
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::atoms_in_pre_grouping_order_follow_con_id_5"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.8",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "f27_minor1_no_ids.con",
+    "f27_minor2_no_ids.con",
+    "v31_mixed_ids.con",
+    "v32_mixed_ids.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "ids/four-column-rows-minor-2",
+    "ids/four-column-rows-two-frames",
+    "ids/last-row-four-columns/minor-2",
+    "ids/last-row-four-columns/v2",
+    "ids/last-row-four-columns/v3.1",
+    "minor/later-minor-four-column-ids"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d02_legacy_velocity_no_time.convel",
+    "d07_sections_capital_velocities.convel",
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "v1_convel.convel",
+    "v1_then_json_frame_empty_title.con",
+    "v30_legacy_velocity_time_fs.convel",
+    "v31_legacy_velocity_no_time.convel",
+    "v31_legacy_velocity_time.convel",
+    "v31_sections_out_of_order.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/legacy-velocity-no-time",
+    "acceptor/sections-capital-velocities",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_two_blanks_before_section.convel",
+    "v31_unicode_blank_before_section.convel",
+    "v31_utf8_separator_line.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "whitespace/unicode-blank-before-section"
+   ],
+   "tests": [
+    "tests/clause_coverage.rs::writer_puts_no_blank_line_between_component_blocks",
+    "tests/field_whitespace.rs::whitespace_line_where_the_section_blank_must_be_opens_the_section",
+    "tests/v31_conformance.rs::one_blank_line_opens_a_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.3",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::writer_puts_no_blank_line_between_component_blocks"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d13_blank_symbol_energies.con",
+    "v31_blank_symbol_velocities.convel",
+    "v31_two_blanks_before_section.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/blank-symbol-energies"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m5_section_rows_have_exact_width"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::per_atom_energies_use_the_name_energies"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::atom_energies_is_not_a_section_name"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "d07_sections_capital_velocities.convel",
+    "v31_unknown_section.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/sections-capital-velocities",
+    "minor/minor-1-section-arity"
+   ],
+   "tests": [
+    "tests/clause_coverage.rs::atom_energies_is_not_a_section_name",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.8",
+   "keyword": "MAY",
+   "corpus31": [
+    "v32_unknown_section_arity.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-arity/minor-2",
+    "minor/later-minor-section-arity/minor-7"
+   ],
+   "tests": [
+    "tests/reader_defects.rs::minor_10_pow_30_is_newer_than_this_reader",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "v33_unknown_section_no_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-no-arity/minor-2",
+    "minor/later-minor-section-no-arity/minor-7"
+   ],
+   "tests": [
+    "tests/reader_defects.rs::minor_10_pow_30_is_newer_than_this_reader",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A rule for revising the specification: adding a reserved section name raises con_spec_minor. It states nothing a reader or a writer does."
+  },
+  {
+   "id": "CON-section.11",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A rule for revising the specification: adding a reserved section name needs no new major. It states nothing a reader or a writer does."
+  },
+  {
+   "id": "CON-section.12",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/section_label_mismatch.rs::skipped_section_label_mismatch_follows_validate",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.13",
+   "keyword": "MUST",
+   "corpus31": [
+    "d09_arity_velocities_1.con",
+    "v31_reserved_arity_wrong.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/arity-velocities-1"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::reserved_section_arity_is_the_value_field_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.14",
+   "keyword": "MUST",
+   "corpus31": [
+    "v32_unknown_section_arity.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-arity/minor-2",
+    "minor/later-minor-section-arity/minor-7"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.15",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_case.convel",
+    "v31_label_velocities_0.convel",
+    "v31_label_velocities_01.convel",
+    "v31_label_velocities_1_xyz.convel",
+    "v31_label_velocities_2.convel",
+    "v31_label_velocities_no_index.convel",
+    "v31_label_velocities_xyz.convel",
+    "v31_section_label_mismatch.convel",
+    "v31_sections_out_of_order.convel",
+    "v31_two_blanks_before_section.convel",
+    "v31_validate_bad_label.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/velocities-0",
+    "labels/velocities-2",
+    "labels/velocities-mismatch-validate",
+    "labels/velocities-no-index",
+    "labels/velocities-xyz"
+   ],
+   "tests": [
+    "src/iterators.rs::section_label_mismatch_follows_validate_at_every_thread_count",
+    "tests/section_label_mismatch.rs::velocities_label_mismatch_follows_validate",
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.16",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::minor2_writer_lists_new_sections_in_section_arity"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.17",
+   "keyword": "MAY",
+   "corpus31": [
+    "v31_section_row_id_mismatch.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.18",
+   "keyword": "SHOULD",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame whose energy differs from the sum of its energies rows, and tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such a frame."
+  },
+  {
+   "id": "CON-section.19",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.20",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_spreads_negative.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "sections/negative-spread"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-validate.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-validate.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::validate_true_relaxes_no_every_mode_check"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-validate.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-validate.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d11_validate_pbc_object.con",
+    "d13_blank_symbol_energies.con",
+    "v30_convel_fs_validate.convel",
+    "v31_blank_symbol_velocities.convel",
+    "v31_coord_label_mismatch.con",
+    "v31_label_case_coordinates.con",
+    "v31_label_coordinates_1_xyz.con",
+    "v31_validate_bad_label.convel",
+    "v31_validate_count_change.con",
+    "v31_validate_ok.convel",
+    "v31_validate_repeated_ids.con",
+    "v31_validate_row_id_mismatch.convel",
+    "v31_validate_symbol_change.con",
+    "v31_validate_symbol_mismatch.convel",
+    "v32_validate_count_change.con",
+    "v32_validate_repeated_ids.con",
+    "v32_validate_symbol_change.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/blank-symbol-energies",
+    "acceptor/validate-pbc-object",
+    "ids/repeated/minor-2-validate",
+    "ids/repeated/validate",
+    "ids/second-frame-new-id/minor-1-validate",
+    "ids/second-frame-new-id/minor-2-validate",
+    "ids/second-frame-new-id/read-minor-1-validate",
+    "ids/second-frame-new-id/read-minor-2-validate",
+    "ids/second-frame-same-id/read-minor-2-validate",
+    "labels/velocities-mismatch-validate",
+    "pbc/numbers-validate",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "src/iterators.rs::section_label_mismatch_follows_validate_at_every_thread_count",
+    "tests/lattice_vectors_cell.rs::validate_still_checks_lines_3_and_4",
+    "tests/reader_defects.rs::bad_section_label_under_validate_is_validation_error",
+    "tests/section_label_mismatch.rs::skipped_section_symbol_mismatch_follows_validate",
+    "tests/section_label_mismatch.rs::velocities_label_mismatch_follows_validate"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-bonds.1",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::bonds_is_not_a_section"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-bonds.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::validate_true_rejects_malformed_bonds"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-bonds.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_bonds_one_index.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::validate_true_rejects_malformed_bonds"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d12_length_trailing_space.con",
+    "v31_kcal_per_mol.con",
+    "v31_length_area.con",
+    "v31_units_compound.convel",
+    "v31_units_string.con",
+    "v31_units_time.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/length-trailing-space",
+    "units/compound-units"
+   ],
+   "tests": [
+    "tests/cross_binding_rewrite.rs::binding_rewrite_completes_version_1_and_2_units",
+    "tests/cross_binding_rewrite.rs::c_abi_rewrite_completes_version_2_units",
+    "tests/python/test_readcon.py::test_write_con_completes_version_2_units",
+    "tests/reader_defects.rs::version_2_units_are_completed_when_rebuilt_as_major_3"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "d01_time_unit_metre.convel",
+    "v2_time_banana.con",
+    "v31_mass_ev.con",
+    "v31_units_compound.convel",
+    "v31_units_time.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/time-unit-metre",
+    "units/banana/v2-velocities",
+    "units/banana/v3.0",
+    "units/banana/v3.1",
+    "units/compound-units",
+    "units/natural-spellings",
+    "units/time-angstrom",
+    "units/v2-time-banana"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.4",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_convel_natural.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/natural-spellings"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::natural_time_spelling_is_byte_exact_on_write"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.7",
+   "keyword": "MAY",
+   "corpus31": [
+    "v2_convel_time_fs.convel",
+    "v2_time_banana.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/banana/v2-velocities",
+    "units/v2-fs-label-validate",
+    "units/v2-time-banana"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::coordinates_and_masses_use_declared_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "f20_v30_time_fs.convel",
+    "v1_convel.convel",
+    "v2_convel_time_fs.convel",
+    "v2_minor1_velocity_no_time.convel",
+    "v30_convel_fs.convel",
+    "v30_legacy_velocity_time_fs.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/corpus-v3.0-fs-label",
+    "units/pre-3.1-label-kept",
+    "units/pre-3.1-minor-kept",
+    "units/v2-fs-label-validate",
+    "units/v3.0-fs-label-rewrite",
+    "units/v3.0-fs-label-to-ase",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "tests/cross_binding_rewrite.rs::binding_rewrite_completes_version_1_and_2_units",
+    "tests/cross_binding_rewrite.rs::c_abi_rewrite_completes_version_2_units",
+    "tests/python/test_readcon.py::test_write_con_completes_version_2_units",
+    "tests/python/test_readcon.py::test_write_con_keeps_the_minor_of_unlabelled_legacy_velocities",
+    "tests/reader_defects.rs::version_2_units_are_completed_when_rebuilt_as_major_3",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.9",
+   "keyword": "MUST NOT",
+   "corpus31": [
+    "f20_v30_time_fs.convel",
+    "v2_convel_time_fs.convel",
+    "v30_convel_fs.convel",
+    "v30_convel_fs_validate.convel",
+    "v30_legacy_velocity_time_fs.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/corpus-v3.0-fs-label",
+    "units/pre-3.1-label-kept",
+    "units/v2-fs-label-validate",
+    "units/v3.0-fs-label-rewrite",
+    "units/v3.0-fs-label-to-ase",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "tests/cross_binding_rewrite.rs::c_abi_rewrite_completes_version_2_units",
+    "tests/python/test_ase.py::TestLegacyVelocityLabel::test_v30_fs_label_is_the_unapplied_label",
+    "tests/python/test_readcon.py::test_write_con_completes_version_2_units",
+    "tests/reader_defects.rs::version_2_units_are_completed_when_rebuilt_as_major_3",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.10",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_convel_fs.convel",
+    "v31_convel_natural.convel",
+    "v31_legacy_velocity_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/minor-1-label-applied"
+   ],
+   "tests": [
+    "tests/python/test_ase.py::TestLegacyVelocityLabel::test_built_frame_is_written_at_minor_1",
+    "tests/python/test_ase.py::TestLegacyVelocityLabel::test_from_ase_velocities_are_written_at_minor_1",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.11",
+   "keyword": "MUST",
+   "corpus31": [
+    "d02_legacy_velocity_no_time.convel",
+    "v2_minor1_velocity_no_time.convel",
+    "v31_convel_no_time.convel",
+    "v31_legacy_velocity_no_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/legacy-velocity-no-time",
+    "minor/later-minor-velocities-need-time/minor-2",
+    "minor/later-minor-velocities-need-time/minor-7",
+    "units/minor-1-velocities-need-time",
+    "units/pre-3.1-minor-kept"
+   ],
+   "tests": [
+    "tests/legacy_velocity_block.rs::missing_time_unit_fails_only_for_a_complete_block",
+    "tests/python/test_ase.py::TestLegacyVelocityLabel::test_built_frame_is_written_at_minor_1",
+    "tests/python/test_readcon.py::test_write_con_keeps_the_minor_of_unlabelled_legacy_velocities",
+    "tests/reader_defects.rs::minor_10_pow_30_is_newer_than_this_reader",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.12",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "units/minor-1-writer-needs-time"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.13",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m7_writer_rejects_invalid_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.14",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/cross_binding_rewrite.rs::binding_rewrite_completes_version_1_and_2_units",
+    "tests/v31_conformance.rs::m7_writer_rejects_invalid_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.15",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.16",
+   "keyword": "MUST",
+   "corpus31": [
+    "d12_length_trailing_space.con",
+    "v31_kcal_per_mol.con",
+    "v31_units_compound.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/length-trailing-space"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::unit_vocabulary_includes_mol"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_inf_velocity.convel",
+    "v31_nan_coordinate.con",
+    "v31_overflow_coordinate.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/soa_traj.rs::bad_velocity_rows_fail_every_retain_mode_like_the_frame_parser",
+    "tests/field_whitespace.rs::trailing_form_feed_on_line_3_is_invalid_number_format",
+    "tests/python/test_readcon.py::TestErrorHandling::test_bad_velocity_row_fails_the_call",
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.3",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::validate_true_relaxes_no_every_mode_check",
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.4",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/metadata_sentinel.rs::c_setters_refuse_an_infinity",
+    "tests/metadata_sentinel.rs::c_setters_take_nan_as_the_absent_value",
+    "tests/metadata_sentinel.rs::c_writer_refuses_a_frame_whose_energy_is_not_finite",
+    "tests/metadata_sentinel.rs::writer_refuses_a_reserved_number_that_is_not_finite"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_float_forms.con",
+    "v31_overflow_coordinate.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::float_accepts_sign_dot_and_exponent"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "d04_vertical_tab_separator.con",
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "two_frames_blank.con",
+    "v31_cr_separator.con",
+    "v31_form_feed_separator.con",
+    "v31_utf8_number_token.con",
+    "whitespace_only.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/vertical-tab-separator",
+    "whitespace/carriage-return-in-row",
+    "whitespace/form-feed-separator"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_type_count_2pow64_minus_1.con",
+    "v31_velocity_no_id.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "hostile/type-count-2^64-1"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m5_section_rows_have_exact_width"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_gzip.con.gz",
+    "v31_gzip_two_members.con.gz"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/gzip-multi-member",
+    "cli/gzip-summary",
+    "cli/truncated-gzip"
+   ],
+   "tests": [
+    "src/iterators.rs::a_file_read_in_steps_stops_where_one_iterator_over_its_bytes_stops",
+    "tests/invalid_utf8_entry_points.rs::every_file_reader_reports_the_error_of_the_decoded_bytes",
+    "tests/v31_conformance.rs::m10_gzip_reads_every_member"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_zstd.con.zst",
+    "v31_zstd_two_frames.con.zst"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/zstd-summary"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m10_zstd_reads_every_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.3",
+   "keyword": "SHOULD",
+   "corpus31": [
+    "v31_gzip_by_content.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-error.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "c-iterator/statuses",
+    "c-iterator/two-frames-blank"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::thread_counts_hash_every_field_and_share_the_first_error"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-error.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/iterators.rs::errors_carry_file_lines_after_reads_and_skips",
+    "tests/reader_defects.rs::error_lines_are_file_lines_on_every_read_path",
+    "tests/stream_reader.rs::only_line_1_of_the_stream_is_checked_for_a_byte_order_mark",
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-error.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "v31_id_2pow64.con",
+    "v31_mask_8.con",
+    "v31_type_count_2pow64.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id"
+   ],
+   "tests": [
+    "tests/clause_coverage.rs::integer_tokens_are_ascii_digits",
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token",
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-error.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "paths/indexed-trajectory-same-error",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [
+    "tests/invalid_utf8_entry_points.rs::a_line_the_velocity_probe_cannot_decode_is_reported_on_that_line",
+    "tests/reader_defects.rs::errors_name_the_line_that_decides_them",
+    "tests/v31_conformance.rs::earliest_frame_error_wins_at_every_thread_count"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-token.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/clause_coverage.rs::integer_tokens_are_ascii_digits"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-token.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_float_forms.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::float_accepts_sign_dot_and_exponent"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-token.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "d04_vertical_tab_separator.con",
+    "v31_cr_separator.con",
+    "v31_form_feed_separator.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id",
+    "acceptor/vertical-tab-separator",
+    "cell/tab-separated/10-10-170",
+    "cell/tab-separated/10-10-170/validate",
+    "cell/tab-separated/120-120-120",
+    "cell/tab-separated/120-120-120/validate",
+    "cell/tab-separated/150-150-100",
+    "cell/tab-separated/150-150-100/validate",
+    "cell/tab-separated/170-170-170",
+    "cell/tab-separated/170-170-170/validate",
+    "cell/tab-separated/90-90-90",
+    "cell/tab-separated/90-90-90/validate",
+    "whitespace/carriage-return-in-row",
+    "whitespace/form-feed-separator"
+   ],
+   "tests": [
+    "src/iterators.rs::separators_agree_at_every_thread_count",
+    "tests/field_whitespace.rs::form_feed_lone_cr_and_vertical_tab_do_not_separate_coordinates",
+    "tests/field_whitespace.rs::tabs_separate_fields",
+    "tests/field_whitespace.rs::zero_atom_lines_8_and_9_hold_no_fields"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-token.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/grammar.rs::grammar_and_hand_parser_read_the_conformance_corpus",
+    "src/grammar.rs::grammar_and_hand_parser_share_an_accept_reject_list"
+   ],
+   "indep_reader": false
+  }
+ ]
+}

@@ -1,0 +1,100 @@
+{
+  "system": {
+    "side": 100,
+    "atoms": 1000000,
+    "frames": 10,
+    "spacing_A": 2.55,
+    "jitter_A": 0.15
+  },
+  "writers": {
+    "xtc_precision_nm": 0.001,
+    "tng_precision_nm": 0.001,
+    "con_decimals": {
+      "traj.con": null,
+      "traj_six.con": 6,
+      "traj_two.con": 2
+    }
+  },
+  "files": {
+    "reference.f64": {
+      "bytes": 240000000,
+      "sha256": "a061fc7e562c5a2ef3132b60c78eedb6e63311c713192a47c75e2d78366bee8f"
+    },
+    "reference_box.f64": {
+      "bytes": 240,
+      "sha256": "2c779ed431df645fa993d82c1571d48374ef777f5dd09fb9ccfc98eb7972cbdc"
+    },
+    "traj.xtc": {
+      "bytes": 42201032,
+      "sha256": "4537673f8d8ec156745e15bbc839bca89bee8509abdfd830191266a2bf768982"
+    },
+    "traj.trr": {
+      "bytes": 120001200,
+      "sha256": "e94b905acd5c39d372c61b3cccee73d3433aa92a9910b201dbc8a6477ec35b5a"
+    },
+    "traj.dcd": {
+      "bytes": 120001156,
+      "sha256": "f5f1ad7e96d573f5b9b11a13c403b91c1f85dffa2939ea5a6fa6d4de10fb8b16"
+    },
+    "traj.tng": {
+      "bytes": 26893846,
+      "sha256": "395b81ba8c7fbcc32eba8d2fd945e096a9eb6e1001b9a0f729c264d41b4a8bb1"
+    },
+    "traj_two_sets.tng": {
+      "bytes": 26955868,
+      "sha256": "b0348fc886e7356e7b07e50959089be3b8f5c3da91dcfa2d990fd7e49e0361a3"
+    },
+    "traj.con": {
+      "bytes": 643991871,
+      "sha256": "d9b91bb510d4fa27ea3d463f1f76d1ee408e253c4ae9e1d8176e7e14c7172615"
+    },
+    "traj_six.con": {
+      "bytes": 405994638,
+      "sha256": "609c4e9016b1183fa9ff2ca17afe2162eea106c0279d1ad94b33c38fa2f55cf3"
+    },
+    "traj_two.con": {
+      "bytes": 285994510,
+      "sha256": "76e641b42bec1ec13ebae2de5f314e51bd090592aa742c24d8fc791d27fbf214"
+    },
+    "traj.rcbin": {
+      "bytes": 240000544,
+      "sha256": "3386bf1bd174ab461abaf094f524e3bc7cb86e13586021e004be36adc1cf0d8e"
+    }
+  },
+  "rerun_identical": {
+    "reference.f64": true,
+    "reference_box.f64": true,
+    "traj.xtc": true,
+    "traj.trr": true,
+    "traj.dcd": true,
+    "traj.tng": true,
+    "traj_two_sets.tng": true,
+    "traj.con": true,
+    "traj_six.con": true,
+    "traj_two.con": true,
+    "traj.rcbin": true
+  },
+  "provenance": {
+    "build": {
+      "binary": "paper/cpc/bench/work/r0174/binary_formats/build/bin/readcon_read",
+      "binary_sha256": "f972f6997ca45cdba8ee73c7e6e5a1b359f1b5665119e1ab73513a9881a90dc1",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+      "source_files": 47,
+      "source_tag": null,
+      "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114",
+      "readcon_version": "0.17.4"
+    },
+    "host": {
+      "kernel": "6.12.94+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel(R) Xeon(R) Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342768
+    }
+  }
+}

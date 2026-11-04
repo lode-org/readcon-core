@@ -1,0 +1,34 @@
+CON 3.1 identifiers above 2^53, frame 1
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":[]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+2
+2 2
+195.084 1.00794
+Pt
+Coordinates of Component 1
+0.0 0.0 0.0 0 41
+2.5 2.5 0.0 3 9007199254740993
+H
+Coordinates of Component 2
+1.0 1.0 1.0 7 18446744073709551615
+1.5 1.0 1.0 0 7
+CON 3.1 identifiers above 2^53, frame 2
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":[]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+2
+2 2
+195.084 1.00794
+Pt
+Coordinates of Component 1
+0.25 0.0 0.0 0 41
+2.5 2.5 0.0 3 9007199254740993
+H
+Coordinates of Component 2
+1.0 1.0 1.0 7 18446744073709551615
+1.5 1.0 1.0 0 7

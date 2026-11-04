@@ -1,0 +1,18 @@
+corpus31 U+2003 line before a section
+{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":["velocities"]}
+10.0 10.0 10.0
+90.0 90.0 90.0
+0 0
+0 0 0
+1
+2
+195.084
+Pt
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+2.5 2.5 0.0 0 1
+ 
+Pt
+Velocities of Component 1
+0.01 0.0 0.0 0 0
+0.0 -0.02 0.0 0 1
