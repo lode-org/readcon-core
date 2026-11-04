@@ -1,0 +1,77 @@
+[package]
+name = "readcon-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+readcon-core = { path = "..", features = ["parallel", "grammar"] }
+serde_json = "1"
+tempfile = "3"
+
+[[bin]]
+name = "parser-lines"
+path = "fuzz_targets/parser_lines.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame-header"
+path = "fuzz_targets/frame_header.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame-parser"
+path = "fuzz_targets/frame_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame-parallel"
+path = "fuzz_targets/frame_parallel.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mmap-index"
+path = "fuzz_targets/mmap_index.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "units-expression"
+path = "fuzz_targets/units_expression.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grammar-surface"
+path = "fuzz_targets/grammar_surface.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metadata-bonds"
+path = "fuzz_targets/metadata_bonds.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "index-proj"
+path = "fuzz_targets/index_proj.rs"
+test = false
+doc = false
+bench = false
