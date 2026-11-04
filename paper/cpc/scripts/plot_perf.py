@@ -30,13 +30,12 @@ RESULTS = ROOT / "bench" / "results" / "r0174"
 # Guide for Authors, Computer Physics Communications: wide figures are set
 # at the full text width. This manuscript uses 17.8 cm.
 DOUBLE_CM = 17.8
-BLUE = "#0072B2"  # Okabe-Ito blue
+BLUE = "#1E88E5"  # Ruhi sky
 BLACK = "#000000"
 GRID = "#B0B0B0"
 
 FONT_CANDIDATES = (
-    Path("/usr/share/texmf/fonts/opentype/public/lm/lmroman10-regular.otf"),
-    Path("/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"),
+    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
 )
 
 # Reader key, axis label. The key is the name in the record.

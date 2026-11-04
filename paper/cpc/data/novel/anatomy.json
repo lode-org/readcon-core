@@ -1,0 +1,19 @@
+{
+  "bytes": {
+    "preamble": 280,
+    "coordinates": 1429,
+    "mask": 112,
+    "id": 92,
+    "velocity header": 30,
+    "velocity numbers": 1860,
+    "time unit": 23,
+    "total": 3826
+  },
+  "copies": 400,
+  "full_median_s": 0.006270466001296882,
+  "coords_median_s": 0.005297062998579349,
+  "velocity_extra_s": 0.0011595520008995663,
+  "per_copy_full_s": 1.5676165003242203e-05,
+  "per_copy_coords_s": 1.3242657496448374e-05,
+  "per_copy_velocity_s": 2.898880002248916e-06
+}

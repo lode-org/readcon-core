@@ -1,0 +1,3 @@
+summary.csv, sizes.csv and dedup.json match readcon-db branch eval/cpc-paper at 6146c3be9cde2d35f78cc540dedd978d995976b8.
+ingest_repeats.csv, query_repeats.csv, hardware.json, correctness.json and RESULTS.md are copied from eval/results and eval/RESULTS.md at that commit.
+Figures db_*.pdf were drawn from these tables.

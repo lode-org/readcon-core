@@ -23,13 +23,12 @@ OUT = Path(__file__).resolve().parents[1] / "src" / "figures" / "generated"
 # double-column figure is set at the full text width. This manuscript
 # uses 17.8 cm for that width and 8.5 cm for one column.
 DOUBLE_CM = 17.8
-BLUE = "#0072B2"  # Okabe-Ito blue
+BLUE = "#1E88E5"  # Ruhi sky
 BLACK = "#000000"
-WASH = "#E8F1FA"
+WASH = "#F1DB4B"
 
 FONT_CANDIDATES = (
-    Path("/usr/share/texmf/fonts/opentype/public/lm/lmroman10-regular.otf"),
-    Path("/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"),
+    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
 )
 
 

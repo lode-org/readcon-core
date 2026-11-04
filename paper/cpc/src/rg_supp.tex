@@ -69,6 +69,7 @@ Elsevier%
 \input{figures/generated/worked_macros}
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
+\input{figures/generated/dlpack_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
 \makeatletter
@@ -106,7 +107,9 @@ belowskip=0.4em
 \begin{frontmatter}
 \input{authors.tex}
 \begin{abstract}
-This supplement gives the normative specification of CON 3.1, the versioned configuration (CON) text of eOn, from readcon-core~\readconversion{}, and the reader rules.
+This supplement gives the normative specification of CON 3.1.
+CON is a geometry format used in many codes, and readcon-core formalizes it.
+The supplement also states the reader rules.
 It then gives the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
 The last sections give the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
 \end{abstract}
@@ -126,6 +129,10 @@ The specification also points to an informative parsing expression grammar (PEG)
 The reader-compatibility notes and the references of the source are omitted, because they describe other programs.
 
 \input{figures/generated/spec_normative}
+
+\input{figures/generated/corpus_table}
+\input{figures/generated/drift_table}
+\input{figures/generated/survey_table}
 
 \FloatBarrier
 \section{Reader rules}\label{sec:appendix-rules}
@@ -413,7 +420,7 @@ CIF, Open Babel & no & omitted & none & no \\
 \FloatBarrier
 \section{Restart protocol}\label{sec:supp-restart}
 The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
-Endpoints were relaxed with the Broyden--Fletcher--Goldfarb--Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
+Endpoints were relaxed with the Broyden-{}-Fletcher-{}-Goldfarb-{}-Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
 Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 The band is interrupted after step 25.
@@ -428,7 +435,7 @@ Figure~\ref{fig:supp-velocity} is the step of Section~\ref{sec:cases} on the \(\
 The fixture declares the natural unit, \(\velNaturalFs\,\mathrm{fs}\) for the CODATA 2018 constants.
 A misread scales the kinetic energy by the square of that number, \(\velFactorSq\).
 The step integrates the EMT forces of the fixture with velocity Verlet over \(1\,\mathrm{fs}\), once with the declared unit and once with the numbers read as \(\text{\AA}/\mathrm{fs}\).
-The arrows are the difference of the two positions.
+Each bar is the length of that displacement for one atom.
 
 \begin{figure}[tbp]
 \centering
@@ -436,11 +443,11 @@ The arrows are the difference of the two positions.
 \caption{Position difference after one velocity Verlet step of \(1\,\mathrm{fs}\) on the \(\velFixtureAtoms\)-atom fixture, between the declared natural unit and the same numbers read as \(\text{\AA}/\mathrm{fs}\).
 The kinetic energy goes from \(\velFixtureKe\,\mathrm{eV}\) to \(\velFixtureKeFs\,\mathrm{eV}\), a ratio of \(\velFactorSq\).
 The root mean square over the Cartesian components is \(\velVerletRmsd\,\text{\AA}\) and the largest component \(\velVerletMax\,\text{\AA}\).
-The arrows are drawn at ten times that difference.}
+Each bar is the length of the displacement of one atom.}
 \label{fig:supp-velocity}
 \end{figure}
 
-Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN--HNC system \cite{vanmourikAbInitioGlobal2001}.
+Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN-{}-HNC system \cite{vanmourikAbInitioGlobal2001}.
 On both, readcon-core returns every atom free, the identifiers \texttt{0 1 2} and the declared natural unit.
 Frame 2 is a constructed probe with the identifiers \texttt{2 0 1} and hydrogen fixed on \(x\) alone.
 Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frames (\path{paper/cpc/bench/results/hcn_loss.csv}).
@@ -487,7 +494,7 @@ memray~\rcMemray{} ran a second campaign of the same schedule over the Python ce
 Each capture is a fresh interpreter that warms its reader as a timing run does and reads the timed file under the tracker, with every frame still held when the tracker stops.
 The peak heap of a cell is the median over its captures of the most bytes allocated inside the tracker and not yet freed, and the checksums of every capture match the reference values.
 The runs of a cell are separate processes, so the run is the unit of replication \cite{kaliberaRigorousBenchmarkingReasonable2013}.
-Table~\ref{tab:ordering} gives for every timing ratio of the paper the exact two-sided Mann--Whitney \(p\) of the runs of its two cells \cite{mannTestWhetherOne1947}, the Hodges--Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm decision at the family-wise level \ordAlpha{} over all \ordClaims{} timing ratios \cite{holmSimpleSequentiallyRejective1979}, and Holm rejects \ordRejected{} of them.
+Table~\ref{tab:ordering} gives for every timing ratio of the paper the exact two-sided Mann-{}-Whitney \(p\) of the runs of its two cells \cite{mannTestWhetherOne1947}, the Hodges-{}-Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm decision at the family-wise level \ordAlpha{} over all \ordClaims{} timing ratios \cite{holmSimpleSequentiallyRejective1979}, and Holm rejects \ordRejected{} of them.
 
 \subsection{Python and C++ reads}
 Table~\ref{tab:perf} is the Python read and Table~\ref{tab:cpp} the C++ read through the C++ header.
@@ -694,7 +701,7 @@ The script stops when the records name more than one library digest or readcon-c
 It also stops when the checks are not those of Section~\ref{sec:supp-native}: a cell other than libxtc's beyond the tolerance of its file or a libxtc cell within it, libxtc other than \texttt{pep.npy} or xdrfile other than MDAnalysis on \texttt{pep.xtc}, or, on the file with two frame sets, a TNG frame read beyond the tolerance or an all-frames read that runs to completion.
 It stops as well when the passes of a trial give another settle than the trial names, when the period of \texttt{settle.json} is not the longest settle of its trials, or when its band, window and gap come from other cells than that section names.
 
-\texttt{scripts/\allowbreak ordering\_tests.py} reads the runs of these records and writes Table~\ref{tab:ordering}: for every timing ratio of the paper, the exact two-sided Mann--Whitney \(p\) from the distribution of \(U\) over every arrangement of the ranks \cite{mannTestWhetherOne1947}, the Hodges--Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm step-down decision over all \ordClaims{} claims \cite{holmSimpleSequentiallyRejective1979}.
+\texttt{scripts/\allowbreak ordering\_tests.py} reads the runs of these records and writes Table~\ref{tab:ordering}: for every timing ratio of the paper, the exact two-sided Mann-{}-Whitney \(p\) from the distribution of \(U\) over every arrangement of the ranks \cite{mannTestWhetherOne1947}, the Hodges-{}-Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm step-down decision over all \ordClaims{} claims \cite{holmSimpleSequentiallyRejective1979}.
 Every run of every cell is a fresh process, so the test compares the runs of two cells as two independent samples.
 It stops when two runs of a claim take the same time or when two claims compare cells of different run counts.
 
@@ -768,13 +775,13 @@ git clone readcon-core.bundle readcon-core
 cd readcon-core
 git checkout (*\readconcommit*)
 tar -xzf ../paper-cpc.tar.gz
-conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt
+conda create -n readcon-cpc -{}-file paper/cpc/environment/conda-linux-64.txt
 conda activate readcon-cpc
-python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt
+python3 -m pip install -{}-no-deps -r paper/cpc/environment/requirements.txt
 python3 -m pip install .
 python3 paper/cpc/scripts/regen_paper.py
 bash paper/cpc/scripts/build_tex.sh    # or bash paper/cpc/scripts/build_tex_tectonic.sh
-python3 paper/cpc/scripts/trace_numbers.py --check
+python3 paper/cpc/scripts/trace_numbers.py -{}-check
 \end{lstlisting}
 
 \begin{lstlisting}[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
@@ -796,8 +803,8 @@ python3 paper/cpc/bench/cpp_reads.py                            # cpc-bench-cpp
 #   RC_PAYLOADS=paper/cpc/bench/work/r0174 CHEMFILES_PREFIX=$ENV
 #   BENCH_NATIVE_OUT=paper/cpc/bench/work/native0174
 #   CXX=$ENV/bin/x86_64-conda-linux-gnu-c++;
-#   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build --release --lib \
-#     --features parallel --manifest-path $READCON_SRC/Cargo.toml, then builds
+#   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build -{}-release -{}-lib \
+#     -{}-features parallel -{}-manifest-path $READCON_SRC/Cargo.toml, then builds
 #   readcon_read and chemfiles_read with $CXX -O3 -std=c++17 -DNDEBUG and runs each of
 #   the five cells once, as reads.py does, against the checksums of payloads.json
 python3 paper/cpc/bench/reads.py                                # cpc-bench-reads
@@ -811,19 +818,19 @@ python3 paper/cpc/bench/reads.py                                # cpc-bench-read
 #   and the line that starts its clock follows once the payload is in the page cache
 python3 paper/cpc/bench/memray_peaks.py                         # cpc-bench-memray
 #   RC_PAYLOADS=paper/cpc/bench/work/r0174; per run of a cell:
-#   python3 paper/cpc/bench/memray_peaks.py --child READER THREADS $TMP/read.bin
+#   python3 paper/cpc/bench/memray_peaks.py -{}-child READER THREADS $TMP/read.bin
 #   reads the warm-up file of READER, then its payload inside memray.Tracker
 python3 paper/cpc/bench/cachegrind.py                           # cpc-bench-cachegrind
-#   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build --release \
-#     --example cachegrind_harness --features chemfiles-from-sources; per run of each
+#   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build -{}-release \
+#     -{}-example cachegrind_harness -{}-features chemfiles-from-sources; per run of each
 #   scenario NAME that the program lists:
-#   valgrind --tool=cachegrind --cachegrind-out-file=$TMP/NAME.out --branch-sim=no \
-#     --error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
+#   valgrind -{}-tool=cachegrind -{}-cachegrind-out-file=$TMP/NAME.out -{}-branch-sim=no \
+#     -{}-error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
 bash paper/cpc/bench/build_chemfiles.sh                         # cpc-bench-chemfiles
 #   CHEMFILES_BUILDS=paper/cpc/bench/work/chemfiles CHEMFILES_JOBS=4 GCC=/usr/bin/gcc
 #   GXX=/usr/bin/g++ CLANG=/usr/bin/clang CLANGXX=/usr/bin/clang++
 python3 paper/cpc/bench/h2h.py                                  # cpc-bench-h2h
-#   --steps payloads,python,cpp by default;
+#   -{}-steps payloads,python,cpp by default;
 #   BENCH_WORK=paper/cpc/bench/work/r0174 (its files go to $BENCH_WORK/h2h),
 #   CHEMFILES_BUILDS as for build_chemfiles.sh, CARGO_TARGET_DIR=$BENCH_WORK/h2h/target
 #   GXX=/usr/bin/g++ CLANGXX=/usr/bin/clang++;
@@ -831,56 +838,56 @@ python3 paper/cpc/bench/h2h.py                                  # cpc-bench-h2h
 #   per run of each call NAME:
 #   python3 paper/cpc/bench/h2h_child.py NAME CON RCBIN PEERS 10000
 #   and per run of each call NAME whose peak it records:
-#   python3 -m memray run -q -o $TMP/NAME.bin -f --native $TMP/NAME.py
-#   the C++ step runs cargo build --release --features parallel --lib in $READCON_SRC,
+#   python3 -m memray run -q -o $TMP/NAME.bin -f -{}-native $TMP/NAME.py
+#   the C++ step runs cargo build -{}-release -{}-features parallel -{}-lib in $READCON_SRC,
 #   builds $TMP/cpp_ratio_gccO2, _gccO3, _clangO2 and _clangO3 with the build_cell of
 #   $READCON_SRC/benches/cpp_peer_matrix.py, and per run of each cell:
 #   BINARY MODE FILE
 python3 paper/cpc/bench/binary_formats.py                       # cpc-bench-binary-formats
-#   --steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
+#   -{}-steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
 #   (its files go to $W=$BENCH_WORK/binary_formats), GCC=/usr/bin/gcc GXX=/usr/bin/g++;
 #   build fetches the sources of build.json, checks their SHA-256, runs the compiler
 #   commands that build.json lists and, in $W/readcon_read with the Cargo.lock of
-#   $READCON_SRC, env CARGO_TARGET_DIR=$W/target cargo build --release; payloads runs
+#   $READCON_SRC, env CARGO_TARGET_DIR=$W/target cargo build -{}-release; payloads runs
 #   $W/build/bin/gen DIR, then for each CON file and its decimals D (roundtrip, 6, 2)
 #   readcon_read write-con REF BOX FILE D and readcon_read write-rcbin CON RCBIN, twice;
 #   check runs DRIVER dump MODE THREADS FILE POS BOX for each cell, and time runs
 #   DRIVER time MODE THREADS FILE per run of each cell, after interleave.settle for
 #   the settle_ms of $BENCH_RESULTS/binary_formats/settle.json
 python3 paper/cpc/bench/settle_period.py                        # cpc-bench-settle
-#   --record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
+#   -{}-record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
 #   READCON_SRC as for binary_formats.py, whose readcon_read it hashes; BENCH_ROUNDS
-#   trials; binary_formats.py --steps time then times the cells after the new period
+#   trials; binary_formats.py -{}-steps time then times the cells after the new period
 
-cargo build --release --features zstd,parallel --example corpus31_report
+cargo build -{}-release -{}-features zstd,parallel -{}-example corpus31_report
 python3 paper/cpc/scripts/corpus31_results.py                   # cpc-corpus31
-#   target/release/examples/corpus31_report [--threads N] paper/cpc/data/corpus31
+#   target/release/examples/corpus31_report [-{}-threads N] paper/cpc/data/corpus31
 #   at the default thread count and at N = 1, 2 and 8
-cargo build --release                                # cpc-clib, then cpc-clib-parallel:
-env CARGO_TARGET_DIR=target/clib-parallel cargo build --release --features parallel
+cargo build -{}-release                                # cpc-clib, then cpc-clib-parallel:
+env CARGO_TARGET_DIR=target/clib-parallel cargo build -{}-release -{}-features parallel
 python3 paper/cpc/scripts/corpus_paths.py                       # cpc-corpus-paths
 #   READCON_LIB=target/release/libreadcon_core.so
 #   READCON_LIB_PARALLEL=target/clib-parallel/release/libreadcon_core.so; for BUILD
 #   wheel, clib and clib_parallel, the module and the two libraries:
-#   python3 paper/cpc/scripts/corpus_paths.py --child BUILD $TMP/jobs.json
+#   python3 paper/cpc/scripts/corpus_paths.py -{}-child BUILD $TMP/jobs.json
 python3 paper/cpc/scripts/every_path_count.py                   # cpc-every-path
 #   for each test file NAME that declares mod every_path:
 #   env CARGO_TARGET_DIR=target/every_path EVERY_PATH_LOG=$TMP/NAME.log \
-#     cargo test --release --features zstd,parallel --test NAME
+#     cargo test -{}-release -{}-features zstd,parallel -{}-test NAME
 python3 paper/cpc/scripts/corpus_crosscheck.py                  # cpc-crosscheck
-#   for each file: python3 paper/cpc/scripts/corpus_crosscheck.py --child read_con FILE,
-#   with --rewrite where its entry marks the rewrite, and --child iter_con FILE
-env CARGO_TARGET_DIR=target/cli cargo build --release --features zstd \
-  --bin readcon-core                                            # cpc-cli
-python3 paper/cpc/scripts/referee_probes.py --check             # cpc-probes
+#   for each file: python3 paper/cpc/scripts/corpus_crosscheck.py -{}-child read_con FILE,
+#   with -{}-rewrite where its entry marks the rewrite, and -{}-child iter_con FILE
+env CARGO_TARGET_DIR=target/cli cargo build -{}-release -{}-features zstd \
+  -{}-bin readcon-core                                            # cpc-cli
+python3 paper/cpc/scripts/referee_probes.py -{}-check             # cpc-probes
 #   READCON_CLI=target/cli/release/readcon-core
-#   READCON_LIB=target/release/libreadcon_core.so; --check compares the reads with
-#   paper/cpc/data/referee_probes.json and writes nothing, and the run without --check
+#   READCON_LIB=target/release/libreadcon_core.so; -{}-check compares the reads with
+#   paper/cpc/data/referee_probes.json and writes nothing, and the run without -{}-check
 #   writes that record. It runs $READCON_CLI FILE [OUT] in $TMP, and each read of a
 #   probe that has a time and memory limit in a child:
-#   python3 paper/cpc/scripts/referee_probes.py --child READER
+#   python3 paper/cpc/scripts/referee_probes.py -{}-child READER
 python3 paper/cpc/scripts/mutant_differential.py                # cpc-mutants
-#   --seeds 1-7 --cases 3000 by default; reads each mutant in this process with
+#   -{}-seeds 1-7 -{}-cases 3000 by default; reads each mutant in this process with
 #   indep_reader.read_text and readcon.read_con_string
 python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
 #   reads docs/orgmode/spec.org, both corpus manifests, the probes of

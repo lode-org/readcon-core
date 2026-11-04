@@ -32,10 +32,10 @@ REPO = ROOT.parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
 WORK = OUT / "work"
 
-sys.path.insert(0, str(ROOT / "scripts"))
-import plot_figures as pf  # noqa: E402
-
 import xyzrender as xr  # noqa: E402
+
+DOUBLE_CM = 17.8
+LATIN = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
 
 
 def render_svg(source: Path | Atoms, dest: Path, *, canvas: int = 480) -> Path:
@@ -57,7 +57,7 @@ def render_svg(source: Path | Atoms, dest: Path, *, canvas: int = 480) -> Path:
     cfg.canvas_size = canvas
     cfg.background = "white"
     # Okabe-Ito x, y, z. The default triad is firebrick and forestgreen.
-    cfg.axis_colors = (pf.OKABE_BLUE, pf.OKABE_ORANGE, pf.OKABE_GREEN)
+    cfg.axis_colors = ("#1E88E5", "#F1DB4B", "#004D40")
     cfg.cell_color = "#333333"
     xr.render(molecule, config=cfg, output=str(dest))
     import re
@@ -98,14 +98,14 @@ def _isolate(svg: str, prefix: str) -> tuple[str, str]:
 
 def compose_svg(panels: list[tuple[str, Path]]) -> str:
     """One SVG page, 17.8 cm wide, with a Latin Modern title on each panel."""
-    font = pf.latin_modern_path().as_uri()
+    font = LATIN.resolve().as_uri()
     width, height = 1780, 700
     slot = 540
     gap = (width - 3 * slot) / 4
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{pf.DOUBLE_CM}cm" '
-        f'height="{pf.DOUBLE_CM * height / width:.2f}cm" viewBox="0 0 {width} {height}">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{DOUBLE_CM}cm" '
+        f'height="{DOUBLE_CM * height / width:.2f}cm" viewBox="0 0 {width} {height}">',
         "<defs><style>",
         "@font-face {",
         '  font-family: "Latin Modern Roman";',

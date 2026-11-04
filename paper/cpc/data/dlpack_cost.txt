@@ -1,0 +1,21 @@
+date_utc=2026-11-04T23:49:11Z
+uname_m=x86_64
+nproc=8
+cpu=Intel(R) Xeon(R) Processor
+clone=https://github.com/lode-org/readcon-core
+head=9efd54283545efeefd2f4cc1b7815dd59bf27b67
+status<<STAT
+?? paper/cpc/bench/dlpack_cost/
+STAT
+pwd=.
+tmpdir=paper/cpc/bench/work
+command=paper/cpc/bench/dlpack_cost/target/release/dlpack_cost
+atoms 65536
+warmup_sum 2310144
+repeat 0 view_ns 159311 copy_ns 668471
+repeat 1 view_ns 100121 copy_ns 209093
+repeat 2 view_ns 98457 copy_ns 224775
+repeat 3 view_ns 98521 copy_ns 192647
+repeat 4 view_ns 98383 copy_ns 218567
+repeat 5 view_ns 98524 copy_ns 192395
+exit=0

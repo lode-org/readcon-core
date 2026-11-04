@@ -16,3 +16,4 @@ evidence/work/
 .pixi/
 __pycache__/
 target/
+.texcache/
