@@ -1496,17 +1496,11 @@ where
         .iter()
         .fold(0usize, |sum, &n| sum.saturating_add(n));
     let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
-    use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
+    use crate::storage_dtype::{FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
-    let f64_positions = dt.positions == ElementKind::Float64;
     // A failed reservation only means the vectors grow as rows arrive.
     let mut pos_flat = Vec::new();
     let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
-    let mut positions_other = if f64_positions {
-        None
-    } else {
-        Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
-    };
     let mut ids = Vec::new();
     let _ = ids.try_reserve_exact(reserve_atoms);
     let mut atom_data: Vec<AtomDatum> = Vec::new();
@@ -1528,15 +1522,13 @@ where
             &symbol,
             &mut pos_flat,
             &mut ids,
-            &mut positions_other,
             &mut atom_data,
         )?;
     }
-    let positions = if f64_positions {
-        FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat)
-    } else {
-        positions_other.expect("non-f64 positions allocated")
-    };
+    // Another storage dtype is allocated only here, once every declared row
+    // has been read.
+    let mut positions = FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat);
+    positions.project_to(dt.positions);
     Ok(crate::types::con_frame_coords_only_with_ids(
         header, atom_data, positions, ids,
     ))
@@ -1552,7 +1544,6 @@ fn ingest_coord_rows<'a, L>(
     symbol: &Arc<str>,
     pos_flat: &mut Vec<f64>,
     ids: &mut Vec<u64>,
-    positions_other: &mut Option<crate::storage_dtype::FloatArray2>,
     atom_data: &mut Vec<AtomDatum>,
 ) -> Result<u64, ParseError>
 where
@@ -1560,9 +1551,6 @@ where
 {
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-        if let Some(pos) = positions_other.as_mut() {
-            pos.set_f64_row(ids.len(), xyz);
-        }
         pos_flat.push(xyz[0]);
         pos_flat.push(xyz[1]);
         pos_flat.push(xyz[2]);
@@ -3301,5 +3289,49 @@ Coordinates of Component 1
         assert_eq!(frame.atom_data[1].atom_id, 1);
         assert_eq!(frame.atom_data[2].atom_id, 2);
         assert!(frame.atom_data[2].is_fixed());
+    }
+
+    #[test]
+    fn test_positions_take_the_storage_dtype_of_the_metadata() {
+        use crate::storage_dtype::{ElementKind, FloatArray2};
+        let rows = [[0.5, -1.25, 3.0], [1.0e-3, 2.5e4, -7.75]];
+        let atom_lines: Vec<String> = rows
+            .iter()
+            .enumerate()
+            .map(|(id, [x, y, z])| format!("{x} {y} {z} 0 {id}"))
+            .collect();
+        for &kind in ElementKind::all_hosted() {
+            let metadata = format!(
+                "{{\"con_spec_version\":3,\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\
+                 \"storage_dtypes\":{{\"positions\":\"{}\"}}}}",
+                kind.as_str()
+            );
+            let mut lines = vec![
+                "PREBOX1",
+                metadata.as_str(),
+                "10.0 10.0 10.0",
+                "90.0 90.0 90.0",
+                "POSTBOX1",
+                "POSTBOX2",
+                "1",
+                "2",
+                "1.008",
+                "H",
+                "Coordinates of Component 1",
+            ];
+            lines.extend(atom_lines.iter().map(String::as_str));
+            let frame = parse_single_frame(&mut lines.iter().copied()).unwrap();
+            assert_eq!(frame.positions.kind(), kind);
+            assert_eq!(frame.positions.nrows(), rows.len());
+            for (i, &xyz) in rows.iter().enumerate() {
+                let mut expected = FloatArray2::zeros(kind, 1, 3);
+                expected.set_f64_row(0, xyz);
+                assert_eq!(
+                    frame.positions.as_f64_row(i),
+                    expected.as_f64_row(0),
+                    "{kind:?} row {i}"
+                );
+            }
+        }
     }
 }
