@@ -1580,6 +1580,55 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
+/// Write one binary64 file whose columns come from `seed`.
+///
+/// The header page and both runs match what [`map_file`] and [`read_into`] read.
+/// `seed` is mixed with each value index, so the same triple writes the same file.
+pub fn write_uniform(
+    path: &Path,
+    frames: u64,
+    atoms: u64,
+    seed: u64,
+) -> Result<ConBinHeader, ParseError> {
+    let header = ConBinHeader {
+        n_frames: frames,
+        n_atoms: atoms,
+        binary32: false,
+        velocities: true,
+    };
+    let n = header.position_len()?;
+    let mut file =
+        File::create(path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    let page = page_size()?;
+    write_header_page(&mut file, &header, page)?;
+    let pos: Vec<f64> = (0..n).map(|i| mix_unit(seed, i as u64)).collect();
+    let vel: Vec<f64> = (0..n)
+        .map(|i| mix_unit(seed, (n as u64) + i as u64))
+        .collect();
+    write_values(&mut file, &pos)?;
+    write_values(&mut file, &vel)?;
+    Ok(header)
+}
+
+/// SplitMix64 finalizer, then a unit interval.
+/// The multipliers and shift distances are the ones in Steele, Lea and Flood, 2014.
+const SPLITMIX_MUL_1: u64 = 0x9E37_79B9_7F4A_7C15;
+const SPLITMIX_MUL_2: u64 = 0xBF58_476D_1CE4_E5B9;
+const SPLITMIX_MUL_3: u64 = 0x94D0_49BB_1331_11EB;
+const SPLITMIX_SHIFT_1: u32 = 30;
+const SPLITMIX_SHIFT_2: u32 = 27;
+const SPLITMIX_SHIFT_3: u32 = 31;
+const SPLITMIX_FLOAT_SHIFT: u32 = 11;
+const SPLITMIX_FLOAT_BITS: u32 = 53;
+
+fn mix_unit(seed: u64, index: u64) -> f64 {
+    let mut z = seed.wrapping_add(index).wrapping_mul(SPLITMIX_MUL_1);
+    z = (z ^ (z >> SPLITMIX_SHIFT_1)).wrapping_mul(SPLITMIX_MUL_2);
+    z = (z ^ (z >> SPLITMIX_SHIFT_2)).wrapping_mul(SPLITMIX_MUL_3);
+    z ^= z >> SPLITMIX_SHIFT_3;
+    (z >> SPLITMIX_FLOAT_SHIFT) as f64 / ((1u64 << SPLITMIX_FLOAT_BITS) as f64)
+}
+
 /// Stream a CON text file into a CON-bin of the same frames.
 ///
 /// The header occupies one host page, so the payload starts on a page
