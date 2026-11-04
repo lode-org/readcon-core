@@ -1,8 +1,9 @@
-//! Unit expressions and conversion (metatomic-inspired, SI dimensional analysis).
+//! Unit expressions and conversion with physical and reduced reference scales.
 //!
 //! Supports named base units and simple products/quotients with `*`, `/`, `^`,
 //! and parentheses (case-insensitive). `unit_conversion_factor(from, to)` returns
-//! the multiplier `x_to = factor * x_from` when dimensions match.
+//! the multiplier `x_to = factor * x_from` when dimensions and unresolved
+//! reference scales match. `sigma` and `epsilon` have no implicit SI values.
 
 use crate::error::ParseError;
 use std::collections::HashMap;
@@ -68,6 +69,57 @@ struct UnitValue {
     /// Multiply quantity in this unit by `si_factor` to get SI.
     si_factor: f64,
     dim: Dimension,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct UnitExpression {
+    coefficient: f64,
+    dim: Dimension,
+    // Powers of the unspecified Lennard-Jones length and energy scales.
+    references: [f64; 2],
+}
+
+impl UnitExpression {
+    fn physical(coefficient: f64, dim: Dimension) -> Self {
+        Self {
+            coefficient,
+            dim,
+            references: [0.0; 2],
+        }
+    }
+
+    fn mul(self, other: Self) -> Self {
+        Self {
+            coefficient: self.coefficient * other.coefficient,
+            dim: self.dim.mul(other.dim),
+            references: std::array::from_fn(|i| self.references[i] + other.references[i]),
+        }
+    }
+
+    fn div(self, other: Self) -> Self {
+        Self {
+            coefficient: self.coefficient / other.coefficient,
+            dim: self.dim.div(other.dim),
+            references: std::array::from_fn(|i| self.references[i] - other.references[i]),
+        }
+    }
+
+    fn pow(self, exponent: f64) -> Self {
+        Self {
+            coefficient: self.coefficient.powf(exponent),
+            dim: self.dim.pow(exponent),
+            references: self.references.map(|power| power * exponent),
+        }
+    }
+
+    fn same_references(self, other: Self) -> bool {
+        self.references.iter().zip(other.references.iter()).all(|(a, b)| {
+            a == b
+                || (*a != 0.0
+                    && *b != 0.0
+                    && (a - b).abs() <= 8.0 * f64::EPSILON * a.abs().max(b.abs()))
+        })
+    }
 }
 
 fn base_table() -> HashMap<&'static str, UnitValue> {
@@ -235,7 +287,19 @@ fn base_table() -> HashMap<&'static str, UnitValue> {
 }
 
 /// Parse a unit expression into SI factor and dimension.
+///
+/// Uncancelled `sigma` or `epsilon` reference scales have no SI factor.
 pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError> {
+    let value = parse_unit_value(expr)?;
+    if value.references.iter().any(|power| *power != 0.0) {
+        return Err(ParseError::ValidationError(format!(
+            "unit '{expr}' has unresolved reduced reference scales"
+        )));
+    }
+    Ok((value.coefficient, value.dim))
+}
+
+fn parse_unit_value(expr: &str) -> Result<UnitExpression, ParseError> {
     let s: String = expr.chars().filter(|c| !c.is_whitespace()).collect();
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
@@ -245,10 +309,9 @@ pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError>
     parse_expr(&s.to_lowercase(), &table)
 }
 
-fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimension), ParseError> {
+fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<UnitExpression, ParseError> {
     // Split on * and / with left-associative scan; handle ^N on atoms.
-    let mut factor = 1.0_f64;
-    let mut dim = Dimension::ZERO;
+    let mut value = UnitExpression::physical(1.0, Dimension::ZERO);
     let mut i = 0;
     let bytes = s.as_bytes();
     let mut pending_div = false;
@@ -262,24 +325,22 @@ fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimensi
             i += 1;
             continue;
         }
-        let (atom_f, atom_d, consumed) = parse_atom(&s[i..], table)?;
+        let (atom, consumed) = parse_atom(&s[i..], table)?;
         i += consumed;
         if pending_div {
-            factor /= atom_f;
-            dim = dim.div(atom_d);
+            value = value.div(atom);
             pending_div = false;
         } else {
-            factor *= atom_f;
-            dim = dim.mul(atom_d);
+            value = value.mul(atom);
         }
     }
-    Ok((factor, dim))
+    Ok(value)
 }
 
 fn parse_atom(
     s: &str,
     table: &HashMap<&str, UnitValue>,
-) -> Result<(f64, Dimension, usize), ParseError> {
+) -> Result<(UnitExpression, usize), ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
         return Err(ParseError::ValidationError(
@@ -295,11 +356,11 @@ fn parse_atom(
                 depth -= 1;
                 if depth == 0 {
                     let inner = &s[1..j];
-                    let (f, d) = parse_expr(inner, table)?;
+                    let value = parse_expr(inner, table)?;
                     let mut end = j + 1;
-                    let (f2, d2, extra) = apply_power(f, d, &s[end..])?;
+                    let (value, extra) = apply_power(value, &s[end..])?;
                     end += extra;
-                    return Ok((f2, d2, end));
+                    return Ok((value, end));
                 }
             }
         }
@@ -318,16 +379,33 @@ fn parse_atom(
         )));
     }
     let name = &s[..j];
-    let base = table
-        .get(name)
-        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
+    let value = match name {
+        "sigma" => UnitExpression {
+            coefficient: 1.0,
+            dim: Dimension::LENGTH,
+            references: [1.0, 0.0],
+        },
+        "epsilon" => UnitExpression {
+            coefficient: 1.0,
+            dim: Dimension::MASS
+                .mul(Dimension::LENGTH.pow(2.0))
+                .div(Dimension::TIME.pow(2.0)),
+            references: [0.0, 1.0],
+        },
+        _ => {
+            let base = table.get(name).ok_or_else(|| {
+                ParseError::ValidationError(format!("unknown unit '{name}'"))
+            })?;
+            UnitExpression::physical(base.si_factor, base.dim)
+        }
+    };
     let mut end = j;
-    let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
+    let (value, extra) = apply_power(value, &s[end..])?;
     end += extra;
-    Ok((f, d, end))
+    Ok((value, end))
 }
 
-fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usize), ParseError> {
+fn apply_power(value: UnitExpression, rest: &str) -> Result<(UnitExpression, usize), ParseError> {
     let bytes = rest.as_bytes();
     if bytes.first() == Some(&b'^') {
         let mut k = 1;
@@ -350,21 +428,23 @@ fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usiz
         if neg {
             p = -p;
         }
-        return Ok((f.powf(p), d.pow(p), k));
+        return Ok((value.pow(p), k));
     }
-    Ok((f, d, 0))
+    Ok((value, 0))
 }
 
 /// Multiplicative factor: `value_in_to = factor * value_in_from`.
+///
+/// Reduced reference scales must cancel between the two expressions.
 pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, ParseError> {
-    let (f_from, d_from) = parse_unit_expression(from_unit)?;
-    let (f_to, d_to) = parse_unit_expression(to_unit)?;
-    if !d_from.compatible(d_to) {
+    let from = parse_unit_value(from_unit)?;
+    let to = parse_unit_value(to_unit)?;
+    if !from.dim.compatible(to.dim) || !from.same_references(to) {
         return Err(ParseError::ValidationError(format!(
             "incompatible units '{from_unit}' and '{to_unit}'"
         )));
     }
-    Ok(f_from / f_to)
+    Ok(from.coefficient / to.coefficient)
 }
 
 /// Time unit that velocities in this frame are stored in (D10).
@@ -423,7 +503,7 @@ pub fn velocity_scale_to_natural(file_time: &str) -> Result<f64, ParseError> {
 /// Validate that `unit` has dimensions appropriate for `quantity`
 /// (`length`, `energy`, `mass`, `time`, `velocity`, `force`).
 pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), ParseError> {
-    let (_, dim) = parse_unit_expression(unit)?;
+    let dim = parse_unit_value(unit)?.dim;
     let expect = match quantity {
         "length" => Dimension::LENGTH,
         "time" => Dimension::TIME,
@@ -521,6 +601,8 @@ fn preferred_atom(alias: &str) -> Option<&'static str> {
         "amu" | "u" | "dalton" | "da" => "amu",
         "kg" | "kilogram" => "kg",
         "mol" => "mol",
+        "sigma" => "sigma",
+        "epsilon" => "epsilon",
         _ => return None,
     })
 }

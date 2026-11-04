@@ -1,0 +1,8 @@
+#+TITLE: Reduced reference scales
+
+=sigma= and =epsilon= name the Lennard-Jones reduced length and energy reference scales.
+They are valid in unit expressions, including =epsilon / sigma= for force, and retain their names on write.
+Their physical magnitudes remain unspecified.
+Conversion requires matching powers of both reference scales in the source and destination expressions.
+A conversion to physical units fails when an unresolved reference remains; parsing an SI factor has the same restriction.
+For example, ={"length":"sigma","energy":"epsilon"}= records native reduced values while preserving both reference scales.

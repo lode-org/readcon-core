@@ -121,6 +121,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    :caption: Reference
 
    spec
+   reduced-units
    implementation-notes
    bindings
    chemfiles-reference
