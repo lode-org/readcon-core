@@ -333,7 +333,7 @@ fn ffi_null_and_error_paths() {
         let _ = rkr_frame_spec_version(ptr::null());
         assert!(rkr_frame_composition_formula(ptr::null()).is_null());
         assert!(rkr_frame_metadata_json(ptr::null()).is_null());
-        assert!(rkr_symbol_to_z(ptr::null()) == 0 || true);
+        assert_eq!(rkr_symbol_to_z(ptr::null()), 0);
         let bad = CString::new("Xx").unwrap();
         let _ = rkr_symbol_to_z(bad.as_ptr());
         let _ = rkr_z_to_symbol(0);
