@@ -1,5 +1,5 @@
-use ndarray::Array2;
-use numpy::{IntoPyArray, PyArray1, PyArray2};
+use ndarray::{Array2, ArrayView2};
+use numpy::{IntoPyArray, PyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
@@ -2211,6 +2211,295 @@ fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
     crate::helpers::atomic_number_to_symbol(atomic_number)
 }
 
+#[cfg(unix)]
+mod conbin_py {
+    use super::*;
+
+    /// The map behind the arrays `read_conbin` returns. The arrays borrow it.
+    #[pyclass]
+    pub(super) struct ConBinMapping {
+        #[allow(dead_code)]
+        map: memmap2::Mmap,
+    }
+
+    fn seal_readonly<'py, T, D>(array: &Bound<'py, PyArray<T, D>>)
+    where
+        T: numpy::Element,
+        D: ndarray::Dimension,
+    {
+        array.readwrite().make_nonwriteable();
+    }
+
+    fn shape_counts(n_frames: u64, n_atoms: u64) -> Result<(usize, usize, usize), String> {
+        let frames =
+            usize::try_from(n_frames).map_err(|_| "CON-bin frame count overflows".to_string())?;
+        let atoms =
+            usize::try_from(n_atoms).map_err(|_| "CON-bin atom count overflows".to_string())?;
+        let width = atoms
+            .checked_mul(crate::conbin::COORDS_PER_ATOM)
+            .ok_or_else(|| "CON-bin width overflows".to_string())?;
+        let n = frames
+            .checked_mul(width)
+            .ok_or_else(|| "CON-bin column length overflows".to_string())?;
+        Ok((frames, width, n))
+    }
+
+    type ColumnArrays<'py, T> = (
+        Bound<'py, PyArray2<T>>,
+        Option<Bound<'py, PyArray2<T>>>,
+        usize,
+    );
+
+    fn arrays_from_map<'py, T>(
+        py: Python<'py>,
+        map: memmap2::Mmap,
+        pos: *const T,
+        vel: Option<*const T>,
+        n_frames: usize,
+        width: usize,
+        n_atoms: usize,
+    ) -> PyResult<ColumnArrays<'py, T>>
+    where
+        T: numpy::Element,
+    {
+        let owner = Py::new(py, ConBinMapping { map })?;
+        let base = owner.bind(py).clone();
+        let shape = (n_frames, width);
+        // SAFETY: `pos` addresses `n_frames * width` elements inside `map`.
+        // When `vel` is `Some`, it addresses the same count. `owner` keeps
+        // that map alive for as long as either array does, because each array
+        // stores `owner` as its NumPy base.
+        let pos_arr = unsafe {
+            let pos_view = ArrayView2::from_shape_ptr(shape, pos);
+            PyArray2::borrow_from_array(&pos_view, base.clone().into_any())
+        };
+        let vel_arr = vel.map(|vel| unsafe {
+            let vel_view = ArrayView2::from_shape_ptr(shape, vel);
+            PyArray2::borrow_from_array(&vel_view, base.into_any())
+        });
+        seal_readonly(&pos_arr);
+        if let Some(vel_arr) = &vel_arr {
+            seal_readonly(vel_arr);
+        }
+        Ok((pos_arr, vel_arr, n_atoms))
+    }
+
+    enum CopyFail {
+        Width(String),
+        Io(String),
+    }
+
+    fn require_shape(n_frames: u64, n_atoms: u64) -> PyResult<(usize, usize, usize)> {
+        shape_counts(n_frames, n_atoms).map_err(PyValueError::new_err)
+    }
+
+    /// Read a CON-bin file as one position array and, when present, one velocity array.
+    ///
+    /// The arrays are the mapped file. Nothing in the reader allocates a second
+    /// copy of the columns. `n_threads` workers fault the mapping. The file must
+    /// not change while the arrays are alive, and a truncation can end the
+    /// process with `SIGBUS`. A file with the velocity flag clear returns
+    /// `None` for the velocity array.
+    #[pyfunction]
+    #[pyo3(signature = (path, n_threads=1))]
+    fn read_conbin<'py>(
+        py: Python<'py>,
+        path: &str,
+        n_threads: usize,
+    ) -> PyResult<ColumnArrays<'py, f64>> {
+        let path_owned = path.to_owned();
+        let mapped = py
+            .detach(|| crate::conbin::map_file(Path::new(&path_owned), n_threads))
+            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+        let header = *mapped.header();
+        if header.binary32 {
+            return Err(PyValueError::new_err(
+                "CON-bin file is binary32; use read_conbin_f32",
+            ));
+        }
+        let (n_frames, width, n) = require_shape(header.n_frames, header.n_atoms)?;
+        let n_atoms = usize::try_from(header.n_atoms)
+            .map_err(|_| PyValueError::new_err("CON-bin atom count overflows"))?;
+        if n == 0 {
+            let vel = header
+                .velocities
+                .then(|| PyArray2::zeros(py, (n_frames, width), false));
+            return Ok((PyArray2::zeros(py, (n_frames, width), false), vel, n_atoms));
+        }
+        let pos_ptr = mapped
+            .positions_f64()
+            .map_err(|e| PyIOError::new_err(e.to_string()))?
+            .as_ptr();
+        let vel_ptr = if header.velocities {
+            Some(
+                mapped
+                    .velocities_f64()
+                    .map_err(|e| PyIOError::new_err(e.to_string()))?
+                    .as_ptr(),
+            )
+        } else {
+            None
+        };
+        arrays_from_map(
+            py,
+            mapped.into_map(),
+            pos_ptr,
+            vel_ptr,
+            n_frames,
+            width,
+            n_atoms,
+        )
+    }
+
+    /// Allocate arrays and fill them from a CON-bin with ``pread``.
+    ///
+    /// This is the copy the mapped reader is measured against. The position
+    /// array is allocated here and then filled. When the file has a velocity
+    /// run, the velocity array is allocated and filled too. When the velocity
+    /// flag is clear, the velocity result is ``None``.
+    #[pyfunction]
+    #[pyo3(signature = (path, n_threads=1))]
+    fn read_conbin_copy<'py>(
+        py: Python<'py>,
+        path: &str,
+        n_threads: usize,
+    ) -> PyResult<ColumnArrays<'py, f64>> {
+        let path_owned = path.to_owned();
+        let loaded = py.detach(|| {
+            let header = crate::conbin::read_header(Path::new(&path_owned))
+                .map_err(|e| CopyFail::Io(e.to_string()))?;
+            if header.binary32 {
+                return Err(CopyFail::Width(
+                    "CON-bin file is binary32; use read_conbin_f32".to_string(),
+                ));
+            }
+            let (n_frames, width, n) =
+                shape_counts(header.n_frames, header.n_atoms).map_err(CopyFail::Width)?;
+            let atoms = usize::try_from(header.n_atoms)
+                .map_err(|_| CopyFail::Width("CON-bin atom count overflows".to_string()))?;
+            let mut pos = vec![0.0f64; n];
+            let vel = if header.velocities {
+                let mut vel = vec![0.0f64; n];
+                crate::conbin::read_into_threads(
+                    Path::new(&path_owned),
+                    &mut pos,
+                    Some(&mut vel),
+                    n_threads,
+                )
+                .map_err(|e| CopyFail::Io(e.to_string()))?;
+                Some(vel)
+            } else {
+                crate::conbin::read_into_threads(Path::new(&path_owned), &mut pos, None, n_threads)
+                    .map_err(|e| CopyFail::Io(e.to_string()))?;
+                None
+            };
+            Ok::<_, CopyFail>((n_frames, width, atoms, pos, vel))
+        });
+        let (n_frames, width, n_atoms, pos, vel) = match loaded {
+            Ok(parts) => parts,
+            Err(CopyFail::Width(msg)) => return Err(PyValueError::new_err(msg)),
+            Err(CopyFail::Io(msg)) => return Err(PyIOError::new_err(msg)),
+        };
+        let pos = Array2::from_shape_vec((n_frames, width), pos)
+            .map_err(|e| PyValueError::new_err(format!("conbin positions: {e}")))?;
+        let vel = vel
+            .map(|values| {
+                Array2::from_shape_vec((n_frames, width), values)
+                    .map(|array| array.into_pyarray(py))
+                    .map_err(|e| PyValueError::new_err(format!("conbin velocities: {e}")))
+            })
+            .transpose()?;
+        Ok((pos.into_pyarray(py), vel, n_atoms))
+    }
+
+    /// Read a binary32 CON-bin as one position array and, when present, one velocity array.
+    ///
+    /// The arrays are the mapped file, as in [`read_conbin`]. A file with the
+    /// velocity flag clear returns `None` for the velocity array.
+    #[pyfunction]
+    #[pyo3(signature = (path, n_threads=1))]
+    fn read_conbin_f32<'py>(
+        py: Python<'py>,
+        path: &str,
+        n_threads: usize,
+    ) -> PyResult<ColumnArrays<'py, f32>> {
+        let path_owned = path.to_owned();
+        let mapped = py
+            .detach(|| crate::conbin::map_file(Path::new(&path_owned), n_threads))
+            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+        let header = *mapped.header();
+        if !header.binary32 {
+            return Err(PyValueError::new_err(
+                "CON-bin file is binary64; use read_conbin",
+            ));
+        }
+        let (n_frames, width, n) = require_shape(header.n_frames, header.n_atoms)?;
+        let n_atoms = usize::try_from(header.n_atoms)
+            .map_err(|_| PyValueError::new_err("CON-bin atom count overflows"))?;
+        if n == 0 {
+            let vel = header
+                .velocities
+                .then(|| PyArray2::zeros(py, (n_frames, width), false));
+            return Ok((PyArray2::zeros(py, (n_frames, width), false), vel, n_atoms));
+        }
+        let pos_ptr = mapped
+            .positions_f32()
+            .map_err(|e| PyIOError::new_err(e.to_string()))?
+            .as_ptr();
+        let vel_ptr = if header.velocities {
+            Some(
+                mapped
+                    .velocities_f32()
+                    .map_err(|e| PyIOError::new_err(e.to_string()))?
+                    .as_ptr(),
+            )
+        } else {
+            None
+        };
+        arrays_from_map(
+            py,
+            mapped.into_map(),
+            pos_ptr,
+            vel_ptr,
+            n_frames,
+            width,
+            n_atoms,
+        )
+    }
+
+    /// Write a CON text file to a CON-bin.
+    ///
+    /// The frames are parsed into columns, then the columns are written.
+    /// The velocity column is included only when every frame has velocities.
+    #[pyfunction]
+    #[pyo3(signature = (con_path, out_path, binary32=false))]
+    fn write_conbin(
+        py: Python<'_>,
+        con_path: &str,
+        out_path: &str,
+        binary32: bool,
+    ) -> PyResult<(u64, u64)> {
+        let con_path = con_path.to_owned();
+        let out_path = out_path.to_owned();
+        let header = py
+            .detach(|| {
+                crate::conbin::write_from_con(Path::new(&con_path), Path::new(&out_path), binary32)
+                    .map_err(|e| e.to_string())
+            })
+            .map_err(PyIOError::new_err)?;
+        Ok((header.n_frames, header.n_atoms))
+    }
+
+    pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<ConBinMapping>()?;
+        m.add_function(wrap_pyfunction!(read_conbin, m)?)?;
+        m.add_function(wrap_pyfunction!(read_conbin_copy, m)?)?;
+        m.add_function(wrap_pyfunction!(read_conbin_f32, m)?)?;
+        m.add_function(wrap_pyfunction!(write_conbin, m)?)?;
+        Ok(())
+    }
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2222,6 +2511,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConTrajectory>()?;
     m.add_class::<PyConTrajectoryIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
+    #[cfg(unix)]
+    conbin_py::register(m)?;
     // Ergonomic alias for multi-language matrix (batch all frames).
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
