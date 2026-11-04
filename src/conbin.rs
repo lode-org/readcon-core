@@ -931,8 +931,9 @@ pub fn map_file_with(
 ) -> Result<ConBinMap, ParseError> {
     let file = File::open(path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
     // MAP_PRIVATE, PROT_READ|PROT_WRITE. Writes copy the page.
-    let map = unsafe { memmap2::MmapOptions::new().map_copy(&file) }
-        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    // When `mmap` itself fails, the file is read into a private mapping
+    // that holds the same bytes, so the accessors return the same values.
+    let map = map_copy_or_read(&file)?;
     if map.len() < FIELD_BYTES {
         return Err(ParseError::ValidationError(
             "CON-bin header is not CONBIN01".into(),
@@ -947,6 +948,56 @@ pub fn map_file_with(
         header,
         payload_off,
     })
+}
+
+#[cfg(test)]
+thread_local! {
+    static POPULATE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static MAP_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// File-backed private map, or an anonymous map filled by `read` when `mmap` fails.
+fn map_copy_or_read(file: &File) -> Result<memmap2::MmapMut, ParseError> {
+    #[cfg(test)]
+    if MAP_FAILS.with(|flag| flag.get()) {
+        return private_copy(file);
+    }
+    match unsafe { memmap2::MmapOptions::new().map_copy(file) } {
+        Ok(map) => Ok(map),
+        Err(_) => private_copy(file),
+    }
+}
+
+fn private_copy(file: &File) -> Result<memmap2::MmapMut, ParseError> {
+    let len = usize::try_from(
+        file.metadata()
+            .map_err(|err| ParseError::ValidationError(err.to_string()))?
+            .len(),
+    )
+    .map_err(|_| ParseError::InvalidCount("CON-bin file length overflows".into()))?;
+    if len < FIELD_BYTES {
+        return Err(ParseError::ValidationError(
+            "CON-bin header is not CONBIN01".into(),
+        ));
+    }
+    let mut anon = memmap2::MmapOptions::new()
+        .len(len)
+        .map_anon()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    let mut reader = file
+        .try_clone()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    reader
+        .read_exact(&mut anon[..])
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    Ok(anon)
+}
+
+fn touch_mapped_pages(map: &memmap2::MmapMut, page: usize) {
+    let page = page.max(1);
+    for chunk in map.chunks(page) {
+        std::hint::black_box(chunk.first().copied());
+    }
 }
 
 fn fault_in(
@@ -965,7 +1016,25 @@ fn fault_in(
         match prefetch {
             Prefetch::Span => {
                 let _ = map.advise(memmap2::Advice::WillNeed);
-                advise_spans(map, memmap2::Advice::PopulateRead, threads, page)?;
+                // `MADV_POPULATE_READ` is a hint. Kernels before 5.14 return
+                // `EINVAL`, and some filesystems return other errors. A failed
+                // hint leaves the mapping in place; the pages are touched so
+                // the caller still reads the same values.
+                let hint_failed = {
+                    #[cfg(test)]
+                    {
+                        POPULATE_FAILS.with(|flag| flag.get())
+                    }
+                    #[cfg(not(test))]
+                    {
+                        false
+                    }
+                };
+                if hint_failed
+                    || advise_spans(map, memmap2::Advice::PopulateRead, threads, page).is_err()
+                {
+                    touch_mapped_pages(map, page);
+                }
             }
             Prefetch::ChunkPopulate => {
                 let window = QueueLimits::of(path)?.worker_span(threads);
@@ -1328,11 +1397,13 @@ fn fill_owned_f64(
         }
         // SAFETY: `pread_parallel_uninit` wrote `n` little-endian f64 values or returned.
         unsafe { positions.set_len(n) };
+        decode_le(positions);
         {
             let bytes = spare_prefix_uninit(velocities, n);
             pread_parallel_uninit(fd, bytes, pos_off + expect as u64, threads, page)?;
         }
         unsafe { velocities.set_len(n) };
+        decode_le(velocities);
         Ok(())
     }
 }
@@ -1357,7 +1428,7 @@ pub fn read_into_f32_threads(
     read_columns_into(path, positions, velocities, threads, true)
 }
 
-fn read_columns_into<T>(
+fn read_columns_into<T: StoreLe>(
     path: &Path,
     positions: &mut [T],
     velocities: Option<&mut [T]>,
@@ -1421,6 +1492,7 @@ fn read_columns_into<T>(
         // Linux read returns at most MAX_RW_COUNT bytes (INT_MAX aligned down to
         // the page, include/linux/fs.h). `pread_all` continues until the span is full.
         pread_parallel(fd, pos_bytes, pos_off, threads, page)?;
+        decode_le(positions);
         if header.velocities {
             let Some(vel) = velocities else {
                 return Err(ParseError::InvalidCount(
@@ -1435,6 +1507,7 @@ fn read_columns_into<T>(
             }
             let vel_bytes = bytes_of(vel);
             pread_parallel(fd, vel_bytes, pos_off + expect as u64, threads, page)?;
+            decode_le(vel);
         }
         Ok(header)
     }
@@ -1560,12 +1633,57 @@ fn pread_parallel_uninit(
     })
 }
 
-fn write_values<T>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
-    let bytes = unsafe {
-        std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
-    };
-    file.write_all(bytes)
+trait StoreLe: Copy {
+    fn store_le(self, out: &mut Vec<u8>);
+    fn load_le(self) -> Self;
+}
+
+impl StoreLe for f64 {
+    fn store_le(self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.to_le_bytes());
+    }
+    fn load_le(self) -> Self {
+        f64::from_le_bytes(self.to_ne_bytes())
+    }
+}
+
+impl StoreLe for f32 {
+    fn store_le(self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.to_le_bytes());
+    }
+    fn load_le(self) -> Self {
+        f32::from_le_bytes(self.to_ne_bytes())
+    }
+}
+
+fn write_values<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
+    // A little-endian host already stores the file order. The byte view is
+    // the values themselves, so the write does not build a second buffer.
+    if cfg!(target_endian = "little") {
+        let bytes = unsafe {
+            std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
+        };
+        return file
+            .write_all(bytes)
+            .map_err(|err| ParseError::ValidationError(err.to_string()));
+    }
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
+    for value in values {
+        value.store_le(&mut bytes);
+    }
+    file.write_all(&bytes)
         .map_err(|err| ParseError::ValidationError(err.to_string()))
+}
+
+/// `pread` left little-endian file bytes in `values`. A little-endian host
+/// already reads them as the numbers. A big-endian host swaps each one.
+fn decode_le<T: StoreLe>(values: &mut [T]) {
+    if cfg!(target_endian = "little") {
+        return;
+    }
+    for value in values {
+        *value = value.load_le();
+    }
 }
 
 fn write_header_page(
@@ -1826,6 +1944,85 @@ mod tests {
         read_into_threads(&path, &mut got_pos, Some(&mut got_vel), 2).unwrap();
         assert_eq!(got_pos, pos);
         assert_eq!(got_vel, vel);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    struct HookGuard {
+        slot: &'static std::thread::LocalKey<std::cell::Cell<bool>>,
+    }
+
+    impl HookGuard {
+        fn arm(slot: &'static std::thread::LocalKey<std::cell::Cell<bool>>) -> Self {
+            slot.with(|flag| flag.set(true));
+            Self { slot }
+        }
+    }
+
+    impl Drop for HookGuard {
+        fn drop(&mut self) {
+            self.slot.with(|flag| flag.set(false));
+        }
+    }
+
+    #[test]
+    fn populate_failure_still_reads_the_same_values() {
+        let dir = std::env::temp_dir().join(format!("conbin-populate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("known.conbin");
+        write_known(&path, 4, 3);
+        let plain = map_file(&path, 2).unwrap();
+        let expect_pos = plain.positions_f64().unwrap().to_vec();
+        let expect_vel = plain.velocities_f64().unwrap().to_vec();
+        drop(plain);
+        let _guard = HookGuard::arm(&POPULATE_FAILS);
+        let mapped = map_file(&path, 2).unwrap();
+        assert_eq!(mapped.positions_f64().unwrap(), expect_pos.as_slice());
+        assert_eq!(mapped.velocities_f64().unwrap(), expect_vel.as_slice());
+        let mut got_pos = vec![0.0; expect_pos.len()];
+        let mut got_vel = vec![0.0; expect_vel.len()];
+        read_into_threads(&path, &mut got_pos, Some(&mut got_vel), 2).unwrap();
+        assert_eq!(got_pos, expect_pos);
+        assert_eq!(got_vel, expect_vel);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mmap_failure_still_reads_the_same_values() {
+        let dir = std::env::temp_dir().join(format!("conbin-mmap-fail-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("known.conbin");
+        write_known(&path, 4, 3);
+        let plain = map_file(&path, 1).unwrap();
+        let expect_pos = plain.positions_f64().unwrap().to_vec();
+        let expect_vel = plain.velocities_f64().unwrap().to_vec();
+        drop(plain);
+        let _guard = HookGuard::arm(&MAP_FAILS);
+        let mapped = map_file(&path, 1).unwrap();
+        assert_eq!(mapped.positions_f64().unwrap(), expect_pos.as_slice());
+        assert_eq!(mapped.velocities_f64().unwrap(), expect_vel.as_slice());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn writer_stores_one_known_value_little_endian() {
+        let dir = std::env::temp_dir().join(format!("conbin-le-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("one.conbin");
+        // Second position is 0.25. Its little-endian bytes are fixed.
+        write_known(&path, 1, 1);
+        let known = 0.25f64;
+        let bytes = std::fs::read(&path).unwrap();
+        let at = page_size().unwrap() + std::mem::size_of::<f64>();
+        assert_eq!(&bytes[at..at + 8], known.to_le_bytes().as_slice());
+        let mapped = map_file(&path, 1).unwrap();
+        assert_eq!(mapped.positions_f64().unwrap()[1], known);
+        let mut got = vec![0.0; mapped.header.position_len().unwrap()];
+        let mut vel = vec![0.0; got.len()];
+        read_into_threads(&path, &mut got, Some(&mut vel), 1).unwrap();
+        assert_eq!(got[1], known);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

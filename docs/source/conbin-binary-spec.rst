@@ -80,8 +80,9 @@ When that bit is clear they return no velocity array.
 A truncation of the file during that time can raise ``SIGBUS``.
 
 ``read_into`` and ``read_into_f32`` copy the runs with ``pread`` into slices that the caller owns.
-They do not convert the byte order.
-A big-endian host fails the same little-endian check as the mapped reader, before the copy.
+Each value is read as little-endian.
+A big-endian host still receives the same numbers.
+The mapped view still fails on a big-endian host, because it returns the file bytes in place.
 Each fails when the file uses the other value width, or when a slice has the wrong length.
 The read also fails when a run passes the end of the file, which covers a payload offset past that end.
 Each fills the velocity slice only when flag bit 1 is set.
