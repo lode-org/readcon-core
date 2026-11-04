@@ -75,13 +75,18 @@ fn con_roundtrip_preserves_reduced_units_and_values() {
     builder.add_atom("H", 1.5, 2.5, 3.5, [false; 3], 0, 1.0);
     let original = builder.build().unwrap();
     let mut bytes = Vec::new();
-    ConFrameWriter::new(&mut bytes).write_frame(&original).unwrap();
+    ConFrameWriter::new(&mut bytes)
+        .write_frame(&original)
+        .unwrap();
     let text = String::from_utf8(bytes).unwrap();
     let mut frames = ConFrameIterator::new(&text);
     let restored = frames.next().unwrap().unwrap();
     assert!(frames.next().is_none());
     assert_eq!(restored.header.metadata.get("units"), Some(&units));
-    assert_eq!(restored.header.energy().unwrap().to_bits(), (-1.25_f64).to_bits());
+    assert_eq!(
+        restored.header.energy().unwrap().to_bits(),
+        (-1.25_f64).to_bits()
+    );
     assert_eq!(restored.atom_data[0].x.to_bits(), 1.5_f64.to_bits());
     assert_eq!(restored.atom_data[0].y.to_bits(), 2.5_f64.to_bits());
     assert_eq!(restored.atom_data[0].z.to_bits(), 3.5_f64.to_bits());

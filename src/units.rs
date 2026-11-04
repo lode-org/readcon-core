@@ -113,12 +113,15 @@ impl UnitExpression {
     }
 
     fn same_references(self, other: Self) -> bool {
-        self.references.iter().zip(other.references.iter()).all(|(a, b)| {
-            a == b
-                || (*a != 0.0
-                    && *b != 0.0
-                    && (a - b).abs() <= 8.0 * f64::EPSILON * a.abs().max(b.abs()))
-        })
+        self.references
+            .iter()
+            .zip(other.references.iter())
+            .all(|(a, b)| {
+                a == b
+                    || (*a != 0.0
+                        && *b != 0.0
+                        && (a - b).abs() <= 8.0 * f64::EPSILON * a.abs().max(b.abs()))
+            })
     }
 }
 
@@ -393,9 +396,9 @@ fn parse_atom(
             references: [0.0, 1.0],
         },
         _ => {
-            let base = table.get(name).ok_or_else(|| {
-                ParseError::ValidationError(format!("unknown unit '{name}'"))
-            })?;
+            let base = table
+                .get(name)
+                .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
             UnitExpression::physical(base.si_factor, base.dim)
         }
     };
