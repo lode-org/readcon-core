@@ -808,13 +808,25 @@ fn parse_frames_parallel_bytes(
     };
     match num_threads {
         None => parse_chunks(),
-        Some(n) => {
-            let n = n.max(1);
-            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-                Ok(pool) => pool.install(parse_chunks),
-                Err(_) => parse_chunks(),
-            }
-        }
+        Some(n) if n <= 1 => (0..boundaries.len())
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < boundaries.len() {
+                    boundaries[i + 1]
+                } else {
+                    bytes.len()
+                };
+                let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+                match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                }
+            })
+            .collect(),
+        Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+            Ok(pool) => pool.install(parse_chunks),
+            Err(_) => parse_chunks(),
+        },
     }
 }
 
@@ -1007,13 +1019,25 @@ pub fn parse_frames_at_offsets(
 
     match num_threads {
         None => parse_chunks(),
-        Some(n) => {
-            let n = n.max(1);
-            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-                Ok(pool) => pool.install(parse_chunks),
-                Err(_) => parse_chunks(),
-            }
-        }
+        Some(n) if n <= 1 => (0..boundaries.len())
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < boundaries.len() {
+                    boundaries[i + 1]
+                } else {
+                    file_contents.len()
+                };
+                let mut iter = ConFrameIterator::new(&file_contents[start..end]);
+                match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                }
+            })
+            .collect(),
+        Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+            Ok(pool) => pool.install(parse_chunks),
+            Err(_) => parse_chunks(),
+        },
     }
 }
 
