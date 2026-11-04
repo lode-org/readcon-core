@@ -211,34 +211,64 @@ fn block_bytes(idx: &FrameIndex, r: &std::ops::Range<usize>) -> (usize, usize, V
     (lo, hi, offs)
 }
 
+/// Read only `[lo, hi)` so a rank does not pull bytes another rank parses.
+fn read_span(path: &Path, lo: usize, hi: usize) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len() as usize;
+    if lo > hi || hi > len {
+        return Err("byte range is outside the file".into());
+    }
+    file.seek(SeekFrom::Start(lo as u64))
+        .map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; hi - lo];
+    file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+    Ok(buf)
+}
+
 fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankFrames, BoxErr> {
+    // Rank 0 reads the file once, to build the index. Every other rank
+    // waits for that index and then reads only its own byte range.
+    let mut held = None;
     let packed = if comm.rank() == 0 {
-        root_index(path, true).map(|(_, idx)| pack_index(&idx))
+        match root_index(path, true) {
+            Ok((fc, idx)) => {
+                let packed = pack_index(&idx);
+                held = Some(fc);
+                Ok(packed)
+            }
+            Err(e) => Err(e),
+        }
     } else {
         Ok(Vec::new())
     };
     let idx = unpack_index(&bcast_result(comm, packed)?);
     let r = comm.my_frames(idx.len());
-
-    // Every rank maps the file itself; a size mismatch means it is not
-    // the same file (or not shared), which is an error for all.
-    let opened = compression::read_file_contents(path)
-        .map_err(|e| e.to_string())
-        .and_then(|fc| {
-            if bytes_of(&fc).len() as u64 == idx.data_len {
-                Ok(fc)
-            } else {
-                Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
-            }
-        });
+    let (lo, hi, offs) = block_bytes(&idx, &r);
+    let opened = if let Some(fc) = &held {
+        let all = bytes_of(fc);
+        if all.len() as u64 == idx.data_len {
+            Ok(all[lo..hi].to_vec())
+        } else {
+            Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
+        }
+    } else {
+        let len = std::fs::metadata(path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        if len == idx.data_len {
+            read_span(path, lo, hi)
+        } else {
+            Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
+        }
+    };
     let ok = agree(comm, opened.is_ok());
-    let fc = match (opened, ok) {
-        (Ok(fc), true) => fc,
+    let bytes = match (opened, ok) {
+        (Ok(bytes), true) => bytes,
         (Err(e), _) => return Err(format!("rank {}: {e}", comm.rank()).into()),
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
-    let (lo, hi, offs) = block_bytes(&idx, &r);
-    let frames = parse_local(comm, &bytes_of(&fc)[lo..hi], &offs, threads)?;
+    let frames = parse_local(comm, &bytes, &offs, threads)?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
