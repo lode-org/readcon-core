@@ -16,13 +16,13 @@ On one million atoms the C read takes 0.080 s.
 A fresh Python process takes 0.121 s and peaks at 165 MiB.
 The C reader peaks at 140 MiB.
 The upstream eon client takes 0.276 s.
-The full table is in SUMMARY.md.
+SUMMARY.md lists every row.
 
 ## Nearest native format
 
 This panel reads cell-carrying files.
 ASE and chemfiles read extended xyz.
-OVITO reads extended xyz.
+The Open Visualization Tool reads extended xyz.
 pymatgen reads a POSCAR.
 MDAnalysis reads a protein data bank file with a crystal record.
 NumPy reads an npy coordinate array, which has no cell.
@@ -34,4 +34,4 @@ The other native rows match the atom count, the cell, and the coordinates.
 The rules live in benchmarks/workflow/Snakefile.
 The target name is h2h.
 Each arm is one rule and one asv class under bench/h2h/asv.
-bench/h2h/asv/drive.py holds the lock that keeps the arms serial.
+bench/h2h/asv/drive.py locks the arms so they stay serial.
