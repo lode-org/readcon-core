@@ -20,6 +20,11 @@ pub struct MemchrLines<'a> {
     /// as they are tokenized. Coordinate rows stay on the byte parser.
     check_utf8: bool,
     utf8_bad: bool,
+    /// Absolute offsets of every `\n`. Set only for a frame-start scan.
+    /// `None` keeps the per-line `memchr` path used by a full parse.
+    newlines: Option<Vec<usize>>,
+    /// Index of the line that starts at `pos` when `newlines` is in use.
+    line_no: usize,
 }
 
 impl<'a> MemchrLines<'a> {
@@ -43,11 +48,16 @@ impl<'a> MemchrLines<'a> {
             peeked: None,
             check_utf8,
             utf8_bad: false,
+            newlines: None,
+            line_no: 0,
         }
     }
 
     #[inline]
     fn read_one(&mut self) -> Option<&'a str> {
+        if self.newlines.is_some() {
+            return self.read_one_indexed();
+        }
         if self.utf8_bad || self.pos >= self.bytes.len() {
             return None;
         }
@@ -103,6 +113,53 @@ impl<'a> MemchrLines<'a> {
             // Rewind pos to the start of the peeked line.
             let start = p.as_ptr() as usize - self.bytes.as_ptr() as usize;
             self.pos = start;
+            if let Some(nl) = self.newlines.as_deref() {
+                self.line_no = line_no_for_pos(nl, self.bytes.len(), start);
+            }
+        }
+    }
+
+    /// One line from the precomputed newline index.
+    ///
+    /// The cursor must sit on a line start (or at the end). The bytes of
+    /// the line are the same slice `memchr` would return, including a line
+    /// whose body crosses a chunk boundary: only the `\n` is indexed.
+    fn read_one_indexed(&mut self) -> Option<&'a str> {
+        if self.utf8_bad || self.pos >= self.bytes.len() {
+            return None;
+        }
+        let len = self.bytes.len();
+        let line_no = {
+            let nl = self.newlines.as_deref().unwrap();
+            if self.pos == line_start_pos(nl, len, self.line_no) {
+                self.line_no
+            } else {
+                line_no_for_pos(nl, len, self.pos)
+            }
+        };
+        let Some(span) = indexed_span(self.newlines.as_deref().unwrap(), self.bytes, line_no)
+        else {
+            return None;
+        };
+        let trimmed = &self.bytes[span.start..span.content_end];
+        if self.check_utf8 {
+            match std::str::from_utf8(trimmed) {
+                Ok(s) => {
+                    self.pos = span.next_pos;
+                    self.line_no = line_no + 1;
+                    Some(s)
+                }
+                Err(_) => {
+                    self.utf8_bad = true;
+                    self.line_no = line_no;
+                    None
+                }
+            }
+        } else {
+            self.pos = span.next_pos;
+            self.line_no = line_no + 1;
+            // SAFETY: source was `&str`; the span is a UTF-8 line cut on ASCII `\n`/`\r`.
+            Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
     }
 
@@ -309,6 +366,9 @@ impl<'a> ConFrameIterator<'a> {
     /// parser accepts that line. Further lines after it are missing.
     fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
         self.lines.clear_peek();
+        if self.lines.newlines.is_some() {
+            return self.advance_lines_indexed(n);
+        }
         for i in 0..n {
             let rest = &self.lines.bytes[self.lines.pos..];
             match memchr::memchr(b'\n', rest) {
@@ -334,6 +394,11 @@ impl<'a> ConFrameIterator<'a> {
     /// the per-line search would stop at `end` too, so one vectorized
     /// count replaces it. Any other case takes the per-line search.
     fn advance_lines_to(&mut self, n: usize, end: Option<usize>) -> Result<(), error::ParseError> {
+        // The newline index jumps by line count. `end` does not change
+        // where that jump lands; it only shortcuts the per-line search.
+        if self.lines.newlines.is_some() {
+            return self.advance_lines(n);
+        }
         self.lines.clear_peek();
         let pos = self.lines.pos;
         let bytes = self.lines.bytes;
@@ -347,6 +412,60 @@ impl<'a> ConFrameIterator<'a> {
             return Ok(());
         }
         self.advance_lines(n)
+    }
+
+    /// [`Self::advance_lines`] using the stitched newline index.
+    ///
+    /// A missing line and a final line with no `\n` land on the same byte
+    /// as the `memchr` loop. The index is not consulted for a full parse.
+    fn advance_lines_indexed(&mut self, n: usize) -> Result<(), error::ParseError> {
+        let len = self.lines.bytes.len();
+        let step = {
+            let nl = self.lines.newlines.as_deref().unwrap();
+            let nlines = line_count(nl, len);
+            let line_no = if self.lines.pos == line_start_pos(nl, len, self.lines.line_no) {
+                self.lines.line_no
+            } else {
+                line_no_for_pos(nl, len, self.lines.pos)
+            };
+            if n == 0 {
+                IndexStep::Stay(line_no)
+            } else if line_no >= nlines {
+                IndexStep::Missing(line_no)
+            } else {
+                match line_no.checked_add(n) {
+                    Some(target) if target <= nlines => {
+                        let pos = if target == nlines {
+                            len
+                        } else {
+                            line_start_pos(nl, len, target)
+                        };
+                        IndexStep::Landed(target, pos)
+                    }
+                    _ => IndexStep::Short(nlines, len),
+                }
+            }
+        };
+        match step {
+            IndexStep::Stay(line_no) => {
+                self.lines.line_no = line_no;
+                Ok(())
+            }
+            IndexStep::Missing(line_no) => {
+                self.lines.line_no = line_no;
+                Err(error::ParseError::IncompleteFrame)
+            }
+            IndexStep::Landed(line_no, pos) => {
+                self.lines.line_no = line_no;
+                self.lines.pos = pos;
+                Ok(())
+            }
+            IndexStep::Short(line_no, pos) => {
+                self.lines.line_no = line_no;
+                self.lines.pos = pos;
+                Err(error::ParseError::IncompleteFrame)
+            }
+        }
     }
 
     /// One line from the shared cursor (same as full-parse path).
@@ -758,7 +877,11 @@ fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::ParseError> {
     Ok(boundaries)
 }
 
-fn parse_span(bytes: &[u8], start: usize, end: usize) -> Result<types::ConFrame, error::ParseError> {
+fn parse_span(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+) -> Result<types::ConFrame, error::ParseError> {
     let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
     match iter.next() {
         Some(result) => result,
@@ -896,22 +1019,17 @@ fn parse_frames_parallel_bytes(
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
     use rayon::prelude::*;
 
-    let mut scanner = ConFrameIterator::from_bytes(bytes);
-    let mut boundaries = Vec::new();
-    loop {
-        scanner.lines.clear_peek();
-        let start = scanner.lines.pos;
-        // Whitespace after the final frame does not open another frame.
-        if start >= bytes.len() || bytes[start..].iter().all(u8::is_ascii_whitespace) {
-            break;
-        }
-        boundaries.push(start);
-        match scanner.forward_fast() {
-            Some(Ok(())) => {}
-            Some(Err(_)) | None => break,
-        }
-    }
+    let threads = scan_thread_count(num_threads, bytes.len());
     let parse_chunks = || {
+        let mut scanner = ConFrameIterator::from_bytes(bytes);
+        if threads >= 2 {
+            // Same pool as the parse, so the newline chunks do not start
+            // a second set of workers.
+            scanner.lines.newlines = Some(newline_positions(bytes, threads));
+            scanner.lines.line_no = 0;
+        }
+        // Whitespace after the final frame does not open another frame.
+        let boundaries = collect_frame_starts(scanner, true);
         let num_frames = boundaries.len();
         (0..num_frames)
             .into_par_iter()
@@ -932,21 +1050,25 @@ fn parse_frames_parallel_bytes(
     };
     match num_threads {
         None => parse_chunks(),
-        Some(n) if n <= 1 => (0..boundaries.len())
-            .map(|i| {
-                let start = boundaries[i];
-                let end = if i + 1 < boundaries.len() {
-                    boundaries[i + 1]
-                } else {
-                    bytes.len()
-                };
-                let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
-                match iter.next() {
-                    Some(result) => result,
-                    None => Err(error::ParseError::IncompleteFrame),
-                }
-            })
-            .collect(),
+        Some(n) if n <= 1 => {
+            let _ = n;
+            let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
+            (0..boundaries.len())
+                .map(|i| {
+                    let start = boundaries[i];
+                    let end = if i + 1 < boundaries.len() {
+                        boundaries[i + 1]
+                    } else {
+                        bytes.len()
+                    };
+                    let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+                    match iter.next() {
+                        Some(result) => result,
+                        None => Err(error::ParseError::IncompleteFrame),
+                    }
+                })
+                .collect()
+        }
         Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
             Ok(pool) => pool.install(parse_chunks),
             Err(_) => parse_chunks(),
@@ -1045,16 +1167,166 @@ pub fn read_all_frames_indexed(
         .collect()
 }
 
-/// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
-/// Stops at the first skip error (that start is still included).
-pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
+/// Below this size the chunk scan costs more than one `memchr` pass.
+#[cfg(feature = "parallel")]
+const SCAN_PARALLEL_MIN: usize = 32 * 1024;
+
+enum IndexStep {
+    Stay(usize),
+    Missing(usize),
+    Landed(usize, usize),
+    Short(usize, usize),
+}
+
+struct IndexedSpan {
+    start: usize,
+    content_end: usize,
+    next_pos: usize,
+}
+
+/// Lines in `bytes`, counting a final line that has no `\n`.
+fn line_count(nl: &[usize], len: usize) -> usize {
+    if len == 0 {
+        0
+    } else if nl.last().copied() == Some(len - 1) {
+        nl.len()
+    } else {
+        nl.len() + 1
+    }
+}
+
+fn line_start_pos(nl: &[usize], len: usize, line_no: usize) -> usize {
+    if line_no == 0 {
+        return 0;
+    }
+    if line_no >= line_count(nl, len) {
+        return len;
+    }
+    nl[line_no - 1] + 1
+}
+
+/// Line index of the line that contains `pos`, or the line count at `len`.
+fn line_no_for_pos(nl: &[usize], len: usize, pos: usize) -> usize {
+    if pos >= len {
+        return line_count(nl, len);
+    }
+    nl.partition_point(|&p| p < pos)
+}
+
+fn indexed_span(nl: &[usize], bytes: &[u8], line_no: usize) -> Option<IndexedSpan> {
+    let len = bytes.len();
+    if line_no >= line_count(nl, len) {
+        return None;
+    }
+    let start = if line_no == 0 { 0 } else { nl[line_no - 1] + 1 };
+    let (raw_end, next_pos) = if line_no < nl.len() {
+        (nl[line_no], nl[line_no] + 1)
+    } else {
+        (len, len)
+    };
+    let mut content_end = raw_end;
+    if content_end > start && bytes[content_end - 1] == b'\r' {
+        content_end -= 1;
+    }
+    Some(IndexedSpan {
+        start,
+        content_end,
+        next_pos,
+    })
+}
+
+/// `n` cuts covering `0..=len`. A cut may fall in the middle of a header line.
+#[cfg(feature = "parallel")]
+fn equal_cuts(len: usize, n: usize) -> Vec<usize> {
+    let n = n.max(1);
+    let mut cuts = Vec::with_capacity(n + 1);
+    for i in 0..=n {
+        let at = ((i as u128) * (len as u128) / (n as u128)) as usize;
+        let at = at.min(len);
+        if cuts.last().copied() != Some(at) {
+            cuts.push(at);
+        }
+    }
+    if cuts.last().copied() != Some(len) {
+        cuts.push(len);
+    }
+    cuts
+}
+
+/// Newline offsets in `bytes`.
+///
+/// `cuts` splits the buffer into `[cuts[i], cuts[i + 1])`. Each piece is
+/// scanned on its own and the offsets are concatenated. A `\n` belongs to
+/// the piece that contains that byte, so a header line whose body crosses
+/// a cut still contributes one newline.
+#[cfg(feature = "parallel")]
+fn newline_positions_at_cuts(bytes: &[u8], cuts: &[usize]) -> Vec<usize> {
+    let spans: Vec<(usize, usize)> = cuts
+        .windows(2)
+        .map(|w| (w[0].min(bytes.len()), w[1].min(bytes.len())))
+        .filter(|(start, end)| start < end)
+        .collect();
+    if spans.len() <= 1 {
+        let (start, end) = spans.first().copied().unwrap_or((0, 0));
+        return memchr::memchr_iter(b'\n', &bytes[start..end])
+            .map(|p| start + p)
+            .collect();
+    }
+    // The current Rayon pool, or the global pool when the caller has not
+    // installed one. Chunk count is the worker cap: two chunks do not
+    // wake every core.
+    use rayon::prelude::*;
+    let parts: Vec<Vec<usize>> = spans
+        .par_iter()
+        .map(|&(start, end)| {
+            memchr::memchr_iter(b'\n', &bytes[start..end])
+                .map(|p| start + p)
+                .collect()
+        })
+        .collect();
+    let mut all = Vec::with_capacity(bytes.len() / 32);
+    for part in parts {
+        all.extend(part);
+    }
+    all
+}
+
+#[cfg(feature = "parallel")]
+fn newline_positions(bytes: &[u8], threads: usize) -> Vec<usize> {
+    newline_positions_at_cuts(bytes, &equal_cuts(bytes.len(), threads))
+}
+
+#[cfg(feature = "parallel")]
+fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
+    let requested = match num_threads {
+        Some(n) => n,
+        None => std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+    };
+    if requested < 2 || len < SCAN_PARALLEL_MIN {
+        1
+    } else {
+        requested
+    }
+}
+
+fn collect_frame_starts(
+    mut scanner: ConFrameIterator<'_>,
+    skip_whitespace_tail: bool,
+) -> Vec<usize> {
     let mut boundaries = Vec::new();
-    let mut scanner = ConFrameIterator::new(file_contents);
     loop {
         scanner.lines.clear_peek();
         let start = scanner.lines.pos;
         if start >= scanner.lines.bytes.len() {
             break;
+        }
+        if skip_whitespace_tail {
+            let rest = &scanner.lines.bytes[start..];
+            if rest.iter().all(u8::is_ascii_whitespace) {
+                break;
+            }
         }
         boundaries.push(start);
         match scanner.forward_fast() {
@@ -1065,14 +1337,79 @@ pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
     boundaries
 }
 
+/// Serial header walk. This is the reference the chunked scan must match.
+fn frame_start_offsets_serial(file_contents: &str) -> Vec<usize> {
+    collect_frame_starts(ConFrameIterator::new(file_contents), false)
+}
+
+#[cfg(feature = "parallel")]
+fn scanner_with_newlines<'a>(text: &'a str, newlines: Vec<usize>) -> ConFrameIterator<'a> {
+    let mut scanner = ConFrameIterator::new(text);
+    scanner.lines.line_no = 0;
+    scanner.lines.newlines = Some(newlines);
+    scanner
+}
+
+#[cfg(feature = "parallel")]
+fn frame_start_offsets_indexed(text: &str, newlines: Vec<usize>) -> Vec<usize> {
+    collect_frame_starts(scanner_with_newlines(text, newlines), false)
+}
+
+/// Frame starts for `text` when the newline scan is split at `cuts`.
+///
+/// `cuts` is the chunk edges, including 0 and `text.len()`. A cut inside a
+/// header line is the straddling case: the stitched offsets are still the
+/// serial offsets.
+#[cfg(all(feature = "parallel", test))]
+fn frame_start_offsets_at_cuts(text: &str, cuts: &[usize]) -> Vec<usize> {
+    let newlines = newline_positions_at_cuts(text.as_bytes(), cuts);
+    frame_start_offsets_indexed(text, newlines)
+}
+
+/// Frame start byte offsets via [`ConFrameIterator::forward_fast`] (no atom parse).
+///
+/// Stops at the first skip error (that start is still included).
+///
+/// With the `parallel` feature, a buffer of at least 32 KiB is split into
+/// chunks and the newline bytes are scanned together. The chunks are not
+/// aligned to lines. A header that straddles a cut is one line, because
+/// each `\n` is recorded by the chunk that holds that byte and the lists
+/// are stitched in order. The returned offsets match the serial walk.
+pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
+    frame_start_offsets_with_threads(file_contents, None)
+}
+
+/// [`frame_start_offsets`] using `num_threads` chunks.
+///
+/// `None` uses the machine's parallelism. `Some(0)` and `Some(1)` stay on
+/// the calling thread. The offsets do not depend on the thread count.
+pub(crate) fn frame_start_offsets_with_threads(
+    file_contents: &str,
+    num_threads: Option<usize>,
+) -> Vec<usize> {
+    #[cfg(feature = "parallel")]
+    {
+        let threads = scan_thread_count(num_threads, file_contents.len());
+        if threads >= 2 {
+            let newlines = newline_positions(file_contents.as_bytes(), threads);
+            return frame_start_offsets_indexed(file_contents, newlines);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    frame_start_offsets_serial(file_contents)
+}
+
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
 ///
-/// Phase 1: sequential O(N) scan via memchr-backed
-/// [`ConFrameIterator::forward_fast`] to find byte offsets of every
-/// frame's start. The previous implementation built a `Vec<&str>` of
-/// every line and called `lines[..i].iter().map(|l| l.len() +
-/// 1).sum()` on every frame, which is O(N^2) in line count and
-/// dominated runtime on multi-frame trajectories.
+/// Phase 1: frame-start offsets from [`frame_start_offsets_with_threads`].
+/// The newline scan is split into chunks and stitched, including a header
+/// that crosses a chunk edge. The offsets match a serial
+/// [`ConFrameIterator::forward_fast`] walk. An earlier walk built a
+/// `Vec<&str>` of every line and summed lengths up to each frame, which
+/// is O(N^2) in the line count.
 ///
 /// Phase 2: parallel parse of each frame slice using rayon on the
 /// **global** Rayon pool (see also [`parse_frames_parallel_with_threads`]
@@ -1099,9 +1436,47 @@ pub fn parse_frames_parallel_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    // Phase 1: skip walk (no atom parse) for frame start offsets.
-    let boundaries = frame_start_offsets(file_contents);
-    parse_frames_at_offsets(file_contents, &boundaries, num_threads)
+    // Phase 1 runs on the same pool as phase 2. Building the pool twice
+    // would put the newline scan on the global pool and the parse on
+    // another.
+    let threads = scan_thread_count(num_threads, file_contents.len());
+    let run = || {
+        let boundaries = if threads >= 2 {
+            let newlines = newline_positions(file_contents.as_bytes(), threads);
+            frame_start_offsets_indexed(file_contents, newlines)
+        } else {
+            frame_start_offsets_serial(file_contents)
+        };
+        let parse_one = |i: usize| {
+            let start = boundaries[i];
+            let end = if i + 1 < boundaries.len() {
+                boundaries[i + 1]
+            } else {
+                file_contents.len()
+            };
+            let mut iter = ConFrameIterator::new(&file_contents[start..end]);
+            match iter.next() {
+                Some(result) => result,
+                None => Err(error::ParseError::IncompleteFrame),
+            }
+        };
+        if threads >= 2 {
+            use rayon::prelude::*;
+            (0..boundaries.len())
+                .into_par_iter()
+                .map(parse_one)
+                .collect()
+        } else {
+            (0..boundaries.len()).map(parse_one).collect()
+        }
+    };
+    match num_threads {
+        Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+            Ok(pool) => pool.install(run),
+            Err(_) => run(),
+        },
+        _ => run(),
+    }
 }
 
 /// Phase 2 of [`parse_frames_parallel_with_threads`]: parse the frames
@@ -1235,8 +1610,7 @@ mod parallel_strong_scale_tests {
     #[test]
     fn default_read_of_a_wide_file_stays_on_the_calling_thread() {
         const CHILD: &str = "READCON_DEFAULT_THREAD_CHILD";
-        const NAME: &str =
-            "iterators::parallel_strong_scale_tests::default_read_of_a_wide_file_stays_on_the_calling_thread";
+        const NAME: &str = "iterators::parallel_strong_scale_tests::default_read_of_a_wide_file_stays_on_the_calling_thread";
         if std::env::var_os(CHILD).is_none() {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([NAME, "--exact", "--test-threads=1"])
@@ -1271,5 +1645,128 @@ mod parallel_strong_scale_tests {
             sequential[0].atom_data[0].x, frames[0].atom_data[0].x,
             "default read changed a coordinate"
         );
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_header_scan_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test")
+            .join(name);
+        std::fs::read_to_string(path).expect(name)
+    }
+
+    fn assert_cuts_match(text: &str, cuts: &[usize]) {
+        let serial_nl: Vec<usize> = memchr::memchr_iter(b'\n', text.as_bytes()).collect();
+        let stitched = newline_positions_at_cuts(text.as_bytes(), cuts);
+        assert_eq!(stitched, serial_nl, "newline stitch at {cuts:?}");
+        let serial = frame_start_offsets_serial(text);
+        let parallel = frame_start_offsets_at_cuts(text, cuts);
+        assert_eq!(parallel, serial, "frame offsets at {cuts:?}");
+    }
+
+    fn header_straddle_cuts(text: &str) -> Vec<Vec<usize>> {
+        let serial = frame_start_offsets_serial(text);
+        let bytes = text.as_bytes();
+        let mut out = Vec::new();
+        // Equal splits, plus a cut forced into a header line of every frame.
+        for n in [2usize, 3, 4, 8] {
+            out.push(equal_cuts(bytes.len(), n));
+        }
+        for &start in &serial {
+            let window = (start + 160).min(bytes.len());
+            let mut line = start;
+            let mut straddled = 0usize;
+            while line < window && straddled < 9 {
+                let Some(rel) = memchr::memchr(b'\n', &bytes[line..window]) else {
+                    break;
+                };
+                let end = line + rel;
+                if end - line > 1 {
+                    let mid = line + (end - line) / 2;
+                    // mid is inside the line, so the header byte sits across two chunks.
+                    assert!(mid > line && mid < end);
+                    out.push(vec![0, mid, bytes.len()]);
+                    straddled += 1;
+                }
+                line = end + 1;
+            }
+        }
+        out
+    }
+
+    fn assert_slab(text: &str) {
+        assert!(!text.is_empty());
+        for cuts in header_straddle_cuts(&text) {
+            assert_cuts_match(&text, &cuts);
+        }
+        let bare = text.trim_end_matches(['\n', '\r']);
+        if !bare.is_empty() {
+            assert_cuts_match(bare, &equal_cuts(bare.len(), 4));
+            let mid = bare.len() / 2;
+            let line_start = bare[..mid].rfind('\n').map(|i| i + 1).unwrap_or(0);
+            let line_end = bare[mid..]
+                .find('\n')
+                .map(|i| mid + i)
+                .unwrap_or(bare.len());
+            if line_end - line_start > 1 {
+                let cut = line_start + (line_end - line_start) / 2;
+                assert_cuts_match(bare, &[0, cut, bare.len()]);
+            }
+        }
+        let tailed = format!("{text}\n   \n\t\n");
+        assert_cuts_match(
+            &tailed,
+            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
+        );
+        let crlf = text.replace('\n', "\r\n");
+        assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
+        let serial = frame_start_offsets_serial(text);
+        if serial.len() >= 2 {
+            let second = serial[1];
+            let next = serial.get(2).copied().unwrap_or(text.len());
+            let broken_at = second + (next - second) / 2;
+            let broken = &text[..broken_at.max(1)];
+            assert_cuts_match(broken, &[0, 1.max(broken.len() / 3), broken.len()]);
+        }
+    }
+
+    #[test]
+    fn chunked_header_scan_matches_serial_offsets() {
+        assert_eq!(frame_start_offsets_serial(""), frame_start_offsets(""));
+        assert_cuts_match("\n", &[0, 1]);
+        assert_cuts_match("   \n\n", &[0, 2, 5]);
+        for name in [
+            "tiny_cuh2.con",
+            "tiny_cuh2.convel",
+            "tiny_cuh2_forces.con",
+            "tiny_cuh2_vel_forces.con",
+            "cuh2.con",
+        ] {
+            let one = fixture(name);
+            assert_slab(&one);
+            assert_slab(&one.repeat(3));
+        }
+        // The bytes parser (the read_con path) uses the same stitch.
+        let wide = fixture("cuh2.con").repeat(4);
+        assert!(wide.len() >= SCAN_PARALLEL_MIN);
+        let serial = frame_start_offsets_serial(&wide);
+        for workers in [2usize, 3, 4, 8] {
+            let parallel = frame_start_offsets_with_threads(&wide, Some(workers));
+            assert_eq!(parallel, serial, "workers={workers}");
+            let parsed = frames_from_bytes(wide.as_bytes(), Some(workers)).expect("bytes parse");
+            assert_eq!(parsed.len(), serial.len());
+            let seq = frames_from_text(&wide, Some(1)).expect("serial parse");
+            assert_eq!(parsed.len(), seq.len());
+            assert_eq!(parsed[0].atom_data[0].x, seq[0].atom_data[0].x);
+            assert_eq!(
+                parsed.last().unwrap().atom_data.last().unwrap().z,
+                seq.last().unwrap().atom_data.last().unwrap().z
+            );
+        }
     }
 }
