@@ -26,7 +26,7 @@ import numpy as np
 REPEATS = 6
 LADDER = (1, 2, 4, 8)
 FRAMES_PER_WORKER = 16384
-RANK_PHASES = ("open_s", "map_s", "fault_s", "parse_s", "unmap_s", "barrier_s")
+RANK_PHASES = ("open_s", "map_s", "fault_s", "parse_s", "release_s", "unmap_s", "barrier_s")
 PHASE_KEYS = (
     "open_mmap_s",
     "pool_s",

@@ -199,14 +199,15 @@ struct RankSample {
     fault_s: f64,
     parse_s: f64,
     unmap_s: f64,
+    release_s: f64,
     barrier_s: f64,
     majflt: i64,
     minflt: i64,
     n_ok: usize,
 }
 
-/// One clock for this rank: open, map, fault, parse, and unmap of its
-/// own span, then the barrier. Nothing is touched before `wall0`.
+/// One clock for this rank: open, map, fault, parse, release, and unmap
+/// of its own span, then the barrier. Nothing is touched before `wall0`.
 fn time_span(
     world: &mpi::topology::SimpleCommunicator,
     path: &Path,
@@ -257,7 +258,11 @@ fn time_span(
     let parsed = parse_frames_at_offsets(text, offsets, Some(1));
     let n_ok = parsed.iter().filter(|item| item.is_ok()).count();
     let parse_s = t.elapsed().as_secs_f64();
+
+    // Freeing the frames is part of the clock. It is not inside the parse.
+    let t = Instant::now();
     drop(parsed);
+    let release_s = t.elapsed().as_secs_f64();
 
     let t = Instant::now();
     drop(map);
@@ -277,6 +282,7 @@ fn time_span(
         fault_s,
         parse_s,
         unmap_s,
+        release_s,
         barrier_s,
         majflt: fault1.saturating_sub(fault0),
         minflt: touch1.saturating_sub(touch0),
@@ -426,6 +432,7 @@ fn main() {
     let mut fault_s = Vec::with_capacity(repeats);
     let mut parse_s = Vec::with_capacity(repeats);
     let mut unmap_s = Vec::with_capacity(repeats);
+    let mut release_s = Vec::with_capacity(repeats);
     let mut barrier_s = Vec::with_capacity(repeats);
     for _ in 0..repeats {
         let sample = time_span(&world, path, lo, hi, &offsets);
@@ -441,6 +448,7 @@ fn main() {
             fault_s.push(sample.fault_s);
             parse_s.push(sample.parse_s);
             unmap_s.push(sample.unmap_s);
+            release_s.push(sample.release_s);
             barrier_s.push(sample.barrier_s);
         }
     }
@@ -455,11 +463,12 @@ fn main() {
         let fault_txt = fmt_f64s(&fault_s);
         let parse_txt = fmt_f64s(&parse_s);
         let unmap_txt = fmt_f64s(&unmap_s);
+        let release_txt = fmt_f64s(&release_s);
         let barrier_txt = fmt_f64s(&barrier_s);
         let host = json_escape(&record_cpu());
         let mpi_name = json_escape(mpi.trim());
         let body = format!(
-            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"open_s\": [{open_txt}],\n  \"map_s\": [{map_txt}],\n  \"fault_s\": [{fault_txt}],\n  \"parse_s\": [{parse_txt}],\n  \"unmap_s\": [{unmap_txt}],\n  \"barrier_s\": [{barrier_txt}],\n  \"clock\": \"map-fault-span\",\n  \"mpirun_in_clock\": false,\n  \"init_to_clock_s\": {init_to_clock_s:.9},\n  \"span\": {span},\n  \"page_size\": {},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n",
+            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"open_s\": [{open_txt}],\n  \"map_s\": [{map_txt}],\n  \"fault_s\": [{fault_txt}],\n  \"parse_s\": [{parse_txt}],\n  \"unmap_s\": [{unmap_txt}],\n  \"release_s\": [{release_txt}],\n  \"barrier_s\": [{barrier_txt}],\n  \"clock\": \"map-fault-span\",\n  \"mpirun_in_clock\": false,\n  \"init_to_clock_s\": {init_to_clock_s:.9},\n  \"span\": {span},\n  \"page_size\": {},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n",
             page_size()
         );
         if let Some(parent) = out_path.parent() {
