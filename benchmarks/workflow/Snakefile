@@ -335,3 +335,225 @@ rule check:
             exit 1
         fi
         """
+
+
+# Head-to-head arms. Paper numbers come from these rules.
+# Each rule runs one asv module under taskset -c 0 for six serial samples.
+
+
+rule h2h_prepare:
+    output:
+        touch("bench/h2h/work/prepare.ok"),
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py prepare
+        """
+
+
+rule h2h_readcon_c:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/c-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/c-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/c-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/c-write-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py readcon_c
+        """
+
+
+rule h2h_readcon_fortran:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/fortran-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/fortran-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/fortran-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/fortran-write-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py readcon_fortran
+        """
+
+
+rule h2h_readcon_python:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/python-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/python-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/python-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/python-write-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/python-read-atoms-1000000-fresh.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py readcon_python
+        """
+
+
+rule h2h_eon_cpp:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/eon-cpp-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/eon-cpp-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py eon_cpp
+        """
+
+
+rule h2h_eon_python:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/eon-python-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py eon_python
+        """
+
+
+rule h2h_ase:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/ase-eon-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py ase
+        """
+
+
+rule h2h_chemfiles:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/chemfiles-xyz-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py chemfiles
+        """
+
+
+rule h2h_mdanalysis:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/mdanalysis-xyz-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py mdanalysis
+        """
+
+
+rule h2h_ovito:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/ovito-extxyz-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py ovito
+        """
+
+
+rule h2h_pymatgen:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/pymatgen-xyz-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py pymatgen
+        """
+
+
+rule h2h_numpy:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/numpy-npy-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py numpy
+        """
+
+
+rule h2h_ase_traj:
+    input:
+        "bench/h2h/work/prepare.ok",
+    output:
+        "bench/h2h/logs/campaign/ase-traj-read-atoms-1000000.stdout",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py ase_traj
+        """
+
+
+rule h2h_report:
+    input:
+        "bench/h2h/logs/campaign/c-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/c-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/c-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/c-write-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/fortran-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/fortran-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/fortran-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/fortran-write-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/python-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/python-read-frames-10000x100.stdout",
+        "bench/h2h/logs/campaign/python-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/python-write-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/python-read-atoms-1000000-fresh.stdout",
+        "bench/h2h/logs/campaign/eon-cpp-read-tiny10.stdout",
+        "bench/h2h/logs/campaign/eon-cpp-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/eon-python-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/ase-eon-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/chemfiles-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/mdanalysis-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/ovito-extxyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/pymatgen-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/numpy-npy-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/ase-traj-read-atoms-1000000.stdout",
+    output:
+        "bench/h2h/results.json",
+    shell:
+        """
+        set -euo pipefail
+        taskset -c 0 python bench/h2h/asv/drive.py report
+        """
+
+
+rule h2h:
+    input:
+        "bench/h2h/results.json",
+
