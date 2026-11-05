@@ -49,7 +49,6 @@ Elsevier%
 \input{affilfix}
 \input{commit}
 \input{release}
-\input{figures/generated/r0174_macros}
 \input{figures/generated/case_macros}
 \input{figures/generated/velocity_case}
 \input{figures/generated/corpus31_macros}
@@ -468,283 +467,16 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \FloatBarrier
 \section{Timing}\label{sec:supp-timing}
-This section records a stored campaign from a checkout that is not this branch.
-Section~\ref{sec:performance} does not use these tables.
-The measurements of that section are Section~\ref{sec:host} of the main text.
-Section~\ref{sec:supp-perf} names the stored records.
+The candidate timing campaign is not reported.
+Section~\ref{sec:performance} of the main text uses the measurements in Section~\ref{sec:host}.
+Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
+Each head-to-head arm reports how many frames match the reference and how many do not.
 
-\subsection{Host and payloads}
-The host of every timing is one Kernel-based Virtual Machine (\rcHypervisor) guest, whose processor reports itself as \texttt{\rcCpu}, of family~\rcFamily, model~\rcModel{} and stepping~\rcStepping.
-The guest has \rcCores{} processing units of the \rcArch{} architecture, \(\rcMemGiB\,\mathrm{GiB}\) of memory, \rcLtwo{} of L2 cache in \rcLtwoInstances{} instances and \rcLthree{} of L3 cache in \rcLthreeInstances{} instance.
-It runs \texttt{\rcOs} with Linux~\rcKernel{} and Python~\rcPython.
-Every timing record carries the hardware line of that host, which is the processor model as the kernel prints it, the count of processing units and the machine architecture, and no record names the host.
-The head-to-head and native-reader campaigns of Sections~\ref{sec:supp-h2h} and~\ref{sec:supp-native} ran on the same host with the same schedule.
-The scripts that write their tables stop on a record that names another processor, core count, kernel or hardware line, or another seed or count of rounds.
-The Python reads ran the readcon~\rcModuleVersion{} module, built from the library of the \readconcommitrole{} \texttt{\readconcommitshort} with rustc~\rcRustc.
-Both readcon-core reads of the trajectory have the \texttt{parallel} feature: the Python wheel enables it, and the C++ read links the library built with it.
-readcon-core wrote the trajectory as CON~\rcConVersion{} with positions and velocities, \rcTrajBytes{} bytes, and without velocities, \rcCoordsBytes{} bytes.
-The peers read the same frames as extended XYZ (\rcExtxyzBytes{} bytes), the ASE trajectory, H5MD written by h5py in binary64, which h5py and MDAnalysis both read, and XYZ (\rcXyzBytes{} bytes).
-Each reader returns every field of its group in Tables~\ref{tab:perf} and~\ref{tab:cpp}, keeps every frame, and releases the frames inside the timer.
-
-\subsection{Method}\label{sec:supp-method}
-We measure every timing of the paper with one schedule, \path{paper/cpc/bench/interleave.py}.
-A campaign is a set of cells, and a run of a cell is one fresh process that makes its measurement once and prints it.
-A campaign runs one untimed round and then \rcRounds{} timed rounds, and a round runs every cell once, in an order that one pseudo-random generator seeded with \rcSeed{} shuffles anew for each round.
-A drift of the host during a campaign then falls on every cell alike instead of on the cells that run last.
-The record keeps the seed, the order of every round, the runs of each cell in the order they ran, and the load averages of the host before the first round and after the last.
-
-A Python run is a fresh \path{paper/cpc/bench/bench_child.py}, pinned to one core at one thread and to all \rcCores{} at eight, and the peers run on one thread.
-It imports its reader and reads a \rcWarmFrames-frame warm-up file, and while it waits the parent reads the timed file once to load it into the page cache.
-The clock runs from the signal of the parent until the reader has returned every frame and its record, and then over the release of those frames.
-The release is a \texttt{del} and one pass of the garbage collector, so that frames held in reference cycles are freed inside the timer too.
-The checksums of every field are computed between the two intervals, with the clock stopped and every frame alive.
-A C++ run is a fresh process of \path{paper/cpc/bench/native/readcon_read.cpp} or \path{paper/cpc/bench/native/chemfiles_read.cpp}, pinned with \texttt{taskset}.
-It reads its warm-up file, waits for the same signal, reads the timed file and keeps every frame and its record, then sums the checksums, frees the frames and prints the seconds from the signal to the release of the frames.
-The clock does not cover the start of the process.
-The Python and C++ cells form one campaign of \rcCells{} cells, and every run of a cell printed the same checksums, which match the reference values of its payload.
-
-A time is the median of the \rcRounds{} runs of its cell, and the tables give the interquartile range (IQR) of those runs, the third quartile less the first, as \texttt{statistics.quantiles} of Python computes them with the inclusive method.
-A ratio is the readcon-core median over that of the other reader.
-memray~\rcMemray{} ran a second campaign of the same schedule over the Python cells.
-Each capture is a fresh interpreter that warms its reader as a timing run does and reads the timed file under the tracker, with every frame still held when the tracker stops.
-The peak heap of a cell is the median over its captures of the most bytes allocated inside the tracker and not yet freed, and the checksums of every capture match the reference values.
-The runs of a cell are separate processes, so the run is the unit of replication \cite{kaliberaRigorousBenchmarkingReasonable2013}.
-Table~\ref{tab:ordering} gives for every timing ratio of the paper the exact two-sided Mann-{}-Whitney \(p\) of the runs of its two cells \cite{mannTestWhetherOne1947}, the Hodges-{}-Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm decision at the family-wise level \ordAlpha{} over all \ordClaims{} timing ratios \cite{holmSimpleSequentiallyRejective1979}, and Holm rejects \ordRejected{} of them.
-
-\subsection{Python and C++ reads}
-Table~\ref{tab:perf} is the Python read and Table~\ref{tab:cpp} the C++ read through the C++ header.
-On one thread the Python read takes \(\rcUsRcOne\,\mu\mathrm{s}\) per frame, and returning the frames without copying any field out takes \(\rcTimeRcFramesOne\,\mathrm{s}\).
-The one-thread read peaks at \(\rcPeakRcOne\,\mathrm{MiB}\) of heap, \rcPeakAtomRcOne{} bytes per atom, against a file of \(\rcTrajMiB\,\mathrm{MiB}\).
-Table~\ref{tab:perf} gives MDAnalysis a group of its own, because its H5MD reader returns the positions and velocities in binary32 and in no wider type.
-The C++ read takes \(\rcCppUsReadconMocOne\,\mu\mathrm{s}\) per frame on one thread and \(\rcCppReadconMocEight\,\mathrm{s}\), \(\rcCppUsReadconMocEight\,\mu\mathrm{s}\) per frame, on eight.
-chemfiles stores the velocities, identifiers and mask of extended XYZ as per-atom properties, so its read looks each of them up by name for every atom of every frame.
-The ratio to chemfiles C++ on XYZ is \(\rcCppRatioChemfilesCoordsOne\) on the coordinates alone, with no per-atom property to read.
-Holm keeps that ratio, so the runs do not order the two readers (Table~\ref{tab:ordering}).
-Cachegrind~\rcValgrind{} counts the instructions of the Rust parse and of chemfiles C++ on fixed inputs (Table~\ref{tab:cachegrind}): one \rcAtoms-atom frame takes \rcGrindParseFrame{} instructions, and 100 frames \rcGrindParseHundred.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{Python reads of the \rcFrames-frame trajectory.
-A time is the median of the \rcRounds{} runs of a cell, with their IQR, and the peak heap is the median of the memray captures of the cell.
-The last column is readcon-core time over the time of the reader of that row.}
-\label{tab:perf}
-\scriptsize
-\input{figures/generated/r0174_table}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{C++ reads of the \rcFrames-frame trajectory, each run a fresh process timed from the signal of the parent until it frees its frames.
-A time is the median of the \rcRounds{} runs of a cell, with their IQR.
-The last column is readcon-core time at one thread over the time of the reader of that row.}
-\label{tab:cpp}
-\scriptsize
-\input{figures/generated/r0174_cpp}
-\end{table}
-
-\subsection{Column reads and the binary image}\label{sec:supp-h2h}
-Two head-to-head campaigns time the column reader, which returns the positions of every frame in one array, and a binary image of those positions against readers of other files that contain the same numbers (\path{paper/cpc/bench/h2h.py}).
-The coordinates campaign is \path{resources/test/cuh2.con}, the \rcAtoms-atom slab without velocities, repeated \hhFrames{} times, \hhCoordsBytes{} bytes.
-The velocity campaign is a file of \hhFrames{} frames of the same slab with a velocity section in each, \hhVelBytes{} bytes, which \path{benches/make_velocity_campaign.py} writes together with an XYZ file (\hhVelXyzBytes{} bytes) and a GROMACS coordinate (GRO) file (\hhVelGroBytes{} bytes) of the same frames; \texttt{h2h.py} runs the script twice and requires the same bytes from both runs.
-For each campaign, \path{benches/headtohead.py} writes the h5py dataset \texttt{position/value} in binary64 without compression or chunks (\hhHfiveBytes{} bytes), an ASE trajectory and an extended XYZ file with eight decimals, all from the first frame with the first atom moved along \(z\) by \(i \times 10^{-6}\,\text{\AA}\) in frame~\(i\).
-In the velocity campaign the ASE trajectory also stores the momenta of every frame, and the extended XYZ file and the dataset store positions only.
-The image of each CON file, \texttt{.rcbin}, is \hhRcbinBytes{} bytes: a header of 64 bytes with the frame and atom counts and the CRC-32C, a cyclic redundancy check (CRC), of the payload, then the positions, cell lengths and angles of every frame in binary64.
-
-In Python, \texttt{read\_arrays} with \texttt{positions\_only} parses the coordinate rows and passes over each velocity section by the atom counts of its frame header, and with \texttt{low\_memory} it reads the file through a window instead of mapping all of it.
-\texttt{read\_con} returns one frame object per frame and builds the atoms of a frame at their first access.
-\texttt{read\_rcbin} copies the positions of an image into a new array, or into one the caller passes, after it checks the magic, the version and that the block sizes of the header add up to the length of the file (\texttt{\srcRcbinCopy}).
-It does not recompute the CRC; \texttt{checksum\_rcbin\_mmap} and \texttt{read\_rcbin\_bytes} check it (\texttt{\srcRcbinCrc}).
-h5py reads the whole dataset, and ASE reads every frame of its file into a list of \texttt{Atoms}.
-A run of a call is a fresh \path{paper/cpc/bench/h2h_child.py} that makes the call once untimed and then once timed, from the call until what it read is released.
-The calls of a campaign run unpinned in the interleaved rounds of Section~\ref{sec:supp-method}, with the same seed and count of rounds.
-A time is the median of the runs of a call, with their IQR, and a ratio is the readcon-core median over the peer median.
-memray captured the peak heap of each call in a second campaign of the same schedule.
-Each capture is a fresh interpreter that makes the call of \texttt{benches/\allowbreak headtohead.py} once with its imports.
-The peak heap of a call is the median of its captures, in MB of \(10^{6}\) bytes.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{Python reads of the two head-to-head campaigns, with the memray peak heap of each read.}
-\label{tab:h2h-python}
-\scriptsize
-\input{figures/generated/h2h_python}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{C++ reads of the coordinates and velocity campaigns at one thread, by the column reader and the frame iterator of readcon-core and by chemfiles, built by g++~\hhGxxVersion{} and clang++~\hhClangVersion.
-A time is the median of the runs of a cell, with their IQR, and a ratio is the readcon-core median over the chemfiles median.}
-\label{tab:h2h-cpp}
-\scriptsize
-\input{figures/generated/h2h_cpp}
-\end{table}
-
-On the velocity file, \texttt{read\_arrays} takes \(\hhRatioArraysAseTrajVel\) times the ASE trajectory, \(\hhRatioArraysAseExtxyzVel\) times ASE on extended XYZ and \(\hhRatioArraysHfiveVel\) times h5py, and \texttt{read\_con} takes \(\hhRatioReadConAseTrajVel\) times the ASE trajectory (Table~\ref{tab:h2h-python}).
-On the coordinates file the same ratios are \(\hhRatioArraysAseTrajCoords\), \(\hhRatioArraysAseExtxyzCoords\), \(\hhRatioArraysHfiveCoords\) and \(\hhRatioReadConAseTrajCoords\).
-The image reads in \(\hhRatioRcbinHfiveVel\) times h5py on the velocity campaign and \(\hhRatioRcbinHfiveCoords\) times on the coordinates, and into a buffer of the caller in \(\hhRatioRcbinCallerHfiveVel\) and \(\hhRatioRcbinCallerHfiveCoords\) times.
-On the velocity file the peak heap of \texttt{read\_arrays} is \(\hhPeakArraysVel\,\mathrm{MB}\), of which the map of the file is part, and with \texttt{low\_memory} \(\hhPeakArraysLowVel\,\mathrm{MB}\), against \(\hhPeakHfiveVel\,\mathrm{MB}\) for h5py and \(\hhPeakAseTrajVel\,\mathrm{MB}\) for the ASE trajectory; \texttt{read\_con} peaks at \(\hhPeakReadConVel\,\mathrm{MB}\) and the image at \(\hhPeakRcbinVel\,\mathrm{MB}\).
-
-In C++, \texttt{Trajectory::\allowbreak read} of chemfiles~\hhChemfilesVersion{} reads one frame after another, and so does the frame iterator of readcon-core, \texttt{readcon::\allowbreak ConFrameIterator}: it parses every section of a frame, the velocities included, and frees the frame before it parses the next.
-Its column reader, \texttt{readcon::\allowbreak CoordinateBlocks::\allowbreak read}, returns the positions of every frame in one array, with \texttt{positions\_only} or with the velocities as well.
-Each program sums the \(x\) components it reads and prints the frame count and the sum (\path{benches/cpp_ratio.cpp}).
-A cell pairs one compiler and level, g++~\hhGxxVersion{} or clang++~\hhClangVersion{} at -O2 or -O3, with the chemfiles library built by that compiler at that level (\path{paper/cpc/bench/build_chemfiles.sh}), and every cell links the readcon-core library built with the \texttt{parallel} feature and reads on one thread.
-A run is a fresh unpinned process of one program in one mode, in the interleaved rounds of Section~\ref{sec:supp-method}; the timer starts after the process does and covers the read and the sum, and every run of a cell printed the same frame count and sum.
-On each XYZ file the two readers print the same sum.
-Frame by frame on the coordinates file, readcon-core takes \(\hhCppFramesRatioMinCoords\) to \(\hhCppFramesRatioMaxCoords\) times chemfiles over the four cells (Table~\ref{tab:h2h-cpp}).
-On the velocity file it takes \(\hhCppFramesRatioMinVel\) to \(\hhCppFramesRatioMaxVel\) times chemfiles on XYZ, and it parses the velocity sections without summing them.
-The column reader takes \(\hhCppRatioMinCoords\) to \(\hhCppRatioMaxCoords\) times chemfiles on the coordinates file and, with \texttt{positions\_only}, \(\hhCppRatioMinVel\) to \(\hhCppRatioMaxVel\) on the file with velocities.
-The XYZ reader of chemfiles loads no velocities.
-Its GRO reader loads positions and velocities, so the GRO file is the peer that returns the same fields.
-Summing the velocities too, readcon-core takes \(\hhCppFramesGroRatioMin\) to \(\hhCppFramesGroRatioMax\) times chemfiles on GRO frame by frame and \(\hhCppGroRatioMin\) to \(\hhCppGroRatioMax\) with the column reader.
-Holm rejects every ratio of Table~\ref{tab:h2h-cpp} but two, those of the column reader against GRO under clang++ at -O2 and at -O3.
-For those two the runs do not order the programs (Table~\ref{tab:ordering}).
-GRO stores positions in nanometres with three decimals and velocities with four, against five in the CON file, so chemfiles parses fewer digits per value.
-
-\subsection{Native trajectory readers}\label{sec:supp-native}
-A third campaign times readcon-core against the readers that come with the binary trajectory formats of molecular dynamics, on one system written through the writer of each format (\path{paper/cpc/bench/binary_formats.py}).
-The system is \bfAtoms{} atoms on a simple cubic lattice, \bfSide{} sites to an edge at a spacing of \(\bfSpacing\,\text{\AA}\), in \bfFrames{} frames of an orthorhombic box whose three edges grow by different amounts from frame to frame.
-Each atom sits at the centre of its lattice cell, moved by less than \(\bfJitter\,\text{\AA}\) in each coordinate.
-No two frames are equal, since a hash of the frame, the atom and the coordinate sets each move.
-The first half of the atoms are Cu and the second half H, so a CON frame, which groups its atoms by type, lists them in the order of the other formats.
-One program writes the positions and box lengths in binary64 and through the writers of the formats: the GROMACS compressed trajectory (XTC) at a precision of \(\bfXtcPrecision\,\mathrm{nm}\) and the full-precision trajectory (TRR) in binary32, both by xdrfile~\bfXdrfile; the binary trajectory (DCD) of CHARMM in binary32 by the molfile code that MDAnalysis vendors at commit \texttt{\bfMolfileCommit}; and TNG by the TNG library~\bfTngVersion{} at commit \texttt{\bfTngCommit}, compressed at \(\bfTngPrecision\,\mathrm{nm}\) in one frame set.
-From the binary64 values the readcon-core writer writes three CON files, in the shortest round-trip form, with six decimals and with two, and the binary image of the round-trip file.
-Two decimals, \(\bfConTwoStep\,\text{\AA}\), are the \(\bfXtcPrecision\,\mathrm{nm}\) of XTC and TNG, and six decimals hold more than the binary32 of TRR and DCD.
-The CON files take \bfMbCon, \bfMbConSix{} and \bfMbConTwo{}~MB, the image \bfMbRcbin{}~MB, and the XTC, TRR, DCD and TNG files \bfMbXtc, \bfMbTrr, \bfMbDcd{} and \bfMbTng{}~MB, and a second run of every writer gives the same bytes.
-
-Every reader returns the positions and the three box lengths of every frame.
-A CON atom row also carries the fixed flags and the identifier, which readcon-core parses, and the TRR file stores no velocities or forces.
-Each reader is a program that times, in a fresh process, the open of the file, the read of every frame and the release of what it read.
-Reading by frame, the native programs read each frame into a buffer that the next frame reuses, and the frame iterator of readcon-core builds a new frame at each step from the mapped file.
-Reading all frames, every program keeps each frame in its own buffer until the read ends, and readcon-core calls \texttt{read\_all\_frames\_with\_threads}.
-readcon-core also reads the positions of every frame into one array with its column reader, \texttt{read\_soa\_path}, and reads the image with \texttt{read\_rcbin}, which reads the file, checks its CRC-32C and copies the positions into a new array.
-The TNG frame read makes the calls of GROMACS, the box and then the positions of each frame, and the TNG all-frames read calls \texttt{tng\_util\_pos\_read} and \texttt{tng\_util\_box\_shape\_read}.
-libxtc \cite{krylovLibxtcEfficientLibrary2021} at commit \texttt{\bfLibxtcCommit} decodes the XTC file with its own kernel.
-The all-frames read of readcon-core and both libxtc reads ran on one and on eight threads; the other readers take no thread count and ran on one.
-GCC~\bfGcc{} built the C libraries and programs with \texttt{-O3 -DNDEBUG} and the libxtc kernel with the flags of its \texttt{setup.py}, \texttt{-march=native} and \texttt{-ffast-math} among them, and rustc~\bfRustc{} built the readcon-core program with the release profile and lock file of the library and the \texttt{parallel} feature.
-
-Before the timing, each program wrote the positions it read as binary64 values in \(\text{\AA}\), and the script compared them with the binary64 source (Table~\ref{tab:binary-formats}).
-Every reader but libxtc stays within the quantization of its file, and the round-trip CON file and the image return the source exactly.
-libxtc puts \bfLibxtcOff{} atom positions, \bfLibxtcOffPercent\,\% of those in the file, beyond the tolerance of XTC, up to \(\bfLibxtcMaxError\,\text{\AA}\) from the source.
-On \texttt{pep.xtc}, the test file of libxtc with \bfPepFrames{} frames of \bfPepAtoms{} atoms, libxtc returns the \texttt{pep.npy} that its own tests compare with, xdrfile returns the positions that MDAnalysis~\bfMdaVersion{} returns, and the two differ in \bfPepOff{} of the \bfPepPositions{} atom positions.
-Table~\ref{tab:binary-formats} gives the libxtc times, and no ratio uses them.
-On a file whose frames are in two frame sets of \bfTngSetFrames{} frames, the TNG frame read returns every frame within the tolerance and the TNG all-frames read is killed by a signal, so the timed TNG file contains one frame set.
-
-Each cell ran unpinned in the interleaved rounds of Section~\ref{sec:supp-method}, a fresh process each run, and every run printed the frame count, atom count and checksum of the check run of its cell.
-Before every run of every cell, warm-up or timed, \texttt{interleave.settle} kept every CPU busy for \(\bfSettleMs\,\mathrm{ms}\) with one pinned child process per CPU, since libxtc splits each frame evenly over its threads and a CPU that an idle period leaves slow stretches every frame.
-\texttt{bench/\allowbreak settle\_period.py} measured that period on the host from a timing record of the campaign without the settle, whose SHA-256 \texttt{settle.json} keeps.
-Three values come from that record: the band, the median over the \bfSettleCells{} one-thread cells of the IQR over the median, \(\bfSettleBand\,\%\); the window, the shortest median on eight threads, \(\bfSettleWindow\,\mathrm{ms}\) for libxtc reading by frame; and the gap, the longest one-thread run, \(\bfSettleGap\,\mathrm{s}\) for the TNG frame read.
-Each of \bfSettleTrials{} trials idles for the gap and then keeps every CPU busy for as long, \bfSettleWindows{} windows, and each child counts its passes through its loop in every window.
-The ratio of a CPU in a window is its time per pass over the median of all CPUs, and its steady value is its median ratio over the second half of the trial.
-A trial settles at the start of the first window in which no ratio exceeds its steady value by more than \(\bfSettleBand\,\%\), and the period is the longest settle of the trials, that of trial~\bfSettleTrial.
-A time is the median of the runs of a cell, with their IQR, and a ratio is the readcon-core median over the median of a native reader in the same read, both on one thread (Table~\ref{tab:binary-ratios}).
-At the precision of each format, reading by frame, readcon-core takes \(\bfRatioRcFramesTwoXtcFrames\) times xdrfile on XTC, \(\bfRatioRcFramesSixTrrFrames\) times xdrfile on TRR, \(\bfRatioRcFramesSixDcdFrames\) times molfile on DCD and \(\bfRatioRcFramesTwoTngFrames\) times TNG.
-Reading all frames, it takes \(\bfRatioRcAllTwoXtcAll\), \(\bfRatioRcAllSixTrrAll\), \(\bfRatioRcAllSixDcdAll\) and \(\bfRatioRcAllTwoTngAll\) times the same readers.
-TNG reads by frame in \(\bfTTngFrames\,\mathrm{s}\) and all frames in \(\bfTTngAll\,\mathrm{s}\).
-The image keeps every binary64 value and reads in \(\bfRatioRcImageXtcAll\), \(\bfRatioRcImageTrrAll\), \(\bfRatioRcImageDcdAll\) and \(\bfRatioRcImageTngAll\) times the all-frames reads of XTC, TRR, DCD and TNG.
-Holm rejects every ratio of Table~\ref{tab:binary-ratios} (Table~\ref{tab:ordering}), and the bottom panel of Figure~\ref{fig:timing} draws the all-frames times behind them.
-The round-trip CON file keeps every binary64 value too, and readcon-core reads it by frame in \(\bfTRcFrames\,\mathrm{s}\), against \(\bfTRcFramesSix\) and \(\bfTRcFramesTwo\,\mathrm{s}\) with six and two decimals.
-On eight threads it reads all frames of the three CON files in \(\bfTRcAllEight\), \(\bfTRcAllSixEight\) and \(\bfTRcAllTwoEight\,\mathrm{s}\), against \(\bfTRcAll\), \(\bfTRcAllSix\) and \(\bfTRcAllTwo\,\mathrm{s}\) on one.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{Reads of the \bfAtoms-atom, \bfFrames-frame system by readcon-core and by the native readers of XTC, TRR, DCD and TNG.
-A time is the median of the \rcRounds{} runs of a cell, with their IQR, and the rate is frames over the median.
-The error is the largest difference between a coordinate read and the binary64 source.
-\textsuperscript{a}libxtc returns wrong positions, and no ratio uses its times.}
-\label{tab:binary-formats}
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\input{figures/generated/bf_table}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{The readcon-core median over the median of each native reader in the same read, both on one thread.
-The image is set against the all-frames reads.
-The two-decimal CON file has the precision of XTC and TNG, and the six-decimal file more than the binary32 of TRR and DCD.}
-\label{tab:binary-ratios}
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\input{figures/generated/bf_ratios}
-\end{table}
-
-\subsection{File sizes}
-Table~\ref{tab:sizes} is the byte cost of the first frame of the timed trajectory of Section~\ref{sec:performance} and of all \sizeFrames{} frames, raw and after gzip at level \sizeGzipLevel.
-Every frame of that trajectory differs from the one before it, and the files of one column of the table hold the same fields.
-One CON~\sizeConVersion{} frame without velocities is \(\sizeConOne\) bytes per atom, against \(\sizeExtxyzOne\) for extended XYZ with mask and identifier columns, \(\sizeAsetrajOne\) for the ASE trajectory, and \(\sizeHfiveOne\) for one H5MD frame written by h5py with binary64 positions, a mask dataset and an identifier dataset.
-With velocities one CON frame is \(\sizeConOneVel\) bytes per atom.
-Over \sizeFrames{} frames with velocities the raw CON cost is \(\sizeConTraj\) bytes per atom, against \(\sizeAsetrajTraj\) for the ASE trajectory and \(\sizeHfiveTraj\) for h5py.
-gzip brings the CON trajectory down to \(\sizeConTrajGz\), extended XYZ to \(\sizeExtxyzTrajGz\), the ASE trajectory to \(\sizeAsetrajTrajGz\) and h5py to \(\sizeHfiveTrajGz\).
-H5MD is the smaller record for a long trajectory \cite{buylH5mdStructuredEfficient2014}, and CON is the record for the checkpoint, where one frame keeps the mask, the identifier and the unit.
-
-\input{figures/generated/sizes_table}
-
-\subsection{Records and tests}\label{sec:supp-perf}
-The records of Section~\ref{sec:performance} are the directory \path{paper/cpc/bench/results/r0174}.
-\texttt{reads.json} contains the campaign of the Python and C++ reads, written by \texttt{bench/\allowbreak reads.py}: the seed, the order of every round, the load averages and the hardware line, and for each cell every run in the order it ran, the median, quartiles and IQR of the runs and the checksums they printed.
-\texttt{memray.json} contains the memray campaign of the same schedule, written by \texttt{bench/\allowbreak memray\_peaks.py}.
-\texttt{bench/\allowbreak cpp\_reads.py} writes \texttt{cpp/checks.json}, the checksums of one run of each C++ cell against the reference, and \texttt{cpp/build.json}, the compiler, flags, commands and library digest of the two C++ programs.
-\texttt{cpp/build.json} also gives the SHA-256 of the C++ sources, of that script and of the two programs, and \texttt{reads.py} times no program with another SHA-256.
-In these records the host paths are the variables of \texttt{bench/\allowbreak portable.py}.
-\texttt{cachegrind/} contains the Cachegrind record of \texttt{bench/\allowbreak cachegrind.py}, which builds the benchmark program of readcon-core and runs each of its scenarios in a fresh Valgrind process in the same schedule.
-\texttt{payloads.json} gives the size and checksums of every timed file, and \texttt{provenance.json} the release, the commit, the digests of the module and of the library sources, the host, the hardware line and the module versions.
-\texttt{scripts/\allowbreak r0174\_tables.py} writes Tables~\ref{tab:perf}, \ref{tab:cpp} and~\ref{tab:cachegrind} and every number of Section~\ref{sec:performance} from these records, and \path{paper/cpc/data/trace/r0174_numbers.tsv} lists each such number with its record and field.
-\texttt{scripts/\allowbreak plot\_perf.py} writes Figure~\ref{fig:timing} from \texttt{reads.json} and the native-reader timings.
-The script stops when a record names another build, host or hardware line than \texttt{provenance.json} or another seed or count of rounds than \texttt{reads.json}, when \texttt{reads.json} ran fewer than six rounds, when a checksum of a run or of a memray capture disagrees with \texttt{payloads.json}, or when \texttt{reads.json} timed other C++ programs than \texttt{cpp/build.json} hashed.
-
-The head-to-head records of Section~\ref{sec:supp-h2h} are the directory \path{paper/cpc/bench/results/r0174/h2h}, written by \texttt{bench/\allowbreak h2h.py}.
-\texttt{payloads.json} gives the size and SHA-256 of every file of the two campaigns and the byte comparison of the second run of \texttt{benches/\allowbreak make\_velocity\_campaign.py} with the first, \texttt{python\_coords.json} and \texttt{python\_vel.json} the protocol, the runs and the memray captures of the calls of \texttt{benches/\allowbreak headtohead.py}, and \texttt{cpp\_coords.json} and \texttt{cpp\_vel.json} the protocol, the runs, the printed sums and the builds of the programs of \texttt{benches/\allowbreak cpp\_peer\_matrix.py}.
-\texttt{scripts/\allowbreak h2h\_tables.py} writes Tables~\ref{tab:h2h-python} and~\ref{tab:h2h-cpp} and every number of Section~\ref{sec:supp-h2h} from them, and \path{paper/cpc/data/trace/h2h_numbers.tsv} lists each such number.
-The script stops when the records name more than one library digest, when the Python records name other peers or another readcon module than \texttt{provenance.json}, when a record names another processor, core count or kernel than \texttt{provenance.json} or another protocol or hardware line than \texttt{reads.json}, when the second run of the velocity campaign differs from the first, or when readcon and chemfiles print different sums on an XYZ file.
-\texttt{bench/\allowbreak build\_chemfiles.sh} builds chemfiles~\hhChemfilesVersion{} from its source archive, whose SHA-256 it checks, once for each compiler and level.
-
-The records of Section~\ref{sec:supp-native} are the directory \path{paper/cpc/bench/results/r0174/binary_formats}, written by \texttt{bench/\allowbreak binary\_formats.py} with the programs of \path{paper/cpc/bench/binary_formats}.
-\texttt{build.json} gives the URL and SHA-256 of every source, the compiler versions, the flags and command of every library and program, the manifest of the readcon-core program and the SHA-256 of every program.
-\texttt{payloads.json} gives the system, the precision of each writer, and the size and SHA-256 of every file with the byte comparison of a second run of the writers.
-\texttt{checks.json} gives the largest error of every cell and the count of atom positions beyond the tolerance of its file, and the reads of \texttt{pep.xtc} and of the TNG file with two frame sets.
-\texttt{timings.json} gives the protocol and, for each cell, every run in the order it ran with the median, quartiles and IQR of the runs.
-\texttt{settle.json}, which \texttt{bench/\allowbreak settle\_period.py} wrote with its log \texttt{settle.log}, gives the band, the window and the gap with the cells they come from and the SHA-256 that names their record, and for each trial the passes of every CPU in every window, the steady values and the settle; \texttt{timings.json} names \texttt{settle.json} by its SHA-256 and keeps its period.
-The provenance of each record names the digest of the library sources, the SHA-256 of the readcon-core program and the host.
-\texttt{scripts/\allowbreak binary\_formats\_tables.py} writes Tables~\ref{tab:binary-formats} and~\ref{tab:binary-ratios} and every number of Section~\ref{sec:supp-native} from these records, and \path{paper/cpc/data/trace/bf_numbers.tsv} lists each such number.
-The script stops when the records name more than one library digest or readcon-core program, when a record names another processor, core count or kernel than \texttt{provenance.json}, when \texttt{timings.json} ran another protocol or hardware line than \texttt{reads.json} or another period, hardware line or SHA-256 than the \texttt{settle.json} beside it, when a rerun of the writers changes a file, or when a timed run prints another frame count, atom count or checksum than the check run of its cell.
-It also stops when the checks are not those of Section~\ref{sec:supp-native}: a cell other than libxtc's beyond the tolerance of its file or a libxtc cell within it, libxtc other than \texttt{pep.npy} or xdrfile other than MDAnalysis on \texttt{pep.xtc}, or, on the file with two frame sets, a TNG frame read beyond the tolerance or an all-frames read that runs to completion.
-It stops as well when the passes of a trial give another settle than the trial names, when the period of \texttt{settle.json} is not the longest settle of its trials, or when its band, window and gap come from other cells than that section names.
-
-\texttt{scripts/\allowbreak ordering\_tests.py} reads the runs of these records and writes Table~\ref{tab:ordering}: for every timing ratio of the paper, the exact two-sided Mann-{}-Whitney \(p\) from the distribution of \(U\) over every arrangement of the ranks \cite{mannTestWhetherOne1947}, the Hodges-{}-Lehmann estimate of the ratio with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014}, and the Holm step-down decision over all \ordClaims{} claims \cite{holmSimpleSequentiallyRejective1979}.
-Every run of every cell is a fresh process, so the test compares the runs of two cells as two independent samples.
-It stops when two runs of a claim take the same time or when two claims compare cells of different run counts.
-
-\input{figures/generated/ordering_table}
-
-Table~\ref{tab:cachegrind} counts instructions, which do not depend on the load of the host.
-Cachegrind~\rcValgrind{} ran the Rust benchmark program of readcon-core on fixed inputs, with chemfiles C++ built from its sources, and each scenario ran in the schedule of Section~\ref{sec:supp-method}, a fresh Valgrind process each run.
-The \texttt{git\_sha} of the record is the commit of the checkout that ran the program, which \texttt{r0174\_tables.py} checks against \texttt{provenance.json}.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{Instructions counted by Cachegrind for each scenario of the readcon-core benchmark program and for chemfiles C++, the median of the \rcRounds{} runs of a scenario with their IQR.}
-\label{tab:cachegrind}
-\input{figures/generated/r0174_cachegrind}
-\end{table}
-
-\FloatBarrier
 \section{Measured versions}\label{sec:supp-versions}
 The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
-The stored campaign used readcon~\rcModuleVersion, ASE~\rcVerAse, chemfiles~\rcVerChemfiles, MDAnalysis~\rcVerMda, h5py~\rcVerHfivepy, OVITO~\rcVerOvito{} and NumPy~\rcVerNumpy{} under Python~\rcPython.
-Those versions are not the readers of Section~\ref{sec:host}.
-g++~\rcCxx{} compiled the two C++ programs, one against readcon-core built with the \texttt{parallel} feature and one against the chemfiles~\rcVerChemfilesCpp{} library of the conda-forge package \texttt{chemfiles-lib-0.10.4-h5ebf4e1\_0}, which \path{paper/cpc/environment/conda-linux-64.txt} lists.
-The Rust code was built with rustc~\rcRustc, and the tools are memray~\rcMemray{} and Valgrind~\rcValgrind.
-The head-to-head campaigns of Section~\ref{sec:supp-h2h} ran the same readcon module, h5py and ASE; their C++ cells link chemfiles~\hhChemfilesVersion{} built by g++~\hhGxxVersion{} and clang++~\hhClangVersion{} at \texttt{-O2} and \texttt{-O3}, the level of the readcon program of the cell.
-The native readers of Section~\ref{sec:supp-native} are xdrfile~\bfXdrfile, the TNG library~\bfTngVersion{} at commit \texttt{\bfTngCommit}, the molfile DCD code of MDAnalysis at commit \texttt{\bfMolfileCommit} and libxtc at commit \texttt{\bfLibxtcCommit}, built by GCC~\bfGcc; rustc~\bfRustc{} built the readcon-core program, and MDAnalysis~\bfMdaVersion{} read \texttt{pep.xtc}.
+The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
 
 \texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process, and the four do not return the same outcome on every file (\path{paper/cpc/data/spec/version_drift.json}).
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
@@ -772,7 +504,7 @@ Seven of them have version \texttt{2023.20240207-1}: \texttt{texlive-\allowbreak
 The other two are \texttt{texlive-\allowbreak binaries}, at version \texttt{2023.20230311.66589-9build3}, and \texttt{lmodern}, at version \texttt{2.005-1}.
 \texttt{apt install} with the arguments \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers}, \texttt{texlive-\allowbreak plain-\allowbreak generic} and \texttt{lmodern} installs the nine with the packages they depend on.
 On a host without TeX Live, \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents with Tectonic~0.17.0 on the path, three rounds of each so that the labels of each document reach the other, and stops on an undefined reference, an overfull box or a float that fits on no page.
-\path{paper/cpc/environment/conda-linux-64.txt} lists the conda-forge packages of that environment with the MD5 of each, among them Python~\rcPython, pandoc~3.13 and Rust~\rcRustc, and \path{requirements.txt} beside it the packages that pip adds; \texttt{scripts/\allowbreak export\_env.py} wrote both from the package records of the environment.
+\path{paper/cpc/environment/conda-linux-64.txt} lists the conda-forge packages of that environment with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and \path{requirements.txt} beside it the packages that pip adds; \texttt{scripts/\allowbreak export\_env.py} wrote both from the package records of the environment.
 \texttt{pip install .} builds the readcon module from the checkout.
 \texttt{scripts/\allowbreak regen\_paper.py} rewrites every table, figure and macro from the records without timing anything, and \texttt{scripts/\allowbreak build\_tex.sh} or \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents.
 \texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \path{paper/cpc/data/trace/numbers.csv}.

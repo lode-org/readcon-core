@@ -153,8 +153,8 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
 READER_LOG = ROOT / "logs" / "reader-exchange.log"
 
 
-def _reader_samples() -> dict[str, list[float]]:
-    """Per-arm times from the tip measurement. The baseline arm is main."""
+def _reader_samples(system: str = "cuh2", schedule: str = "interleaved") -> dict[str, list[float]]:
+    """Wall times for one system and one schedule. Arms stay inside one file format."""
     if not READER_LOG.is_file():
         raise SystemExit("reader-exchange.log is missing. Run bench_readers.py first.")
     arms: dict[str, list[float]] = {}
@@ -162,17 +162,30 @@ def _reader_samples() -> dict[str, list[float]]:
         if not line.startswith("sample "):
             continue
         fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        if fields.get("system") != system or fields.get("schedule") != schedule:
+            continue
         arms.setdefault(fields["arm"], []).append(float(fields["seconds"]))
-    if "baseline" not in arms or len(arms["baseline"]) < 6:
-        raise SystemExit("The baseline row needs at least six samples.")
+    if "readcon_base" not in arms or len(arms["readcon_base"]) < 6:
+        raise SystemExit("The base readcon row needs at least six samples.")
     return arms
+
+
+def _summary_rows(system: str = "cuh2", schedule: str = "interleaved") -> list[dict[str, str]]:
+    rows = []
+    for line in READER_LOG.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("summary ") and not line.startswith("result "):
+            continue
+        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        if fields.get("system") == system and fields.get("schedule") == schedule:
+            rows.append(fields)
+    return rows
 
 
 def ratios(theme) -> None:
     arms = _reader_samples()
-    base = arms["baseline"]
-    order = [name for name in arms if name != "baseline" and len(arms[name]) >= 6]
-    fig, ax = plt.subplots(figsize=(7.2, 3.6))
+    base = arms["readcon_base"]
+    order = [name for name in ("readcon_tip", "ase_eon", "readcon_db") if name in arms]
+    fig, ax = plt.subplots(figsize=(7.2, 3.2))
     y = list(range(len(order)))
     med, lo, hi = [], [], []
     for name in order:
@@ -186,7 +199,7 @@ def ratios(theme) -> None:
     ax.axvline(1.0, color=BLACK, lw=0.6)
     ax.set_yticks(y)
     ax.set_yticklabels(order, fontsize=8)
-    ax.set_xlabel("baseline time / peer time")
+    ax.set_xlabel("base readcon time / CON reader time")
     ax.set_xscale("log")
     pf._theme_axes([ax], theme)
     pf._save(fig, "ratios", None)
@@ -218,20 +231,41 @@ def threads(theme) -> None:
 
 
 def timing(theme) -> None:
-    """Type 7 medians from reader-exchange.log. The first bar is main."""
+    """Type 7 medians on the CuH2 files, interleaved. Each panel is one format."""
     arms = _reader_samples()
-    order = ["baseline", *[name for name in arms if name != "baseline"]]
-    meds = [_type7(arms[name])[0] for name in order]
-    x = np.arange(len(order))
-    colors = [TEAL if name == "baseline" else SKY for name in order]
-    fig, ax = plt.subplots(figsize=(7.2, 3.6))
-    ax.bar(x, meds, color=colors, edgecolor=BLACK, linewidth=0.4)
-    ax.set_xticks(x)
-    ax.set_xticklabels(order, fontsize=7, rotation=20, ha="right")
-    ax.set_ylabel("median wall time (s)")
-    ax.set_yscale("log")
-    pf._theme_axes([ax], theme)
+    groups = {
+        "CON": ["readcon_base", "readcon_tip", "ase_eon", "readcon_db"],
+        "XYZ": ["numpy", "chemfiles", "ovito", "ase_extxyz", "pymatgen"],
+        "HDF5": ["h5py", "mdanalysis"],
+    }
+    fig, axes = plt.subplots(1, 3, figsize=(7.2, 3.4))
+    for ax, (title, order) in zip(axes, groups.items(), strict=True):
+        order = [name for name in order if name in arms]
+        meds = [_type7(arms[name])[0] for name in order]
+        x = np.arange(len(order))
+        ax.bar(x, meds, color=CYCLE[: len(order)], edgecolor=BLACK, linewidth=0.4)
+        ax.set_xticks(x)
+        ax.set_xticklabels(order, fontsize=6, rotation=30, ha="right")
+        ax.set_yscale("log")
+        ax.set_title(title)
+    axes[0].set_ylabel("median wall time (s)")
+    pf._theme_axes(list(axes), theme)
     pf._save(fig, "timing", None)
+
+
+def memory(theme) -> None:
+    """Peak RSS above the import, CuH2, interleaved. A zero bar did not rise above the import."""
+    rows = [row for row in _summary_rows() if "rss_above_import_median" in row]
+    order = [row["arm"] for row in rows]
+    meds = [float(row["rss_above_import_median"]) for row in rows]
+    fig, ax = plt.subplots(figsize=(7.2, 3.4))
+    x = np.arange(len(order))
+    ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
+    ax.set_xticks(x)
+    ax.set_xticklabels(order, fontsize=6, rotation=30, ha="right")
+    ax.set_ylabel("median RSS above import (bytes)")
+    pf._theme_axes([ax], theme)
+    pf._save(fig, "memory", None)
 
 
 def matrix(theme) -> None:
@@ -396,6 +430,7 @@ def main() -> None:
     ratios(theme)
     threads(theme)
     timing(theme)
+    memory(theme)
     matrix(theme)
     structures()
     print("wrote extra figures under paper/cpc/src/figures/generated")
