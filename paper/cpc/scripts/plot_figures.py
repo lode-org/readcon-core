@@ -63,6 +63,7 @@ SEQUENTIAL = matplotlib.colormaps["cividis"]
 _LM_CANDIDATES = (
     Path("/usr/share/texmf/fonts/opentype/public/lm/lmroman10-regular.otf"),
     Path("/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"),
+    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
 )
 
 

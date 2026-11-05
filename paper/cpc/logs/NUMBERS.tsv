@@ -1,21 +1,52 @@
-quantity	reader	file	n	median	iqr	unit	rss_above_baseline_bytes	frames	equal	log
-h2h_wall	ase-eon	CON	6	2.608650e-02	1.020000e-04	s	46520320	200	true	logs/h2h/ase-eon.log
-h2h_wall	ase-extxyz	XYZ	6	2.918900e-02	2.857500e-04	s	46254080	200	true	logs/h2h/ase-extxyz.log
-h2h_wall	chemfiles	XYZ	6	4.653000e-03	2.940000e-04	s	0	200	false	logs/h2h/chemfiles.log
-h2h_wall	mdanalysis	XYZ	6	7.828500e-03	1.010000e-04	s	90521600	200	true	logs/h2h/mdanalysis.log
-h2h_wall	ovito	XYZ	6	1.830000e-02	1.101750e-03	s	52838400	200	true	logs/h2h/ovito.log
-h2h_wall	pymatgen	XYZ	6	1.976910e-01	7.721750e-03	s	42375168	200	true	logs/h2h/pymatgen.log
-h2h_wall	python-con	CON	6	5.985500e-03	3.867500e-04	s	0	200	true	logs/h2h/python-con.log
-h2h_wall	readcon	CON	6	6.607500e-03	5.466500e-03	s	0	200	true	logs/h2h/readcon.log
-h2h_ref	chemfiles	XYZ	200			max_abs_angstrom		200	false	logs/h2h/chemfiles-ref.log
-h2h_build	eon					missing			false	logs/h2h/eon.log
-mpi_wall	scatter-rank1	CON	6	5.274263e-02	3.393851e-03	s		4000	true	logs/mpi.log
-mpi_wall	scatter-rank2	CON	6	3.108121e-02	3.574367e-04	s		4000	true	logs/mpi.log
-mpi_wall	scatter-rank4	CON	6	1.605767e-02	1.224139e-03	s		4000	true	logs/mpi.log
-mpi_wall	scatter-rank8	CON	6	1.455157e-02	6.066579e-03	s		4000	true	logs/mpi.log
-mpi_wall	shared-rank1	CON	6	5.559690e-02	4.420761e-03	s		4000	true	logs/mpi.log
-mpi_wall	shared-rank2	CON	6	2.896367e-02	7.004087e-04	s		4000	true	logs/mpi.log
-mpi_wall	shared-rank4	CON	6	1.562632e-02	1.259391e-03	s		4000	true	logs/mpi.log
-mpi_wall	shared-rank8	CON	6	9.585121e-03	2.526872e-04	s		4000	true	logs/mpi.log
-db_wall	readcon-db	CON	6	4.882654e-03	6.468760e-04	s	262144	40	true	logs/db.log
-db_wall	ase.db	CON	6	7.756277e-02	1.659678e-02	s	60438528	40	true	logs/db.log
+quantity	system	schedule	arm	file	n	median_s	iqr_s	rss_above_import	requested	matched	failed	log
+h2h	cuh2	serial	eon	con	0			0	400	0	400	logs/reader-exchange.log
+h2h	cuh2	serial	readcon_tip	con	6	2.767836350e-02	9.805271250e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	readcon_base	con	6	2.508409150e-02	1.207725250e-02	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	readcon_db	con	6	1.939127250e-01	3.878288000e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	ase_eon	con	6	1.108762845e-01	2.129258750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	ase_extxyz	xyz	6	1.169835795e-01	1.383840500e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	numpy	xyz	6	2.239794500e-02	2.305901750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	chemfiles	xyz	6	1.874557400e-02	1.174138750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	ovito	xyz	6	2.968158700e-02	1.434277499e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	pymatgen	xyz	6	4.860393835e-01	4.175320999e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	h5py	h5	6	2.870716500e-03	1.153676750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	serial	mdanalysis	h5	6	1.994894170e-01	2.970980000e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	eon	con	0			0	400	0	400	logs/reader-exchange.log
+h2h	cuh2	interleaved	readcon_tip	con	6	3.244605900e-02	6.390466750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	readcon_base	con	6	3.231562200e-02	9.716598750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	readcon_db	con	6	1.959175665e-01	2.770247493e-04	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	ase_eon	con	6	1.119093910e-01	1.194460000e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	ase_extxyz	xyz	6	1.183540530e-01	1.124854250e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	numpy	xyz	6	2.365434700e-02	1.395955000e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	chemfiles	xyz	6	1.957271200e-02	6.570107496e-04	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	ovito	xyz	6	3.057897900e-02	2.073230751e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	pymatgen	xyz	6	4.950989480e-01	9.268444001e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	h5py	h5	6	4.652694000e-03	2.019655000e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cuh2	interleaved	mdanalysis	h5	6	1.980277170e-01	3.664432750e-03	0	400	400	0	logs/reader-exchange.log
+h2h	cu48	serial	eon	con	0			0	200	0	200	logs/reader-exchange.log
+h2h	cu48	serial	readcon_tip	con	6	2.851218000e-03	6.593522505e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	readcon_base	con	6	3.039476000e-03	6.726550005e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	readcon_db	con	6	3.629103000e-02	1.491949251e-03	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	ase_eon	con	6	2.493019050e-02	3.175822505e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	ase_extxyz	xyz	6	2.507064550e-02	1.386107501e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	numpy	xyz	6	2.931401500e-03	1.110889998e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	chemfiles	xyz	6	3.327900000e-03	2.342712501e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	ovito	xyz	6	1.014042100e-02	9.181137500e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	pymatgen	xyz	6	4.769812600e-02	8.273549500e-03	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	h5py	h5	6	1.097563500e-03	2.426787498e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	serial	mdanalysis	h5	6	9.826578600e-02	2.770377500e-03	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	eon	con	0			0	200	0	200	logs/reader-exchange.log
+h2h	cu48	interleaved	readcon_tip	con	6	2.846173999e-03	7.366457496e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	readcon_base	con	6	3.168327000e-03	6.777472495e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	readcon_db	con	6	3.617619450e-02	6.378189994e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	ase_eon	con	6	2.465641250e-02	2.833102503e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	ase_extxyz	xyz	6	2.519436550e-02	3.712744997e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	numpy	xyz	6	3.038841500e-03	9.630550039e-05	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	chemfiles	xyz	6	3.345728500e-03	2.072495001e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	ovito	xyz	6	1.120804150e-02	9.191004992e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	pymatgen	xyz	6	4.820202900e-02	8.017656749e-03	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	h5py	h5	6	1.218590000e-03	1.806474995e-04	0	200	200	0	logs/reader-exchange.log
+h2h	cu48	interleaved	mdanalysis	h5	6	9.910570450e-02	2.176947001e-03	0	200	200	0	logs/reader-exchange.log
+db	cu8	serial	readcon-db	CON	6	4.882654e-03	6.468760e-04	262144	40	40	0	logs/db.log
+db	cu8	serial	ase.db	CON	6	7.756277e-02	1.659678e-02	60438528	40	40	0	logs/db.log
+mpi	cu64	shared-rank8	readcon	CON	6	9.585121e-03	2.526872e-04		4000			logs/mpi.log

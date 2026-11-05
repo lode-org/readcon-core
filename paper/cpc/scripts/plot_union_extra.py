@@ -384,7 +384,7 @@ def structures() -> None:
             dest = work / f"{src.stem}.svg"
             one(src, dest)
             panels.append((label, dest))
-        font_bytes = (ROOT / "fonts" / "AtkinsonHyperlegible-Regular.otf").read_bytes()
+        font_bytes = (ROOT / "fonts" / "atkinson-hyperlegible" / "AtkinsonHyperlegible-Regular.ttf").read_bytes()
         font = "data:font/otf;base64," + base64.b64encode(font_bytes).decode("ascii")
         width, height = 1780, 700
         slot = 540

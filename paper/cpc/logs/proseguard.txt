@@ -1,13 +1,8 @@
 proseguard_main_exit=0
-paper/cpc/src/rg_main.tex:642: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
-
-proseguard: 1 finding(s), 0 actionable
-
 proseguard_supp_exit=0
-paper/cpc/src/rg_supp.tex:114: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
-paper/cpc/src/rg_supp.tex:133: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
-paper/cpc/src/rg_supp.tex:401: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
-
-proseguard: 3 finding(s), 0 actionable
 snap_main_exit=0
 snap_supp_exit=0
+persona=rohit-paper
+no_llm=1
+WRITING_VOICE_ROOT=/home/ubuntu/.config/proseguard
+note=The first main pass exited 1 on a defensive sentence. The rewrite exited 0. Suggestions are not actionable.
