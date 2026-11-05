@@ -92,23 +92,54 @@ def table(found: dict[str, dict[str, str]], order: tuple[str, ...], caption: str
     return "\n".join(lines)
 
 
+def rev_short(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("rev_parse "):
+            return line.split()[1][:8]
+    raise SystemExit("reader-exchange.log has no rev_parse line")
+
+
+def arm_s(found: dict[str, dict[str, str]], name: str) -> float:
+    return float(found[name]["median_s"])
+
+
+def arm_mib(found: dict[str, dict[str, str]], name: str) -> float:
+    return float(found[name]["mib_median"])
+
+
 def main() -> int:
     text = LOG.read_text(encoding="utf-8")
     found = rows(text)
-    tip = float(found["readcon_tip"]["median_s"])
-    base = float(found["readcon_v0173"]["median_s"])
-    h5 = float(found["h5py"]["median_s"]) if "h5py" in found else float("nan")
+    tip = arm_s(found, "readcon_tip")
+    base = arm_s(found, "readcon_v0173")
+    h5 = arm_s(found, "h5py")
+    conbin = arm_s(found, "conbin")
+    ase = arm_s(found, "ase_eon")
+    eon = arm_s(found, "eon_py")
+    db = arm_s(found, "readcon_db")
     GEN.mkdir(parents=True, exist_ok=True)
-    conbin = float(found["conbin"]["median_s"]) if "conbin" in found else float("nan")
     macros = "\n".join(
         [
             "% Generated from paper/cpc/logs/reader-exchange.log by scripts/host_from_log.py.",
+            f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",
             f"\\newcommand{{\\rcTipOverRelease}}{{{base / tip:.3g}}}",
             f"\\newcommand{{\\rcHdfMedian}}{{{h5:.4g}}}",
             f"\\newcommand{{\\rcConbinMedian}}{{{conbin:.4g}}}",
-            f"\\newcommand{{\\rcTipMib}}{{{float(found['readcon_tip']['mib_median']):.4g}}}",
+            f"\\newcommand{{\\rcTipMib}}{{{arm_mib(found, 'readcon_tip'):.4g}}}",
+            f"\\newcommand{{\\rcAseMedian}}{{{ase:.4g}}}",
+            f"\\newcommand{{\\rcTipOverAse}}{{{ase / tip:.3g}}}",
+            f"\\newcommand{{\\rcEonMedian}}{{{eon:.4g}}}",
+            f"\\newcommand{{\\rcTipOverEon}}{{{eon / tip:.3g}}}",
+            f"\\newcommand{{\\rcApiMedian}}{{{arm_s(found, 'readcon_eon_api'):.4g}}}",
+            f"\\newcommand{{\\rcDbMedian}}{{{db:.4g}}}",
+            f"\\newcommand{{\\rcTipOverDb}}{{{db / tip:.3g}}}",
+            f"\\newcommand{{\\rcAseMib}}{{{arm_mib(found, 'ase_eon'):.4g}}}",
+            f"\\newcommand{{\\rcChemMib}}{{{arm_mib(found, 'chemfiles'):.4g}}}",
+            f"\\newcommand{{\\rcOvitoMib}}{{{arm_mib(found, 'ovito'):.4g}}}",
+            f"\\newcommand{{\\rcFirstMedian}}{{{arm_s(found, 'readcon_first'):.4g}}}",
+            f"\\newcommand{{\\rcMatterMedian}}{{{arm_s(found, 'eon'):.4g}}}",
             "",
         ]
     )

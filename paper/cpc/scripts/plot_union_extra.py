@@ -434,6 +434,15 @@ def structures() -> None:
         shutil.rmtree(work, ignore_errors=True)
 
 
+def reader_figures() -> None:
+    """Timing, ratio and memory figures from reader-exchange.log."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    theme = _theme()
+    timing(theme)
+    ratios(theme)
+    memory(theme)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     theme = _theme()

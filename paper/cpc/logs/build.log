@@ -1,14 +1,24 @@
-rev_parse 18a1927dff664f1dc9edf6e3783a570ec42fb651
-tree 03b3631949c41743d94a16d695f7205694247cce
+rev_parse 5e1430ddf6da5d2b0d4652f47dce889e7895598f
+tree 7df8390b6ee7cfd73f0b849b02313a365121d4a2
 command python3 -m pip install .
+Defaulting to user installation because normal site-packages is not writeable
+Processing .
   Installing build dependencies: started
   Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
 Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
-  Created wheel for readcon: filename=readcon-<package-version>-cp312-cp312-linux_x86_64.whl size=998496 sha256=e4e8b2138c13df696783c1691820cf8f7a408f03fc7f7ff68cd558d163ad7857
+  Created wheel for readcon: filename=readcon-<package-version>-cp312-cp312-linux_x86_64.whl size=998546 sha256=f86d46f0ba0afb7db3bd7669e6e7a2e37654cc51ccb43c8eea8d25c90e91a425
+  Stored in directory: .cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
 Successfully built readcon
 Installing collected packages: readcon
+  Attempting uninstall: readcon
+    Found existing installation: readcon <package-version>
+    Uninstalling readcon-<package-version>:
       Successfully uninstalled readcon-<package-version>
 Successfully installed readcon-<package-version>
 exit_code 0

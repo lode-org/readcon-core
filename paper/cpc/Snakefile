@@ -46,6 +46,14 @@ rule db_log:
     shell:
         "python3 bench/db_v2.py"
 
+rule db_macros:
+    input:
+        "logs/db.log",
+    output:
+        "src/figures/generated/db_macros.tex",
+    shell:
+        "python3 scripts/db_from_log.py"
+
 rule mpi_log:
     output:
         "logs/mpi.log",
@@ -89,6 +97,7 @@ rule manuscript:
         "src/figures/generated/host_macros.tex",
         "src/figures/generated/host_table.tex",
         "src/figures/generated/mpi_macros.tex",
+        "src/figures/generated/db_macros.tex",
     output:
         "src/rg_main.pdf",
     shell:
@@ -130,12 +139,4 @@ rule reader_figures:
         "src/figures/generated/ratios.pdf",
         "src/figures/generated/memory.pdf",
     shell:
-        """
-        cd scripts && python3 - << 'PY'
-        import plot_union_extra as u
-        theme = u._theme()
-        u.timing(theme)
-        u.ratios(theme)
-        u.memory(theme)
-        PY
-        """
+        "cd scripts && python3 -c 'import plot_union_extra as u; u.reader_figures()'"
