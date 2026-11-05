@@ -710,7 +710,17 @@ def _ensure_poscar(folder: Path, ensure_images) -> Path:
 def _ensure_pdb(folder: Path, ensure_images) -> Path:
     path = folder / "grid.pdb"
     if not path.exists():
-        _write_images(path, ensure_images(), "proteindatabank")
+        images = ensure_images()
+        _write_images(path, images, "proteindatabank")
+        text = path.read_text(encoding="utf-8")
+        if "CRYST1" not in text[:200]:
+            lengths = images[0].cell.lengths()
+            angles = images[0].cell.angles()
+            record = (
+                f"CRYST1{lengths[0]:9.3f}{lengths[1]:9.3f}{lengths[2]:9.3f}"
+                f"{angles[0]:7.2f}{angles[1]:7.2f}{angles[2]:7.2f} P 1           1\n"
+            )
+            path.write_text(record + text, encoding="utf-8")
     return path
 
 
