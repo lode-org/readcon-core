@@ -80,6 +80,7 @@ python3 - "$ver" <<'PY'
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 sys.path.insert(0, "scripts")
@@ -210,14 +211,23 @@ skip_dirs = {
     "docs/build",
     "docs/doctrees",
     ".venv",
+    "work",
 }
+# bench/h2h/work is generated campaign output. It is gitignored, and a
+# full-tree walk would still open it. The gate lists tracked files and
+# also skips this prefix.
+skip_prefixes = ("bench/h2h/work/",)
 bad = []
-for path in root.rglob("*"):
+listed = subprocess.check_output(["git", "ls-files", "-z"])
+for raw in listed.split(b"\0"):
+    if not raw:
+        continue
+    rel = raw.decode()
+    path = root / rel
     if not path.is_file():
         continue
-    rel = path.relative_to(root).as_posix()
-    parts = set(path.parts)
-    if parts & skip_dirs or any(part in skip_dirs for part in path.parts):
+    parts = set(pathlib.PurePosixPath(rel).parts)
+    if rel.startswith(skip_prefixes) or parts & skip_dirs or any(part in skip_dirs for part in parts):
         continue
     if rel in allow_exact or rel.startswith("docs/source/") and rel.endswith(".rst"):
         continue

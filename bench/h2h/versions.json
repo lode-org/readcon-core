@@ -7,5 +7,5 @@
   "pymatgen": "2026.10.24",
   "numpy": "2.5.4",
   "eon": "upstream client built with meson",
-  "readcon": "0.17.3"
+  "readcon": "VERSION"
 }
