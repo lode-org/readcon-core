@@ -31,6 +31,12 @@ def redact(line: str) -> str:
     )
     line = re.sub(r"\S*site-packages/", "<site-packages>/", line)
     line = re.sub(r"\S*site-packages_", "<site-packages>/", line)
+    cargo = ROOT / "Cargo.toml"
+    if cargo.is_file():
+        for row in cargo.read_text(encoding="utf-8").splitlines():
+            if row.startswith('version = "'):
+                line = line.replace(row.split('"', 2)[1], "<package-version>")
+                break
     return line
 
 

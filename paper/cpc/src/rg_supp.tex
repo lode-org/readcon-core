@@ -49,6 +49,7 @@ Elsevier%
 \usepackage{xr-hyper}
 \input{affilfix}
 \input{commit}
+\input{cargo_version}
 \input{release}
 \input{figures/generated/case_macros}
 \input{figures/generated/velocity_case}
@@ -447,14 +448,14 @@ chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neit
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
 
-\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process, and the four do not return the same outcome on every file (\path{paper/cpc/data/spec/version_drift.json}).
+\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \readconCargoVersion{}, each in its own process, and the four do not return the same outcome on every file (\path{paper/cpc/data/spec/version_drift.json}).
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
 Only the second refuses a file with a legacy velocity label in capitals or separated by tabs, which the other three read.
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 Each of them was written by readcon-core~\readconversion{} built from the library of the \readconcommitrole{} \texttt{\readconcommitshort}, and each names that library by its digest, \texttt{\readcondigest}.
-Two of them also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
+Two of them also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and \readconCargoVersion{}, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 \texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
 The version history of Table~\ref{tab:versions}, \texttt{data/\allowbreak spec/\allowbreak versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py -{}-measure}, which runs no readcon-core code, so the table does not list it.
 Nor does it list \texttt{data/\allowbreak spec/\allowbreak clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
@@ -483,7 +484,7 @@ The measurements are separate steps, each of which rewrites its own records.
 For the performance records, \texttt{bench/\allowbreak make\_payloads.py} writes the timed files, \texttt{bench/\allowbreak r0174.py} the provenance record, \texttt{bench/\allowbreak cpp\_reads.py} builds and checks the C++ programs, and \texttt{bench/\allowbreak reads.py}, \texttt{bench/\allowbreak memray\_peaks.py} and \texttt{bench/\allowbreak cachegrind.py} write the timing, heap and Cachegrind records; \texttt{bench/\allowbreak build\_chemfiles.sh} and then \texttt{bench/\allowbreak h2h.py} write the head-to-head records, and \texttt{bench/\allowbreak settle\_period.py} and \texttt{bench/\allowbreak binary\_formats.py} the records of the native readers.
 For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build -{}-release} builds and that \texttt{cargo build -{}-release -{}-features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \path{paper/cpc/data/referee_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
 Listing~\ref{lst:measure} gives the command line of each of these performance and conformance scripts, the environment variables it reads with their defaults, and the command lines it runs for each cell, file or build, among them those of memray, Valgrind and cargo.
-The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3 and rewrites \texttt{data/\allowbreak spec/\allowbreak version\_drift.json}.
+The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \readconCargoVersion{} and rewrites \texttt{data/\allowbreak spec/\allowbreak version\_drift.json}.
 
 \begin{lstlisting}[caption={Rebuild of the paper in a checkout of the \readconcommitrole.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
 git clone readcon-core.bundle readcon-core

@@ -3,9 +3,9 @@
 The paper rests on two archives, both in its supplementary material.
 
 - `readcon-core.bundle`, a git bundle of readcon-core that holds the commit of 0.17.4 that `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
-  That commit descends from commit `d0b7d3c7`, the head of pull request 80 to the main branch after the published release 0.17.3 (tag v0.17.3 at commit `12ca800b`), and its change log lists every change since 0.17.3 under 0.17.4.
+  That commit descends from commit `d0b7d3c7`, the head of pull request 80 to the main branch after the published release named in Cargo.toml (that version's tag at commit `12ca800b`), and its change log lists every change since that version under 0.17.4.
   It holds the library and its bindings, the specification `docs/orgmode/spec.org` that the supplement typesets, and the conformance corpus `resources/conformance/`, and it holds no `paper` directory.
-  Besides that commit, the bundle holds `refs/archive/candidate-v3`, an earlier commit with the same tree that most records name as the commit of their checkout, the branch `main`, the branch `paper/cpc-v7.16` of the previous submission, and the release tags v0.1.0 to v0.17.3, from which `scripts/gen_spec_supp.py --measure` writes `data/spec/versions.json`.
+  Besides that commit, the bundle holds `refs/archive/candidate-v3`, an earlier commit with the same tree that most records name as the commit of their checkout, the branch `main`, the branch `paper/cpc-v7.16` of the previous submission, and the release tags from v0.1.0 through the version in Cargo.toml, from which `scripts/gen_spec_supp.py --measure` writes `data/spec/versions.json`.
   A clone of the bundle keeps the objects of `refs/archive/candidate-v3` without the ref, and `scripts/gen_version_map.py` and `scripts/check_manuscript.py` read the library of that commit from them.
   The concept record of readcon-core is https://doi.org/10.5281/zenodo.18753567.
 - `paper-cpc.tar.gz`, this directory, which unpacks into a checkout of that commit.
@@ -29,7 +29,7 @@ The script takes the client from `EONCLIENT`, then from `PATH`, then from `paper
 
 `src/commit.tex` holds one value, `\readconcommit`: the commit of readcon-core that the paper describes, the release candidate, which tag v0.17.4 is to name.
 `scripts/gen_release.py` writes `src/release.tex` from that commit and the git history: its short form, its role (release commit), the sentence that tag v0.17.4 names it, the library digest, and the commits and pull requests of the main branch that the paper cites.
-It stops unless HEAD has the tree of the commit, the commit holds the library files that `bench/results/r0174/provenance.json` names by their digest, its change log has a section for the version, commit d0b7d3c7 is an ancestor of it, the newest release tag before that commit, v0.17.3, is of another version, and tag v0.17.4, when it exists, names it.
+It stops unless HEAD has the tree of the commit, the commit holds the library files that `bench/results/r0174/provenance.json` names by their digest, its change log has a section for the version, commit d0b7d3c7 is an ancestor of it, the newest release tag before that commit, the version in Cargo.toml, is of another version, and tag v0.17.4, when it exists, names it.
 Every record names the library it measured by that digest and the commit of the checkout that ran it.
 One record also depends on the commit of `src/commit.tex`: `data/test_run.json`, the run of the example program in a clone of that commit, prints the commit in its commands, and `scripts/test_run.py --tables` stops when the record names another.
 No other record changes with the tag, and neither do `data/trace/numbers.csv` and the files under `src/figures/generated/` but `test_run.tex`, the listing that `scripts/test_run.py` writes from that record.

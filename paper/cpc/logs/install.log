@@ -6,12 +6,12 @@ command python3 -m pip install .
 Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
-  Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=998496 sha256=e4e8b2138c13df696783c1691820cf8f7a408f03fc7f7ff68cd558d163ad7857
+  Created wheel for readcon: filename=readcon-<package-version>-cp312-cp312-linux_x86_64.whl size=998496 sha256=e4e8b2138c13df696783c1691820cf8f7a408f03fc7f7ff68cd558d163ad7857
 Successfully built readcon
 Installing collected packages: readcon
-      Successfully uninstalled readcon-0.17.3
-Successfully installed readcon-0.17.3
-readcon 0.17.3
+      Successfully uninstalled readcon-<package-version>
+Successfully installed readcon-<package-version>
+readcon <package-version>
 ase 3.30.0b1
 MDAnalysis 2.12.0.dev0
 pymatgen 0.0.post1.dev1+gaa6fda20e

@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from numbers_lib import Rule, jget
+
+
+def _cargo_version() -> str:
+    root = Path(__file__).resolve().parents[4]
+    for line in (root / "Cargo.toml").read_text(encoding="utf-8").splitlines():
+        if line.startswith('version = "'):
+            return line.split('"', 2)[1]
+    raise SystemExit("Cargo.toml has no version")
 
 DOC = "rg_main.tex"
 OPENERS = "data/failure/con_openers.json"
@@ -35,5 +45,5 @@ RULES = [
     Rule("3.2.1", opener("Open Babel", "openbabel"), OPENERS, "Open Babel version; opens neither file",
          OPEN_NEITHER),
     *(Rule(v, drift_reader(v), DRIFT, f"published wheel {v} the drift probes ran", DRIFT_LINE)
-      for v in ("0.17.0", "0.17.1", "0.17.2", "0.17.3")),
+      for v in ("0.17.0", "0.17.1", "0.17.2", _cargo_version())),
 ]

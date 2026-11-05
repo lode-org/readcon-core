@@ -28,7 +28,15 @@ WORK = PAPER / "logs" / "reader-work" / "large"
 BASE_COMMIT = "ac4f437989dea5aad9f75ff045af09ccf7127eba"
 BASE_DIR = PAPER / "build" / "baseline-readcon"
 RELEASE_COMMIT = "12ca800bc2212c565941e04094cba6b4d99a62e0"
-RELEASE_DIR = PAPER / "build" / "readcon-0.17.3"
+def _cargo_version() -> str:
+    text = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if line.startswith('version = "'):
+            return line.split('"', 2)[1]
+    raise SystemExit("Cargo.toml has no version")
+
+
+RELEASE_DIR = PAPER / "build" / f"readcon-{_cargo_version()}"
 EON_PY = PAPER / "bench" / "work" / "peers" / "eon" / "client" / "python"
 EON_PKG = PAPER / "bench" / "work" / "peers" / "eon"
 EON_LIB = PAPER / "bench" / "work" / "peers" / "eon" / "build-h2h" / "subprojects" / "readcon-core"

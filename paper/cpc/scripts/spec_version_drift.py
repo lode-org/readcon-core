@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Give one file to several readers that all claim CON 3.1.
 
-readcon-core 0.17.0, 0.17.1, 0.17.2 and 0.17.3 ship the CON 3.1 text. This script
+readcon-core 0.17.0, 0.17.1, 0.17.2 and the version in Cargo.toml ship the CON 3.1 text. This script
 gives the same probe files to each published readcon wheel and records the
 verdicts, so a behaviour change between releases is a measurement and not a
 claim. For every probe that splits the readers, the record names the release
@@ -16,7 +16,7 @@ process. A reader is a wheel file or a directory that holds an unpacked wheel.
         --reader 0.17.0=readcon-0.17.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
         --reader 0.17.1=readcon-0.17.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
         --reader 0.17.2=readcon-0.17.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl \
-        --reader 0.17.3=readcon-0.17.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        --reader <version>=readcon-<version>-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
 
 Writes data/spec/version_drift.json, with the releases of the wheels under
 measures_release and the build and host that ran the probes under

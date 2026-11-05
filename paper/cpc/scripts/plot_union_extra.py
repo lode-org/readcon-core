@@ -191,7 +191,7 @@ CON_ARMS = (
 )
 CON_LABELS = {
     "readcon_tip": "readcon tip",
-    "readcon_v0173": "readcon 0.17.3",
+    "readcon_v0173": "readcon release",
     "readcon_base": "readcon main",
     "ase_eon": "ASE ase.io (format eon)",
     "eon_py": "eOn loadcons",

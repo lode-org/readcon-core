@@ -1,7 +1,7 @@
 #+TITLE: CPC manuscript (readcon-core)
 
 The paper is =src/rg_main.tex= and its supplement =src/rg_supp.tex=.
-Both =\input= =src/commit.tex=, whose one macro =\readconcommit= is the readcon-core commit that the paper describes, and =src/release.tex=, which =scripts/gen_release.py= writes from it: readcon-core 0.17.4, the role of that commit (the release commit, which tag v0.17.4 names), the digest of its library, and commit =d0b7d3c7=, the head of pull request 80 to the main branch after the published release 0.17.3, which it descends from.
+Both =\input= =src/commit.tex=, whose one macro =\readconcommit= is the readcon-core commit that the paper describes, and =src/release.tex=, which =scripts/gen_release.py= writes from it: readcon-core 0.17.4, the role of that commit (the release commit, which tag v0.17.4 names), the digest of its library, and commit =d0b7d3c7=, the head of pull request 80 to the main branch after the published release named in Cargo.toml, which it descends from.
 If tag v0.17.4 names another commit, that commit goes into =src/commit.tex=, and =gen_release.py= stops unless it holds the library that every record names; the section Release of =REPRO-ARCHIVE.md= lists what the change rewrites.
 This directory is the supplementary material of the article, =paper-cpc.tar.gz=, which =scripts/pack_paper.py= writes.
 The git bundle =readcon-core.bundle= beside it holds that commit with its whole history; the commit holds no =paper= directory, and this directory unpacks into a checkout of it.

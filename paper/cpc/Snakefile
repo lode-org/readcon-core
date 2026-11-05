@@ -1,6 +1,12 @@
 # Rebuild the corpora, the reader exchange, and the tables the paper inputs.
 # Run from paper/cpc: snakemake -c1 all
 
+rule cargo_version:
+    output:
+        "src/cargo_version.tex",
+    shell:
+        "python3 scripts/cargo_version_tex.py"
+
 rule all:
     input:
         "data/corpus31/manifest.toml",

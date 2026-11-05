@@ -66,7 +66,7 @@ cpc-every-path = { cmd = "python scripts/every_path_count.py", description = "Ru
 cpc-recount = { cmd = "python scripts/spec_corpus_recount.py", description = "Recount the conformance corpus by released clause" }
 cpc-clauses = { cmd = "python scripts/clause_coverage.py", description = "List the corpus files, probes and library tests that name each clause of spec.org, and write data/spec/clause_coverage.json and clauses_macros.tex" }
 cpc-mutants = { cmd = "python scripts/mutant_differential.py", description = "Read mutants of the small corpus31 files with readcon and with the independent reader, and write data/spec/mutant_differential.json and mutant_macros.tex" }
-cpc-drift = { cmd = "python scripts/spec_version_drift.py", description = "Read the drift probes with the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each given as --reader VERSION=WHEEL" }
+cpc-drift = { cmd = "python scripts/spec_version_drift.py", description = "Read the drift probes with the published readcon wheels, each given as --reader VERSION=WHEEL" }
 cpc-eon = { cmd = "python evidence/e1_restart.py", description = "Rerun the eOn Morse band with the eonclient of the eon environment (pixi install -e eon first)" }
 cpc-restart-walls = { cmd = "python scripts/run_restart_walls.py", description = "Wall times and force-call counts of the resumed legs" }
 cpc-sizes = { cmd = "python scripts/file_sizes.py", description = "Rewrite the format-size files and the size table" }

@@ -3,7 +3,7 @@
 The measured library is the tree of the commit that ``provenance.source_identity``
 finds: tag v0.17.4 once it holds these library files, and until then the
 release candidate at HEAD, which descends from commit ``BASE``, the head of
-pull request 80 to the main branch after the published release 0.17.3, and
+pull request 80 to the main branch after the published release named in Cargo.toml, and
 adds the version bump and the changes that CHANGELOG.md lists under 0.17.4.
 ``build()`` records that commit, the number of commits after ``BASE``, the
 library digest of the working tree and of the commit's git objects, which must

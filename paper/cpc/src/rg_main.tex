@@ -50,6 +50,7 @@ Elsevier%
 \usepackage{xr-hyper}
 \input{affilfix}
 \input{commit}
+\input{cargo_version}
 \input{release}
 \input{figures/generated/sizes_macros}
 \input{figures/generated/case_macros}
@@ -563,7 +564,7 @@ Every case is read from a string, from bytes, from a plain and a gzip file at on
 Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library, and the other \(\clauseUncovered\) state no duty of a reader, such as the rules for revising the specification.
 
 One name must mean one language for every reader that carries it.
-The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and 0.17.3 do not return the same outcome on every probe file.
+The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and \readconCargoVersion{} do not return the same outcome on every probe file.
 On files of two frames whose first line is empty, the oldest refuses the file and the later three read two frames, and on a blank symbol line the newest two refuse a file that the earlier two read (Section~\ref*{sec:supp-versions}).
 Each of those changes decided a case that the text of its release left open, and Table~\ref{tab:versions} lists the clauses involved.
 
@@ -695,8 +696,8 @@ readcon does not read HDF5.
 Memory is the VmHWM after the read minus the VmHWM after the import.
 
 \subsection{Results}\label{sec:results} On the coordinate file, readcon at the tip takes \rcTipMedian~s.
-readcon-core 0.17.3 takes \rcReleaseMedian~s.
-The tip reads the file \rcTipOverRelease{} times faster than readcon-core 0.17.3.
+readcon-core \readconCargoVersion{} takes \rcReleaseMedian~s.
+The tip reads the file \rcTipOverRelease{} times faster than readcon-core \readconCargoVersion{}.
 ASE ase.io (format eon) takes 11.34~s, and the tip is 61.7 times as fast.
 eOn 3.6.0 \texttt{loadcons} takes 14.90~s, and the tip is 81.1 times as fast.
 The row labelled readcon through the eOn C++ API is readcon's own parser called from that API.
@@ -805,7 +806,7 @@ A format that defines no place for the mask cannot return that field.
 Unlike a format whose meaning lives in the code of one reader, CON 3.1 lets any program test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
-The public commit on the main branch is \begin{center} \texttt{ac4f437989dea5aad9f75ff045af09ccf7127eba} \end{center} and the latest release tag is v0.17.3 at commit \texttt{12ca800bc2212c565941e04094cba6b4d99a62e0}.
+The public commit on the main branch is \begin{center} \texttt{ac4f437989dea5aad9f75ff045af09ccf7127eba} \end{center} and the latest release tag is v\readconCargoVersion{} at commit \texttt{12ca800bc2212c565941e04094cba6b4d99a62e0}.
 The deposited timing records name the candidate commit \texttt{\readconcommit}.
 That candidate is not a public tag.
 Rebuild the library from the public commit with \texttt{cargo build -{}-release}.

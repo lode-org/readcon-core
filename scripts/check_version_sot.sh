@@ -193,6 +193,13 @@ allow_exact = {
     "include/readcon-core-version.h",
     "packaging/wrapdb/readcon-core.wrap",
     "README.md",
+    # Cargo writes the path dependency's version into these lockfiles.
+    # A lockfile that omits it is not a lockfile cargo will keep.
+    "paper/cpc/bench/mpi_cost/Cargo.lock",
+    "paper/cpc/bench/dlpack_cost/Cargo.lock",
+    # The one macro the paper reads. scripts/cargo_version_tex.py writes
+    # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
+    "paper/cpc/src/cargo_version.tex",
 }
 skip_dirs = {
     ".git",
