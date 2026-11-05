@@ -231,6 +231,25 @@ The write path is the same frames, not a peer-format comparison.
 Peer scripts write JSON with host, date, and commit.
 This paper tables only numbers that carry that provenance.
 
+The same-file comparison reads one con file.
+The readers are readcon from C, Fortran, and Python, the upstream eon
+client, eon Python, and ASE with the eon format.
+The nearest-native panel reads different files.
+NumPy reads an npy array, ASE reads a traj file, =OVITO= reads extended
+xyz, and chemfiles, MDAnalysis, and pymatgen read xyz.
+That panel is separate from the con table.
+A row passes only when the atom count, the cell, and the coordinates
+match.
+Chemfiles returns cell lengths of 0 on xyz, so that row fails the cell
+check.
+The in-process Python read and the fresh-process Python read are
+separate rows.
+On the recorded host, Intel Xeon Processor, x86_64, 8 CPUs, a fresh
+Python process reads one million atoms in 0.115 s and peaks at 165 MiB.
+The C reader does that file in 0.087 s and peaks at 140 MiB.
+The eon client takes 0.261 s.
+Those medians are six serial samples on one pinned core.
+
 * Multi-language fidelity :PROPERTIES: :CUSTOM_ID: sec:fidelity :END:
 
 A clause-keyed Phase A corpus under =resources/conformance/= locks the column-4 collision (spec 1 value $1$ is all-fixed; spec 2 value $1$ is $x$-only; spec 2 value $7$ is all-fixed), required v3 units, missing =con_spec_version=, unsupported version $4$, unknown section names, and =validate=true= without =sections=.

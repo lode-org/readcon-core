@@ -1,41 +1,67 @@
-# Head to head after the array read and the in place write
+# Head to head on one host
 
-The campaign is serial, six repeats, one pinned core, on x86_64 with 8 CPUs.
-The median uses the type 7 quantile.
-A coordinate check uses an absolute tolerance of 1e-12.
-The eon client is the upstream tree 579738a9387e8d0ea55496f45dd057812cfab892.
+The host is Intel Xeon Processor, x86_64, 8 CPUs, memory_kib 49342768.
+Every arm runs under taskset -c 0.
+Each arm is one Snakemake rule and one asv class with time and track methods.
+The timeout on each class is 600 s.
+Samples are serial, six repeats, and the median and interquartile range use the type 7 quantile.
+A row is correct only when the atom count, the cell, and the coordinates match within 1e-12.
+The eon client is upstream commit 579738a9387e8d0ea55496f45dd057812cfab892.
 
-## Con readers
+## Same file
 
-A fresh Python process reads one million atoms in 0.124 s and peaks at 203 MiB.
-The C reader does that file in 0.093 s and peaks at 140 MiB.
-Fortran reads it in 0.101 s.
-The eon client reads it in 0.307 s.
-eon Python loadcons takes 3.326 s and allocates one object for each atom.
-ASE with the eon format takes 1.568 s.
-Python read beats the eon client and eon Python.
-The split on the fresh read is parse 0.085 s, convert 0.017 s, copy 0.000027 s.
+This table reads one con file.
+The in-process Python read and the fresh-process Python read are separate rows.
 
-Python write of that file takes 0.247 s and the file format step inside it is 0.185 s.
-C write takes 0.203 s.
-Fortran write takes 0.202 s.
-The old Fortran path rebuilt every atom before the format step.
-Fortran now writes the parsed atoms and only replaces the header text, and it matches C.
+| arm | median s | iqr s | correct |
+| --- | --- | --- | --- |
+| C read, 1000000 atoms | 0.087 | 0.002 | yes |
+| Fortran read, 1000000 atoms | 0.096 | 0.008 | yes |
+| Python in-process read, 1000000 atoms | 0.087 | 0.010 | yes |
+| Python fresh-process read, 1000000 atoms | 0.115 | 0.005 | yes |
+| eon C++ read, 1000000 atoms | 0.261 | 0.004 | yes |
+| eon Python read, 1000000 atoms | 3.303 | 0.036 | yes |
+| ASE eon read, 1000000 atoms | 1.376 | 0.035 | yes |
+| C write, 1000000 atoms | 0.203 | 0.008 | yes |
+| Fortran write, 1000000 atoms | 0.203 | 0.006 | yes |
+| Python write, 1000000 atoms | 0.222 | 0.008 | yes |
+| C read, 10000 frames of 100 atoms | 0.085 | 0.003 | yes |
+| Fortran read, 10000 frames of 100 atoms | 0.112 | 0.004 | yes |
+| Python read, 10000 frames of 100 atoms | 0.087 | 0.018 | yes |
+| C read, 10 atoms | 0.0000049 | 0.0000007 | yes |
+| Fortran read, 10 atoms | 0.0000046 | 0.0000025 | yes |
+| Python read, 10 atoms | 0.0000063 | 0.0000063 | yes |
+| eon C++ read, 10 atoms | 0.0000233 | 0.0000022 | yes |
 
-Ten thousand frames of one hundred atoms take 0.074 s in C, 0.100 s in Python and 0.118 s in Fortran.
-A ten atom file takes 4.1 us in C, 6.9 us in Python and 7.9 us in Fortran.
-That is under the 17 us eon read of the same size.
+The C reader peaks at 140 MiB on the million atom file.
+The fresh Python process peaks at 165 MiB on that file.
+The in-process Python peak is 268 MiB because that process has already read the smaller files.
+The fresh-process split is parse 0.092 s, convert 0.019 s, copy 0.000155 s.
+The Python write split is copy 0.002 s, convert 0.024 s, file format 0.170 s.
+Python read of one million atoms is faster than the eon client and faster than eon Python.
+The 10 atom C read is 4.9 us. The eon client takes 23.3 us on that file.
 
 ## Nearest native format
 
-This panel is not a con read.
-NumPy loads the coordinate array in 0.005 s with a maximum absolute difference of 0.
-ASE traj reads back in 0.030 s with a maximum absolute difference of 0.
-OVITO reads extended xyz in 0.162 s with a maximum absolute difference of 0.
-Chemfiles reads xyz in 0.282 s with a maximum absolute difference of 0 on the copper grid.
-MDAnalysis reads that xyz in 6.024 s with a maximum absolute difference of 0.
-pymatgen reads that xyz in 7.992 s with a maximum absolute difference of 0.
-On the small copper hydride xyz, chemfiles returns cell lengths of 0.
-The coordinates still match within 3.6e-15.
-Chemfiles xyz omits the cell.
-RCSO is an in memory broadcast blob, and conbin is absent from this version, so neither is in these tables.
+This table reads different files.
+It is a separate panel from the con table.
+NumPy reads an npy array.
+ASE reads a traj file.
+`OVITO` reads extended xyz.
+Chemfiles, MDAnalysis, and pymatgen read xyz.
+
+| arm | median s | iqr s | atoms | cell | coordinates | correct |
+| --- | --- | --- | --- | --- | --- | --- |
+| NumPy npy | 0.005 | 0.010 | yes | no, cell is missing | yes, max abs 0 | no |
+| ASE traj | 0.018 | 0.018 | yes | yes | yes, max abs 0 | yes |
+| `OVITO` extxyz | 0.134 | 0.003 | yes | yes | yes, max abs 0 | yes |
+| chemfiles xyz | 0.258 | 0.011 | yes | no, cell lengths are 0 | yes, max abs 0 | no |
+| MDAnalysis xyz | 5.419 | 0.162 | yes | no, cell is missing | yes, max abs 0 | no |
+| pymatgen xyz | 7.504 | 0.492 | yes | no, cell is missing | yes, max abs 0 | no |
+
+Chemfiles returns cell lengths of 0.
+The xyz file omits the cell, so that row fails the cell check.
+MDAnalysis leaves the cell missing on that xyz file.
+pymatgen reads a molecule and has no lattice.
+The npy file stores the coordinate array and has no cell.
+`RCSO` is an in memory broadcast blob, and conbin is absent from this version, so neither is in these tables.
