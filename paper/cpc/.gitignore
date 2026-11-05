@@ -13,6 +13,7 @@
 !logs/reader-exchange.log
 !logs/dlpack-exchange.log
 !logs/build.log
+!logs/eon-build.log
 !logs/NUMBERS.tsv
 *.out
 *.synctex.gz
