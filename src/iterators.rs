@@ -1013,14 +1013,108 @@ pub fn frames_from_bytes(
 }
 
 #[cfg(feature = "parallel")]
+fn span_end(boundaries: &[usize], index: usize, len: usize) -> usize {
+    if index + 1 < boundaries.len() {
+        boundaries[index + 1]
+    } else {
+        len
+    }
+}
+
+/// Parse each frame into a slot allocated before any worker runs.
+///
+/// The frames are split by index into contiguous ranges, one range per
+/// worker. Worker `t` writes only `slots[start..end]`. The returned
+/// vector is that slot storage, in boundary order, which is the serial
+/// iterator order. `workers < 2` parses on the calling thread.
+#[cfg(feature = "parallel")]
+fn parse_into_slots<F>(
+    len: usize,
+    boundaries: &[usize],
+    workers: usize,
+    parse_span: F,
+) -> Vec<Result<types::ConFrame, error::ParseError>>
+where
+    F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
+{
+    let n = boundaries.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    if workers < 2 {
+        return (0..n)
+            .map(|i| parse_span(boundaries[i], span_end(boundaries, i, len)))
+            .collect();
+    }
+    let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
+        (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
+    let chunk = n.div_ceil(workers).max(1);
+    {
+        use rayon::prelude::*;
+        slots
+            .par_chunks_mut(chunk)
+            .enumerate()
+            .for_each(|(chunk_index, part)| {
+                let base = chunk_index * chunk;
+                for (offset, slot) in part.iter_mut().enumerate() {
+                    let i = base + offset;
+                    slot.write(parse_span(boundaries[i], span_end(boundaries, i, len)));
+                }
+            });
+    }
+    // Each index in `0..n` was written once. `par_chunks_mut` hands out
+    // disjoint slices, and the last slice is shorter when `n` does not
+    // divide the worker count.
+    let mut slots = std::mem::ManuallyDrop::new(slots);
+    unsafe {
+        Vec::from_raw_parts(
+            slots.as_mut_ptr() as *mut Result<types::ConFrame, error::ParseError>,
+            slots.len(),
+            slots.capacity(),
+        )
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parse_byte_span(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+) -> Result<types::ConFrame, error::ParseError> {
+    let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+    match iter.next() {
+        Some(result) => result,
+        None => Err(error::ParseError::IncompleteFrame),
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parse_text_span(
+    text: &str,
+    start: usize,
+    end: usize,
+) -> Result<types::ConFrame, error::ParseError> {
+    let mut iter = ConFrameIterator::new(&text[start..end]);
+    match iter.next() {
+        Some(result) => result,
+        None => Err(error::ParseError::IncompleteFrame),
+    }
+}
+
+#[cfg(feature = "parallel")]
 fn parse_frames_parallel_bytes(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    use rayon::prelude::*;
-
     let threads = scan_thread_count(num_threads, bytes.len());
-    let parse_chunks = || {
+    // The scan stays serial below `SCAN_PARALLEL_MIN`. An explicit pool
+    // still parses on that many workers.
+    let parse_workers = match num_threads {
+        Some(n) if n >= 2 => n,
+        Some(_) => 1,
+        None => threads,
+    };
+    let run = || {
         let mut scanner = ConFrameIterator::from_bytes(bytes);
         if threads >= 2 {
             // Same pool as the parse, so the newline chunks do not start
@@ -1030,48 +1124,22 @@ fn parse_frames_parallel_bytes(
         }
         // Whitespace after the final frame does not open another frame.
         let boundaries = collect_frame_starts(scanner, true);
-        let num_frames = boundaries.len();
-        (0..num_frames)
-            .into_par_iter()
-            .map(|i| {
-                let start = boundaries[i];
-                let end = if i + 1 < num_frames {
-                    boundaries[i + 1]
-                } else {
-                    bytes.len()
-                };
-                let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
-                match iter.next() {
-                    Some(result) => result,
-                    None => Err(error::ParseError::IncompleteFrame),
-                }
-            })
-            .collect()
+        parse_into_slots(bytes.len(), &boundaries, parse_workers, |start, end| {
+            parse_byte_span(bytes, start, end)
+        })
     };
     match num_threads {
-        None => parse_chunks(),
+        None => run(),
         Some(n) if n <= 1 => {
             let _ = n;
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
-            (0..boundaries.len())
-                .map(|i| {
-                    let start = boundaries[i];
-                    let end = if i + 1 < boundaries.len() {
-                        boundaries[i + 1]
-                    } else {
-                        bytes.len()
-                    };
-                    let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
-                    match iter.next() {
-                        Some(result) => result,
-                        None => Err(error::ParseError::IncompleteFrame),
-                    }
-                })
-                .collect()
+            parse_into_slots(bytes.len(), &boundaries, 1, |start, end| {
+                parse_byte_span(bytes, start, end)
+            })
         }
         Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(parse_chunks),
-            Err(_) => parse_chunks(),
+            Ok(pool) => pool.install(run),
+            Err(_) => run(),
         },
     }
 }
@@ -1167,9 +1235,13 @@ pub fn read_all_frames_indexed(
         .collect()
 }
 
-/// Below this size the chunk scan costs more than one `memchr` pass.
+/// Minimum buffer length for a chunked newline scan.
+///
+/// Below this length the cut setup, the per-chunk `memchr`, and the
+/// stitch cost more than one pass on the calling thread. The value is
+/// 32 KiB. Callers name this constant instead of writing the length again.
 #[cfg(feature = "parallel")]
-const SCAN_PARALLEL_MIN: usize = 32 * 1024;
+pub const SCAN_PARALLEL_MIN: usize = 32 * 1024;
 
 enum IndexStep {
     Stay(usize),
@@ -1370,11 +1442,12 @@ fn frame_start_offsets_at_cuts(text: &str, cuts: &[usize]) -> Vec<usize> {
 ///
 /// Stops at the first skip error (that start is still included).
 ///
-/// With the `parallel` feature, a buffer of at least 32 KiB is split into
-/// chunks and the newline bytes are scanned together. The chunks are not
-/// aligned to lines. A header that straddles a cut is one line, because
-/// each `\n` is recorded by the chunk that holds that byte and the lists
-/// are stitched in order. The returned offsets match the serial walk.
+/// With the `parallel` feature, a buffer of at least
+/// [`SCAN_PARALLEL_MIN`] bytes is split into chunks and the newline bytes
+/// are scanned together. The chunks are not aligned to lines. A header
+/// that straddles a cut is one line, because each `\n` is recorded by the
+/// chunk that holds that byte and the lists are stitched in order. The
+/// returned offsets match the serial walk.
 pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
     frame_start_offsets_with_threads(file_contents, None)
 }
@@ -1383,7 +1456,10 @@ pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
 ///
 /// `None` uses the machine's parallelism. `Some(0)` and `Some(1)` stay on
 /// the calling thread. The offsets do not depend on the thread count.
-pub(crate) fn frame_start_offsets_with_threads(
+///
+/// The timed work includes the cut setup, the per-chunk scans, the
+/// stitch, and the frame walk that reads the stitched newline index.
+pub fn frame_start_offsets_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<usize> {
@@ -1411,9 +1487,9 @@ pub(crate) fn frame_start_offsets_with_threads(
 /// `Vec<&str>` of every line and summed lengths up to each frame, which
 /// is O(N^2) in the line count.
 ///
-/// Phase 2: parallel parse of each frame slice using rayon on the
-/// **global** Rayon pool (see also [`parse_frames_parallel_with_threads`]
-/// for strong-scaling control of the worker count).
+/// Phase 2: each worker parses a contiguous run of those frames into
+/// slots allocated before the parse. The slot order is the boundary
+/// order. See [`parse_frames_parallel_with_threads`].
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -1423,12 +1499,15 @@ pub fn parse_frames_parallel(
     parse_frames_parallel_with_threads(file_contents, None)
 }
 
-/// Like [`parse_frames_parallel`], but runs phase-2 on an explicit Rayon
-/// pool with `num_threads` workers when `Some(n)` (`n` is clamped to at
-/// least 1). `None` uses the global pool (same as [`parse_frames_parallel`]).
+/// Like [`parse_frames_parallel`], but runs both phases on an explicit
+/// Rayon pool with `num_threads` workers when `Some(n)` (`n` is clamped
+/// to at least 1). `None` uses the global pool when the buffer is at
+/// least [`SCAN_PARALLEL_MIN`] bytes, and the calling thread otherwise.
 ///
-/// Strong-scaling tests pin worker counts without racing the global pool.
-/// Results are ordered by frame index (stable vs sequential iterator order).
+/// Phase 2 splits the frame offsets into one contiguous range per
+/// worker. Each worker writes its frames into slots allocated before
+/// the parse. The result matches a serial iterator, field for field
+/// and in frame order.
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -1440,35 +1519,27 @@ pub fn parse_frames_parallel_with_threads(
     // would put the newline scan on the global pool and the parse on
     // another.
     let threads = scan_thread_count(num_threads, file_contents.len());
+    let parse_workers = match num_threads {
+        Some(n) if n >= 2 => n,
+        Some(_) => 1,
+        None => threads,
+    };
     let run = || {
+        // A whitespace tail is not a frame. The serial iterator stops
+        // there. The offset scan used by callers still records that byte
+        // when a skip error includes it.
         let boundaries = if threads >= 2 {
             let newlines = newline_positions(file_contents.as_bytes(), threads);
-            frame_start_offsets_indexed(file_contents, newlines)
+            collect_frame_starts(scanner_with_newlines(file_contents, newlines), true)
         } else {
-            frame_start_offsets_serial(file_contents)
+            collect_frame_starts(ConFrameIterator::new(file_contents), true)
         };
-        let parse_one = |i: usize| {
-            let start = boundaries[i];
-            let end = if i + 1 < boundaries.len() {
-                boundaries[i + 1]
-            } else {
-                file_contents.len()
-            };
-            let mut iter = ConFrameIterator::new(&file_contents[start..end]);
-            match iter.next() {
-                Some(result) => result,
-                None => Err(error::ParseError::IncompleteFrame),
-            }
-        };
-        if threads >= 2 {
-            use rayon::prelude::*;
-            (0..boundaries.len())
-                .into_par_iter()
-                .map(parse_one)
-                .collect()
-        } else {
-            (0..boundaries.len()).map(parse_one).collect()
-        }
+        parse_into_slots(
+            file_contents.len(),
+            &boundaries,
+            parse_workers,
+            |start, end| parse_text_span(file_contents, start, end),
+        )
     };
     match num_threads {
         Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
@@ -1484,7 +1555,13 @@ pub fn parse_frames_parallel_with_threads(
 /// `file_contents`; frame `i` ends where frame `i + 1` starts).
 ///
 /// Offsets may come from [`frame_start_offsets`] or from a checked
-/// [`crate::frame_index::FrameIndex`]. Results are ordered by frame index.
+/// [`crate::frame_index::FrameIndex`]. The output slots are allocated
+/// first. Each worker then fills one contiguous index range. Results
+/// stay in frame order.
+///
+/// The timer for this function starts after `boundaries` exist. It
+/// includes slot allocation and the worker parse. It does not include
+/// the newline scan or the stitch.
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -1493,50 +1570,22 @@ pub fn parse_frames_at_offsets(
     boundaries: &[usize],
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    use rayon::prelude::*;
-
-    let parse_chunks = || {
-        let num_frames = boundaries.len();
-        (0..num_frames)
-            .into_par_iter()
-            .map(|i| {
-                let start = boundaries[i];
-                let end = if i + 1 < num_frames {
-                    boundaries[i + 1]
-                } else {
-                    file_contents.len()
-                };
-                let chunk = &file_contents[start..end];
-                let mut iter = ConFrameIterator::new(chunk);
-                match iter.next() {
-                    Some(result) => result,
-                    None => Err(error::ParseError::IncompleteFrame),
-                }
-            })
-            .collect()
+    let workers = match num_threads {
+        Some(n) if n <= 1 => 1,
+        Some(n) => n,
+        None => rayon::current_num_threads().max(1),
     };
-
+    let run = || {
+        parse_into_slots(file_contents.len(), boundaries, workers, |start, end| {
+            parse_text_span(file_contents, start, end)
+        })
+    };
     match num_threads {
-        None => parse_chunks(),
-        Some(n) if n <= 1 => (0..boundaries.len())
-            .map(|i| {
-                let start = boundaries[i];
-                let end = if i + 1 < boundaries.len() {
-                    boundaries[i + 1]
-                } else {
-                    file_contents.len()
-                };
-                let mut iter = ConFrameIterator::new(&file_contents[start..end]);
-                match iter.next() {
-                    Some(result) => result,
-                    None => Err(error::ParseError::IncompleteFrame),
-                }
-            })
-            .collect(),
-        Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(parse_chunks),
-            Err(_) => parse_chunks(),
+        Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+            Ok(pool) => pool.install(run),
+            Err(_) => run(),
         },
+        _ => run(),
     }
 }
 
@@ -1660,6 +1709,26 @@ mod parallel_header_scan_tests {
         std::fs::read_to_string(path).expect(name)
     }
 
+    /// A cut on the byte between `\r` and `\n`. The `\n` is in the next chunk.
+    fn assert_crlf_gap_cut(text: &str) {
+        let bytes = text.as_bytes();
+        let mut found = 0usize;
+        let mut i = 0usize;
+        while i + 1 < bytes.len() && found < 6 {
+            if bytes[i] == b'\r' && bytes[i + 1] == b'\n' {
+                let cut = i + 1;
+                assert_eq!(bytes[cut - 1], b'\r');
+                assert_eq!(bytes[cut], b'\n');
+                assert_cuts_match(text, &[0, cut, bytes.len()]);
+                found += 1;
+                i += 2;
+                continue;
+            }
+            i += 1;
+        }
+        assert!(found > 0, "fixture has no CRLF pair");
+    }
+
     fn assert_cuts_match(text: &str, cuts: &[usize]) {
         let serial_nl: Vec<usize> = memchr::memchr_iter(b'\n', text.as_bytes()).collect();
         let stitched = newline_positions_at_cuts(text.as_bytes(), cuts);
@@ -1725,6 +1794,7 @@ mod parallel_header_scan_tests {
         );
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
+        assert_crlf_gap_cut(&crlf);
         let serial = frame_start_offsets_serial(text);
         if serial.len() >= 2 {
             let second = serial[1];
@@ -1767,6 +1837,185 @@ mod parallel_header_scan_tests {
                 parsed.last().unwrap().atom_data.last().unwrap().z,
                 seq.last().unwrap().atom_data.last().unwrap().z
             );
+        }
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_frame_parse_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    const ZERO_ATOM: &str = "\
+zero-atom frame
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10.0 10.0 10.0
+90.0 90.0 90.0
+
+
+0
+
+
+";
+
+    fn fixture(name: &str) -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test")
+            .join(name);
+        std::fs::read_to_string(path).expect(name)
+    }
+
+    fn serial_results(text: &str) -> Vec<Result<types::ConFrame, error::ParseError>> {
+        ConFrameIterator::new(text).collect()
+    }
+
+    fn written(frame: &types::ConFrame) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut writer = crate::writer::ConFrameWriter::new(&mut out);
+            writer.write_frame(frame).expect("write");
+            writer.flush().expect("flush");
+        }
+        out
+    }
+
+    fn assert_same_results(
+        label: &str,
+        serial: Vec<Result<types::ConFrame, error::ParseError>>,
+        parallel: Vec<Result<types::ConFrame, error::ParseError>>,
+    ) {
+        assert_eq!(serial.len(), parallel.len(), "{label} count");
+        for (i, (left, right)) in serial.into_iter().zip(parallel).enumerate() {
+            match (left, right) {
+                (Ok(a), Ok(b)) => {
+                    assert_eq!(written(&a), written(&b), "{label} bytes frame {i}");
+                    assert_eq!(a, b, "{label} fields frame {i}");
+                }
+                (Err(a), Err(b)) => {
+                    assert_eq!(
+                        format!("{a:?}"),
+                        format!("{b:?}"),
+                        "{label} error frame {i}"
+                    );
+                }
+                (Ok(_), Err(err)) => panic!("{label} frame {i} serial ok parallel {err:?}"),
+                (Err(err), Ok(_)) => panic!("{label} frame {i} serial {err:?} parallel ok"),
+            }
+        }
+    }
+
+    fn assert_workers(label: &str, text: &str) {
+        let serial_ok = serial_results(text).iter().all(|item| item.is_ok());
+        for workers in [1usize, 2, 3, 4, 8] {
+            let parallel = parse_frames_parallel_with_threads(text, Some(workers));
+            assert_same_results(
+                &format!("{label} workers {workers}"),
+                serial_results(text),
+                parallel,
+            );
+            let bounds = collect_frame_starts(ConFrameIterator::new(text), true);
+            let at = parse_frames_at_offsets(text, &bounds, Some(workers));
+            assert_same_results(
+                &format!("{label} offsets workers {workers}"),
+                serial_results(text),
+                at,
+            );
+        }
+        if serial_ok {
+            for workers in [2usize, 3, 8] {
+                let bytes = frames_from_bytes(text.as_bytes(), Some(workers)).expect(label);
+                let seq = frames_from_text(text, Some(1)).expect(label);
+                assert_eq!(bytes.len(), seq.len(), "{label} byte count");
+                for (i, (a, b)) in bytes.iter().zip(seq.iter()).enumerate() {
+                    assert_eq!(written(a), written(b), "{label} byte path frame {i}");
+                    assert_eq!(a, b, "{label} byte path fields frame {i}");
+                }
+            }
+        }
+    }
+
+    fn crlf_gap_offsets(text: &str) -> Vec<usize> {
+        let bytes = text.as_bytes();
+        let mut cut = None;
+        let mut i = 0usize;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b'\r' && bytes[i + 1] == b'\n' {
+                cut = Some(i + 1);
+                break;
+            }
+            i += 1;
+        }
+        let cut = cut.expect("crlf");
+        frame_start_offsets_at_cuts(text, &[0, cut, bytes.len()])
+    }
+
+    #[test]
+    fn parallel_slots_match_serial_frames() {
+        assert_workers("empty", "");
+        assert_workers("blank", "\n");
+        assert_workers("space", "   \n\n");
+        assert_workers("zero", ZERO_ATOM);
+        assert_workers("zero-repeat", &ZERO_ATOM.repeat(5));
+        for name in [
+            "tiny_cuh2.con",
+            "tiny_cuh2.convel",
+            "tiny_cuh2_forces.con",
+            "tiny_cuh2_vel_forces.con",
+            "tiny_cuh2_charges_spins_magmoms.con",
+            "tiny_cuh2_displacements.con",
+            "tiny_cuh2_spreads.con",
+            "cuh2.con",
+        ] {
+            let one = fixture(name);
+            assert_workers(name, &one);
+            assert_workers(&format!("{name} x5"), &one.repeat(5));
+            let bare = one.trim_end_matches(['\n', '\r']);
+            assert_workers(&format!("{name} bare"), bare);
+            let tailed = format!("{one}\n   \n\t\n");
+            assert_workers(&format!("{name} tail"), &tailed);
+            let crlf = one.replace('\n', "\r\n");
+            assert_workers(&format!("{name} crlf"), &crlf);
+            let gap = crlf_gap_offsets(&crlf);
+            assert_eq!(
+                gap,
+                frame_start_offsets_serial(&crlf),
+                "{name} crlf gap offsets"
+            );
+            let parsed = parse_frames_at_offsets(&crlf, &gap, Some(4));
+            assert_same_results(
+                &format!("{name} crlf gap parse"),
+                serial_results(&crlf),
+                parsed,
+            );
+            let serial_offs = frame_start_offsets_serial(&one);
+            let broken: &str = if serial_offs.len() >= 2 {
+                let second = serial_offs[1];
+                let next = serial_offs.get(2).copied().unwrap_or(one.len());
+                &one[..second + (next - second) / 2]
+            } else if one.len() > 8 {
+                &one[..one.len() / 2]
+            } else {
+                ""
+            };
+            if !broken.is_empty() {
+                let serial_err = frames_from_text(broken, Some(1))
+                    .err()
+                    .map(|e| format!("{e:?}"));
+                assert!(serial_err.is_some(), "{name} chopped still parsed");
+                for workers in [1usize, 2, 4, 8] {
+                    let parallel_err = frames_from_text(broken, Some(workers))
+                        .err()
+                        .map(|e| format!("{e:?}"));
+                    assert_eq!(parallel_err, serial_err, "{name} chopped workers {workers}");
+                    let byte_err = frames_from_bytes(broken.as_bytes(), Some(workers))
+                        .err()
+                        .map(|e| format!("{e:?}"));
+                    assert_eq!(
+                        byte_err, serial_err,
+                        "{name} chopped bytes workers {workers}"
+                    );
+                }
+            }
         }
     }
 }
