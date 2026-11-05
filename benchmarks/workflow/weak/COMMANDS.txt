@@ -40,5 +40,6 @@ That command exits 2. The stub has no times.
 
 == Logs
 Each log starts with HEAD, tree, and command, and ends with exit_code.
-Templates are benchmarks/workflow/weak/templates/.
+Templates are benchmarks/workflow/weak/templates/*.tpl.
 Copy a template, replace the braces, and put the raw stdout between the header and exit_code.
+The names end in .tpl because *.log is gitignored.
