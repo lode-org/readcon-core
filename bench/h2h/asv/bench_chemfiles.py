@@ -1,7 +1,7 @@
 """ASV arm. timeout is 600 s. time_* is one call. track_* reports a scalar.
 
-Snakemake runs the same module through drive.py so the paper samples are the
-six serial repeats, not a separate timer.
+Imports used by the timed call live in setup, outside the clock.
+Snakemake runs the same module through drive.py for the six serial samples.
 """
 
 from __future__ import annotations
@@ -14,23 +14,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import measure
 import support
 
-class ChemfilesXyz:
+
+class ChemfilesExtxyz:
     timeout = 600
     number = 1
     repeat = 6
     rounds = 1
     warmup_time = 0
 
-    def time_read_atoms_1000000(self):
+    def setup(self):
         import chemfiles
-        path = support.WORK / "native" / "atoms.xyz"
-        traj = chemfiles.Trajectory(str(path))
+        self.chemfiles = chemfiles
+        self.path = str(support.WORK / "native" / "grid.extxyz")
+
+    def time_read_atoms_1000000(self):
+        traj = self.chemfiles.Trajectory(self.path, "r", "XYZ")
         for _step in range(traj.nsteps):
             traj.read()
 
-    def track_cell_length_0(self):
-        import chemfiles
-        path = support.WORK / "native" / "atoms.xyz"
-        frame = chemfiles.Trajectory(str(path)).read()
-        lengths = list(frame.cell.lengths)
-        return float(lengths[0])
+    def track_cell_length(self):
+        frame = self.chemfiles.Trajectory(self.path, "r", "XYZ").read()
+        return float(list(frame.cell.lengths)[0])

@@ -54,7 +54,7 @@ def main() -> None:
         "ovito": lambda: measure.run_native("ovito"),
         "pymatgen": lambda: measure.run_native("pymatgen"),
         "numpy": lambda: measure.run_native("numpy"),
-        "ase_traj": lambda: measure.run_native("ase_traj"),
+        "ase_extxyz": lambda: measure.run_native("ase_extxyz"),
     }
     if arm not in runners:
         raise SystemExit(f"unknown arm {arm}")

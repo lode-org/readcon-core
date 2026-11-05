@@ -445,7 +445,7 @@ rule h2h_chemfiles:
     input:
         "bench/h2h/work/prepare.ok",
     output:
-        "bench/h2h/logs/campaign/chemfiles-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/chemfiles-extxyz-read-atoms-1000000.stdout",
     shell:
         """
         set -euo pipefail
@@ -458,7 +458,7 @@ rule h2h_mdanalysis:
     input:
         "bench/h2h/work/prepare.ok",
     output:
-        "bench/h2h/logs/campaign/mdanalysis-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/mdanalysis-pdb-read-atoms-1000000.stdout",
     shell:
         """
         set -euo pipefail
@@ -484,7 +484,7 @@ rule h2h_pymatgen:
     input:
         "bench/h2h/work/prepare.ok",
     output:
-        "bench/h2h/logs/campaign/pymatgen-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/pymatgen-poscar-read-atoms-1000000.stdout",
     shell:
         """
         set -euo pipefail
@@ -510,12 +510,12 @@ rule h2h_ase_traj:
     input:
         "bench/h2h/work/prepare.ok",
     output:
-        "bench/h2h/logs/campaign/ase-traj-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/ase-extxyz-read-atoms-1000000.stdout",
     shell:
         """
         set -euo pipefail
         export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
-        taskset -c 0 python bench/h2h/asv/drive.py ase_traj
+        taskset -c 0 python bench/h2h/asv/drive.py ase_extxyz
         """
 
 
@@ -538,12 +538,12 @@ rule h2h_report:
         "bench/h2h/logs/campaign/eon-cpp-read-atoms-1000000.stdout",
         "bench/h2h/logs/campaign/eon-python-read-atoms-1000000.stdout",
         "bench/h2h/logs/campaign/ase-eon-read-atoms-1000000.stdout",
-        "bench/h2h/logs/campaign/chemfiles-xyz-read-atoms-1000000.stdout",
-        "bench/h2h/logs/campaign/mdanalysis-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/chemfiles-extxyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/mdanalysis-pdb-read-atoms-1000000.stdout",
         "bench/h2h/logs/campaign/ovito-extxyz-read-atoms-1000000.stdout",
-        "bench/h2h/logs/campaign/pymatgen-xyz-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/pymatgen-poscar-read-atoms-1000000.stdout",
         "bench/h2h/logs/campaign/numpy-npy-read-atoms-1000000.stdout",
-        "bench/h2h/logs/campaign/ase-traj-read-atoms-1000000.stdout",
+        "bench/h2h/logs/campaign/ase-extxyz-read-atoms-1000000.stdout",
     output:
         "bench/h2h/results.json",
     shell:

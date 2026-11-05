@@ -226,7 +226,7 @@ JSON you generate; regenerate after peer runs if you need them current.
 
 **Python**
 
-Multi-frame parse paths release the GIL via =py.detach= (=src/python.rs=) around
+Multi-frame parse paths release the global interpreter lock (GIL) via =py.detach= (=src/python.rs=) around
 the Rust work; =iter_con= yields full frames.
 
 * Criterion (local Rust latency)
@@ -285,11 +285,20 @@ intervals; it is not part of the PR gate.
 Each rule calls an asv class under =bench/h2h/asv/=.
 The class sets =timeout = 600= and defines =time_*= and =track_*= methods.
 Paper numbers come from those rules.
-The same-file table reads one con file: readcon from C, Fortran, and Python, the upstream eon client, eon Python, and ASE with the eon format.
-The nearest-native table reads different files.
-NumPy reads an npy array, ASE reads a traj file, =OVITO= reads extended xyz, and chemfiles, MDAnalysis, and pymatgen read xyz.
+The same-file table reads one con file: readcon from C, Fortran, and Python, the upstream eon client, eon Python, and the Atomic Simulation Environment (ASE) with the eon format.
+The nearest-native table reads different files that carry the same atoms and the same cell.
+NumPy reads an npy coordinate array, which has no cell.
+ASE and chemfiles read extended xyz.
+=OVITO= reads extended xyz.
+pymatgen reads a POSCAR.
+MDAnalysis reads a PDB file with a CRYST1 record.
+=scripts/check_version_sot.sh= scans the tree for the package version string.
+It allows that string only in a fixed list of packaging files and in =docs/source= rst pages.
+A file outside that list fails the scan.
+The paper directory is outside the list, so a full =cargo test= reports those paths.
+The 207 library tests do not run that scan.
 A row passes only when the atom count, the cell, and the coordinates match.
-Chemfiles returns cell lengths of 0 on xyz, so that row fails the cell check.
+NumPy has no cell, so that row fails the cell check.
 The host line is Intel Xeon Processor, the =uname -m= value, =nproc=, and the memory total.
 Every arm is pinned with =taskset -c 0=.
 The in-process Python read and the fresh-process Python read are separate rows.

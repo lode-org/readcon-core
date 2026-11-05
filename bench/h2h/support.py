@@ -179,12 +179,15 @@ def git_line(args: list[str]) -> str:
 def log_text(command: list[str], body: str, code: int) -> str:
     rev = git_line(["rev-parse", "HEAD"])
     tree = git_line(["rev-parse", "HEAD^{tree}"])
+    src_tree = git_line(["rev-parse", "HEAD:src"])
     shown = " ".join(command)
     text = (
         "git rev-parse HEAD\n"
         f"{rev}\n"
         "git rev-parse HEAD^{tree}\n"
         f"{tree}\n"
+        "git rev-parse HEAD:src\n"
+        f"{src_tree}\n"
         "command\n"
         f"{shown}\n"
         f"{hardware_line()}\n"

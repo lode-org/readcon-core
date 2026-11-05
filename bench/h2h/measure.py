@@ -479,22 +479,34 @@ def run_native(kind: str) -> None:
             images = ase_read(support.rel(con), index=":", format="eon")
         return images
 
-    if kind == "ase_traj":
-        traj = folder / "atoms.traj"
-        if not traj.exists():
-            from ase.io import write as ase_write
-
-            ase_write(os.fspath(traj), ensure_images())
+    if kind == "ase_extxyz":
+        ext = _ensure_extxyz(folder, ensure_images)
         samples = []
         last = None
         for _ in range(REPEATS):
             started = time.perf_counter()
-            last = ase_read(os.fspath(traj), index=":")
+            last = ase_read(os.fspath(ext), index=":", format="extxyz")
             samples.append(time.perf_counter() - started)
         coords = np.stack([image.positions for image in last])
-        cell = np.concatenate([np.asarray(last[0].cell.lengths()), np.asarray(last[0].cell.angles())])
-        row = _native_row("ase-traj", "traj", samples, coords.shape[1], coords.shape[0], cell, coords, atoms, frames, "ASE traj is a different file, not the con file.")
-        _emit("ase-traj-read-atoms-1000000", _command(["ase_traj"]), row, {"file": support.rel(traj), "format": "traj", "panel": "nearest-native"})
+        cell = _cell_from_ase(last[0])
+        row = _native_row(
+            "ase-extxyz",
+            "extxyz",
+            samples,
+            coords.shape[1],
+            coords.shape[0],
+            cell,
+            coords,
+            atoms,
+            frames,
+            "Atomic Simulation Environment extended xyz is a different file from the con file, and the lattice is in the file.",
+        )
+        _emit(
+            "ase-extxyz-read-atoms-1000000",
+            _command(["ase_extxyz"]),
+            row,
+            {"file": support.rel(ext), "format": "extxyz", "panel": "nearest-native"},
+        )
     elif kind == "numpy":
         npy = folder / "coords.npy"
         reference = support.expected_positions(atoms)
@@ -523,14 +535,14 @@ def run_native(kind: str) -> None:
         )
         _emit("numpy-npy-read-atoms-1000000", _command(["numpy"]), row, {"file": support.rel(npy), "format": "npy", "panel": "nearest-native"})
     elif kind == "chemfiles":
-        xyz = _ensure_xyz(folder, ensure_images)
+        ext = _ensure_extxyz(folder, ensure_images)
         import chemfiles
 
         samples = []
         chem_frames = None
         for _ in range(REPEATS):
             started = time.perf_counter()
-            traj = chemfiles.Trajectory(os.fspath(xyz))
+            traj = chemfiles.Trajectory(os.fspath(ext), "r", "XYZ")
             chem_frames = [traj.read() for _step in range(traj.nsteps)]
             samples.append(time.perf_counter() - started)
         coords = np.stack([np.array(frame.positions, dtype=np.float64) for frame in chem_frames])
@@ -539,7 +551,7 @@ def run_native(kind: str) -> None:
         cell = np.concatenate([lengths.reshape(-1)[:3], angles.reshape(-1)[:3]])
         row = _native_row(
             "chemfiles",
-            "xyz",
+            "extxyz",
             samples,
             coords.shape[1],
             coords.shape[0],
@@ -547,11 +559,16 @@ def run_native(kind: str) -> None:
             coords,
             atoms,
             frames,
-            "Chemfiles xyz is a different file. The xyz writer omits the cell, so cell lengths come back as 0.",
+            "Chemfiles reads extended xyz. The lattice is in the comment line.",
         )
-        _emit("chemfiles-xyz-read-atoms-1000000", _command(["chemfiles"]), row, {"file": support.rel(xyz), "format": "xyz", "panel": "nearest-native"})
+        _emit(
+            "chemfiles-extxyz-read-atoms-1000000",
+            _command(["chemfiles"]),
+            row,
+            {"file": support.rel(ext), "format": "extxyz", "panel": "nearest-native"},
+        )
     elif kind == "mdanalysis":
-        xyz = _ensure_xyz(folder, ensure_images)
+        pdb = _ensure_pdb(folder, ensure_images)
         import MDAnalysis as mda
 
         samples = []
@@ -559,7 +576,7 @@ def run_native(kind: str) -> None:
         cell = None
         for _ in range(REPEATS):
             started = time.perf_counter()
-            universe = mda.Universe(os.fspath(xyz))
+            universe = mda.Universe(os.fspath(pdb))
             blocks = []
             for _ts in universe.trajectory:
                 blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
@@ -569,7 +586,7 @@ def run_native(kind: str) -> None:
             cell = None if dims is None else np.asarray(dims, dtype=np.float64)
         row = _native_row(
             "mdanalysis",
-            "xyz",
+            "pdb",
             samples,
             coords.shape[1],
             coords.shape[0],
@@ -577,9 +594,14 @@ def run_native(kind: str) -> None:
             coords,
             atoms,
             frames,
-            "MDAnalysis xyz is a different file, not the con file.",
+            "MDAnalysis reads a PDB file whose CRYST1 record stores the cell.",
         )
-        _emit("mdanalysis-xyz-read-atoms-1000000", _command(["mdanalysis"]), row, {"file": support.rel(xyz), "format": "xyz", "panel": "nearest-native"})
+        _emit(
+            "mdanalysis-pdb-read-atoms-1000000",
+            _command(["mdanalysis"]),
+            row,
+            {"file": support.rel(pdb), "format": "pdb", "panel": "nearest-native"},
+        )
     elif kind == "ovito":
         ext = folder / "atoms.extxyz"
         if not ext.exists():
@@ -619,31 +641,77 @@ def run_native(kind: str) -> None:
         )
         _emit("ovito-extxyz-read-atoms-1000000", _command(["ovito"]), row, {"file": support.rel(ext), "format": "extxyz", "panel": "nearest-native"})
     elif kind == "pymatgen":
-        xyz = _ensure_xyz(folder, ensure_images)
-        from pymatgen.io.xyz import XYZ
+        poscar = _ensure_poscar(folder, ensure_images)
+        from pymatgen.io.vasp import Poscar
 
         samples = []
-        mols = None
+        structure = None
         for _ in range(REPEATS):
             started = time.perf_counter()
-            mols = XYZ.from_file(os.fspath(xyz)).all_molecules
+            structure = Poscar.from_file(os.fspath(poscar)).structure
             samples.append(time.perf_counter() - started)
-        coords = np.stack([np.asarray(mol.cart_coords, dtype=np.float64) for mol in mols])
+        coords = np.asarray(structure.cart_coords, dtype=np.float64)
+        lattice = structure.lattice
+        cell = np.concatenate(
+            [np.asarray(lattice.abc, dtype=np.float64), np.asarray(lattice.angles, dtype=np.float64)]
+        )
         row = _native_row(
             "pymatgen",
-            "xyz",
+            "poscar",
             samples,
-            coords.shape[1],
             coords.shape[0],
-            None,
+            1,
+            cell,
             coords,
             atoms,
-            frames,
-            "pymatgen xyz is a different file and the molecule has no lattice.",
+            1,
+            "pymatgen reads a POSCAR. The lattice is in the file.",
         )
-        _emit("pymatgen-xyz-read-atoms-1000000", _command(["pymatgen"]), row, {"file": support.rel(xyz), "format": "xyz", "panel": "nearest-native"})
+        _emit(
+            "pymatgen-poscar-read-atoms-1000000",
+            _command(["pymatgen"]),
+            row,
+            {"file": support.rel(poscar), "format": "poscar", "panel": "nearest-native"},
+        )
     else:
         raise SystemExit(f"unknown native arm {kind}")
+
+
+def _cell_from_ase(image) -> np.ndarray:
+    return np.concatenate(
+        [np.asarray(image.cell.lengths(), dtype=np.float64), np.asarray(image.cell.angles(), dtype=np.float64)]
+    )
+
+
+def _write_images(path: Path, images, fmt: str) -> None:
+    from ase.io import write as ase_write
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.unlink()
+    ase_write(os.fspath(path), images, format=fmt)
+
+
+def _ensure_extxyz(folder: Path, ensure_images) -> Path:
+    path = folder / "grid.extxyz"
+    if not path.exists():
+        _write_images(path, ensure_images(), "extxyz")
+    return path
+
+
+def _ensure_poscar(folder: Path, ensure_images) -> Path:
+    path = folder / "grid.poscar"
+    if not path.exists():
+        images = ensure_images()
+        _write_images(path, images[0], "vasp")
+    return path
+
+
+def _ensure_pdb(folder: Path, ensure_images) -> Path:
+    path = folder / "grid.pdb"
+    if not path.exists():
+        _write_images(path, ensure_images(), "proteindatabank")
+    return path
 
 
 def _ensure_xyz(folder: Path, ensure_images) -> Path:
