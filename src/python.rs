@@ -1,5 +1,7 @@
 use ndarray::{Array2, Array3, ArrayView2};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3};
+use numpy::{
+    IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
+};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
@@ -1292,6 +1294,258 @@ impl PyConFrame {
     }
 }
 
+fn push_positions(storage: crate::storage_dtype::Array2Storage, out: &mut Vec<f64>) {
+    match storage {
+        crate::storage_dtype::Array2Storage::F64(arr) => {
+            if let Some(slice) = arr.as_slice() {
+                out.extend_from_slice(slice);
+            } else {
+                for row in arr.rows() {
+                    out.extend(row.iter().copied());
+                }
+            }
+        }
+        other => {
+            for i in 0..other.nrows() {
+                out.extend_from_slice(&other.as_f64_row(i));
+            }
+        }
+    }
+}
+
+fn expand_masses(frame: &ConFrame) -> Vec<f64> {
+    let mut masses = Vec::with_capacity(frame.atom_data.len());
+    for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let mass = frame
+            .header
+            .masses_per_type
+            .get(type_index)
+            .copied()
+            .unwrap_or(0.0);
+        masses.extend(std::iter::repeat_n(mass, count));
+    }
+    masses
+}
+
+fn frame_from_arrays(
+    positions: &[f64],
+    masses: &[f64],
+    cell: &[f64],
+    symbol: &str,
+) -> Result<ConFrame, String> {
+    let n = masses.len();
+    if positions.len() != n * 3 || cell.len() != 6 || n == 0 {
+        return Err("positions, masses and cell disagree".to_string());
+    }
+    let shared: std::sync::Arc<str> = std::sync::Arc::from(symbol);
+    let mut atom_data = Vec::with_capacity(n);
+    for i in 0..n {
+        let base = i * 3;
+        atom_data.push(AtomDatum::coords(
+            std::sync::Arc::clone(&shared),
+            positions[base],
+            positions[base + 1],
+            positions[base + 2],
+            [false, false, false],
+            i as u64,
+        ));
+    }
+    let mut metadata = BTreeMap::new();
+    metadata.insert(
+        meta::CON_SPEC_MINOR.to_string(),
+        serde_json::json!(1),
+    );
+    metadata.insert(
+        meta::CON_SPEC_VERSION.to_string(),
+        serde_json::json!(2),
+    );
+    Ok(ConFrame {
+        header: crate::types::FrameHeader {
+            prebox_header: crate::types::PreboxHeader::new("readcon"),
+            boxl: [cell[0], cell[1], cell[2]],
+            angles: [cell[3], cell[4], cell[5]],
+            postbox_header: ["0 0".to_string(), "0 0".to_string()],
+            natm_types: 1,
+            natms_per_type: vec![n],
+            masses_per_type: vec![masses[0]],
+            spec_version: 2,
+            metadata,
+            sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: true,
+        },
+        atom_data,
+        positions: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        velocities: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        forces: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        atom_energies: crate::storage_dtype::Array1Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+        ),
+        charges: crate::storage_dtype::Array1Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+        ),
+        spins: crate::storage_dtype::Array1Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+        ),
+        magmoms: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        displacements: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        spreads: crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+            3,
+        ),
+        masses: crate::storage_dtype::Array1Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            0,
+        ),
+        atom_ids: ndarray::ArcArray1::zeros(0),
+    })
+}
+
+/// Read coordinates as one contiguous array.
+///
+/// The parse runs without the GIL. The returned positions are the parser's
+/// coordinate block moved into NumPy. Per-frame cell and masses travel beside
+/// that array. `parse_s`, `convert_s` and `copy_s` split the time.
+#[pyfunction]
+fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
+    let path_owned = path.to_owned();
+    let parse_start = std::time::Instant::now();
+    let frames = py
+        .detach(|| {
+            crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
+                .map_err(|err| err.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    let parse_s = parse_start.elapsed().as_secs_f64();
+    let convert_start = std::time::Instant::now();
+    let n_frames = frames.len();
+    let n_atoms = frames.first().map(|frame| frame.atom_data.len()).unwrap_or(0);
+    let uniform = frames.iter().all(|frame| frame.atom_data.len() == n_atoms);
+    if !uniform {
+        return Err(PyValueError::new_err(
+            "read_coords needs the same atom count in every frame",
+        ));
+    }
+    let mut positions = Vec::with_capacity(n_frames * n_atoms * 3);
+    let mut masses = Vec::with_capacity(n_frames * n_atoms);
+    let mut cell = Vec::with_capacity(n_frames * 6);
+    for frame in frames {
+        cell.extend_from_slice(&frame.header.boxl);
+        cell.extend_from_slice(&frame.header.angles);
+        masses.extend(expand_masses(&frame));
+        push_positions(frame.positions, &mut positions);
+    }
+    let convert_s = convert_start.elapsed().as_secs_f64();
+    let copy_start = std::time::Instant::now();
+    let pos = ndarray::Array3::from_shape_vec((n_frames, n_atoms, 3), positions)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let mass = ndarray::Array2::from_shape_vec((n_frames, n_atoms), masses)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let cell_arr = ndarray::Array2::from_shape_vec((n_frames, 6), cell)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let dict = PyDict::new(py);
+    dict.set_item("positions", pos.into_pyarray(py))?;
+    dict.set_item("masses", mass.into_pyarray(py))?;
+    dict.set_item("cell", cell_arr.into_pyarray(py))?;
+    dict.set_item("n_frames", n_frames)?;
+    dict.set_item("n_atoms", n_atoms)?;
+    dict.set_item("parse_s", parse_s)?;
+    dict.set_item("convert_s", convert_s)?;
+    let copy_s = copy_start.elapsed().as_secs_f64();
+    dict.set_item("copy_s", copy_s)?;
+    Ok(dict.unbind())
+}
+
+/// Write coordinates from contiguous arrays.
+///
+/// `positions` is `(frames, atoms, 3)`, `masses` is `(frames, atoms)` and
+/// `cell` is `(frames, 6)` with lengths then angles. The GIL is released
+/// while the file is formatted.
+#[pyfunction]
+#[pyo3(signature = (path, positions, masses, cell, symbol="Cu"))]
+fn write_coords(
+    py: Python<'_>,
+    path: &str,
+    positions: PyReadonlyArray3<'_, f64>,
+    masses: PyReadonlyArray2<'_, f64>,
+    cell: PyReadonlyArray2<'_, f64>,
+    symbol: &str,
+) -> PyResult<Py<PyDict>> {
+    let copy_start = std::time::Instant::now();
+    let pos = positions.as_slice()?;
+    let mass = masses.as_slice()?;
+    let cell_s = cell.as_slice()?;
+    let shape = positions.dims();
+    let n_frames = shape[0];
+    let n_atoms = shape[1];
+    if mass.len() != n_frames * n_atoms || cell_s.len() != n_frames * 6 {
+        return Err(PyValueError::new_err("positions, masses and cell disagree"));
+    }
+    let pos_owned = pos.to_vec();
+    let mass_owned = mass.to_vec();
+    let cell_owned = cell_s.to_vec();
+    let copy_s = copy_start.elapsed().as_secs_f64();
+    let path_owned = path.to_owned();
+    let symbol_owned = symbol.to_owned();
+    let convert_start = std::time::Instant::now();
+    py.detach(move || {
+        let mut frames = Vec::with_capacity(n_frames);
+        for index in 0..n_frames {
+            let p = index * n_atoms * 3;
+            let m = index * n_atoms;
+            let c = index * 6;
+            let frame = frame_from_arrays(
+                &pos_owned[p..p + n_atoms * 3],
+                &mass_owned[m..m + n_atoms],
+                &cell_owned[c..c + 6],
+                &symbol_owned,
+            )?;
+            frames.push(frame);
+        }
+        let convert_s = convert_start.elapsed().as_secs_f64();
+        let write_start = std::time::Instant::now();
+        let mut writer = ConFrameWriter::from_path(Path::new(&path_owned))
+            .map_err(|err| err.to_string())?;
+        writer
+            .extend(frames.iter())
+            .map_err(|err| err.to_string())?;
+        let write_s = write_start.elapsed().as_secs_f64();
+        Ok::<_, String>((convert_s, write_s))
+    })
+    .map_err(PyIOError::new_err)
+    .and_then(|(convert_s, write_s)| {
+        let dict = PyDict::new(py);
+        dict.set_item("copy_s", copy_s)?;
+        dict.set_item("convert_s", convert_s)?;
+        dict.set_item("write_s", write_s)?;
+        Ok(dict.unbind())
+    })
+}
+
 /// Read frames from a .con or .convel file path.
 ///
 /// `n_threads` is `None` or `0` for the automatic policy (Rayon when the
@@ -2472,6 +2726,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConTrajectoryIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_positions, m)?)?;
+    m.add_function(wrap_pyfunction!(read_coords, m)?)?;
+    m.add_function(wrap_pyfunction!(write_coords, m)?)?;
     m.add_class::<ConBinMapping>()?;
     m.add_function(wrap_pyfunction!(read_conbin, m)?)?;
     m.add_function(wrap_pyfunction!(write_conbin, m)?)?;

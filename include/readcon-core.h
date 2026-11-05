@@ -907,6 +907,14 @@ enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
                                  uintptr_t num_frames);
 
 /**
+ * Write frames with the binding metadata stamp and the caller's atoms.
+ * The stamp is restored before return. Atoms are not copied.
+ */
+enum RKRStatus rkr_writer_extend_binding(struct RKRConFrameWriter *writer_handle,
+                                         struct RKRConFrame **frame_handles,
+                                         uintptr_t num_frames);
+
+/**
  * Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
  * Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
  *

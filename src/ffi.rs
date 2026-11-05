@@ -1288,6 +1288,39 @@ pub unsafe extern "C" fn rkr_frame_binding_rewrite(
     }
 }
 
+/// Write frames with the binding metadata stamp and the caller's atoms.
+///
+/// Unlike [`rkr_frame_binding_rewrite`], this does not allocate a second
+/// copy of the atoms. The stamp is restored before the function returns.
+///
+/// # Safety
+/// `writer_handle` and `frame_handles` must be valid. Each frame is mutated
+/// only for the metadata map, and that map is restored.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_writer_extend_binding(
+    writer_handle: *mut RKRConFrameWriter,
+    frame_handles: *const *mut RKRConFrame,
+    num_frames: usize,
+) -> RKRStatus {
+    let writer = match unsafe { (writer_handle as *mut RkrWriter).as_mut() } {
+        Some(w) => w,
+        None => return RKRStatus::RKR_STATUS_NULL_POINTER,
+    };
+    if frame_handles.is_null() && num_frames > 0 {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    for i in 0..num_frames {
+        let handle = unsafe { *frame_handles.add(i) };
+        let Some(frame) = (unsafe { (handle as *mut ConFrame).as_mut() }) else {
+            return RKRStatus::RKR_STATUS_NULL_POINTER;
+        };
+        if writer.write_frame_binding(frame).is_err() {
+            return RKRStatus::RKR_STATUS_IO_ERROR;
+        }
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
 /// Writes multiple frames from an array of handles to the file managed by the writer.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///

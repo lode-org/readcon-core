@@ -708,8 +708,8 @@ pub fn read_all_frames_with_threads(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let text = crate::compression::read_file_text(path)?;
-    Ok(frames_from_text(&text, num_threads)?)
+    let bytes = crate::compression::read_file_bytes(path)?;
+    Ok(frames_from_bytes(&bytes, num_threads)?)
 }
 
 /// Positions of every frame, one row-major `f64` buffer.

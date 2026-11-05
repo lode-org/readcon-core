@@ -85,6 +85,38 @@ pub fn read_file_text(path: &Path) -> Result<String, Box<dyn std::error::Error>>
     }
 }
 
+/// File bytes in one read when the file is not compressed.
+///
+/// Gzip and zstd still go through the decoder. Plain text skips the
+/// four-byte probe and the UTF-8 `String` allocation.
+pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let bytes = std::fs::read(path)?;
+    let magic = &bytes[..bytes.len().min(4)];
+    match detect_compression(magic) {
+        Compression::None => Ok(bytes),
+        Compression::Gzip => {
+            let mut decoder = flate2::read::MultiGzDecoder::new(std::io::Cursor::new(bytes));
+            let mut out = Vec::new();
+            decoder.read_to_end(&mut out)?;
+            Ok(out)
+        }
+        Compression::Zstd => {
+            #[cfg(feature = "zstd")]
+            {
+                let mut decoder = zstd::stream::read::Decoder::new(std::io::Cursor::new(bytes))?;
+                let mut out = Vec::new();
+                decoder.read_to_end(&mut out)?;
+                Ok(out)
+            }
+            #[cfg(not(feature = "zstd"))]
+            {
+                let _ = bytes;
+                Err(zstd_unsupported().into())
+            }
+        }
+    }
+}
+
 fn read_contents(
     path: &Path,
     map_large: bool,

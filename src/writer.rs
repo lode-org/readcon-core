@@ -1,5 +1,5 @@
 use crate::types::{
-    ConFrame, ConFrameBuilder, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES,
+    ConFrame, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES,
     SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES,
     encode_fixed_bitmask, meta,
 };
@@ -391,6 +391,18 @@ impl<W: Write> ConFrameWriter<W> {
             serialized,
         });
         Ok(())
+    }
+
+    /// Writes `frame` with the binding metadata stamp and the original atoms.
+    ///
+    /// The stamp is installed for the duration of the write and then put back.
+    /// Atoms are not rebuilt.
+    pub fn write_frame_binding(&mut self, frame: &mut ConFrame) -> Result<(), WriteError> {
+        let stamped = binding_metadata(frame);
+        let saved = std::mem::replace(&mut frame.header.metadata, stamped);
+        let result = self.write_frame(frame);
+        frame.header.metadata = saved;
+        result
     }
 
     /// Writes a single `ConFrame` to the output stream.
@@ -925,76 +937,33 @@ pub(crate) fn stamp_legacy_velocity_time(
     }
 }
 
-/// Rebuild `frame` the way the Python and Julia writers do.
+/// Metadata a language binding emits for `frame`, without copying atoms.
 ///
 /// [`ConFrameBuilder::build`] stamps `con_spec_minor` 1 when the key is
-/// absent (D15). A parsed frame does not carry that key unless the file
-/// did, and the writer does not invent it. Language bindings that turn a
-/// read frame back into atoms and metadata therefore emit the minor, and
-/// this is that rebuild.
-pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
+/// absent. A parsed frame does not carry that key unless the file did.
+/// The stamp lives on the header. The atoms stay where the parser put them.
+pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
     let mut meta = frame.header.metadata.clone();
     meta.remove(meta::CON_SPEC_VERSION);
     meta.remove(meta::SECTIONS);
-    let has_velocity = frame.atom_data.iter().any(|atom| atom.velocity().is_some());
+    let has_velocity = frame.atom_data.iter().any(|atom| atom.has_velocity());
     stamp_legacy_velocity_time(&mut meta, frame.header.spec_version, has_velocity);
-
-    let mut builder = ConFrameBuilder::new(frame.header.boxl, frame.header.angles);
-    builder
-        .prebox_header(frame.header.prebox_header.user.as_str())
-        .postbox_header(frame.header.postbox_header.clone())
-        .metadata(meta);
-
-    let mut masses = Vec::with_capacity(frame.atom_data.len());
-    for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
-        let mass = frame
-            .header
-            .masses_per_type
-            .get(type_index)
-            .copied()
-            .unwrap_or(0.0);
-        for _ in 0..count {
-            masses.push(mass);
-        }
+    if !meta.contains_key(meta::CON_SPEC_MINOR) {
+        meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
     }
+    meta
+}
 
-    for (index, atom) in frame.atom_data.iter().enumerate() {
-        let mass = masses.get(index).copied().unwrap_or(0.0);
-        builder.add_atom(
-            atom.symbol.as_ref(),
-            atom.x,
-            atom.y,
-            atom.z,
-            atom.fixed,
-            atom.atom_id,
-            mass,
-        );
-        if let Some(velocity) = atom.velocity() {
-            builder.with_velocity(velocity);
-        }
-        if let Some(force) = atom.force() {
-            builder.with_force(force);
-        }
-        if let Some(energy) = atom.energy() {
-            builder.with_energy(energy);
-        }
-        if let Some(charge) = atom.charge() {
-            builder.with_charge(charge);
-        }
-        if let Some(spin) = atom.spin() {
-            builder.with_spin(spin);
-        }
-        if let Some(magmom) = atom.magmom() {
-            builder.with_magmom(magmom);
-        }
-        if let Some(displacement) = atom.displacement() {
-            builder.with_displacement(displacement);
-        }
-        if let Some(spread) = atom.spread() {
-            builder.with_spread(spread);
-        }
+/// Same bytes as a binding rewrite, without rebuilding each atom.
+pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
+    let mut out = frame.clone();
+    out.header.metadata = binding_metadata(frame);
+    // Spec 1 keeps line 2 as free text. A binding rewrite emits JSON,
+    // which the writer does only from spec 2 upward.
+    if out.header.spec_version < 2 {
+        out.header.spec_version = 2;
     }
-    builder.build()
+    Ok(out)
 }
 
 // Implementation block specifically for when the writer is a `File`.
