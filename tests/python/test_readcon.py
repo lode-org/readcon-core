@@ -48,6 +48,31 @@ class TestReadCon:
         assert auto[0].atoms[0].atom_id == one[0].atoms[0].atom_id
         assert one[1].atoms[0].x == pytest.approx(two[1].atoms[0].x)
 
+    def test_lazy_list_matches_serial_positions(self):
+        import numpy as np
+
+        path = _resource("tiny_multi_cuh2.con")
+        serial = readcon.read_positions(path, n_threads=1)
+        lazy = readcon.read_con(path, n_threads=2)
+        stacked = np.stack([frame.xyz for frame in lazy])
+        assert np.array_equal(stacked, serial)
+        eager, eager_phases = readcon.read_con_phases(path, n_threads=2, build="eager")
+        again, lazy_phases = readcon.read_con_phases(path, n_threads=2, build="lazy")
+        assert lazy_phases["build"] == "lazy"
+        assert eager_phases["build"] == "eager"
+        for key in (
+            "open_mmap_s",
+            "scan_s",
+            "slot_alloc_s",
+            "worker_parse_s",
+            "python_build_s",
+            "return_s",
+        ):
+            assert key in lazy_phases
+        assert eager[1].atoms[0].x == pytest.approx(again[1].atoms[0].x)
+        assert lazy_phases["n_frames"] == len(lazy)
+        assert readcon.scan_probe(path, 2, True)[2] is True
+
 
 class TestReadConvel:
     def test_read_convel(self):

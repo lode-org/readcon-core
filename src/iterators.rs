@@ -1037,18 +1037,44 @@ fn parse_into_slots<F>(
 where
     F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
 {
+    parse_into_slots_timed(len, boundaries, workers, parse_span).0
+}
+
+/// Slot allocation and the worker parse, timed apart.
+///
+/// The first `f64` is the slot allocation. The second is the worker
+/// parse. `workers < 2` still reserves the slot vector before the
+/// calling thread fills it.
+#[cfg(feature = "parallel")]
+fn parse_into_slots_timed<F>(
+    len: usize,
+    boundaries: &[usize],
+    workers: usize,
+    parse_span: F,
+) -> (Vec<Result<types::ConFrame, error::ParseError>>, f64, f64)
+where
+    F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
+{
     let n = boundaries.len();
     if n == 0 {
-        return Vec::new();
+        return (Vec::new(), 0.0, 0.0);
     }
     if workers < 2 {
-        return (0..n)
-            .map(|i| parse_span(boundaries[i], span_end(boundaries, i, len)))
-            .collect();
+        let t_alloc = std::time::Instant::now();
+        let mut slots = Vec::with_capacity(n);
+        let alloc_s = t_alloc.elapsed().as_secs_f64();
+        let t_work = std::time::Instant::now();
+        for i in 0..n {
+            slots.push(parse_span(boundaries[i], span_end(boundaries, i, len)));
+        }
+        return (slots, alloc_s, t_work.elapsed().as_secs_f64());
     }
+    let t_alloc = std::time::Instant::now();
     let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
         (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
+    let alloc_s = t_alloc.elapsed().as_secs_f64();
     let chunk = n.div_ceil(workers).max(1);
+    let t_work = std::time::Instant::now();
     {
         use rayon::prelude::*;
         slots
@@ -1062,17 +1088,19 @@ where
                 }
             });
     }
+    let work_s = t_work.elapsed().as_secs_f64();
     // Each index in `0..n` was written once. `par_chunks_mut` hands out
     // disjoint slices, and the last slice is shorter when `n` does not
     // divide the worker count.
     let mut slots = std::mem::ManuallyDrop::new(slots);
-    unsafe {
+    let slots = unsafe {
         Vec::from_raw_parts(
             slots.as_mut_ptr() as *mut Result<types::ConFrame, error::ParseError>,
             slots.len(),
             slots.capacity(),
         )
-    }
+    };
+    (slots, alloc_s, work_s)
 }
 
 #[cfg(feature = "parallel")]
@@ -1106,6 +1134,25 @@ fn parse_frames_parallel_bytes(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
+    parse_bytes_timed(bytes, num_threads).0
+}
+
+/// Scan, slot allocation, and worker parse of `bytes`.
+///
+/// The three times are seconds. `Some(n)` with `n >= 2` uses a pool of
+/// that size for the chunked newline scan and the slot parse. Every
+/// other count stays on the calling thread. `None` follows
+/// [`scan_thread_count`].
+#[cfg(feature = "parallel")]
+fn parse_bytes_timed(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> (
+    Vec<Result<types::ConFrame, error::ParseError>>,
+    f64,
+    f64,
+    f64,
+) {
     let threads = scan_thread_count(num_threads, bytes.len());
     // The scan stays serial below `SCAN_PARALLEL_MIN`. An explicit pool
     // still parses on that many workers.
@@ -1115,6 +1162,7 @@ fn parse_frames_parallel_bytes(
         None => threads,
     };
     let run = || {
+        let t_scan = std::time::Instant::now();
         let mut scanner = ConFrameIterator::from_bytes(bytes);
         if threads >= 2 {
             // Same pool as the parse, so the newline chunks do not start
@@ -1124,18 +1172,25 @@ fn parse_frames_parallel_bytes(
         }
         // Whitespace after the final frame does not open another frame.
         let boundaries = collect_frame_starts(scanner, true);
-        parse_into_slots(bytes.len(), &boundaries, parse_workers, |start, end| {
-            parse_byte_span(bytes, start, end)
-        })
+        let scan_s = t_scan.elapsed().as_secs_f64();
+        let (slots, slot_s, work_s) =
+            parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
+                parse_byte_span(bytes, start, end)
+            });
+        (slots, scan_s, slot_s, work_s)
     };
     match num_threads {
         None => run(),
         Some(n) if n <= 1 => {
             let _ = n;
+            let t_scan = std::time::Instant::now();
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
-            parse_into_slots(bytes.len(), &boundaries, 1, |start, end| {
-                parse_byte_span(bytes, start, end)
-            })
+            let scan_s = t_scan.elapsed().as_secs_f64();
+            let (slots, slot_s, work_s) =
+                parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
+                    parse_byte_span(bytes, start, end)
+                });
+            (slots, scan_s, slot_s, work_s)
         }
         Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
             Ok(pool) => pool.install(run),
@@ -1237,11 +1292,13 @@ pub fn read_all_frames_indexed(
 
 /// Minimum buffer length for a chunked newline scan.
 ///
-/// Below this length the cut setup, the per-chunk `memchr`, and the
-/// stitch cost more than one pass on the calling thread. The value is
-/// 32 KiB. Callers name this constant instead of writing the length again.
+/// On this host a chunked scan of a real trajectory is slower than one
+/// serial pass at 4 MiB, and the gap exceeds the chunked interquartile
+/// range at 2 and 4 workers. At 64 MiB the chunked median is faster at
+/// 2, 4, and 8 workers, and each of those gaps exceeds the chunked
+/// interquartile range. The constant is that 64 MiB size.
 #[cfg(feature = "parallel")]
-pub const SCAN_PARALLEL_MIN: usize = 32 * 1024;
+pub const SCAN_PARALLEL_MIN: usize = 64 * 1024 * 1024;
 
 enum IndexStep {
     Stay(usize),
@@ -1410,7 +1467,7 @@ fn collect_frame_starts(
 }
 
 /// Serial header walk. This is the reference the chunked scan must match.
-fn frame_start_offsets_serial(file_contents: &str) -> Vec<usize> {
+pub fn frame_start_offsets_serial(file_contents: &str) -> Vec<usize> {
     collect_frame_starts(ConFrameIterator::new(file_contents), false)
 }
 
@@ -1587,6 +1644,192 @@ pub fn parse_frames_at_offsets(
         },
         _ => run(),
     }
+}
+
+/// Seconds for one phased read. The open time is the file read or the
+/// map. Scan, slot allocation, and the worker parse are separate.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReadPhaseTimes {
+    pub open_mmap_s: f64,
+    pub scan_s: f64,
+    pub slot_alloc_s: f64,
+    pub worker_parse_s: f64,
+    /// True when the bytes came from a map rather than an owned buffer.
+    pub mapped: bool,
+}
+
+/// Frames from one phased read, plus the byte length of the buffer.
+pub struct PhasedFrames {
+    pub frames: Vec<types::ConFrame>,
+    pub phases: ReadPhaseTimes,
+    pub n_bytes: usize,
+}
+
+/// Read `path` and time open, scan, slot allocation, and the worker parse.
+///
+/// Plain text at or above the map threshold is mapped. Smaller files and
+/// compressed files are owned buffers. `Some(n)` with `n >= 2` parses on
+/// that many workers. Every other count parses on the calling thread.
+/// The frame list matches [`frames_from_bytes`].
+pub fn read_all_frames_phased(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    let t_open = std::time::Instant::now();
+    let contents = crate::compression::read_file_contents(path)?;
+    let open_mmap_s = t_open.elapsed().as_secs_f64();
+    let mapped = matches!(contents, crate::compression::FileContents::Mapped(_));
+    let n_bytes = match &contents {
+        crate::compression::FileContents::Owned(text) => text.len(),
+        crate::compression::FileContents::Mapped(map) => map.len(),
+    };
+    let bytes: &[u8] = match &contents {
+        crate::compression::FileContents::Owned(text) => text.as_bytes(),
+        crate::compression::FileContents::Mapped(map) => map,
+    };
+    let (frames, scan_s, slot_alloc_s, worker_parse_s) =
+        frames_from_bytes_phased(bytes, num_threads)?;
+    Ok(PhasedFrames {
+        frames,
+        n_bytes,
+        phases: ReadPhaseTimes {
+            open_mmap_s,
+            scan_s,
+            slot_alloc_s,
+            worker_parse_s,
+            mapped,
+        },
+    })
+}
+
+/// [`frames_from_bytes`] with scan, slot allocation, and worker-parse times.
+///
+/// `Some(n)` with `n >= 2` uses that pool. Every other count, including
+/// `None`, stays on the calling thread. That is the `read_con` policy:
+/// an omitted count does not start a pool.
+pub fn frames_from_bytes_phased(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<(Vec<types::ConFrame>, f64, f64, f64), error::ParseError> {
+    #[cfg(feature = "parallel")]
+    {
+        let requested = match num_threads {
+            Some(n) if n >= 2 => Some(n),
+            _ => Some(1),
+        };
+        let (parts, scan_s, slot_s, work_s) = parse_bytes_timed(bytes, requested);
+        let mut frames = Vec::with_capacity(parts.len());
+        for part in parts {
+            frames.push(part?);
+        }
+        return Ok((frames, scan_s, slot_s, work_s));
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+        let t_work = std::time::Instant::now();
+        let mut frames = Vec::new();
+        for part in ConFrameIterator::from_bytes(bytes) {
+            frames.push(part?);
+        }
+        Ok((frames, 0.0, 0.0, t_work.elapsed().as_secs_f64()))
+    }
+}
+
+/// Copy every frame's coordinates into one row-major buffer.
+///
+/// `None` means the frames do not share one atom count. `workers >= 2`
+/// writes disjoint frame runs. The copy is bit-identical to reading
+/// each frame's `f64` positions in order.
+pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<Vec<f64>> {
+    if frames.is_empty() {
+        return None;
+    }
+    let n_atoms = frames[0].positions.nrows();
+    if frames
+        .iter()
+        .any(|frame| frame.positions.nrows() != n_atoms)
+    {
+        return None;
+    }
+    let stride = n_atoms.saturating_mul(3);
+    let mut values = vec![0.0_f64; frames.len().saturating_mul(stride)];
+    if stride == 0 {
+        return Some(values);
+    }
+    let write = |frame: &types::ConFrame, dest: &mut [f64]| {
+        if let Some(src) = frame.positions.f64_slice() {
+            dest.copy_from_slice(src);
+        } else {
+            for (row, slot) in dest.chunks_exact_mut(3).enumerate() {
+                slot.copy_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+    };
+    #[cfg(feature = "parallel")]
+    {
+        if workers >= 2 {
+            use rayon::prelude::*;
+            let chunk_frames = frames.len().div_ceil(workers).max(1);
+            let chunk_vals = chunk_frames.saturating_mul(stride);
+            values
+                .par_chunks_mut(chunk_vals)
+                .enumerate()
+                .for_each(|(chunk_index, dest)| {
+                    let base = chunk_index * chunk_frames;
+                    for (offset, slot) in dest.chunks_exact_mut(stride).enumerate() {
+                        let index = base + offset;
+                        if index < frames.len() {
+                            write(&frames[index], slot);
+                        }
+                    }
+                });
+            return Some(values);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = workers;
+    }
+    for (frame, dest) in frames.iter().zip(values.chunks_exact_mut(stride)) {
+        write(frame, dest);
+    }
+    Some(values)
+}
+
+/// Time a newline scan of `text`.
+///
+/// `chunked` with `threads >= 2` splits the buffer into that many
+/// chunks, stitches the newline index, and walks frame starts. The
+/// pool is built before the timer starts. The serial walk is
+/// [`frame_start_offsets_serial`]. The returned offsets are the frame
+/// starts. The size gate used by the hot path is not applied here.
+pub fn measure_newline_scan(text: &str, threads: usize, chunked: bool) -> (Vec<usize>, f64) {
+    #[cfg(feature = "parallel")]
+    {
+        if chunked && threads >= 2 {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build();
+            let t_scan = std::time::Instant::now();
+            let offsets = match pool {
+                Ok(pool) => pool.install(|| {
+                    let newlines = newline_positions(text.as_bytes(), threads);
+                    frame_start_offsets_indexed(text, newlines)
+                }),
+                Err(_) => {
+                    let newlines = newline_positions(text.as_bytes(), threads);
+                    frame_start_offsets_indexed(text, newlines)
+                }
+            };
+            return (offsets, t_scan.elapsed().as_secs_f64());
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = (threads, chunked);
+    }
+    let t_scan = std::time::Instant::now();
+    let offsets = frame_start_offsets_serial(text);
+    (offsets, t_scan.elapsed().as_secs_f64())
 }
 
 #[cfg(all(test, feature = "parallel"))]
@@ -1822,7 +2065,9 @@ mod parallel_header_scan_tests {
             assert_slab(&one.repeat(3));
         }
         // The bytes parser (the read_con path) uses the same stitch.
-        let wide = fixture("cuh2.con").repeat(4);
+        // Repeat until the buffer crosses the measured chunked-scan gate.
+        let one = fixture("cuh2.con");
+        let wide = one.repeat(SCAN_PARALLEL_MIN.div_ceil(one.len()).max(1));
         assert!(wide.len() >= SCAN_PARALLEL_MIN);
         let serial = frame_start_offsets_serial(&wide);
         for workers in [2usize, 3, 4, 8] {
@@ -2017,5 +2262,60 @@ zero-atom frame
                 }
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod phased_read_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test")
+            .join(name);
+        std::fs::read_to_string(path).expect(name)
+    }
+
+    #[test]
+    fn phased_bytes_match_serial_frames() {
+        let text = fixture("cuh2.con").repeat(4);
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        for workers in [1usize, 2, 4, 8] {
+            let (parallel, scan_s, slot_s, work_s) =
+                frames_from_bytes_phased(text.as_bytes(), Some(workers)).expect("phased");
+            assert_eq!(parallel.len(), serial.len(), "workers={workers}");
+            assert!(scan_s >= 0.0 && slot_s >= 0.0 && work_s >= 0.0);
+            assert_eq!(parallel[0], serial[0], "workers={workers} first");
+            assert_eq!(
+                parallel.last().unwrap(),
+                serial.last().unwrap(),
+                "workers={workers} last"
+            );
+            let slab = pack_position_slab(&serial, workers).expect("slab");
+            let stride = serial[0].positions.nrows() * 3;
+            let src = serial[0].positions.f64_slice().expect("f64");
+            assert_eq!(&slab[..stride], src);
+            let (chunked, _) = measure_newline_scan(&text, workers.max(2), true);
+            let (plain, _) = measure_newline_scan(&text, 1, false);
+            if workers >= 2 {
+                assert_eq!(chunked, plain);
+            }
+        }
+    }
+
+    #[test]
+    fn phased_file_matches_serial_and_maps_a_wide_file() {
+        let text = fixture("cuh2.con").repeat(5);
+        let dir = std::env::temp_dir();
+        let path = dir.join("readcon-phased-wide.con");
+        std::fs::write(&path, &text).expect("write");
+        let phased = read_all_frames_phased(&path, Some(4)).expect("phased");
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        assert_eq!(phased.frames, serial);
+        assert!(phased.phases.mapped, "a file past 64 KiB is mapped");
+        assert!(phased.phases.worker_parse_s >= 0.0);
+        assert_eq!(phased.n_bytes, text.len());
+        let _ = std::fs::remove_file(&path);
     }
 }

@@ -1069,10 +1069,7 @@ impl PyConFrame {
         if self.n_atoms > 0 {
             return self.n_atoms;
         }
-        if self
-            .atoms_ready
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return self.atoms.bind(py).len();
         }
         self.inner
@@ -1082,6 +1079,10 @@ impl PyConFrame {
     }
 
     fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
+        Self::from_owned(py, frame.clone())
+    }
+
+    fn from_owned(py: Python<'_>, mut frame: ConFrame) -> PyResult<Self> {
         let n_atoms = frame.positions.nrows();
         let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
         if let Some(src) = frame.positions.f64_slice() {
@@ -1095,21 +1096,26 @@ impl PyConFrame {
             .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
             .into_pyarray(py)
             .unbind();
-        let mut stored = frame.clone();
-        stored.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        let cell = frame.header.boxl;
+        let angles = frame.header.angles;
+        let prebox_header = [
+            frame.header.prebox_header.user.clone(),
+            frame.header.prebox_header.metadata_line().to_string(),
+        ];
+        let postbox_header = frame.header.postbox_header.clone();
+        let spec_version = frame.header.spec_version;
+        let metadata = json_map_to_py_dict(py, &frame.header.metadata)?;
         Ok(PyConFrame {
-            cell: frame.header.boxl,
-            angles: frame.header.angles,
-            prebox_header: [
-                frame.header.prebox_header.user.clone(),
-                frame.header.prebox_header.metadata_line().to_string(),
-            ],
-            postbox_header: frame.header.postbox_header.clone(),
+            cell,
+            angles,
+            prebox_header,
+            postbox_header,
             atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
-            spec_version: frame.header.spec_version,
-            metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
-            inner: Some(stored),
+            spec_version,
+            metadata,
+            inner: Some(frame),
             n_atoms,
             slab: None,
             slab_index: 0,
@@ -1358,14 +1364,8 @@ fn frame_from_arrays(
         ));
     }
     let mut metadata = BTreeMap::new();
-    metadata.insert(
-        meta::CON_SPEC_MINOR.to_string(),
-        serde_json::json!(1),
-    );
-    metadata.insert(
-        meta::CON_SPEC_VERSION.to_string(),
-        serde_json::json!(2),
-    );
+    metadata.insert(meta::CON_SPEC_MINOR.to_string(), serde_json::json!(1));
+    metadata.insert(meta::CON_SPEC_VERSION.to_string(), serde_json::json!(2));
     Ok(ConFrame {
         header: crate::types::FrameHeader {
             prebox_header: crate::types::PreboxHeader::new("readcon"),
@@ -1450,7 +1450,10 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let parse_s = parse_start.elapsed().as_secs_f64();
     let convert_start = std::time::Instant::now();
     let n_frames = frames.len();
-    let n_atoms = frames.first().map(|frame| frame.atom_data.len()).unwrap_or(0);
+    let n_atoms = frames
+        .first()
+        .map(|frame| frame.atom_data.len())
+        .unwrap_or(0);
     let uniform = frames.iter().all(|frame| frame.atom_data.len() == n_atoms);
     if !uniform {
         return Err(PyValueError::new_err(
@@ -1535,8 +1538,8 @@ fn write_coords(
         }
         let convert_s = convert_start.elapsed().as_secs_f64();
         let write_start = std::time::Instant::now();
-        let mut writer = ConFrameWriter::from_path(Path::new(&path_owned))
-            .map_err(|err| err.to_string())?;
+        let mut writer =
+            ConFrameWriter::from_path(Path::new(&path_owned)).map_err(|err| err.to_string())?;
         writer
             .extend(frames.iter())
             .map_err(|err| err.to_string())?;
@@ -1553,11 +1556,310 @@ fn write_coords(
     })
 }
 
+/// Phase seconds for one `read_con` call.
+struct ReadCallPhases {
+    open_mmap_s: f64,
+    scan_s: f64,
+    slot_alloc_s: f64,
+    worker_parse_s: f64,
+    slab_s: f64,
+    python_build_s: f64,
+    return_s: f64,
+    mapped: bool,
+    n_bytes: usize,
+    n_frames: usize,
+    build: &'static str,
+}
+
+impl ReadCallPhases {
+    fn from_rust(
+        phases: crate::iterators::ReadPhaseTimes,
+        n_bytes: usize,
+        n_frames: usize,
+        build: &'static str,
+    ) -> Self {
+        Self {
+            open_mmap_s: phases.open_mmap_s,
+            scan_s: phases.scan_s,
+            slot_alloc_s: phases.slot_alloc_s,
+            worker_parse_s: phases.worker_parse_s,
+            slab_s: 0.0,
+            python_build_s: 0.0,
+            return_s: 0.0,
+            mapped: phases.mapped,
+            n_bytes,
+            n_frames,
+            build,
+        }
+    }
+
+    fn dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("open_mmap_s", self.open_mmap_s)?;
+        dict.set_item("scan_s", self.scan_s)?;
+        dict.set_item("slot_alloc_s", self.slot_alloc_s)?;
+        dict.set_item("worker_parse_s", self.worker_parse_s)?;
+        dict.set_item("parse_s", self.slot_alloc_s + self.worker_parse_s)?;
+        dict.set_item("slab_s", self.slab_s)?;
+        dict.set_item("python_build_s", self.python_build_s)?;
+        dict.set_item("return_s", self.return_s)?;
+        dict.set_item("mapped", self.mapped)?;
+        dict.set_item("n_bytes", self.n_bytes)?;
+        dict.set_item("n_frames", self.n_frames)?;
+        dict.set_item("build", self.build)?;
+        Ok(dict.unbind())
+    }
+}
+
+/// Parsed frames. Indexing builds one [`PyConFrame`].
+///
+/// `read_con` returns this. The coordinate slab is one array shared by
+/// every rectangular frame. A frame's Python object, including its
+/// metadata dict, is built the first time that frame is indexed.
+#[pyclass(name = "ConFrameList")]
+struct ConFrameList {
+    frames: std::sync::Mutex<Vec<Option<ConFrame>>>,
+    cache: std::sync::Mutex<Vec<Option<Py<PyConFrame>>>>,
+    slab: Option<Py<PyArray3<f64>>>,
+    n_atoms: usize,
+    phases: std::sync::Mutex<ReadCallPhases>,
+}
+
+#[pyclass(name = "ConFrameListIterator")]
+struct ConFrameListIter {
+    inner: Py<ConFrameList>,
+    pos: usize,
+}
+
+impl ConFrameList {
+    fn len_frames(&self) -> usize {
+        self.frames.lock().expect("frames").len()
+    }
+
+    fn frame_obj(&self, py: Python<'_>, index: usize) -> PyResult<Py<PyConFrame>> {
+        {
+            let cache = self.cache.lock().expect("cache");
+            if let Some(hit) = cache.get(index).and_then(|slot| slot.as_ref()) {
+                return Ok(hit.clone_ref(py));
+            }
+        }
+        let frame = self.frames.lock().expect("frames")[index]
+            .take()
+            .ok_or_else(|| PyIOError::new_err(format!("frame {index} is already borrowed")))?;
+        let built = if let Some(slab) = &self.slab {
+            PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, self.n_atoms)?
+        } else {
+            PyConFrame::from_owned(py, frame)?
+        };
+        let obj = Py::new(py, built)?;
+        self.cache.lock().expect("cache")[index] = Some(obj.clone_ref(py));
+        Ok(obj)
+    }
+}
+
+#[pymethods]
+impl ConFrameList {
+    fn __len__(&self) -> usize {
+        self.len_frames()
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let n = self.len_frames();
+        if let Ok(slice) = key.cast::<pyo3::types::PySlice>() {
+            let ind = slice.indices(n as isize)?;
+            let mut out = Vec::with_capacity(ind.slicelength as usize);
+            for step in 0..ind.slicelength as isize {
+                let index = (ind.start + step * ind.step) as usize;
+                out.push(self.frame_obj(py, index)?);
+            }
+            return out.into_py_any(py);
+        }
+        let index: isize = key.extract()?;
+        let resolved = if index < 0 { index + n as isize } else { index };
+        if resolved < 0 || resolved as usize >= n {
+            return Err(pyo3::exceptions::PyIndexError::new_err(format!(
+                "frame index {index} is out of range for {n} frames"
+            )));
+        }
+        self.frame_obj(py, resolved as usize)?.into_py_any(py)
+    }
+
+    fn __iter__(slf: Py<Self>) -> ConFrameListIter {
+        ConFrameListIter { inner: slf, pos: 0 }
+    }
+
+    /// Seconds for open, scan, slot allocation, worker parse, the slab,
+    /// Python object construction, and the return.
+    #[getter]
+    fn phases(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        self.phases.lock().expect("phases").dict(py)
+    }
+}
+
+#[pymethods]
+impl ConFrameListIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyConFrame>>> {
+        let n = self.inner.borrow(py).len_frames();
+        if self.pos >= n {
+            return Ok(None);
+        }
+        let index = self.pos;
+        self.pos += 1;
+        self.inner.borrow(py).frame_obj(py, index).map(Some)
+    }
+}
+
+fn clear_packed_positions(frames: &mut [ConFrame]) {
+    for frame in frames {
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+    }
+}
+
+fn slab_from_values(
+    py: Python<'_>,
+    values: Vec<f64>,
+    n_frames: usize,
+    n_atoms: usize,
+) -> PyResult<Py<PyArray3<f64>>> {
+    let array = Array3::from_shape_vec((n_frames, n_atoms, 3), values)
+        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
+    Ok(array.into_pyarray(py).unbind())
+}
+
+/// Move `frames` into a lazy list. The coordinate copy runs without the GIL.
+fn con_frame_list(
+    py: Python<'_>,
+    mut frames: Vec<ConFrame>,
+    phases: crate::iterators::ReadPhaseTimes,
+    n_bytes: usize,
+    n_threads: Option<usize>,
+    build: &'static str,
+) -> PyResult<Py<ConFrameList>> {
+    let n_frames = frames.len();
+    let workers = n_threads.filter(|n| *n >= 2).unwrap_or(1);
+    let t_slab = std::time::Instant::now();
+    let packed = py.detach(|| crate::iterators::pack_position_slab(&frames, workers));
+    let slab_s = t_slab.elapsed().as_secs_f64();
+    let n_atoms = match packed.as_ref() {
+        Some(values) if n_frames > 0 => values.len() / n_frames / 3,
+        _ => 0,
+    };
+    if packed.is_some() {
+        clear_packed_positions(&mut frames);
+    }
+    let t_build = std::time::Instant::now();
+    let slab = match packed {
+        Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
+        None => None,
+    };
+    let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, build);
+    record.slab_s = slab_s;
+    record.python_build_s = t_build.elapsed().as_secs_f64();
+    let mut cache = Vec::with_capacity(n_frames);
+    cache.resize_with(n_frames, || None);
+    let stored: Vec<Option<ConFrame>> = frames.into_iter().map(Some).collect();
+    let t_return = std::time::Instant::now();
+    let obj = Py::new(
+        py,
+        ConFrameList {
+            frames: std::sync::Mutex::new(stored),
+            cache: std::sync::Mutex::new(cache),
+            slab,
+            n_atoms,
+            phases: std::sync::Mutex::new(record),
+        },
+    )?;
+    obj.borrow_mut(py).phases.lock().expect("phases").return_s = t_return.elapsed().as_secs_f64();
+    Ok(obj)
+}
+
+fn load_phased(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<(Vec<ConFrame>, crate::iterators::ReadPhaseTimes, usize)> {
+    let path_owned = path.to_owned();
+    py.detach(|| {
+        crate::iterators::read_all_frames_phased(Path::new(&path_owned), n_threads)
+            .map(|phased| (phased.frames, phased.phases, phased.n_bytes))
+            .map_err(|err| err.to_string())
+    })
+    .map_err(PyIOError::new_err)
+}
+
+fn read_con_lazy(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Py<ConFrameList>> {
+    let (frames, phases, n_bytes) = load_phased(py, path, n_threads)?;
+    con_frame_list(py, frames, phases, n_bytes, n_threads, "lazy")
+}
+
+fn read_con_eager(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
+    let (frames, phases, n_bytes) = load_phased(py, path, n_threads)?;
+    let n_frames = frames.len();
+    let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, "eager");
+    let t_build = std::time::Instant::now();
+    let built = frames_from_parsed(py, frames)?;
+    record.python_build_s = t_build.elapsed().as_secs_f64();
+    let t_return = std::time::Instant::now();
+    let obj = built.into_py_any(py)?;
+    record.return_s = t_return.elapsed().as_secs_f64();
+    let dict = record.dict(py)?;
+    Ok((obj, dict))
+}
+
+/// Phase split of [`read_con`].
+///
+/// `build="lazy"` is the default path. `build="eager"` builds every
+/// Python frame before returning, which is the previous wrapper.
+#[pyfunction]
+#[pyo3(name = "read_con_phases", signature = (path, n_threads=None, *, build="lazy"))]
+fn read_con_phases(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+    build: &str,
+) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
+    match build {
+        "lazy" => {
+            let frames = read_con_lazy(py, path, n_threads)?;
+            let dict = frames.borrow(py).phases(py)?;
+            Ok((frames.into_py_any(py)?, dict))
+        }
+        "eager" => read_con_eager(py, path, n_threads),
+        other => Err(PyValueError::new_err(format!(
+            "unknown build {other:?}; use \"lazy\" or \"eager\""
+        ))),
+    }
+}
+
+/// Newline-scan probe. The pool is built before the timer.
+///
+/// Returns the frame-start count, the seconds, and whether those starts
+/// match the serial walk.
+#[pyfunction]
+#[pyo3(signature = (path, threads, chunked))]
+fn scan_probe(path: &str, threads: usize, chunked: bool) -> PyResult<(usize, f64, bool)> {
+    let text = std::fs::read_to_string(path).map_err(|err| PyIOError::new_err(err.to_string()))?;
+    let (offsets, seconds) = crate::iterators::measure_newline_scan(&text, threads, chunked);
+    let serial = crate::iterators::frame_start_offsets_serial(&text);
+    Ok((offsets.len(), seconds, offsets == serial))
+}
+
 /// Read frames from a .con or .convel file path.
 ///
-/// `n_threads` is `None` or `0` for the automatic policy (Rayon when the
-/// buffer is at least 48 KiB), `1` for sequential parse, and `n >= 2`
-/// for an explicit Rayon pool.
+/// `n_threads` is `None`, `0`, or `1` for the calling thread, and
+/// `n >= 2` for a Rayon pool of that size.
 #[pyfunction]
 #[pyo3(name = "read_all_frames", signature = (path, n_threads=None, *, comm=None, mode="auto"))]
 fn read_all_frames(
@@ -1566,7 +1868,7 @@ fn read_all_frames(
     n_threads: Option<usize>,
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
-) -> PyResult<Vec<PyConFrame>> {
+) -> PyResult<Py<ConFrameList>> {
     read_con(py, path, n_threads, comm, mode)
 }
 
@@ -1584,19 +1886,13 @@ fn read_con(
     n_threads: Option<usize>,
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
-) -> PyResult<Vec<PyConFrame>> {
+) -> PyResult<Py<ConFrameList>> {
     if let Some(comm) = comm {
         return read_con_mpi(py, path, n_threads, comm, mode);
     }
-    // Release the GIL for file I/O + (optional) Rayon multi-frame parse.
-    let path_owned = path.to_owned();
-    let frames = py
-        .detach(|| {
-            crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
-    frames_from_parsed(py, frames)
+    // The GIL stays released across the map, the scan, and the parse.
+    // Python frame objects are built on first use.
+    read_con_lazy(py, path, n_threads)
 }
 
 /// One `[frames, atoms, 3]` float64 array of coordinates.
@@ -1623,10 +1919,15 @@ fn read_positions(
 }
 
 fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {
-    let n_atoms = frames.first().map(|frame| frame.positions.nrows()).unwrap_or(0);
+    let n_atoms = frames
+        .first()
+        .map(|frame| frame.positions.nrows())
+        .unwrap_or(0);
     let rectangular = !frames.is_empty()
         && n_atoms > 0
-        && frames.iter().all(|frame| frame.positions.nrows() == n_atoms);
+        && frames
+            .iter()
+            .all(|frame| frame.positions.nrows() == n_atoms);
     if !rectangular {
         return frames
             .into_iter()
@@ -1669,7 +1970,7 @@ fn read_con_mpi(
     n_threads: Option<usize>,
     comm: &Bound<'_, PyAny>,
     mode: &str,
-) -> PyResult<Vec<PyConFrame>> {
+) -> PyResult<Py<ConFrameList>> {
     use crate::distrib_read::ReadMode;
     let mode = match mode {
         "auto" => ReadMode::Auto,
@@ -1683,12 +1984,15 @@ fn read_con_mpi(
     };
     let c = comm_from_py(comm)?;
     // MPI handles are not Send, so the GIL stays held for the collective.
+    let t_parse = std::time::Instant::now();
     let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
         .map_err(|e| PyIOError::new_err(e.to_string()))?;
-    rf.frames
-        .iter()
-        .map(|frame| PyConFrame::from_con_frame(py, frame))
-        .collect()
+    let worker_parse_s = t_parse.elapsed().as_secs_f64();
+    let phases = crate::iterators::ReadPhaseTimes {
+        worker_parse_s,
+        ..crate::iterators::ReadPhaseTimes::default()
+    };
+    con_frame_list(py, rf.frames, phases, 0, n_threads, "lazy")
 }
 
 #[cfg(not(feature = "mpi"))]
@@ -1698,7 +2002,7 @@ fn read_con_mpi(
     _n_threads: Option<usize>,
     _comm: &Bound<'_, PyAny>,
     _mode: &str,
-) -> PyResult<Vec<PyConFrame>> {
+) -> PyResult<Py<ConFrameList>> {
     Err(pyo3::exceptions::PyNotImplementedError::new_err(
         "comm= needs readcon built with the mpi feature",
     ))
@@ -1723,16 +2027,27 @@ fn read_con_string(
     py: Python<'_>,
     contents: &str,
     n_threads: Option<usize>,
-) -> PyResult<Vec<PyConFrame>> {
+) -> PyResult<Py<ConFrameList>> {
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
+    let t_open = std::time::Instant::now();
     let owned = contents.to_owned();
-    let frames = py
-        .detach(|| crate::iterators::frames_from_text(&owned, n_threads).map_err(|e| e.to_string()))
+    let open_mmap_s = t_open.elapsed().as_secs_f64();
+    let n_bytes = owned.len();
+    let parsed = py
+        .detach(|| {
+            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads)
+                .map_err(|e| e.to_string())
+        })
         .map_err(PyIOError::new_err)?;
-    frames
-        .iter()
-        .map(|frame| PyConFrame::from_con_frame(py, frame))
-        .collect()
+    let (frames, scan_s, slot_alloc_s, worker_parse_s) = parsed;
+    let phases = crate::iterators::ReadPhaseTimes {
+        open_mmap_s,
+        scan_s,
+        slot_alloc_s,
+        worker_parse_s,
+        mapped: false,
+    };
+    con_frame_list(py, frames, phases, n_bytes, n_threads, "lazy")
 }
 
 /// Streaming frame iterator: parses one frame per `__next__` (does not
@@ -2165,7 +2480,14 @@ fn write_con_string(
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
     let frames = read_con(py, path, None, None, "auto")?;
-    frames.iter().map(|f| ase_from_pyconframe(py, f)).collect()
+    let n = frames.borrow(py).len_frames();
+    let mut out = Vec::with_capacity(n);
+    for index in 0..n {
+        let frame = frames.borrow(py).frame_obj(py, index)?;
+        let view = frame.borrow(py);
+        out.push(ase_from_pyconframe(py, &view)?);
+    }
+    Ok(out)
 }
 
 fn py_frames_to_rust(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
@@ -2778,7 +3100,11 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConFrameIterator>()?;
     m.add_class::<PyConTrajectory>()?;
     m.add_class::<PyConTrajectoryIter>()?;
+    m.add_class::<ConFrameList>()?;
+    m.add_class::<ConFrameListIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
+    m.add_function(wrap_pyfunction!(read_con_phases, m)?)?;
+    m.add_function(wrap_pyfunction!(scan_probe, m)?)?;
     m.add_function(wrap_pyfunction!(read_positions, m)?)?;
     m.add_function(wrap_pyfunction!(read_coords, m)?)?;
     m.add_function(wrap_pyfunction!(write_coords, m)?)?;
@@ -2904,8 +3230,9 @@ fn read_extxyz<'py>(
 )> {
     let tables = crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(path))
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
-    let positions = ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let positions =
+        ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
     let masses = ndarray::Array2::from_shape_vec((tables.n_frames, tables.n_atoms), tables.masses)
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
     let cell = ndarray::Array2::from_shape_vec((tables.n_frames, 6), tables.cell)
@@ -2933,8 +3260,9 @@ fn read_pdb<'py>(
 )> {
     let tables = crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(path))
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
-    let positions = ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let positions =
+        ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
     let masses = ndarray::Array2::from_shape_vec((tables.n_frames, tables.n_atoms), tables.masses)
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
     let cell = ndarray::Array2::from_shape_vec((tables.n_frames, 6), tables.cell)
