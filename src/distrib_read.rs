@@ -92,12 +92,21 @@ fn decode_u64s(b: &[u8]) -> Vec<u64> {
 }
 
 /// Broadcast `Ok(payload)` or an error message from rank 0.
-fn bcast_result(comm: &Comm, r: Result<Vec<u8>, String>) -> Result<Vec<u8>, BoxErr> {
+fn bcast_result(
+    comm: &Comm,
+    r: Result<Vec<u8>, String>,
+    yielding: bool,
+) -> Result<Vec<u8>, BoxErr> {
     let msg = match &r {
         Ok(p) => [&[1u8][..], p].concat(),
         Err(e) => [&[0u8][..], e.as_bytes()].concat(),
     };
-    let got = comm.bcast_bytes(0, if comm.rank() == 0 { &msg } else { &[] });
+    let payload = if comm.rank() == 0 { &msg[..] } else { &[][..] };
+    let got = if yielding {
+        comm.bcast_bytes_yielding(0, payload)
+    } else {
+        comm.bcast_bytes(0, payload)
+    };
     match got.split_first() {
         Some((1, rest)) => Ok(rest.to_vec()),
         Some((_, rest)) => Err(String::from_utf8_lossy(rest).into_owned().into()),
@@ -154,7 +163,7 @@ pub fn read_block(
     } else {
         Ok(Vec::new())
     };
-    let mode = match bcast_result(comm, decided)?.first() {
+    let mode = match bcast_result(comm, decided, false)?.first() {
         Some(1) => ReadMode::Shared,
         _ => ReadMode::Scatter,
     };
@@ -242,7 +251,7 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
     } else {
         Ok(Vec::new())
     };
-    let idx = unpack_index(&bcast_result(comm, packed)?);
+    let idx = unpack_index(&bcast_result(comm, packed, false)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
     let opened = if let Some(fc) = &held {
@@ -276,11 +285,53 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
     })
 }
 
+/// Block in the kernel until rank 0 has finished the file scan.
+///
+/// The other ranks would otherwise sit in a busy-polling broadcast for
+/// the whole scan. On a node that already has one rank per core, that
+/// poll starves the scan.
+fn wait_until_root_scanned(comm: &Comm, path: &Path, scan: impl FnOnce()) {
+    let visible = std::fs::File::open(path).is_ok();
+    if !agree(comm, visible) {
+        if comm.rank() == 0 {
+            scan();
+        }
+        return;
+    }
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => {
+            scan();
+            return;
+        }
+    };
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+    let lock = |op: i32| {
+        while unsafe { libc::flock(fd, op) } < 0 {
+            if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+                break;
+            }
+        }
+    };
+    if comm.rank() == 0 {
+        lock(libc::LOCK_EX);
+    }
+    comm.raw().barrier();
+    if comm.rank() == 0 {
+        scan();
+        lock(libc::LOCK_UN);
+    } else {
+        lock(libc::LOCK_SH);
+        lock(libc::LOCK_UN);
+    }
+}
+
 fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankFrames, BoxErr> {
     let p = comm.size();
     let mut root_data = None;
-    let packed = if comm.rank() == 0 {
-        root_index(path, false).and_then(|(fc, idx)| {
+    let mut packed_slot = None;
+    wait_until_root_scanned(comm, path, || {
+        packed_slot = Some(root_index(path, false).and_then(|(fc, idx)| {
             // Scatterv counts are C ints.
             let too_big = (0..p).any(|k| {
                 let (lo, hi, _) = block_bytes(&idx, &block_range(idx.len(), p, k));
@@ -292,11 +343,10 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
             let b = pack_index(&idx);
             root_data = Some((fc, idx));
             Ok(b)
-        })
-    } else {
-        Ok(Vec::new())
-    };
-    let idx = unpack_index(&bcast_result(comm, packed)?);
+        }));
+    });
+    let packed = packed_slot.unwrap_or(Ok(Vec::new()));
+    let idx = unpack_index(&bcast_result(comm, packed, false)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
     // Keep a real allocation even for an empty block: Open MPI rejects
