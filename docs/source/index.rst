@@ -117,6 +117,7 @@ Site map
    :caption: Reference
 
    spec
+   conbin-binary-spec
    bindings
    chemfiles-reference
    rpc
