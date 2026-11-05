@@ -133,73 +133,22 @@ mod with_mpi {
         /// Broadcast a byte blob from `root`. `data` is read on `root` and
         /// ignored elsewhere; every rank returns the root's bytes.
         pub fn bcast_bytes(&self, root: usize, data: &[u8]) -> Vec<u8> {
-            self.bcast_bytes_inner(root, data, false)
-        }
-
-        /// Like [`Self::bcast_bytes`], but ranks other than the root sleep
-        /// between polls.
-        ///
-        /// A blocking broadcast busy-waits. In scatter mode the root still
-        /// has to read the file, and on a full node that wait takes the
-        /// cores the read needs.
-        pub fn bcast_bytes_yielding(&self, root: usize, data: &[u8]) -> Vec<u8> {
-            self.bcast_bytes_inner(root, data, true)
-        }
-
-        fn bcast_bytes_inner(&self, root: usize, data: &[u8], yielding: bool) -> Vec<u8> {
+            let r = self.inner.process_at_rank(root as i32);
             let mut n: u64 = if self.rank() == root {
                 data.len() as u64
             } else {
                 0
             };
-            self.broadcast(root, &mut n, yielding);
+            r.broadcast_into(&mut n);
             let mut buf = if self.rank() == root {
                 data.to_vec()
             } else {
                 vec![0u8; n as usize]
             };
             if n > 0 {
-                self.broadcast(root, &mut buf[..], yielding);
+                r.broadcast_into(&mut buf[..]);
             }
             buf
-        }
-
-        fn broadcast<B>(&self, root: usize, buf: &mut B, yielding: bool)
-        where
-            B: ::mpi::traits::BufferMut + ?Sized,
-        {
-            if !yielding {
-                self.inner
-                    .process_at_rank(root as i32)
-                    .broadcast_into(buf);
-                return;
-            }
-            self.broadcast_yielding(root, buf);
-        }
-
-        fn broadcast_yielding<B>(&self, root: usize, buf: &mut B)
-        where
-            B: ::mpi::traits::BufferMut + ?Sized,
-        {
-            ::mpi::request::scope(|scope| {
-                let mut req = self
-                    .inner
-                    .process_at_rank(root as i32)
-                    .immediate_broadcast_into(scope, buf);
-                if self.rank() == root {
-                    req.wait_without_status();
-                    return;
-                }
-                loop {
-                    match req.test() {
-                        Ok(_) => break,
-                        Err(pending) => {
-                            req = pending;
-                            std::thread::sleep(std::time::Duration::from_micros(200));
-                        }
-                    }
-                }
-            });
         }
     }
 

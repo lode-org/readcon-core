@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,10 +20,17 @@ def redact(line: str) -> str:
     line = line.replace(repo, ".")
     line = line.replace(str(home) + "/", "")
     line = line.replace(str(home), ".")
-    line = line.replace("~/.local", "local-site")
+    line = line.replace("~/.local", "")
     line = line.replace("~/", "")
-    line = line.replace(f"_home_{user}_.local", "local-site")
+    line = line.replace(f"_home_{user}_.local", "")
     line = line.replace(f"_home_{user}_", "")
+    line = re.sub(
+        r"\S*site-packages[/_.]nanobind[/_.]",
+        "<site-packages>/nanobind/",
+        line,
+    )
+    line = re.sub(r"\S*site-packages/", "<site-packages>/", line)
+    line = re.sub(r"\S*site-packages_", "<site-packages>/", line)
     return line
 
 

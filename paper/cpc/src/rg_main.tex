@@ -729,6 +729,7 @@ In scatter mode the median is 0.0495~s at 1 rank, 0.0271~s at 2, 0.0142~s at 4 a
 Eight ranks are faster than four in both modes.
 The scatter-mode interquartile range at eight ranks is 0.00140~s.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
+In scatter mode the waiting ranks sleep on a file lock, which needs a filesystem with coherent flock across the ranks, and where flock is not coherent they fall back to the blocking broadcast.
 The log is \path{paper/cpc/logs/mpi.log}.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn by \path{scripts/plot_restored.py} from the records under \path{paper/cpc/data}.

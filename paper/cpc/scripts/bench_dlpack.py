@@ -134,10 +134,10 @@ def main() -> int:
 
     emit(f"rev_parse {run(['git', 'rev-parse', 'HEAD'])}")
     emit(f"tree {run(['git', 'rev-parse', 'HEAD^{tree}'])}")
-    emit("command python3 paper/cpc/scripts/bench_dlpack.py")
+    emit("command taskset -c 0 python3 paper/cpc/scripts/bench_dlpack.py")
     emit(f"date_utc {run(['date', '-u', '+%Y-%m-%dT%H:%M:%SZ'])}")
     emit(f"uname_m {run(['uname', '-m'])}")
-    emit(f"nproc {run(['nproc'])}")
+    emit(f"nproc {run(['nproc', '--all'])}")
     emit(f"cpu_model {cpu_model()}")
     status = run(["git", "status", "--short"])
     emit("git_status_begin")

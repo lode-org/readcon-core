@@ -92,21 +92,13 @@ fn decode_u64s(b: &[u8]) -> Vec<u64> {
 }
 
 /// Broadcast `Ok(payload)` or an error message from rank 0.
-fn bcast_result(
-    comm: &Comm,
-    r: Result<Vec<u8>, String>,
-    yielding: bool,
-) -> Result<Vec<u8>, BoxErr> {
+fn bcast_result(comm: &Comm, r: Result<Vec<u8>, String>) -> Result<Vec<u8>, BoxErr> {
     let msg = match &r {
         Ok(p) => [&[1u8][..], p].concat(),
         Err(e) => [&[0u8][..], e.as_bytes()].concat(),
     };
     let payload = if comm.rank() == 0 { &msg[..] } else { &[][..] };
-    let got = if yielding {
-        comm.bcast_bytes_yielding(0, payload)
-    } else {
-        comm.bcast_bytes(0, payload)
-    };
+    let got = comm.bcast_bytes(0, payload);
     match got.split_first() {
         Some((1, rest)) => Ok(rest.to_vec()),
         Some((_, rest)) => Err(String::from_utf8_lossy(rest).into_owned().into()),
@@ -163,7 +155,7 @@ pub fn read_block(
     } else {
         Ok(Vec::new())
     };
-    let mode = match bcast_result(comm, decided, false)?.first() {
+    let mode = match bcast_result(comm, decided)?.first() {
         Some(1) => ReadMode::Shared,
         _ => ReadMode::Scatter,
     };
@@ -251,7 +243,7 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
     } else {
         Ok(Vec::new())
     };
-    let idx = unpack_index(&bcast_result(comm, packed, false)?);
+    let idx = unpack_index(&bcast_result(comm, packed)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
     let opened = if let Some(fc) = &held {
@@ -285,11 +277,40 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
     })
 }
 
+fn flock_wait(fd: std::os::fd::RawFd, op: i32) -> bool {
+    loop {
+        if unsafe { libc::flock(fd, op) } == 0 {
+            return true;
+        }
+        if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+            return false;
+        }
+    }
+}
+
+/// True when a non-blocking shared lock fails because another holder has
+/// the exclusive lock. A successful lock means `flock` did not see that
+/// holder, so the caller releases it and reports the lock as not coherent.
+fn flock_sees_exclusive(fd: std::os::fd::RawFd) -> bool {
+    loop {
+        if unsafe { libc::flock(fd, libc::LOCK_SH | libc::LOCK_NB) } == 0 {
+            let _ = unsafe { libc::flock(fd, libc::LOCK_UN) };
+            return false;
+        }
+        let err = std::io::Error::last_os_error();
+        if err.kind() == std::io::ErrorKind::Interrupted {
+            continue;
+        }
+        return err.kind() == std::io::ErrorKind::WouldBlock;
+    }
+}
+
 /// Block in the kernel until rank 0 has finished the file scan.
 ///
-/// The other ranks would otherwise sit in a busy-polling broadcast for
-/// the whole scan. On a node that already has one rank per core, that
-/// poll starves the scan.
+/// The other ranks sleep on a shared file lock while rank 0 holds the
+/// exclusive lock. That lock has to be coherent across the ranks. Where
+/// it is not, rank 0 still scans and every rank then uses the blocking
+/// broadcast.
 fn wait_until_root_scanned(comm: &Comm, path: &Path, scan: impl FnOnce()) {
     let visible = std::fs::File::open(path).is_ok();
     if !agree(comm, visible) {
@@ -301,28 +322,37 @@ fn wait_until_root_scanned(comm: &Comm, path: &Path, scan: impl FnOnce()) {
     let file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(_) => {
-            scan();
+            if comm.rank() == 0 {
+                scan();
+            }
             return;
         }
     };
     let fd = std::os::fd::AsRawFd::as_raw_fd(&file);
-    let lock = |op: i32| {
-        while unsafe { libc::flock(fd, op) } < 0 {
-            if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
-                break;
-            }
-        }
+    let root_holds = if comm.rank() == 0 {
+        flock_wait(fd, libc::LOCK_EX)
+    } else {
+        false
     };
-    if comm.rank() == 0 {
-        lock(libc::LOCK_EX);
-    }
     comm.raw().barrier();
+    let sees = if comm.rank() == 0 {
+        root_holds
+    } else {
+        flock_sees_exclusive(fd)
+    };
+    if !agree(comm, sees) {
+        if comm.rank() == 0 {
+            let _ = unsafe { libc::flock(fd, libc::LOCK_UN) };
+            scan();
+        }
+        return;
+    }
     if comm.rank() == 0 {
         scan();
-        lock(libc::LOCK_UN);
+        let _ = unsafe { libc::flock(fd, libc::LOCK_UN) };
     } else {
-        lock(libc::LOCK_SH);
-        lock(libc::LOCK_UN);
+        flock_wait(fd, libc::LOCK_SH);
+        let _ = unsafe { libc::flock(fd, libc::LOCK_UN) };
     }
 }
 
@@ -346,7 +376,7 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
         }));
     });
     let packed = packed_slot.unwrap_or(Ok(Vec::new()));
-    let idx = unpack_index(&bcast_result(comm, packed, false)?);
+    let idx = unpack_index(&bcast_result(comm, packed)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
     // Keep a real allocation even for an empty block: Open MPI rejects

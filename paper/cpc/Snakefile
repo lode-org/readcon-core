@@ -53,7 +53,7 @@ rule dlpack_log:
         "src/figures/generated/dlpack_table.tex",
         "src/figures/generated/dlpack.pdf",
     shell:
-        "python3 scripts/bench_dlpack.py"
+        "taskset -c 0 python3 scripts/bench_dlpack.py"
 
 rule eon_build_log:
     output:
