@@ -1,8 +1,0 @@
-route,steps,converged,barrier_eV,d_barrier_eV,d_barrier_ulp,max_disp_A,max_disp_coord_A,max_disp_ulp,file_dpos_A,file_dpos_coord_A,file_dpos_ulp,free_modes_mid,force_calls,kept,file_version,error,notes
-uninterrupted,60,True,0.644561366,0,,0,,,,,,56,61,,,,
-"CON 3.1, shortest round trip",60,True,0.644561366,0.00e+00,0,0.00e+00,,,0.00e+00,,,56,36,mask ids pbc,3.1,,
-"CON 3.1, six decimals",60,True,0.644561378,1.19e-08,6.7e+06,5.69e-07,1.83745,2.56e+09,4.95e-07,-0.000253495,9.13e+12,56,36,mask ids pbc,3.1,,
-extended XYZ (ASE),60,True,0.644561367,1.09e-09,6.13e+05,4.94e-09,4.14802,5.57e+06,4.99e-09,7.87649,5.62e+06,56,36,mask ids pbc,none,,
-"ASE trajectory, ids in tags",60,True,0.644561366,0.00e+00,0,0.00e+00,,,0.00e+00,,,56,36,mask ids pbc,"ASE-Trajectory, ULM 3, version 1, ASE 3.29.0",,
-"POSCAR (ASE), FixScaled z",60,True,0.644561366,3.73e-14,21,5.33e-15,9.85543,3,5.03e-17,-0.00942321,29,56,36,mask,none,,adatom written T T F
-"H5MD (h5py), private mask dataset",60,True,0.644561366,0.00e+00,0,0.00e+00,,,0.00e+00,,,56,36,mask ids pbc,1.1,,"fixed is not an H5MD element, so only a reader that knows this layout gets the mask back"

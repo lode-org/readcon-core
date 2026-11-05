@@ -1,5 +1,0 @@
-point 0.460752
-lo 0.290437
-hi 0.511757
-excludes_one True
-exit=0

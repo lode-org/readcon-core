@@ -1,8 +1,0 @@
-route,steps,converged,force_calls,wall_s,wall_q1_s,wall_q3_s,wall_iqr_s,n_repeats,error
-uninterrupted,60,True,61,1.608097,1.606448,1.612573,0.006125,11,
-"CON 3.1, shortest round trip",60,True,36,0.955321,0.951104,0.958585,0.007481,11,
-"CON 3.1, six decimals",60,True,36,0.955662,0.951035,0.962126,0.011091,11,
-extended XYZ (ASE),60,True,36,1.007925,1.004616,1.010402,0.005786,11,
-"ASE trajectory, ids in tags",60,True,36,0.950735,0.949561,0.955470,0.005909,11,
-"POSCAR (ASE), FixScaled z",60,True,36,0.965003,0.961474,0.968620,0.007146,11,
-"H5MD (h5py), private mask dataset",60,True,36,0.952747,0.951012,0.955773,0.004761,11,
