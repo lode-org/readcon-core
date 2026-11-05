@@ -255,6 +255,33 @@ class HostAndLaunch(unittest.TestCase):
         self.assertEqual(summary["points"][0]["median_s"], 3.5)
         self.assertNotEqual(summary["points"][0]["median_s"], 9)
 
+    def test_from_asv_reads_column_samples(self) -> None:
+        columns = ["result", "params", "samples"]
+        samples = [[1, 2, 3, 4, 5, 6] for _ in range(6)]
+        payload = {
+            "commit_hash": "abc",
+            "result_columns": columns,
+            "results": {
+                "bench_threads.TimeWeakThreads.time_weak_threads": [
+                    [9, 9, 9, 9, 9, 9],
+                    [["1", "2", "4", "8", "16", "32"]],
+                    samples,
+                ]
+            },
+        }
+        host = {
+            "cpu_model": "Intel Xeon Processor",
+            "ncpus": 32,
+            "physical_cores": 32,
+            "mpi": "absent",
+            "gpu": "absent",
+        }
+        record = weak.from_asv(payload, host, 64, "resources/test/cuh2.con", 10)
+        summary = weak.summarise(record)
+        self.assertEqual(summary["points"][0]["median_s"], 3.5)
+        self.assertNotEqual(summary["points"][0]["median_s"], 9)
+        self.assertEqual(summary["points"][-1]["workers"], 32)
+
     def test_derive_conf_leaves_the_pr_directory_alone(self) -> None:
         pr = json.loads((ROOT / "asv.conf.json").read_text(encoding="utf-8"))
         self.assertEqual(pr["benchmark_dir"], "benchmarks")

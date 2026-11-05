@@ -866,6 +866,21 @@ def _flatten_numbers(value) -> list[float]:
     raise ValueError("sample is not a number")
 
 
+def _asv_record(payload: dict, chosen) -> dict:
+    """Accept a mapping or asv's column list.
+
+    asv 0.6 stores one benchmark as a list aligned with ``result_columns``.
+    Older payloads store a mapping with ``params`` and ``samples``.
+    The ``result`` column is not the reported time.
+    """
+    if isinstance(chosen, dict):
+        return chosen
+    columns = payload.get("result_columns")
+    if isinstance(chosen, list) and isinstance(columns, list):
+        return {str(name): value for name, value in zip(columns, chosen)}
+    raise ValueError("asv payload has no time_weak_threads result")
+
+
 def from_asv(payload: dict, host: dict, frames_per_worker: int, fixture: str, fixture_bytes: int) -> dict:
     """Build a campaign record from an asv result. Medians are not taken from asv."""
     results = payload.get("results")
@@ -874,7 +889,7 @@ def from_asv(payload: dict, host: dict, frames_per_worker: int, fixture: str, fi
     chosen = None
     for name, body in results.items():
         if name.endswith(ASV_BENCH) or name.endswith("." + ASV_BENCH):
-            chosen = body
+            chosen = _asv_record(payload, body)
             break
     if not isinstance(chosen, dict):
         raise ValueError("asv payload has no time_weak_threads result")
@@ -1107,16 +1122,21 @@ def command_run_threads(args: argparse.Namespace) -> int:
         else:
             newest = max(results, key=lambda path: path.stat().st_mtime)
             fixture = Path(args.fixture)
-            record = from_asv(
-                _load_json(newest),
-                host,
-                args.frames_per_worker,
-                str(fixture),
-                fixture.stat().st_size,
-            )
-            record["date_utc"] = _utc_minute()
-            _write_json(Path(args.json), record)
-            chunks.append(json.dumps(record, indent=2) + "\n")
+            try:
+                record = from_asv(
+                    _load_json(newest),
+                    host,
+                    args.frames_per_worker,
+                    str(fixture),
+                    fixture.stat().st_size,
+                )
+            except ValueError as exc:
+                chunks.append(f"{exc}\n")
+                code = 1
+            else:
+                record["date_utc"] = _utc_minute()
+                _write_json(Path(args.json), record)
+                chunks.append(json.dumps(record, indent=2) + "\n")
     write_headed_log(Path(args.log), command, "".join(chunks), code)
     return code
 
