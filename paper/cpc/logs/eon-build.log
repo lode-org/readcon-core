@@ -1,13 +1,13 @@
-rev_parse 0084681808f8e57d6e3c4d982d33c62b4c039064
-tree ea490b7d05bc8b4f40740b9816498379f6f0d7de
+rev_parse 102e4f628de6bee015da730d8d076300e92c1155
+tree cb70a6b6b256e539384b547613e458962e2462ff
 command ninja -C paper/cpc/bench/work/peers/eon/build-h2h client/python/_core.abi3.so
 eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
 eon_version 3.6.0
 ninja: Entering directory `paper/cpc/bench/work/peers/eon/build-h2h'
-[1/2] Compiling C++ object client/python/_core.abi3.so.p/local-site_lib_python3.12_site-packages_nanobind_src_nb_combined.cpp.o
-In file included from .local/lib/python3.12/site-packages/nanobind/src/nb_combined.cpp:91:
-.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp: In function ‘std::atomic<long unsigned int>& nanobind::detail::alloc_word(type_data*)’:
-.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp:131:13: warning: dereferencing type-punned pointer will break strict-aliasing rules [-Wstrict-aliasing]
+[1/2] Compiling C++ object <site-packages>/nanobind/src_nb_combined.cpp.o
+In file included from <site-packages>/nanobind/src/nb_combined.cpp:91:
+<site-packages>/nanobind/src/trampoline.cpp: In function ‘std::atomic<long unsigned int>& nanobind::detail::alloc_word(type_data*)’:
+<site-packages>/nanobind/src/trampoline.cpp:131:13: warning: dereferencing type-punned pointer will break strict-aliasing rules [-Wstrict-aliasing]
   131 |     return *(std::atomic<uintptr_t> *) &td->trampoline_allocs;
       |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 [2/2] Linking target client/python/_core.abi3.so
