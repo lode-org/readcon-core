@@ -86,6 +86,7 @@ flate2 = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"
+libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
 mpi = { version = "0.8", optional = true, default-features = false }

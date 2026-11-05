@@ -732,6 +732,156 @@ pub fn read_all_frames_with_threads(
     }
 }
 
+/// Positions of every frame, one row-major `f64` buffer.
+///
+/// The boundary walk records each frame start. Each worker then parses
+/// only its span and writes that frame's coordinates at
+/// `frame * n_atoms * 3`. The returned buffer is the only retained
+/// coordinate storage. A file whose frames do not share one atom count
+/// is rejected, because the buffer is rectangular.
+pub struct PositionBlock {
+    pub n_frames: usize,
+    pub n_atoms: usize,
+    pub values: Vec<f64>,
+}
+
+pub fn read_positions_with_threads(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<PositionBlock, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let block = match &contents {
+        crate::compression::FileContents::Owned(text) => {
+            fill_position_block(text.as_bytes(), num_threads)
+        }
+        crate::compression::FileContents::Mapped(map) => fill_position_block(map, num_threads),
+    }?;
+    Ok(block)
+}
+
+fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::ParseError> {
+    let mut scanner = ConFrameIterator::from_bytes(bytes);
+    let mut boundaries = Vec::new();
+    loop {
+        scanner.lines.clear_peek();
+        let start = scanner.lines.pos;
+        if start >= bytes.len() || bytes[start..].iter().all(u8::is_ascii_whitespace) {
+            break;
+        }
+        boundaries.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            Some(Err(err)) => return Err(err),
+            None => break,
+        }
+    }
+    Ok(boundaries)
+}
+
+fn parse_span(bytes: &[u8], start: usize, end: usize) -> Result<types::ConFrame, error::ParseError> {
+    let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+    match iter.next() {
+        Some(result) => result,
+        None => Err(error::ParseError::IncompleteFrame),
+    }
+}
+
+fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error::ParseError> {
+    if frame.positions.nrows().saturating_mul(3) != dest.len() {
+        return Err(error::ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    if let Some(src) = frame.positions.f64_slice() {
+        dest.copy_from_slice(src);
+        return Ok(());
+    }
+    for (i, slot) in dest.chunks_exact_mut(3).enumerate() {
+        slot.copy_from_slice(&frame.positions.as_f64_row(i));
+    }
+    Ok(())
+}
+
+fn fill_position_block(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<PositionBlock, error::ParseError> {
+    let boundaries = frame_starts(bytes)?;
+    if boundaries.is_empty() {
+        return Ok(PositionBlock {
+            n_frames: 0,
+            n_atoms: 0,
+            values: Vec::new(),
+        });
+    }
+    let end0 = boundaries.get(1).copied().unwrap_or(bytes.len());
+    let first = parse_span(bytes, boundaries[0], end0)?;
+    let n_atoms = first.positions.nrows();
+    let n_frames = boundaries.len();
+    let stride = n_atoms.saturating_mul(3);
+    let mut values = vec![0.0_f64; n_frames.saturating_mul(stride)];
+    if stride == 0 {
+        return Ok(PositionBlock {
+            n_frames,
+            n_atoms,
+            values,
+        });
+    }
+    fill_position_spans(bytes, &boundaries, n_atoms, num_threads, &mut values)?;
+    Ok(PositionBlock {
+        n_frames,
+        n_atoms,
+        values,
+    })
+}
+
+fn fill_position_spans(
+    bytes: &[u8],
+    boundaries: &[usize],
+    n_atoms: usize,
+    num_threads: Option<usize>,
+    values: &mut [f64],
+) -> Result<(), error::ParseError> {
+    let stride = n_atoms * 3;
+    let write_one = |i: usize, dest: &mut [f64]| {
+        let start = boundaries[i];
+        let end = boundaries.get(i + 1).copied().unwrap_or(bytes.len());
+        let frame = parse_span(bytes, start, end)?;
+        copy_positions(&frame, dest)
+    };
+    #[cfg(feature = "parallel")]
+    {
+        let parallel = !matches!(num_threads, Some(n) if n <= 1);
+        if parallel {
+            use rayon::prelude::*;
+            let mut run = || {
+                values
+                    .par_chunks_mut(stride)
+                    .enumerate()
+                    .try_for_each(|(i, dest)| write_one(i, dest))
+            };
+            return match num_threads {
+                Some(n) if n >= 2 => {
+                    let pool = rayon::ThreadPoolBuilder::new()
+                        .num_threads(n)
+                        .build()
+                        .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
+                    pool.install(run)
+                }
+                _ => run(),
+            };
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    for (i, dest) in values.chunks_mut(stride).enumerate() {
+        write_one(i, dest)?;
+    }
+    Ok(())
+}
+
 /// [`frames_from_text`] for bytes that may not be UTF-8 yet.
 pub fn frames_from_bytes(
     bytes: &[u8],

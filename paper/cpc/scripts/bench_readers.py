@@ -50,10 +50,15 @@ def hwm_kib() -> int:
 
 
 def cpu_model() -> str:
+    raw = platform.processor()
     for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
         if line.startswith("model name"):
-            return line.split(":", 1)[1].strip()
-    return platform.processor()
+            raw = line.split(":", 1)[1].strip()
+            break
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").split())
+    if "Xeon" in cleaned:
+        return "Intel Xeon Processor"
+    return cleaned
 
 
 def reference(n_frames: int, n_atoms: int) -> np.ndarray:
@@ -94,6 +99,9 @@ def write_files(frames: np.ndarray) -> None:
     import MDAnalysis as mda
 
     universe = mda.Universe(str(xyz))
+    conbin = WORK / "frames.conbin"
+    import readcon
+    readcon.write_conbin(str(con), str(conbin))
     h5md = WORK / "frames.h5md"
     with mda.Writer(str(h5md), n_atoms=n_atoms) as writer:
         for _ts in universe.trajectory:
@@ -123,8 +131,10 @@ if arm in {"readcon_tip", "readcon_base", "readcon_v0173", "readcon_first"}:
     import readcon
     def parse():
         if arm == "readcon_first":
-            return [np.array(readcon.read_first_frame(path).xyz, dtype=float, copy=True)]
-        return [np.array(frame.xyz, dtype=float, copy=True) for frame in readcon.read_con(path)]
+            return [np.array(readcon.read_first_frame(path).xyz, dtype=float)]
+        if arm == "readcon_tip" and hasattr(readcon, "read_positions"):
+            return readcon.read_positions(path)
+        return [np.array(frame.xyz, dtype=float) for frame in readcon.read_con(path)]
 elif arm == "readcon_db":
     from readcon_db import ConCorpus
     def parse():
@@ -134,7 +144,7 @@ elif arm == "readcon_db":
             shutil.rmtree(dest)
         db = ConCorpus(str(dest))
         db.append_trajectory_str(1, Path(path).read_text(), source="frames.con")
-        return [np.array(db.get_positions(1, i), dtype=float, copy=True) for i in range(n_frames)]
+        return [np.array(db.get_positions(1, i), dtype=float) for i in range(n_frames)]
 elif arm == "ase_eon":
     from ase.io import read
     def parse():
@@ -160,17 +170,17 @@ elif arm == "chemfiles":
         frames = []
         with chemfiles.Trajectory(path) as traj:
             for frame in traj:
-                frames.append(np.array(frame.positions, copy=True))
+                frames.append(np.array(frame.positions))
         return frames
 elif arm == "ovito":
     from ovito.io import import_file
     def parse():
         pipeline = import_file(path, multiple_frames=True)
-        return [np.array(pipeline.compute(i).particles.positions, copy=True) for i in range(pipeline.source.num_frames)]
+        return [np.array(pipeline.compute(i).particles.positions) for i in range(pipeline.source.num_frames)]
 elif arm == "pymatgen":
     from pymatgen.io.xyz import XYZ
     def parse():
-        return [np.array(mol.cart_coords, dtype=float, copy=True) for mol in XYZ.from_file(path).all_molecules]
+        return [np.array(mol.cart_coords, dtype=float) for mol in XYZ.from_file(path).all_molecules]
 elif arm == "h5py":
     import h5py
     def parse():
@@ -190,22 +200,27 @@ elif arm == "eon":
         status = matter.con2matter(path)
         if not pyec.io_ok(status):
             raise RuntimeError(str(status))
-        return [np.array(matter.positions, copy=True)]
+        return [np.array(matter.positions)]
 elif arm == "eon_py":
     sys.path.insert(0, os.environ["EON_PKG"])
     from eon.fileio import loadcons
     def parse():
-        return [np.array(frame.r, dtype=float, copy=True) for frame in loadcons(path)]
-elif arm == "eon_cpp":
+        return [np.array(frame.r, dtype=float) for frame in loadcons(path)]
+elif arm == "readcon_eon_api":
     def parse():
-        raise RuntimeError("eon_cpp is timed in its own process")
+        raise RuntimeError("readcon_eon_api is timed in its own process")
+elif arm == "conbin":
+    import readcon
+    def parse():
+        positions, _velocities, n_atoms = readcon.read_conbin(path)
+        return positions.reshape(-1, n_atoms, 3)
 else:
     raise SystemExit(arm)
 
 before = hwm_kib()
 print(f"READY {before}", flush=True)
 sys.stdin.readline()
-if arm == "eon_cpp":
+if arm == "readcon_eon_api":
     import subprocess
     proc = subprocess.run([os.environ["EON_ALLFRAMES"], path], capture_output=True, text=True)
     parts = proc.stdout.split()
@@ -263,7 +278,7 @@ def one(arm: str, path: Path) -> dict:
     if arm == "eon_py":
         env["EON_PKG"] = str(EON_PKG)
         env["PYTHONPATH"] = str(EON_PKG) + os.pathsep + env.get("PYTHONPATH", "")
-    if arm == "eon_cpp":
+    if arm == "readcon_eon_api":
         env["EON_ALLFRAMES"] = str(EON_BIN)
     proc = subprocess.run(
         [sys.executable, "-c", WORKER, arm, str(path), str(N_FRAMES), str(N_ATOMS)],
@@ -320,7 +335,9 @@ def main() -> int:
         "readcon_hdf5 no",
         "eon_first Matter.con2matter first frame",
         "eon_py eon.fileio.loadcons all frames",
-        "eon_cpp ConFileIO con2matter loop all frames",
+        "readcon_eon_api readcon through the eOn C++ API, all frames",
+        "conbin mmap zero-copy positions",
+        "eon_reader eon.fileio.loadcons",
         "readcon_first read_first_frame first frame",
     ]
     frames = reference(N_FRAMES, N_ATOMS)
@@ -337,7 +354,8 @@ def main() -> int:
         ("ase_eon", con),
         ("eon", con),
         ("eon_py", con),
-        ("eon_cpp", con),
+        ("readcon_eon_api", con),
+        ("conbin", WORK / "frames.conbin"),
         ("numpy", xyz),
         ("chemfiles", xyz),
         ("ovito", xyz),
@@ -370,6 +388,8 @@ def main() -> int:
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
         scope = "first_frame" if name in {"eon", "readcon_first"} else "all_frames"
+        if name == "readcon_eon_api":
+            scope = "readcon_through_eon"
         lines.append(
             f"summary arm={name} scope={scope} n_rep={len(got)} median_s={med:.9e} iqr_s={iqr:.9e} "
             f"mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "

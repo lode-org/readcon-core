@@ -1,5 +1,5 @@
-use ndarray::Array2;
-use numpy::{IntoPyArray, PyArray1, PyArray2};
+use ndarray::{Array2, Array3, ArrayView2};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
@@ -372,9 +372,15 @@ pub struct PyConFrame {
     #[pyo3(get)]
     pub spec_version: u32,
     metadata: Py<PyDict>,
-    /// Rust SoA when this frame came from the parser. Numeric hot path
-    /// (`xyz`) reads this instead of walking the Python atom list.
+    /// Rust SoA when this frame came from the parser. The positions
+    /// column is empty: coordinates live in `xyz_owned` or in `slab`.
     inner: Option<ConFrame>,
+    n_atoms: usize,
+    /// One `[frames, N, 3]` array shared by every frame of a read.
+    slab: Option<Py<PyArray3<f64>>>,
+    slab_index: usize,
+    /// Coordinates of a frame that was not part of a shared read.
+    xyz_owned: Option<Py<PyArray2<f64>>>,
 }
 
 #[pymethods]
@@ -405,6 +411,10 @@ impl PyConFrame {
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
             metadata,
             inner: None,
+            n_atoms: 0,
+            slab: None,
+            slab_index: 0,
+            xyz_owned: None,
         })
     }
 
@@ -458,17 +468,7 @@ impl PyConFrame {
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        let natoms = if !self
-            .atoms_ready
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
-            self.inner
-                .as_ref()
-                .map(|frame| frame.positions.nrows())
-                .unwrap_or(0)
-        } else {
-            self.atoms.bind(py).len()
-        };
+        let natoms = self.atom_count(py);
         Ok(format!(
             "ConFrame(cell={:?}, angles={:?}, natoms={}, has_velocities={})",
             self.cell,
@@ -479,15 +479,7 @@ impl PyConFrame {
     }
 
     fn __len__(&self, py: Python<'_>) -> usize {
-        if !self
-            .atoms_ready
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
-            if let Some(frame) = self.inner.as_ref() {
-                return frame.positions.nrows();
-            }
-        }
-        self.atoms.bind(py).len()
+        self.atom_count(py)
     }
 
     /// Atoms in file order. The file cursor is `iter_con`, not this.
@@ -517,26 +509,19 @@ impl PyConFrame {
     // arrays are zero-copy interoperable with torch / jax / cupy via
     // `torch.from_dlpack(frame.coords_array())` etc.
 
-    /// SoA xyz as a contiguous numpy `[N, 3] float64` array.
+    /// Coordinates as a numpy `[N, 3] float64` view.
     ///
-    /// Parsed frames copy once from the Rust column (not per-atom Python
-    /// objects). A fresh array is returned so callers can mutate it.
-    /// `coords_array()` still walks `.atoms` so in-place Atom edits show up.
+    /// A frame from `read_con` views one row of the trajectory slab.
+    /// A later read of `xyz` returns that same view. `coords_array()`
+    /// still walks `.atoms` so in-place Atom edits show up.
     #[getter]
     fn xyz<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        if let Some(frame) = self.inner.as_ref() {
-            let n = frame.positions.nrows();
-            let mut data = Vec::with_capacity(n.saturating_mul(3));
-            if let Some(src) = frame.positions.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n {
-                    data.extend_from_slice(&frame.positions.as_f64_row(i));
-                }
-            }
-            let array = Array2::from_shape_vec((n, 3), data)
-                .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?;
-            return Ok(array.into_pyarray(py));
+        if let Some(slab) = &self.slab {
+            let item = slab.bind(py).get_item(self.slab_index)?;
+            return Ok(item.cast::<PyArray2<f64>>()?.clone());
+        }
+        if let Some(owned) = &self.xyz_owned {
+            return Ok(owned.bind(py).clone());
         }
         self.coords_array(py)
     }
@@ -1078,7 +1063,38 @@ impl PyConFrame {
 }
 
 impl PyConFrame {
+    fn atom_count(&self, py: Python<'_>) -> usize {
+        if self.n_atoms > 0 {
+            return self.n_atoms;
+        }
+        if self
+            .atoms_ready
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return self.atoms.bind(py).len();
+        }
+        self.inner
+            .as_ref()
+            .map(|frame| frame.atom_data.len())
+            .unwrap_or(0)
+    }
+
     fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
+        let n_atoms = frame.positions.nrows();
+        let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
+        if let Some(src) = frame.positions.f64_slice() {
+            data.extend_from_slice(src);
+        } else {
+            for i in 0..n_atoms {
+                data.extend_from_slice(&frame.positions.as_f64_row(i));
+            }
+        }
+        let xyz = Array2::from_shape_vec((n_atoms, 3), data)
+            .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
+            .into_pyarray(py)
+            .unbind();
+        let mut stored = frame.clone();
+        stored.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -1091,7 +1107,40 @@ impl PyConFrame {
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
             spec_version: frame.header.spec_version,
             metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
-            inner: Some(frame.clone()),
+            inner: Some(stored),
+            n_atoms,
+            slab: None,
+            slab_index: 0,
+            xyz_owned: Some(xyz),
+        })
+    }
+
+    fn from_slab(
+        py: Python<'_>,
+        frame: &ConFrame,
+        slab: Py<PyArray3<f64>>,
+        index: usize,
+        n_atoms: usize,
+    ) -> PyResult<Self> {
+        let mut stored = frame.clone();
+        stored.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        Ok(PyConFrame {
+            cell: frame.header.boxl,
+            angles: frame.header.angles,
+            prebox_header: [
+                frame.header.prebox_header.user.clone(),
+                frame.header.prebox_header.metadata_line().to_string(),
+            ],
+            postbox_header: frame.header.postbox_header.clone(),
+            atoms: PyList::empty(py).unbind(),
+            atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            spec_version: frame.header.spec_version,
+            metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
+            inner: Some(stored),
+            n_atoms,
+            slab: Some(slab),
+            slab_index: index,
+            xyz_owned: None,
         })
     }
 
@@ -1286,9 +1335,61 @@ fn read_con(
                 .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
+    frames_from_parsed(py, &frames)
+}
+
+/// One `[frames, atoms, 3]` float64 array of coordinates.
+///
+/// The array is allocated once. Parsing writes each frame at its offset
+/// from the boundary walk. No per-frame Python object is built.
+#[pyfunction]
+#[pyo3(name = "read_positions", signature = (path, n_threads=None))]
+fn read_positions(
+    py: Python<'_>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Py<PyArray3<f64>>> {
+    let path_owned = path.to_owned();
+    let block = py
+        .detach(|| {
+            crate::iterators::read_positions_with_threads(Path::new(&path_owned), n_threads)
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
+        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
+    Ok(array.into_pyarray(py).unbind())
+}
+
+fn frames_from_parsed(py: Python<'_>, frames: &[ConFrame]) -> PyResult<Vec<PyConFrame>> {
+    let n_atoms = frames.first().map(|frame| frame.positions.nrows()).unwrap_or(0);
+    let rectangular = !frames.is_empty()
+        && n_atoms > 0
+        && frames.iter().all(|frame| frame.positions.nrows() == n_atoms);
+    if !rectangular {
+        return frames
+            .iter()
+            .map(|frame| PyConFrame::from_con_frame(py, frame))
+            .collect();
+    }
+    let mut values = Vec::with_capacity(frames.len().saturating_mul(n_atoms).saturating_mul(3));
+    for frame in frames {
+        if let Some(src) = frame.positions.f64_slice() {
+            values.extend_from_slice(src);
+        } else {
+            for row in 0..n_atoms {
+                values.extend_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+    }
+    let slab = Array3::from_shape_vec((frames.len(), n_atoms, 3), values)
+        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?
+        .into_pyarray(py)
+        .unbind();
     frames
         .iter()
-        .map(|frame| PyConFrame::from_con_frame(py, frame))
+        .enumerate()
+        .map(|(index, frame)| PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, n_atoms))
         .collect()
 }
 
@@ -2216,6 +2317,10 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         spec_version: crate::CON_SPEC_VERSION,
         metadata: metadata.unbind(),
         inner: None,
+        n_atoms,
+        slab: None,
+        slab_index: 0,
+        xyz_owned: None,
     })
 }
 
@@ -2247,6 +2352,114 @@ fn atomic_number_to_symbol(atomic_number: u64) -> &'static str {
     crate::helpers::atomic_number_to_symbol(atomic_number)
 }
 
+/// The `MAP_PRIVATE` map behind the arrays `read_conbin` returns.
+///
+/// Both arrays hold this object as their NumPy base. The map is dropped,
+/// and the address range is unmapped, when the last array is freed.
+#[pyclass]
+struct ConBinMapping {
+    #[allow(dead_code)]
+    map: memmap2::MmapMut,
+}
+
+fn arrays_from_map<'py, T>(
+    py: Python<'py>,
+    map: memmap2::MmapMut,
+    pos: *const T,
+    vel: *const T,
+    n_frames: usize,
+    width: usize,
+    n_atoms: usize,
+) -> PyResult<(Bound<'py, PyArray2<T>>, Bound<'py, PyArray2<T>>, usize)>
+where
+    T: numpy::Element,
+{
+    let owner = Py::new(py, ConBinMapping { map })?;
+    let base = owner.bind(py).clone();
+    let shape = (n_frames, width);
+    // SAFETY: `pos` and `vel` address `n_frames * width` elements inside `map`.
+    // `owner` keeps that map alive for as long as either array does, because
+    // each array stores `owner` as its NumPy base.
+    let (pos_arr, vel_arr) = unsafe {
+        let pos_view = ArrayView2::from_shape_ptr(shape, pos);
+        let vel_view = ArrayView2::from_shape_ptr(shape, vel);
+        let pos_arr = PyArray2::borrow_from_array(&pos_view, base.clone().into_any());
+        let vel_arr = PyArray2::borrow_from_array(&vel_view, base.into_any());
+        (pos_arr, vel_arr)
+    };
+    Ok((pos_arr, vel_arr, n_atoms))
+}
+
+/// Read a CON-bin file as one writable position array and one writable
+/// velocity array.
+///
+/// The arrays are a `MAP_PRIVATE` copy-on-write view of the file. A store
+/// copies that page and does not modify the file. The map is the NumPy base
+/// of both arrays and stays mapped until both arrays are freed.
+#[pyfunction]
+#[pyo3(signature = (path, n_threads=1))]
+fn read_conbin<'py>(
+    py: Python<'py>,
+    path: &str,
+    n_threads: usize,
+) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>, usize)> {
+    let path_owned = path.to_owned();
+    let mapped = py
+        .detach(|| crate::conbin::map_file(Path::new(&path_owned), n_threads))
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    if mapped.header.binary32 {
+        return Err(PyValueError::new_err(
+            "CON-bin file is binary32; use read_conbin_f32",
+        ));
+    }
+    if !mapped.header.velocities {
+        return Err(PyValueError::new_err("CON-bin file has no velocity run"));
+    }
+    let n_frames = mapped.header.n_frames as usize;
+    let n_atoms = mapped.header.n_atoms as usize;
+    let width = n_atoms * 3;
+    let n = mapped
+        .header
+        .position_len()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    if n == 0 {
+        return Ok((
+            PyArray2::zeros(py, (n_frames, width), false),
+            PyArray2::zeros(py, (n_frames, width), false),
+            n_atoms,
+        ));
+    }
+    let pos_ptr = mapped
+        .positions_f64()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?
+        .as_ptr();
+    let vel_ptr = mapped
+        .velocities_f64()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?
+        .as_ptr();
+    arrays_from_map(py, mapped.map, pos_ptr, vel_ptr, n_frames, width, n_atoms)
+}
+
+/// Stream a CON text file into a CON-bin. One frame is parsed at a time.
+#[pyfunction]
+#[pyo3(signature = (con_path, out_path, binary32=false))]
+fn write_conbin(
+    py: Python<'_>,
+    con_path: &str,
+    out_path: &str,
+    binary32: bool,
+) -> PyResult<(u64, u64)> {
+    let con_path = con_path.to_owned();
+    let out_path = out_path.to_owned();
+    let header = py
+        .detach(|| {
+            crate::conbin::write_from_con(Path::new(&con_path), Path::new(&out_path), binary32)
+                .map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    Ok((header.n_frames, header.n_atoms))
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2258,6 +2471,10 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConTrajectory>()?;
     m.add_class::<PyConTrajectoryIter>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
+    m.add_function(wrap_pyfunction!(read_positions, m)?)?;
+    m.add_class::<ConBinMapping>()?;
+    m.add_function(wrap_pyfunction!(read_conbin, m)?)?;
+    m.add_function(wrap_pyfunction!(write_conbin, m)?)?;
     // Ergonomic alias for multi-language matrix (batch all frames).
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
