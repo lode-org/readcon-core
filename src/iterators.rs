@@ -1170,6 +1170,10 @@ struct SlotParse {
     chunk_s: Vec<f64>,
     /// Minor faults on each worker during its range.
     worker_minflt: Vec<i64>,
+    /// Frames in each worker's share.
+    share_frames: Vec<u64>,
+    /// File bytes in each worker's share.
+    share_bytes: Vec<u64>,
 }
 
 /// Slot allocation and the worker parse, timed apart.
@@ -1199,6 +1203,8 @@ where
             max_s: 0.0,
             chunk_s: Vec::new(),
             worker_minflt: Vec::new(),
+            share_frames: Vec::new(),
+            share_bytes: Vec::new(),
         };
     }
     if workers < 2 {
@@ -1220,6 +1226,8 @@ where
             max_s: work_s,
             chunk_s: vec![work_s],
             worker_minflt,
+            share_frames: vec![n as u64],
+            share_bytes: vec![len as u64],
         };
     }
     let t_alloc = std::time::Instant::now();
@@ -1270,6 +1278,8 @@ where
     let mut worker_max_s = 0.0_f64;
     let mut chunk_s = Vec::new();
     let mut worker_minflt = Vec::new();
+    let mut share_frames = Vec::new();
+    let mut share_bytes = Vec::new();
     for worker in 0..workers {
         let start = worker * share;
         if start >= n {
@@ -1280,6 +1290,10 @@ where
         worker_sum_s += seconds;
         worker_max_s = worker_max_s.max(seconds);
         worker_minflt.push(chunk_flt[worker].load(std::sync::atomic::Ordering::Relaxed));
+        let end = (start + share).min(n);
+        share_frames.push((end - start) as u64);
+        let bytes = span_end(boundaries, end - 1, len).saturating_sub(boundaries[start]);
+        share_bytes.push(bytes as u64);
     }
     // Each index in `0..n` was written once. The counter visits every
     // chunk, and the last chunk is shorter when `n` does not divide the
@@ -1300,6 +1314,8 @@ where
         max_s: worker_max_s,
         chunk_s,
         worker_minflt,
+        share_frames,
+        share_bytes,
     }
 }
 
@@ -1334,7 +1350,7 @@ struct TimedParse {
     slots: Vec<Result<types::ConFrame, error::ParseError>>,
     /// Still alive so later phases of this read use the same workers.
     /// `None` when the call stayed on the calling thread.
-    pool: Option<rayon::ThreadPool>,
+    pool: Option<std::sync::Arc<rayon::ThreadPool>>,
     pool_s: f64,
     /// Zero while `pool` is still alive. The owner times the join.
     pool_join_s: f64,
@@ -1346,10 +1362,30 @@ struct TimedParse {
     worker_max_s: f64,
     chunk_s: Vec<f64>,
     worker_minflt: Vec<i64>,
+    share_frames: Vec<u64>,
+    share_bytes: Vec<u64>,
     llc_misses: i64,
     numa_remote: i64,
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`].
     scan_kind: u8,
+}
+
+/// One pool per worker count, kept for the life of the process.
+///
+/// A fresh pool on every file made each worker fault its frames again.
+/// Reusing the workers lets the allocator hand back the pages just freed.
+#[cfg(feature = "parallel")]
+fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    let mut guard = cache.lock().ok()?;
+    if let Some((_, pool)) = guard.iter().find(|(count, _)| *count == workers) {
+        return Some(Arc::clone(pool));
+    }
+    let pool = Arc::new(rayon::ThreadPoolBuilder::new().num_threads(workers).build().ok()?);
+    guard.push((workers, Arc::clone(&pool)));
+    Some(pool)
 }
 
 /// Minor faults of this process.
@@ -1456,14 +1492,14 @@ pub const SCAN_SERIAL: u8 = 0;
 /// until the skip runs.
 #[cfg(feature = "parallel")]
 pub const SCAN_INDEXED: u8 = 1;
-/// Equal-length frames, spans checked on the worker pool.
+/// Equal-length frames. Each worker boundary is checked.
 #[cfg(feature = "parallel")]
 pub const SCAN_EQUAL_SPAN: u8 = 2;
 
 /// Frame starts when every frame occupies the same number of bytes.
 ///
-/// The first frame sets the span. Each later frame is skipped on its
-/// own slice, on `workers` threads. A span that does not tile the
+/// The first frame sets the span. Each worker boundary is skipped on
+/// its own slice. A span that does not tile the
 /// buffer, or a skip that does not land on the next span, returns
 /// `None` and the caller keeps the serial walk. The starts are
 /// `0, span, 2*span, ...` and match [`collect_frame_starts`].
@@ -1485,14 +1521,14 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
     if n < 2 {
         return None;
     }
-    use rayon::prelude::*;
     // Equal byte ranges. A cut that falls inside a frame resyncs to the
-    // next frame start, and only that header is checked.
+    // next frame start, and only that header is checked. The checks stay
+    // on this worker: a nested pool wake was larger than the checks.
     let byte_share = bytes.len().div_ceil(workers);
-    let ok = (0..workers).into_par_iter().try_for_each(|worker| {
+    for worker in 0..workers {
         let byte_cut = worker.saturating_mul(byte_share).min(bytes.len());
         if byte_cut >= bytes.len() {
-            return Ok(());
+            continue;
         }
         let index = if worker == 0 {
             0
@@ -1501,17 +1537,47 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
         };
         let start = index.saturating_mul(span);
         if start >= bytes.len() {
-            return Ok(());
+            continue;
         }
         let end = (start + span).min(bytes.len());
         let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
         match iter.forward_fast() {
-            Some(Ok(())) if iter.lines.pos == end - start => Ok(()),
-            _ => Err(()),
+            Some(Ok(())) if iter.lines.pos == end - start => {}
+            _ => return None,
         }
-    });
-    ok.ok()?;
-    Some((0..n).map(|index| index * span).collect())
+    }
+    Some(arithmetic_starts(span, n))
+}
+
+/// Starts `0, span, 2*span, ...` from a buffer kept between files.
+///
+/// Building that buffer from a fresh allocation stalled for milliseconds
+/// after a large free. The next file fills the same pages.
+#[cfg(feature = "parallel")]
+static START_CACHE: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(feature = "parallel")]
+fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
+    let mut starts = START_CACHE
+        .lock()
+        .map(|mut slot| std::mem::take(&mut *slot))
+        .unwrap_or_default();
+    if starts.len() != n {
+        starts.resize(n, 0);
+    }
+    for (index, slot) in starts.iter_mut().enumerate() {
+        *slot = index * span;
+    }
+    starts
+}
+
+#[cfg(feature = "parallel")]
+fn recycle_starts(starts: Vec<usize>) {
+    if let Ok(mut slot) = START_CACHE.lock() {
+        if starts.capacity() >= slot.capacity() {
+            *slot = starts;
+        }
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -1566,6 +1632,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
+        recycle_starts(boundaries);
         (parsed, scan_s, scan_kind, scan_minflt)
     };
     let (pool_s, pool, packed) = match num_threads {
@@ -1584,19 +1651,19 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         }
         Some(n) => {
             let t_pool = std::time::Instant::now();
-            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-                Ok(pool) => {
+            match shared_pool(n) {
+                Some(pool) => {
                     let built = t_pool.elapsed().as_secs_f64();
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();
                         (wake, run())
                     });
-                    // The pool stays alive for the slab, the position
-                    // release, the touch, and the frame teardown.
+                    // The same workers serve later files of this width.
+                    // Their freed blocks stay warm for the next parse.
                     (built + wake, Some(pool), body)
                 }
-                Err(_) => (t_pool.elapsed().as_secs_f64(), None, run()),
+                None => (t_pool.elapsed().as_secs_f64(), None, run()),
             }
         }
     };
@@ -1614,6 +1681,8 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         worker_max_s: parsed.max_s,
         chunk_s: parsed.chunk_s,
         worker_minflt: parsed.worker_minflt,
+        share_frames: parsed.share_frames,
+        share_bytes: parsed.share_bytes,
         llc_misses: sample_llc_misses(),
         numa_remote: numa_remote_pages(),
         scan_kind,
@@ -2112,9 +2181,13 @@ pub struct PhasedFrames {
     pub scan_kind: u8,
     /// Minor faults on each parse worker.
     pub worker_minflt: Vec<i64>,
+    /// Frames in each worker share.
+    pub share_frames: Vec<u64>,
+    /// File bytes in each worker share.
+    pub share_bytes: Vec<u64>,
     /// Pool kept for the slab, the touch, and frame teardown.
     #[cfg(feature = "parallel")]
-    pub pool: Option<rayon::ThreadPool>,
+    pub pool: Option<std::sync::Arc<rayon::ThreadPool>>,
 }
 
 /// Read `path` and time open, scan, slot allocation, and the worker parse.
@@ -2185,6 +2258,8 @@ pub fn read_all_frames_phased(
         chunk_s: phased.chunk_s,
         scan_kind: phased.scan_kind,
         worker_minflt: phased.worker_minflt,
+        share_frames: phased.share_frames,
+        share_bytes: phased.share_bytes,
         phases: ReadPhaseTimes {
             open_mmap_s,
             pool_s: phased.pool_s,
@@ -2233,13 +2308,15 @@ pub struct PhasedByteTimes {
     pub scan_minflt: i64,
     /// Minor faults on each parse worker, in worker order.
     pub worker_minflt: Vec<i64>,
+    pub share_frames: Vec<u64>,
+    pub share_bytes: Vec<u64>,
     /// LLC read misses, or `-1` when the guest refuses the counter.
     pub llc_misses: i64,
     /// Pages on a node other than node 0.
     pub numa_remote: i64,
     /// Pool kept for the slab, the touch, and frame teardown.
     #[cfg(feature = "parallel")]
-    pub pool: Option<rayon::ThreadPool>,
+    pub pool: Option<std::sync::Arc<rayon::ThreadPool>>,
 }
 
 pub fn frames_from_bytes_phased(
@@ -2259,6 +2336,7 @@ pub fn frames_from_bytes_phased(
             }
             let worker_parse_s = t_work.elapsed().as_secs_f64();
             let scan_minflt = process_minflt().saturating_sub(fault0);
+            let n_frames = frames.len() as u64;
             return Ok(PhasedByteTimes {
                 frames,
                 pool_s: 0.0,
@@ -2273,6 +2351,8 @@ pub fn frames_from_bytes_phased(
                 scan_kind: SCAN_SERIAL,
                 scan_minflt,
                 worker_minflt: vec![scan_minflt],
+                share_frames: vec![n_frames],
+                share_bytes: vec![bytes.len() as u64],
                 llc_misses: sample_llc_misses(),
                 numa_remote: numa_remote_pages(),
                 pool: None,
@@ -2281,7 +2361,7 @@ pub fn frames_from_bytes_phased(
         let requested = Some(num_threads.expect("workers"));
         let timed = parse_bytes_timed(bytes, requested);
         let t_finish = std::time::Instant::now();
-        let frames = finish_results(timed.pool.as_ref(), timed.slots)?;
+        let frames = finish_results(timed.pool.as_deref(), timed.slots)?;
         let finish_s = t_finish.elapsed().as_secs_f64();
         return Ok(PhasedByteTimes {
             frames,
@@ -2297,6 +2377,8 @@ pub fn frames_from_bytes_phased(
             scan_kind: timed.scan_kind,
             scan_minflt: timed.scan_minflt,
             worker_minflt: timed.worker_minflt,
+            share_frames: timed.share_frames,
+            share_bytes: timed.share_bytes,
             llc_misses: timed.llc_misses,
             numa_remote: timed.numa_remote,
             pool: timed.pool,
@@ -2325,6 +2407,8 @@ pub fn frames_from_bytes_phased(
             scan_kind: 0,
             scan_minflt: 0,
             worker_minflt: Vec::new(),
+            share_frames: Vec::new(),
+            share_bytes: Vec::new(),
             llc_misses: -1,
             numa_remote: 0,
         })

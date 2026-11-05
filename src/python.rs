@@ -1578,9 +1578,10 @@ struct ReadCallPhases {
     teardown_s: f64,
     scan_minflt: i64,
     parse_minflt: i64,
-    llc_misses: i64,
-    numa_remote: i64,
+            numa_remote: i64,
     worker_minflt: Vec<i64>,
+    share_frames: Vec<u64>,
+    share_bytes: Vec<u64>,
     slab_minflt: i64,
     touch_minflt: i64,
     mapped: bool,
@@ -1619,9 +1620,10 @@ impl ReadCallPhases {
             teardown_s: 0.0,
             scan_minflt: phases.scan_minflt,
             parse_minflt: phases.parse_minflt,
-            llc_misses: phases.llc_misses,
             numa_remote: phases.numa_remote,
             worker_minflt: Vec::new(),
+            share_frames: Vec::new(),
+            share_bytes: Vec::new(),
             slab_minflt: phases.slab_minflt,
             touch_minflt: phases.touch_minflt,
             mapped: phases.mapped,
@@ -1656,9 +1658,11 @@ impl ReadCallPhases {
         dict.set_item("teardown_s", self.teardown_s)?;
         dict.set_item("scan_minflt", self.scan_minflt)?;
         dict.set_item("parse_minflt", self.parse_minflt)?;
-        dict.set_item("llc_misses", self.llc_misses)?;
         dict.set_item("numa_remote", self.numa_remote)?;
+        dict.set_item("fault_proxy", "minor faults per worker; the guest denies perf_event_open")?;
         dict.set_item("worker_minflt", &self.worker_minflt)?;
+        dict.set_item("share_frames", &self.share_frames)?;
+        dict.set_item("share_bytes", &self.share_bytes)?;
         dict.set_item("slab_minflt", self.slab_minflt)?;
         dict.set_item("touch_minflt", self.touch_minflt)?;
         dict.set_item("mapped", self.mapped)?;
@@ -1685,7 +1689,7 @@ struct ConFrameList {
     workers: usize,
     phases: std::sync::Mutex<ReadCallPhases>,
     /// The pool from the read. Touch and teardown reuse it.
-    pool: std::sync::Mutex<Option<rayon::ThreadPool>>,
+    pool: std::sync::Mutex<Option<std::sync::Arc<rayon::ThreadPool>>>,
 }
 
 #[pyclass(name = "ConFrameListIterator")]
@@ -1797,9 +1801,10 @@ impl ConFrameList {
         Ok((digest, touch_s))
     }
 
-    /// Drop the parsed frames on the read's pool and join that pool.
+    /// Return each frame's position buffer and symbol storage to the
+    /// worker recycle lists, then join the pool.
     ///
-    /// The seconds cover the frame drop and the pool join. A later drop
+    /// The seconds cover that return and the pool join. A later drop
     /// of this object is empty.
     fn release_frames(&mut self, py: Python<'_>) -> f64 {
         let (teardown_s, pool_join_s) = py.detach(|| self.teardown());
@@ -1813,18 +1818,41 @@ impl ConFrameList {
 impl ConFrameList {
     fn teardown(&mut self) -> (f64, f64) {
         let t0 = std::time::Instant::now();
-        let frames = std::mem::take(&mut *self.frames.lock().expect("frames"));
+        let mut frames = std::mem::take(&mut *self.frames.lock().expect("frames"));
         let pool = self.pool.lock().expect("pool").take();
         let workers = self.workers.max(1);
         if let Some(pool) = pool {
             if frames.len() >= 2 {
-                pool.install(|| {
-                    use rayon::prelude::*;
-                    frames.into_par_iter().for_each(drop);
+                // Drop each share in place. Moving every frame into a
+                // parallel iterator copies the frame header before the
+                // free, and that copy sat inside this clock.
+                let share = frames.len().div_ceil(pool.current_num_threads()).max(1);
+                let ptr = frames.as_mut_ptr() as usize;
+                let len = frames.len();
+                pool.broadcast(move |ctx| {
+                    let start = ctx.index().saturating_mul(share);
+                    if start >= len {
+                        return;
+                    }
+                    let end = (start + share).min(len);
+                    let base = ptr as *mut Option<ConFrame>;
+                    for index in start..end {
+                        unsafe {
+                            std::ptr::drop_in_place(base.add(index));
+                        }
+                    }
                 });
+                let mut frames = std::mem::ManuallyDrop::new(frames);
+                unsafe {
+                    frames.set_len(0);
+                    drop(std::mem::ManuallyDrop::into_inner(frames));
+                }
             } else {
                 drop(frames);
             }
+            // Dropping this handle does not join the workers. The process
+            // keeps one pool per width so the next file reuses the pages
+            // those workers just freed.
             let t_join = std::time::Instant::now();
             drop(pool);
             let pool_join_s = t_join.elapsed().as_secs_f64();
@@ -1945,8 +1973,10 @@ fn con_frame_list(
     build: &'static str,
     chunk_s: Vec<f64>,
     worker_minflt: Vec<i64>,
+    share_frames: Vec<u64>,
+    share_bytes: Vec<u64>,
     scan_kind: &'static str,
-    pool: Option<rayon::ThreadPool>,
+    pool: Option<std::sync::Arc<rayon::ThreadPool>>,
 ) -> PyResult<Py<ConFrameList>> {
     let t_list = std::time::Instant::now();
     let n_frames = frames.len();
@@ -1988,6 +2018,8 @@ fn con_frame_list(
     record.python_build_s = python_build_s;
     record.chunk_s = chunk_s;
     record.worker_minflt = worker_minflt;
+    record.share_frames = share_frames;
+    record.share_bytes = share_bytes;
     record.scan_kind = scan_kind;
     let mut cache = Vec::with_capacity(n_frames);
     cache.resize_with(n_frames, || None);
@@ -2034,8 +2066,10 @@ fn load_phased(
     usize,
     Vec<f64>,
     &'static str,
-    Option<rayon::ThreadPool>,
+    Option<std::sync::Arc<rayon::ThreadPool>>,
     Vec<i64>,
+    Vec<u64>,
+    Vec<u64>,
 )> {
     let path_owned = path.to_owned();
     let t_enter = std::time::Instant::now();
@@ -2051,6 +2085,8 @@ fn load_phased(
                         scan_kind_name(phased.scan_kind),
                         phased.pool,
                         phased.worker_minflt,
+                        phased.share_frames,
+                        phased.share_bytes,
                     )
                 })
                 .map_err(|err| err.to_string())
@@ -2076,10 +2112,11 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt) =
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt, share_frames, share_bytes) =
         load_phased(py, path, n_threads)?;
     con_frame_list(
-        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, worker_minflt, scan_kind, pool,
+        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, worker_minflt, share_frames,
+        share_bytes, scan_kind, pool,
     )
 }
 
@@ -2088,10 +2125,12 @@ fn read_con_eager(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt) =
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt, share_frames, share_bytes) =
         load_phased(py, path, n_threads)?;
     drop(pool);
     drop(worker_minflt);
+    drop(share_frames);
+    drop(share_bytes);
     let n_frames = frames.len();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, "eager");
     record.chunk_s = chunk_s;
@@ -2289,6 +2328,8 @@ fn read_con_mpi(
         "lazy",
         Vec::new(),
         Vec::new(),
+        Vec::new(),
+        Vec::new(),
         "serial",
         None,
     )
@@ -2352,7 +2393,6 @@ fn read_con_string(
         close_s: 0.0,
         scan_minflt: parsed.scan_minflt,
         parse_minflt: parsed.worker_minflt.iter().copied().sum(),
-        llc_misses: parsed.llc_misses,
         numa_remote: parsed.numa_remote,
         mapped: false,
         ..crate::iterators::ReadPhaseTimes::default()
@@ -2366,6 +2406,8 @@ fn read_con_string(
         "lazy",
         parsed.chunk_s,
         parsed.worker_minflt,
+        parsed.share_frames,
+        parsed.share_bytes,
         scan_kind_name(parsed.scan_kind),
         parsed.pool,
     )
