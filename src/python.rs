@@ -1119,26 +1119,33 @@ impl PyConFrame {
 
     fn from_slab(
         py: Python<'_>,
-        frame: &ConFrame,
+        mut frame: ConFrame,
         slab: Py<PyArray3<f64>>,
         index: usize,
         n_atoms: usize,
     ) -> PyResult<Self> {
-        let mut stored = frame.clone();
-        stored.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        let cell = frame.header.boxl;
+        let angles = frame.header.angles;
+        let prebox_header = [
+            frame.header.prebox_header.user.clone(),
+            frame.header.prebox_header.metadata_line().to_string(),
+        ];
+        let postbox_header = frame.header.postbox_header.clone();
+        let spec_version = frame.header.spec_version;
+        let metadata = json_map_to_py_dict(py, &frame.header.metadata)?;
+        // Coordinates live in the slab. Moving the frame avoids cloning
+        // every atom onto the GIL thread after the parallel parse.
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
         Ok(PyConFrame {
-            cell: frame.header.boxl,
-            angles: frame.header.angles,
-            prebox_header: [
-                frame.header.prebox_header.user.clone(),
-                frame.header.prebox_header.metadata_line().to_string(),
-            ],
-            postbox_header: frame.header.postbox_header.clone(),
+            cell,
+            angles,
+            prebox_header,
+            postbox_header,
             atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
-            spec_version: frame.header.spec_version,
-            metadata: json_map_to_py_dict(py, &frame.header.metadata)?,
-            inner: Some(stored),
+            spec_version,
+            metadata,
+            inner: Some(frame),
             n_atoms,
             slab: Some(slab),
             slab_index: index,
@@ -1589,7 +1596,7 @@ fn read_con(
                 .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    frames_from_parsed(py, &frames)
+    frames_from_parsed(py, frames)
 }
 
 /// One `[frames, atoms, 3]` float64 array of coordinates.
@@ -1615,19 +1622,19 @@ fn read_positions(
     Ok(array.into_pyarray(py).unbind())
 }
 
-fn frames_from_parsed(py: Python<'_>, frames: &[ConFrame]) -> PyResult<Vec<PyConFrame>> {
+fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {
     let n_atoms = frames.first().map(|frame| frame.positions.nrows()).unwrap_or(0);
     let rectangular = !frames.is_empty()
         && n_atoms > 0
         && frames.iter().all(|frame| frame.positions.nrows() == n_atoms);
     if !rectangular {
         return frames
-            .iter()
-            .map(|frame| PyConFrame::from_con_frame(py, frame))
+            .into_iter()
+            .map(|frame| PyConFrame::from_con_frame(py, &frame))
             .collect();
     }
     let mut values = Vec::with_capacity(frames.len().saturating_mul(n_atoms).saturating_mul(3));
-    for frame in frames {
+    for frame in &frames {
         if let Some(src) = frame.positions.f64_slice() {
             values.extend_from_slice(src);
         } else {
@@ -1641,7 +1648,7 @@ fn frames_from_parsed(py: Python<'_>, frames: &[ConFrame]) -> PyResult<Vec<PyCon
         .into_pyarray(py)
         .unbind();
     frames
-        .iter()
+        .into_iter()
         .enumerate()
         .map(|(index, frame)| PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, n_atoms))
         .collect()
