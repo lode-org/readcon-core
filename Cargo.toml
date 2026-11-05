@@ -149,6 +149,14 @@ name = "wall_scale_harness"
 required-features = ["parallel"]
 
 [[example]]
+name = "weak_scale_threads"
+required-features = ["parallel"]
+
+[[example]]
+name = "weak_scale_mpi"
+required-features = ["mpi"]
+
+[[example]]
 name = "leaf_io_harness"
 required-features = ["rpc"]
 

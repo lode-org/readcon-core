@@ -1,0 +1,44 @@
+Weak-scaling campaign for BenchBot.
+Run these from the repository root.
+Rust is 1.88, the rust-version in Cargo.toml.
+The relation is n_frames = frames_per_worker * workers.
+The default ladder is 1 2 4 8 16 32.
+Each count must be at most the online CPU count.
+A curve with fewer than six counts is not a result.
+Repeats are 6. The median is the mean of the two central sorted samples.
+Efficiency is t(1)/t(w). The ideal line is 1.
+Do not invent a time. A skipped curve stays a stub.
+Do not record the machine name. Tables are named from the CPU model.
+The thread curve leaves RAYON_NUM_THREADS unset.
+The rank curve sets RAYON_NUM_THREADS=1 and OMP_NUM_THREADS=1.
+CUDA is a DLPack export, not a parse worker. Do not put it on either curve.
+
+== Plan
+python3 benchmarks/weak_scale.py host --json results/weak/host.json --log results/weak/logs/host.log
+python3 benchmarks/weak_scale.py plan --host results/weak/host.json --json results/weak/plan.json --log results/weak/logs/plan.log --ladder 1 2 4 8 16 32
+snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 all
+
+== Thread curve, asv
+The plan's threads_asv.run field has to be true.
+snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 threads
+python3 benchmarks/weak_scale.py report --json results/weak/threads.json --out results/weak/tables --plot
+
+== Rank curve, mpirun
+The plan's ranks_mpi.run field has to be true.
+cargo build --release --example weak_scale_mpi --features mpi
+snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 ranks
+python3 benchmarks/weak_scale.py report --json results/weak/ranks.json --out results/weak/tables --plot
+
+== Fallback thread harness, when the asv wheel cannot be built
+cargo build --release --example weak_scale_threads --features parallel
+target/release/examples/weak_scale_threads results/weak/threads-rust.json 64
+python3 benchmarks/weak_scale.py report --json results/weak/threads-rust.json --out results/weak/tables --plot
+
+== GPU
+python3 benchmarks/weak_scale.py run-gpu --host results/weak/host.json --out results/weak/stubs --log results/weak/logs/gpu.log
+That command exits 2. The stub has no times.
+
+== Logs
+Each log starts with HEAD, tree, and command, and ends with exit_code.
+Templates are benchmarks/workflow/weak/templates/.
+Copy a template, replace the braces, and put the raw stdout between the header and exit_code.

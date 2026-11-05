@@ -1,0 +1,111 @@
+# Weak scaling. Snakemake launches asv for threads and mpirun for ranks.
+# The relation is n_frames = frames_per_worker * workers.
+# A curve needs at least six worker counts, each bound to its own CPU.
+# This file does not time anything itself.
+
+configfile: "benchmarks/workflow/weak/config.yaml"
+
+RESULTS = config["results"]
+LADDER = " ".join(str(worker) for worker in config["ladder"])
+
+
+rule all:
+    input:
+        f"{RESULTS}/host.json",
+        f"{RESULTS}/plan.json",
+        f"{RESULTS}/logs/host.log",
+        f"{RESULTS}/logs/plan.log",
+        f"{RESULTS}/stubs/weak_scale_table_stub.tex",
+        f"{RESULTS}/stubs/weak_scale_figure_stub.tex",
+        f"{RESULTS}/stubs/weak_scale_gpu_stub.tex",
+
+
+rule host:
+    output:
+        json=f"{RESULTS}/host.json",
+        log=f"{RESULTS}/logs/host.log",
+    shell:
+        "python3 benchmarks/weak_scale.py host --json {output.json} --log {output.log}"
+
+
+rule plan:
+    input:
+        f"{RESULTS}/host.json",
+    output:
+        json=f"{RESULTS}/plan.json",
+        log=f"{RESULTS}/logs/plan.log",
+    params:
+        ladder=LADDER,
+    shell:
+        """
+        python3 benchmarks/weak_scale.py plan \
+            --host {input} \
+            --json {output.json} \
+            --log {output.log} \
+            --ladder {params.ladder}
+        """
+
+
+rule stubs:
+    output:
+        f"{RESULTS}/stubs/weak_scale_table_stub.tex",
+        f"{RESULTS}/stubs/weak_scale_figure_stub.tex",
+        f"{RESULTS}/stubs/weak_scale_gpu_stub.tex",
+    params:
+        out=f"{RESULTS}/stubs",
+    shell:
+        "python3 benchmarks/weak_scale.py stubs --out {params.out}"
+
+
+rule campaign:
+    input:
+        f"{RESULTS}/threads.json",
+        f"{RESULTS}/ranks.json",
+
+
+rule threads:
+    input:
+        plan=f"{RESULTS}/plan.json",
+        host=f"{RESULTS}/host.json",
+    output:
+        f"{RESULTS}/threads.json",
+    params:
+        frames=config["frames_per_worker"],
+        fixture=config["fixture"],
+        log=f"{RESULTS}/logs/threads-asv.log",
+    shell:
+        """
+        python3 benchmarks/weak_scale.py run-threads \
+            --plan {input.plan} \
+            --host {input.host} \
+            --json {output} \
+            --log {params.log} \
+            --frames-per-worker {params.frames} \
+            --fixture {params.fixture}
+        """
+
+
+rule ranks:
+    input:
+        plan=f"{RESULTS}/plan.json",
+        host=f"{RESULTS}/host.json",
+    output:
+        f"{RESULTS}/ranks.json",
+    params:
+        frames=config["frames_per_worker"],
+        fixture=config["fixture"],
+        binary=config["mpi_binary"],
+        work=f"{RESULTS}/mpi-work",
+        log=f"{RESULTS}/logs/ranks-mpi.log",
+    shell:
+        """
+        python3 benchmarks/weak_scale.py run-ranks \
+            --plan {input.plan} \
+            --host {input.host} \
+            --json {output} \
+            --log {params.log} \
+            --binary {params.binary} \
+            --work {params.work} \
+            --frames-per-worker {params.frames} \
+            --fixture {params.fixture}
+        """

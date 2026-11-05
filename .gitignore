@@ -484,6 +484,7 @@ docs/notebooks/out/
 /asv.aa.conf.json
 /asv.cmp.conf.json
 /asv.mem.conf.json
+/asv.weak.conf.json
 
 # coverage instrumentation local venv
 .venv-coverage/

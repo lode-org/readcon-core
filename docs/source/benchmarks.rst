@@ -25,6 +25,8 @@ What we measure
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
     |      6 | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                  |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    |  local | ``benchmarks/workflow/weak/Snakefile`` launches asv and mpirun locally     | Frames per worker stay fixed. Efficiency is t(1)/t(w).                   |
+    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
     |  local | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                 |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
 
@@ -225,6 +227,15 @@ the code, not a promise about every host):
   ``examples/wall_scale_harness.rs`` writes ``benches/results/wall_scale.json``
   (host, date, commit). That JSON is Table io in ``paper/cpc/main.tex``.
   Do not mix it with the Python ``readcon.read_con`` wall table.
+
+- Weak scaling grows the frame count with the worker count:
+  ``n_frames = frames_per_worker * workers``. Threads and MPI ranks are
+  separate curves. A published curve has at least six worker counts, each
+  at most the online CPU count. The default ladder is 1, 2, 4, 8, 16, 32.
+  Efficiency is ``t(1)/t(w)`` with a dashed ideal at 1.
+  ``benchmarks/workflow/weak/Snakefile`` launches asv for threads and
+  ``mpirun`` for ranks. Tables are named from the CPU model. The CUDA
+  feature is a DLPack export, not a point on those curves.
 
 - Skip without atoms: ``forward`` / ``forward_fast`` (Cachegrind ``forward_*``)
 

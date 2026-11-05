@@ -1,0 +1,9 @@
+# Campaign settings. A published curve uses the ladder below and 64 frames
+# per worker. A host whose online CPU count is below 32 does not shorten it.
+frames_per_worker: 64
+fixture: resources/test/cuh2.con
+repeats: 6
+ladder: [1, 2, 4, 8, 16, 32]
+min_points: 6
+results: results/weak
+mpi_binary: target/release/examples/weak_scale_mpi
