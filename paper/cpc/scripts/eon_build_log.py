@@ -28,11 +28,11 @@ def main() -> int:
     ]
     proc = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
     version = "3.6.0"
-    meson = EON / "meson.build"
-    if meson.is_file():
-        for line in meson.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("version:"):
-                version = line.split("'", 2)[1]
+    project = EON / "pyproject.toml"
+    if project.is_file():
+        for line in project.read_text(encoding="utf-8").splitlines():
+            if line.startswith("version ="):
+                version = line.split("=", 1)[1].strip().strip("'\"")
                 break
     lines = [
         f"rev_parse {git(['rev-parse', 'HEAD'], ROOT)}",
