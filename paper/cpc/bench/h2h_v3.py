@@ -29,6 +29,7 @@ REPEATS = 6
 CHILD = r"""
 import json, resource, sys, time
 from pathlib import Path
+import numpy as np
 reader, path = sys.argv[1], sys.argv[2]
 # Import before the parent starts the clock.
 if reader == "readcon":
@@ -71,12 +72,12 @@ elif reader == "chemfiles":
     import chemfiles
     def parse():
         traj = chemfiles.Trajectory(path)
-        return [traj.read().positions.copy() for _ in range(traj.nsteps)]
+        return [np.array(traj.read_step(i).positions) for i in range(traj.nsteps)]
 elif reader == "ovito":
     from ovito.io import import_file
     def parse():
         pipeline = import_file(path, multiple_frames=True)
-        return [pipeline.compute(frame).particles.positions.copy() for frame in range(pipeline.source.num_frames)]
+        return [np.array(pipeline.compute(frame).particles.positions) for frame in range(pipeline.source.num_frames)]
 elif reader == "python-con":
     def parse():
         frames = []
@@ -93,6 +94,7 @@ elif reader == "python-con":
             if len(parts) < 3:
                 if rows:
                     frames.append(rows)
+                    rows = []
                 expect = None
                 continue
             try:
@@ -100,6 +102,7 @@ elif reader == "python-con":
             except ValueError:
                 if rows:
                     frames.append(rows)
+                    rows = []
                 expect = None
         if rows:
             frames.append(rows)
@@ -121,7 +124,7 @@ dt = time.perf_counter() - t0
 rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
 coord_sum = None
 if reader != "eon":
-    coord_sum = float(__import__("numpy").asarray(got, dtype=float).sum())
+    coord_sum = float(np.asarray(got, dtype=float).sum())
 print(json.dumps({"reader": reader, "seconds": dt, "rss_bytes": rss, "n": len(got), "sum": coord_sum}))
 """
 
@@ -210,11 +213,12 @@ def main() -> None:
         ("ase-extxyz", xyz),
     ]
     # Optional peers, each tried once so a missing import is logged.
-    for name, src in (("chemfiles", xyz), ("ovito", xyz), ("eon", con)):
+    optional = [("chemfiles", xyz), ("ovito", xyz)]
+    if eon_bin:
+        optional.append(("eon", con))
+    for name, src in optional:
         probe = run_one(name, src, eon_bin)
-        if "error" in probe and name != "eon":
-            (OUT / f"{name}.log").write_text(probe["error"] + "\n")
-        elif "error" not in probe:
+        if "error" not in probe:
             readers.append((name, src))
         else:
             (OUT / f"{name}.log").write_text(probe["error"] + "\n")
@@ -263,7 +267,9 @@ def main() -> None:
         n = got[0]["n"]
         rate = [N_ATOMS * n / s for s in seconds]
         for row, sec, mem in zip(got, seconds, rss):
-            log_lines.append(f"repeat {row['repeat']} seconds {sec:.6f} rss_above_baseline {mem} frames {row['n']}")
+            log_lines.append(
+                f"repeat {row['repeat']} seconds {sec:.6f} rss_bytes {row['rss_bytes']} rss_above_baseline {mem} frames {row['n']} sum {row['sum']:.6f}"
+            )
         log_lines.append("exit=0")
         (OUT / f"{reader}.log").write_text("\n".join(log_lines) + "\n")
         by[reader] = {
