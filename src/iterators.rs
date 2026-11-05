@@ -1021,12 +1021,56 @@ fn span_end(boundaries: &[usize], index: usize, len: usize) -> usize {
     }
 }
 
+/// Pointer to slot storage shared by the workers that claim chunks.
+///
+/// Each claimed index is written by one thread, so the alias is the
+/// partition. The pointer stays valid until those workers join.
+#[cfg(feature = "parallel")]
+#[derive(Copy, Clone)]
+struct SlotWritePtr(
+    *mut std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>,
+);
+
+#[cfg(feature = "parallel")]
+impl SlotWritePtr {
+    /// # Safety
+    /// `index` is in range and this call is the only write of that slot.
+    unsafe fn write_slot(self, index: usize, value: Result<types::ConFrame, error::ParseError>) {
+        unsafe {
+            (*self.0.add(index)).write(value);
+        }
+    }
+}
+
+// SAFETY: `SlotWritePtr` is copied into the claim loop, and that loop
+// writes each slot index from exactly one worker. The allocation
+// outlives the join.
+#[cfg(feature = "parallel")]
+unsafe impl Send for SlotWritePtr {}
+
+// SAFETY: same partition as `Send`. Workers do not read a slot another
+// worker is writing.
+#[cfg(feature = "parallel")]
+unsafe impl Sync for SlotWritePtr {}
+
+/// Frames in one claimed chunk.
+///
+/// Eight equal chunks left the slowest chunk on the wall while the
+/// others sat idle. Sixteen claims per worker makes that leftover one
+/// chunk, which another worker can take.
+#[cfg(feature = "parallel")]
+fn claim_grain(n: usize, workers: usize) -> usize {
+    let workers = workers.max(1);
+    let claims = workers.saturating_mul(16);
+    n.div_ceil(claims).max(1)
+}
+
 /// Parse each frame into a slot allocated before any worker runs.
 ///
-/// The frames are split by index into contiguous ranges, one range per
-/// worker. Worker `t` writes only `slots[start..end]`. The returned
-/// vector is that slot storage, in boundary order, which is the serial
-/// iterator order. `workers < 2` parses on the calling thread.
+/// Workers claim chunk indexes from an atomic counter and write only
+/// those slots. The returned vector is that slot storage, in boundary
+/// order, which is the serial iterator order. `workers < 2` parses on
+/// the calling thread.
 #[cfg(feature = "parallel")]
 fn parse_into_slots<F>(
     len: usize,
@@ -1037,35 +1081,48 @@ fn parse_into_slots<F>(
 where
     F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
 {
-    parse_into_slots_timed(len, boundaries, workers, parse_span).0
+    parse_into_slots_timed(len, boundaries, workers, parse_span).slots
+}
+
+/// Slot allocation and the worker parse, timed apart.
+#[cfg(feature = "parallel")]
+struct SlotParse {
+    slots: Vec<Result<types::ConFrame, error::ParseError>>,
+    alloc_s: f64,
+    work_s: f64,
+    sum_s: f64,
+    max_s: f64,
+    /// One entry per claimed chunk, in chunk order. This is CPU time.
+    chunk_s: Vec<f64>,
 }
 
 /// Slot allocation and the worker parse, timed apart.
 ///
-/// The first `f64` is the slot allocation. The second is the worker
-/// parse wall. The third is the sum of per-chunk parse times, and the
-/// fourth is the slowest chunk. `workers < 2` still reserves the slot
-/// vector before the calling thread fills it, and that one chunk's
-/// time is both the sum and the max.
+/// `alloc_s` is the slot vector. `work_s` is the parse wall. `sum_s` is
+/// the sum of per-chunk parse times and `max_s` is the slowest chunk.
+/// `chunk_s` keeps every chunk. `workers < 2` still reserves the slot
+/// vector before the calling thread fills it, and that one chunk's time
+/// is the sum, the max, and the only entry.
 #[cfg(feature = "parallel")]
 fn parse_into_slots_timed<F>(
     len: usize,
     boundaries: &[usize],
     workers: usize,
     parse_span: F,
-) -> (
-    Vec<Result<types::ConFrame, error::ParseError>>,
-    f64,
-    f64,
-    f64,
-    f64,
-)
+) -> SlotParse
 where
     F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
 {
     let n = boundaries.len();
     if n == 0 {
-        return (Vec::new(), 0.0, 0.0, 0.0, 0.0);
+        return SlotParse {
+            slots: Vec::new(),
+            alloc_s: 0.0,
+            work_s: 0.0,
+            sum_s: 0.0,
+            max_s: 0.0,
+            chunk_s: Vec::new(),
+        };
     }
     if workers < 2 {
         let t_alloc = std::time::Instant::now();
@@ -1076,48 +1133,72 @@ where
             slots.push(parse_span(boundaries[i], span_end(boundaries, i, len)));
         }
         let work_s = t_work.elapsed().as_secs_f64();
-        return (slots, alloc_s, work_s, work_s, work_s);
+        return SlotParse {
+            slots,
+            alloc_s,
+            work_s,
+            sum_s: work_s,
+            max_s: work_s,
+            chunk_s: vec![work_s],
+        };
     }
     let t_alloc = std::time::Instant::now();
     let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
         (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
     let alloc_s = t_alloc.elapsed().as_secs_f64();
-    let chunk = n.div_ceil(workers).max(1);
-    let n_chunks = n.div_ceil(chunk);
-    // One store per chunk. Chunk `i` is the only writer of slot `i`.
+    let grain = claim_grain(n, workers);
+    let n_chunks = n.div_ceil(grain);
+    // Chunk `i` is the only writer of its slots. The counter hands that
+    // index to one worker.
     let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..n_chunks)
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let slots_ptr = SlotWritePtr(slots.as_mut_ptr());
     let t_work = std::time::Instant::now();
     {
         use rayon::prelude::*;
-        slots
-            .par_chunks_mut(chunk)
-            .enumerate()
-            .for_each(|(chunk_index, part)| {
+        (0..workers).into_par_iter().for_each(|_| {
+            loop {
+                let chunk_index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if chunk_index >= n_chunks {
+                    break;
+                }
+                let base = chunk_index * grain;
+                let end = (base + grain).min(n);
                 let t_chunk = std::time::Instant::now();
-                let base = chunk_index * chunk;
-                for (offset, slot) in part.iter_mut().enumerate() {
-                    let i = base + offset;
-                    slot.write(parse_span(boundaries[i], span_end(boundaries, i, len)));
+                for i in base..end {
+                    // SAFETY: `chunk_index` was claimed once, so `i` is
+                    // unique to this iteration. `slots_ptr` addresses
+                    // `slots`, which outlives this pool join, and no
+                    // other reference writes that index.
+                    unsafe {
+                        slots_ptr.write_slot(
+                            i,
+                            parse_span(boundaries[i], span_end(boundaries, i, len)),
+                        );
+                    }
                 }
                 chunk_ns[chunk_index].store(
                     t_chunk.elapsed().as_nanos() as u64,
                     std::sync::atomic::Ordering::Relaxed,
                 );
-            });
+            }
+        });
     }
     let work_s = t_work.elapsed().as_secs_f64();
     let mut worker_sum_s = 0.0_f64;
     let mut worker_max_s = 0.0_f64;
+    let mut chunk_s = Vec::with_capacity(n_chunks);
     for cell in &chunk_ns {
         let seconds = cell.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
+        chunk_s.push(seconds);
         worker_sum_s += seconds;
         worker_max_s = worker_max_s.max(seconds);
     }
-    // Each index in `0..n` was written once. `par_chunks_mut` hands out
-    // disjoint slices, and the last slice is shorter when `n` does not
-    // divide the worker count.
+    // Each index in `0..n` was written once. The counter visits every
+    // chunk, and the last chunk is shorter when `n` does not divide the
+    // grain.
     let mut slots = std::mem::ManuallyDrop::new(slots);
     let slots = unsafe {
         Vec::from_raw_parts(
@@ -1126,7 +1207,14 @@ where
             slots.capacity(),
         )
     };
-    (slots, alloc_s, work_s, worker_sum_s, worker_max_s)
+    SlotParse {
+        slots,
+        alloc_s,
+        work_s,
+        sum_s: worker_sum_s,
+        max_s: worker_max_s,
+        chunk_s,
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -1164,7 +1252,25 @@ struct TimedParse {
     worker_parse_s: f64,
     worker_sum_s: f64,
     worker_max_s: f64,
+    chunk_s: Vec<f64>,
+    /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`].
+    scan_kind: u8,
 }
+
+/// Header walk on the calling thread.
+#[cfg(feature = "parallel")]
+pub const SCAN_SERIAL: u8 = 0;
+/// Newline index in chunks, then a header walk on the calling thread.
+///
+/// Frames that do not share one byte length take this path. The newline
+/// bytes are split across the pool. The header walk is not, because a
+/// later frame start is the end of the skip, and that end is not known
+/// until the skip runs.
+#[cfg(feature = "parallel")]
+pub const SCAN_INDEXED: u8 = 1;
+/// Equal-length frames, spans checked on the worker pool.
+#[cfg(feature = "parallel")]
+pub const SCAN_EQUAL_SPAN: u8 = 2;
 
 /// Frame starts when every frame occupies the same number of bytes.
 ///
@@ -1239,25 +1345,30 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     };
     let run = || {
         let t_scan = std::time::Instant::now();
-        let boundaries = if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
-            bounds
-        } else {
-            let mut scanner = ConFrameIterator::from_bytes(bytes);
-            if threads >= 2 {
-                // Same pool as the parse, so the newline chunks do not start
-                // a second set of workers.
-                scanner.lines.newlines = Some(newline_positions(bytes, threads));
-                scanner.lines.line_no = 0;
-            }
-            // Whitespace after the final frame does not open another frame.
-            collect_frame_starts(scanner, true)
-        };
+        let (boundaries, scan_kind) =
+            if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
+                (bounds, SCAN_EQUAL_SPAN)
+            } else {
+                let mut scanner = ConFrameIterator::from_bytes(bytes);
+                let scan_kind = if threads >= 2 {
+                    // Same pool as the parse, so the newline chunks do not start
+                    // a second set of workers. The header walk stays serial:
+                    // unequal frames do not share a span to split on.
+                    scanner.lines.newlines = Some(newline_positions(bytes, threads));
+                    scanner.lines.line_no = 0;
+                    SCAN_INDEXED
+                } else {
+                    SCAN_SERIAL
+                };
+                // Whitespace after the final frame does not open another frame.
+                (collect_frame_starts(scanner, true), scan_kind)
+            };
         let scan_s = t_scan.elapsed().as_secs_f64();
-        let (slots, slot_s, work_s, sum_s, max_s) =
+        let parsed =
             parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
-        (slots, scan_s, slot_s, work_s, sum_s, max_s)
+        (parsed, scan_s, scan_kind)
     };
     let (pool_s, packed) = match num_threads {
         None => (0.0, run()),
@@ -1266,11 +1377,10 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             let t_scan = std::time::Instant::now();
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
-            let (slots, slot_s, work_s, sum_s, max_s) =
-                parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
-                    parse_byte_span(bytes, start, end)
-                });
-            (0.0, (slots, scan_s, slot_s, work_s, sum_s, max_s))
+            let parsed = parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
+                parse_byte_span(bytes, start, end)
+            });
+            (0.0, (parsed, scan_s, SCAN_SERIAL))
         }
         Some(n) => {
             let t_pool = std::time::Instant::now();
@@ -1285,15 +1395,17 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             }
         }
     };
-    let (slots, scan_s, slot_s, work_s, sum_s, max_s) = packed;
+    let (parsed, scan_s, scan_kind) = packed;
     TimedParse {
-        slots,
+        slots: parsed.slots,
         pool_s,
         scan_s,
-        slot_alloc_s: slot_s,
-        worker_parse_s: work_s,
-        worker_sum_s: sum_s,
-        worker_max_s: max_s,
+        slot_alloc_s: parsed.alloc_s,
+        worker_parse_s: parsed.work_s,
+        worker_sum_s: parsed.sum_s,
+        worker_max_s: parsed.max_s,
+        chunk_s: parsed.chunk_s,
+        scan_kind,
     }
 }
 
@@ -1390,13 +1502,15 @@ pub fn read_all_frames_indexed(
 
 /// Minimum buffer length for a chunked newline scan.
 ///
-/// On this host a chunked scan of a real trajectory is slower than one
-/// serial pass at 4 MiB, and the gap exceeds the chunked interquartile
-/// range at 2 and 4 workers. At 64 MiB the chunked median is faster at
-/// 2, 4, and 8 workers, and each of those gaps exceeds the chunked
-/// interquartile range. The constant is that 64 MiB size.
+/// On this host the sizes were 4, 8, 16, 32, 64, and 128 MiB of
+/// repeated `cuh2.con`. A size clears when the chunked median beats
+/// one serial walk at 2, 4, and 8 workers and each gap exceeds the
+/// chunked interquartile range. 4 MiB does not clear. 8 MiB clears
+/// and 16 MiB does not, so that pass is not the start of a run.
+/// 32, 64, and 128 MiB clear. The constant is 32 MiB, the first size
+/// of that run. The samples are the scan-crossover row.
 #[cfg(feature = "parallel")]
-pub const SCAN_PARALLEL_MIN: usize = 64 * 1024 * 1024;
+pub const SCAN_PARALLEL_MIN: usize = 32 * 1024 * 1024;
 
 enum IndexStep {
     Stay(usize),
@@ -1771,6 +1885,11 @@ pub struct PhasedFrames {
     pub frames: Vec<types::ConFrame>,
     pub phases: ReadPhaseTimes,
     pub n_bytes: usize,
+    /// Per-chunk parse seconds, in claim order.
+    pub chunk_s: Vec<f64>,
+    /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`] when
+    /// `parallel` is on. Zero otherwise.
+    pub scan_kind: u8,
 }
 
 /// Read `path` and time open, scan, slot allocation, and the worker parse.
@@ -1802,6 +1921,8 @@ pub fn read_all_frames_phased(
     Ok(PhasedFrames {
         frames: phased.frames,
         n_bytes,
+        chunk_s: phased.chunk_s,
+        scan_kind: phased.scan_kind,
         phases: ReadPhaseTimes {
             open_mmap_s,
             pool_s: phased.pool_s,
@@ -1831,6 +1952,11 @@ pub struct PhasedByteTimes {
     pub finish_s: f64,
     pub worker_sum_s: f64,
     pub worker_max_s: f64,
+    /// Per-chunk parse seconds, in claim order.
+    pub chunk_s: Vec<f64>,
+    /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`] when
+    /// `parallel` is on. Zero otherwise.
+    pub scan_kind: u8,
 }
 
 pub fn frames_from_bytes_phased(
@@ -1859,6 +1985,8 @@ pub fn frames_from_bytes_phased(
             finish_s,
             worker_sum_s: timed.worker_sum_s,
             worker_max_s: timed.worker_max_s,
+            chunk_s: timed.chunk_s,
+            scan_kind: timed.scan_kind,
         });
     }
     #[cfg(not(feature = "parallel"))]
@@ -1879,6 +2007,8 @@ pub fn frames_from_bytes_phased(
             finish_s: 0.0,
             worker_sum_s: worker_parse_s,
             worker_max_s: worker_parse_s,
+            chunk_s: vec![worker_parse_s],
+            scan_kind: 0,
         })
     }
 }

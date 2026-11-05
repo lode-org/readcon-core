@@ -1577,6 +1577,8 @@ struct ReadCallPhases {
     n_bytes: usize,
     n_frames: usize,
     build: &'static str,
+    chunk_s: Vec<f64>,
+    scan_kind: &'static str,
 }
 
 impl ReadCallPhases {
@@ -1606,6 +1608,8 @@ impl ReadCallPhases {
             n_bytes,
             n_frames,
             build,
+            chunk_s: Vec::new(),
+            scan_kind: "serial",
         }
     }
 
@@ -1631,6 +1635,8 @@ impl ReadCallPhases {
         dict.set_item("n_bytes", self.n_bytes)?;
         dict.set_item("n_frames", self.n_frames)?;
         dict.set_item("build", self.build)?;
+        dict.set_item("chunk_s", &self.chunk_s)?;
+        dict.set_item("scan_kind", self.scan_kind)?;
         Ok(dict.unbind())
     }
 }
@@ -1792,6 +1798,23 @@ fn slab_from_values(
 }
 
 /// Move `frames` into a lazy list. The coordinate copy runs without the GIL.
+fn scan_kind_name(kind: u8) -> &'static str {
+    #[cfg(feature = "parallel")]
+    {
+        if kind == crate::iterators::SCAN_EQUAL_SPAN {
+            return "equal-span";
+        }
+        if kind == crate::iterators::SCAN_INDEXED {
+            return "indexed";
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = kind;
+    }
+    "serial"
+}
+
 fn con_frame_list(
     py: Python<'_>,
     mut frames: Vec<ConFrame>,
@@ -1799,6 +1822,8 @@ fn con_frame_list(
     n_bytes: usize,
     n_threads: Option<usize>,
     build: &'static str,
+    chunk_s: Vec<f64>,
+    scan_kind: &'static str,
 ) -> PyResult<Py<ConFrameList>> {
     let t_list = std::time::Instant::now();
     let n_frames = frames.len();
@@ -1825,6 +1850,8 @@ fn con_frame_list(
     record.slab_s = slab_s;
     record.release_s = release_s;
     record.python_build_s = python_build_s;
+    record.chunk_s = chunk_s;
+    record.scan_kind = scan_kind;
     let mut cache = Vec::with_capacity(n_frames);
     cache.resize_with(n_frames, || None);
     let stored: Vec<Option<ConFrame>> = frames.into_iter().map(Some).collect();
@@ -1857,11 +1884,25 @@ fn load_phased(
     py: Python<'_>,
     path: &str,
     n_threads: Option<usize>,
-) -> PyResult<(Vec<ConFrame>, crate::iterators::ReadPhaseTimes, usize)> {
+) -> PyResult<(
+    Vec<ConFrame>,
+    crate::iterators::ReadPhaseTimes,
+    usize,
+    Vec<f64>,
+    &'static str,
+)> {
     let path_owned = path.to_owned();
     py.detach(|| {
         crate::iterators::read_all_frames_phased(Path::new(&path_owned), n_threads)
-            .map(|phased| (phased.frames, phased.phases, phased.n_bytes))
+            .map(|phased| {
+                (
+                    phased.frames,
+                    phased.phases,
+                    phased.n_bytes,
+                    phased.chunk_s,
+                    scan_kind_name(phased.scan_kind),
+                )
+            })
             .map_err(|err| err.to_string())
     })
     .map_err(PyIOError::new_err)
@@ -1872,8 +1913,17 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    let (frames, phases, n_bytes) = load_phased(py, path, n_threads)?;
-    con_frame_list(py, frames, phases, n_bytes, n_threads, "lazy")
+    let (frames, phases, n_bytes, chunk_s, scan_kind) = load_phased(py, path, n_threads)?;
+    con_frame_list(
+        py,
+        frames,
+        phases,
+        n_bytes,
+        n_threads,
+        "lazy",
+        chunk_s,
+        scan_kind,
+    )
 }
 
 fn read_con_eager(
@@ -1881,9 +1931,11 @@ fn read_con_eager(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
-    let (frames, phases, n_bytes) = load_phased(py, path, n_threads)?;
+    let (frames, phases, n_bytes, chunk_s, scan_kind) = load_phased(py, path, n_threads)?;
     let n_frames = frames.len();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, "eager");
+    record.chunk_s = chunk_s;
+    record.scan_kind = scan_kind;
     let t_build = std::time::Instant::now();
     let built = frames_from_parsed(py, frames)?;
     record.python_build_s = t_build.elapsed().as_secs_f64();
@@ -2068,7 +2120,7 @@ fn read_con_mpi(
         worker_parse_s,
         ..crate::iterators::ReadPhaseTimes::default()
     };
-    con_frame_list(py, rf.frames, phases, 0, n_threads, "lazy")
+    con_frame_list(py, rf.frames, phases, 0, n_threads, "lazy", Vec::new(), "serial")
 }
 
 #[cfg(not(feature = "mpi"))]
@@ -2127,7 +2179,16 @@ fn read_con_string(
         close_s: 0.0,
         mapped: false,
     };
-    con_frame_list(py, parsed.frames, phases, n_bytes, n_threads, "lazy")
+    con_frame_list(
+        py,
+        parsed.frames,
+        phases,
+        n_bytes,
+        n_threads,
+        "lazy",
+        parsed.chunk_s,
+        scan_kind_name(parsed.scan_kind),
+    )
 }
 
 /// Streaming frame iterator: parses one frame per `__next__` (does not
