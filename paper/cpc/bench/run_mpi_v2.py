@@ -15,8 +15,8 @@ WORK = Path(__file__).resolve().parent / "work" / "v2"
 RANKS = (1, 2, 4, 8)
 MODES = ("shared", "scatter")
 REPEATS = 6
-N_FRAMES = 80
-N_ATOMS = 32
+N_FRAMES = 4000
+N_ATOMS = 64
 
 
 def write_con(path: Path) -> None:

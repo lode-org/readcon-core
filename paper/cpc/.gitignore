@@ -4,6 +4,8 @@
 *.fdb_latexmk
 *.fls
 *.log
+!bench/install.log
+!data/h2h/*.log
 *.out
 *.synctex.gz
 *.spl
