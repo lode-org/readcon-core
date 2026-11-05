@@ -11,6 +11,7 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage[ruled,linesnumbered]{algorithm2e}
+\usepackage{listings}
 \input{figures/generated/macros}
 \input{figures/generated/neb_macros}
 \input{figures/generated/dlpack_macros}
@@ -35,7 +36,7 @@
 
 \begin{abstract}
 CON is a file format used by rare-event and saddle-search codes to store atomic checkpoints.
-readcon-core formalizes that format and is the reference reader and writer.
+We formalize that format in readcon-core, the reference reader and writer.
 The parsed positions, velocities, forces, per-atom energies, masses and atom ids are exposed through DLPack.
 At 32768 atoms the NumPy \texttt{from\_dlpack} median is $\dlpackExMed$\,s and the copy median is $\dlpackCpMed$\,s, from $\dlpackRepeats$ repeats on one host.
 Text CON remains the file other codes read.
@@ -68,8 +69,8 @@ headers; Python 3.10+; Julia; Fortran 2008 (\texttt{ISO\_C\_BINDING})\\
 toolchain, or a prebuilt C library tarball; Linux, macOS, and Windows\\
 \textit{RAM:} of order the parsed frame.\\
 \textit{External routines:} optional chemfiles, metatensor, DLPack,
-zstd, CUDA (feature-gated); readcon-db uses LMDB. Cap'n Proto is a
-Rust-only RPC feature, not a C ABI symbol.\\
+zstd, CUDA (feature-gated); readcon-db uses LMDB. Cap'n Proto stays
+in the Rust RPC feature.\\
 \textit{Nature of problem:} Rare-event and nudged-elastic-band
 campaigns need a checkpoint that carries cell, per-type masses,
 per-axis constraints, original atom indices, optional
@@ -110,7 +111,7 @@ CON is a file format used in many places for that checkpoint.
 readcon-core formalizes the file and improves the reader and the writer.
 The layout is a short header, then atoms grouped by chemical type, each line a position, a constraint flag, and a fifth integer that historical writers used as a display index \cite{chillEONSoftwareLong2014}.
 Velocities were stored in a sibling \texttt{.convel} file.
-Later files add force blocks and free-form comments on line 2.
+Later files add force blocks and free-form comments in the metadata record of Listing~\ref{lst:header}.
 readcon-core exchanges the parsed position array through DLPack, and at 32768 atoms the NumPy exchange median is $\dlpackExMed$\,s against a copy median of $\dlpackCpMed$\,s.
 
 \begin{figure}[tbp]
@@ -120,7 +121,7 @@ readcon-core exchanges the parsed position array through DLPack, and at 32768 at
 Left, the four-atom CuH2 survey frame.
 Centre, the 218-atom CuH2 timing frame.
 Right, one image of the two-atom NEB band.
-Axis colours are the Ruhi palette.}
+The axes use the Ruhi palette.}
 \label{fig:structures}
 \end{figure}
 
@@ -135,20 +136,21 @@ Column 4 therefore cannot carry a per-axis mask unless the reader consults a spe
 Versions 2 and 3 are defined in the accompanying specification (\texttt{docs/orgmode/spec.org}); this paper states the parts that matter for interchange.
 The design goal is one on-disk checkpoint and one C ABI, so a Fortran optimizer, a C++ driver, and a Python notebook see the same constraints, identities, and metadata.
 \section{Related work}
-\label{sec:related} CON is a rare-event checkpoint, not a general structure archive and not an MD analysis tape.
+\label{sec:related} CON is the checkpoint rare-event codes write between saddle searches.
 The nine-line type-grouped layout is the unversioned eOn de facto format.
 Chill et al. describe the eOn software and do not specify atom-line columns \cite{chillEONSoftwareLong2014}.
 
 Extended XYZ puts \texttt{Lattice=} and a \texttt{Properties=} column schema on the comment line; lean XYZ has neither.
-There is no journal specification of extXYZ; the living grammar is the ASE/libAtoms dialect \cite{larsenAtomicSimulationEnvironment2017}.
-CON uses a JSON object on line 2 for the same job (machine metadata on a line that old tools treat as a comment) and keeps a first-class three-bit constraint mask and a pre-grouping \texttt{atom\_id}.
+No journal specifies extXYZ.
+The living grammar is the ASE/libAtoms dialect \cite{larsenAtomicSimulationEnvironment2017}.
+CON uses a JSON object in Listing~\ref{lst:header} for the same job (machine metadata on a record that old tools treat as a comment) and keeps a three-bit constraint mask and a pre-grouping \texttt{atom\_id}.
 Lean XYZ, as timed in this paper, has no constraint mask.
 The library's ASE adapters convert a parsed \texttt{ConFrame} to \texttt{Atoms} and back; they do not register a \texttt{format}'con'= plugin and do not replace \texttt{ase.io.eon}.
 That reader treats leftover force-section lines after the coordinate parse as an error.
 
 H5MD is the structured particle container in this journal \cite{deBuylH5MDStructuredEfficient2014}.
 It can carry per-particle mass, force, velocity, SI unit attributes, and an observables tree.
-It has no first-class per-axis freeze mask and no type-grouped atom-index recovery.
+It has no per-axis freeze mask and no type-grouped atom-index recovery.
 The equal-geometry timings below treat H5MD as a peer load path, not as ``MD tape.''
 GROMACS XTC/TRR and CHARMM/NAMD DCD are engine tapes: masses and restraints live in the TPR or PSF, and restart is a separate checkpoint (\texttt{cpt}, \texttt{namdbin}) \cite{abrahamGromacsHighPerformance2015}.
 They are cited here and are not timed.
@@ -160,7 +162,7 @@ chemfiles is the optional ingress library \cite{frauxChemfiles2023}: it opens ma
 MDAnalysis is used only as the H5MD Python API in the wall-time table \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016}; MDTraj is not timed \cite{mcgibbonMDTrajModernOpen2015}.
 An optional metatensor export copies four \texttt{TensorBlock}s (positions, velocities, forces, per-atom energies) \cite{bigiMetatensorMetatomicFoundational2026}; it is not a TensorMap or metatomic \texttt{System} path.
 \section{The CON format}
-\label{sec:format} A spec 2 file places a JSON object on line 2 with at least \texttt{con\_spec\_version}.
+\label{sec:format} A spec 2 file places a JSON object in the metadata record of Listing~\ref{lst:header} with at least \texttt{con\_spec\_version}.
 Spec 3 requires a \texttt{units} object with non-empty \texttt{length} and \texttt{energy} keys.
 The \texttt{sections} array names the data blocks that follow the coordinates (velocities, forces, energies, charges, spins, magnetic moments).
 The Rust writer fills \texttt{sections} from the frame.
@@ -174,8 +176,17 @@ Old readers that test ``nonzero means fixed'' over-constrain \(y\) and \(z\) on 
 Column 5 is \texttt{atom\_id}.
 Readers accept four-column lines and default the missing index to the sequential position in the frame.
 
-Line 2 was chosen because existing tools treat it as a comment.
-Adding a tenth header line, overwriting the postbox on lines 5 to 6, or shipping a sidecar \texttt{.con.meta} breaks those parsers or loses pairing.
+The metadata record in Listing~\ref{lst:header} was chosen because existing tools treat it as a comment.
+Adding a tenth header record, overwriting the postbox records in Listing~\ref{lst:header}, or adding a sidecar file named \texttt{con.meta} breaks those parsers or loses pairing.
+
+\begin{lstlisting}[caption={Records in the header of one frame.},label={lst:header}]
+free_line
+metadata_line
+cell_lengths
+cell_angles
+postbox
+postbox
+\end{lstlisting}
 
 Velocities live in a declared \texttt{sections} entry on a \texttt{.con} file.
 The \texttt{.convel} extension is the historical name and the blank-separator fallback when the \texttt{sections} key is absent.
@@ -222,7 +233,7 @@ Equation~\eqref{eq:stop} stops at the end of the file.
 
 \begin{algorithm}[tbp]
 \caption{Read one CON file. Each line is the matching equation.}
-\label{alg:read} propose the next record\; accept the record when the version test holds\; update the frame from the accepted record\; stop when the file has no further record\;
+\label{alg:read} propose the next record\; accept the record when the version test passes\; update the frame from the accepted record\; stop when the file has no further record\;
 \end{algorithm}
 
 Figure~\ref{fig:workflow} draws those four steps.
@@ -278,44 +289,45 @@ The 0.14.x contract freezes ownership, sentinels (\texttt{NaN}, \texttt{UINT64\_
 Additive symbols appear in a 0.14.z patch when the C ABI grows.
 A breaking C change is a 0.15+ minor.
 \section{Performance}
-\label{sec:performance} Figure~\ref{fig:timing} shows the median wall time of readcon against ASE, chemfiles, MDAnalysis and h5py on the committed 10000-frame rows.
-Each point is the median of the paired repeats in \texttt{paper/cpc/bench/results/repeats.csv}.
-Figure~\ref{fig:ratios} shows the same rows as the ratio of those medians.
-A ratio below 1 means readcon returned first.
-The supplement holds the remaining figures from the same campaign files.
+\label{sec:performance} We time the base commit against ASE, chemfiles, h5py, MDAnalysis, OVITO and pymatgen on one host.
+We use the same frames for every arm.
+We interleave the arms inside each repeat.
+Figure~\ref{fig:timing} shows those median wall times.
+Figure~\ref{fig:ratios} shows the base time divided by each peer time.
+A ratio below 1 means the base commit returned first.
+We report the median and the type 7 quartiles.
+The supplement prints the remaining figures from the same campaign files.
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{Median wall time on the 10000-frame payload.
-The readcon bar and the peer bar are the medians of the committed paired repeats.}
+\caption{Median wall time of the base commit and of each peer that reads the frames.
+The base bar is readcon at the base commit.}
 \label{fig:timing}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{readcon time divided by the peer time.
-The marker is the median ratio and the bar runs from the type 7 lower quartile to the type 7 upper quartile of the paired ratios.}
+\caption{Base time divided by peer time.
+The marker is the median ratio and the bar runs from the type 7 lower quartile to the type 7 upper quartile.}
 \label{fig:ratios}
 \end{figure}
 
-Figure~\ref{fig:restart} draws the uninterrupted band and the two resumed bands on the chord between the end images.
-Figure~\ref{fig:restartfmt} is the energy of those bands.
+Figure~\ref{fig:restart} draws the uninterrupted band and the two resumed bands on the $(s, d)$ plane.
+Figure~\ref{fig:restartfmt} is the energy surface of each resume route.
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{Uninterrupted and resumed bands.
-The left panel is the distance off the chord between the end images.
-The right panel is the energy along that chord.}
+\caption{Uninterrupted and resumed bands on the $(s, d)$ plane, with the energy beside the map.}
 \label{fig:restart}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
-\caption{Energy of the uninterrupted band, the round trip and the six-decimal resume, along the same chord.}
+\caption{Energy surface of the uninterrupted band, the POSCAR resume and the ASE resume.}
 \label{fig:restartfmt}
 \end{figure}
 \section{Multi-language fidelity}
@@ -347,6 +359,7 @@ The C++ RAII header is the path for in-process drivers that cannot embed a Pytho
 \texttt{positions\_dlpack}, \texttt{velocities\_dlpack}, \texttt{forces\_dlpack}, \texttt{atom\_energies\_dlpack}, \texttt{masses\_dlpack} and \texttt{atom\_ids\_dlpack} borrow those arrays as DLPack views.
 The C ABI exports the same fields as \texttt{rkr\_frame\_*\_dlpack} and \texttt{rkr\_frame\_builder\_*\_dlpack}.
 The Python \texttt{xyz}, \texttt{vel} and \texttt{frc} getters allocate a fresh NumPy array from that storage, and that array implements \texttt{\_\_dlpack\_\_}.
+We measure that exchange against a copy.
 NumPy \texttt{from\_dlpack} and PyTorch \texttt{from\_dlpack} share that array's pointer.
 JAX \texttt{from\_dlpack} does not share the pointer on this build.
 CuPy did not import.
@@ -373,7 +386,7 @@ Quartiles are type 7.}
 
 The reproduction command is \texttt{python3 paper/cpc/scripts/bench\_dlpack.py} at commit \texttt{\dlpackCommit} of \url{https://github.com/lode-org/readcon-core}.
 \section{Availability}
-\label{sec:availability} Source, headers, and language packages are versioned together at 0.14.9: the crate on crates.io and wheels on PyPI (\texttt{readcon} and \texttt{readcon-chemfiles}).
+\label{sec:availability} One version number covers this release of the crate and the wheels (\texttt{readcon} and \texttt{readcon-chemfiles}).
 Julia \texttt{Project.toml} and the Fortran fpm package live in this repository and bind a prebuilt or locally built \texttt{libreadcon\_core}; they are not registry packages.
 CMake FetchContent and the in-tree Meson wrap-file point at the slim cxx tarball on the matching GitHub Release.
 Cite the software through \texttt{CITATION.cff} \cite{smithSoftwareCitationPrinciples2016}.

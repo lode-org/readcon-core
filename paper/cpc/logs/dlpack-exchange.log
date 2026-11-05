@@ -1,0 +1,297 @@
+date_utc 2026-11-05T00:23:33Z
+uname_m x86_64
+nproc 8
+cpu_model Intel(R) Xeon(R) Processor
+clone_url https://github.com/lode-org/readcon-core
+head 0cafb24ffb4b53c7f9749cd4a27a7334f4ebb92a
+git_status_begin
+(clean)
+git_status_end
+pwd .
+tmpdir paper/cpc/logs
+command python3 paper/cpc/scripts/bench_dlpack.py
+readcon_file readcon
+numpy 2.5.4
+sizes 32 128 512 2048 8192 32768
+repeats 8
+warmup 1
+consumer torch 2.15.0+cpu
+consumer jax 0.12.0.1
+consumer cupy import failed: ModuleNotFoundError
+parsed n=32 atoms=32
+parsed n=128 atoms=128
+parsed n=512 atoms=512
+parsed n=2048 atoms=2048
+parsed n=8192 atoms=8192
+parsed n=32768 atoms=32768
+sample materialise n=32 rep=0 seconds=1.568999778e-06
+sample materialise n=32 rep=1 seconds=8.030001482e-07
+sample materialise n=32 rep=2 seconds=3.540003490e-07
+sample materialise n=32 rep=3 seconds=3.599998308e-07
+sample materialise n=32 rep=4 seconds=3.320001269e-07
+sample materialise n=32 rep=5 seconds=2.299998414e-07
+sample materialise n=32 rep=6 seconds=2.010001481e-07
+sample materialise n=32 rep=7 seconds=2.259998837e-07
+summary materialise n=32 n_rep=8 median=3.430002380e-07 q1=2.289998520e-07 q3=4.707499102e-07 iqr=2.417500582e-07
+sample materialise n=128 rep=0 seconds=4.720000106e-07
+sample materialise n=128 rep=1 seconds=4.360003913e-07
+sample materialise n=128 rep=2 seconds=2.629999472e-07
+sample materialise n=128 rep=3 seconds=2.699998731e-07
+sample materialise n=128 rep=4 seconds=2.580000000e-07
+sample materialise n=128 rep=5 seconds=2.350002433e-07
+sample materialise n=128 rep=6 seconds=2.340002538e-07
+sample materialise n=128 rep=7 seconds=2.619999577e-07
+summary materialise n=128 n_rep=8 median=2.624999524e-07 q1=2.522500608e-07 q3=3.115000027e-07 iqr=5.924994184e-08
+sample materialise n=512 rep=0 seconds=4.950002221e-07
+sample materialise n=512 rep=1 seconds=3.519999154e-07
+sample materialise n=512 rep=2 seconds=3.600002856e-07
+sample materialise n=512 rep=3 seconds=2.830001904e-07
+sample materialise n=512 rep=4 seconds=2.789997779e-07
+sample materialise n=512 rep=5 seconds=2.799997674e-07
+sample materialise n=512 rep=6 seconds=2.819997462e-07
+sample materialise n=512 rep=7 seconds=3.390000529e-07
+summary materialise n=512 n_rep=8 median=3.110001217e-07 q1=2.814997515e-07 q3=3.540000080e-07 iqr=7.250025646e-08
+sample materialise n=2048 rep=0 seconds=1.243000042e-06
+sample materialise n=2048 rep=1 seconds=1.216000328e-06
+sample materialise n=2048 rep=2 seconds=1.212999905e-06
+sample materialise n=2048 rep=3 seconds=1.197000074e-06
+sample materialise n=2048 rep=4 seconds=1.159000021e-06
+sample materialise n=2048 rep=5 seconds=1.181000243e-06
+sample materialise n=2048 rep=6 seconds=1.213999894e-06
+sample materialise n=2048 rep=7 seconds=1.183000222e-06
+summary materialise n=2048 n_rep=8 median=1.204999990e-06 q1=1.182500228e-06 q3=1.214500003e-06 iqr=3.199977527e-08
+sample materialise n=8192 rep=0 seconds=3.928999831e-06
+sample materialise n=8192 rep=1 seconds=3.907000064e-06
+sample materialise n=8192 rep=2 seconds=3.854000170e-06
+sample materialise n=8192 rep=3 seconds=3.981999726e-06
+sample materialise n=8192 rep=4 seconds=3.868000022e-06
+sample materialise n=8192 rep=5 seconds=3.912000011e-06
+sample materialise n=8192 rep=6 seconds=3.842999831e-06
+sample materialise n=8192 rep=7 seconds=3.887999810e-06
+summary materialise n=8192 n_rep=8 median=3.897499937e-06 q1=3.864500059e-06 q3=3.916249966e-06 iqr=5.174990747e-08
+sample materialise n=32768 rep=0 seconds=2.097600009e-05
+sample materialise n=32768 rep=1 seconds=1.654400012e-05
+sample materialise n=32768 rep=2 seconds=1.625499999e-05
+sample materialise n=32768 rep=3 seconds=1.608399998e-05
+sample materialise n=32768 rep=4 seconds=1.624800007e-05
+sample materialise n=32768 rep=5 seconds=1.595300000e-05
+sample materialise n=32768 rep=6 seconds=1.616000009e-05
+sample materialise n=32768 rep=7 seconds=1.595300000e-05
+summary materialise n=32768 n_rep=8 median=1.620400008e-05 q1=1.605124999e-05 q3=1.632725002e-05 iqr=2.760000370e-07
+sample numpy from_dlpack n=32 rep=0 seconds=4.676999652e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=0 seconds=2.430699988e-05 ptr_equal=1
+sample jax from_dlpack n=32 rep=0 seconds=2.071230001e-04 ptr_equal=0
+sample numpy copy n=32 rep=0 seconds=1.046300031e-05 ptr_equal=0
+sample numpy from_dlpack n=32 rep=1 seconds=5.047999821e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=1 seconds=8.479000371e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=1 seconds=1.004490000e-04 ptr_equal=0
+sample numpy copy n=32 rep=1 seconds=1.921000148e-06 ptr_equal=0
+sample numpy from_dlpack n=32 rep=2 seconds=1.820999842e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=2 seconds=4.011999863e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=2 seconds=6.209399999e-05 ptr_equal=0
+sample numpy copy n=32 rep=2 seconds=1.241000064e-06 ptr_equal=0
+sample numpy from_dlpack n=32 rep=3 seconds=1.588000032e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=3 seconds=3.783000011e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=3 seconds=6.075299962e-05 ptr_equal=0
+sample numpy copy n=32 rep=3 seconds=1.252999937e-06 ptr_equal=0
+sample numpy from_dlpack n=32 rep=4 seconds=1.562000307e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=4 seconds=3.317999926e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=4 seconds=5.146600006e-05 ptr_equal=0
+sample numpy copy n=32 rep=4 seconds=1.094000254e-06 ptr_equal=0
+sample numpy from_dlpack n=32 rep=5 seconds=1.404000159e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=5 seconds=3.135000043e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=5 seconds=4.907799985e-05 ptr_equal=0
+sample numpy copy n=32 rep=5 seconds=9.639998098e-07 ptr_equal=0
+sample numpy from_dlpack n=32 rep=6 seconds=1.406000138e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=6 seconds=3.076000212e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=6 seconds=4.722199992e-05 ptr_equal=0
+sample numpy copy n=32 rep=6 seconds=9.979999049e-07 ptr_equal=0
+sample numpy from_dlpack n=32 rep=7 seconds=1.341999905e-06 ptr_equal=1
+sample torch from_dlpack n=32 rep=7 seconds=2.906000191e-06 ptr_equal=1
+sample jax from_dlpack n=32 rep=7 seconds=4.765199992e-05 ptr_equal=0
+sample numpy copy n=32 rep=7 seconds=9.489999684e-07 ptr_equal=0
+summary numpy copy n=32 n_rep=8 median=1.167500159e-06 q1=9.894998811e-07 q3=1.419999990e-06 iqr=4.305001085e-07
+summary numpy from_dlpack n=32 n_rep=8 median=1.575000169e-06 q1=1.405500143e-06 q3=2.534999794e-06 iqr=1.129499651e-06
+summary torch from_dlpack n=32 n_rep=8 median=3.550499969e-06 q1=3.120250085e-06 q3=5.128749990e-06 iqr=2.008499905e-06
+summary jax from_dlpack n=32 n_rep=8 median=5.610949984e-05 q1=4.872149987e-05 q3=7.168274999e-05 iqr=2.296125012e-05
+sample numpy from_dlpack n=128 rep=0 seconds=3.557000127e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=0 seconds=1.613000040e-05 ptr_equal=1
+sample jax from_dlpack n=128 rep=0 seconds=1.327200002e-04 ptr_equal=0
+sample numpy copy n=128 rep=0 seconds=2.929999937e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=1 seconds=2.289999884e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=1 seconds=5.357999726e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=1 seconds=8.281600003e-05 ptr_equal=0
+sample numpy copy n=128 rep=1 seconds=1.924000117e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=2 seconds=1.784999768e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=2 seconds=4.061999789e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=2 seconds=6.236799982e-05 ptr_equal=0
+sample numpy copy n=128 rep=2 seconds=1.697999778e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=3 seconds=1.639999937e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=3 seconds=3.722000201e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=3 seconds=5.915999964e-05 ptr_equal=0
+sample numpy copy n=128 rep=3 seconds=1.493000127e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=4 seconds=1.508999958e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=4 seconds=3.347000074e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=4 seconds=4.987599959e-05 ptr_equal=0
+sample numpy copy n=128 rep=4 seconds=1.317000169e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=5 seconds=1.336000423e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=5 seconds=3.027999810e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=5 seconds=5.086000010e-05 ptr_equal=0
+sample numpy copy n=128 rep=5 seconds=1.152999630e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=6 seconds=1.477999831e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=6 seconds=3.256000127e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=6 seconds=4.779800020e-05 ptr_equal=0
+sample numpy copy n=128 rep=6 seconds=1.326000074e-06 ptr_equal=0
+sample numpy from_dlpack n=128 rep=7 seconds=1.359999715e-06 ptr_equal=1
+sample torch from_dlpack n=128 rep=7 seconds=3.095000011e-06 ptr_equal=1
+sample jax from_dlpack n=128 rep=7 seconds=5.865000003e-05 ptr_equal=0
+sample numpy copy n=128 rep=7 seconds=1.313999746e-06 ptr_equal=0
+summary numpy copy n=128 n_rep=8 median=1.409500101e-06 q1=1.316250064e-06 q3=1.754499863e-06 iqr=4.382497991e-07
+summary numpy from_dlpack n=128 n_rep=8 median=1.574499947e-06 q1=1.448499802e-06 q3=1.911249797e-06 iqr=4.627499948e-07
+summary torch from_dlpack n=128 n_rep=8 median=3.534500138e-06 q1=3.215750098e-06 q3=4.385999773e-06 iqr=1.170249675e-06
+summary jax from_dlpack n=128 n_rep=8 median=5.890499983e-05 q1=5.061399997e-05 q3=6.747999987e-05 iqr=1.686599990e-05
+sample numpy from_dlpack n=512 rep=0 seconds=3.768000170e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=0 seconds=1.434099977e-05 ptr_equal=1
+sample jax from_dlpack n=512 rep=0 seconds=1.648160001e-04 ptr_equal=0
+sample numpy copy n=512 rep=0 seconds=5.011999747e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=1 seconds=3.417000244e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=1 seconds=6.629000382e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=1 seconds=1.105320002e-04 ptr_equal=0
+sample numpy copy n=512 rep=1 seconds=4.335999620e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=2 seconds=2.884999958e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=2 seconds=4.039000032e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=2 seconds=6.737700005e-05 ptr_equal=0
+sample numpy copy n=512 rep=2 seconds=4.245999662e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=3 seconds=2.603999746e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=3 seconds=3.510999704e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=3 seconds=6.479300009e-05 ptr_equal=0
+sample numpy copy n=512 rep=3 seconds=2.307000159e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=4 seconds=2.328999926e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=4 seconds=3.356999969e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=4 seconds=5.521300000e-05 ptr_equal=0
+sample numpy copy n=512 rep=4 seconds=1.606999831e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=5 seconds=1.463999979e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=5 seconds=3.235999884e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=5 seconds=5.002599983e-05 ptr_equal=0
+sample numpy copy n=512 rep=5 seconds=2.593999852e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=6 seconds=1.413000064e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=6 seconds=3.484999979e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=6 seconds=5.899500002e-05 ptr_equal=0
+sample numpy copy n=512 rep=6 seconds=3.741999990e-06 ptr_equal=0
+sample numpy from_dlpack n=512 rep=7 seconds=3.195999852e-06 ptr_equal=1
+sample torch from_dlpack n=512 rep=7 seconds=3.500999810e-06 ptr_equal=1
+sample jax from_dlpack n=512 rep=7 seconds=5.672099996e-05 ptr_equal=0
+sample numpy copy n=512 rep=7 seconds=3.062999895e-06 ptr_equal=0
+summary numpy copy n=512 n_rep=8 median=3.402499942e-06 q1=2.522249929e-06 q3=4.268499652e-06 iqr=1.746249723e-06
+summary numpy from_dlpack n=512 n_rep=8 median=2.744499852e-06 q1=2.112749939e-06 q3=3.251249950e-06 iqr=1.138500011e-06
+summary torch from_dlpack n=512 n_rep=8 median=3.505999757e-06 q1=3.452999977e-06 q3=4.686500120e-06 iqr=1.233500143e-06
+summary jax from_dlpack n=512 n_rep=8 median=6.189400005e-05 q1=5.634399997e-05 q3=7.816575010e-05 iqr=2.182175012e-05
+sample numpy from_dlpack n=2048 rep=0 seconds=1.742399991e-05 ptr_equal=1
+sample torch from_dlpack n=2048 rep=0 seconds=1.328400003e-05 ptr_equal=1
+sample jax from_dlpack n=2048 rep=0 seconds=1.474289998e-04 ptr_equal=0
+sample numpy copy n=2048 rep=0 seconds=6.573000064e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=1 seconds=4.189999800e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=1 seconds=6.586999916e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=1 seconds=1.073270000e-04 ptr_equal=0
+sample numpy copy n=2048 rep=1 seconds=6.856999789e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=2 seconds=3.946999641e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=2 seconds=6.479000149e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=2 seconds=8.513200009e-05 ptr_equal=0
+sample numpy copy n=2048 rep=2 seconds=3.820000074e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=3 seconds=2.804999895e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=3 seconds=3.700999969e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=3 seconds=7.383100001e-05 ptr_equal=0
+sample numpy copy n=2048 rep=3 seconds=6.702000064e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=4 seconds=2.788000074e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=4 seconds=4.214999990e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=4 seconds=8.089299990e-05 ptr_equal=0
+sample numpy copy n=2048 rep=4 seconds=3.156000275e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=5 seconds=2.004000180e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=5 seconds=5.363000128e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=5 seconds=6.770200025e-05 ptr_equal=0
+sample numpy copy n=2048 rep=5 seconds=5.475000307e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=6 seconds=3.071000265e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=6 seconds=4.099999842e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=6 seconds=9.612599979e-05 ptr_equal=0
+sample numpy copy n=2048 rep=6 seconds=5.497000075e-06 ptr_equal=0
+sample numpy from_dlpack n=2048 rep=7 seconds=2.721000328e-06 ptr_equal=1
+sample torch from_dlpack n=2048 rep=7 seconds=4.193000223e-06 ptr_equal=1
+sample jax from_dlpack n=2048 rep=7 seconds=5.975300019e-05 ptr_equal=0
+sample numpy copy n=2048 rep=7 seconds=8.409000202e-06 ptr_equal=0
+summary numpy copy n=2048 n_rep=8 median=6.035000069e-06 q1=5.061250249e-06 q3=6.740749996e-06 iqr=1.679499746e-06
+summary numpy from_dlpack n=2048 n_rep=8 median=2.938000080e-06 q1=2.771250138e-06 q3=4.007749681e-06 iqr=1.236499543e-06
+summary torch from_dlpack n=2048 n_rep=8 median=4.789000059e-06 q1=4.169750127e-06 q3=6.506000091e-06 iqr=2.336249963e-06
+summary jax from_dlpack n=2048 n_rep=8 median=8.301250000e-05 q1=7.229875007e-05 q3=9.892624985e-05 iqr=2.662749978e-05
+sample numpy from_dlpack n=8192 rep=0 seconds=5.158000022e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=0 seconds=1.376600039e-05 ptr_equal=1
+sample jax from_dlpack n=8192 rep=0 seconds=1.603240003e-04 ptr_equal=0
+sample numpy copy n=8192 rep=0 seconds=9.725999917e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=1 seconds=3.669999842e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=1 seconds=7.275999906e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=1 seconds=1.088389999e-04 ptr_equal=0
+sample numpy copy n=8192 rep=1 seconds=7.611999990e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=2 seconds=2.592000328e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=2 seconds=5.676999990e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=2 seconds=1.111580000e-04 ptr_equal=0
+sample numpy copy n=8192 rep=2 seconds=6.764000318e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=3 seconds=2.753999979e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=3 seconds=7.040000128e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=3 seconds=9.983200016e-05 ptr_equal=0
+sample numpy copy n=8192 rep=3 seconds=6.819000191e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=4 seconds=2.452999979e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=4 seconds=4.835000254e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=4 seconds=8.576700020e-05 ptr_equal=0
+sample numpy copy n=8192 rep=4 seconds=7.289999758e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=5 seconds=2.086000222e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=5 seconds=4.479000381e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=5 seconds=8.012399985e-05 ptr_equal=0
+sample numpy copy n=8192 rep=5 seconds=6.481000128e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=6 seconds=1.925000106e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=6 seconds=4.786999853e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=6 seconds=7.616999983e-05 ptr_equal=0
+sample numpy copy n=8192 rep=6 seconds=8.475999948e-06 ptr_equal=0
+sample numpy from_dlpack n=8192 rep=7 seconds=2.004000180e-06 ptr_equal=1
+sample torch from_dlpack n=8192 rep=7 seconds=4.296000043e-06 ptr_equal=1
+sample jax from_dlpack n=8192 rep=7 seconds=7.548799977e-05 ptr_equal=0
+sample numpy copy n=8192 rep=7 seconds=8.390999938e-06 ptr_equal=0
+summary numpy copy n=8192 n_rep=8 median=7.450999874e-06 q1=6.805250223e-06 q3=8.412249940e-06 iqr=1.606999717e-06
+summary numpy from_dlpack n=8192 n_rep=8 median=2.522500154e-06 q1=2.065500212e-06 q3=2.982999945e-06 iqr=9.174997331e-07
+summary torch from_dlpack n=8192 n_rep=8 median=5.256000122e-06 q1=4.709999985e-06 q3=7.099000072e-06 iqr=2.389000088e-06
+summary jax from_dlpack n=8192 n_rep=8 median=9.279950018e-05 q1=7.913549985e-05 q3=1.094187500e-04 iqr=3.028325011e-05
+sample numpy from_dlpack n=32768 rep=0 seconds=8.802000139e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=0 seconds=1.721900026e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=0 seconds=2.625929997e-04 ptr_equal=0
+sample numpy copy n=32768 rep=0 seconds=4.263900018e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=1 seconds=6.579000001e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=1 seconds=1.215399971e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=1 seconds=2.870030003e-04 ptr_equal=0
+sample numpy copy n=32768 rep=1 seconds=4.074600020e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=2 seconds=6.742999631e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=2 seconds=1.562299985e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=2 seconds=2.037290001e-04 ptr_equal=0
+sample numpy copy n=32768 rep=2 seconds=3.476999973e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=3 seconds=4.880000233e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=3 seconds=1.097699987e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=3 seconds=1.656310001e-04 ptr_equal=0
+sample numpy copy n=32768 rep=3 seconds=5.029300019e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=4 seconds=8.868999885e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=4 seconds=1.326299980e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=4 seconds=1.796840002e-04 ptr_equal=0
+sample numpy copy n=32768 rep=4 seconds=3.425499972e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=5 seconds=5.227000202e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=5 seconds=1.050600031e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=5 seconds=2.095949999e-04 ptr_equal=0
+sample numpy copy n=32768 rep=5 seconds=3.529300011e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=6 seconds=5.558999874e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=6 seconds=1.073800013e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=6 seconds=1.650999998e-04 ptr_equal=0
+sample numpy copy n=32768 rep=6 seconds=3.638399994e-05 ptr_equal=0
+sample numpy from_dlpack n=32768 rep=7 seconds=6.185000075e-06 ptr_equal=1
+sample torch from_dlpack n=32768 rep=7 seconds=1.125499966e-05 ptr_equal=1
+sample jax from_dlpack n=32768 rep=7 seconds=1.591790001e-04 ptr_equal=0
+sample numpy copy n=32768 rep=7 seconds=3.369900014e-05 ptr_equal=0
+summary numpy copy n=32768 n_rep=8 median=3.583850003e-05 q1=3.464124973e-05 q3=4.121925019e-05 iqr=6.578000466e-06
+summary numpy from_dlpack n=32768 n_rep=8 median=6.382000038e-06 q1=5.475999956e-06 q3=7.257749758e-06 iqr=1.781749802e-06
+summary torch from_dlpack n=32768 n_rep=8 median=1.170449968e-05 q1=1.091724994e-05 q3=1.385299981e-05 iqr=2.935749876e-06
+summary jax from_dlpack n=32768 n_rep=8 median=1.917065001e-04 q1=1.654982500e-04 q3=2.228444998e-04 iqr=5.734624983e-05
+exit_code 0

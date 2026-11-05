@@ -1,0 +1,95 @@
+date_utc 2026-11-05T00:23:15Z
+uname_m x86_64
+nproc 8
+cpu_model Intel(R) Xeon(R) Processor
+clone_url https://github.com/lode-org/readcon-core
+head 0cafb24ffb4b53c7f9749cd4a27a7334f4ebb92a
+baseline_commit ac4f437989dea5aad9f75ff045af09ccf7127eba
+baseline_role readcon
+git_status_begin
+(clean)
+git_status_end
+pwd .
+tmpdir paper/cpc/logs
+command python3 paper/cpc/scripts/bench_readers.py
+frames 400
+repeats 8
+warmup 1
+numpy_percentile method=linear type=7
+arm baseline format=con
+arm ase_eon format=con
+arm chemfiles format=xyz
+arm h5py format=h5
+arm mdanalysis_h5md format=h5
+arm ovito format=xyz
+arm pymatgen format=xyz
+sample arm=baseline rep=0 seconds=1.982674000e-02
+sample arm=ase_eon rep=0 seconds=1.177067370e-01
+sample arm=chemfiles rep=0 seconds=2.264935300e-02
+sample arm=h5py rep=0 seconds=2.367203000e-03
+sample arm=mdanalysis_h5md rep=0 seconds=2.023503830e-01
+sample arm=ovito rep=0 seconds=2.662670700e-02
+sample arm=pymatgen rep=0 seconds=5.492831750e-01
+sample arm=baseline rep=1 seconds=1.865843300e-02
+sample arm=ase_eon rep=1 seconds=1.155612600e-01
+sample arm=chemfiles rep=1 seconds=2.289014000e-02
+sample arm=h5py rep=1 seconds=2.427872000e-03
+sample arm=mdanalysis_h5md rep=1 seconds=2.082280630e-01
+sample arm=ovito rep=1 seconds=2.970551500e-02
+sample arm=pymatgen rep=1 seconds=5.852309770e-01
+sample arm=baseline rep=2 seconds=1.884945600e-02
+sample arm=ase_eon rep=2 seconds=1.195014330e-01
+sample arm=chemfiles rep=2 seconds=2.282199400e-02
+sample arm=h5py rep=2 seconds=2.346112000e-03
+sample arm=mdanalysis_h5md rep=2 seconds=2.050263560e-01
+sample arm=ovito rep=2 seconds=2.631926900e-02
+sample arm=pymatgen rep=2 seconds=5.325748630e-01
+sample arm=baseline rep=3 seconds=2.026875800e-02
+sample arm=ase_eon rep=3 seconds=1.187707970e-01
+sample arm=chemfiles rep=3 seconds=2.316253100e-02
+sample arm=h5py rep=3 seconds=2.902249000e-03
+sample arm=mdanalysis_h5md rep=3 seconds=2.193840910e-01
+sample arm=ovito rep=3 seconds=3.354564900e-02
+sample arm=pymatgen rep=3 seconds=5.858145700e-01
+sample arm=baseline rep=4 seconds=1.979182600e-02
+sample arm=ase_eon rep=4 seconds=1.157788580e-01
+sample arm=chemfiles rep=4 seconds=2.273941700e-02
+sample arm=h5py rep=4 seconds=2.454396000e-03
+sample arm=mdanalysis_h5md rep=4 seconds=2.081833730e-01
+sample arm=ovito rep=4 seconds=2.730211200e-02
+sample arm=pymatgen rep=4 seconds=5.511279900e-01
+sample arm=baseline rep=5 seconds=2.108050500e-02
+sample arm=ase_eon rep=5 seconds=1.175768000e-01
+sample arm=chemfiles rep=5 seconds=2.290494900e-02
+sample arm=h5py rep=5 seconds=2.524730000e-03
+sample arm=mdanalysis_h5md rep=5 seconds=2.107149820e-01
+sample arm=ovito rep=5 seconds=2.694371200e-02
+sample arm=pymatgen rep=5 seconds=5.729084070e-01
+sample arm=baseline rep=6 seconds=1.760027500e-02
+sample arm=ase_eon rep=6 seconds=1.174797540e-01
+sample arm=chemfiles rep=6 seconds=2.251309900e-02
+sample arm=h5py rep=6 seconds=2.410748000e-03
+sample arm=mdanalysis_h5md rep=6 seconds=2.051691050e-01
+sample arm=ovito rep=6 seconds=2.650731100e-02
+sample arm=pymatgen rep=6 seconds=5.751793120e-01
+sample arm=baseline rep=7 seconds=1.851901500e-02
+sample arm=ase_eon rep=7 seconds=1.151950240e-01
+sample arm=chemfiles rep=7 seconds=2.260512100e-02
+sample arm=h5py rep=7 seconds=2.391817000e-03
+sample arm=mdanalysis_h5md rep=7 seconds=2.069413630e-01
+sample arm=ovito rep=7 seconds=2.868659500e-02
+sample arm=pymatgen rep=7 seconds=5.433578470e-01
+summary arm=baseline n_rep=8 median=1.932064100e-02 q1=1.862357850e-02 q3=1.993724450e-02 iqr=1.313666000e-03
+summary arm=ase_eon n_rep=8 median=1.175282770e-01 q1=1.157244585e-01 q3=1.179727520e-01 iqr=2.248293500e-03
+summary arm=chemfiles n_rep=8 median=2.278070550e-02 q1=2.263829500e-02 q3=2.289384225e-02 iqr=2.555472500e-04
+summary arm=h5py n_rep=8 median=2.419310000e-03 q1=2.385663500e-03 q3=2.471979500e-03 iqr=8.631600019e-05
+summary arm=mdanalysis_h5md n_rep=8 median=2.075623680e-01 q1=2.051334178e-01 q3=2.088497928e-01 iqr=3.716375000e-03
+summary arm=ovito n_rep=8 median=2.712291200e-02 q1=2.659685800e-02 q3=2.894132500e-02 iqr=2.344467000e-03
+summary arm=pymatgen n_rep=8 median=5.620181985e-01 q1=5.478018430e-01 q3=5.776922283e-01 iqr=2.989038525e-02
+summary ratio=ase_eon n_rep=8 median=1.649505418e-01 q1=1.600052474e-01 q3=1.707270627e-01 iqr=1.072181532e-02
+summary ratio=chemfiles n_rep=8 median=8.481545254e-01 q1=8.182122819e-01 q3=8.751444155e-01 iqr=5.693213352e-02
+summary ratio=h5py n_rep=8 median=7.888496571e+00 q1=7.589011291e+00 q3=8.135272556e+00 iqr=5.462612654e-01
+summary ratio=mdanalysis_h5md n_rep=8 median=9.216305807e-02 q1=8.957661454e-02 q3=9.579745271e-02 iqr=6.220838169e-03
+summary ratio=ovito n_rep=8 median=6.900813853e-01 q1=6.412008872e-01 q3=7.298440602e-01 iqr=8.864317295e-02
+summary ratio=pymatgen n_rep=8 median=3.499616810e-02 q1=3.353244652e-02 q3=3.595753131e-02 iqr=2.425084786e-03
+exit_code 0

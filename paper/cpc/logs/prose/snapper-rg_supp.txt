@@ -10,7 +10,8 @@
 \end{frontmatter}
 
 \section{Further figures}
-\label{sec:figures} Figure~\ref{fig:layout} is the CON frame beside the fields a version 1 reader keeps.
+\label{sec:figures} We place the remaining panels in this supplement.
+Figure~\ref{fig:layout} is the CON frame beside the fields a version 1 reader keeps.
 Figure~\ref{fig:pipeline} is the three-step parse.
 Figure~\ref{fig:matrix} marks which format pairs keep a displacement.
 Figure~\ref{fig:threads} is the committed thread sweep.
@@ -46,7 +47,7 @@ Figure~\ref{fig:mpistrong} and Figure~\ref{fig:mpiweak} are the committed MPI sw
 \centering
 \includegraphics[width=\textwidth]{figures/generated/matrix.pdf}
 \caption{Format pairs from the committed failure matrix.
-A full bar marks a numeric displacement.}
+A full bar is a numeric displacement.}
 \label{fig:matrix}
 \end{figure}
 \begin{figure}[tbp]
