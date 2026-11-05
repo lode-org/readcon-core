@@ -724,11 +724,12 @@ Both stores keep all 40 frames.
 The log is \path{paper/cpc/logs/db.log}.
 
 \input{figures/generated/mpi_macros}
+
 We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches at each count.
-\mpiSharedLine
-\mpiScatterLine
-\mpiCompareLine
-\mpiScatterIqrLine
+\mpiSharedLine.
+\mpiScatterLine.
+\mpiCompareLine.
+\mpiScatterIqrLine.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
 In scatter mode the waiting ranks sleep on a file lock, which needs a filesystem with coherent flock across the ranks, and where flock is not coherent they fall back to the blocking broadcast.
 The log is \path{paper/cpc/logs/mpi.log}.
@@ -736,8 +737,7 @@ The fallback log is \path{paper/cpc/logs/mpi-fallback.log}.
 
 \input{figures/generated/mpi_host_table}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{\textbf{Distributed read on this host.}
-The marker is the type 7 median of \mpiRepeats{} serial launches and the whisker is the type 7 interquartile range. Every repeat is kept.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-host} \end{figure}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn by \path{scripts/plot_restored.py} from the records under \path{paper/cpc/data}.

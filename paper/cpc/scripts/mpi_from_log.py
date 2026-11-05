@@ -62,16 +62,16 @@ def main() -> int:
         unit = "rank" if ranks == 1 else "ranks"
         return f"{fmt(stats[(mode, ranks)][0])}~s at {ranks} {unit}"
 
-    shared_line = "In shared mode the median is " + ", ".join(place("shared", ranks) for ranks in RANKS[:-1]) + " and " + place("shared", 8) + "."
-    scatter_line = "In scatter mode the median is " + ", ".join(place("scatter", ranks) for ranks in RANKS[:-1]) + " and " + place("scatter", 8) + "."
+    shared_line = "In shared mode the median is " + ", ".join(place("shared", ranks) for ranks in RANKS[:-1]) + " and " + place("shared", 8)
+    scatter_line = "In scatter mode the median is " + ", ".join(place("scatter", ranks) for ranks in RANKS[:-1]) + " and " + place("scatter", 8)
     if shared_eight < shared_four and scatter_eight < scatter_four:
-        compare = "Eight ranks are faster than four in both modes."
+        compare = "Eight ranks are faster than four in both modes"
     else:
         compare = (
-            f"In shared mode the eight-rank median is {fmt(shared_eight)}~s and the four-rank median is {fmt(shared_four)}~s. "
-            f"In scatter mode the eight-rank median is {fmt(scatter_eight)}~s and the four-rank median is {fmt(scatter_four)}~s."
+            f"In shared mode the eight-rank median is {fmt(shared_eight)}~s and the four-rank median is {fmt(shared_four)}~s, "
+            f"and in scatter mode the eight-rank median is {fmt(scatter_eight)}~s and the four-rank median is {fmt(scatter_four)}~s"
         )
-    iqr_line = f"The scatter-mode interquartile range at eight ranks is {fmt(scatter_iqr)}~s."
+    iqr_line = f"The scatter-mode interquartile range at eight ranks is {fmt(scatter_iqr)}~s"
     lines = [
         "% Generated from paper/cpc/logs/mpi.log by scripts/mpi_from_log.py.",
         f"\\newcommand{{\\mpiRepeats}}{{{repeats}}}",
