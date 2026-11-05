@@ -1043,21 +1043,29 @@ where
 /// Slot allocation and the worker parse, timed apart.
 ///
 /// The first `f64` is the slot allocation. The second is the worker
-/// parse. `workers < 2` still reserves the slot vector before the
-/// calling thread fills it.
+/// parse wall. The third is the sum of per-chunk parse times, and the
+/// fourth is the slowest chunk. `workers < 2` still reserves the slot
+/// vector before the calling thread fills it, and that one chunk's
+/// time is both the sum and the max.
 #[cfg(feature = "parallel")]
 fn parse_into_slots_timed<F>(
     len: usize,
     boundaries: &[usize],
     workers: usize,
     parse_span: F,
-) -> (Vec<Result<types::ConFrame, error::ParseError>>, f64, f64)
+) -> (
+    Vec<Result<types::ConFrame, error::ParseError>>,
+    f64,
+    f64,
+    f64,
+    f64,
+)
 where
     F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
 {
     let n = boundaries.len();
     if n == 0 {
-        return (Vec::new(), 0.0, 0.0);
+        return (Vec::new(), 0.0, 0.0, 0.0, 0.0);
     }
     if workers < 2 {
         let t_alloc = std::time::Instant::now();
@@ -1067,13 +1075,19 @@ where
         for i in 0..n {
             slots.push(parse_span(boundaries[i], span_end(boundaries, i, len)));
         }
-        return (slots, alloc_s, t_work.elapsed().as_secs_f64());
+        let work_s = t_work.elapsed().as_secs_f64();
+        return (slots, alloc_s, work_s, work_s, work_s);
     }
     let t_alloc = std::time::Instant::now();
     let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
         (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
     let alloc_s = t_alloc.elapsed().as_secs_f64();
     let chunk = n.div_ceil(workers).max(1);
+    let n_chunks = n.div_ceil(chunk);
+    // One store per chunk. Chunk `i` is the only writer of slot `i`.
+    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..n_chunks)
+        .map(|_| std::sync::atomic::AtomicU64::new(0))
+        .collect();
     let t_work = std::time::Instant::now();
     {
         use rayon::prelude::*;
@@ -1081,14 +1095,26 @@ where
             .par_chunks_mut(chunk)
             .enumerate()
             .for_each(|(chunk_index, part)| {
+                let t_chunk = std::time::Instant::now();
                 let base = chunk_index * chunk;
                 for (offset, slot) in part.iter_mut().enumerate() {
                     let i = base + offset;
                     slot.write(parse_span(boundaries[i], span_end(boundaries, i, len)));
                 }
+                chunk_ns[chunk_index].store(
+                    t_chunk.elapsed().as_nanos() as u64,
+                    std::sync::atomic::Ordering::Relaxed,
+                );
             });
     }
     let work_s = t_work.elapsed().as_secs_f64();
+    let mut worker_sum_s = 0.0_f64;
+    let mut worker_max_s = 0.0_f64;
+    for cell in &chunk_ns {
+        let seconds = cell.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
+        worker_sum_s += seconds;
+        worker_max_s = worker_max_s.max(seconds);
+    }
     // Each index in `0..n` was written once. `par_chunks_mut` hands out
     // disjoint slices, and the last slice is shorter when `n` does not
     // divide the worker count.
@@ -1100,7 +1126,7 @@ where
             slots.capacity(),
         )
     };
-    (slots, alloc_s, work_s)
+    (slots, alloc_s, work_s, worker_sum_s, worker_max_s)
 }
 
 #[cfg(feature = "parallel")]
@@ -1130,32 +1156,82 @@ fn parse_text_span(
 }
 
 #[cfg(feature = "parallel")]
+struct TimedParse {
+    slots: Vec<Result<types::ConFrame, error::ParseError>>,
+    pool_s: f64,
+    scan_s: f64,
+    slot_alloc_s: f64,
+    worker_parse_s: f64,
+    worker_sum_s: f64,
+    worker_max_s: f64,
+}
+
+/// Frame starts when every frame occupies the same number of bytes.
+///
+/// The first frame sets the span. Each later frame is skipped on its
+/// own slice, on `workers` threads. A span that does not tile the
+/// buffer, or a skip that does not land on the next span, returns
+/// `None` and the caller keeps the serial walk. The starts are
+/// `0, span, 2*span, ...` and match [`collect_frame_starts`].
+#[cfg(feature = "parallel")]
+fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
+    if workers < 2 || bytes.len() < 2 {
+        return None;
+    }
+    let mut first = ConFrameIterator::from_bytes(bytes);
+    match first.forward_fast() {
+        Some(Ok(())) => {}
+        _ => return None,
+    }
+    let span = first.lines.pos;
+    if span < 2 || bytes.len() % span != 0 {
+        return None;
+    }
+    let n = bytes.len() / span;
+    if n < 2 {
+        return None;
+    }
+    use rayon::prelude::*;
+    // One task per worker. A task per frame would spend the scan on
+    // the scheduler instead of the header walk.
+    let chunk = n.div_ceil(workers).max(1);
+    let ok = (0..workers).into_par_iter().try_for_each(|worker| {
+        let first = worker * chunk;
+        let last = (first + chunk).min(n);
+        for index in first..last {
+            let start = index * span;
+            let end = start + span;
+            let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+            match iter.forward_fast() {
+                Some(Ok(())) if iter.lines.pos == span => {}
+                _ => return Err(()),
+            }
+        }
+        Ok(())
+    });
+    ok.ok()?;
+    Some((0..n).map(|index| index * span).collect())
+}
+
+#[cfg(feature = "parallel")]
 fn parse_frames_parallel_bytes(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    parse_bytes_timed(bytes, num_threads).0
+    parse_bytes_timed(bytes, num_threads).slots
 }
 
 /// Scan, slot allocation, and worker parse of `bytes`.
 ///
-/// The three times are seconds. `Some(n)` with `n >= 2` uses a pool of
-/// that size for the chunked newline scan and the slot parse. Every
-/// other count stays on the calling thread. `None` follows
-/// [`scan_thread_count`].
+/// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
+/// stays on the calling thread. `None` follows [`scan_thread_count`].
+/// The pool build is `pool_s` and is not inside the scan or the parse.
 #[cfg(feature = "parallel")]
-fn parse_bytes_timed(
-    bytes: &[u8],
-    num_threads: Option<usize>,
-) -> (
-    Vec<Result<types::ConFrame, error::ParseError>>,
-    f64,
-    f64,
-    f64,
-) {
+fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     let threads = scan_thread_count(num_threads, bytes.len());
     // The scan stays serial below `SCAN_PARALLEL_MIN`. An explicit pool
-    // still parses on that many workers.
+    // still parses on that many workers. Equal-length frames walk their
+    // spans on that pool instead of one serial header walk.
     let parse_workers = match num_threads {
         Some(n) if n >= 2 => n,
         Some(_) => 1,
@@ -1163,39 +1239,61 @@ fn parse_bytes_timed(
     };
     let run = || {
         let t_scan = std::time::Instant::now();
-        let mut scanner = ConFrameIterator::from_bytes(bytes);
-        if threads >= 2 {
-            // Same pool as the parse, so the newline chunks do not start
-            // a second set of workers.
-            scanner.lines.newlines = Some(newline_positions(bytes, threads));
-            scanner.lines.line_no = 0;
-        }
-        // Whitespace after the final frame does not open another frame.
-        let boundaries = collect_frame_starts(scanner, true);
+        let boundaries = if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
+            bounds
+        } else {
+            let mut scanner = ConFrameIterator::from_bytes(bytes);
+            if threads >= 2 {
+                // Same pool as the parse, so the newline chunks do not start
+                // a second set of workers.
+                scanner.lines.newlines = Some(newline_positions(bytes, threads));
+                scanner.lines.line_no = 0;
+            }
+            // Whitespace after the final frame does not open another frame.
+            collect_frame_starts(scanner, true)
+        };
         let scan_s = t_scan.elapsed().as_secs_f64();
-        let (slots, slot_s, work_s) =
+        let (slots, slot_s, work_s, sum_s, max_s) =
             parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
-        (slots, scan_s, slot_s, work_s)
+        (slots, scan_s, slot_s, work_s, sum_s, max_s)
     };
-    match num_threads {
-        None => run(),
+    let (pool_s, packed) = match num_threads {
+        None => (0.0, run()),
         Some(n) if n <= 1 => {
             let _ = n;
             let t_scan = std::time::Instant::now();
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
-            let (slots, slot_s, work_s) =
+            let (slots, slot_s, work_s, sum_s, max_s) =
                 parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
                     parse_byte_span(bytes, start, end)
                 });
-            (slots, scan_s, slot_s, work_s)
+            (0.0, (slots, scan_s, slot_s, work_s, sum_s, max_s))
         }
-        Some(n) => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => run(),
-        },
+        Some(n) => {
+            let t_pool = std::time::Instant::now();
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => {
+                    let pool_s = t_pool.elapsed().as_secs_f64();
+                    let packed = pool.install(run);
+                    drop(pool);
+                    (pool_s, packed)
+                }
+                Err(_) => (t_pool.elapsed().as_secs_f64(), run()),
+            }
+        }
+    };
+    let (slots, scan_s, slot_s, work_s, sum_s, max_s) = packed;
+    TimedParse {
+        slots,
+        pool_s,
+        scan_s,
+        slot_alloc_s: slot_s,
+        worker_parse_s: work_s,
+        worker_sum_s: sum_s,
+        worker_max_s: max_s,
     }
 }
 
@@ -1651,9 +1749,19 @@ pub fn parse_frames_at_offsets(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReadPhaseTimes {
     pub open_mmap_s: f64,
+    /// Rayon pool construction. Zero when the call stays on one thread.
+    pub pool_s: f64,
     pub scan_s: f64,
     pub slot_alloc_s: f64,
     pub worker_parse_s: f64,
+    /// Moving each parsed `Result` into the frame vector.
+    pub finish_s: f64,
+    /// Sum of per-chunk parse times. This is CPU time, not wall time.
+    pub worker_sum_s: f64,
+    /// Slowest parse chunk. This is inside `worker_parse_s`.
+    pub worker_max_s: f64,
+    /// Drop of the mapped or owned file buffer after the parse.
+    pub close_s: f64,
     /// True when the bytes came from a map rather than an owned buffer.
     pub mapped: bool,
 }
@@ -1687,16 +1795,23 @@ pub fn read_all_frames_phased(
         crate::compression::FileContents::Owned(text) => text.as_bytes(),
         crate::compression::FileContents::Mapped(map) => map,
     };
-    let (frames, scan_s, slot_alloc_s, worker_parse_s) =
-        frames_from_bytes_phased(bytes, num_threads)?;
+    let phased = frames_from_bytes_phased(bytes, num_threads)?;
+    let t_close = std::time::Instant::now();
+    drop(contents);
+    let close_s = t_close.elapsed().as_secs_f64();
     Ok(PhasedFrames {
-        frames,
+        frames: phased.frames,
         n_bytes,
         phases: ReadPhaseTimes {
             open_mmap_s,
-            scan_s,
-            slot_alloc_s,
-            worker_parse_s,
+            pool_s: phased.pool_s,
+            scan_s: phased.scan_s,
+            slot_alloc_s: phased.slot_alloc_s,
+            worker_parse_s: phased.worker_parse_s,
+            finish_s: phased.finish_s,
+            worker_sum_s: phased.worker_sum_s,
+            worker_max_s: phased.worker_max_s,
+            close_s,
             mapped,
         },
     })
@@ -1707,22 +1822,44 @@ pub fn read_all_frames_phased(
 /// `Some(n)` with `n >= 2` uses that pool. Every other count, including
 /// `None`, stays on the calling thread. That is the `read_con` policy:
 /// an omitted count does not start a pool.
+pub struct PhasedByteTimes {
+    pub frames: Vec<types::ConFrame>,
+    pub pool_s: f64,
+    pub scan_s: f64,
+    pub slot_alloc_s: f64,
+    pub worker_parse_s: f64,
+    pub finish_s: f64,
+    pub worker_sum_s: f64,
+    pub worker_max_s: f64,
+}
+
 pub fn frames_from_bytes_phased(
     bytes: &[u8],
     num_threads: Option<usize>,
-) -> Result<(Vec<types::ConFrame>, f64, f64, f64), error::ParseError> {
+) -> Result<PhasedByteTimes, error::ParseError> {
     #[cfg(feature = "parallel")]
     {
         let requested = match num_threads {
             Some(n) if n >= 2 => Some(n),
             _ => Some(1),
         };
-        let (parts, scan_s, slot_s, work_s) = parse_bytes_timed(bytes, requested);
-        let mut frames = Vec::with_capacity(parts.len());
-        for part in parts {
+        let timed = parse_bytes_timed(bytes, requested);
+        let t_finish = std::time::Instant::now();
+        let mut frames = Vec::with_capacity(timed.slots.len());
+        for part in timed.slots {
             frames.push(part?);
         }
-        return Ok((frames, scan_s, slot_s, work_s));
+        let finish_s = t_finish.elapsed().as_secs_f64();
+        return Ok(PhasedByteTimes {
+            frames,
+            pool_s: timed.pool_s,
+            scan_s: timed.scan_s,
+            slot_alloc_s: timed.slot_alloc_s,
+            worker_parse_s: timed.worker_parse_s,
+            finish_s,
+            worker_sum_s: timed.worker_sum_s,
+            worker_max_s: timed.worker_max_s,
+        });
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -1732,7 +1869,17 @@ pub fn frames_from_bytes_phased(
         for part in ConFrameIterator::from_bytes(bytes) {
             frames.push(part?);
         }
-        Ok((frames, 0.0, 0.0, t_work.elapsed().as_secs_f64()))
+        let worker_parse_s = t_work.elapsed().as_secs_f64();
+        Ok(PhasedByteTimes {
+            frames,
+            pool_s: 0.0,
+            scan_s: 0.0,
+            slot_alloc_s: 0.0,
+            worker_parse_s,
+            finish_s: 0.0,
+            worker_sum_s: worker_parse_s,
+            worker_max_s: worker_parse_s,
+        })
     }
 }
 
@@ -1795,6 +1942,127 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
         write(frame, dest);
     }
     Some(values)
+}
+
+fn mix_touch(hash: u64, value: u64) -> u64 {
+    hash.wrapping_mul(0x9E3779B185EBCA87) ^ value
+}
+
+fn one_frame_touch(frame: &types::ConFrame, coords: &[f64], index: u64) -> u64 {
+    let mut hash = index;
+    for value in frame.header.boxl {
+        hash = mix_touch(hash, value.to_bits());
+    }
+    for atom in &frame.atom_data {
+        hash = mix_touch(hash, atom.symbol.len() as u64);
+        for byte in atom.symbol.as_bytes() {
+            hash = mix_touch(hash, u64::from(*byte));
+        }
+    }
+    for value in coords {
+        hash = mix_touch(hash, value.to_bits());
+    }
+    hash
+}
+
+/// XOR of positions, cell lengths, and atom-type symbols.
+///
+/// `positions` is frame-major `[frames, atoms, 3]`. `None` means the
+/// slice does not match the frames. `workers >= 2` folds disjoint
+/// frame runs on that many threads. Each frame's hash includes its
+/// index, and the returned word is the XOR of those hashes.
+pub fn touch_frame_checksum(
+    frames: &[types::ConFrame],
+    positions: &[f64],
+    workers: usize,
+) -> Option<u64> {
+    if frames.is_empty() {
+        return Some(0);
+    }
+    let n_atoms = frames[0].atom_data.len();
+    let stride = n_atoms.saturating_mul(3);
+    if stride == 0 || positions.len() != frames.len().saturating_mul(stride) {
+        return None;
+    }
+    if frames.iter().any(|frame| frame.atom_data.len() != n_atoms) {
+        return None;
+    }
+    let one = |index: usize| {
+        let start = index * stride;
+        one_frame_touch(
+            &frames[index],
+            &positions[start..start + stride],
+            index as u64,
+        )
+    };
+    Some(reduce_touch(frames.len(), workers, one))
+}
+
+/// [`touch_frame_checksum`] for frames still sitting in optional slots.
+///
+/// `None` means a slot is empty or the position slice does not match.
+pub fn touch_option_checksum(
+    frames: &[Option<types::ConFrame>],
+    positions: &[f64],
+    workers: usize,
+) -> Option<u64> {
+    if frames.is_empty() {
+        return Some(0);
+    }
+    if frames.iter().any(Option::is_none) {
+        return None;
+    }
+    let n_atoms = frames[0].as_ref()?.atom_data.len();
+    let stride = n_atoms.saturating_mul(3);
+    if stride == 0 || positions.len() != frames.len().saturating_mul(stride) {
+        return None;
+    }
+    if frames
+        .iter()
+        .any(|frame| frame.as_ref().map(|item| item.atom_data.len()) != Some(n_atoms))
+    {
+        return None;
+    }
+    let one = |index: usize| {
+        let start = index * stride;
+        one_frame_touch(
+            frames[index].as_ref().expect("slot"),
+            &positions[start..start + stride],
+            index as u64,
+        )
+    };
+    Some(reduce_touch(frames.len(), workers, one))
+}
+
+fn reduce_touch(n: usize, workers: usize, one: impl Fn(usize) -> u64 + Sync) -> u64 {
+    #[cfg(feature = "parallel")]
+    if workers >= 2 {
+        let run = || {
+            use rayon::prelude::*;
+            let chunk = n.div_ceil(workers).max(1);
+            (0..workers)
+                .into_par_iter()
+                .map(|worker| {
+                    let first = worker * chunk;
+                    let last = (first + chunk).min(n);
+                    let mut acc = 0u64;
+                    for index in first..last {
+                        acc ^= one(index);
+                    }
+                    acc
+                })
+                .reduce(|| 0u64, |left, right| left ^ right)
+        };
+        return match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+            Ok(pool) => pool.install(run),
+            Err(_) => (0..n).map(&one).fold(0, |acc, item| acc ^ item),
+        };
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = workers;
+    }
+    (0..n).map(one).fold(0, |acc, item| acc ^ item)
 }
 
 /// Time a newline scan of `text`.
@@ -2282,10 +2550,12 @@ mod phased_read_tests {
         let text = fixture("cuh2.con").repeat(4);
         let serial = frames_from_text(&text, Some(1)).expect("serial");
         for workers in [1usize, 2, 4, 8] {
-            let (parallel, scan_s, slot_s, work_s) =
-                frames_from_bytes_phased(text.as_bytes(), Some(workers)).expect("phased");
+            let phased = frames_from_bytes_phased(text.as_bytes(), Some(workers)).expect("phased");
+            let parallel = phased.frames;
             assert_eq!(parallel.len(), serial.len(), "workers={workers}");
-            assert!(scan_s >= 0.0 && slot_s >= 0.0 && work_s >= 0.0);
+            assert!(
+                phased.scan_s >= 0.0 && phased.slot_alloc_s >= 0.0 && phased.worker_parse_s >= 0.0
+            );
             assert_eq!(parallel[0], serial[0], "workers={workers} first");
             assert_eq!(
                 parallel.last().unwrap(),
@@ -2317,5 +2587,38 @@ mod phased_read_tests {
         assert!(phased.phases.worker_parse_s >= 0.0);
         assert_eq!(phased.n_bytes, text.len());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn equal_span_boundaries_match_the_serial_walk() {
+        let text = fixture("cuh2.con").repeat(8);
+        let bytes = text.as_bytes();
+        let got = equal_span_boundaries(bytes, 4).expect("equal span");
+        let expect = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
+        assert_eq!(got, expect);
+        assert_eq!(got.len(), 8);
+    }
+
+    #[test]
+    fn a_whitespace_tail_skips_the_equal_span_walk() {
+        let mut text = fixture("cuh2.con").repeat(3);
+        text.push('\n');
+        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(parallel.frames, serial);
+    }
+
+    #[test]
+    fn touch_checksum_matches_across_worker_counts() {
+        let text = fixture("cuh2.con").repeat(4);
+        let serial = frames_from_bytes_phased(text.as_bytes(), Some(1)).expect("serial");
+        let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("parallel");
+        let slab_s = pack_position_slab(&serial.frames, 1).expect("slab");
+        let slab_p = pack_position_slab(&parallel.frames, 4).expect("slab");
+        let left = touch_frame_checksum(&serial.frames, &slab_s, 1).expect("touch");
+        let right = touch_frame_checksum(&parallel.frames, &slab_p, 4).expect("touch");
+        assert_eq!(left, right);
+        assert_ne!(left, 0);
     }
 }

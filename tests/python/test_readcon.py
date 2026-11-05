@@ -72,6 +72,10 @@ class TestReadCon:
         assert eager[1].atoms[0].x == pytest.approx(again[1].atoms[0].x)
         assert lazy_phases["n_frames"] == len(lazy)
         assert readcon.scan_probe(path, 2, True)[2] is True
+        one = readcon.read_con(path, n_threads=1).touch_checksum()
+        two = readcon.read_con(path, n_threads=2).touch_checksum()
+        assert one[0] == two[0]
+        assert one[1] >= 0.0
 
 
 class TestReadConvel:

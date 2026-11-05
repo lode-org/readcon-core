@@ -1559,12 +1559,20 @@ fn write_coords(
 /// Phase seconds for one `read_con` call.
 struct ReadCallPhases {
     open_mmap_s: f64,
+    pool_s: f64,
     scan_s: f64,
     slot_alloc_s: f64,
     worker_parse_s: f64,
+    finish_s: f64,
+    worker_sum_s: f64,
+    worker_max_s: f64,
+    close_s: f64,
     slab_s: f64,
+    release_s: f64,
+    list_rest_s: f64,
     python_build_s: f64,
     return_s: f64,
+    touch_s: f64,
     mapped: bool,
     n_bytes: usize,
     n_frames: usize,
@@ -1580,12 +1588,20 @@ impl ReadCallPhases {
     ) -> Self {
         Self {
             open_mmap_s: phases.open_mmap_s,
+            pool_s: phases.pool_s,
             scan_s: phases.scan_s,
             slot_alloc_s: phases.slot_alloc_s,
             worker_parse_s: phases.worker_parse_s,
+            finish_s: phases.finish_s,
+            worker_sum_s: phases.worker_sum_s,
+            worker_max_s: phases.worker_max_s,
+            close_s: phases.close_s,
             slab_s: 0.0,
+            release_s: 0.0,
+            list_rest_s: 0.0,
             python_build_s: 0.0,
             return_s: 0.0,
+            touch_s: 0.0,
             mapped: phases.mapped,
             n_bytes,
             n_frames,
@@ -1596,13 +1612,21 @@ impl ReadCallPhases {
     fn dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("open_mmap_s", self.open_mmap_s)?;
+        dict.set_item("pool_s", self.pool_s)?;
         dict.set_item("scan_s", self.scan_s)?;
         dict.set_item("slot_alloc_s", self.slot_alloc_s)?;
         dict.set_item("worker_parse_s", self.worker_parse_s)?;
         dict.set_item("parse_s", self.slot_alloc_s + self.worker_parse_s)?;
+        dict.set_item("finish_s", self.finish_s)?;
+        dict.set_item("worker_sum_s", self.worker_sum_s)?;
+        dict.set_item("worker_max_s", self.worker_max_s)?;
+        dict.set_item("close_s", self.close_s)?;
         dict.set_item("slab_s", self.slab_s)?;
+        dict.set_item("release_s", self.release_s)?;
+        dict.set_item("list_rest_s", self.list_rest_s)?;
         dict.set_item("python_build_s", self.python_build_s)?;
         dict.set_item("return_s", self.return_s)?;
+        dict.set_item("touch_s", self.touch_s)?;
         dict.set_item("mapped", self.mapped)?;
         dict.set_item("n_bytes", self.n_bytes)?;
         dict.set_item("n_frames", self.n_frames)?;
@@ -1622,6 +1646,7 @@ struct ConFrameList {
     cache: std::sync::Mutex<Vec<Option<Py<PyConFrame>>>>,
     slab: Option<Py<PyArray3<f64>>>,
     n_atoms: usize,
+    workers: usize,
     phases: std::sync::Mutex<ReadCallPhases>,
 }
 
@@ -1688,11 +1713,34 @@ impl ConFrameList {
         ConFrameListIter { inner: slf, pos: 0 }
     }
 
-    /// Seconds for open, scan, slot allocation, worker parse, the slab,
-    /// Python object construction, and the return.
+    /// Seconds for open, the pool, scan, slot allocation, worker parse,
+    /// the finish move, the slab, position release, Python object
+    /// construction, the return, and a later touch.
     #[getter]
     fn phases(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         self.phases.lock().expect("phases").dict(py)
+    }
+
+    /// XOR of every frame's positions, cell lengths, and atom-type symbols.
+    ///
+    /// The read walks the coordinate slab and each stored symbol. The
+    /// returned seconds are that walk. A second call walks again.
+    fn touch_checksum(&self, py: Python<'_>) -> PyResult<(u64, f64)> {
+        let frames = self.frames.lock().expect("frames");
+        let Some(slab) = &self.slab else {
+            return Err(PyIOError::new_err(
+                "touch_checksum needs the shared coordinate slab",
+            ));
+        };
+        let values = slab.bind(py).readonly();
+        let slice = values.as_slice()?;
+        let t_touch = std::time::Instant::now();
+        let digest = crate::iterators::touch_option_checksum(&frames, slice, self.workers)
+            .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
+        let touch_s = t_touch.elapsed().as_secs_f64();
+        drop(frames);
+        self.phases.lock().expect("phases").touch_s = touch_s;
+        Ok((digest, touch_s))
     }
 }
 
@@ -1713,10 +1761,23 @@ impl ConFrameListIter {
     }
 }
 
-fn clear_packed_positions(frames: &mut [ConFrame]) {
-    for frame in frames {
+fn clear_packed_positions(frames: &mut [ConFrame], workers: usize) {
+    let clear = |frame: &mut ConFrame| {
         frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+    };
+    #[cfg(feature = "parallel")]
+    if workers >= 2 {
+        let run = || {
+            use rayon::prelude::*;
+            frames.par_iter_mut().for_each(clear);
+        };
+        match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+            Ok(pool) => pool.install(run),
+            Err(_) => frames.iter_mut().for_each(clear),
+        }
+        return;
     }
+    frames.iter_mut().for_each(clear);
 }
 
 fn slab_from_values(
@@ -1739,6 +1800,7 @@ fn con_frame_list(
     n_threads: Option<usize>,
     build: &'static str,
 ) -> PyResult<Py<ConFrameList>> {
+    let t_list = std::time::Instant::now();
     let n_frames = frames.len();
     let workers = n_threads.filter(|n| *n >= 2).unwrap_or(1);
     let t_slab = std::time::Instant::now();
@@ -1748,17 +1810,21 @@ fn con_frame_list(
         Some(values) if n_frames > 0 => values.len() / n_frames / 3,
         _ => 0,
     };
+    let t_release = std::time::Instant::now();
     if packed.is_some() {
-        clear_packed_positions(&mut frames);
+        clear_packed_positions(&mut frames, workers);
     }
+    let release_s = t_release.elapsed().as_secs_f64();
     let t_build = std::time::Instant::now();
     let slab = match packed {
         Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
         None => None,
     };
+    let python_build_s = t_build.elapsed().as_secs_f64();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, build);
     record.slab_s = slab_s;
-    record.python_build_s = t_build.elapsed().as_secs_f64();
+    record.release_s = release_s;
+    record.python_build_s = python_build_s;
     let mut cache = Vec::with_capacity(n_frames);
     cache.resize_with(n_frames, || None);
     let stored: Vec<Option<ConFrame>> = frames.into_iter().map(Some).collect();
@@ -1770,10 +1836,20 @@ fn con_frame_list(
             cache: std::sync::Mutex::new(cache),
             slab,
             n_atoms,
+            workers,
             phases: std::sync::Mutex::new(record),
         },
     )?;
-    obj.borrow_mut(py).phases.lock().expect("phases").return_s = t_return.elapsed().as_secs_f64();
+    let return_s = t_return.elapsed().as_secs_f64();
+    let list_s = t_list.elapsed().as_secs_f64();
+    let accounted = slab_s + release_s + python_build_s + return_s;
+    let list_rest_s = (list_s - accounted).max(0.0);
+    obj.borrow_mut(py).phases.lock().expect("phases").return_s = return_s;
+    obj.borrow_mut(py)
+        .phases
+        .lock()
+        .expect("phases")
+        .list_rest_s = list_rest_s;
     Ok(obj)
 }
 
@@ -2039,15 +2115,19 @@ fn read_con_string(
                 .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    let (frames, scan_s, slot_alloc_s, worker_parse_s) = parsed;
     let phases = crate::iterators::ReadPhaseTimes {
         open_mmap_s,
-        scan_s,
-        slot_alloc_s,
-        worker_parse_s,
+        pool_s: parsed.pool_s,
+        scan_s: parsed.scan_s,
+        slot_alloc_s: parsed.slot_alloc_s,
+        worker_parse_s: parsed.worker_parse_s,
+        finish_s: parsed.finish_s,
+        worker_sum_s: parsed.worker_sum_s,
+        worker_max_s: parsed.worker_max_s,
+        close_s: 0.0,
         mapped: false,
     };
-    con_frame_list(py, frames, phases, n_bytes, n_threads, "lazy")
+    con_frame_list(py, parsed.frames, phases, n_bytes, n_threads, "lazy")
 }
 
 /// Streaming frame iterator: parses one frame per `__next__` (does not
