@@ -12,6 +12,9 @@
 *.tectonic.txt
 auto/
 bench/work/
+bench/results/
+src/rg_main.pdf
+src/rg_supp.pdf
 src/figures/generated/work/
 src/figures/generated/*.aux
 evidence/work/
