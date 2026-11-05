@@ -269,7 +269,8 @@ Two-workflow pattern for safe PR comments:
    The timing lower bound uses the reciprocal when it is smaller.
    The false-slowdown budget is 0.01, split across the timing rows in this comparison.
    Memory keeps the within-run bound, widened by one allocator granule over the median base peak.
-   Base vs head wall time is ``asv continuous --interleave-rounds`` (no ``--quick``).
+   Base vs head wall time is one ``asv run`` of base and then one ``asv run`` of head, repeated for each round, with samples appended.
+   ``asv continuous --interleave-rounds`` reverses commit order on even rounds, and the round count is even, so that command would give the commits different numbers of back-to-back rounds.
    Memory peaks are ``ray_*`` benchmarks (``asv_bench_memray``).
    Tool versions are pinned in ``benchmarks/workflow/requirements.txt`` and ``asv.conf.json``.
    ``ci_benchmark.yml`` also pins rustc 1.88.0, Actions commits, uv 0.13.6, Python 3.12.16, and exact cmake/gcc/g++ packages.

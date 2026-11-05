@@ -14,7 +14,7 @@ What we measure
     +========+============================================================================+==========================================================================+
     | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    | 2 (PR) | ``benchmarks/workflow/Snakefile`` drives ``asv continuous``; memory via    | Python wall time and memray peak, base vs head, one runner               |
+    | 2 (PR) | ``benchmarks/workflow/Snakefile`` drives asv; memory via                   | Python wall time and memray peak, base vs head, one runner               |
     |        | ``asv_bench_memray``                                                       |                                                                          |
     +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
     |      3 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
@@ -81,7 +81,7 @@ benchmarks.
    absolute deviation (MAD); that lower bound is the smaller of the 1st percentile and
    median - 3*MAD when that bound is positive. Time uses ``asv run --interleave-rounds`` (twelve
    rounds of six repeats, 72 samples). Odd rounds are one side and even rounds
-   the other, 36 samples a side, the same alternation as the comparison.
+   the other, 36 samples a side, the same count the comparison records.
    Each round is its own process of one installed build. A speed shift that
    covers an odd round and the following even round cancels in their ratio,
    so that bound sits closer to 1 than a ratio of two builds. Each repetition
@@ -112,9 +112,13 @@ benchmarks.
    hundreds of bytes, is many granules and falls outside it. Timing does
    not use the granule.
 
-3. Wall time for base vs head is ``asv continuous --interleave-rounds`` (no
-   ``--quick``) in the same virtualenv, six rounds and six repeats (36 samples
-   a side). Memory is the same two commits, alternating one-round runs, base
+3. Wall time for base vs head is six rounds and six repeats (36 samples
+   a side) in the same virtualenv. Each round is one ``asv run`` of base and
+   then one ``asv run`` of head, and the samples are appended.
+   ``asv continuous --interleave-rounds`` reverses commit order on even
+   rounds. Six is even, so that command gives the two commits different
+   numbers of back-to-back rounds. The one-round pair does not.
+   Memory is the same two commits, alternating one-round runs, base
    then head.
 
 4. ``results/comparison.txt`` calls a change significant only when the head/base

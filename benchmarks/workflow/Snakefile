@@ -225,16 +225,27 @@ rule compare_time:
         set -euo pipefail
         export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1
         factor=$(cat {input.factor})
+        # asv continuous --interleave-rounds reverses commit order on even
+        # rounds. An even round count then gives the two commits different
+        # numbers of back-to-back rounds. One round of base, then one round
+        # of head, repeats that pair and keeps the counts equal.
+        for _rnd in $(seq 1 {params.rounds}); do
+            for commit in {params.base} {params.head}; do
+                asv run "$commit^!" \
+                    --record-samples \
+                    --append-samples \
+                    --no-interleave-rounds \
+                    --bench '\\.time_' \
+                    -a rounds=1 \
+                    -a repeat={params.repeat} \
+                    --machine {params.machine} \
+                    --config {input.conf}
+            done
+        done
         set +e
-        asv continuous {params.base} {params.head} \
-            --interleave-rounds \
-            --record-samples \
-            --no-only-changed \
+        asv compare {params.base} {params.head} \
             --split \
             --factor "$factor" \
-            --bench '\\.time_' \
-            -a rounds={params.rounds} \
-            -a repeat={params.repeat} \
             --machine {params.machine} \
             --config {input.conf} \
             > {output}
@@ -242,6 +253,10 @@ rule compare_time:
         set -e
         if [ "$code" -ge 2 ]; then
             exit "$code"
+        fi
+        if [ ! -s {output} ]; then
+            echo "asv compare wrote no timing table" >&2
+            exit 1
         fi
         """
 
