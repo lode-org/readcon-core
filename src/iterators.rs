@@ -1925,10 +1925,13 @@ pub fn read_all_frames_phased(
     };
     let t_close = std::time::Instant::now();
     if let crate::compression::FileContents::Mapped(map) = &contents {
-        // The serial unmap of a fully resident file is the 8-worker
-        // tail. Advise the pages away on the same worker count first,
-        // so the following unmap does not walk every resident page alone.
-        crate::compression::advise_dontneed_parallel(map, workers);
+        // The serial unmap of a fully resident file is the multi-worker
+        // tail. Advise the pages away on that worker count first.
+        // One worker unmaps directly, so a serial read does not walk
+        // the pages twice.
+        if workers >= 2 {
+            crate::compression::advise_dontneed_parallel(map, workers);
+        }
     }
     drop(contents);
     let close_s = t_close.elapsed().as_secs_f64();

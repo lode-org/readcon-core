@@ -500,7 +500,9 @@ fn main() {
                 }
             }
             let base = slow_at * local.len();
-            samples.push(sample.wall_s);
+            // The sample is the slowest rank's own phase sum. Rank 0's
+            // barrier wait is recorded separately and is not this clock.
+            samples.push(slow_local);
             samples_maj.push(maj);
             samples_min.push(minr);
             // Phases are the slowest rank's own timers, not rank 0's wait.
