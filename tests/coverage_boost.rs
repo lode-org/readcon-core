@@ -91,6 +91,15 @@ fn compression_detect_extension_and_mmap_and_writers() {
         detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]),
         Compression::Zstd
     );
+    assert_eq!(
+        detect_compression(&[0x50, 0x2a, 0x4d, 0x18]),
+        Compression::Zstd
+    );
+    assert_eq!(
+        detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]),
+        Compression::Zstd
+    );
+    assert_eq!(detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]), Compression::None);
     assert_eq!(detect_compression(b"not"), Compression::None);
 
     let dir = tempfile::tempdir().unwrap();

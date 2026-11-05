@@ -15,25 +15,36 @@ use std::path::Path;
 pub enum Compression {
     None,
     Gzip,
-    /// zstd frame, magic `28 B5 2F FD`. Build with `--features zstd`.
+    /// zstd data: a frame (`28 b5 2f fd`) or a skippable frame
+    /// (`5? 2a 4d 18`, RFC 8878). Build with `--features zstd`.
     Zstd,
+}
+
+/// A Zstandard frame or a skippable frame, in the byte order on disk.
+///
+/// RFC 8878 gives a frame the magic `28 b5 2f fd` and a skippable frame
+/// one of `50 2a 4d 18` through `5f 2a 4d 18`. A file from `pzstd` can
+/// start with the skippable frame.
+fn is_zstd_magic(bytes: &[u8]) -> bool {
+    bytes.len() >= 4
+        && (bytes[..4] == [0x28, 0xb5, 0x2f, 0xfd]
+            || ((0x50..=0x5f).contains(&bytes[0])
+                && bytes[1] == 0x2a
+                && bytes[2] == 0x4d
+                && bytes[3] == 0x18))
 }
 
 /// Detect compression format from the first bytes of a file.
 ///
 /// - `1f 8b` = gzip
-/// - `28 b5 2f fd` = zstd
+/// - `28 b5 2f fd` = zstd frame
+/// - `5? 2a 4d 18` = zstd skippable frame
 /// - Otherwise = uncompressed
 pub fn detect_compression(bytes: &[u8]) -> Compression {
     if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
         return Compression::Gzip;
     }
-    if bytes.len() >= 4
-        && bytes[0] == 0x28
-        && bytes[1] == 0xb5
-        && bytes[2] == 0x2f
-        && bytes[3] == 0xfd
-    {
+    if is_zstd_magic(bytes) {
         return Compression::Zstd;
     }
     Compression::None
@@ -516,5 +527,63 @@ mod tests {
             let err = ForwardText::open(&path, map).err().unwrap().to_string();
             assert_eq!(Err(err), mapped_text(&path), "map {map}");
         }
+    }
+
+    #[test]
+    fn skippable_frame_magic_is_zstd() {
+        assert_eq!(detect_compression(&[0x50, 0x2a, 0x4d, 0x18]), Compression::Zstd);
+        assert_eq!(detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]), Compression::Zstd);
+        assert_eq!(detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]), Compression::None);
+        assert_eq!(detect_compression(&[0x50, 0x2a, 0x4d]), Compression::None);
+        assert_eq!(detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]), Compression::Zstd);
+    }
+
+    fn skippable_prefix(nibble: u8, payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(0x184D_2A50u32 + u32::from(nibble)).to_le_bytes());
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    #[cfg(not(feature = "zstd"))]
+    #[test]
+    fn a_leading_skippable_frame_needs_the_zstd_feature() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("skip-first.zst");
+        std::fs::write(&path, skippable_prefix(0, b"index")).unwrap();
+        let err = read_file_text(&path).unwrap_err().to_string();
+        assert!(err.contains("zstd-compressed input detected"), "{err}");
+        match open_decoded(&path) {
+            Err(err) => {
+                assert!(
+                    err.to_string().contains("zstd-compressed input detected"),
+                    "{err}"
+                );
+            }
+            Ok(_) => panic!("a skippable frame was treated as uncompressed"),
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn a_leading_skippable_frame_decodes_with_the_frames_after_it() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let frame = zstd::stream::encode_all(text.as_bytes(), 1).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("skip-first.con.zst");
+        let mut bytes = skippable_prefix(0, b"index");
+        bytes.extend_from_slice(&frame);
+        std::fs::write(&first, &bytes).unwrap();
+        assert_eq!(read_file_text(&first).unwrap(), text);
+        let frames = crate::iterators::read_all_frames(&first).unwrap();
+        assert_eq!(frames.len(), 1);
+
+        let mut between = frame.clone();
+        between.extend(skippable_prefix(0, b"index"));
+        between.extend_from_slice(&frame);
+        let mid = dir.path().join("skip-between.con.zst");
+        std::fs::write(&mid, &between).unwrap();
+        assert_eq!(read_file_text(&mid).unwrap(), format!("{text}{text}"));
     }
 }
