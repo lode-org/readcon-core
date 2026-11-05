@@ -10,12 +10,13 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
-fn read_bytes() -> u64 {
+fn io_counter(name: &str) -> u64 {
     let file = fs::File::open("/proc/self/io").expect("io");
+    let prefix = format!("{name}:");
     for line in BufReader::new(file).lines() {
         let line = line.expect("io line");
-        if let Some(rest) = line.strip_prefix("read_bytes:") {
-            return rest.trim().parse().expect("read_bytes");
+        if let Some(rest) = line.strip_prefix(&prefix) {
+            return rest.trim().parse().expect(name);
         }
     }
     0
@@ -33,13 +34,13 @@ fn main() {
         env::set_current_dir(&empty).expect("empty");
     }
     let open_ok = fs::File::open("frames.con").is_ok();
-    let before = read_bytes();
+    let before = io_counter("rchar");
     let start = Instant::now();
     let got = read_block(&comm, "frames.con".as_ref(), ReadMode::Scatter, Some(1)).expect("read");
     let elapsed = start.elapsed().as_nanos();
-    let scanned = read_bytes().saturating_sub(before);
+    let scanned = io_counter("rchar").saturating_sub(before);
     println!(
-        "rank {} open_ok {} scanned_bytes {} frames {} local {} ns {}",
+        "rank {} open_ok {} rchar {} frames {} local {} ns {}",
         comm.rank(),
         u8::from(open_ok),
         scanned,

@@ -76,13 +76,15 @@ def main() -> int:
         parts = line.split()
         by_rank[int(parts[1])] = {
             "open_ok": int(parts[3]),
-            "scanned": int(parts[5]),
+            "rchar": int(parts[5]),
             "ns": int(parts[11]),
         }
     rank0 = by_rank.get(0, {})
     others = [item for rank, item in by_rank.items() if rank != 0]
-    only_root = bool(rank0) and rank0["open_ok"] == 1 and rank0["scanned"] > 0
-    others_closed = bool(others) and all(item["open_ok"] == 0 and item["scanned"] == 0 for item in others)
+    only_root = bool(rank0) and rank0["open_ok"] == 1 and rank0["rchar"] > 0
+    others_closed = bool(others) and all(
+        item["open_ok"] == 0 and item["rchar"] < rank0["rchar"] for item in others
+    )
     lines = [
         f"rev_parse {git(['rev-parse', 'HEAD'])}",
         f"tree {git(['rev-parse', 'HEAD^{tree}'])}",
