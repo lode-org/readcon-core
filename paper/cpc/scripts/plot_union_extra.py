@@ -153,8 +153,8 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
 READER_LOG = ROOT / "logs" / "reader-exchange.log"
 
 
-def _reader_samples(system: str = "cuh2", schedule: str = "interleaved") -> dict[str, list[float]]:
-    """Wall times for one system and one schedule. Arms stay inside one file format."""
+def _reader_samples() -> dict[str, list[float]]:
+    """Wall times from the large-file log. One list per arm."""
     if not READER_LOG.is_file():
         raise SystemExit("reader-exchange.log is missing. Run bench_readers.py first.")
     arms: dict[str, list[float]] = {}
@@ -162,34 +162,33 @@ def _reader_samples(system: str = "cuh2", schedule: str = "interleaved") -> dict
         if not line.startswith("sample "):
             continue
         fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
-        if fields.get("system") != system or fields.get("schedule") != schedule:
+        seconds = fields.get("seconds")
+        if seconds in (None, "", "None"):
             continue
-        arms.setdefault(fields["arm"], []).append(float(fields["seconds"]))
-    if "readcon_base" not in arms or len(arms["readcon_base"]) < 6:
-        raise SystemExit("The base readcon row needs at least six samples.")
+        arms.setdefault(fields["arm"], []).append(float(seconds))
+    if "readcon_tip" not in arms or len(arms["readcon_tip"]) < 6:
+        raise SystemExit("The tip readcon row needs at least six samples.")
     return arms
 
 
-def _summary_rows(system: str = "cuh2", schedule: str = "interleaved") -> list[dict[str, str]]:
+def _summary_rows() -> list[dict[str, str]]:
     rows = []
     for line in READER_LOG.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("summary ") and not line.startswith("result "):
+        if not line.startswith("summary "):
             continue
-        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
-        if fields.get("system") == system and fields.get("schedule") == schedule:
-            rows.append(fields)
+        rows.append(dict(part.split("=", 1) for part in line.split() if "=" in part))
     return rows
 
 
 def ratios(theme) -> None:
     arms = _reader_samples()
-    base = arms["readcon_base"]
-    order = [name for name in ("readcon_tip", "ase_eon", "readcon_db") if name in arms]
+    tip = arms["readcon_tip"]
+    order = [name for name in ("readcon_base", "ase_eon", "readcon_db") if name in arms]
     fig, ax = plt.subplots(figsize=(7.2, 3.2))
     y = list(range(len(order)))
     med, lo, hi = [], [], []
     for name in order:
-        ratios_rep = [b / p for b, p in zip(base, arms[name], strict=True)]
+        ratios_rep = [p / t for t, p in zip(tip, arms[name], strict=True)]
         m, q1, q3 = _type7(ratios_rep)
         med.append(m)
         lo.append(q1)
@@ -199,7 +198,7 @@ def ratios(theme) -> None:
     ax.axvline(1.0, color=BLACK, lw=0.6)
     ax.set_yticks(y)
     ax.set_yticklabels(order, fontsize=8)
-    ax.set_xlabel("base readcon time / CON reader time")
+    ax.set_xlabel("other CON time / readcon tip time")
     ax.set_xscale("log")
     pf._theme_axes([ax], theme)
     pf._save(fig, "ratios", None)
@@ -231,10 +230,10 @@ def threads(theme) -> None:
 
 
 def timing(theme) -> None:
-    """Type 7 medians on the CuH2 files, interleaved. Each panel is one format."""
+    """Type 7 medians on the 100000-frame files. Each panel is one format."""
     arms = _reader_samples()
     groups = {
-        "CON": ["readcon_base", "readcon_tip", "ase_eon", "readcon_db"],
+        "CON": ["readcon_tip", "readcon_base", "ase_eon", "readcon_db"],
         "XYZ": ["numpy", "chemfiles", "ovito", "ase_extxyz", "pymatgen"],
         "HDF5": ["h5py", "mdanalysis"],
     }
@@ -254,16 +253,16 @@ def timing(theme) -> None:
 
 
 def memory(theme) -> None:
-    """Peak RSS above the import, CuH2, interleaved. A zero bar did not rise above the import."""
-    rows = [row for row in _summary_rows() if "rss_above_import_median" in row]
+    """VmHWM after the read minus VmHWM after the import, in MiB."""
+    rows = [row for row in _summary_rows() if "mib_median" in row]
     order = [row["arm"] for row in rows]
-    meds = [float(row["rss_above_import_median"]) for row in rows]
+    meds = [float(row["mib_median"]) for row in rows]
     fig, ax = plt.subplots(figsize=(7.2, 3.4))
     x = np.arange(len(order))
     ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
     ax.set_xticks(x)
     ax.set_xticklabels(order, fontsize=6, rotation=30, ha="right")
-    ax.set_ylabel("median RSS above import (bytes)")
+    ax.set_ylabel("MiB above the import")
     pf._theme_axes([ax], theme)
     pf._save(fig, "memory", None)
 

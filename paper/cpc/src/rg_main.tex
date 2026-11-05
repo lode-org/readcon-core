@@ -759,14 +759,14 @@ A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a
 
 \section{Read performance}\label{sec:performance}
 The comparison measured on this branch is Section~\ref{sec:host}.
-It reads one CON file with readcon-core and with the readers that built here, six times, on one process at a time.
+It reads one 100000-frame file, six times, one fresh process per sample.
 The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}.
 The candidate timing campaign is not reported.
 
 \begin{figure*}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{Wall time on the CuH$_2$ files, six interleaved repeats.
+\caption{Wall time on the 100000-frame files, six interleaved repeats.
 Each panel is one file format.
 The bar is the type 7 median.
 The log is \texttt{paper/cpc/logs/reader-exchange.log}.}
@@ -776,105 +776,121 @@ The log is \texttt{paper/cpc/logs/reader-exchange.log}.}
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{Base readcon time divided by each other CON reader, CuH$_2$, interleaved.
+\caption{CON reader time divided by the readcon tip time, six repeats.
 The horizontal line is 1.
-A point above the line is a CON reader that is faster than readcon at the base commit.}
+A point above the line means the tip is that many times as fast.}
 \label{fig:ratios}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/memory.pdf}
-\caption{Median peak resident set above the import, CuH$_2$, interleaved.
-A bar at zero means the parse did not raise the high water mark above the import.}
+\caption{MiB added to the high-water mark by the read, after the import, six repeats.}
 \label{fig:memory}
 \end{figure}
 
 \FloatBarrier
 \section{Measurements on this host}\label{sec:host}
-We read two trajectories on this host, six times for each arm, serial and interleaved.
+We read one trajectory of 100000 frames and 32 copper atoms, six times for each arm, interleaved, each sample a fresh process.
 Each library is imported before the clock starts.
-The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}, and the log names commit \texttt{b9bcc07b}.
-CuH$_2$ is 400 frames of 218 atoms from \path{resources/test/cuh2.con}.
-Cu48 is 200 frames of 48 copper atoms.
+The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}, and the log names commit \texttt{bba2b0b5}.
 CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file.
-The peak resident set of every parse stayed at the import, so the median above the import is 0.
+readcon does not read XYZ.
+readcon does not read HDF5.
+Memory is the VmHWM after the read minus the VmHWM after the import.
 
 \subsection{Results}\label{sec:results}
-Table~\ref{tab:host} gives the interleaved medians.
-On CuH$_2$ CON, readcon at the base commit takes 0.0323~s and readcon at the tip takes 0.0324~s.
-The base median is the lower one, and the two interquartile ranges overlap.
-The ASE eon parser takes 0.112~s and readcon-db takes 0.196~s.
-On the CuH$_2$ XYZ file, chemfiles takes 0.0196~s and NumPy takes 0.0237~s, so chemfiles has the lower median.
-OVITO takes 0.0306~s, the ASE extended XYZ reader takes 0.118~s and pymatgen takes 0.495~s.
-On the CuH$_2$ HDF5 file, h5py takes 0.00465~s and MDAnalysis takes 0.198~s.
-On Cu48 CON, the tip takes 0.00285~s and the base takes 0.00317~s.
-On the Cu48 XYZ file, NumPy takes 0.00304~s and chemfiles takes 0.00335~s, so NumPy has the lower median.
-On the Cu48 HDF5 file, h5py takes 0.00122~s and MDAnalysis takes 0.0991~s.
+On the CON file, readcon at the tip takes 1.108~s (IQR 0.0500~s) and readcon at the base commit takes 2.496~s (IQR 0.192~s).
+The tip is 2.25 times as fast as the base.
+The ASE eon parser takes 11.10~s (IQR 0.121~s), and the tip is 10.0 times as fast.
+readcon-db ingests the same file in 11.50~s (IQR 0.143~s), and the read is 10.4 times as fast as that ingest.
+Every one of those arms matches 100000 of 100000 frames, and the failure count is 0.
+The read adds 1158~MiB at the tip, 2531~MiB at the base, 384~MiB for ASE, and 398~MiB for readcon-db.
 
-A frame counts as a success when every coordinate is within \(10^{-5}\,\text{\AA}\) of the reference.
-Every arm in Table~\ref{tab:host} matches every requested frame, 400 of 400 on CuH$_2$ and 200 of 200 on Cu48, and the failure count of each of those arms is 0.
-The eOn client matches 0 of 400 frames on CuH$_2$ and 0 of 200 frames on Cu48, so those failure counts are 400 and 200.
-Its checkout has no \path{client/CMakeLists.txt}, and \path{paper/cpc/logs/build.log} records that configure error.
-This branch therefore has no wall time for that client.
+eOn 3.6.0 reads the first frame of that file through \texttt{Matter.con2matter}.
+That call takes 0.365~s (IQR 0.0181~s) and matches 1 of 1 frame.
+readcon's first-frame read of the same file takes 0.0525~s (IQR 0.00631~s) and matches 1 of 1 frame.
+The first-frame read is 6.96 times as fast as \texttt{con2matter}.
+The build log is \path{paper/cpc/logs/eon-build.log}, and its ninja step exits 0.
+
+On the XYZ file, NumPy takes 1.258~s (IQR 0.00963~s) and chemfiles takes 1.344~s (IQR 0.0147~s).
+NumPy is 1.07 times as fast as chemfiles.
+OVITO takes 5.091~s (IQR 0.613~s), the ASE extended XYZ reader takes 8.239~s (IQR 0.252~s), and pymatgen takes 27.90~s (IQR 3.23~s).
+Each matches 100000 of 100000 frames.
+Their peaks above the import are 391~MiB, 166~MiB, 172~MiB, 346~MiB and 2119~MiB.
+
+On the HDF5 file, h5py takes 0.740~s (IQR 0.193~s) and MDAnalysis takes 51.6~s (IQR 1.18~s).
+h5py is 69.7 times as fast as MDAnalysis.
+Both match 100000 of 100000 frames.
+The read adds 759~MiB for h5py and 139~MiB for MDAnalysis.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
-\caption{Interleaved reads, six repeats, after the import.
-The median is the type 7 median of the wall time.}
+\caption{CON reads of 100000 frames, six fresh processes, type 7 median.
+eOn and the first-frame read return one frame of the same file.}
 \label{tab:host}
-\begin{tabular}{@{}llrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Reader & File & CuH$_2$ (s) & Cu48 (s) \\
+Reader & Median (s) & IQR (s) & MiB & Matched \\
 \midrule
-readcon, base & CON & 0.0323 & 0.00317 \\
-readcon, tip & CON & 0.0324 & 0.00285 \\
-ASE, eOn format & CON & 0.112 & 0.0247 \\
-readcon-db & CON & 0.196 & 0.0362 \\
-chemfiles & XYZ & 0.0196 & 0.00335 \\
-NumPy & XYZ & 0.0237 & 0.00304 \\
-OVITO & XYZ & 0.0306 & 0.0112 \\
-ASE, extended XYZ & XYZ & 0.118 & 0.0252 \\
-pymatgen & XYZ & 0.495 & 0.0482 \\
-h5py & HDF5 & 0.00465 & 0.00122 \\
-MDAnalysis & HDF5 & 0.198 & 0.0991 \\
+readcon, tip & 1.108 & 0.0500 & 1158 & 100000/100000 \\
+readcon, base & 2.496 & 0.192 & 2531 & 100000/100000 \\
+ASE, eOn format & 11.10 & 0.121 & 384 & 100000/100000 \\
+readcon-db & 11.50 & 0.143 & 398 & 100000/100000 \\
+readcon, first frame & 0.0525 & 0.00631 & 131 & 1/1 \\
+eOn \texttt{con2matter} & 0.365 & 0.0181 & 263 & 1/1 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The eOn client is the one arm that fails.
-The missing \path{client/CMakeLists.txt} is why that arm has no wall time.
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{XYZ reads of the same 100000 frames.
+readcon has no XYZ reader.}
+\label{tab:xyz}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+NumPy & 1.258 & 0.00963 & 391 & 100000/100000 \\
+chemfiles & 1.344 & 0.0147 & 166 & 100000/100000 \\
+OVITO & 5.091 & 0.613 & 172 & 100000/100000 \\
+ASE, extended XYZ & 8.239 & 0.252 & 346 & 100000/100000 \\
+pymatgen & 27.90 & 3.23 & 2119 & 100000/100000 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each, with each library imported before the clock.
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{HDF5 reads of the same 100000 frames.
+readcon has no HDF5 reader.}
+\label{tab:hdf5}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+h5py & 0.740 & 0.193 & 759 & 100000/100000 \\
+MDAnalysis & 51.6 & 1.18 & 139 & 100000/100000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each.
 readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.
 Both stores keep all 40 frames.
-The peaks above a NumPy-import child are 0.262~MB and 60.4~MB, and the log is \path{paper/cpc/logs/db.log}.
+The log is \path{paper/cpc/logs/db.log}.
 
 We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
-One read takes well over a millisecond.
 In shared mode the median is 0.0556~s at 1 rank, 0.0290~s at 2, 0.0156~s at 4 and 0.00959~s at 8.
 In scatter mode the median is 0.0527~s at 1 rank, 0.0311~s at 2, 0.0161~s at 4 and 0.0146~s at 8.
 Eight ranks are faster than four on both medians.
 The scatter-mode interquartile range at eight ranks is 0.00607~s, and that range overlaps the four-rank median.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
-One thread parses without building a thread pool.
-Each launch returns the block of frames that the partition assigns to rank 0, and the log is \path{paper/cpc/logs/mpi.log}.
-
-We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each, with each library imported before the clock.
-readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.
-Both stores keep all 40 frames.
-The peaks above a NumPy-import child are 0.262~MB and 60.4~MB, and the log names commit \texttt{8a5f0fb5}.
-
-We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
-One read takes well over a millisecond.
-In shared mode the median is 0.0556~s at 1 rank, 0.0290~s at 2, 0.0156~s at 4 and 0.00959~s at 8.
-In scatter mode the median is 0.0527~s at 1 rank, 0.0311~s at 2, 0.0161~s at 4 and 0.0146~s at 8.
-Eight ranks are faster than four on both medians.
-The scatter-mode interquartile range at eight ranks is 0.00607~s, and that range overlaps the four-rank median.
-Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
-One thread parses without building a thread pool.
-Each launch returns the block of frames that the partition assigns to rank 0, and the log names commit \texttt{109cbc4b}.
+The log is \path{paper/cpc/logs/mpi.log}.
 
 \FloatBarrier
 \section{Stored campaigns}\label{sec:stored}

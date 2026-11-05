@@ -24,7 +24,7 @@ reason=client/CMakeLists.txt is not in the checkout, and include/eon/ConFileIO.h
 CMake Error at CMakeLists.txt:82 (add_subdirectory):
   The source directory
 
-    /agent/repos/readcon-core/paper/cpc/bench/work/peers/eon/client
+    ./paper/cpc/bench/work/peers/eon/client
 
   does not contain a CMakeLists.txt file.
 

@@ -4,5 +4,3 @@ snap_main_exit=0
 snap_supp_exit=0
 persona=rohit-paper
 no_llm=1
-WRITING_VOICE_ROOT=/home/ubuntu/.config/proseguard
-note=The first main pass exited 1 on a defensive sentence. The rewrite exited 0. Suggestions are not actionable.

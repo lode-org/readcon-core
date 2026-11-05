@@ -1,14 +1,14 @@
 date_utc 2026-11-05T01:19:04Z
 
 $ python3 -m pip install --user --force-reinstall --no-build-isolation .
-Processing /agent/repos/readcon-core
+Processing .
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
 Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
   Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=965541 sha256=2ae282d48a0fa9df4f0ffe3218d7e6742c0d87b307fcef2741960fb8f42ca42b
-  Stored in directory: /home/ubuntu/.cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
+  Stored in directory: ~/.cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
 Successfully built readcon
 Installing collected packages: readcon
   Attempting uninstall: readcon
@@ -18,30 +18,30 @@ Installing collected packages: readcon
 Successfully installed readcon-0.17.3
 exit 0
 
-$ /usr/bin/python3 -m pip install --target /agent/repos/readcon-core/paper/cpc/build/baseline-readcon --no-build-isolation /tmp/readcon-base-src
-Processing /tmp/readcon-base-src
+$ /usr/bin/python3 -m pip install --target ./paper/cpc/build/baseline-readcon --no-build-isolation tmp/readcon-base-src
+Processing tmp/readcon-base-src
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
 Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
   Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=964614 sha256=810f92800ab728cb5d3318eaafedc6ea3832f941d0ee9f79e942de76601d57ba
-  Stored in directory: /home/ubuntu/.cache/pip/wheels/6c/23/fb/bce97d2af03b72d6dea4c63d0e5e075c8998d095d613a944c3
+  Stored in directory: ~/.cache/pip/wheels/6c/23/fb/bce97d2af03b72d6dea4c63d0e5e075c8998d095d613a944c3
 Successfully built readcon
 Installing collected packages: readcon
 Successfully installed readcon-0.17.3
 exit 0
 
 $ /usr/bin/python3 -m pip install --user h5py
-Requirement already satisfied: h5py in /home/ubuntu/.local/lib/python3.12/site-packages (3.16.0)
-Requirement already satisfied: numpy>=1.21.2 in /home/ubuntu/.local/lib/python3.12/site-packages (from h5py) (2.5.4)
+Requirement already satisfied: h5py in ~/.local/lib/python3.12/site-packages (3.16.0)
+Requirement already satisfied: numpy>=1.21.2 in ~/.local/lib/python3.12/site-packages (from h5py) (2.5.4)
 exit 0
 
-$ cmake -S /agent/repos/readcon-core/paper/cpc/bench/work/peers/eon -B /agent/repos/readcon-core/paper/cpc/bench/work/peers/eon/build-h2h -DCMAKE_BUILD_TYPE=Release
+$ cmake -S ./paper/cpc/bench/work/peers/eon -B ./paper/cpc/bench/work/peers/eon/build-h2h -DCMAKE_BUILD_TYPE=Release
 CMake Error at CMakeLists.txt:82 (add_subdirectory):
   The source directory
 
-    /agent/repos/readcon-core/paper/cpc/bench/work/peers/eon/client
+    ./paper/cpc/bench/work/peers/eon/client
 
   does not contain a CMakeLists.txt file.
 

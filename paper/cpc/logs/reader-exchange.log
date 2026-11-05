@@ -1,328 +1,113 @@
-date_utc 2026-11-05T01:22:34Z
+rev_parse bba2b0b565a6a00ff279f3fe348f33dff23e39b8
+tree 88bf959a17c45f425e13e18d3554a236ab14d1b6
+date_utc 2026-11-05T02:14:50Z
 uname_m x86_64
 nproc 8
 cpu_model Intel(R) Xeon(R) Processor
-head b9bcc07b71a2ef86a9dc03c41c753ec03520120d
 baseline_commit ac4f437989dea5aad9f75ff045af09ccf7127eba
 git_status_begin
 (clean)
 git_status_end
 command python3 paper/cpc/scripts/bench_readers.py
+frames 100000
+atoms 32
 repeats 6
+schedule interleaved
+process fresh
+memory VmHWM_after_read_minus_VmHWM_after_import_MiB
 numpy_percentile method=linear type=7
-import_before_timer 1
-system cuh2 frames 400 atoms 218
-result system=cuh2 schedule=serial arm=eon format=con requested=400 matched=0 failed=400 error=build
-sample system=cuh2 schedule=serial arm=readcon_tip rep=0 seconds=5.482448100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_tip rep=1 seconds=3.045295100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_tip rep=2 seconds=2.444339000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_tip rep=3 seconds=2.490377600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_tip rep=4 seconds=3.566736000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_tip rep=5 seconds=2.356813700e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=0 seconds=3.875085000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=1 seconds=4.053278400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=2 seconds=2.613574800e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=3 seconds=2.403243500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=4 seconds=2.114755100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_base rep=5 seconds=2.334895100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=0 seconds=1.979831200e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=1 seconds=1.955395810e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=2 seconds=1.914943570e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=3 seconds=1.955808370e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=4 seconds=1.885491250e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=readcon_db rep=5 seconds=1.922858690e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=0 seconds=1.160302330e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=1 seconds=1.106130500e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=2 seconds=1.097225470e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=3 seconds=1.096226280e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=4 seconds=1.123860690e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_eon rep=5 seconds=1.111395190e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=0 seconds=1.308741420e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=1 seconds=1.172990290e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=2 seconds=1.177963080e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=3 seconds=1.166681300e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=4 seconds=1.161614870e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ase_extxyz rep=5 seconds=1.160649080e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=0 seconds=3.052166100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=1 seconds=2.414283600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=2 seconds=2.253299400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=3 seconds=2.226289600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=4 seconds=2.096764000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=numpy rep=5 seconds=2.115833300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=0 seconds=2.360944200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=1 seconds=1.990176700e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=2 seconds=1.869723600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=3 seconds=1.836847400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=4 seconds=1.879391200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=chemfiles rep=5 seconds=1.828208500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=0 seconds=4.773172200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=1 seconds=3.037547700e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=2 seconds=2.902027300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=3 seconds=2.890398300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=4 seconds=3.034290100e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=ovito rep=5 seconds=2.872041200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=0 seconds=5.341749510e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=1 seconds=4.861800860e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=2 seconds=4.871111710e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=3 seconds=4.706801560e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=4 seconds=4.816378780e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=pymatgen rep=5 seconds=4.858986810e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=0 seconds=6.816885000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=1 seconds=4.209780000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=2 seconds=2.973439000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=3 seconds=2.740026000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=4 seconds=2.767994000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=h5py rep=5 seconds=2.650115000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=0 seconds=2.054481680e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=1 seconds=1.983578960e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=2 seconds=1.982900610e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=3 seconds=2.019725480e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=4 seconds=2.000093990e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=serial arm=mdanalysis rep=5 seconds=1.989694350e-01 rss_above_import=0 matched=400 got=400
-summary system=cuh2 schedule=serial arm=readcon_tip format=con n_rep=6 median=2.767836350e-02 iqr=9.805271250e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=readcon_base format=con n_rep=6 median=2.508409150e-02 iqr=1.207725250e-02 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=readcon_db format=con n_rep=6 median=1.939127250e-01 iqr=3.878288000e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=ase_eon format=con n_rep=6 median=1.108762845e-01 iqr=2.129258750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=ase_extxyz format=xyz n_rep=6 median=1.169835795e-01 iqr=1.383840500e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=numpy format=xyz n_rep=6 median=2.239794500e-02 iqr=2.305901750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=chemfiles format=xyz n_rep=6 median=1.874557400e-02 iqr=1.174138750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=ovito format=xyz n_rep=6 median=2.968158700e-02 iqr=1.434277499e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=pymatgen format=xyz n_rep=6 median=4.860393835e-01 iqr=4.175320999e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=h5py format=h5 n_rep=6 median=2.870716500e-03 iqr=1.153676750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=serial arm=mdanalysis format=h5 n_rep=6 median=1.994894170e-01 iqr=2.970980000e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-result system=cuh2 schedule=interleaved arm=eon format=con requested=400 matched=0 failed=400 error=build
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=0 seconds=3.744548500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=0 seconds=3.697610800e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=0 seconds=1.959334700e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=0 seconds=1.176366750e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=0 seconds=1.244459150e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=0 seconds=2.609293200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=0 seconds=2.215357700e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=0 seconds=4.295197900e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=0 seconds=4.951354780e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=0 seconds=6.886307000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=0 seconds=2.049395790e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=1 seconds=1.966315010e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=1 seconds=4.228921000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=1 seconds=4.852651710e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=1 seconds=3.318325400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=1 seconds=2.002312400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=1 seconds=2.231427000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=1 seconds=1.189909140e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=1 seconds=1.115668900e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=1 seconds=1.960964940e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=1 seconds=3.455241600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=1 seconds=3.551772300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=2 seconds=2.542968600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=2 seconds=2.551183900e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=2 seconds=1.959016630e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=2 seconds=1.109233440e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=2 seconds=1.186405750e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=2 seconds=2.419483400e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=2 seconds=1.906146600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=2 seconds=3.049274600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=2 seconds=5.061538750e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=2 seconds=5.994167000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=2 seconds=1.978084780e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=3 seconds=2.013712520e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=3 seconds=3.583809000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=3 seconds=4.756796220e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=3 seconds=3.047643500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=3 seconds=1.922624300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=3 seconds=2.370106500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=3 seconds=1.176821230e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=3 seconds=1.119788850e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=3 seconds=1.957377300e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=3 seconds=3.929698500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=3 seconds=2.810978000e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=4 seconds=3.411507800e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=4 seconds=2.484565500e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=4 seconds=1.913741690e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=4 seconds=1.118398970e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=4 seconds=1.176308390e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=4 seconds=2.236470600e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=4 seconds=1.969141200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=4 seconds=3.007102300e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=4 seconds=4.975987430e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=4 seconds=5.076467000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=4 seconds=1.982469560e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=mdanalysis rep=5 seconds=1.940800970e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=h5py rep=5 seconds=3.407381000e-03 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=pymatgen rep=5 seconds=4.950624180e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ovito rep=5 seconds=3.066521200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=chemfiles rep=5 seconds=1.945401200e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=numpy rep=5 seconds=2.360762900e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_extxyz rep=5 seconds=1.180675310e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=ase_eon rep=5 seconds=1.131131740e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_db rep=5 seconds=1.969441440e-01 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_base rep=5 seconds=3.007882800e-02 rss_above_import=0 matched=400 got=400
-sample system=cuh2 schedule=interleaved arm=readcon_tip rep=5 seconds=3.077704000e-02 rss_above_import=0 matched=400 got=400
-summary system=cuh2 schedule=interleaved arm=readcon_tip format=con n_rep=6 median=3.244605900e-02 iqr=6.390466750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=readcon_base format=con n_rep=6 median=3.231562200e-02 iqr=9.716598750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=readcon_db format=con n_rep=6 median=1.959175665e-01 iqr=2.770247493e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=ase_eon format=con n_rep=6 median=1.119093910e-01 iqr=1.194460000e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=ase_extxyz format=xyz n_rep=6 median=1.183540530e-01 iqr=1.124854250e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=numpy format=xyz n_rep=6 median=2.365434700e-02 iqr=1.395955000e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=chemfiles format=xyz n_rep=6 median=1.957271200e-02 iqr=6.570107496e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=ovito format=xyz n_rep=6 median=3.057897900e-02 iqr=2.073230751e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=pymatgen format=xyz n_rep=6 median=4.950989480e-01 iqr=9.268444001e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=h5py format=h5 n_rep=6 median=4.652694000e-03 iqr=2.019655000e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-summary system=cuh2 schedule=interleaved arm=mdanalysis format=h5 n_rep=6 median=1.980277170e-01 iqr=3.664432750e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=400 matched=400 failed=0 got=400 error=
-system cu48 frames 200 atoms 48
-result system=cu48 schedule=serial arm=eon format=con requested=200 matched=0 failed=200 error=build
-sample system=cu48 schedule=serial arm=readcon_tip rep=0 seconds=6.900083000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_tip rep=1 seconds=3.404804001e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_tip rep=2 seconds=2.633149000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_tip rep=3 seconds=2.689996000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_tip rep=4 seconds=3.012440000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_tip rep=5 seconds=2.622707000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=0 seconds=5.928698000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=1 seconds=3.577078000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=2 seconds=2.945955000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=3 seconds=3.132997001e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=4 seconds=2.742552000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_base rep=5 seconds=2.573134000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=0 seconds=3.988944600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=1 seconds=3.753864300e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=2 seconds=3.671867800e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=3 seconds=3.583447600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=4 seconds=3.586338200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=readcon_db rep=5 seconds=3.541245200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=0 seconds=2.662366700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=1 seconds=2.485746900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=2 seconds=2.474078100e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=3 seconds=2.511574300e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=4 seconds=2.467553800e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_eon rep=5 seconds=2.500291200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=0 seconds=3.011531100e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=1 seconds=2.510613600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=2 seconds=2.503515500e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=3 seconds=2.490385000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=4 seconds=2.495335600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ase_extxyz rep=5 seconds=2.511451000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=0 seconds=3.780610000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=1 seconds=2.994838000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=2 seconds=2.977520000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=3 seconds=2.813892999e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=4 seconds=2.885283000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=numpy rep=5 seconds=2.877465000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=0 seconds=5.353363000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=1 seconds=3.610370000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=2 seconds=3.298157000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=3 seconds=3.327677000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=4 seconds=3.276949000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=chemfiles rep=5 seconds=3.328123000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=0 seconds=1.285724900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=1 seconds=1.042325000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=2 seconds=1.084487300e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=3 seconds=9.857592000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=4 seconds=9.809274000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=ovito rep=5 seconds=9.667627000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=0 seconds=4.955545800e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=1 seconds=5.877743500e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=2 seconds=4.584079400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=3 seconds=4.560315200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=4 seconds=5.539633000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=pymatgen rep=5 seconds=4.533228200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=0 seconds=2.371898000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=1 seconds=1.221321000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=2 seconds=1.195753000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=3 seconds=9.632090005e-04 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=4 seconds=9.993739995e-04 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=h5py rep=5 seconds=8.652150000e-04 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=0 seconds=1.022511030e-01 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=1 seconds=9.851785000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=2 seconds=9.784390700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=3 seconds=9.789775200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=4 seconds=9.801372200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=serial arm=mdanalysis rep=5 seconds=1.014235460e-01 rss_above_import=0 matched=200 got=200
-summary system=cu48 schedule=serial arm=readcon_tip format=con n_rep=6 median=2.851218000e-03 iqr=6.593522505e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=readcon_base format=con n_rep=6 median=3.039476000e-03 iqr=6.726550005e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=readcon_db format=con n_rep=6 median=3.629103000e-02 iqr=1.491949251e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=ase_eon format=con n_rep=6 median=2.493019050e-02 iqr=3.175822505e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=ase_extxyz format=xyz n_rep=6 median=2.507064550e-02 iqr=1.386107501e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=numpy format=xyz n_rep=6 median=2.931401500e-03 iqr=1.110889998e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=chemfiles format=xyz n_rep=6 median=3.327900000e-03 iqr=2.342712501e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=ovito format=xyz n_rep=6 median=1.014042100e-02 iqr=9.181137500e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=pymatgen format=xyz n_rep=6 median=4.769812600e-02 iqr=8.273549500e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=h5py format=h5 n_rep=6 median=1.097563500e-03 iqr=2.426787498e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=serial arm=mdanalysis format=h5 n_rep=6 median=9.826578600e-02 iqr=2.770377500e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-result system=cu48 schedule=interleaved arm=eon format=con requested=200 matched=0 failed=200 error=build
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=0 seconds=5.684683000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=0 seconds=6.420186000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=0 seconds=3.896186600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=0 seconds=2.661117900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=0 seconds=2.999097900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=0 seconds=3.776040000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=0 seconds=5.292990000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=0 seconds=1.365016000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=0 seconds=5.035094400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=0 seconds=2.335701000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=0 seconds=1.032585000e-01 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=1 seconds=9.909280900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=1 seconds=1.254064000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=1 seconds=5.796137700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=1 seconds=1.088749700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=1 seconds=3.562937000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=1 seconds=3.042373000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=1 seconds=2.525668400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=1 seconds=2.463476900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=1 seconds=3.537839100e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=1 seconds=3.674002000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=1 seconds=3.606609000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=2 seconds=2.947647999e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=2 seconds=3.371829000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=2 seconds=3.588065200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=2 seconds=2.491448900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=2 seconds=2.488875400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=2 seconds=3.136816001e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=2 seconds=3.297662000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=2 seconds=1.042310600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=2 seconds=4.594365700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=2 seconds=1.277806000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=2 seconds=9.911860000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=3 seconds=9.865226000e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=3 seconds=1.060592001e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=3 seconds=4.605311400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=3 seconds=1.081087400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=3 seconds=3.362315000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=3 seconds=2.852178000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=3 seconds=2.513204700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=3 seconds=2.455117100e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=3 seconds=3.585401800e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=3 seconds=2.964825000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=3 seconds=2.692064000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=4 seconds=2.744699999e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=4 seconds=2.856459000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=4 seconds=3.650741500e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=4 seconds=2.454356300e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=4 seconds=2.538668900e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=4 seconds=3.010763000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=4 seconds=3.279294000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=4 seconds=1.182264500e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=4 seconds=5.520125600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=4 seconds=1.183116000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=4 seconds=9.811465400e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=mdanalysis rep=5 seconds=1.015462590e-01 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=h5py rep=5 seconds=9.719019999e-04 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=pymatgen rep=5 seconds=4.563049500e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ovito rep=5 seconds=1.152858600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=chemfiles rep=5 seconds=3.329142000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=numpy rep=5 seconds=3.035310000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_extxyz rep=5 seconds=2.493320200e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=ase_eon rep=5 seconds=2.467805600e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_db rep=5 seconds=3.647173700e-02 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_base rep=5 seconds=2.906007000e-03 rss_above_import=0 matched=200 got=200
-sample system=cu48 schedule=interleaved arm=readcon_tip rep=5 seconds=2.625858000e-03 rss_above_import=0 matched=200 got=200
-summary system=cu48 schedule=interleaved arm=readcon_tip format=con n_rep=6 median=2.846173999e-03 iqr=7.366457496e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=readcon_base format=con n_rep=6 median=3.168327000e-03 iqr=6.777472495e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=readcon_db format=con n_rep=6 median=3.617619450e-02 iqr=6.378189994e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=ase_eon format=con n_rep=6 median=2.465641250e-02 iqr=2.833102503e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=ase_extxyz format=xyz n_rep=6 median=2.519436550e-02 iqr=3.712744997e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=numpy format=xyz n_rep=6 median=3.038841500e-03 iqr=9.630550039e-05 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=chemfiles format=xyz n_rep=6 median=3.345728500e-03 iqr=2.072495001e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=ovito format=xyz n_rep=6 median=1.120804150e-02 iqr=9.191004992e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=pymatgen format=xyz n_rep=6 median=4.820202900e-02 iqr=8.017656749e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=h5py format=h5 n_rep=6 median=1.218590000e-03 iqr=1.806474995e-04 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
-summary system=cu48 schedule=interleaved arm=mdanalysis format=h5 n_rep=6 median=9.910570450e-02 iqr=2.176947001e-03 rss_above_import_median=0 rss_above_import_iqr=0 requested=200 matched=200 failed=0 got=200 error=
+readcon_xyz no
+readcon_hdf5 no
+eon_path Matter.con2matter first frame
+sample arm=readcon_tip rep=0 seconds=1.5589866480004275 mib=1158.19140625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=0 seconds=2.7709970970008726 mib=2531.36328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=0 seconds=0.05253483400156256 mib=130.88671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=0 seconds=11.815017122999052 mib=397.76953125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=0 seconds=11.255063220000011 mib=383.78125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=0 seconds=0.3517694440015475 mib=263.0234375 matched=1 got=1 requested=1 exit=0 error=
+sample arm=numpy rep=0 seconds=1.2935994890012807 mib=390.84375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=0 seconds=1.3325472769993212 mib=165.53125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=0 seconds=5.6580610609998985 mib=172.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=0 seconds=8.168412711000201 mib=345.5078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=0 seconds=25.645594577999873 mib=2119.0234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=0 seconds=0.7302212049999071 mib=758.6953125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=0 seconds=50.4246353540002 mib=139.32421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=1 seconds=51.18797576600082 mib=139.33984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=1 seconds=0.7497022859988647 mib=758.73046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=1 seconds=31.230126071000996 mib=2118.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=1 seconds=8.509048388001247 mib=345.81640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=1 seconds=5.655858961999911 mib=172.12890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=1 seconds=1.3515383519988973 mib=166.8359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=1 seconds=1.258549887999834 mib=390.89453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=1 seconds=0.3684335520010791 mib=263.0859375 matched=1 got=1 requested=1 exit=0 error=
+sample arm=ase_eon rep=1 seconds=11.054354779000278 mib=383.37109375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=1 seconds=11.502742008000496 mib=397.8515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=1 seconds=0.05153204799898958 mib=130.7578125 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_base rep=1 seconds=2.4849624819999008 mib=2531.32421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=1 seconds=1.0941878239991638 mib=1158.171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=2 seconds=1.063598598999306 mib=1158.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=2 seconds=2.3653524450000987 mib=2531.56640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=2 seconds=0.052517588999762665 mib=130.8828125 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=2 seconds=11.459453236999252 mib=397.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=2 seconds=10.97342490200026 mib=383.70703125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=2 seconds=0.36238067299927934 mib=262.9921875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=numpy rep=2 seconds=1.1981382140002097 mib=390.90625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=2 seconds=1.366310158999113 mib=165.6015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=2 seconds=4.840010196998264 mib=172.01171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=2 seconds=8.176947575999293 mib=345.63671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=2 seconds=29.489115739001136 mib=2118.89453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=2 seconds=0.725237049999123 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=2 seconds=50.73840756200116 mib=139.328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=3 seconds=52.01169283899981 mib=139.2734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=3 seconds=0.9757357050002611 mib=758.7578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=3 seconds=28.935231208000914 mib=2118.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=3 seconds=8.245631286999924 mib=345.5625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=3 seconds=4.911492262999673 mib=172.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=3 seconds=1.3449362219998875 mib=165.41015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=3 seconds=1.2592197979993216 mib=390.84375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=3 seconds=0.3739204609992157 mib=263.015625 matched=1 got=1 requested=1 exit=0 error=
+sample arm=ase_eon rep=3 seconds=11.091402006999488 mib=383.6875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=3 seconds=11.646509702000913 mib=397.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=3 seconds=0.060767803000999265 mib=130.9140625 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_base rep=3 seconds=2.6142222480011696 mib=2531.3828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=3 seconds=1.1333700449995376 mib=1158.34765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=4 seconds=1.1220156640010828 mib=1158.33984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=4 seconds=2.2389238979994843 mib=2531.421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=4 seconds=0.052356371999849216 mib=130.88671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=4 seconds=11.4928630480008 mib=397.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=4 seconds=11.209140570001182 mib=383.7578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=4 seconds=0.3216559749998851 mib=263.18359375 matched=1 got=1 requested=1 exit=0 error=
+sample arm=numpy rep=4 seconds=1.2465437970004132 mib=390.69140625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=4 seconds=1.3429446420013846 mib=166.859375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=4 seconds=5.201576286999625 mib=172.2109375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=4 seconds=8.232224969000526 mib=345.5234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=4 seconds=25.877134403001037 mib=2119.01953125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=4 seconds=0.6895795889995497 mib=758.7265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=4 seconds=52.043465844999446 mib=139.390625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=5 seconds=52.081044369000665 mib=138.40625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=5 seconds=0.977853922999202 mib=758.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=5 seconds=26.861637035000967 mib=2119.05078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=5 seconds=8.513154152000425 mib=345.6875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=5 seconds=4.981106604000161 mib=172.07421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=5 seconds=1.3078594970011181 mib=166.12109375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=5 seconds=1.258038524998483 mib=390.80859375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=5 seconds=0.45799053399969125 mib=263.13671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=ase_eon rep=5 seconds=11.1126618219987 mib=383.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=5 seconds=11.444143710001299 mib=397.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=5 seconds=0.06196045599972422 mib=130.8828125 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_base rep=5 seconds=2.5078282809990924 mib=2531.04296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=5 seconds=1.0760126380009751 mib=1158.49609375 matched=100000 got=100000 requested=100000 exit=0 error=
+summary arm=readcon_tip n_rep=6 median_s=1.108101744e+00 iqr_s=4.997501525e-02 mib_median=1158.343750 mib_iqr=0.133789 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_base n_rep=6 median_s=2.496395381e+00 iqr_s=1.923688020e-01 mib_median=2531.373047 mib_iqr=0.078125 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_first n_rep=6 median_s=5.252621150e-02 iqr_s=6.312884501e-03 mib_median=130.884766 mib_iqr=0.003906 requested=1 matched=1 failed=0 exit=0
+summary arm=readcon_db n_rep=6 median_s=1.149780253e+01 iqr_s=1.427620888e-01 mib_median=397.892578 mib_iqr=0.065430 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_eon n_rep=6 median_s=1.110203191e+01 iqr_s=1.214042970e-01 mib_median=383.732422 mib_iqr=0.083008 requested=100000 matched=100000 failed=0 exit=0
+summary arm=eon n_rep=6 median_s=3.654071125e-01 iqr_s=1.812648250e-02 mib_median=263.054688 mib_iqr=0.106445 requested=1 matched=1 failed=0 exit=0
+summary arm=numpy n_rep=6 median_s=1.258294206e+00 iqr_s=9.634841500e-03 mib_median=390.843750 mib_iqr=0.064453 requested=100000 matched=100000 failed=0 exit=0
+summary arm=chemfiles n_rep=6 median_s=1.343940432e+00 iqr_s=1.474120125e-02 mib_median=165.861328 mib_iqr=1.108398 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ovito n_rep=6 median_s=5.091341445e+00 iqr_s=6.133924450e-01 mib_median=172.076172 mib_iqr=0.071289 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_extxyz n_rep=6 median_s=8.238928128e+00 iqr_s=2.524271885e-01 mib_median=345.599609 mib_iqr=0.141602 requested=100000 matched=100000 failed=0 exit=0
+summary arm=pymatgen n_rep=6 median_s=2.789843412e+01 iqr_s=3.227384545e+00 mib_median=2118.957031 mib_iqr=0.151367 requested=100000 matched=100000 failed=0 exit=0
+summary arm=h5py n_rep=6 median_s=7.399617455e-01 iqr_s=1.927442615e-01 mib_median=758.724609 mib_iqr=0.009766 requested=100000 matched=100000 failed=0 exit=0
+summary arm=mdanalysis n_rep=6 median_s=5.159983430e+01 iqr_s=1.184722980e+00 mib_median=139.326172 mib_iqr=0.050781 requested=100000 matched=100000 failed=0 exit=0
 exit_code 0

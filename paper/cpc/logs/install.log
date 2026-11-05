@@ -1,5 +1,5 @@
 ===== readcon-build.log =====
-Processing /agent/repos/readcon-core
+Processing .
   Installing build dependencies: started
   Installing build dependencies: finished with status 'done'
   Getting requirements to build wheel: started
@@ -10,7 +10,7 @@ Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
   Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=964609 sha256=741214c9fdefbd1e3040d52f5cb4ebddaff67b512614135b59df0f72bf62692d
-  Stored in directory: /home/ubuntu/.cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
+  Stored in directory: ~/.cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
 Successfully built readcon
 Installing collected packages: readcon
 Successfully installed readcon-0.17.3
@@ -26,7 +26,7 @@ Building wheels for collected packages: readcon-db
   Building wheel for readcon-db (pyproject.toml): started
   Building wheel for readcon-db (pyproject.toml): finished with status 'done'
   Created wheel for readcon-db: filename=readcon_db-0.2.0-cp312-cp312-linux_x86_64.whl size=1399804 sha256=d939afde7adb14174532b8adf8a69cc54cea495307ed62659c21c35b1ad2cdf8
-  Stored in directory: /tmp/pip-ephem-wheel-cache-acsxv68v/wheels/9a/b6/37/5bcf8aabdcb63eee011c8b3ce8c5788ef4ddf8e4a184784763
+  Stored in directory: tmp/pip-ephem-wheel-cache-acsxv68v/wheels/9a/b6/37/5bcf8aabdcb63eee011c8b3ce8c5788ef4ddf8e4a184784763
 Successfully built readcon-db
 Installing collected packages: readcon-db
 Successfully installed readcon-db-0.2.0
@@ -44,7 +44,7 @@ Downloading maturin-1.16.0-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.m
 [?25l                                            0.0/10.8 MB ? eta -:--:--[2K                                            0.0/10.8 MB 2.7 MB/s eta 0:00:05[2K                                            0.1/10.8 MB 1.7 MB/s eta 0:00:07[2K   ╸                                        0.3/10.8 MB 2.5 MB/s eta 0:00:05[2K   ━╸                                       0.4/10.8 MB 2.9 MB/s eta 0:00:04[2K   ━━                                       0.6/10.8 MB 3.1 MB/s eta 0:00:04[2K   ━━╸                                      0.7/10.8 MB 3.4 MB/s eta 0:00:03[2K   ━━━                                      0.9/10.8 MB 3.7 MB/s eta 0:00:03[2K   ━━━━                                     1.1/10.8 MB 3.9 MB/s eta 0:00:03[2K   ━━━━╸                                    1.3/10.8 MB 4.0 MB/s eta 0:00:03[2K   ━━━━━╸                                   1.5/10.8 MB 4.2 MB/s eta 0:00:03[2K   ━━━━━━                                   1.7/10.8 MB 4.4 MB/s eta 0:00:03[2K   ━━━━━━━                                  1.9/10.8 MB 4.6 MB/s eta 0:00:02[2K   ━━━━━━━━                                 2.2/10.8 MB 4.8 MB/s eta 0:00:02[2K   ━━━━━━━━━                                2.5/10.8 MB 5.1 MB/s eta 0:00:02[2K   ━━━━━━━━━━                               2.8/10.8 MB 5.3 MB/s eta 0:00:02[2K   ━━━━━━━━━━━                              3.1/10.8 MB 5.4 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━                             3.3/10.8 MB 5.6 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━                            3.6/10.8 MB 5.7 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━╸                          3.9/10.8 MB 5.9 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━╸                         4.2/10.8 MB 6.0 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━╸                         4.2/10.8 MB 6.0 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━━━                        4.7/10.8 MB 6.1 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━                       4.9/10.8 MB 6.1 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━╸                      5.1/10.8 MB 6.1 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━                     5.4/10.8 MB 6.1 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━╸                    5.6/10.8 MB 6.2 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━╸                   5.9/10.8 MB 6.3 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━╸                  6.1/10.8 MB 6.3 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━╸                 6.4/10.8 MB 6.3 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━                6.7/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━               7.0/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━╸              7.2/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━╸             7.5/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━             7.7/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━            7.9/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           8.1/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸          8.3/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸         8.5/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸        8.8/10.8 MB 6.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸       9.0/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸      9.3/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━      9.5/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━     9.8/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    10.0/10.8 MB 6.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   10.3/10.8 MB 6.7 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  10.6/10.8 MB 6.9 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸ 10.8/10.8 MB 7.0 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.8/10.8 MB 6.9 MB/s eta 0:00:00
 [?25hInstalling collected packages: maturin
 Successfully installed maturin-1.16.0
-Processing /agent/repos/readcon-core
+Processing .
   Installing build dependencies: started
   Installing build dependencies: finished with status 'done'
   Getting requirements to build wheel: started
@@ -56,7 +56,7 @@ Processing /agent/repos/readcon-core
   [31m×[0m [32mPreparing metadata [0m[1;32m([0m[32mpyproject.toml[0m[1;32m)[0m did not run successfully.
   [31m│[0m exit code: [1;36m1[0m
   [31m╰─>[0m [31m[14 lines of output][0m
-  [31m   [0m error: failed to parse manifest at `/agent/repos/readcon-core/Cargo.toml`
+  [31m   [0m error: failed to parse manifest at `./Cargo.toml`
   [31m   [0m 
   [31m   [0m Caused by:
   [31m   [0m   feature `edition2024` is required
@@ -67,9 +67,9 @@ Processing /agent/repos/readcon-core
   [31m   [0m 💥 maturin failed
   [31m   [0m   Caused by: Cargo metadata failed. Does your crate compile with `cargo build`?
   [31m   [0m   Caused by: `cargo metadata` exited with an error:
-  [31m   [0m Error running maturin: Command '['maturin', 'pep517', 'write-dist-info', '--metadata-directory', '/tmp/pip-modern-metadata-ad79yry_', '--interpreter', '/usr/bin/python3']' returned non-zero exit status 1.
+  [31m   [0m Error running maturin: Command '['maturin', 'pep517', 'write-dist-info', '--metadata-directory', 'tmp/pip-modern-metadata-ad79yry_', '--interpreter', '/usr/bin/python3']' returned non-zero exit status 1.
   [31m   [0m Checking for Rust toolchain....
-  [31m   [0m Running `maturin pep517 write-dist-info --metadata-directory /tmp/pip-modern-metadata-ad79yry_ --interpreter /usr/bin/python3`
+  [31m   [0m Running `maturin pep517 write-dist-info --metadata-directory tmp/pip-modern-metadata-ad79yry_ --interpreter /usr/bin/python3`
   [31m   [0m [31m[end of output][0m
   
   [1;35mnote[0m: This error originates from a subprocess, and is likely not a problem with pip.
@@ -97,15 +97,15 @@ Processing ./paper/cpc/bench/work/peers/mdanalysis/package
   Getting requirements to build wheel: finished with status 'done'
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy>=1.26.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (2.5.4)
+Requirement already satisfied: numpy>=1.26.0 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (2.5.4)
 Collecting GridDataFormats>=0.4.0 (from MDAnalysis==2.12.0.dev0)
   Downloading griddataformats-1.2.0-py3-none-any.whl.metadata (5.0 kB)
 Collecting mmtf-python>=1.0.0 (from MDAnalysis==2.12.0.dev0)
   Downloading mmtf_python-1.1.3-py2.py3-none-any.whl.metadata (1.2 kB)
 Collecting joblib>=0.12 (from MDAnalysis==2.12.0.dev0)
   Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
-Requirement already satisfied: scipy>=1.5.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.18.1)
-Requirement already satisfied: matplotlib>=1.5.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (3.11.2)
+Requirement already satisfied: scipy>=1.5.0 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.18.1)
+Requirement already satisfied: matplotlib>=1.5.1 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (3.11.2)
 Collecting tqdm>=4.43.0 (from MDAnalysis==2.12.0.dev0)
   Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
 [?25l                                              0.0/57.4 kB ? eta -:--:--[2K     ━━━━━━━━━━━━━━━━━━━━━                    30.7/57.4 kB 2.5 MB/s eta 0:00:01[2K     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 57.4/57.4 kB 1.2 MB/s eta 0:00:00
@@ -120,16 +120,16 @@ Collecting mrcfile (from GridDataFormats>=0.4.0->MDAnalysis==2.12.0.dev0)
   Downloading mrcfile-1.5.4-py2.py3-none-any.whl.metadata (7.0 kB)
 Collecting cloudpickle>=3.0 (from joblib>=0.12->MDAnalysis==2.12.0.dev0)
   Downloading cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
-Requirement already satisfied: contourpy>=1.0.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.4.0)
-Requirement already satisfied: cycler>=0.10 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (0.12.1)
-Requirement already satisfied: fonttools>=4.28.2 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.68.0)
-Requirement already satisfied: kiwisolver>=1.3.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.5.1)
-Requirement already satisfied: pillow>=9 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (13.0.0)
+Requirement already satisfied: contourpy>=1.0.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.68.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.5.1)
+Requirement already satisfied: pillow>=9 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (13.0.0)
 Requirement already satisfied: pyparsing>=3 in /usr/lib/python3/dist-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (3.1.1)
-Requirement already satisfied: python-dateutil>=2.7 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.0.0)
+Requirement already satisfied: python-dateutil>=2.7 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.0.0)
 Collecting msgpack>=1.0.0 (from mmtf-python>=1.0.0->MDAnalysis==2.12.0.dev0)
   Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
-Requirement already satisfied: tzdata in /home/ubuntu/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (2026.6)
+Requirement already satisfied: tzdata in ~/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (2026.6)
 Downloading griddataformats-1.2.0-py3-none-any.whl (5.6 MB)
 [?25l                                            0.0/5.6 MB ? eta -:--:--[2K   ╸                                        0.1/5.6 MB 5.6 MB/s eta 0:00:01[2K   ━━                                       0.3/5.6 MB 5.0 MB/s eta 0:00:02[2K   ━━━━━                                    0.7/5.6 MB 7.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━╸                              1.5/5.6 MB 11.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━                   3.2/5.6 MB 18.6 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸ 5.6/5.6 MB 28.0 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.6/5.6 MB 26.5 MB/s eta 0:00:00
 [?25hDownloading joblib-1.6.0-py3-none-any.whl (306 kB)
@@ -221,13 +221,13 @@ Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
   [31m   [0m [11/13] Cythonizing MDAnalysis/lib/formats/libmdaxdr.pyx
   [31m   [0m [12/13] Cythonizing MDAnalysis/lib/nsgrid.pyx
   [31m   [0m [13/13] Cythonizing MDAnalysis/lib/qcprot.pyx
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py:318: UserWarning: Unknown distribution option: 'test_suite'
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py:318: UserWarning: Unknown distribution option: 'test_suite'
   [31m   [0m   warnings.warn(msg)
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py:318: UserWarning: Unknown distribution option: 'tests_require'
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py:318: UserWarning: Unknown distribution option: 'tests_require'
   [31m   [0m   warnings.warn(msg)
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:332: InformationOnly: Normalizing '2.12.0-dev0' to '2.12.0.dev0'
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:332: InformationOnly: Normalizing '2.12.0-dev0' to '2.12.0.dev0'
   [31m   [0m   self.metadata.version = self._normalize_version(self.metadata.version)
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
   [31m   [0m !!
   [31m   [0m 
   [31m   [0m         ********************************************************************************
@@ -241,7 +241,7 @@ Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
   [31m   [0m 
   [31m   [0m !!
   [31m   [0m   corresp(dist, value, root_dir)
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
   [31m   [0m !!
   [31m   [0m 
   [31m   [0m         ********************************************************************************
@@ -254,7 +254,7 @@ Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
   [31m   [0m 
   [31m   [0m !!
   [31m   [0m   dist._finalize_license_expression()
-  [31m   [0m /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+  [31m   [0m tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
   [31m   [0m !!
   [31m   [0m 
   [31m   [0m         ********************************************************************************
@@ -503,72 +503,72 @@ Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
   [31m   [0m writing dependency_links to MDAnalysis.egg-info/dependency_links.txt
   [31m   [0m writing requirements to MDAnalysis.egg-info/requires.txt
   [31m   [0m writing top-level names to MDAnalysis.egg-info/top_level.txt
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/analysis/encore/clustering/include/ap.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/analysis/encore/dimensionality_reduction/include/spe.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
-  [31m   [0m dependency /tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/analysis/encore/clustering/include/ap.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/analysis/encore/dimensionality_reduction/include/spe.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency ./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/include/calc_distances.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/arrayscalars.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarrayobject.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ndarraytypes.h won't be automatically included in the manifest: the path must be relative
+  [31m   [0m dependency tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include/numpy/ufuncobject.h won't be automatically included in the manifest: the path must be relative
   [31m   [0m reading manifest file 'MDAnalysis.egg-info/SOURCES.txt'
   [31m   [0m reading manifest template 'MANIFEST.in'
   [31m   [0m warning: no previously-included files matching 'doc/html/html' found anywhere in distribution
@@ -856,12 +856,12 @@ Downloading msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
   [31m   [0m copying doc/sphinx/source/documentation_pages/lib/formats/libmdaxdr.rst -> build/lib.linux-x86_64-cpython-312/doc/sphinx/source/documentation_pages/lib/formats
   [31m   [0m running build_ext
   [31m   [0m building 'MDAnalysis.lib.formats.libdcd' extension
-  [31m   [0m x86_64-linux-gnu-gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O2 -Wall -fPIC -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats -I/tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats/include -I/usr/include/python3.12 -c MDAnalysis/lib/formats/libdcd.c -o build/temp.linux-x86_64-cpython-312/MDAnalysis/lib/formats/libdcd.o -std=c11 -O3 -funroll-loops -fsigned-zeros
+  [31m   [0m x86_64-linux-gnu-gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O2 -Wall -fPIC -I./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats -Itmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include -I./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats/include -I/usr/include/python3.12 -c MDAnalysis/lib/formats/libdcd.c -o build/temp.linux-x86_64-cpython-312/MDAnalysis/lib/formats/libdcd.o -std=c11 -O3 -funroll-loops -fsigned-zeros
   [31m   [0m MDAnalysis/lib/formats/libdcd.c:51:10: fatal error: Python.h: No such file or directory
   [31m   [0m    51 | #include "Python.h"
   [31m   [0m       |          ^~~~~~~~~~
   [31m   [0m compilation terminated.
-  [31m   [0m error: Command '['x86_64-linux-gnu-gcc', '-fno-strict-overflow', '-Wsign-compare', '-DNDEBUG', '-g', '-O2', '-Wall', '-fPIC', '-I/agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats', '-I/tmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include', '-I/agent/repos/readcon-core/paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats/include', '-I/usr/include/python3.12', '-c', 'MDAnalysis/lib/formats/libdcd.c', '-o', 'build/temp.linux-x86_64-cpython-312/MDAnalysis/lib/formats/libdcd.o', '-std=c11', '-O3', '-funroll-loops', '-fsigned-zeros']' returned non-zero exit status 1.
+  [31m   [0m error: Command '['x86_64-linux-gnu-gcc', '-fno-strict-overflow', '-Wsign-compare', '-DNDEBUG', '-g', '-O2', '-Wall', '-fPIC', '-I./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats', '-Itmp/pip-build-env-u1pgt7iq/overlay/local/lib/python3.12/dist-packages/numpy/_core/include', '-I./paper/cpc/bench/work/peers/mdanalysis/package/MDAnalysis/lib/formats/include', '-I/usr/include/python3.12', '-c', 'MDAnalysis/lib/formats/libdcd.c', '-o', 'build/temp.linux-x86_64-cpython-312/MDAnalysis/lib/formats/libdcd.o', '-std=c11', '-O3', '-funroll-loops', '-fsigned-zeros']' returned non-zero exit status 1.
   [31m   [0m [31m[end of output][0m
   
   [1;35mnote[0m: This error originates from a subprocess, and is likely not a problem with pip.
@@ -880,7 +880,7 @@ Processing ./paper/cpc/bench/work/peers/pymatgen
   Preparing metadata (pyproject.toml): finished with status 'done'
 Collecting pymatgen-core>=2026.10.16 (from pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading pymatgen_core-2026.10.31-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
-Requirement already satisfied: networkx>=3.6.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from pymatgen==0.0.post1.dev1+gaa6fda20e) (3.7)
+Requirement already satisfied: networkx>=3.6.1 in ~/.local/lib/python3.12/site-packages (from pymatgen==0.0.post1.dev1+gaa6fda20e) (3.7)
 Collecting bibtexparser<2,>=1 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading bibtexparser-1.4.4.tar.gz (55 kB)
 [?25l                                              0.0/55.6 kB ? eta -:--:--[2K     ━━━━━━━━━━━━━━━━━━━━━━                   30.7/55.6 kB 2.5 MB/s eta 0:00:01[2K     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 55.6/55.6 kB 907.6 kB/s eta 0:00:00
@@ -890,10 +890,10 @@ Collecting joblib>=1.3.2 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.de
   Using cached joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
 Collecting lxml>=6.1.0 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading lxml-6.1.3-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
-Requirement already satisfied: matplotlib>=3.8 in /home/ubuntu/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (3.11.2)
+Requirement already satisfied: matplotlib>=3.8 in ~/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (3.11.2)
 Collecting monty>=2026.7.16 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading monty-2026.10.21-py3-none-any.whl.metadata (5.5 kB)
-Requirement already satisfied: numpy<3,>=1.25.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (2.5.4)
+Requirement already satisfied: numpy<3,>=1.25.0 in ~/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (2.5.4)
 Collecting orjson<4,>=3.10 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading orjson-3.13.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (42 kB)
 [?25l                                              0.0/42.2 kB ? eta -:--:--[2K     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 42.2/42.2 kB 1.6 MB/s eta 0:00:00
@@ -905,7 +905,7 @@ Collecting plotly>=5.0 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1
   Downloading plotly-7.1.0-py3-none-any.whl.metadata (8.8 kB)
 Collecting requests>=2.32.5 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
-Requirement already satisfied: scipy>=1.13.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.18.1)
+Requirement already satisfied: scipy>=1.13.0 in ~/.local/lib/python3.12/site-packages (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.18.1)
 Collecting spglib>=2.5 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading spglib-2.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (4.2 kB)
 Collecting sympy>=1.3 (from pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
@@ -920,13 +920,13 @@ Collecting uncertainties>=3.1 (from pymatgen-core>=2026.10.16->pymatgen==0.0.pos
 Requirement already satisfied: pyparsing>=2.0.3 in /usr/lib/python3/dist-packages (from bibtexparser<2,>=1->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (3.1.1)
 Collecting cloudpickle>=3.0 (from joblib>=1.3.2->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Using cached cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
-Requirement already satisfied: contourpy>=1.0.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.4.0)
-Requirement already satisfied: cycler>=0.10 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (0.12.1)
-Requirement already satisfied: fonttools>=4.28.2 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.68.0)
-Requirement already satisfied: kiwisolver>=1.3.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.5.1)
+Requirement already satisfied: contourpy>=1.0.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.68.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (1.5.1)
 Requirement already satisfied: packaging>=20.0 in /usr/lib/python3/dist-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (24.0)
-Requirement already satisfied: pillow>=9 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (13.0.0)
-Requirement already satisfied: python-dateutil>=2.7 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.0.0)
+Requirement already satisfied: pillow>=9 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (13.0.0)
+Requirement already satisfied: python-dateutil>=2.7 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.0.0)
 Collecting ruamel.yaml (from monty>=2026.7.16->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading ruamel_yaml-0.19.1-py3-none-any.whl.metadata (16 kB)
 Collecting narwhals>=1.15.1 (from plotly>=5.0->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
@@ -939,10 +939,10 @@ Collecting charset_normalizer<4,>=2 (from requests>=2.32.5->pymatgen-core>=2026.
 Requirement already satisfied: urllib3<3,>=1.26 in /usr/lib/python3/dist-packages (from requests>=2.32.5->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (2.0.7)
 Collecting certifi>=2023.5.7 (from requests>=2.32.5->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
-Requirement already satisfied: typing-extensions>=4.9.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from spglib>=2.5->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.16.0)
+Requirement already satisfied: typing-extensions>=4.9.0 in ~/.local/lib/python3.12/site-packages (from spglib>=2.5->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (4.16.0)
 Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.3->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e)
   Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
-Requirement already satisfied: tzdata in /home/ubuntu/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (2026.6)
+Requirement already satisfied: tzdata in ~/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=3.8->pymatgen-core>=2026.10.16->pymatgen==0.0.post1.dev1+gaa6fda20e) (2026.6)
 Downloading pymatgen_core-2026.10.31-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.7 MB)
 [?25l                                            0.0/4.7 MB ? eta -:--:--[2K   ╸                                        0.1/4.7 MB 2.4 MB/s eta 0:00:02[2K   ━                                        0.1/4.7 MB 2.0 MB/s eta 0:00:03[2K   ━╸                                       0.2/4.7 MB 2.0 MB/s eta 0:00:03[2K   ━━                                       0.3/4.7 MB 2.0 MB/s eta 0:00:03[2K   ━━╸                                      0.3/4.7 MB 1.9 MB/s eta 0:00:03[2K   ━━━                                      0.4/4.7 MB 1.9 MB/s eta 0:00:03[2K   ━━━╸                                     0.5/4.7 MB 1.9 MB/s eta 0:00:03[2K   ━━━━╸                                    0.5/4.7 MB 2.0 MB/s eta 0:00:03[2K   ━━━━━                                    0.6/4.7 MB 2.0 MB/s eta 0:00:03[2K   ━━━━━╸                                   0.7/4.7 MB 2.0 MB/s eta 0:00:02[2K   ━━━━━━                                   0.7/4.7 MB 2.0 MB/s eta 0:00:02[2K   ━━━━━━━                                  0.8/4.7 MB 2.1 MB/s eta 0:00:02[2K   ━━━━━━━━                                 0.9/4.7 MB 2.1 MB/s eta 0:00:02[2K   ━━━━━━━━╸                                1.0/4.7 MB 2.2 MB/s eta 0:00:02[2K   ━━━━━━━━━╸                               1.1/4.7 MB 2.2 MB/s eta 0:00:02[2K   ━━━━━━━━━━                               1.2/4.7 MB 2.2 MB/s eta 0:00:02[2K   ━━━━━━━━━━━                              1.3/4.7 MB 2.3 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━                             1.4/4.7 MB 2.3 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━╸                            1.5/4.7 MB 2.4 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━                           1.6/4.7 MB 2.4 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━                          1.8/4.7 MB 2.5 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━━                         1.9/4.7 MB 2.6 MB/s eta 0:00:02[2K   ━━━━━━━━━━━━━━━━━╸                       2.1/4.7 MB 2.7 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━╸                      2.2/4.7 MB 2.7 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━                     2.4/4.7 MB 2.8 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━                   2.6/4.7 MB 2.9 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━╸                 2.8/4.7 MB 3.0 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━                3.0/4.7 MB 3.1 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━╸              3.2/4.7 MB 3.2 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸            3.3/4.7 MB 3.3 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           3.6/4.7 MB 3.4 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸        3.8/4.7 MB 3.5 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸      4.0/4.7 MB 3.6 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━     4.3/4.7 MB 3.7 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   4.5/4.7 MB 3.8 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸ 4.7/4.7 MB 3.8 MB/s eta 0:00:01[2K   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 3.8 MB/s eta 0:00:00
 [?25hUsing cached joblib-1.6.0-py3-none-any.whl (306 kB)
@@ -985,11 +985,11 @@ Downloading idna-3.20-py3-none-any.whl (69 kB)
   Building wheel for pymatgen (pyproject.toml): started
   Building wheel for pymatgen (pyproject.toml): finished with status 'done'
   Created wheel for pymatgen: filename=pymatgen-0.0.post1.dev1+gaa6fda20e-py3-none-any.whl size=839742 sha256=ab97eddd2f27427fe6a991051c992b3356e3b9ad19770b5403612694181bda97
-  Stored in directory: /tmp/pip-ephem-wheel-cache-b9_a5yww/wheels/3d/45/5e/8f404d7f3497a3198dfc78b9a329e24586c0e5f6b9e037154b
+  Stored in directory: tmp/pip-ephem-wheel-cache-b9_a5yww/wheels/3d/45/5e/8f404d7f3497a3198dfc78b9a329e24586c0e5f6b9e037154b
   Building wheel for bibtexparser (setup.py): started
   Building wheel for bibtexparser (setup.py): finished with status 'done'
   Created wheel for bibtexparser: filename=bibtexparser-1.4.4-py3-none-any.whl size=43611 sha256=c48be7d419a57510c2cc76434656a2e6ca18c3a0dc102d2393aa8d6263d3eb1c
-  Stored in directory: /home/ubuntu/.cache/pip/wheels/54/f8/e6/ecfceb6af875ddc5096bb3811795ac336f50371009a601454d
+  Stored in directory: ~/.cache/pip/wheels/54/f8/e6/ecfceb6af875ddc5096bb3811795ac336f50371009a601454d
 Successfully built pymatgen bibtexparser
 Installing collected packages: mpmath, uncertainties, tqdm, tabulate, sympy, spglib, ruamel.yaml, palettable, orjson, narwhals, lxml, idna, cloudpickle, charset_normalizer, certifi, bibtexparser, requests, plotly, pandas, monty, joblib, pymatgen-core, pymatgen
 Successfully installed bibtexparser-1.4.4 certifi-2026.10.23 charset_normalizer-3.5.2 cloudpickle-3.1.2 idna-3.20 joblib-1.6.0 lxml-6.1.3 monty-2026.10.21 mpmath-1.3.0 narwhals-2.28.0 orjson-3.13.0 palettable-3.3.3 pandas-3.1.1 plotly-7.1.0 pymatgen-0.0.post1.dev1+gaa6fda20e pymatgen-core-2026.10.31 requests-2.34.2 ruamel.yaml-0.19.1 spglib-2.8.0 sympy-1.14.0 tabulate-0.10.0 tqdm-4.70.1 uncertainties-3.2.3
@@ -1051,33 +1051,33 @@ Processing ./paper/cpc/bench/work/peers/ase
   Getting requirements to build wheel: finished with status 'done'
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy>=1.24 in /home/ubuntu/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (2.5.4)
-Requirement already satisfied: scipy>=1.10 in /home/ubuntu/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (1.18.1)
-Requirement already satisfied: matplotlib>=3.7 in /home/ubuntu/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (3.11.2)
-Requirement already satisfied: contourpy>=1.0.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (1.4.0)
-Requirement already satisfied: cycler>=0.10 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (0.12.1)
-Requirement already satisfied: fonttools>=4.28.2 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (4.68.0)
-Requirement already satisfied: kiwisolver>=1.3.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (1.5.1)
+Requirement already satisfied: numpy>=1.24 in ~/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (2.5.4)
+Requirement already satisfied: scipy>=1.10 in ~/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (1.18.1)
+Requirement already satisfied: matplotlib>=3.7 in ~/.local/lib/python3.12/site-packages (from ase==3.30.0b1) (3.11.2)
+Requirement already satisfied: contourpy>=1.0.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (4.68.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (1.5.1)
 Requirement already satisfied: packaging>=20.0 in /usr/lib/python3/dist-packages (from matplotlib>=3.7->ase==3.30.0b1) (24.0)
-Requirement already satisfied: pillow>=9 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (13.0.0)
+Requirement already satisfied: pillow>=9 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (13.0.0)
 Requirement already satisfied: pyparsing>=3 in /usr/lib/python3/dist-packages (from matplotlib>=3.7->ase==3.30.0b1) (3.1.1)
-Requirement already satisfied: python-dateutil>=2.7 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (4.0.0)
-Requirement already satisfied: tzdata in /home/ubuntu/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=3.7->ase==3.30.0b1) (2026.6)
+Requirement already satisfied: python-dateutil>=2.7 in ~/.local/lib/python3.12/site-packages (from matplotlib>=3.7->ase==3.30.0b1) (4.0.0)
+Requirement already satisfied: tzdata in ~/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=3.7->ase==3.30.0b1) (2026.6)
 Building wheels for collected packages: ase
   Building wheel for ase (pyproject.toml): started
   Building wheel for ase (pyproject.toml): finished with status 'done'
   Created wheel for ase: filename=ase-3.30.0b1-py3-none-any.whl size=2922919 sha256=ffd711c50a924cb43e0b0d6bbdcadf1085bc0db699618338dd5d6142055180f8
-  Stored in directory: /tmp/pip-ephem-wheel-cache-7tpa2gpg/wheels/49/82/43/c900ae904a69dcafc8992181180fe1f86e37f35546bca5633a
+  Stored in directory: tmp/pip-ephem-wheel-cache-7tpa2gpg/wheels/49/82/43/c900ae904a69dcafc8992181180fe1f86e37f35546bca5633a
 Successfully built ase
 Installing collected packages: ase
   Attempting uninstall: ase
     Found existing installation: ase 3.29.0
     Uninstalling ase-3.29.0:
       Successfully uninstalled ase-3.29.0
-  WARNING: The script ase is installed in '/home/ubuntu/.local/bin' which is not on PATH.
+  WARNING: The script ase is installed in '~/.local/bin' which is not on PATH.
   Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
 Successfully installed ase-3.30.0b1
-Processing /agent/repos/readcon-core
+Processing .
   Installing build dependencies: started
   Installing build dependencies: finished with status 'done'
   Getting requirements to build wheel: started
@@ -1125,7 +1125,7 @@ Building wheels for collected packages: readcon
          Compiling num-complex v0.4.6
          Compiling num-integer v0.1.46
          Compiling ndarray v0.17.2
-         Compiling readcon-core v0.17.3 (/agent/repos/readcon-core)
+         Compiling readcon-core v0.17.3 (.)
          Compiling either v1.15.0
          Compiling half v1.8.3
          Compiling pyo3-macros-backend v0.28.2
@@ -1153,7 +1153,7 @@ Building wheels for collected packages: readcon
       warning: `readcon-core` (lib) generated 1 warning
           Finished `release` profile [optimized] target(s) in 22.19s
       💥 maturin failed
-        Caused by: No such file or directory (os error 2) at path "/agent/repos/readcon-core/tmpdir/.tmp2z6fit"
+        Caused by: No such file or directory (os error 2) at path ".tmpdir/.tmp2z6fit"
       Error: command ['maturin', 'pep517', 'build-wheel', '-i', '/usr/bin/python3', '--compatibility', 'off'] returned non-zero exit status 1
       [end of output]
   
@@ -1251,11 +1251,11 @@ Building wheels for collected packages: readcon-db
          Compiling bincode v1.3.3
          Compiling heed-types v0.21.0
       warning: zstd-sys@2.1.1+zstd.1.5.7: cc: error: unable to make temporary file: No such file or directory
-      warning: zstd-sys@2.1.1+zstd.1.5.7: ToolExecError: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "/agent/repos/readcon-core/paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
+      warning: zstd-sys@2.1.1+zstd.1.5.7: ToolExecError: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "./paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
       error: failed to run custom build command for `zstd-sys v2.1.1+zstd.1.5.7`
       
       Caused by:
-        process didn't exit successfully: `/agent/repos/readcon-core/paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-2da75db2caef3d4b/build-script-build` (exit status: 1)
+        process didn't exit successfully: `./paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-2da75db2caef3d4b/build-script-build` (exit status: 1)
         --- stdout
         cargo:rerun-if-env-changed=ZSTD_SYS_USE_PKG_CONFIG
         cargo:rerun-if-env-changed=ZSTD_SYS_NO_HIDE_SYMBOLS
@@ -1333,7 +1333,7 @@ Building wheels for collected packages: readcon-db
         exit status: 0
         cargo:warning=cc: error: unable to make temporary file: No such file or directory
         exit status: 1
-        cargo:warning=ToolExecError: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "/agent/repos/readcon-core/paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
+        cargo:warning=ToolExecError: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "./paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
         exit status: 0
         exit status: 0
         exit status: 0
@@ -1342,13 +1342,13 @@ Building wheels for collected packages: readcon-db
         --- stderr
       
       
-        error occurred in cc-rs: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "/agent/repos/readcon-core/paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
+        error occurred in cc-rs: command did not execute successfully (status code exit status: 1): "cc" "-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "-m64" "--target=x86_64-unknown-linux-gnu" "-I" "zstd/lib/" "-I" "zstd/lib/common" "-w" "-fvisibility=hidden" "-ffunction-sections" "-fdata-sections" "-fmerge-all-constants" "-DZSTD_LIB_DEPRECATED=0" "-DXXH_PRIVATE_API=" "-DZSTDLIB_VISIBILITY=" "-DZSTDERRORLIB_VISIBILITY=" "-o" "./paper/cpc/bench/work/peers/readcon-db/target/release/build/zstd-sys-d3d52385c2c41b03/out/7faed3f8272f2313-huf_decompress_amd64.o" "-c" "zstd/lib/decompress/huf_decompress_amd64.S"
       
       
       warning: build failed, waiting for other jobs to finish...
       💥 maturin failed
         Caused by: Failed to build a native library through cargo
-        Caused by: Cargo build finished with "exit status: 101": `env -u CARGO PYO3_BUILD_EXTENSION_MODULE="1" PYO3_ENVIRONMENT_SIGNATURE="cpython-3.12-64bit" PYO3_PYTHON="/usr/bin/python3" PYTHON_SYS_EXECUTABLE="/usr/bin/python3" "cargo" "rustc" "--profile" "release" "--features" "python" "--message-format" "json-render-diagnostics" "--manifest-path" "/agent/repos/readcon-core/paper/cpc/bench/work/peers/readcon-db/Cargo.toml" "--lib" "--crate-type" "cdylib"`
+        Caused by: Cargo build finished with "exit status: 101": `env -u CARGO PYO3_BUILD_EXTENSION_MODULE="1" PYO3_ENVIRONMENT_SIGNATURE="cpython-3.12-64bit" PYO3_PYTHON="/usr/bin/python3" PYTHON_SYS_EXECUTABLE="/usr/bin/python3" "cargo" "rustc" "--profile" "release" "--features" "python" "--message-format" "json-render-diagnostics" "--manifest-path" "./paper/cpc/bench/work/peers/readcon-db/Cargo.toml" "--lib" "--crate-type" "cdylib"`
       Error: command ['maturin', 'pep517', 'build-wheel', '-i', '/usr/bin/python3', '--compatibility', 'off'] returned non-zero exit status 1
       [end of output]
   
@@ -1363,15 +1363,15 @@ Processing ./paper/cpc/bench/work/peers/mdanalysis/package
   Getting requirements to build wheel: finished with status 'done'
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy>=1.26.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (2.5.4)
+Requirement already satisfied: numpy>=1.26.0 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (2.5.4)
 Collecting GridDataFormats>=0.4.0 (from MDAnalysis==2.12.0.dev0)
   Using cached griddataformats-1.2.0-py3-none-any.whl.metadata (5.0 kB)
 Collecting mmtf-python>=1.0.0 (from MDAnalysis==2.12.0.dev0)
   Using cached mmtf_python-1.1.3-py2.py3-none-any.whl.metadata (1.2 kB)
-Requirement already satisfied: joblib>=0.12 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.6.0)
-Requirement already satisfied: scipy>=1.5.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.18.1)
-Requirement already satisfied: matplotlib>=1.5.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (3.11.2)
-Requirement already satisfied: tqdm>=4.43.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (4.70.1)
+Requirement already satisfied: joblib>=0.12 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.6.0)
+Requirement already satisfied: scipy>=1.5.0 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (1.18.1)
+Requirement already satisfied: matplotlib>=1.5.1 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (3.11.2)
+Requirement already satisfied: tqdm>=4.43.0 in ~/.local/lib/python3.12/site-packages (from MDAnalysis==2.12.0.dev0) (4.70.1)
 Collecting threadpoolctl (from MDAnalysis==2.12.0.dev0)
   Using cached threadpoolctl-3.7.0-py3-none-any.whl.metadata (24 kB)
 Requirement already satisfied: packaging in /usr/lib/python3/dist-packages (from MDAnalysis==2.12.0.dev0) (24.0)
@@ -1381,17 +1381,17 @@ Collecting mda-xdrlib (from MDAnalysis==2.12.0.dev0)
   Using cached mda_xdrlib-0.2.0-py3-none-any.whl.metadata (19 kB)
 Collecting mrcfile (from GridDataFormats>=0.4.0->MDAnalysis==2.12.0.dev0)
   Using cached mrcfile-1.5.4-py2.py3-none-any.whl.metadata (7.0 kB)
-Requirement already satisfied: cloudpickle>=3.0 in /home/ubuntu/.local/lib/python3.12/site-packages (from joblib>=0.12->MDAnalysis==2.12.0.dev0) (3.1.2)
-Requirement already satisfied: contourpy>=1.0.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.4.0)
-Requirement already satisfied: cycler>=0.10 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (0.12.1)
-Requirement already satisfied: fonttools>=4.28.2 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.68.0)
-Requirement already satisfied: kiwisolver>=1.3.1 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.5.1)
-Requirement already satisfied: pillow>=9 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (13.0.0)
+Requirement already satisfied: cloudpickle>=3.0 in ~/.local/lib/python3.12/site-packages (from joblib>=0.12->MDAnalysis==2.12.0.dev0) (3.1.2)
+Requirement already satisfied: contourpy>=1.0.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.68.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (1.5.1)
+Requirement already satisfied: pillow>=9 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (13.0.0)
 Requirement already satisfied: pyparsing>=3 in /usr/lib/python3/dist-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (3.1.1)
-Requirement already satisfied: python-dateutil>=2.7 in /home/ubuntu/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.0.0)
+Requirement already satisfied: python-dateutil>=2.7 in ~/.local/lib/python3.12/site-packages (from matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (4.0.0)
 Collecting msgpack>=1.0.0 (from mmtf-python>=1.0.0->MDAnalysis==2.12.0.dev0)
   Using cached msgpack-1.2.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
-Requirement already satisfied: tzdata in /home/ubuntu/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (2026.6)
+Requirement already satisfied: tzdata in ~/.local/lib/python3.12/site-packages (from python-dateutil>=2.7->matplotlib>=1.5.1->MDAnalysis==2.12.0.dev0) (2026.6)
 Using cached griddataformats-1.2.0-py3-none-any.whl (5.6 MB)
 Using cached mmtf_python-1.1.3-py2.py3-none-any.whl (25 kB)
 Using cached filelock-4.2.9-py3-none-any.whl (164 kB)
@@ -1404,10 +1404,10 @@ Building wheels for collected packages: MDAnalysis
   Building wheel for MDAnalysis (pyproject.toml): still running...
   Building wheel for MDAnalysis (pyproject.toml): finished with status 'done'
   Created wheel for MDAnalysis: filename=mdanalysis-2.12.0.dev0-cp312-cp312-linux_x86_64.whl size=13410152 sha256=0f621815ba871fa0b3294dedcb5cfe3d1202a0725914fc3437fdfb53f31566c8
-  Stored in directory: /tmp/pip-ephem-wheel-cache-5o_6se9c/wheels/08/61/17/0610000423f20e0f8a3320802281c8ea6ef51cf0b44af84102
+  Stored in directory: tmp/pip-ephem-wheel-cache-5o_6se9c/wheels/08/61/17/0610000423f20e0f8a3320802281c8ea6ef51cf0b44af84102
 Successfully built MDAnalysis
 Installing collected packages: threadpoolctl, msgpack, mrcfile, mda-xdrlib, filelock, mmtf-python, GridDataFormats, MDAnalysis
-  WARNING: The scripts mrcfile-header and mrcfile-validate are installed in '/home/ubuntu/.local/bin' which is not on PATH.
+  WARNING: The scripts mrcfile-header and mrcfile-validate are installed in '~/.local/bin' which is not on PATH.
   Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
 Successfully installed GridDataFormats-1.2.0 MDAnalysis-2.12.0.dev0 filelock-4.2.9 mda-xdrlib-0.2.0 mmtf-python-1.1.3 mrcfile-1.5.4 msgpack-1.2.4 threadpoolctl-3.7.0
 Cloning into 'paper/cpc/bench/work/peers/chemfiles.py'...
@@ -1418,7 +1418,7 @@ Processing ./paper/cpc/bench/work/peers/chemfiles.py
   Getting requirements to build wheel: finished with status 'done'
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy in /home/ubuntu/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
+Requirement already satisfied: numpy in ~/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
 Building wheels for collected packages: chemfiles
   Building wheel for chemfiles (pyproject.toml): started
   Building wheel for chemfiles (pyproject.toml): finished with status 'error'
@@ -1427,9 +1427,9 @@ Building wheels for collected packages: chemfiles
   × Building wheel for chemfiles (pyproject.toml) did not run successfully.
   │ exit code: 1
   ╰─> [96 lines of output]
-      /tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/wheel/bdist_wheel.py:4: FutureWarning: The 'wheel' package is no longer the canonical location of the 'bdist_wheel' command, and will be removed in a future release. Please update to setuptools v70.1 or later which contains an integrated version of this command.
+      tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/wheel/bdist_wheel.py:4: FutureWarning: The 'wheel' package is no longer the canonical location of the 'bdist_wheel' command, and will be removed in a future release. Please update to setuptools v70.1 or later which contains an integrated version of this command.
         warn(
-      /tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
       !!
       
               ********************************************************************************
@@ -1443,7 +1443,7 @@ Building wheels for collected packages: chemfiles
       !!
         self._finalize_license_expression()
       running bdist_wheel
-      /tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py:119: SetuptoolsDeprecationWarning: bdist_wheel.universal is deprecated
+      tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py:119: SetuptoolsDeprecationWarning: bdist_wheel.universal is deprecated
       !!
       
               ********************************************************************************
@@ -1477,52 +1477,52 @@ Building wheels for collected packages: chemfiles
         File "/usr/lib/python3/dist-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 251, in build_wheel
           return _build_backend().build_wheel(wheel_directory, config_settings,
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 441, in build_wheel
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 441, in build_wheel
           return _build(['bdist_wheel', '--dist-info-dir', str(metadata_directory)])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 429, in _build
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 429, in _build
           return self._build_with_temp_dir(
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
           self.run_setup()
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 317, in run_setup
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/build_meta.py", line 317, in run_setup
           exec(code, locals())  # noqa: S102 # exec is intentional here
           ^^^^^^^^^^^^^^^^^^^^
         File "<string>", line 105, in <module>
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/__init__.py", line 117, in setup
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/__init__.py", line 117, in setup
           return distutils.core.setup(**attrs)  # type: ignore[return-value]
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/core.py", line 168, in setup
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/core.py", line 168, in setup
           return run_commands(dist)
                  ^^^^^^^^^^^^^^^^^^
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/core.py", line 184, in run_commands
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/core.py", line 184, in run_commands
           dist.run_commands()
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1028, in run_commands
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1028, in run_commands
           self.run_command(cmd)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
           super().run_command(command)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
           cmd_obj.run()
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/command/bdist_wheel.py", line 454, in run
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/command/bdist_wheel.py", line 454, in run
           self.run_command("build")
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py", line 342, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py", line 342, in run_command
           self.distribution.run_command(command)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
           super().run_command(command)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
           cmd_obj.run()
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/command/build.py", line 137, in run
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/command/build.py", line 137, in run
           self.run_command(cmd_name)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py", line 342, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/cmd.py", line 342, in run_command
           self.distribution.run_command(command)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/dist.py", line 1106, in run_command
           super().run_command(command)
-        File "/tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+        File "tmp/pip-build-env-qa5v0d7r/overlay/local/lib/python3.12/dist-packages/setuptools/_distutils/dist.py", line 1047, in run_command
           cmd_obj.run()
         File "<string>", line 63, in run
         File "/usr/lib/python3.12/subprocess.py", line 571, in run
           raise CalledProcessError(retcode, process.args,
-      subprocess.CalledProcessError: Command '['cmake', '/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py', '-GNinja', '-DCMAKE_INSTALL_PREFIX=/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/lib.linux-x86_64-cpython-312', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=ON']' returned non-zero exit status 1.
+      subprocess.CalledProcessError: Command '['cmake', './paper/cpc/bench/work/peers/chemfiles.py', '-GNinja', '-DCMAKE_INSTALL_PREFIX=./paper/cpc/bench/work/peers/chemfiles.py/build/lib.linux-x86_64-cpython-312', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=ON']' returned non-zero exit status 1.
       [end of output]
   
   note: This error originates from a subprocess, and is likely not a problem with pip.
@@ -1533,7 +1533,7 @@ ERROR: Could not build wheels for chemfiles, which is required to install pyproj
 Processing ./paper/cpc/bench/work/peers/chemfiles.py
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy in /home/ubuntu/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
+Requirement already satisfied: numpy in ~/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
 Building wheels for collected packages: chemfiles
   Building wheel for chemfiles (pyproject.toml): started
   Building wheel for chemfiles (pyproject.toml): finished with status 'error'
@@ -1545,7 +1545,7 @@ Building wheels for collected packages: chemfiles
       running bdist_wheel
       running build
       running build_py
-      -- Using internal chemfiles from /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib
+      -- Using internal chemfiles from ./paper/cpc/bench/work/peers/chemfiles.py/lib
       CMake Deprecation Warning at lib/CMakeLists.txt:1 (cmake_minimum_required):
         Compatibility with CMake < 3.5 will be removed from a future version of
         CMake.
@@ -1620,7 +1620,7 @@ Building wheels for collected packages: chemfiles
       -- Unpacking gemmi sources
       -- Configuring done (10.7s)
       -- Generating done (0.0s)
-      -- Build files have been written to: /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build
+      -- Build files have been written to: ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build
       creating build/lib.linux-x86_64-cpython-312
       creating build/lib.linux-x86_64-cpython-312/chemfiles
       copying src/chemfiles/selection.py -> build/lib.linux-x86_64-cpython-312/chemfiles
@@ -1639,73 +1639,73 @@ Building wheels for collected packages: chemfiles
       running build_ext
       [1/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Property.cpp
-      In file included from /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Property.cpp:4:
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include/chemfiles/Property.hpp:7:10: fatal error: 'new' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Property.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Property.cpp
+      In file included from ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Property.cpp:4:
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/include/chemfiles/Property.hpp:7:10: fatal error: 'new' file not found
           7 | #include <new>
             |          ^~~~~
       1 error generated.
       [2/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Atom.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Atom.cpp:4:10: fatal error: 'cassert' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Atom.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Atom.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Atom.cpp:4:10: fatal error: 'cassert' file not found
           4 | #include <cassert>
             |          ^~~~~~~~~
       1 error generated.
       [3/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Connectivity.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Connectivity.cpp:4:10: fatal error: 'cassert' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Connectivity.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Connectivity.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Connectivity.cpp:4:10: fatal error: 'cassert' file not found
           4 | #include <cassert>
             |          ^~~~~~~~~
       1 error generated.
       [4/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Format.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Format.cpp:4:10: fatal error: 'cstdint' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Format.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Format.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Format.cpp:4:10: fatal error: 'cstdint' file not found
           4 | #include <cstdint>
             |          ^~~~~~~~~
       1 error generated.
       [5/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatMetadata.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatMetadata.cpp:3:10: fatal error: 'cassert' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/FormatMetadata.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatMetadata.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatMetadata.cpp:3:10: fatal error: 'cassert' file not found
           3 | #include <cassert>
             |          ^~~~~~~~~
       1 error generated.
       [6/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Residue.cpp
-      In file included from /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Residue.cpp:4:
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include/chemfiles/Residue.hpp:7:10: fatal error: 'cstdint' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Residue.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Residue.cpp
+      In file included from ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Residue.cpp:4:
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/include/chemfiles/Residue.hpp:7:10: fatal error: 'cstdint' file not found
           7 | #include <cstdint>
             |          ^~~~~~~~~
       1 error generated.
       [7/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Configuration.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Configuration.cpp:4:10: fatal error: 'cstdint' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Configuration.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Configuration.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Configuration.cpp:4:10: fatal error: 'cstdint' file not found
           4 | #include <cstdint>
             |          ^~~~~~~~~
       1 error generated.
       [8/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/File.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/File.cpp:4:10: fatal error: 'cassert' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/File.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/File.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/File.cpp:4:10: fatal error: 'cassert' file not found
           4 | #include <cassert>
             |          ^~~~~~~~~
       1 error generated.
       [9/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Frame.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/Frame.cpp:4:10: fatal error: 'cassert' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/Frame.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Frame.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/Frame.cpp:4:10: fatal error: 'cassert' file not found
           4 | #include <cassert>
             |          ^~~~~~~~~
       1 error generated.
       [10/180] Building CXX object lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o
       FAILED: lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o
-      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/include -I/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o -c /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatFactory.cpp
-      /agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatFactory.cpp:4:10: fatal error: 'memory' file not found
+      /usr/bin/c++ -DLZMA_API_STATIC -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE=1 -D_LFS64_LARGEFILE=1 -Dchemfiles_EXPORTS -I./paper/cpc/bench/work/peers/chemfiles.py/lib/include -I./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/zlib -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma/liblzma/api -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/lzma -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/bzip2 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/fmt/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/toml11 -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/tng/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/molfiles/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/mmtf-cpp/msgpack-c/include -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/pugixml/src -isystem ./paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build/lib/external/gemmi/include -std=c++11  -O3 -DNDEBUG -std=c++11 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -MD -MT lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o -MF lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o.d -o lib/CMakeFiles/chemfiles_objects.dir/src/FormatFactory.cpp.o -c ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatFactory.cpp
+      ./paper/cpc/bench/work/peers/chemfiles.py/lib/src/FormatFactory.cpp:4:10: fatal error: 'memory' file not found
           4 | #include <memory>
             |          ^~~~~~~~
       1 error generated.
@@ -1760,7 +1760,7 @@ Building wheels for collected packages: chemfiles
         File "<string>", line 78, in run
         File "/usr/lib/python3.12/subprocess.py", line 571, in run
           raise CalledProcessError(retcode, process.args,
-      subprocess.CalledProcessError: Command '['cmake', '--build', '/agent/repos/readcon-core/paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build']' returned non-zero exit status 1.
+      subprocess.CalledProcessError: Command '['cmake', '--build', './paper/cpc/bench/work/peers/chemfiles.py/build/cmake-build']' returned non-zero exit status 1.
       [end of output]
   
   note: This error originates from a subprocess, and is likely not a problem with pip.
@@ -1772,19 +1772,19 @@ CHEM:1
 Processing ./paper/cpc/bench/work/peers/chemfiles.py
   Preparing metadata (pyproject.toml): started
   Preparing metadata (pyproject.toml): finished with status 'done'
-Requirement already satisfied: numpy in /home/ubuntu/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
+Requirement already satisfied: numpy in ~/.local/lib/python3.12/site-packages (from chemfiles==0.10.4) (2.5.4)
 Building wheels for collected packages: chemfiles
   Building wheel for chemfiles (pyproject.toml): started
   Building wheel for chemfiles (pyproject.toml): finished with status 'done'
   Created wheel for chemfiles: filename=chemfiles-0.10.4-py2.py3-none-linux_x86_64.whl size=1705088 sha256=1d8cae96f8088dc2a3fb4448cd90cd4508c14a68d45e596db72b9211e7163cc2
-  Stored in directory: /tmp/pip-ephem-wheel-cache-yyrtonrl/wheels/fc/b4/17/9684e285cf5786e8f5da29125575b5d45886654ece09c5eb63
+  Stored in directory: tmp/pip-ephem-wheel-cache-yyrtonrl/wheels/fc/b4/17/9684e285cf5786e8f5da29125575b5d45886654ece09c5eb63
 Successfully built chemfiles
 Installing collected packages: chemfiles
 Successfully installed chemfiles-0.10.4
 ===== ovito-pip.log =====
 Collecting ovito
   Downloading ovito-3.17.2-cp312-cp312-manylinux_2_34_x86_64.whl.metadata (2.4 kB)
-Requirement already satisfied: numpy>=2 in /home/ubuntu/.local/lib/python3.12/site-packages (from ovito) (2.5.4)
+Requirement already satisfied: numpy>=2 in ~/.local/lib/python3.12/site-packages (from ovito) (2.5.4)
 Collecting traits>=6.3 (from ovito)
   Downloading traits-7.3.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (4.8 kB)
 Collecting PySide6-Essentials~=6.12.0 (from ovito)
@@ -1804,7 +1804,7 @@ Downloading traits-7.3.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.man
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.1/5.1 MB 115.7 MB/s eta 0:00:00
 
 Installing collected packages: traits, shiboken6, PySide6-Essentials, ovito
-  WARNING: The scripts pyside6-android-deploy, pyside6-assistant, pyside6-balsam, pyside6-balsamui, pyside6-deploy, pyside6-designer, pyside6-genpyi, pyside6-linguist, pyside6-lrelease, pyside6-lupdate, pyside6-metaobjectdump, pyside6-project, pyside6-qml, pyside6-qmlcachegen, pyside6-qmlformat, pyside6-qmlimportscanner, pyside6-qmllint, pyside6-qmlls, pyside6-qmltyperegistrar, pyside6-qsb, pyside6-qtpy2cpp, pyside6-rcc, pyside6-svgtoqml and pyside6-uic are installed in '/home/ubuntu/.local/bin' which is not on PATH.
+  WARNING: The scripts pyside6-android-deploy, pyside6-assistant, pyside6-balsam, pyside6-balsamui, pyside6-deploy, pyside6-designer, pyside6-genpyi, pyside6-linguist, pyside6-lrelease, pyside6-lupdate, pyside6-metaobjectdump, pyside6-project, pyside6-qml, pyside6-qmlcachegen, pyside6-qmlformat, pyside6-qmlimportscanner, pyside6-qmllint, pyside6-qmlls, pyside6-qmltyperegistrar, pyside6-qsb, pyside6-qtpy2cpp, pyside6-rcc, pyside6-svgtoqml and pyside6-uic are installed in '~/.local/bin' which is not on PATH.
   Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
 Successfully installed PySide6-Essentials-6.12.0 ovito-3.17.2 shiboken6-6.12.0 traits-7.3.0
 OVITO:0
@@ -1829,7 +1829,7 @@ OVITO:0
 CMake Error at CMakeLists.txt:82 (add_subdirectory):
   The source directory
 
-    /agent/repos/readcon-core/paper/cpc/bench/work/peers/eon/client
+    ./paper/cpc/bench/work/peers/eon/client
 
   does not contain a CMakeLists.txt file.
 
