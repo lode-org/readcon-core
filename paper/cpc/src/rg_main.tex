@@ -177,7 +177,7 @@ Files that earlier eOn releases wrote are grammar version 1 and read as such.
 The velocities of a file of an earlier version are read in the natural unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listing~\ref{lst:py}).
 
-\textit{References:} eOn \cite{chillEonSoftwareLong2014,chillEONSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026,goswamiReadconcore01472026}.
+\textit{References:} eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026,goswamiReadconcore01472026}.
 \end{small}
 
 \section{Introduction}\label{sec:introduction} Rare-event methods turn a potential energy surface into rates.
@@ -204,7 +204,7 @@ H5MD \cite{buylH5mdStructuredEfficient2014,deBuylH5MDStructuredEfficient2014,fol
 The GROMACS compressed trajectory (XTC) and full-precision trajectory (TRR) formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} store molecular dynamics output with neither a mask nor a velocity unit.
 The ASE trajectory keeps every field in a layout that the Python code of ASE defines.
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
-Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMDAnalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
+Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.

@@ -49,8 +49,27 @@ rule mpi_log:
 rule dlpack_log:
     output:
         "logs/dlpack-exchange.log",
+        "src/figures/generated/dlpack_macros.tex",
+        "src/figures/generated/dlpack_table.tex",
+        "src/figures/generated/dlpack.pdf",
     shell:
         "python3 scripts/bench_dlpack.py"
+
+rule eon_build_log:
+    output:
+        "logs/eon-build.log",
+    shell:
+        "python3 scripts/eon_build_log.py"
+
+rule manuscript:
+    input:
+        "src/figures/generated/dlpack_macros.tex",
+        "src/figures/generated/host_macros.tex",
+        "src/figures/generated/host_table.tex",
+    output:
+        "src/rg_main.pdf",
+    shell:
+        "cd src && ../.texcache/tectonic rg_main.tex"
 
 rule stamp_host:
     shell:

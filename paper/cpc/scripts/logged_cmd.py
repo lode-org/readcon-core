@@ -10,6 +10,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def redact(line: str) -> str:
+    """Rewrite home and checkout paths so a log stays inside the tree."""
+    home = Path.home()
+    user = home.name
+    repo = str(ROOT)
+    line = line.replace(repo + "/", "")
+    line = line.replace(repo, ".")
+    line = line.replace(str(home) + "/", "")
+    line = line.replace(str(home), ".")
+    line = line.replace("~/.local", "local-site")
+    line = line.replace("~/", "")
+    line = line.replace(f"_home_{user}_.local", "local-site")
+    line = line.replace(f"_home_{user}_", "")
+    return line
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print("usage: logged_cmd.py LOG command...", file=sys.stderr)
@@ -29,7 +45,8 @@ def main() -> int:
     ]
     for stream in (proc.stdout, proc.stderr):
         for line in stream.splitlines():
-            if any(token in line for token in ("/agent", "/tmp", "/home", "/cursor")):
+            line = redact(line)
+            if any(token in line for token in ("/agent", "/tmp", "/home", "/cursor", "~/", "_home_")):
                 continue
             lines.append(line)
     lines.append(f"exit_code {proc.returncode}")
