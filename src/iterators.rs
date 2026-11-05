@@ -1449,50 +1449,6 @@ fn slot_cache() -> &'static std::sync::Mutex<
     &CACHE
 }
 
-/// Touch one byte on each page of every worker share.
-///
-/// A fresh mapping faults those pages on the thread that first reads
-/// them. Doing that before the parse clock keeps those faults out of
-/// the per-worker parse count.
-#[cfg(feature = "parallel")]
-fn prefault_shares(bytes: &[u8], boundaries: &[usize], workers: usize) {
-    if boundaries.is_empty() || bytes.is_empty() {
-        return;
-    }
-    let page = host_page_size().max(1);
-    let n = boundaries.len();
-    let workers = workers.max(1);
-    let share = n.div_ceil(workers);
-    let len = bytes.len();
-    let touch = |worker: usize| {
-        let start_i = worker.saturating_mul(share);
-        if start_i >= n {
-            return;
-        }
-        let end_i = (start_i + share).min(n) - 1;
-        let start = boundaries[start_i];
-        let end = span_end(boundaries, end_i, len);
-        let mut at = start;
-        while at < end {
-            unsafe {
-                std::ptr::read_volatile(bytes.as_ptr().add(at));
-            }
-            at = at.saturating_add(page);
-        }
-    };
-    if workers >= 2 && rayon::current_thread_index().is_some() {
-        rayon::broadcast(|ctx| {
-            if ctx.index() < workers {
-                touch(ctx.index());
-            }
-        });
-        return;
-    }
-    for worker in 0..workers {
-        touch(worker);
-    }
-}
-
 /// One pool per worker count, kept for the life of the process.
 ///
 /// A fresh pool on every file made each worker fault its frames again.
@@ -1752,9 +1708,6 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             };
         let scan_s = t_scan.elapsed().as_secs_f64();
         let scan_minflt = process_minflt().saturating_sub(fault0);
-        // The mapping's faults are not the frame build. Touch each
-        // share first so the parse counter is the build alone.
-        prefault_shares(bytes, &boundaries, parse_workers);
         let parsed =
             parse_into_slots_timed(bytes, bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
@@ -1772,7 +1725,6 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
             let scan_minflt = process_minflt().saturating_sub(fault0);
-            prefault_shares(bytes, &boundaries, 1);
             let parsed = parse_into_slots_timed(bytes, bytes.len(), &boundaries, 1, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
@@ -2458,14 +2410,6 @@ pub fn frames_from_bytes_phased(
         // One thread walks the file once. A scan plus a second parse made
         // a short file slower than the plain iterator.
         if !matches!(num_threads, Some(n) if n >= 2) {
-            let page = host_page_size().max(1);
-            let mut at = 0;
-            while at < bytes.len() {
-                unsafe {
-                    std::ptr::read_volatile(bytes.as_ptr().add(at));
-                }
-                at = at.saturating_add(page);
-            }
             let flt0 = thread_minflt();
             let t_work = std::time::Instant::now();
             let mut frames = Vec::new();
