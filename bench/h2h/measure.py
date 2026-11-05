@@ -176,7 +176,17 @@ def run_readcon_c() -> None:
         seen = support.c_inspect(path)
         check = support.judge(seen["n_atoms"], seen["n_frames"], seen["cell"], seen["coords"], atoms, frames)
         row = _merge(samples, check)
-        _emit(f"c-read-{name}", _command(["readcon_c"]), row, {"file": support.rel(path), "format": "con"})
+        extra = {"file": support.rel(path), "format": "con"}
+        if name == "atoms-1000000":
+            probe = support.run_binary(
+                support.WORK / "time_c",
+                ["read", support.rel(path), "bench/h2h/work/outs/c-hwm.con", "1"],
+            )
+            kib = support.parse_kv_samples(probe.stdout, "hwm_kib")
+            if kib:
+                row["hwm_mib"] = kib[0] / 1024.0
+                extra["hwm_mib"] = row["hwm_mib"]
+        _emit(f"c-read-{name}", _command(["readcon_c"]), row, extra)
         if name == "atoms-1000000":
             out = support.WORK / "outs" / "c-rewrite.con"
             out.parent.mkdir(parents=True, exist_ok=True)
