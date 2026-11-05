@@ -593,6 +593,7 @@ The measured exchange is the borrowed view against an explicit copy of the same 
 One warm-up is followed by six repeats, and each repeat runs both arms, alternating which arm is first.
 The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
+A 95 percent bootstrap interval for that ratio is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds.
 Figure~\ref{fig:dlpack} shows the six repeats.
 
@@ -750,11 +751,11 @@ The three routes agree with each other to the printed digits, so the lost optimi
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{\textbf{The resumed Morse band ends on the uninterrupted path.}
-Final images of the converged Morse band on the \((s, d)\) plane \cite{goswamiTwodimensionalRmsdProjections2026}, with \(s\), \(d\), colour and dashed lines as in Figure~\ref{fig:restartfmt}.
-Each atom is taken at its periodic image nearest the reactant, and the RMSD follows permutation matching with the iterative rotations and assignments (IRA) algorithm \cite{gundeIRAShapeMatching2021}.
-The steepest-descent band resumed through the shortest round trip returns the uninterrupted barrier, \(\eOneBarrierSd\,\mathrm{eV}\), and the six-decimal restart overlies it.
-The right panel is the image energies against \(s\).}
+\caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
+Left: force calls of the uninterrupted steepest-descent band and of the three resumes.
+Right: the barrier of each route.
+The horizontal line is the uninterrupted barrier.
+The four routes use teal, sky, coral and magenta, and the reference line is sunshine.}
 \label{fig:restart}
 \end{figure}
 
@@ -816,11 +817,61 @@ It keeps the C++ read of positions alone against chemfiles on XYZ and the C++ co
 For those the runs do not order the two readers.
 
 \FloatBarrier
+\section{Measurements on this host}\label{sec:host}
+We read one trajectory of 200 frames and 48 copper atoms on this host, one reader at a time, six times for each reader.
+The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}.
+NumPy parses the XYZ text in a median of 0.00798~s, and readcon-core reads the CON file in a median of 0.0158~s.
+The ASE reader of the eOn format, MDAnalysis and the ASE extended XYZ reader take 0.284~s, 0.291~s and 0.295~s.
+NumPy is the fastest reader in this set.
+Those five readers return coordinates that match the reference.
+pymatgen reads one POSCAR frame in a median of 0.605~s, so that read is not the 200-frame trajectory.
+The chemfiles bindings, the eOn client and OVITO did not build from source in this run.
+Table~\ref{tab:host} records the median wall time, the type 7 interquartile range, the throughput and the peak resident set.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Serial reads of 200 frames of 48 copper atoms, six repeats.
+pymatgen reads one frame.
+The throughput is atoms times frames divided by the median wall time.}
+\label{tab:host}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & Atoms/s & RSS (MB) \\
+\midrule
+NumPy & 0.00798 & 0.000558 & \num{1.20e6} & 38.2 \\
+readcon-core & 0.0158 & 0.00845 & \num{6.21e5} & 38.2 \\
+ASE, eOn format & 0.284 & 0.00747 & \num{3.38e4} & 85.1 \\
+MDAnalysis & 0.291 & 0.0112 & \num{3.29e4} & 129 \\
+ASE, extended XYZ & 0.295 & 0.00709 & \num{3.26e4} & 84.9 \\
+pymatgen & 0.605 & 0.00809 & 79.3 & 129 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/peer_host.pdf}
+\caption{Median wall time of the six readers.
+The bar is the median and the whisker is the type 7 interquartile range.}
+\label{fig:host}
+\end{figure}
+
+We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each.
+readcon-db takes a median of 0.00578~s and the ASE database takes 0.389~s.
+Both stores keep all 40 frames.
+The peak resident sets are 29.1~MB and 89.4~MB.
+
+We time a distributed read of 80 frames of 32 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
+In shared mode the median is 0.00184~s at 1 rank, 0.00128~s at 2, 0.000962~s at 4 and 0.00364~s at 8.
+Four ranks are faster than one rank, and eight ranks are slower than four.
+Each launch returns the block of frames that the partition assigns to rank 0.
+
+\FloatBarrier
 \section{Stored campaigns}\label{sec:stored}
 The figures in this section are drawn by \path{scripts/plot_restored.py} from the records under \path{paper/cpc/data}.
-The database ingest and query records hold five repeats each.
-The MPI records hold one time per rank.
-The Python read ratios use the eleven repeats of the timing record.
+The database and MPI figures in this section are earlier stored records.
+Section~\ref{sec:host} gives the repeats measured on this host.
 
 \begin{figure}[tbp]
 \centering
@@ -853,35 +904,35 @@ The Python read ratios use the eleven repeats of the timing record.
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
-\caption{Strong-scaling speedup of the stored one-time MPI reads and writes.}
+\caption{Earlier stored MPI speedups.}
 \label{fig:mpi-strong}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
-\caption{Stored MPI ingest times for a single writer and a sharded writer.}
+\caption{Earlier stored MPI ingest times.}
 \label{fig:mpi-weak}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
-\caption{Median ingest rate from five stored repeats.}
+\caption{Earlier stored ingest rates.}
 \label{fig:db-throughput}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
-\caption{Median ingest bandwidth from the same five repeats.}
+\caption{Earlier stored ingest bandwidth.}
 \label{fig:db-bandwidth}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
-\caption{Median composition-query time from five stored repeats.}
+\caption{Earlier stored composition-query times.}
 \label{fig:db-query}
 \end{figure}
 

@@ -115,6 +115,20 @@ The last sections give the records beside a checkpoint with what the specificati
 \end{abstract}
 \end{frontmatter}
 
+We keep the specification, the corpora and the timing records in this supplement.
+We name the script that writes each table.
+We state a reader rule as an input and the outcome that follows from it.
+We measure a wall time as the median of at least six repeats.
+We place the type 7 interquartile range next to that median.
+We compare each peer on the same file and the same host.
+We call two reads equal when their coordinates match.
+We count the frames a reader returns and the bytes it keeps.
+We draw each restored figure from a record in this directory.
+We leave a version deposit unnamed until the record exists.
+We build the library from the public commit named in the manuscript.
+We run one cell at a time on one host.
+We keep the machine line to the architecture, the processor count and the processor string.
+
 \section{Normative specification}\label{sec:spec-normative}
 This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} at git blob \texttt{\specTextBlob}.
 \texttt{scripts/\allowbreak gen\_spec\_supp.py -{}-as-is} typesets that file, and its \texttt{-{}-check} fails unless the typeset text matches the file.
@@ -130,9 +144,7 @@ The reader-compatibility notes and the references of the source are omitted, bec
 
 \input{figures/generated/spec_normative}
 
-\input{figures/generated/corpus_table}
-\input{figures/generated/drift_table}
-\input{figures/generated/survey_table}
+\input{figures/generated/corpus_table} \input{figures/generated/drift_table} \input{figures/generated/survey_table}
 
 \FloatBarrier
 \section{Reader rules}\label{sec:appendix-rules}
@@ -192,7 +204,7 @@ No \texttt{sections} key, any other blank line after the coordinates & Line 1 of
 Cell length not positive, or angle outside the open interval to \(180^\circ\) & Rejected with \texttt{validate} true; not checked otherwise. \\
 Angles whose computed radicand \(\hat\rho\) of Eq.~\eqref{eq:cell} is at most \(-\num{\wkWindow}\), without \texttt{lattice\_vectors} & Validation error, in every mode. \\
 Angles whose computed radicand lies between \(-\num{\wkWindow}\) and zero & Flat cell with \(c_z=0\). \\
-\texttt{lattice\_vectors} on line 2 & The cell; lines 3 and 4 build none. \\
+\texttt{lattice\_vectors} in the header & The cell; lines 3 and 4 build none. \\
 Coordinate label other than \texttt{Coordinates of Component}~\(N\) & Validation error, in every mode. \\
 \texttt{nan}, \texttt{inf} or \texttt{infinity} in any case and sign, or a decimal past binary64 such as \texttt{1e999} & Non-finite value, in every mode. \\
 Token that begins like those spellings and is none of them, such as \texttt{NaN.5} & Invalid number format. \\
@@ -784,6 +796,9 @@ bash paper/cpc/scripts/build_tex.sh    # or bash paper/cpc/scripts/build_tex_tec
 python3 paper/cpc/scripts/trace_numbers.py -{}-check
 \end{lstlisting}
 
+\iffalse
+# proseguard:off rgoswami.Headings
+\fi
 \begin{lstlisting}[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
 # NAME=value: a variable the script reads, with its default; after env, the environment
 # of the command that follows. $ENV is the environment of the python3 that runs the
@@ -893,6 +908,9 @@ python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
 #   reads docs/orgmode/spec.org, both corpus manifests, the probes of
 #   paper/cpc/data/referee_probes.json and the tests under tests/ and src/
 \end{lstlisting}
+\iffalse
+# proseguard:on rgoswami.Headings
+\fi
 
 % A digital object identifier in the reference list stays on one line.
 \DeclareUrlCommand\path{\def\UrlFont{\footnotesize\ttfamily}\mathchardef\UrlBreakPenalty=10000 \mathchardef\UrlBigBreakPenalty=10000 }
