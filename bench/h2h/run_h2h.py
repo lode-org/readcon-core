@@ -486,7 +486,11 @@ def can_read(libs, code: str, path: Path, mode: str, n_frames: int) -> bool:
 
 def run_job(job: dict, source: Path, log_dir: Path, tiny_con: Path, tiny_xyz: Path, tiny_pdb: Path) -> dict:
     log_dir.mkdir(parents=True, exist_ok=True)
-    name = f"run-{job['table']}-{job['code']}-{job['cache']}-{job['mode']}-{job['workload']}-r{job['repeat']:02d}"
+    suffix = job["format"].lstrip(".")
+    name = (
+        f"run-{job['table']}-{job['code']}-{job['cache']}-{job['mode']}-"
+        f"{suffix}-{job['workload']}-r{job['repeat']:02d}"
+    )
     env = os.environ.copy()
     for key in THREAD_ENV:
         env[key] = "1"
