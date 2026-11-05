@@ -46,32 +46,41 @@ from pathlib import Path
 kind, src, dest = sys.argv[1:]
 text = Path(src).read_text()
 dest = Path(dest)
+if kind == "readcon-db":
+    from readcon_db import ConCorpus
+elif kind == "ase.db":
+    from ase.io import read
+    from ase.db import connect
+else:
+    raise SystemExit(kind)
+print("READY", flush=True)
+sys.stdin.readline()
 if dest.exists():
     shutil.rmtree(dest)
 dest.mkdir(parents=True)
 t0 = time.perf_counter()
 if kind == "readcon-db":
-    from readcon_db import ConCorpus
     db = ConCorpus(str(dest / "corpus"))
     n = db.append_trajectory_str(1, text, source="traj.con")
     frames = len(db.select(traj_id=1))
-elif kind == "ase.db":
-    from ase.io import read
-    from ase.db import connect
+else:
     atoms = read(src, index=":", format="eon")
     db = connect(dest / "atoms.db")
     for frame in atoms:
         db.write(frame)
     frames = db.count()
     n = frames
-else:
-    raise SystemExit(kind)
 dt = time.perf_counter() - t0
 rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
 print(json.dumps({"kind": kind, "seconds": dt, "rss_bytes": rss, "frames": int(frames), "stored": int(n)}))
 """
     src = WORK / "db.con"
-    proc = subprocess.run([sys.executable, "-c", code, kind, str(src), str(dest)], text=True, capture_output=True)
+    proc = subprocess.run(
+        [sys.executable, "-c", code, kind, str(src), str(dest)],
+        text=True,
+        input="\n",
+        capture_output=True,
+    )
     try:
         doc = json.loads(proc.stdout.strip().splitlines()[-1])
     except Exception:
@@ -107,7 +116,12 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
     write_con(WORK / "db.con")
+    floor = int(subprocess.check_output(
+        [sys.executable, "-c", "import numpy, resource; print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)"],
+        text=True,
+    ).strip())
     lines = header()
+    lines.append(f"baseline_rss_bytes={floor}")
     rows = []
     kinds = ["readcon-db", "ase.db"]
     for repeat in range(REPEATS):
@@ -116,9 +130,14 @@ def main() -> None:
             doc = one(kind, (WORK / "db.con").read_text(), WORK / f"{kind}-{repeat}")
             doc["repeat"] = repeat
             rows.append(doc)
+            above = None
+            if doc.get("rss_bytes") is not None:
+                above = max(0, int(doc["rss_bytes"]) - floor)
+                doc["rss_above_baseline"] = above
             lines.append(
                 f"repeat {repeat} kind {kind} seconds {doc.get('seconds')} "
-                f"rss {doc.get('rss_bytes')} frames {doc.get('frames')} error {doc.get('error', '')}"
+                f"rss_bytes {doc.get('rss_bytes')} rss_above_baseline {above} "
+                f"frames {doc.get('frames')} error {doc.get('error', '')}"
             )
             shutil.rmtree(WORK / f"{kind}-{repeat}", ignore_errors=True)
     lines.append("exit=0")
@@ -137,7 +156,7 @@ def main() -> None:
             continue
         out[kind] = {
             "wall_s": summary([row["seconds"] for row in got]),
-            "rss_bytes": summary([row["rss_bytes"] for row in got]),
+            "rss_above_baseline": summary([row["rss_above_baseline"] for row in got]),
             "frames": got[0]["frames"],
         }
     (OUT / "db.json").write_text(json.dumps(out, indent=2) + "\n")
