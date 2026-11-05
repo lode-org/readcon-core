@@ -19,6 +19,7 @@ pub mod hostlabel;
 pub mod index_proj;
 pub mod iterators;
 pub mod parser;
+pub mod pdb_scan;
 /// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
 pub mod rcso;
 pub mod storage_dtype;

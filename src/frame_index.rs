@@ -206,15 +206,23 @@ pub fn validate_utf8_sliced(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
             Err(err) => reject_with_absolute_utf8(bytes, w[0], err),
         }
     };
+    let windows: Vec<&[usize]> = cuts.windows(2).collect();
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        let windows: Vec<&[usize]> = cuts.windows(2).collect();
-        windows.par_iter().try_for_each(|w| check(w))?;
+        // One window has no second slice to run beside it. `par_iter`
+        // would still start the global pool.
+        if windows.len() >= 2 {
+            windows.par_iter().try_for_each(|w| check(w))?;
+        } else {
+            for w in &windows {
+                check(w)?;
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
     {
-        for w in cuts.windows(2) {
+        for w in &windows {
             check(w)?;
         }
     }

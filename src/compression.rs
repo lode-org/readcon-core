@@ -232,17 +232,11 @@ impl ForwardText {
         } else {
             FileContents::Owned(read_file_text(path)?)
         };
+        // One sequential check. Discarding the pages here would fault
+        // them back in during the parse, and a parallel check would
+        // start a worker pool for a single slice.
         if let FileContents::Mapped(m) = &contents {
-            let mut start = 0;
-            while start < m.len() {
-                let target = (start + RELEASE_STEP).min(m.len());
-                let end = memchr::memchr(b'\n', &m[target..]).map_or(m.len(), |p| target + p + 1);
-                if crate::frame_index::validate_utf8_sliced(&m[start..end]).is_err() {
-                    std::str::from_utf8(m)?;
-                }
-                release(m, start, end)?;
-                start = end;
-            }
+            std::str::from_utf8(m)?;
         }
         Ok(Self {
             contents,

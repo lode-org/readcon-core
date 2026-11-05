@@ -3795,10 +3795,9 @@ pub unsafe extern "C" fn rkr_read_all_frames(
 
 /// Like [`rkr_read_all_frames`], with an explicit worker count.
 ///
-/// `n_threads == 0` is the automatic policy (Rayon when the library is
-/// built with `parallel` and the file is at least 48 KiB). `n_threads == 1`
-/// is sequential. `n_threads >= 2` pins a Rayon pool of that size when
-/// `parallel` is on; otherwise the parse is sequential.
+/// `n_threads == 0` and `n_threads == 1` parse on the calling thread.
+/// `n_threads >= 2` pins a Rayon pool of that size when `parallel` is
+/// on; otherwise the parse is sequential.
 ///
 /// # Safety
 /// Same contract as [`rkr_read_all_frames`].

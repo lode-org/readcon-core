@@ -215,15 +215,16 @@ the code, not a promise about every host):
 
 - Atom vectors: sized from the CON header before filling
 
-- File load: ``read_to_string`` below 64 KiB, mmap at/above (``MMAP_THRESHOLD`` in
-  ``src/compression.rs``)
+- File load for ``read_con`` / ``read_all_frames``: one owned buffer.
+  ``read_file_contents`` still maps an uncompressed file at or above 64 KiB
+  (``MMAP_THRESHOLD`` in ``src/compression.rs``) for the streaming iterator
+  when ``mmap=True``.
 
-- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and ``parallel`` is on
-  (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``). Sequential vs
-  pinned workers: ``examples/wall_scale_harness.rs`` writes
-  ``benches/results/wall_scale.json`` (host, date, commit). That JSON is
-  Table io in ``paper/cpc/main.tex``. Do not mix it with the Python
-  ``readcon.read_con`` wall table.
+- Multi-frame parse on the default path stays on the calling thread.
+  ``n_threads >= 2`` selects a Rayon pool. Sequential versus pinned workers:
+  ``examples/wall_scale_harness.rs`` writes ``benches/results/wall_scale.json``
+  (host, date, commit). That JSON is Table io in ``paper/cpc/main.tex``.
+  Do not mix it with the Python ``readcon.read_con`` wall table.
 
 - Skip without atoms: ``forward`` / ``forward_fast`` (Cachegrind ``forward_*``)
 

@@ -152,6 +152,10 @@ required-features = ["parallel"]
 name = "leaf_io_harness"
 required-features = ["rpc"]
 
+[[test]]
+name = "default_read_threads"
+required-features = ["parallel"]
+
 [[bench]]
 name = "iterator_bench"
 harness = false

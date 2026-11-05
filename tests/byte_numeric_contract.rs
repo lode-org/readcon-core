@@ -350,7 +350,7 @@ fn mapped_file_reports_invalid_utf8_on_a_corrupt_last_frame() {
         let err = read_all_frames_with_threads(&path, workers).expect_err("mapped corrupt tail");
         let message = err.to_string();
         assert!(
-            message.contains("invalid UTF-8"),
+            message.to_ascii_lowercase().contains("invalid utf-8"),
             "workers={workers:?} mapped read reported {message}"
         );
         assert!(

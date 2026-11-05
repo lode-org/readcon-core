@@ -663,43 +663,27 @@ mod aos_soa_agreement_tests {
 
 /// Reads all frames from a file.
 ///
-/// For files smaller than 64 KiB, uses a simple `read_to_string` to avoid
-/// the fixed overhead of mmap (VMA creation, page fault, munmap). For larger
-/// trajectory files, uses memory-mapped I/O to let the OS page cache handle
-/// the data.
-/// Byte-size gate for Rayon multi-frame parse. Avoids an extra O(n) frame-count
-/// scan: phase-1 of [`parse_frames_parallel`] already walks boundaries when we
-/// choose parallel. Below this size, sequential parse wins on small multi-frame
-/// files (pool scheduling overhead).
-#[cfg(feature = "parallel")]
-pub(crate) const PARALLEL_BYTES_THRESHOLD: usize = 48 * 1024;
-
+/// The bytes are read into one owned buffer and parsed on the calling
+/// thread. A worker pool runs only when [`read_all_frames_with_threads`]
+/// is asked for two or more threads.
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     read_all_frames_with_threads(path, None)
 }
 
 /// Collect every frame from `text`.
 ///
-/// `num_threads` is `None` for the automatic policy (Rayon when the
-/// `parallel` feature is on and the buffer is at least
-/// [`PARALLEL_BYTES_THRESHOLD`]), `Some(1)` for a sequential iterator,
-/// and `Some(n)` with `n >= 2` for an explicit Rayon pool. Builds
-/// without `parallel` always parse sequentially.
+/// `None`, `Some(0)`, and `Some(1)` parse on the calling thread.
+/// `Some(n)` with `n >= 2` uses a Rayon pool of that size when the
+/// `parallel` feature is on. Builds without `parallel` always parse
+/// sequentially.
 pub fn frames_from_text(
     text: &str,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, error::ParseError> {
     #[cfg(feature = "parallel")]
     {
-        let use_parallel = match num_threads {
-            Some(1) => false,
-            Some(n) if n >= 2 => true,
-            // None and Some(0): automatic policy.
-            _ => text.len() >= PARALLEL_BYTES_THRESHOLD,
-        };
-        if use_parallel {
-            let pool = num_threads.filter(|&n| n >= 2);
-            let parts = parse_frames_parallel_with_threads(text, pool);
+        if let Some(n) = num_threads.filter(|n| *n >= 2) {
+            let parts = parse_frames_parallel_with_threads(text, Some(n));
             let mut frames = Vec::with_capacity(parts.len());
             for r in parts {
                 frames.push(r?);
@@ -716,20 +700,16 @@ pub fn frames_from_text(
 
 /// Like [`read_all_frames`], with an explicit worker count.
 ///
-/// `None` is the automatic policy used by [`read_all_frames`]. `Some(1)`
-/// forces sequential parse. `Some(n)` with `n >= 2` pins a Rayon pool
-/// (ignored when the `parallel` feature is off).
+/// `None`, `Some(0)`, and `Some(1)` parse on the calling thread.
+/// `Some(n)` with `n >= 2` pins a Rayon pool when `parallel` is on.
+/// The file is read into one owned buffer. The caller who wants a map
+/// uses the streaming iterator.
 pub fn read_all_frames_with_threads(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    match contents {
-        crate::compression::FileContents::Owned(text) => Ok(frames_from_text(&text, num_threads)?),
-        // Mapped bytes are not pre-validated. The cursor checks UTF-8 on
-        // text lines and the coordinate scan rejects non-ASCII tokens.
-        crate::compression::FileContents::Mapped(map) => Ok(frames_from_bytes(&map, num_threads)?),
-    }
+    let text = crate::compression::read_file_text(path)?;
+    Ok(frames_from_text(&text, num_threads)?)
 }
 
 /// Positions of every frame, one row-major `f64` buffer.
@@ -889,14 +869,8 @@ pub fn frames_from_bytes(
 ) -> Result<Vec<types::ConFrame>, error::ParseError> {
     #[cfg(feature = "parallel")]
     {
-        let use_parallel = match num_threads {
-            Some(1) => false,
-            Some(n) if n >= 2 => true,
-            _ => bytes.len() >= PARALLEL_BYTES_THRESHOLD,
-        };
-        if use_parallel {
-            let pool = num_threads.filter(|&n| n >= 2);
-            let parts = parse_frames_parallel_bytes(bytes, pool);
+        if let Some(n) = num_threads.filter(|n| *n >= 2) {
+            let parts = parse_frames_parallel_bytes(bytes, Some(n));
             let mut frames = Vec::with_capacity(parts.len());
             for r in parts {
                 frames.push(r?);
@@ -1242,5 +1216,60 @@ mod parallel_strong_scale_tests {
             .map(|r| frames_payload_key(&r.expect("par")))
             .collect();
         assert_eq!(def_keys, seq_keys);
+    }
+
+    fn live_threads() -> usize {
+        std::fs::read_to_string("/proc/self/status")
+            .unwrap()
+            .lines()
+            .find(|line| line.starts_with("Threads:"))
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+
+    /// A file past the old map and pool gates stays on this thread.
+    #[test]
+    fn default_read_of_a_wide_file_stays_on_the_calling_thread() {
+        const CHILD: &str = "READCON_DEFAULT_THREAD_CHILD";
+        const NAME: &str =
+            "iterators::parallel_strong_scale_tests::default_read_of_a_wide_file_stays_on_the_calling_thread";
+        if std::env::var_os(CHILD).is_none() {
+            let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([NAME, "--exact", "--test-threads=1"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                out.status.success() && stdout.contains("test result: ok. 1 passed;"),
+                "{stdout}{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con");
+        let one = std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con"),
+        )
+        .unwrap();
+        std::fs::write(&path, one.repeat(200)).unwrap();
+        assert!(std::fs::metadata(&path).unwrap().len() > 64 * 1024);
+        let before = live_threads();
+        let frames = super::read_all_frames(&path).unwrap();
+        let after = live_threads();
+        assert_eq!(before, after, "default read started worker threads");
+        assert!(frames.len() > 1);
+        let text = std::fs::read_to_string(&path).unwrap();
+        let sequential = super::frames_from_text(&text, None).unwrap();
+        assert_eq!(sequential.len(), frames.len());
+        assert_eq!(
+            sequential[0].atom_data[0].x, frames[0].atom_data[0].x,
+            "default read changed a coordinate"
+        );
     }
 }
