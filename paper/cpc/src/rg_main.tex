@@ -714,6 +714,23 @@ The first-frame rows read one frame of the same file.
 readcon's first-frame read takes \rcFirstMedian~s and matches 1 of 1 frame.
 The eOn build log is \path{paper/cpc/logs/eon-build.log}, and it names eOn commit \texttt{579738a}.
 
+\subsection{Same-file and nearest-native panel}\label{sec:h2h}
+The same-file comparison reads one con file.
+The readers are readcon from C, Fortran, and Python, the upstream eon client, eon Python, and the Atomic Simulation Environment (ASE) with the eon format.
+The nearest-native panel reads different files that carry the same atoms and the same cell.
+NumPy reads an npy coordinate array, which has no cell.
+ASE and chemfiles read extended xyz.
+OVITO reads extended xyz.
+pymatgen reads a POSCAR.
+MDAnalysis reads a protein data bank file with a crystal record.
+That panel is separate from the con table.
+A row passes only when the atom count, the cell, and the coordinates match.
+NumPy has no cell, so that row fails the cell check.
+On the recorded host, Intel Xeon Processor, x86\_64, 8 CPUs, a fresh Python process reads one million atoms in 0.121~s and peaks at 165~MiB.
+The C reader does that file in 0.080~s and peaks at 140~MiB.
+The eon client takes 0.276~s.
+Those medians are six serial samples on one pinned core.
+
 The times for XYZ, HDF5 and the mapped binary coordinate file are context for choosing a format, in Section~\ref*{sec:supp-timing}.
 h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s.
 The mapped binary file reads them in \rcConbinMedian~s.
