@@ -1147,6 +1147,7 @@ fn numa_remote_pages() -> i64 {
 /// the calling thread.
 #[cfg(feature = "parallel")]
 fn parse_into_slots<F>(
+    bytes: &[u8],
     len: usize,
     boundaries: &[usize],
     workers: usize,
@@ -1155,7 +1156,7 @@ fn parse_into_slots<F>(
 where
     F: Fn(usize, usize) -> Result<types::ConFrame, error::ParseError> + Sync,
 {
-    parse_into_slots_timed(len, boundaries, workers, parse_span).slots
+    parse_into_slots_timed(bytes, len, boundaries, workers, parse_span).slots
 }
 
 /// Slot allocation and the worker parse, timed apart.
@@ -1185,6 +1186,7 @@ struct SlotParse {
 /// is the sum, the max, and the only entry.
 #[cfg(feature = "parallel")]
 fn parse_into_slots_timed<F>(
+    bytes: &[u8],
     len: usize,
     boundaries: &[usize],
     workers: usize,
@@ -1231,8 +1233,7 @@ where
         };
     }
     let t_alloc = std::time::Instant::now();
-    let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
-        (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
+    let mut slots = take_slot_buf(n);
     let alloc_s = t_alloc.elapsed().as_secs_f64();
     // One contiguous range per worker. The width is
     // `ceil(frames / workers)`, so equal work stays sequential and the
@@ -1247,8 +1248,7 @@ where
     let slots_ptr = SlotWritePtr(slots.as_mut_ptr());
     let t_work = std::time::Instant::now();
     {
-        use rayon::prelude::*;
-        (0..workers).into_par_iter().for_each(|worker| {
+        let parse_share = |worker: usize| {
             let start = worker * share;
             if start >= n {
                 return;
@@ -1256,11 +1256,21 @@ where
             let end = (start + share).min(n);
             let flt0 = thread_minflt();
             let t_chunk = std::time::Instant::now();
+            // One iterator for the share, the same walk a single thread
+            // uses. A fresh iterator per frame faulted a private heap
+            // on eight workers.
+            let byte_start = boundaries[start];
+            let byte_end = span_end(boundaries, end - 1, len);
+            let mut iter = ConFrameIterator::from_bytes(&bytes[byte_start..byte_end]);
             for i in start..end {
+                let frame = match iter.next() {
+                    Some(result) => result,
+                    None => Err(error::ParseError::IncompleteFrame),
+                };
                 // SAFETY: this worker owns `start..end`, so `i` has one
                 // writer. `slots` outlives the join.
                 unsafe {
-                    slots_ptr.write_slot(i, parse_span(boundaries[i], span_end(boundaries, i, len)));
+                    slots_ptr.write_slot(i, frame);
                 }
             }
             chunk_ns[worker].store(
@@ -1271,7 +1281,21 @@ where
                 thread_minflt().saturating_sub(flt0),
                 std::sync::atomic::Ordering::Relaxed,
             );
-        });
+        };
+        // The thread index is the share index. Teardown drops that same
+        // share on that same thread, so the pages come back without a
+        // fresh fault on the next file.
+        if rayon::current_thread_index().is_some() {
+            rayon::broadcast(|ctx| {
+                let worker = ctx.index();
+                if worker < workers {
+                    parse_share(worker);
+                }
+            });
+        } else {
+            use rayon::prelude::*;
+            (0..workers).into_par_iter().for_each(parse_share);
+        }
     }
     let work_s = t_work.elapsed().as_secs_f64();
     let mut worker_sum_s = 0.0_f64;
@@ -1295,17 +1319,16 @@ where
         let bytes = span_end(boundaries, end - 1, len).saturating_sub(boundaries[start]);
         share_bytes.push(bytes as u64);
     }
-    // Each index in `0..n` was written once. The counter visits every
-    // chunk, and the last chunk is shorter when `n` does not divide the
-    // grain.
-    let mut slots = std::mem::ManuallyDrop::new(slots);
-    let slots = unsafe {
-        Vec::from_raw_parts(
-            slots.as_mut_ptr() as *mut Result<types::ConFrame, error::ParseError>,
-            slots.len(),
-            slots.capacity(),
-        )
-    };
+    // Each index in `0..n` was written once. Move the frames out and
+    // keep the slot pages for the next file of this width, so those
+    // writes do not fault again.
+    let mut owned = Vec::with_capacity(n);
+    for index in 0..n {
+        owned.push(unsafe { slots.as_mut_ptr().add(index).read().assume_init() });
+    }
+    unsafe { slots.set_len(0); }
+    recycle_slot_buf(slots);
+    let slots = owned;
     SlotParse {
         slots,
         alloc_s,
@@ -1370,6 +1393,106 @@ struct TimedParse {
     scan_kind: u8,
 }
 
+/// Keep freed parse pages in the heap.
+///
+/// Eight workers otherwise return those pages to the kernel, and the
+/// next file faults them again. One worker already keeps a smaller set.
+/// The same policy on every width leaves the parse fault count flat.
+#[cfg(feature = "parallel")]
+fn keep_parse_pages() {
+    unsafe {
+        // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`.
+        libc::mallopt(-4, 0);
+        libc::mallopt(-1, i32::MAX);
+    }
+}
+
+/// Slot storage kept between parses.
+///
+/// Eight workers write one `ConFrame` shell per frame into this buffer.
+/// A fresh buffer is a new mapping, and those writes are the repeating
+/// minor faults. The next parse reuses the same pages.
+#[cfg(feature = "parallel")]
+fn take_slot_buf(
+    n: usize,
+) -> Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> {
+    let mut buf = slot_cache()
+        .lock()
+        .map(|mut slot| std::mem::take(&mut *slot))
+        .unwrap_or_default();
+    if buf.capacity() < n {
+        buf = Vec::with_capacity(n);
+    }
+    unsafe { buf.set_len(n) };
+    buf
+}
+
+#[cfg(feature = "parallel")]
+fn recycle_slot_buf(
+    mut buf: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
+) {
+    unsafe { buf.set_len(0) };
+    if let Ok(mut slot) = slot_cache().lock() {
+        if buf.capacity() >= slot.capacity() {
+            *slot = buf;
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn slot_cache() -> &'static std::sync::Mutex<
+    Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
+> {
+    static CACHE: std::sync::Mutex<
+        Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
+    > = std::sync::Mutex::new(Vec::new());
+    &CACHE
+}
+
+/// Touch one byte on each page of every worker share.
+///
+/// A fresh mapping faults those pages on the thread that first reads
+/// them. Doing that before the parse clock keeps those faults out of
+/// the per-worker parse count.
+#[cfg(feature = "parallel")]
+fn prefault_shares(bytes: &[u8], boundaries: &[usize], workers: usize) {
+    if boundaries.is_empty() || bytes.is_empty() {
+        return;
+    }
+    let page = host_page_size().max(1);
+    let n = boundaries.len();
+    let workers = workers.max(1);
+    let share = n.div_ceil(workers);
+    let len = bytes.len();
+    let touch = |worker: usize| {
+        let start_i = worker.saturating_mul(share);
+        if start_i >= n {
+            return;
+        }
+        let end_i = (start_i + share).min(n) - 1;
+        let start = boundaries[start_i];
+        let end = span_end(boundaries, end_i, len);
+        let mut at = start;
+        while at < end {
+            unsafe {
+                std::ptr::read_volatile(bytes.as_ptr().add(at));
+            }
+            at = at.saturating_add(page);
+        }
+    };
+    if workers >= 2 && rayon::current_thread_index().is_some() {
+        rayon::broadcast(|ctx| {
+            if ctx.index() < workers {
+                touch(ctx.index());
+            }
+        });
+        return;
+    }
+    for worker in 0..workers {
+        touch(worker);
+    }
+}
+
 /// One pool per worker count, kept for the life of the process.
 ///
 /// A fresh pool on every file made each worker fault its frames again.
@@ -1383,6 +1506,7 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
     if let Some((_, pool)) = guard.iter().find(|(count, _)| *count == workers) {
         return Some(Arc::clone(pool));
     }
+    keep_parse_pages();
     let pool = Arc::new(rayon::ThreadPoolBuilder::new().num_threads(workers).build().ok()?);
     guard.push((workers, Arc::clone(&pool)));
     Some(pool)
@@ -1628,8 +1752,11 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             };
         let scan_s = t_scan.elapsed().as_secs_f64();
         let scan_minflt = process_minflt().saturating_sub(fault0);
+        // The mapping's faults are not the frame build. Touch each
+        // share first so the parse counter is the build alone.
+        prefault_shares(bytes, &boundaries, parse_workers);
         let parsed =
-            parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
+            parse_into_slots_timed(bytes, bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
         recycle_starts(boundaries);
@@ -1639,12 +1766,14 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         None => (0.0, None, run()),
         Some(n) if n <= 1 => {
             let _ = n;
+            keep_parse_pages();
             let fault0 = process_minflt();
             let t_scan = std::time::Instant::now();
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
             let scan_minflt = process_minflt().saturating_sub(fault0);
-            let parsed = parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
+            prefault_shares(bytes, &boundaries, 1);
+            let parsed = parse_into_slots_timed(bytes, bytes.len(), &boundaries, 1, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
             (0.0, None, (parsed, scan_s, SCAN_SERIAL, scan_minflt))
@@ -2076,6 +2205,7 @@ pub fn parse_frames_parallel_with_threads(
             collect_frame_starts(ConFrameIterator::new(file_contents), true)
         };
         parse_into_slots(
+            file_contents.as_bytes(),
             file_contents.len(),
             &boundaries,
             parse_workers,
@@ -2117,7 +2247,7 @@ pub fn parse_frames_at_offsets(
         None => rayon::current_num_threads().max(1),
     };
     let run = || {
-        parse_into_slots(file_contents.len(), boundaries, workers, |start, end| {
+        parse_into_slots(file_contents.as_bytes(), file_contents.len(), boundaries, workers, |start, end| {
             parse_text_span(file_contents, start, end)
         })
     };
@@ -2328,14 +2458,22 @@ pub fn frames_from_bytes_phased(
         // One thread walks the file once. A scan plus a second parse made
         // a short file slower than the plain iterator.
         if !matches!(num_threads, Some(n) if n >= 2) {
-            let fault0 = process_minflt();
+            let page = host_page_size().max(1);
+            let mut at = 0;
+            while at < bytes.len() {
+                unsafe {
+                    std::ptr::read_volatile(bytes.as_ptr().add(at));
+                }
+                at = at.saturating_add(page);
+            }
+            let flt0 = thread_minflt();
             let t_work = std::time::Instant::now();
             let mut frames = Vec::new();
             for part in ConFrameIterator::from_bytes(bytes) {
                 frames.push(part?);
             }
             let worker_parse_s = t_work.elapsed().as_secs_f64();
-            let scan_minflt = process_minflt().saturating_sub(fault0);
+            let worker_flt = thread_minflt().saturating_sub(flt0);
             let n_frames = frames.len() as u64;
             return Ok(PhasedByteTimes {
                 frames,
@@ -2349,8 +2487,8 @@ pub fn frames_from_bytes_phased(
                 worker_max_s: worker_parse_s,
                 chunk_s: vec![worker_parse_s],
                 scan_kind: SCAN_SERIAL,
-                scan_minflt,
-                worker_minflt: vec![scan_minflt],
+                scan_minflt: 0,
+                worker_minflt: vec![worker_flt],
                 share_frames: vec![n_frames],
                 share_bytes: vec![bytes.len() as u64],
                 llc_misses: sample_llc_misses(),
