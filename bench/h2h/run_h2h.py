@@ -362,14 +362,11 @@ def within_tolerance(pos, mass, cell, reference: Path) -> dict:
 
 
 def warmup(libs, tiny_con: Path, tiny_xyz: Path, tiny_pdb: Path) -> None:
+    # The scored native panel is the Snakemake campaign.
+    # Those arms read extended xyz, a poscar file, and a protein data bank file with a crystal record.
     calls = (
         ("readcon", tiny_con, "default"),
         ("ase", tiny_con, "eon"),
-        ("chemfiles", tiny_xyz, "native"),
-        ("ovito", tiny_xyz, "native"),
-        ("mdanalysis", tiny_xyz, "native"),
-        ("pymatgen", tiny_xyz, "native"),
-        ("gemmi", tiny_xyz, "native"),
         ("readcon", tiny_xyz, "chemfiles"),
         ("readcon", tiny_pdb, "pdb"),
     )
