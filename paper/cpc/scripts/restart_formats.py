@@ -90,7 +90,8 @@ def roundoff_host():
             conda[pkg["name"]] = f"{pkg['version']} {pkg['build']}"
     blas = np.show_config(mode="dicts")["Build Dependencies"]["blas"]
     return {
-        "cpu_model": cpu.get("model name"), "family": cpu.get("cpu family"), "model": cpu.get("model"),
+        "cpu_model": __import__("provenance").normalize_cpu(cpu.get("model name") or ""),
+        "family": cpu.get("cpu family"), "model": cpu.get("model"),
         "kernel": platform.release(), "machine": platform.machine(),
         "numpy": np.__version__, "numpy_blas_build": f"{blas['name']} {blas['version']}", "conda_packages": conda,
         "blas_runtime": [f"{i['internal_api']} {i['version']}, {i.get('threading_layer')}, {i.get('architecture')} kernels"

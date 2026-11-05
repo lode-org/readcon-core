@@ -23,6 +23,8 @@
 auto/
 bench/work/
 bench/results/
+evidence/results/
+src/figures/generated/**
 src/rg_main.pdf
 src/rg_supp.pdf
 src/figures/generated/work/

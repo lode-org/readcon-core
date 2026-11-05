@@ -19,23 +19,32 @@ WORK = HERE / "work" / "v2"
 REPEATS = 6
 
 
-def header() -> list[str]:
-    cpu = ""
+def cpu_name() -> str:
+    raw = ""
     for line in Path("/proc/cpuinfo").read_text().splitlines():
         if line.startswith("model name"):
-            cpu = line.split(":", 1)[1].strip()
+            raw = line.split(":", 1)[1].strip()
             break
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").split())
+    if "Xeon" in cleaned:
+        return "Intel Xeon Processor"
+    return cleaned
+
+
+def header() -> list[str]:
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
     return [
-        f"date_utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
-        f"uname_m={os.uname().machine}",
-        f"nproc={os.cpu_count()}",
-        f"cpu={cpu}",
-        f"head={head}",
-        "pwd=.",
-        "tmpdir=paper/cpc/bench/work/v2",
-        "command=python3 paper/cpc/bench/db_v2.py",
-        f"repeats={REPEATS}",
+        f"rev_parse {head}",
+        f"tree {tree}",
+        "command python3 paper/cpc/bench/db_v2.py",
+        f"date_utc {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        f"uname_m {os.uname().machine}",
+        f"nproc {os.cpu_count()}",
+        f"cpu_model {cpu_name()}",
+        "pwd .",
+        "tmpdir paper/cpc/bench/work/v2",
+        f"repeats {REPEATS}",
     ]
 
 
@@ -140,8 +149,12 @@ def main() -> None:
                 f"frames {doc.get('frames')} error {doc.get('error', '')}"
             )
             shutil.rmtree(WORK / f"{kind}-{repeat}", ignore_errors=True)
-    lines.append("exit=0")
-    (OUT / "db.log").write_text("\n".join(lines) + "\n")
+    lines.append("exit_code 0")
+    text = "\n".join(lines) + "\n"
+    (OUT / "db.log").write_text(text)
+    log = HERE.parent / "logs" / "db.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(text)
 
     def summary(values):
         arr = np.asarray(values, dtype=float)

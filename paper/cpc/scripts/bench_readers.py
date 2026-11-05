@@ -157,12 +157,12 @@ elif arm == "numpy":
     def parse():
         lines = Path(path).read_text().splitlines()
         frames = []
-        cursor = 0
-        while cursor < len(lines):
-            count = int(lines[cursor])
-            block = lines[cursor + 2 : cursor + 2 + count]
+        line_index = 0
+        while line_index < len(lines):
+            count = int(lines[line_index])
+            block = lines[line_index + 2 : line_index + 2 + count]
             frames.append(np.loadtxt(block, usecols=(1, 2, 3)))
-            cursor += count + 2
+            line_index += count + 2
         return frames
 elif arm == "chemfiles":
     import chemfiles

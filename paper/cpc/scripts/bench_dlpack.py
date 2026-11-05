@@ -29,10 +29,15 @@ WARMUP = 1
 
 
 def cpu_model() -> str:
+    raw = platform.processor()
     for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
         if line.startswith("model name"):
-            return line.split(":", 1)[1].strip()
-    return platform.processor()
+            raw = line.split(":", 1)[1].strip()
+            break
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").split())
+    if "Xeon" in cleaned:
+        return "Intel Xeon Processor"
+    return cleaned
 
 
 def run(cmd: list[str]) -> str:
@@ -127,19 +132,18 @@ def main() -> int:
     def emit(text: str) -> None:
         lines.append(text)
 
+    emit(f"rev_parse {run(['git', 'rev-parse', 'HEAD'])}")
+    emit(f"tree {run(['git', 'rev-parse', 'HEAD^{tree}'])}")
+    emit("command python3 paper/cpc/scripts/bench_dlpack.py")
     emit(f"date_utc {run(['date', '-u', '+%Y-%m-%dT%H:%M:%SZ'])}")
     emit(f"uname_m {run(['uname', '-m'])}")
     emit(f"nproc {run(['nproc'])}")
     emit(f"cpu_model {cpu_model()}")
-    emit("clone_url https://github.com/lode-org/readcon-core")
-    emit(f"head {run(['git', 'rev-parse', 'HEAD'])}")
     status = run(["git", "status", "--short"])
     emit("git_status_begin")
     emit(status if status else "(clean)")
     emit("git_status_end")
     emit("pwd .")
-    emit(f"tmpdir {os.environ.get('TMPDIR', '')}")
-    emit("command python3 paper/cpc/scripts/bench_dlpack.py")
     emit("readcon_file readcon")
     emit(f"numpy {np.__version__}")
     emit(f"sizes {' '.join(str(n) for n in SIZES)}")

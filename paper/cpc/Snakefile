@@ -34,6 +34,28 @@ rule host_tables:
     shell:
         "python3 scripts/host_from_log.py"
 
+rule db_log:
+    output:
+        "logs/db.log",
+    shell:
+        "python3 bench/db_v2.py"
+
+rule mpi_log:
+    output:
+        "logs/mpi.log",
+    shell:
+        "python3 bench/run_mpi_v2.py"
+
+rule dlpack_log:
+    output:
+        "logs/dlpack-exchange.log",
+    shell:
+        "python3 scripts/bench_dlpack.py"
+
+rule stamp_host:
+    shell:
+        "python3 scripts/stamp_host.py"
+
 rule reader_figures:
     input:
         "logs/reader-exchange.log",

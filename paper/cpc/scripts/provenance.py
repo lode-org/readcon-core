@@ -229,6 +229,17 @@ def hardware_tex(line: dict) -> str:
     return f"\\texttt{{{tex(line['cpu_model'])}}}, {tex(line['uname_m'])}, {line['nproc']} processing units"
 
 
+def normalize_cpu(raw: str) -> str:
+    """Plain processor name written into every record.
+
+    A Xeon model becomes ``Intel Xeon Processor``.
+    """
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split())
+    if "Xeon" in cleaned:
+        return "Intel Xeon Processor"
+    return cleaned or "unknown"
+
+
 def host() -> dict:
     info: dict = {"kernel": platform.release(), "uname_m": platform.machine(), "nproc": os.cpu_count()}
     try:
@@ -239,7 +250,7 @@ def host() -> dict:
         key, _, value = line.partition(":")
         key = key.strip()
         if key == "model name" and "cpu_model" not in info:
-            info["cpu_model"] = value.strip()
+            info["cpu_model"] = normalize_cpu(value.strip())
         elif key == "cpu family" and "family" not in info:
             info["family"] = value.strip()
         elif key == "model" and "model" not in info:

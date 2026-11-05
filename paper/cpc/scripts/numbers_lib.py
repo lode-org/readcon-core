@@ -71,8 +71,16 @@ class Rule:
 
 
 def path(rel: str) -> Path:
-    """``rel`` is relative to ``paper/cpc`` unless it starts with ``/`` (repository root)."""
-    return REPO / rel.lstrip("/") if rel.startswith("/") else ROOT / rel
+    """``rel`` is relative to ``paper/cpc`` unless it starts with ``/``.
+
+    A leading slash means the repository root. ``Path('/src/types.rs')``
+    would be the filesystem root, so the slash is dropped and the rest
+    is joined onto ``REPO``.
+    """
+    if rel.startswith("/"):
+        parts = Path(rel).parts[1:]
+        return REPO.joinpath(*parts)
+    return ROOT / rel
 
 
 @lru_cache(maxsize=None)

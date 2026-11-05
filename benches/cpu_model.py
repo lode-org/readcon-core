@@ -6,14 +6,25 @@ import platform
 from pathlib import Path
 
 
+def normalize_cpu(raw: str) -> str:
+    """The hardware string the records write.
+
+    The kernel prints trademark marks. The records use one plain name.
+    """
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split())
+    if "Xeon" in cleaned:
+        return "Intel Xeon Processor"
+    return cleaned or "unknown"
+
+
 def cpu_model() -> str:
-    """Return the ``model name`` from ``/proc/cpuinfo``, or ``unknown``."""
+    """Return the normalized model name from ``/proc/cpuinfo``, or ``unknown``."""
     try:
         for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
             if line.lower().startswith("model name"):
                 value = line.split(":", 1)[1].strip()
                 if value:
-                    return value
+                    return normalize_cpu(value)
     except OSError:
         pass
     return "unknown"

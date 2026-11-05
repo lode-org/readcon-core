@@ -177,7 +177,7 @@ Files that earlier eOn releases wrote are grammar version 1 and read as such.
 The velocities of a file of an earlier version are read in the natural unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listing~\ref{lst:py}).
 
-\textit{References:} eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026}.
+\textit{References:} eOn \cite{chillEonSoftwareLong2014,chillEONSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026,goswamiReadconcore01472026}.
 \end{small}
 
 \section{Introduction}\label{sec:introduction} Rare-event methods turn a potential energy surface into rates.
@@ -199,12 +199,12 @@ Two readers given the same bytes must then return the same fields, and that take
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain Cartesian coordinate format (XYZ) and publishes a grammar \cite{kermodeLibatomsExtxyzV0462026}.
-It keeps masks and identifiers in column names that the Atomic Simulation Environment (ASE) chose \cite{larsenAtomicSimulationEnvironmenta2017}, and a file declares no version and no velocity unit.
-H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores identity, velocities with units and the box in HDF5, and it defines no element for a per-component constraint.
+It keeps masks and identifiers in column names that the Atomic Simulation Environment (ASE) chose \cite{larsenAtomicSimulationEnvironmenta2017,larsenAtomicSimulationEnvironment2017}, and a file declares no version and no velocity unit.
+H5MD \cite{buylH5mdStructuredEfficient2014,deBuylH5MDStructuredEfficient2014,folkOverviewHdf5Technology2011} stores identity, velocities with units and the box in HDF5, and it defines no element for a per-component constraint.
 The GROMACS compressed trajectory (XTC) and full-precision trajectory (TRR) formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} store molecular dynamics output with neither a mask nor a velocity unit.
 The ASE trajectory keeps every field in a layout that the Python code of ASE defines.
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
-Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
+Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMDAnalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.
@@ -526,7 +526,6 @@ A C caller that needs the tensor after the builder is gone takes the versioned m
 Python materialises a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
 The measured exchange is the borrowed view against an explicit copy of the same positions, on a builder of \dlpackAtoms{} copper atoms.
 One warm-up is followed by six repeats, and each repeat runs both arms, alternating which arm is first.
-The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
 A 95 percent bootstrap interval for that ratio is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds.
@@ -671,7 +670,6 @@ A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a
 
 \section{Read performance}\label{sec:performance} The comparison measured on this branch is Section~\ref{sec:host}.
 It reads one 100000-frame file, six times, one fresh process per sample.
-The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor.
 The candidate timing campaign is not reported.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time of the all-frame CON readers on one 100000-frame file, six interleaved repeats.
@@ -801,7 +799,6 @@ The public commit on the main branch is \begin{center} \texttt{ac4f437989dea5aad
 The deposited timing records name the candidate commit \texttt{\readconcommit}.
 That candidate is not a public tag.
 Rebuild the library from the public commit with \texttt{cargo build -{}-release}.
-The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor.
 The concept record of readcon-core \cite{goswamiReadconcoreConConvel2026} is \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 
 Two earlier commits of the main branch carry parts of the reader used here: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.

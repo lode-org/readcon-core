@@ -47,24 +47,28 @@ def main() -> None:
     WORK.mkdir(parents=True, exist_ok=True)
     path = WORK / "mpi.con"
     write_con(path)
-    cpu = ""
+    raw = ""
     for line in Path("/proc/cpuinfo").read_text().splitlines():
         if line.startswith("model name"):
-            cpu = line.split(":", 1)[1].strip()
+            raw = line.split(":", 1)[1].strip()
             break
+    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").split())
+    cpu = "Intel Xeon Processor" if "Xeon" in cleaned else cleaned
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
     lines = [
-        f"date_utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
-        f"uname_m={os.uname().machine}",
-        f"nproc={os.cpu_count()}",
-        f"cpu={cpu}",
-        f"head={head}",
-        "pwd=.",
-        "tmpdir=paper/cpc/bench/work/v2",
-        f"frames={N_FRAMES}",
-        f"atoms={N_ATOMS}",
-        f"repeats={REPEATS}",
-        "command=python3 paper/cpc/bench/run_mpi_v2.py",
+        f"rev_parse {head}",
+        f"tree {tree}",
+        "command python3 paper/cpc/bench/run_mpi_v2.py",
+        f"date_utc {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        f"uname_m {os.uname().machine}",
+        f"nproc {os.cpu_count()}",
+        f"cpu_model {cpu}",
+        "pwd .",
+        "tmpdir paper/cpc/bench/work/v2",
+        f"frames {N_FRAMES}",
+        f"atoms {N_ATOMS}",
+        f"repeats {REPEATS}",
     ]
     for mode in MODES:
         for ranks in RANKS:
@@ -77,8 +81,12 @@ def main() -> None:
                 )
                 text = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-300:]
                 lines.append(f"repeat {repeat} mode {mode} launch {text} exit {proc.returncode}")
-    lines.append("exit=0")
-    (OUT / "mpi.log").write_text("\n".join(lines) + "\n")
+    lines.append("exit_code 0")
+    text = "\n".join(lines) + "\n"
+    (OUT / "mpi.log").write_text(text)
+    log = Path(__file__).resolve().parents[1] / "logs" / "mpi.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(text)
     print("\n".join(lines[-8:]))
 
 

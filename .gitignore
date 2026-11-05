@@ -1,4 +1,5 @@
 # Project-specific
+benches/results/
 *.profraw
 compile_commands.json
 addl/referenceImpls/eon_cpp/bench_con_reader
