@@ -2120,10 +2120,33 @@ pub fn frames_from_bytes_phased(
 ) -> Result<PhasedByteTimes, error::ParseError> {
     #[cfg(feature = "parallel")]
     {
-        let requested = match num_threads {
-            Some(n) if n >= 2 => Some(n),
-            _ => Some(1),
-        };
+        // One thread walks the file once. A scan plus a second parse made
+        // a short file slower than the plain iterator.
+        if !matches!(num_threads, Some(n) if n >= 2) {
+            let fault0 = process_minflt();
+            let t_work = std::time::Instant::now();
+            let mut frames = Vec::new();
+            for part in ConFrameIterator::from_bytes(bytes) {
+                frames.push(part?);
+            }
+            let worker_parse_s = t_work.elapsed().as_secs_f64();
+            return Ok(PhasedByteTimes {
+                frames,
+                pool_s: 0.0,
+                pool_join_s: 0.0,
+                scan_s: 0.0,
+                slot_alloc_s: 0.0,
+                worker_parse_s,
+                finish_s: 0.0,
+                worker_sum_s: worker_parse_s,
+                worker_max_s: worker_parse_s,
+                chunk_s: vec![worker_parse_s],
+                scan_kind: SCAN_SERIAL,
+                scan_minflt: process_minflt().saturating_sub(fault0),
+                pool: None,
+            });
+        }
+        let requested = Some(num_threads.expect("workers"));
         let timed = parse_bytes_timed(bytes, requested);
         let t_finish = std::time::Instant::now();
         let frames = finish_results(timed.pool.as_ref(), timed.slots)?;
