@@ -16,11 +16,11 @@
 
 use mpi::collective::SystemOperation;
 use mpi::traits::*;
-use readcon_core::distrib::block_range;
 use readcon_core::distrib::Comm;
+use readcon_core::distrib::block_range;
 use readcon_core::distrib_read::{ReadMode, read_block};
 use readcon_core::hostlabel::cpu_model;
-use readcon_core::iterators::{parse_frames_at_offsets, ConFrameIterator};
+use readcon_core::iterators::{ConFrameIterator, parse_frames_at_offsets};
 use readcon_core::types::ConFrame;
 use readcon_core::writer::ConFrameWriter;
 use std::env;
@@ -87,10 +87,7 @@ fn lscpu_usize(label: &str) -> Option<usize> {
 }
 
 fn physical_cores() -> usize {
-    match (
-        lscpu_usize("Core(s) per socket"),
-        lscpu_usize("Socket(s)"),
-    ) {
+    match (lscpu_usize("Core(s) per socket"), lscpu_usize("Socket(s)")) {
         (Some(cores), Some(sockets)) if cores >= 1 && sockets >= 1 => cores * sockets,
         _ => 0,
     }
@@ -171,23 +168,120 @@ fn fmt_i64s(values: &[i64]) -> String {
     listed
 }
 
-/// Touch every page and keep the map so the timed reads are not the
-/// first fault of this file.
-fn hold_resident(path: &Path) -> memmap2::Mmap {
-    let file = fs::File::open(path).expect("map open");
-    // SAFETY: the benchmark does not truncate the file while the map lives.
-    let map = unsafe { memmap2::Mmap::map(&file).expect("map") };
-    let mut acc = 0u8;
-    let mut offset = 0usize;
-    while offset < map.len() {
-        acc ^= map[offset];
-        offset = offset.saturating_add(4096);
+fn page_size() -> usize {
+    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    if page <= 0 { 4096 } else { page as usize }
+}
+
+/// First-frame length when that length tiles the file.
+fn frame_span(path: &Path) -> Option<usize> {
+    let file = fs::File::open(path).ok()?;
+    // SAFETY: the file is not truncated while this map is alive.
+    let map = unsafe { memmap2::Mmap::map(&file).ok()? };
+    let mut iter = ConFrameIterator::from_bytes(&map);
+    match iter.forward_fast() {
+        Some(Ok(())) => {
+            let span = iter.byte_pos();
+            if span >= 2 && !map.is_empty() && map.len() % span == 0 {
+                Some(span)
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
-    if !map.is_empty() {
-        acc ^= map[map.len() - 1];
+}
+
+struct RankSample {
+    wall_s: f64,
+    open_s: f64,
+    map_s: f64,
+    fault_s: f64,
+    parse_s: f64,
+    unmap_s: f64,
+    barrier_s: f64,
+    majflt: i64,
+    minflt: i64,
+    n_ok: usize,
+}
+
+/// One clock for this rank: open, map, fault, parse, and unmap of its
+/// own span, then the barrier. Nothing is touched before `wall0`.
+fn time_span(
+    world: &mpi::topology::SimpleCommunicator,
+    path: &Path,
+    lo: usize,
+    hi: usize,
+    offsets: &[usize],
+) -> RankSample {
+    world.barrier();
+    let fault0 = majflt();
+    let touch0 = minflt();
+    let wall0 = Instant::now();
+
+    let t = Instant::now();
+    let file = fs::File::open(path).expect("open");
+    let open_s = t.elapsed().as_secs_f64();
+
+    let page = page_size();
+    let map_lo = lo - (lo % page);
+    let map_len = hi - map_lo;
+    let t = Instant::now();
+    // SAFETY: the file is not truncated while this map is alive.
+    let map = unsafe {
+        memmap2::MmapOptions::new()
+            .offset(map_lo as u64)
+            .len(map_len)
+            .map(&file)
+            .expect("map")
+    };
+    let map_s = t.elapsed().as_secs_f64();
+    let local = lo - map_lo;
+    let slice = &map[local..local + (hi - lo)];
+
+    let t = Instant::now();
+    let mut acc = 0u8;
+    let mut at = 0usize;
+    while at < slice.len() {
+        acc ^= slice[at];
+        at = at.saturating_add(page);
+    }
+    if !slice.is_empty() {
+        acc ^= slice[slice.len() - 1];
     }
     std::hint::black_box(acc);
-    map
+    let fault_s = t.elapsed().as_secs_f64();
+
+    let t = Instant::now();
+    let text = std::str::from_utf8(slice).expect("utf8");
+    let parsed = parse_frames_at_offsets(text, offsets, Some(1));
+    let n_ok = parsed.iter().filter(|item| item.is_ok()).count();
+    let parse_s = t.elapsed().as_secs_f64();
+    drop(parsed);
+
+    let t = Instant::now();
+    drop(map);
+    drop(file);
+    let unmap_s = t.elapsed().as_secs_f64();
+
+    let t = Instant::now();
+    world.barrier();
+    let barrier_s = t.elapsed().as_secs_f64();
+    let wall_s = wall0.elapsed().as_secs_f64();
+    let fault1 = majflt();
+    let touch1 = minflt();
+    RankSample {
+        wall_s,
+        open_s,
+        map_s,
+        fault_s,
+        parse_s,
+        unmap_s,
+        barrier_s,
+        majflt: fault1.saturating_sub(fault0),
+        minflt: touch1.saturating_sub(touch0),
+        n_ok,
+    }
 }
 
 fn write_refusal(path: &Path, reason: &str) {
@@ -209,7 +303,10 @@ fn main() {
     }
     let path = Path::new(&args[1]);
     let out_path = Path::new(&args[2]);
-    let repeats = args.get(3).map(|text| text.parse::<usize>().expect("repeats")).unwrap_or(6);
+    let repeats = args
+        .get(3)
+        .map(|text| text.parse::<usize>().expect("repeats"))
+        .unwrap_or(6);
 
     let universe = mpi::initialize().expect("mpi init");
     let booted = Instant::now();
@@ -245,7 +342,10 @@ fn main() {
     let total = total as usize;
     if total == 0 || total % ranks != 0 {
         if comm.rank() == 0 {
-            write_refusal(out_path, "frame count is not a positive multiple of the rank count");
+            write_refusal(
+                out_path,
+                "frame count is not a positive multiple of the rank count",
+            );
         }
         std::process::exit(2);
     }
@@ -289,52 +389,20 @@ fn main() {
         String::new()
     };
 
-    // The old clock: one untimed `read_block`, then `read_block` inside
-    // the timer. Rank 0 re-reads the whole file on every call, so the
-    // first samples can fault pages the warmup already dropped.
-    world.barrier();
-    let _ = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("warmup");
-    world.barrier();
-    let init_to_legacy_s = booted.elapsed().as_secs_f64();
-
-    let mut legacy_samples = Vec::with_capacity(repeats);
-    let mut legacy_maj = Vec::with_capacity(repeats);
-    let mut legacy_min = Vec::with_capacity(repeats);
-    for _ in 0..repeats {
-        world.barrier();
-        let fault0 = majflt();
-        let touch0 = minflt();
-        let started = Instant::now();
-        let block = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("timed read");
-        world.barrier();
-        let seconds = started.elapsed().as_secs_f64();
-        let fault1 = majflt();
-        let touch1 = minflt();
-        assert_eq!(block.frames.len(), frames_per_worker);
-        drop(block);
-        let maj = sum_i64(&world, fault1.saturating_sub(fault0));
-        let minr = sum_i64(&world, touch1.saturating_sub(touch0));
-        if comm.rank() == 0 {
-            legacy_samples.push(seconds);
-            legacy_maj.push(maj);
-            legacy_min.push(minr);
-        }
-    }
-
-    // Equal-work clock. The map stays mapped, so these samples do not
-    // pay the first fault. Each rank copies and parses only its block.
-    // `mpirun` has already returned by `booted`; it is not in this timer.
-    let map = hold_resident(path);
-    let mut span_b = 0u64;
-    if comm.rank() == 0 {
-        let mut iter = ConFrameIterator::from_bytes(&map);
-        if let Some(Ok(())) = iter.forward_fast() {
-            span_b = iter.byte_pos() as u64;
-        }
-    }
+    // One clock. Each rank opens, maps, faults, parses, and unmaps its
+    // own span inside the timer. Rank 0 does not scan the whole file.
+    // `mpirun` has already returned by `booted`. It is not in this timer.
+    let mut span_b = if comm.rank() == 0 {
+        frame_span(path).unwrap_or(0) as u64
+    } else {
+        0
+    };
     world.process_at_rank(0).broadcast_into(&mut span_b);
     let span = span_b as usize;
-    if span < 2 || map.len() % span != 0 || map.len() / span != total {
+    let file_len = fs::metadata(path)
+        .map(|meta| meta.len() as usize)
+        .unwrap_or(0);
+    if span < 2 || file_len % span != 0 || file_len / span != total {
         if comm.rank() == 0 {
             write_refusal(out_path, "frames do not share one byte length");
         }
@@ -344,50 +412,55 @@ fn main() {
     let lo = owned.start * span;
     let hi = owned.end * span;
     let offsets: Vec<usize> = (0..owned.len()).map(|i| i * span).collect();
-    let mut buf = vec![0u8; hi - lo];
-    buf.copy_from_slice(&map[lo..hi]);
+
+    // One untimed call, same work as the timed calls. It is not a sample.
+    let warmup = time_span(&world, path, lo, hi, &offsets);
+    assert_eq!(warmup.n_ok, frames_per_worker);
+    let init_to_clock_s = booted.elapsed().as_secs_f64();
 
     let mut samples = Vec::with_capacity(repeats);
     let mut samples_maj = Vec::with_capacity(repeats);
     let mut samples_min = Vec::with_capacity(repeats);
+    let mut open_s = Vec::with_capacity(repeats);
+    let mut map_s = Vec::with_capacity(repeats);
+    let mut fault_s = Vec::with_capacity(repeats);
+    let mut parse_s = Vec::with_capacity(repeats);
+    let mut unmap_s = Vec::with_capacity(repeats);
+    let mut barrier_s = Vec::with_capacity(repeats);
     for _ in 0..repeats {
-        world.barrier();
-        let fault0 = majflt();
-        let touch0 = minflt();
-        let started = Instant::now();
-        buf.copy_from_slice(&map[lo..hi]);
-        let text = std::str::from_utf8(&buf).expect("utf8");
-        let parsed = parse_frames_at_offsets(text, &offsets, Some(1));
-        let n_ok = parsed.iter().filter(|item| item.is_ok()).count();
-        world.barrier();
-        let seconds = started.elapsed().as_secs_f64();
-        let fault1 = majflt();
-        let touch1 = minflt();
-        drop(parsed);
-        assert_eq!(n_ok, frames_per_worker);
-        let maj = sum_i64(&world, fault1.saturating_sub(fault0));
-        let minr = sum_i64(&world, touch1.saturating_sub(touch0));
+        let sample = time_span(&world, path, lo, hi, &offsets);
+        assert_eq!(sample.n_ok, frames_per_worker);
+        let maj = sum_i64(&world, sample.majflt);
+        let minr = sum_i64(&world, sample.minflt);
         if comm.rank() == 0 {
-            samples.push(seconds);
+            samples.push(sample.wall_s);
             samples_maj.push(maj);
             samples_min.push(minr);
+            open_s.push(sample.open_s);
+            map_s.push(sample.map_s);
+            fault_s.push(sample.fault_s);
+            parse_s.push(sample.parse_s);
+            unmap_s.push(sample.unmap_s);
+            barrier_s.push(sample.barrier_s);
         }
     }
-    // Keep the map until the samples are stored.
-    drop(map);
 
     if comm.rank() == 0 {
         let mpi = env::var("READCON_WEAK_MPI_IMPL").unwrap_or_else(|_| "unrecorded".to_string());
         let samples_s = fmt_f64s(&samples);
-        let legacy_s = fmt_f64s(&legacy_samples);
         let maj_s = fmt_i64s(&samples_maj);
-        let legacy_maj_s = fmt_i64s(&legacy_maj);
         let min_s = fmt_i64s(&samples_min);
-        let legacy_min_s = fmt_i64s(&legacy_min);
+        let open_txt = fmt_f64s(&open_s);
+        let map_txt = fmt_f64s(&map_s);
+        let fault_txt = fmt_f64s(&fault_s);
+        let parse_txt = fmt_f64s(&parse_s);
+        let unmap_txt = fmt_f64s(&unmap_s);
+        let barrier_txt = fmt_f64s(&barrier_s);
         let host = json_escape(&record_cpu());
         let mpi_name = json_escape(mpi.trim());
         let body = format!(
-            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"legacy_samples_s\": [{legacy_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"legacy_majflt\": [{legacy_maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"legacy_minflt\": [{legacy_min_s}],\n  \"clock\": \"resident-span\",\n  \"legacy_clock\": \"read_block\",\n  \"mpirun_in_clock\": false,\n  \"init_to_legacy_s\": {init_to_legacy_s:.9},\n  \"span\": {span},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n"
+            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"open_s\": [{open_txt}],\n  \"map_s\": [{map_txt}],\n  \"fault_s\": [{fault_txt}],\n  \"parse_s\": [{parse_txt}],\n  \"unmap_s\": [{unmap_txt}],\n  \"barrier_s\": [{barrier_txt}],\n  \"clock\": \"map-fault-span\",\n  \"mpirun_in_clock\": false,\n  \"init_to_clock_s\": {init_to_clock_s:.9},\n  \"span\": {span},\n  \"page_size\": {},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n",
+            page_size()
         );
         if let Some(parent) = out_path.parent() {
             let _ = fs::create_dir_all(parent);

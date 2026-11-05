@@ -4,9 +4,10 @@
 //! Two modes:
 //!
 //! - [`ReadMode::Shared`]: every rank opens the same file (shared file
-//!   system). Rank 0 loads or builds the checked `.rcidx` index and
-//!   broadcasts the offsets; each rank then maps the file, checks UTF-8
-//!   on its own byte range only, and parses its frames with rayon. No
+//!   system). When the frames share one byte length, every rank reads
+//!   only its own span and rank 0 does not scan the rest of the file.
+//!   Otherwise rank 0 loads or builds the checked `.rcidx` index, and
+//!   every rank, including rank 0, then reads only its own span. No
 //!   frame bytes move between ranks.
 //! - [`ReadMode::Scatter`]: rank 0 reads (and decompresses) the file,
 //!   scans offsets, and sends each rank its byte range with
@@ -133,8 +134,9 @@ fn parse_local(
 /// Read this rank's block of frames from `path`.
 ///
 /// `threads` sets the rayon pool size within each rank (`None` uses the
-/// global pool). In shared mode rank 0 refreshes `path.rcidx` when it
-/// is missing or stale.
+/// global pool). In shared mode, equal-length frames skip the full-file
+/// index walk. Other files still let rank 0 refresh `path.rcidx` when
+/// it is missing or stale, and then every rank reads only its span.
 pub fn read_block(
     comm: &Comm,
     path: &Path,
@@ -227,17 +229,103 @@ fn read_span(path: &Path, lo: usize, hi: usize) -> Result<Vec<u8>, String> {
     Ok(buf)
 }
 
+/// Span and frame count when the first two frames share one length and
+/// that length tiles the file. Later frames are checked by the parse of
+/// each rank's own span, not by a walk of the whole file on rank 0.
+fn tiled_span(path: &Path) -> Option<(usize, usize)> {
+    let file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len() as usize;
+    if len < 2 {
+        return None;
+    }
+    // SAFETY: the file is not truncated while this map is alive.
+    let map = unsafe { memmap2::Mmap::map(&file).ok()? };
+    let mut iter = crate::iterators::ConFrameIterator::from_bytes(&map);
+    if !matches!(iter.forward_fast(), Some(Ok(()))) {
+        return None;
+    }
+    let span = iter.byte_pos();
+    if span < 2 || len % span != 0 {
+        return None;
+    }
+    let n = len / span;
+    if n == 0 {
+        return None;
+    }
+    if n >= 2 {
+        let mut next = crate::iterators::ConFrameIterator::from_bytes(&map[span..span * 2]);
+        if !matches!(next.forward_fast(), Some(Ok(()))) || next.byte_pos() != span {
+            return None;
+        }
+    }
+    Some((span, n))
+}
+
+/// Equal-length frames: every rank, including rank 0, reads only its span.
+///
+/// `Ok(None)` means the file is not one frame length and the caller keeps
+/// the index path. Every rank takes the same branch.
+fn read_tiled(
+    comm: &Comm,
+    path: &Path,
+    threads: Option<usize>,
+) -> Result<Option<RankFrames>, BoxErr> {
+    let local = tiled_span(path);
+    let packed = if comm.rank() == 0 {
+        match local {
+            Some((span, n)) => {
+                let mut bytes = Vec::with_capacity(16);
+                bytes.extend_from_slice(&(span as u64).to_le_bytes());
+                bytes.extend_from_slice(&(n as u64).to_le_bytes());
+                Ok(bytes)
+            }
+            None => Err("frames do not share one length".into()),
+        }
+    } else {
+        Ok(Vec::new())
+    };
+    let decided = match bcast_result(comm, packed) {
+        Ok(bytes) if bytes.len() == 16 => Some((
+            u64::from_le_bytes(bytes[0..8].try_into().unwrap()) as usize,
+            u64::from_le_bytes(bytes[8..16].try_into().unwrap()) as usize,
+        )),
+        _ => None,
+    };
+    let Some((span, n)) = decided else {
+        return Ok(None);
+    };
+    if !agree(comm, local == Some((span, n))) {
+        return Ok(None);
+    }
+    let r = comm.my_frames(n);
+    let lo = r.start.saturating_mul(span);
+    let hi = r.end.saturating_mul(span);
+    let opened = read_span(path, lo, hi);
+    let ok = agree(comm, opened.is_ok());
+    let bytes = match (opened, ok) {
+        (Ok(bytes), true) => bytes,
+        (Err(e), _) => return Err(format!("rank {}: {e}", comm.rank()).into()),
+        (Ok(_), false) => return Err("file open failed on another rank".into()),
+    };
+    let offs: Vec<usize> = (0..r.len()).map(|i| i * span).collect();
+    let frames = parse_local(comm, &bytes, &offs, threads)?;
+    Ok(Some(RankFrames {
+        first: r.start,
+        n_total: n,
+        frames,
+    }))
+}
+
 fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankFrames, BoxErr> {
-    // Rank 0 reads the file once, to build the index. Every other rank
-    // waits for that index and then reads only its own byte range.
-    let mut held = None;
+    if let Some(done) = read_tiled(comm, path, threads)? {
+        return Ok(done);
+    }
+    // Unequal frames: rank 0 builds the index, then every rank, including
+    // rank 0, reads only its own byte range. The full buffer is not kept
+    // for the parse.
     let packed = if comm.rank() == 0 {
         match root_index(path, true) {
-            Ok((fc, idx)) => {
-                let packed = pack_index(&idx);
-                held = Some(fc);
-                Ok(packed)
-            }
+            Ok((_fc, idx)) => Ok(pack_index(&idx)),
             Err(e) => Err(e),
         }
     } else {
@@ -246,22 +334,11 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
     let idx = unpack_index(&bcast_result(comm, packed)?);
     let r = comm.my_frames(idx.len());
     let (lo, hi, offs) = block_bytes(&idx, &r);
-    let opened = if let Some(fc) = &held {
-        let all = bytes_of(fc);
-        if all.len() as u64 == idx.data_len {
-            Ok(all[lo..hi].to_vec())
-        } else {
-            Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
-        }
+    let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let opened = if len == idx.data_len {
+        read_span(path, lo, hi)
     } else {
-        let len = std::fs::metadata(path)
-            .map(|m| m.len())
-            .unwrap_or(0);
-        if len == idx.data_len {
-            read_span(path, lo, hi)
-        } else {
-            Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
-        }
+        Err("file differs from rank 0's copy; use ReadMode::Scatter".to_string())
     };
     let ok = agree(comm, opened.is_ok());
     let bytes = match (opened, ok) {
