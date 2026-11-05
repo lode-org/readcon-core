@@ -53,7 +53,7 @@ def hardware_line() -> str:
         if line.lower().startswith("model name"):
             model = line.split(":", 1)[1].strip()
             break
-    model = _strip_vendor_marks(model)
+    model = " ".join(_strip_vendor_marks(model).split())
     machine = os.uname().machine
     nproc = os.cpu_count() or 0
     memory = 0
@@ -161,7 +161,7 @@ def write_con(path: Path, n_atoms: int, n_frames: int) -> None:
 def _strip_vendor_marks(text: str) -> str:
     for token in ("(" + "R" + ")", "(" + "TM" + ")"):
         text = text.replace(token, "")
-    return " ".join(text.split())
+    return text
 
 
 def sanitize(text: str) -> str:

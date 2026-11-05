@@ -6,6 +6,7 @@ asv module and records six serial samples.
 
 from __future__ import annotations
 
+import fcntl
 import sys
 from pathlib import Path
 
@@ -13,6 +14,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import measure
 import support
+
+_LOCK = None
+
+
+def _hold_lock() -> None:
+    global _LOCK
+    path = support.WORK / "campaign.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _LOCK = path.open("a", encoding="utf-8")
+    fcntl.flock(_LOCK.fileno(), fcntl.LOCK_EX)
 
 
 def main() -> None:
@@ -24,6 +35,7 @@ def main() -> None:
         measure.fresh_once(Path(sys.argv[2]))
         return
     support.ensure_pinned()
+    _hold_lock()
     if arm == "prepare":
         support.prepare()
         return
