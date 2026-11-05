@@ -5,7 +5,8 @@ Each sample is a fresh process. The clock starts after the import.
 Memory is VmHWM after the read minus VmHWM after the import.
 CON readers read the CON file, XYZ readers the XYZ file, HDF5 readers the HDF5 file.
 readcon does not read XYZ or HDF5.
-The eOn client reads the first frame through Matter.con2matter.
+eOn all-frame arms are eon.fileio.loadcons and a C++ loop over ConFileIO.
+Matter.con2matter and read_first_frame are first-frame rows.
 """
 
 from __future__ import annotations
@@ -26,8 +27,14 @@ LOG = PAPER / "logs" / "reader-exchange.log"
 WORK = PAPER / "logs" / "reader-work" / "large"
 BASE_COMMIT = "ac4f437989dea5aad9f75ff045af09ccf7127eba"
 BASE_DIR = PAPER / "build" / "baseline-readcon"
+RELEASE_COMMIT = "12ca800bc2212c565941e04094cba6b4d99a62e0"
+RELEASE_DIR = PAPER / "build" / "readcon-0.17.3"
 EON_PY = PAPER / "bench" / "work" / "peers" / "eon" / "client" / "python"
+EON_PKG = PAPER / "bench" / "work" / "peers" / "eon"
 EON_LIB = PAPER / "bench" / "work" / "peers" / "eon" / "build-h2h" / "subprojects" / "readcon-core"
+EON_BIN = PAPER / "bench" / "work" / "eon_allframes"
+EON_COMMIT = "579738a9387e8d0ea55496f45dd057812cfab892"
+EON_VERSION = "3.6.0"
 REPEATS = 6
 N_FRAMES = int(os.environ.get("LARGE_FRAMES", "100000"))
 N_ATOMS = 32
@@ -108,9 +115,11 @@ def hwm_kib():
 arm, path, n_frames_s, n_atoms_s = sys.argv[1:5]
 n_frames = int(n_frames_s)
 n_atoms = int(n_atoms_s)
-if arm in {"readcon_tip", "readcon_base", "readcon_first"}:
+if arm in {"readcon_tip", "readcon_base", "readcon_v0173", "readcon_first"}:
     if arm == "readcon_base":
         sys.path.insert(0, os.environ["READCON_BASE"])
+    if arm == "readcon_v0173":
+        sys.path.insert(0, os.environ["READCON_V0173"])
     import readcon
     def parse():
         if arm == "readcon_first":
@@ -182,12 +191,38 @@ elif arm == "eon":
         if not pyec.io_ok(status):
             raise RuntimeError(str(status))
         return [np.array(matter.positions, copy=True)]
+elif arm == "eon_py":
+    sys.path.insert(0, os.environ["EON_PKG"])
+    from eon.fileio import loadcons
+    def parse():
+        return [np.array(frame.r, dtype=float, copy=True) for frame in loadcons(path)]
+elif arm == "eon_cpp":
+    def parse():
+        raise RuntimeError("eon_cpp is timed in its own process")
 else:
     raise SystemExit(arm)
 
 before = hwm_kib()
 print(f"READY {before}", flush=True)
 sys.stdin.readline()
+if arm == "eon_cpp":
+    import subprocess
+    proc = subprocess.run([os.environ["EON_ALLFRAMES"], path], capture_output=True, text=True)
+    parts = proc.stdout.split()
+    if proc.returncode != 0 or len(parts) < 5:
+        err = (proc.stderr or proc.stdout)[-240:].replace("\n", " ")
+        print(json.dumps({"seconds": None, "hwm_before": before, "hwm_after": before, "matched": 0, "got": 0, "requested": n_frames, "error": err}))
+        raise SystemExit(0)
+    print(json.dumps({
+        "seconds": float(parts[0]),
+        "hwm_before": int(parts[1]),
+        "hwm_after": int(parts[2]),
+        "matched": int(parts[3]),
+        "got": int(parts[4]),
+        "requested": n_frames,
+        "error": "",
+    }))
+    raise SystemExit(0)
 import time
 t0 = time.perf_counter()
 error = ""
@@ -220,10 +255,16 @@ print(json.dumps({"seconds": dt, "hwm_before": before, "hwm_after": after, "matc
 def one(arm: str, path: Path) -> dict:
     env = os.environ.copy()
     env["READCON_BASE"] = str(BASE_DIR)
+    env["READCON_V0173"] = str(RELEASE_DIR)
     env.pop("TMPDIR", None)
     if arm == "eon":
         env["PYTHONPATH"] = str(EON_PY) + os.pathsep + env.get("PYTHONPATH", "")
         env["LD_LIBRARY_PATH"] = str(EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    if arm == "eon_py":
+        env["EON_PKG"] = str(EON_PKG)
+        env["PYTHONPATH"] = str(EON_PKG) + os.pathsep + env.get("PYTHONPATH", "")
+    if arm == "eon_cpp":
+        env["EON_ALLFRAMES"] = str(EON_BIN)
     proc = subprocess.run(
         [sys.executable, "-c", WORKER, arm, str(path), str(N_FRAMES), str(N_ATOMS)],
         input="\n",
@@ -261,6 +302,9 @@ def main() -> int:
         f"nproc {os.cpu_count()}",
         f"cpu_model {cpu_model()}",
         f"baseline_commit {BASE_COMMIT}",
+        f"release_commit {RELEASE_COMMIT}",
+        f"eon_commit {EON_COMMIT}",
+        f"eon_version {EON_VERSION}",
         "git_status_begin",
         status or "(clean)",
         "git_status_end",
@@ -274,7 +318,10 @@ def main() -> int:
         "numpy_percentile method=linear type=7",
         "readcon_xyz no",
         "readcon_hdf5 no",
-        "eon_path Matter.con2matter first frame",
+        "eon_first Matter.con2matter first frame",
+        "eon_py eon.fileio.loadcons all frames",
+        "eon_cpp ConFileIO con2matter loop all frames",
+        "readcon_first read_first_frame first frame",
     ]
     frames = reference(N_FRAMES, N_ATOMS)
     write_files(frames)
@@ -284,10 +331,13 @@ def main() -> int:
     arms = [
         ("readcon_tip", con),
         ("readcon_base", con),
+        ("readcon_v0173", con),
         ("readcon_first", con),
         ("readcon_db", con),
         ("ase_eon", con),
         ("eon", con),
+        ("eon_py", con),
+        ("eon_cpp", con),
         ("numpy", xyz),
         ("chemfiles", xyz),
         ("ovito", xyz),
@@ -319,8 +369,9 @@ def main() -> int:
         mib, mib_iqr = type7([row["mib"] for row in got])
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
+        scope = "first_frame" if name in {"eon", "readcon_first"} else "all_frames"
         lines.append(
-            f"summary arm={name} n_rep={len(got)} median_s={med:.9e} iqr_s={iqr:.9e} "
+            f"summary arm={name} scope={scope} n_rep={len(got)} median_s={med:.9e} iqr_s={iqr:.9e} "
             f"mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "
             f"requested={requested} matched={matched} failed={requested - matched} exit=0"
         )
