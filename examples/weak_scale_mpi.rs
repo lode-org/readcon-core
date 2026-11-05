@@ -20,7 +20,7 @@ use readcon_core::distrib::Comm;
 use readcon_core::distrib::block_range;
 use readcon_core::distrib_read::{ReadMode, read_block};
 use readcon_core::hostlabel::cpu_model;
-use readcon_core::iterators::{ConFrameIterator, parse_frames_at_offsets};
+use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrame;
 use readcon_core::writer::ConFrameWriter;
 use std::env;
@@ -241,6 +241,24 @@ fn time_span(
     let slice = &map[local..local + (hi - lo)];
 
     let t = Instant::now();
+    // Sequential advice is inside the clock. It keeps the fault walk of
+    // a cold span from stalling the rank that did not read the file first.
+    let _ = unsafe {
+        libc::posix_fadvise(
+            std::os::fd::AsRawFd::as_raw_fd(&file),
+            map_lo as i64,
+            map_len as i64,
+            libc::POSIX_FADV_SEQUENTIAL,
+        )
+    };
+    let _ = unsafe {
+        libc::posix_fadvise(
+            std::os::fd::AsRawFd::as_raw_fd(&file),
+            map_lo as i64,
+            map_len as i64,
+            libc::POSIX_FADV_WILLNEED,
+        )
+    };
     let mut acc = 0u8;
     let mut at = 0usize;
     while at < slice.len() {
@@ -255,14 +273,28 @@ fn time_span(
 
     let t = Instant::now();
     let text = std::str::from_utf8(slice).expect("utf8");
-    let parsed = parse_frames_at_offsets(text, offsets, Some(1));
-    let n_ok = parsed.iter().filter(|item| item.is_ok()).count();
-    let parse_s = t.elapsed().as_secs_f64();
-
-    // Freeing the frames is part of the clock. It is not inside the parse.
-    let t = Instant::now();
-    drop(parsed);
-    let release_s = t.elapsed().as_secs_f64();
+    // Drop each frame before the next one is built. Holding every frame
+    // and freeing them together made the slowest rank's release grow
+    // once several ranks freed at the same time.
+    let mut n_ok = 0usize;
+    let mut release_s = 0.0_f64;
+    for (index, &start) in offsets.iter().enumerate() {
+        let end = if index + 1 < offsets.len() {
+            offsets[index + 1]
+        } else {
+            text.len()
+        };
+        let mut iter = ConFrameIterator::new(&text[start..end]);
+        let frame = iter.next();
+        let ok = frame.as_ref().is_some_and(|item| item.is_ok());
+        let t_rel = Instant::now();
+        drop(frame);
+        release_s += t_rel.elapsed().as_secs_f64();
+        if ok {
+            n_ok += 1;
+        }
+    }
+    let parse_s = (t.elapsed().as_secs_f64() - release_s).max(0.0);
 
     let t = Instant::now();
     drop(map);
@@ -439,16 +471,45 @@ fn main() {
         assert_eq!(sample.n_ok, frames_per_worker);
         let maj = sum_i64(&world, sample.majflt);
         let minr = sum_i64(&world, sample.minflt);
+        // Local phases, barrier excluded. Every rank contributes.
+        let local = [
+            sample.open_s,
+            sample.map_s,
+            sample.fault_s,
+            sample.parse_s,
+            sample.release_s,
+            sample.unmap_s,
+            sample.open_s
+                + sample.map_s
+                + sample.fault_s
+                + sample.parse_s
+                + sample.release_s
+                + sample.unmap_s,
+        ];
+        let mut gathered = vec![0.0_f64; local.len() * ranks];
+        world.all_gather_into(&local[..], &mut gathered[..]);
         if comm.rank() == 0 {
+            let mut slow_at = 0usize;
+            let mut slow_local = 0.0_f64;
+            for rank in 0..ranks {
+                let base = rank * local.len();
+                let local_s = gathered[base + 6];
+                if rank == 0 || local_s > slow_local {
+                    slow_local = local_s;
+                    slow_at = rank;
+                }
+            }
+            let base = slow_at * local.len();
             samples.push(sample.wall_s);
             samples_maj.push(maj);
             samples_min.push(minr);
-            open_s.push(sample.open_s);
-            map_s.push(sample.map_s);
-            fault_s.push(sample.fault_s);
-            parse_s.push(sample.parse_s);
-            unmap_s.push(sample.unmap_s);
-            release_s.push(sample.release_s);
+            // Phases are the slowest rank's own timers, not rank 0's wait.
+            open_s.push(gathered[base]);
+            map_s.push(gathered[base + 1]);
+            fault_s.push(gathered[base + 2]);
+            parse_s.push(gathered[base + 3]);
+            release_s.push(gathered[base + 4]);
+            unmap_s.push(gathered[base + 5]);
             barrier_s.push(sample.barrier_s);
         }
     }

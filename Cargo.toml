@@ -157,6 +157,9 @@ name = "weak_scale_mpi"
 required-features = ["mpi"]
 
 [[example]]
+name = "serial_probe"
+
+[[example]]
 name = "leaf_io_harness"
 required-features = ["rpc"]
 

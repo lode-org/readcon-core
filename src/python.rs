@@ -1561,6 +1561,7 @@ struct ReadCallPhases {
     open_mmap_s: f64,
     pool_s: f64,
     pool_join_s: f64,
+    schedule_s: f64,
     scan_s: f64,
     slot_alloc_s: f64,
     worker_parse_s: f64,
@@ -1593,6 +1594,7 @@ impl ReadCallPhases {
             open_mmap_s: phases.open_mmap_s,
             pool_s: phases.pool_s,
             pool_join_s: phases.pool_join_s,
+            schedule_s: phases.schedule_s,
             scan_s: phases.scan_s,
             slot_alloc_s: phases.slot_alloc_s,
             worker_parse_s: phases.worker_parse_s,
@@ -1620,6 +1622,7 @@ impl ReadCallPhases {
         dict.set_item("open_mmap_s", self.open_mmap_s)?;
         dict.set_item("pool_s", self.pool_s)?;
         dict.set_item("pool_join_s", self.pool_join_s)?;
+        dict.set_item("schedule_s", self.schedule_s)?;
         dict.set_item("scan_s", self.scan_s)?;
         dict.set_item("slot_alloc_s", self.slot_alloc_s)?;
         dict.set_item("worker_parse_s", self.worker_parse_s)?;
@@ -1895,20 +1898,35 @@ fn load_phased(
     &'static str,
 )> {
     let path_owned = path.to_owned();
-    py.detach(|| {
-        crate::iterators::read_all_frames_phased(Path::new(&path_owned), n_threads)
-            .map(|phased| {
-                (
-                    phased.frames,
-                    phased.phases,
-                    phased.n_bytes,
-                    phased.chunk_s,
-                    scan_kind_name(phased.scan_kind),
-                )
-            })
-            .map_err(|err| err.to_string())
-    })
-    .map_err(PyIOError::new_err)
+    let t_enter = std::time::Instant::now();
+    let mut loaded = py
+        .detach(|| {
+            crate::iterators::read_all_frames_phased(Path::new(&path_owned), n_threads)
+                .map(|phased| {
+                    (
+                        phased.frames,
+                        phased.phases,
+                        phased.n_bytes,
+                        phased.chunk_s,
+                        scan_kind_name(phased.scan_kind),
+                    )
+                })
+                .map_err(|err| err.to_string())
+        })
+        .map_err(PyIOError::new_err)?;
+    let elapsed = t_enter.elapsed().as_secs_f64();
+    let phases = &loaded.1;
+    let named = phases.open_mmap_s
+        + phases.pool_s
+        + phases.pool_join_s
+        + phases.scan_s
+        + phases.slot_alloc_s
+        + phases.worker_parse_s
+        + phases.finish_s
+        + phases.close_s
+        + phases.schedule_s;
+    loaded.1.schedule_s += (elapsed - named).max(0.0);
+    Ok(loaded)
 }
 
 fn read_con_lazy(
@@ -2176,6 +2194,7 @@ fn read_con_string(
         open_mmap_s,
         pool_s: parsed.pool_s,
         pool_join_s: parsed.pool_join_s,
+        schedule_s: 0.0,
         scan_s: parsed.scan_s,
         slot_alloc_s: parsed.slot_alloc_s,
         worker_parse_s: parsed.worker_parse_s,

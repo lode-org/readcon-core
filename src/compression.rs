@@ -312,6 +312,34 @@ impl ForwardText {
     }
 }
 
+/// Drop resident pages of `map` on `workers` threads, then the caller
+/// unmaps. Each thread advises a disjoint byte range. The page size is
+/// `sysconf(SC_PAGESIZE)`, not a host-tuned cutoff.
+pub fn advise_dontneed_parallel(map: &memmap2::Mmap, workers: usize) {
+    let len = map.len();
+    if len == 0 {
+        return;
+    }
+    let workers = workers.max(1);
+    if workers == 1 {
+        let _ = release(map, 0, len);
+        return;
+    }
+    let step = len.div_ceil(workers);
+    std::thread::scope(|scope| {
+        for worker in 0..workers {
+            let start = worker.saturating_mul(step);
+            if start >= len {
+                break;
+            }
+            let end = (start + step).min(len);
+            scope.spawn(move || {
+                let _ = release(map, start, end);
+            });
+        }
+    });
+}
+
 /// Advise `MADV_DONTNEED` for the whole 64 KiB blocks of the map that
 /// `start..end` reaches, cut at the map end.
 fn release(map: &memmap2::Mmap, start: usize, end: usize) -> io::Result<()> {

@@ -1386,11 +1386,15 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             let t_pool = std::time::Instant::now();
             match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
                 Ok(pool) => {
-                    let pool_s = t_pool.elapsed().as_secs_f64();
-                    let packed = pool.install(run);
+                    let built = t_pool.elapsed().as_secs_f64();
+                    let t_wake = std::time::Instant::now();
+                    let (wake, body) = pool.install(|| {
+                        let wake = t_wake.elapsed().as_secs_f64();
+                        (wake, run())
+                    });
                     let t_join = std::time::Instant::now();
                     drop(pool);
-                    (pool_s, t_join.elapsed().as_secs_f64(), packed)
+                    (built + wake, t_join.elapsed().as_secs_f64(), body)
                 }
                 Err(_) => (t_pool.elapsed().as_secs_f64(), 0.0, run()),
             }
@@ -1631,25 +1635,18 @@ fn newline_positions(bytes: &[u8], threads: usize) -> Vec<usize> {
 ///
 /// `Some(n)` with `n >= 2` uses that many workers at every file length.
 /// A file shorter than two bytes has nothing to split, and [`equal_cuts`]
-/// drops a cut that lands on the same byte as the previous one, so a
-/// short file does not invent an empty chunk. `None` uses the machine's
-/// parallelism on the same rule. `Some(0)` and `Some(1)` stay on the
-/// calling thread. There is no byte-length cutoff: a cutoff taken from
-/// one host was not monotone across neighboring sizes.
+/// drops a cut that repeats the previous byte, so a short file does not
+/// invent an empty chunk. `None`, `Some(0)`, and `Some(1)` stay on the
+/// calling thread. An omitted count must not start the global pool:
+/// that pool made a one-frame file slower. There is no byte-length
+/// cutoff taken from one host.
 #[cfg(feature = "parallel")]
 fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
     let requested = match num_threads {
-        Some(0) | Some(1) => return 1,
-        Some(n) => n,
-        None => std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1),
+        Some(n) if n >= 2 => n,
+        _ => return 1,
     };
-    if requested < 2 || len < 2 {
-        1
-    } else {
-        requested
-    }
+    if len < 2 { 1 } else { requested }
 }
 
 fn collect_frame_starts(
@@ -1880,6 +1877,8 @@ pub struct ReadPhaseTimes {
     pub worker_max_s: f64,
     /// Drop of the mapped or owned file buffer after the parse.
     pub close_s: f64,
+    /// Wake of the worker pool and the other gaps inside the read.
+    pub schedule_s: f64,
     /// True when the bytes came from a map rather than an owned buffer.
     pub mapped: bool,
 }
@@ -1906,6 +1905,7 @@ pub fn read_all_frames_phased(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    let t_all = std::time::Instant::now();
     let t_open = std::time::Instant::now();
     let contents = crate::compression::read_file_contents(path)?;
     let open_mmap_s = t_open.elapsed().as_secs_f64();
@@ -1919,9 +1919,29 @@ pub fn read_all_frames_phased(
         crate::compression::FileContents::Mapped(map) => map,
     };
     let phased = frames_from_bytes_phased(bytes, num_threads)?;
+    let workers = match num_threads {
+        Some(n) if n >= 2 => n,
+        _ => 1,
+    };
     let t_close = std::time::Instant::now();
+    if let crate::compression::FileContents::Mapped(map) = &contents {
+        // The serial unmap of a fully resident file is the 8-worker
+        // tail. Advise the pages away on the same worker count first,
+        // so the following unmap does not walk every resident page alone.
+        crate::compression::advise_dontneed_parallel(map, workers);
+    }
     drop(contents);
     let close_s = t_close.elapsed().as_secs_f64();
+    let elapsed = t_all.elapsed().as_secs_f64();
+    let named = open_mmap_s
+        + phased.pool_s
+        + phased.pool_join_s
+        + phased.scan_s
+        + phased.slot_alloc_s
+        + phased.worker_parse_s
+        + phased.finish_s
+        + close_s;
+    let schedule_s = (elapsed - named).max(0.0);
     Ok(PhasedFrames {
         frames: phased.frames,
         n_bytes,
@@ -1938,6 +1958,7 @@ pub fn read_all_frames_phased(
             worker_sum_s: phased.worker_sum_s,
             worker_max_s: phased.worker_max_s,
             close_s,
+            schedule_s,
             mapped,
         },
     })
