@@ -10,7 +10,8 @@ The pdb scan and the extended xyz scan fill positions, masses and the cell in on
 ## Why
 
 The old default read mapped a wide file and started workers before the parse.
-That startup made a warm read of 100 frames take 5.722 ms on a checkout of main, with an interquartile range of 0.638 ms.
+That startup made a warm read of 100 frames take 5.722 ms on a checkout of main.
+The interquartile range on that row is 0.638 ms.
 The calling-thread parse brings that same read to 2.073 ms, with an interquartile range of 0.021 ms.
 
 ## Example
@@ -28,15 +29,18 @@ Every con reader sees the same con file.
 ASE reads that file with format set to eon.
 The eon arm is the upstream client built with meson.
 That client calls read_all_frames and then con2matter on every frame.
-The timer links that client. It is not a separate C rewrite of the parser.
+The timer links that client.
+It is not a separate C rewrite of the parser.
 Codes that cannot read con are timed on extxyz, xyz and pdb.
 readcon is timed on those same files.
 One absolute tolerance of 1e-8 is applied to every code and every frame.
-A miss exits 1. The success rate is the fraction of repeats that pass.
+A miss exits 1.
+The success rate is the fraction of repeats that pass.
 
 ## Before and after
 
-The main row is a checkout of main. The other row is this branch.
+The main row is a checkout of main.
+The other row is this branch.
 Both rows are warm default reads, seven repeats, one pinned core.
 The median and the interquartile range use the type 7 quantile.
 
@@ -53,10 +57,14 @@ A row is one cache, one file and one format.
 readcon wins a row when its fastest full match is faster than every other full match.
 A success of 0 means no repeat stayed inside the tolerance, so that row has no time winner.
 
-con warm 100 frames. readcon wins at 2.057 ms by the mapped read. The eon client takes 4.224 ms and ASE takes 36.144 ms.
-con warm 200 frames. readcon wins at 4.069 ms. The eon client takes 8.636 ms and ASE takes 71.703 ms.
-con warm 100000 atoms. readcon wins at 8.150 ms. The eon client takes 17.175 ms and ASE takes 133.519 ms.
-con warm 1000000 atoms. readcon wins at 92.588 ms. The eon client takes 302.989 ms and ASE takes 1752.489 ms.
+con warm 100 frames. readcon wins at 2.057 ms by the mapped read.
+The eon client takes 4.224 ms and ASE takes 36.144 ms.
+con warm 200 frames. readcon wins at 4.069 ms.
+The eon client takes 8.636 ms and ASE takes 71.703 ms.
+con warm 100000 atoms. readcon wins at 8.150 ms.
+The eon client takes 17.175 ms and ASE takes 133.519 ms.
+con warm 1000000 atoms. readcon wins at 92.588 ms.
+The eon client takes 302.989 ms and ASE takes 1752.489 ms.
 con cold 100 frames. readcon wins at 4.813 ms.
 con cold 200 frames. readcon wins at 8.594 ms.
 con cold 100000 atoms. readcon wins at 13.583 ms.
@@ -77,7 +85,8 @@ pdb cold 100000 atoms. readcon wins at 18.315 ms.
 pdb cold 1000000 atoms. readcon wins at 156.661 ms.
 
 xyz has success 0 on every file, for readcon and for every other code, because the cell does not match.
-pdb of the 100 frame and 200 frame files has success 0 for every code, because the coordinates are rounded past the tolerance.
+The 100 frame pdb file and the 200 frame pdb file have success 0 for every code.
+Those coordinates are rounded past the tolerance.
 
 ## How to reproduce
 
