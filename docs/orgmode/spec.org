@@ -2,6 +2,8 @@
 #+date: 2026-10-11
 #+options: toc:nil num:nil ^:nil
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Specification
 
 - Version :: 3.1 (major 3, minor 1)
@@ -15,7 +17,6 @@
 This document is the normative CON format. CON checkpoints come from
 rare-event work on eOn
 @@rst::cite:t:`goswamiNEBOrchestration2026`@@ @@rst::cite:t:`goswamiRMSDProjections2026`@@ @@rst::cite:t:`goswamiGaussianProcessSaddle2025`@@ @@rst::cite:t:`chillEONSoftwareLong2014`@@.
-Requirement words follow [[https://www.rfc-editor.org/rfc/rfc2119][RFC 2119]].
 Each normative requirement has an id =CON-<section>.<n>=.
 Where this prose and the included PEG disagree, these clauses win.
 
@@ -71,8 +72,8 @@ A stray blank therefore shifts that header and fails at its line 3.
 |    9 | Masses in =units.mass=, empty when line 7 is 0       |
 
 Line 1 and lines 5-6 have no semantics.
-Line 1 may be empty, and parsers keep that empty line.
-Line 2 may be empty. An empty line 2 does not start with ={=, so the frame is implicit version 1.
+Line 1 MAY be empty, and parsers MUST keep that empty line.
+Line 2 MAY be empty. An empty line 2 does not start with ={=, so the frame is implicit version 1.
 Angstrom and amu apply when =units= or that key is absent.
 
 - CON-header.1 :: MAY :: Writers MAY leave lines 5 and 6 empty.
@@ -181,7 +182,7 @@ Grouping by type reorders atoms relative to a pre-group sequence.
 eOn 3.6.0 stable-sorts by ascending id when the ids are unique, and keeps file order when any id repeats (=client/ConFileIO.cpp:147-176= =matter_order=, called at =:691=).
 v3.4.0 has the same function.
 
-- CON-id.1 :: MUST :: Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, never through binary64.
+- CON-id.1 :: MUST :: Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, and MUST NOT be parsed through binary64.
 - CON-id.2 :: MUST NOT :: Readers MUST NOT assume that ids start at 0 or at 1.
 - CON-id.3 :: MUST :: Writers MUST emit ids that are unique within the frame.
 - CON-id.4 :: MUST :: Readers MUST accept repeated ids.
@@ -336,7 +337,7 @@ A float token is an optional =+= or =-=, a significand with at least one digit, 
 
 Line numbers count from 1. Metadata failures are line 2.
 =IncompleteSection= carries the section name.
-A reader that stops at the first error uses the lowest line number, so threads cannot change which error is reported.
+A reader that stops at the first error MUST use the lowest line number, so threads cannot change which error is reported.
 
 | Class                     | When                                                                                                                                                          |
 |---------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -353,7 +354,7 @@ A reader that stops at the first error uses the lowest line number, so threads c
 | =InvalidVectorLength=     | A row has the wrong number of fields, or a reserved arity is not 3 for a vector or 1 for a scalar. An unknown-section row has that many value fields, then a flag, and an optional id. |
 | =UnknownSection=          | A section name is not known and cannot be skipped.                                                                                                             |
 | =UnsupportedVersion=      | Unknown major, or JSON major 0 or 1.                                                                                                                            |
-| =ValidationError=         | A =validate= true check failed. It does not relax =NonFiniteValue= or =InvalidFixedFlag=. A legal zero-atom frame is accepted.                                  |
+| =ValidationError=         | A =validate= true check failed. It MUST NOT relax =NonFiniteValue= or =InvalidFixedFlag=. A legal zero-atom frame is accepted.                                  |
 
 - CON-error.1 :: MUST :: Each class in the table MUST be distinguishable by a caller.
 - CON-error.2 :: MUST :: Reported line numbers MUST count from 1, with metadata on line 2.
@@ -366,7 +367,7 @@ A reader that stops at the first error uses the lowest line number, so threads c
 |---------+------------+------------------------------------------------------------------------|
 |       1 | original   | eOn text. Column 5 present. Column 4 is 0 or 1. No JSON.              |
 |       2 | 2026-03-25 | JSON line 2, ids, bit masks, declared sections.                       |
-|     3.0 | 2026-06-27 | =units.length= and =units.energy= required. Minor absent.             |
+|     3.0 | 2026-06-27 | =units.length= and =units.energy= MUST be present. Minor absent.      |
 |     3.1 | 2026-10-11 | Minor 1. =units.time= when velocities are present. Natural-unit rule. |
 
 Normative changes on 2026-10-11, by decision:
@@ -384,12 +385,12 @@ Normative changes on 2026-10-11, by decision:
 - Invalid units fail the writer (=D11=).
 - Lines 3-4 and =lattice_vectors= follow the cell convention. Missing =pbc= is fully periodic (=D12=).
 - Default float text round-trips binary64. Fixed decimals are opt-in (=D13=).
-- Unknown keys are kept. Unknown sections of a newer minor may be skipped by =section_arity= (=D14=).
+- Unknown keys are kept. Unknown sections of a newer minor MAY be skipped by =section_arity= (=D14=).
 - The major stays 3. =con_spec_minor= is 1. A same-major reader accepts every minor's version number (=D15=).
 - Gzip members and zstd frames are normative envelopes (=D16=).
 - Line 2 is one JSON line. Trailing space is ignored. Labels collapse spaces (=D17=).
 
-=con_spec_minor= is the minor of that major. =ConFrameBuilder= stamps =con_spec_minor= 1 on every spec 3 frame it builds when the caller has not set the key. =set_con_spec_minor= (Rust, =rkr_frame_builder_set_con_spec_minor=, and the C++ method of the same name) overrides that value before =build=. The writer does not invent or replace =con_spec_minor= (D15).
+=con_spec_minor= is the minor of that major. =ConFrameBuilder= stamps =con_spec_minor= 1 on every spec 3 frame it builds when the caller has not set the key. =set_con_spec_minor= (Rust, =rkr_frame_builder_set_con_spec_minor=, and the C++ method of the same name) overrides that value before =build=. The writer MUST NOT invent or replace =con_spec_minor= (D15).
 
 The media type =chemical/x-con= is informative, as is =text/plain; charset=utf-8=.
 CON has no magic bytes. Identify a file by extension and by this header.

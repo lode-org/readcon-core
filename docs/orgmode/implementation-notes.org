@@ -2,11 +2,13 @@
 #+date: 2026-10-11
 #+options: toc:nil num:nil ^:nil
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Status
 
 These notes are informative for the CON format.
 The normative text is [[file:spec.org][the specification]].
-Nothing here changes a byte a conforming reader must accept.
+Nothing here changes a byte a conforming reader MUST accept.
 
 * Absent values in the C ABI
 
@@ -34,7 +36,7 @@ Velocities, forces, magmoms, displacements, and spreads use the same shape when 
 Atom ids are integers, one per atom.
 DLPack exports report their own shape, strides, dtype, and device.
 The data pointer stays valid until a growth of the buffer reallocates it.
-Callers that keep a raw pointer across an added atom must take a new view.
+Callers that keep a raw pointer across an added atom MUST take a new view.
 On-disk coordinates and section values stay decimal text.
 =storage_dtypes= describes the in-memory element type only.
 It is not a change to the file encoding.

@@ -9,6 +9,8 @@
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 #+end_export
 
+#+INCLUDE: "rfc2119-note.inc"
+
 [[file:chemfiles-tutorial.org][tutorial]]; for tasks see [[file:chemfiles-howto.org][how-to]]; for rationale see
 [[file:chemfiles-explain.org][explanation]]. Binding-wide matrices live in [[file:bindings.org][bindings]]; on-disk =bonds=
 key in [[file:spec.org][spec]].
@@ -129,7 +131,7 @@ These patterns are what CON selection implements (tests under
 =chemfiles_selection_cpp_regression= for topology cases). Format limits
 (=resname=, properties, impropers, geometry thresholds) are CON limits—see
 =chemfiles-explain.org= (*What selection cannot see on CON*). The optional
-conversion stack may reuse a third-party grammar engine; that is an
+conversion stack MAY reuse a third-party grammar engine; that is an
 implementation detail, not a second public API surface.
 
 * CI / release artifacts
@@ -141,5 +143,5 @@ implementation detail, not a second public API surface.
 | =c_lib_tarball.yml= | =readcon-core-clib-$VER-$target.tar.gz= on Linux/macOS; Windows + chemfiles is an *explicit skip* |
 | =crates_publish.yml= | crates.io =readcon-core= (chemfiles still optional feature) |
 
-Pending/active trusted publishers must use *exact* PyPI names =readcon= and
+Pending and active trusted publishers MUST use *exact* PyPI names =readcon= and
 =readcon-chemfiles=.

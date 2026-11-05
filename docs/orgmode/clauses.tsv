@@ -52,7 +52,7 @@ CON-mask.4	MUST	In spec 2 and later, values 0 through 7 MUST be read as the bitm
 CON-mask.5	MUST	A float spelling, a sign, or a value outside the legal set MUST be =InvalidFixedFlag= in every mode, including when =validate= is absent or false.
 CON-mask.6	MUST NOT	A spec 2 or later writer MUST NOT emit 1 to mean all-fixed.
 CON-mask.7	MUST	A spec 2 or later writer MUST emit 7 for an atom fixed on x, y, and z.
-CON-id.1	MUST	Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, never through binary64.
+CON-id.1	MUST	Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, and MUST NOT be parsed through binary64.
 CON-id.2	MUST NOT	Readers MUST NOT assume that ids start at 0 or at 1.
 CON-id.3	MUST	Writers MUST emit ids that are unique within the frame.
 CON-id.4	MUST	Readers MUST accept repeated ids.

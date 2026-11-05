@@ -11,6 +11,8 @@
    This page is the multi-language *reference* (parity matrix + examples).
 #+end_export
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Feature parity matrix
 
 The surfaces (Rust, Python, Julia, Fortran, C, C++) share the same core
@@ -266,10 +268,10 @@ readcon.atomic_number_to_symbol(93)     # "X"
 
 Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
 ~atom_data~ order). Prefer *DLPack* for cross-framework hand-off: read
-~ndim~, ~shape~, and ~dtype~ (code/bits) from the tensor—do *not* assume the
-host language must allocate =f64= / =real64= copies. On-disk CON numerics are
+~ndim~, ~shape~, and ~dtype~ (code/bits) from the tensor. Consumers MUST NOT
+assume that the host language allocates =f64= / =real64= copies. On-disk CON numerics are
 IEEE binary64 today, and current exports report =kDLFloat= / 64 for vectors and
-scalars (=kDLUInt= / 64 for =atom_id=), but consumers should branch on the
+scalars (=kDLUInt= / 64 for =atom_id=). Consumers SHOULD branch on the
 tensor metadata so a future dtype change does not force a host =f64= ABI.
 
 C / C++ / Fortran: =rkr_frame_*_dlpack= / builder =*_dlpack= (and
@@ -533,7 +535,7 @@ Atom-context trajectory positions (e.g. ~name H~) without re-selecting in user c
 
 No C ABI multi-frame selection entry in this cut (call per-frame ~rkr_frame_select~
 or use Rust/Python). Lean builds: gated selection / metatensor return
-~RKR_STATUS_FEATURE_DISABLED~ (=-11=), never confused with internal error (=-7=).
+~RKR_STATUS_FEATURE_DISABLED~ (=-11=). Callers MUST NOT confuse that status with internal error (=-7=).
 
 Metadata builder helpers:
 
@@ -663,7 +665,7 @@ The shipped =readcon-core.h= is the C ABI. cbindgen is a maintainer draft tool o
 |------+---------|
 | =0= (=RKR_STATUS_SUCCESS=) | Owned non-null =mts_block_t *= |
 | =-1= | null pointer arg |
-| =-11= (=RKR_STATUS_FEATURE_DISABLED=) | API not in this build (lean Fortran metatensor; never aliases internal error =-7=) |
+| =-11= (=RKR_STATUS_FEATURE_DISABLED=) | API not in this build (lean Fortran metatensor; MUST NOT alias internal error =-7=) |
 | =-8= (=RKR_STATUS_SECTION_ABSENT=) | Optional velocities/forces/energies missing on frame; out null |
 | other non-zero | internal / metatensor error |
 
@@ -725,8 +727,8 @@ no first-class TensorBlock helpers (matrix =n/a=); use C or Rust.
 
 Owned =DLManagedTensorVersioned= tensors (mirror of =dlpack.h=). Fortran binds
 struct fields for =dlpack_inspect= (ndim, shape, *dtype bits*) and
-=dlpack_data_ptr=. *Inspect dtype before casting the data pointer*—do not
-require host =real64= solely because CON text uses binary64; use the bits field
+=dlpack_data_ptr=. Inspect dtype before casting the data pointer. Callers MUST NOT
+require host =real64= solely because CON text uses binary64. Use the bits field
 (64 for float sections today; 64 uint for atom ids).
 
 | Section | C (builder / frame) | Fortran |
@@ -752,7 +754,7 @@ take =double*= for hosts that already use f64; prefer DLPack when interoperating
 
 Builds without the =zstd= feature still detect zstd magic bytes on
 read and return =io::ErrorKind::Unsupported= pointing at the feature
-flag, so consumers never see a corrupt parse on a zstd file produced
+flag, so consumers MUST NOT see a corrupt parse on a zstd file produced
 by another tool.
 
 The path readers decompress the whole file into memory before they parse it.

@@ -1,6 +1,8 @@
 #+title: Library architecture
 #+options: toc:nil num:nil ^:nil
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Overview
 
 The library is an hourglass: a Rust core, a C ABI in =ffi.rs=, and
@@ -61,7 +63,7 @@ within a type block and ensure thread-safety for parallel parsing.
   the scalar / 3-vector paths for =energies= / =charges= / =spins= /
   =magmoms= / =displacements= / =spreads=) :: Optional blocks after coordinates. Spec-v2+ files declare
   sections in JSON metadata; files without a =sections= key can still
-  auto-detect velocities by blank separator. Declared sections must be
+  auto-detect velocities by blank separator. Declared sections MUST be
   present at their declared position. If JSON metadata sets =validate=
   to =true=, section parser paths verify component symbols, exact
   labels, fixed masks, and atom ids against the coordinate blocks
@@ -109,14 +111,14 @@ Version and spec constants:
   =#if= guards.
 - =rkr_con_spec_version()= :: Runtime library spec version query.
 - =rkr_library_version()= :: Returns library version string (e.g.
-  ="0.5.2"=). The pointer is static; do not free it.
+  ="0.5.2"=). The pointer is static. Callers MUST NOT free it.
 
 Per-frame metadata accessors:
 - =rkr_frame_spec_version(handle)= :: Returns the spec version stored
   in a parsed frame's header (the version the file was written with,
   not the library's version).
 - =rkr_frame_metadata_json(handle)= :: Returns the full JSON metadata
-  line as a heap-allocated C string. The caller must free with
+  line as a heap-allocated C string. The caller MUST free with
   =rkr_free_string()=.
 - =rkr_frame_energy(handle)=, =rkr_frame_time(handle)=, etc. :: Typed
   accessors for common metadata keys.
@@ -191,7 +193,7 @@ produces:
 The header is shipped pre-generated at =include/readcon-core.h=.
 CMake (=FetchContent= / =find_package=), Meson (wrap / =pkg.generate=
 =filebase: readcon-core=), and cargo-c (=generation = false=) all
-install that file. None of them run cbindgen. The cxx source tarball
+install that file. They MUST NOT run cbindgen. The cxx source tarball
 (=scripts/package-cxx.sh= → =readcon-core-cxx-$VERSION.tar.gz= on the
 GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
 tarball (=scripts/package-clib.sh= →
@@ -209,7 +211,7 @@ cbindgen at install time. Optional metatensor C exports are gated
 (=metatensor.h= first). Fat builds write
 =target/<profile>/readcon-metatensor.env= for include/lib. Ownership:
 =tensor_block_into_raw_mts= then =mts_block_free= only (bindings page).
-Maintainers may draft a header with =scripts/regen-capi-headers.sh=.
+Maintainers MAY draft a header with =scripts/regen-capi-headers.sh=.
 That tool is not a consumer or CI dependency. CI compiles C/C++ against
 the committed header and checks that the library exports the declared
 =rkr_*= symbols.
@@ -225,8 +227,8 @@ for at the hyphenated name.
 :END:
 
 The published C surface is the =rkr_*= API in the shipped
-=include/readcon-core.h=. Consumers compile against that header; they
-do not run cbindgen. The C++ wrapper (=include/readcon-core.hpp=) is a
+=include/readcon-core.h=. Consumers compile against that header. They
+MUST NOT run cbindgen. The C++ wrapper (=include/readcon-core.hpp=) is a
 header-only RAII layer over the same symbols.
 
 ** What is frozen in 0.14.x **
@@ -239,13 +241,13 @@ header-only RAII layer over the same symbols.
 - Sentinel policy: =NaN= for absent floats, =UINT64_MAX= for absent
   unsigned integers, =NULL= for absent strings.
 - Error policy: functions that allocate or validate return =NULL= or a
-  negative =RKRStatus=; they do not abort the process. Builder
+  negative =RKRStatus=. They MUST NOT abort the process. Builder
   =rkr_frame_builder_build= returns =NULL= on =MassMismatch= and other
   =ParseError= cases.
 - Feature-gated symbols (=RKR_STATUS_FEATURE_DISABLED=) stay in the
   header; a lean build returns that status instead of hiding the
   symbol.
-- Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI does not
+- Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI MUST NOT
   grow a Z=118 table.
 
 ** What is not a 1.0 freeze **
@@ -254,12 +256,12 @@ The crate, wheels, and Fortran package are @READCON_VERSION@. PyPI still reports
 =Development Status :: 4 - Beta=. A =1.0.0= cut is the production
 classifier and the SONAME/semver major bump. Until that tag:
 
-- Additive =rkr_*= symbols may appear in a 0.14.z patch.
-- Existing 0.14.x signatures, sentinels, and ownership do not change
+- Additive =rkr_*= symbols MAY appear in a 0.14.z patch.
+- Existing 0.14.x signatures, sentinels, and ownership MUST NOT change
   in a patch.
 - A breaking C change requires a 0.15+ minor (0.x semver) and a
   matching header/SONAME bump. Downstream packagers that ship
-  =run_exports= should pin an =upper_bound= of =x.x= for that reason.
+  =run_exports= SHOULD pin an =upper_bound= of =x.x= for that reason.
 
 ** Drift check **
 
