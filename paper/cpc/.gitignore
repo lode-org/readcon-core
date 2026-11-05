@@ -37,3 +37,9 @@ target/
 build/
 logs/reader-work/
 logs/dlpack-work/
+
+# Generated records live in the handoff archive. The two notes stay tracked.
+data/**
+!data/**/
+!data/cloud-runs-2/SUMMARY.md
+!data/db/RESULTS.md

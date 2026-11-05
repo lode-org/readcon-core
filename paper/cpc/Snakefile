@@ -56,6 +56,30 @@ rule stamp_host:
     shell:
         "python3 scripts/stamp_host.py"
 
+rule install_log:
+    output:
+        "logs/install.log",
+    shell:
+        "python3 scripts/logged_cmd.py paper/cpc/logs/install.log python3 -m pip install ."
+
+rule build_log:
+    output:
+        "logs/build.log",
+    shell:
+        "python3 scripts/logged_cmd.py paper/cpc/logs/build.log python3 -m pip install ."
+
+rule eon_driver_log:
+    output:
+        "logs/eon-driver.log",
+    shell:
+        "python3 scripts/logged_cmd.py paper/cpc/logs/eon-driver.log ninja -C paper/cpc/bench/work/peers/eon/build-h2h client/python/_core.abi3.so"
+
+rule regen_figures_log:
+    output:
+        "logs/regen-figures.log",
+    shell:
+        "python3 scripts/regen_figures.py"
+
 rule reader_figures:
     input:
         "logs/reader-exchange.log",

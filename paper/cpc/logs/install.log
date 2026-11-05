@@ -1,9 +1,17 @@
-rev_parse 6138346652fe1bdfe2d8315f525aa9a9af129119
-tree 4363943cb04b46c4c07a905b8ebb4e15b03d8ee0
-command python3 -m pip install
-exit_code 0
+rev_parse 18a1927dff664f1dc9edf6e3783a570ec42fb651
+tree 03b3631949c41743d94a16d695f7205694247cce
+command python3 -m pip install .
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+Building wheels for collected packages: readcon
+  Building wheel for readcon (pyproject.toml): started
+  Building wheel for readcon (pyproject.toml): finished with status 'done'
+  Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=998496 sha256=e4e8b2138c13df696783c1691820cf8f7a408f03fc7f7ff68cd558d163ad7857
+Successfully built readcon
+Installing collected packages: readcon
+      Successfully uninstalled readcon-0.17.3
+Successfully installed readcon-0.17.3
 readcon 0.17.3
-readcon-db 0.2.0
 ase 3.30.0b1
 MDAnalysis 2.12.0.dev0
 pymatgen 0.0.post1.dev1+gaa6fda20e
@@ -12,9 +20,5 @@ h5py 3.16.0
 chemfiles 0.10.4
 ovito 3.17.2
 vesin 0.6.2
-eon 3.6.0
-eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
-meson 1.12.1
-ninja 1.11.1
-rustc 1.99.1
-g++ 13.3.0
+readcon-db 0.2.0
+exit_code 0

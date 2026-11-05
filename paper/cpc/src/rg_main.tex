@@ -113,7 +113,7 @@ A JSON line states the version and the units.
 Each coordinate row carries a mask of fixed components and an atom identifier, and a reader of a known major accepts any later minor.
 Two corpora of \corpusFiles{} files fix the verdict of a conforming reader, and every Python and C read path returns that verdict.
 On a platinum slab, a climbing-image band resumed from CON 3.1 repeats the uninterrupted band, and a lost hold changes the prefactor by a factor \sigfig{2}{\eFivePrefactorRatioFree}.
-A borrowed DLPack view of \dlpackAtoms{} positions costs \dlpackRatio{} times an explicit copy, the median of six repeats.
+A borrowed DLPack view of \dlpackAtoms{} positions costs \dlpackRatio{} times an explicit copy, the median of eight repeats.
 \end{abstract}
 
 
@@ -524,15 +524,16 @@ On the Rust builder the methods for positions, velocities, forces, per-atom ener
 The lifetime of each borrowed tensor is the builder, and the default build places it on the CPU.
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
 Python materialises a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
-The measured exchange is the borrowed view against an explicit copy of the same positions, on a builder of \dlpackAtoms{} copper atoms.
-One warm-up is followed by six repeats, and each repeat runs both arms, alternating which arm is first.
+The measured exchange is a NumPy DLPack view against an explicit copy of the same positions, for \dlpackAtoms{} copper atoms.
+The log records eight repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
-A 95 percent bootstrap interval for that ratio is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
+A 95 percent bootstrap interval for that ratio, drawn from those eight samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds.
-Figure~\ref{fig:dlpack} shows the six repeats.
+Figure~\ref{fig:dlpack} shows the eight repeats.
+The log is \path{paper/cpc/logs/dlpack-exchange.log}.
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
-Six repeats on \dlpackAtoms{} atoms.
+Eight repeats on \dlpackAtoms{} atoms.
 The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
@@ -718,15 +719,16 @@ The mapped binary file reads them in \rcConbinMedian~s.
 \input{figures/generated/host_table}
 
 We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each.
-readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.
+readcon-db takes a median of 0.00489~s and the ASE database takes 0.0726~s.
 Both stores keep all 40 frames.
 The log is \path{paper/cpc/logs/db.log}.
 
 We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
-In shared mode the median is 0.0556~s at 1 rank, 0.0290~s at 2, 0.0156~s at 4 and 0.00959~s at 8.
-In scatter mode the median is 0.0527~s at 1 rank, 0.0311~s at 2, 0.0161~s at 4 and 0.0146~s at 8.
-Eight ranks are faster than four on both medians.
-The scatter-mode interquartile range at eight ranks is 0.00607~s, and that range overlaps the four-rank median.
+In shared mode the median is 0.0631~s at 1 rank, 0.0301~s at 2, 0.0167~s at 4 and 0.00977~s at 8.
+In scatter mode the median is 0.0515~s at 1 rank, 0.0315~s at 2, 0.0173~s at 4 and 0.0307~s at 8.
+Eight ranks are faster than four in shared mode.
+In scatter mode the eight-rank median is 0.0307~s and the four-rank median is 0.0173~s.
+The scatter-mode interquartile range at eight ranks is 0.00523~s.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
 The log is \path{paper/cpc/logs/mpi.log}.
 

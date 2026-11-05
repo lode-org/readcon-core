@@ -161,7 +161,7 @@ JAX \texttt{from\_dlpack} does not share the pointer on this build.
 CuPy did not import.
 A copy allocates a second array with \texttt{numpy.array(copy=True)}.
 Table~\ref{tab:dlpack-params} fixes the repeats, the sizes and the dtype.
-The hardware line is x86\_64, 8, Intel(R) Xeon(R) Processor.
+The hardware line is x86\_64, 8, Intel Xeon Processor.
 Figure~\ref{fig:dlpack} and Table~\ref{tab:dlpack} report the median and the type 7 quartiles.
 \begin{figure}[tbp]
 \centering

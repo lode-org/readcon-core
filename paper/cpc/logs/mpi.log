@@ -1,63 +1,61 @@
-rev_parse 109cbc4b338dfba23bf868c17d12b18d96e9cd04
-tree 08427ad6094194cf036bfe7dd1493619172075f9
+rev_parse 18a1927dff664f1dc9edf6e3783a570ec42fb651
+tree 03b3631949c41743d94a16d695f7205694247cce
 command python3 paper/cpc/bench/run_mpi_v2.py
-date_utc=2026-11-05T00:47:46Z
-uname_m=x86_64
-nproc=8
-cpu=Intel(R) Xeon(R) Processor
-head=109cbc4b338dfba23bf868c17d12b18d96e9cd04
-pwd=.
-tmpdir=paper/cpc/bench/work/v2
-frames=4000
-atoms=64
-repeats=6
-command=python3 paper/cpc/bench/run_mpi_v2.py
-repeat 0 mode shared launch ranks 1 frames 4000 local 4000 ns 63374608 sum 2611072.000002 exit 0
-repeat 1 mode shared launch ranks 1 frames 4000 local 4000 ns 57709330 sum 2611072.000002 exit 0
-repeat 2 mode shared launch ranks 1 frames 4000 local 4000 ns 53361359 sum 2611072.000002 exit 0
-repeat 3 mode shared launch ranks 1 frames 4000 local 4000 ns 57847418 sum 2611072.000002 exit 0
-repeat 4 mode shared launch ranks 1 frames 4000 local 4000 ns 52753816 sum 2611072.000002 exit 0
-repeat 5 mode shared launch ranks 1 frames 4000 local 4000 ns 53484464 sum 2611072.000002 exit 0
-repeat 0 mode shared launch ranks 2 frames 4000 local 2000 ns 29098835 sum 1177536.000000 exit 0
-repeat 1 mode shared launch ranks 2 frames 4000 local 2000 ns 29498395 sum 1177536.000000 exit 0
-repeat 2 mode shared launch ranks 2 frames 4000 local 2000 ns 29030573 sum 1177536.000000 exit 0
-repeat 3 mode shared launch ranks 2 frames 4000 local 2000 ns 28209556 sum 1177536.000000 exit 0
-repeat 4 mode shared launch ranks 2 frames 4000 local 2000 ns 28896775 sum 1177536.000000 exit 0
-repeat 5 mode shared launch ranks 2 frames 4000 local 2000 ns 28082026 sum 1177536.000000 exit 0
-repeat 0 mode shared launch ranks 4 frames 4000 local 1000 ns 16133863 sum 556768.000000 exit 0
-repeat 1 mode shared launch ranks 4 frames 4000 local 1000 ns 15106739 sum 556768.000000 exit 0
-repeat 2 mode shared launch ranks 4 frames 4000 local 1000 ns 16447564 sum 556768.000000 exit 0
-repeat 3 mode shared launch ranks 4 frames 4000 local 1000 ns 15118775 sum 556768.000000 exit 0
-repeat 4 mode shared launch ranks 4 frames 4000 local 1000 ns 17036959 sum 556768.000000 exit 0
-repeat 5 mode shared launch ranks 4 frames 4000 local 1000 ns 14438197 sum 556768.000000 exit 0
-repeat 0 mode shared launch ranks 8 frames 4000 local 500 ns 9162658 sum 270384.000000 exit 0
-repeat 1 mode shared launch ranks 8 frames 4000 local 500 ns 9743068 sum 270384.000000 exit 0
-repeat 2 mode shared launch ranks 8 frames 4000 local 500 ns 10847129 sum 270384.000000 exit 0
-repeat 3 mode shared launch ranks 8 frames 4000 local 500 ns 9684184 sum 270384.000000 exit 0
-repeat 4 mode shared launch ranks 8 frames 4000 local 500 ns 9486057 sum 270384.000000 exit 0
-repeat 5 mode shared launch ranks 8 frames 4000 local 500 ns 9472194 sum 270384.000000 exit 0
-repeat 0 mode scatter launch ranks 1 frames 4000 local 4000 ns 52059264 sum 2611072.000002 exit 0
-repeat 1 mode scatter launch ranks 1 frames 4000 local 4000 ns 55491782 sum 2611072.000002 exit 0
-repeat 2 mode scatter launch ranks 1 frames 4000 local 4000 ns 49735372 sum 2611072.000002 exit 0
-repeat 3 mode scatter launch ranks 1 frames 4000 local 4000 ns 58033567 sum 2611072.000002 exit 0
-repeat 4 mode scatter launch ranks 1 frames 4000 local 4000 ns 53426002 sum 2611072.000002 exit 0
-repeat 5 mode scatter launch ranks 1 frames 4000 local 4000 ns 51422226 sum 2611072.000002 exit 0
-repeat 0 mode scatter launch ranks 2 frames 4000 local 2000 ns 31159236 sum 1177536.000000 exit 0
-repeat 1 mode scatter launch ranks 2 frames 4000 local 2000 ns 31202354 sum 1177536.000000 exit 0
-repeat 2 mode scatter launch ranks 2 frames 4000 local 2000 ns 30777792 sum 1177536.000000 exit 0
-repeat 3 mode scatter launch ranks 2 frames 4000 local 2000 ns 31003175 sum 1177536.000000 exit 0
-repeat 4 mode scatter launch ranks 2 frames 4000 local 2000 ns 32269607 sum 1177536.000000 exit 0
-repeat 5 mode scatter launch ranks 2 frames 4000 local 2000 ns 28386902 sum 1177536.000000 exit 0
-repeat 0 mode scatter launch ranks 4 frames 4000 local 1000 ns 17984760 sum 556768.000000 exit 0
-repeat 1 mode scatter launch ranks 4 frames 4000 local 1000 ns 16297409 sum 556768.000000 exit 0
-repeat 2 mode scatter launch ranks 4 frames 4000 local 1000 ns 16960806 sum 556768.000000 exit 0
-repeat 3 mode scatter launch ranks 4 frames 4000 local 1000 ns 15448987 sum 556768.000000 exit 0
-repeat 4 mode scatter launch ranks 4 frames 4000 local 1000 ns 15817925 sum 556768.000000 exit 0
-repeat 5 mode scatter launch ranks 4 frames 4000 local 1000 ns 15488449 sum 556768.000000 exit 0
-repeat 0 mode scatter launch ranks 8 frames 4000 local 500 ns 9783868 sum 270384.000000 exit 0
-repeat 1 mode scatter launch ranks 8 frames 4000 local 500 ns 9683064 sum 270384.000000 exit 0
-repeat 2 mode scatter launch ranks 8 frames 4000 local 500 ns 14409658 sum 270384.000000 exit 0
-repeat 3 mode scatter launch ranks 8 frames 4000 local 500 ns 14693489 sum 270384.000000 exit 0
-repeat 4 mode scatter launch ranks 8 frames 4000 local 500 ns 18883390 sum 270384.000000 exit 0
-repeat 5 mode scatter launch ranks 8 frames 4000 local 500 ns 17778029 sum 270384.000000 exit 0
-exit=0
+date_utc 2026-11-05T04:54:00Z
+uname_m x86_64
+nproc 8
+cpu_model Intel Xeon Processor
+pwd .
+tmpdir paper/cpc/bench/work/v2
+frames 4000
+atoms 64
+repeats 6
+repeat 0 mode shared launch ranks 1 frames 4000 local 4000 ns 152399438 sum 2611072.000002 exit 0
+repeat 1 mode shared launch ranks 1 frames 4000 local 4000 ns 54449599 sum 2611072.000002 exit 0
+repeat 2 mode shared launch ranks 1 frames 4000 local 4000 ns 64573330 sum 2611072.000002 exit 0
+repeat 3 mode shared launch ranks 1 frames 4000 local 4000 ns 90943608 sum 2611072.000002 exit 0
+repeat 4 mode shared launch ranks 1 frames 4000 local 4000 ns 61630640 sum 2611072.000002 exit 0
+repeat 5 mode shared launch ranks 1 frames 4000 local 4000 ns 51923892 sum 2611072.000002 exit 0
+repeat 0 mode shared launch ranks 2 frames 4000 local 2000 ns 28815977 sum 1177536.000000 exit 0
+repeat 1 mode shared launch ranks 2 frames 4000 local 2000 ns 32247658 sum 1177536.000000 exit 0
+repeat 2 mode shared launch ranks 2 frames 4000 local 2000 ns 29725263 sum 1177536.000000 exit 0
+repeat 3 mode shared launch ranks 2 frames 4000 local 2000 ns 111133438 sum 1177536.000000 exit 0
+repeat 4 mode shared launch ranks 2 frames 4000 local 2000 ns 27490537 sum 1177536.000000 exit 0
+repeat 5 mode shared launch ranks 2 frames 4000 local 2000 ns 30543541 sum 1177536.000000 exit 0
+repeat 0 mode shared launch ranks 4 frames 4000 local 1000 ns 16323024 sum 556768.000000 exit 0
+repeat 1 mode shared launch ranks 4 frames 4000 local 1000 ns 83468478 sum 556768.000000 exit 0
+repeat 2 mode shared launch ranks 4 frames 4000 local 1000 ns 16735377 sum 556768.000000 exit 0
+repeat 3 mode shared launch ranks 4 frames 4000 local 1000 ns 15068846 sum 556768.000000 exit 0
+repeat 4 mode shared launch ranks 4 frames 4000 local 1000 ns 16703731 sum 556768.000000 exit 0
+repeat 5 mode shared launch ranks 4 frames 4000 local 1000 ns 27302567 sum 556768.000000 exit 0
+repeat 0 mode shared launch ranks 8 frames 4000 local 500 ns 17783991 sum 270384.000000 exit 0
+repeat 1 mode shared launch ranks 8 frames 4000 local 500 ns 30620458 sum 270384.000000 exit 0
+repeat 2 mode shared launch ranks 8 frames 4000 local 500 ns 9756620 sum 270384.000000 exit 0
+repeat 3 mode shared launch ranks 8 frames 4000 local 500 ns 9607857 sum 270384.000000 exit 0
+repeat 4 mode shared launch ranks 8 frames 4000 local 500 ns 9791455 sum 270384.000000 exit 0
+repeat 5 mode shared launch ranks 8 frames 4000 local 500 ns 9647345 sum 270384.000000 exit 0
+repeat 0 mode scatter launch ranks 1 frames 4000 local 4000 ns 54562072 sum 2611072.000002 exit 0
+repeat 1 mode scatter launch ranks 1 frames 4000 local 4000 ns 50404840 sum 2611072.000002 exit 0
+repeat 2 mode scatter launch ranks 1 frames 4000 local 4000 ns 50000841 sum 2611072.000002 exit 0
+repeat 3 mode scatter launch ranks 1 frames 4000 local 4000 ns 51296454 sum 2611072.000002 exit 0
+repeat 4 mode scatter launch ranks 1 frames 4000 local 4000 ns 51626599 sum 2611072.000002 exit 0
+repeat 5 mode scatter launch ranks 1 frames 4000 local 4000 ns 54435987 sum 2611072.000002 exit 0
+repeat 0 mode scatter launch ranks 2 frames 4000 local 2000 ns 32593672 sum 1177536.000000 exit 0
+repeat 1 mode scatter launch ranks 2 frames 4000 local 2000 ns 29810397 sum 1177536.000000 exit 0
+repeat 2 mode scatter launch ranks 2 frames 4000 local 2000 ns 77897159 sum 1177536.000000 exit 0
+repeat 3 mode scatter launch ranks 2 frames 4000 local 2000 ns 32601331 sum 1177536.000000 exit 0
+repeat 4 mode scatter launch ranks 2 frames 4000 local 2000 ns 30456953 sum 1177536.000000 exit 0
+repeat 5 mode scatter launch ranks 2 frames 4000 local 2000 ns 28923217 sum 1177536.000000 exit 0
+repeat 0 mode scatter launch ranks 4 frames 4000 local 1000 ns 16105881 sum 556768.000000 exit 0
+repeat 1 mode scatter launch ranks 4 frames 4000 local 1000 ns 17062451 sum 556768.000000 exit 0
+repeat 2 mode scatter launch ranks 4 frames 4000 local 1000 ns 17041051 sum 556768.000000 exit 0
+repeat 3 mode scatter launch ranks 4 frames 4000 local 1000 ns 17930563 sum 556768.000000 exit 0
+repeat 4 mode scatter launch ranks 4 frames 4000 local 1000 ns 17468436 sum 556768.000000 exit 0
+repeat 5 mode scatter launch ranks 4 frames 4000 local 1000 ns 42547211 sum 556768.000000 exit 0
+repeat 0 mode scatter launch ranks 8 frames 4000 local 500 ns 31088080 sum 270384.000000 exit 0
+repeat 1 mode scatter launch ranks 8 frames 4000 local 500 ns 22751938 sum 270384.000000 exit 0
+repeat 2 mode scatter launch ranks 8 frames 4000 local 500 ns 31158828 sum 270384.000000 exit 0
+repeat 3 mode scatter launch ranks 8 frames 4000 local 500 ns 24409897 sum 270384.000000 exit 0
+repeat 4 mode scatter launch ranks 8 frames 4000 local 500 ns 30401332 sum 270384.000000 exit 0
+repeat 5 mode scatter launch ranks 8 frames 4000 local 500 ns 48440799 sum 270384.000000 exit 0
+exit_code 0

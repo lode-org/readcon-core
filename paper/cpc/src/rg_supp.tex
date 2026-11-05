@@ -426,7 +426,7 @@ Section~\ref{sec:performance} of the main text uses the measurements in Section~
 Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015,kaliberaRigorousBenchmarkingReasonable2013}.
-The ordering table tests those ratios with the Mann--Whitney statistic \cite{mannTestWhetherOne1947}, the Hodges--Lehmann interval \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.
+The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.
 memray records the peak heap of a cell \cite{memrayBloomberg}.
 libxtc reads the XTC trajectory \cite{krylovLibxtcEfficientLibrary2021}.
 Resumed bands are drawn on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after iterative rotational alignment \cite{gundeIRAShapeMatching2021}.

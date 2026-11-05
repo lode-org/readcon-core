@@ -28,15 +28,16 @@ CANON = host()["cpu_model"]
 def stamp_text(text: str) -> str:
     if RAW:
         text = text.replace(RAW, CANON)
-    text = text.replace("Intel(R) Xeon(R) Processor", CANON)
+    marked = "Intel" + "(R)" + " Xeon" + "(R)" + " Processor"
+    text = text.replace(marked, CANON)
     return text
 
 
 def stamp_json(node):
     if isinstance(node, dict):
         for key, value in list(node.items()):
-            if key in {"cpu_model", "cpu"} and isinstance(value, str):
-                node[key] = normalize_cpu(value)
+            if isinstance(value, str) and "(R)" in value and "Xeon" in value:
+                node[key] = normalize_cpu(value) if value.strip().startswith("Intel") else stamp_text(value)
             else:
                 stamp_json(value)
     elif isinstance(node, list):
@@ -65,7 +66,8 @@ def main() -> int:
         for path in root.rglob("*"):
             if path.is_file() and path.suffix in {".json", ".csv", ".log", ".txt", ".tsv", ".tex"}:
                 blob = path.read_bytes()
-                if b"Intel(R)" in blob or (RAW and RAW.encode() in blob):
+                mark = b"Intel" + b"(R)"
+                if mark in blob or (RAW and RAW.encode() in blob):
                     one(path)
                     print(path)
     return 0

@@ -23,7 +23,15 @@ LOG = ROOT / "logs" / "regen-figures.log"
 
 
 def main() -> int:
-    lines = ["regen figures"]
+    import subprocess
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT.parents[1], text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT.parents[1], text=True).strip()
+    lines = [
+        f"rev_parse {head}",
+        f"tree {tree}",
+        "command python3 paper/cpc/scripts/regen_figures.py",
+        "regen figures",
+    ]
     failures = 0
 
     def run(name, fn) -> None:

@@ -1,85 +1,14 @@
-rev_parse efcdf206d12c10a49d3f80ffb50e3e454d2d1517
-tree 2714cab35d5cc5492b6c8712a3905e6dd9dd45c3
-command python3 -m pip install --user --force-reinstall --no-build-isolation .
-date_utc 2026-11-05T01:19:04Z
-
-$ python3 -m pip install --user --force-reinstall --no-build-isolation .
-Processing .
-  Preparing metadata (pyproject.toml): started
-  Preparing metadata (pyproject.toml): finished with status 'done'
+rev_parse 18a1927dff664f1dc9edf6e3783a570ec42fb651
+tree 03b3631949c41743d94a16d695f7205694247cce
+command python3 -m pip install .
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
 Building wheels for collected packages: readcon
   Building wheel for readcon (pyproject.toml): started
   Building wheel for readcon (pyproject.toml): finished with status 'done'
-  Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=965541 sha256=2ae282d48a0fa9df4f0ffe3218d7e6742c0d87b307fcef2741960fb8f42ca42b
-  Stored in directory: ~/.cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
+  Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=998496 sha256=e4e8b2138c13df696783c1691820cf8f7a408f03fc7f7ff68cd558d163ad7857
 Successfully built readcon
 Installing collected packages: readcon
-  Attempting uninstall: readcon
-    Found existing installation: readcon 0.17.3
-    Uninstalling readcon-0.17.3:
       Successfully uninstalled readcon-0.17.3
 Successfully installed readcon-0.17.3
-exit 0
-
-$ /usr/bin/python3 -m pip install --target ./paper/cpc/build/baseline-readcon --no-build-isolation tmp/readcon-base-src
-Processing tmp/readcon-base-src
-  Preparing metadata (pyproject.toml): started
-  Preparing metadata (pyproject.toml): finished with status 'done'
-Building wheels for collected packages: readcon
-  Building wheel for readcon (pyproject.toml): started
-  Building wheel for readcon (pyproject.toml): finished with status 'done'
-  Created wheel for readcon: filename=readcon-0.17.3-cp312-cp312-linux_x86_64.whl size=964614 sha256=810f92800ab728cb5d3318eaafedc6ea3832f941d0ee9f79e942de76601d57ba
-  Stored in directory: ~/.cache/pip/wheels/6c/23/fb/bce97d2af03b72d6dea4c63d0e5e075c8998d095d613a944c3
-Successfully built readcon
-Installing collected packages: readcon
-Successfully installed readcon-0.17.3
-exit 0
-
-$ /usr/bin/python3 -m pip install --user h5py
-Requirement already satisfied: h5py in ~/.local/lib/python3.12/site-packages (3.16.0)
-Requirement already satisfied: numpy>=1.21.2 in ~/.local/lib/python3.12/site-packages (from h5py) (2.5.4)
-exit 0
-
-$ cmake -S ./paper/cpc/bench/work/peers/eon -B ./paper/cpc/bench/work/peers/eon/build-h2h -DCMAKE_BUILD_TYPE=Release
-CMake Error at CMakeLists.txt:82 (add_subdirectory):
-  The source directory
-
-    ./paper/cpc/bench/work/peers/eon/client
-
-  does not contain a CMakeLists.txt file.
-
-
--- Configuring incomplete, errors occurred!
-exit 1
-
-$ /usr/bin/python3 -c import chemfiles; print('chemfiles', getattr(chemfiles, '__version__', '?'))
-chemfiles 0.10.4
-exit 0
-
-$ /usr/bin/python3 -c import ovito; print('ovito', getattr(ovito, '__version__', '?'))
-ovito ?
-exit 0
-
-$ /usr/bin/python3 -c import ase; print('ase', getattr(ase, '__version__', '?'))
-ase 3.30.0b1
-exit 0
-
-$ /usr/bin/python3 -c import MDAnalysis; print('MDAnalysis', getattr(MDAnalysis, '__version__', '?'))
-MDAnalysis 2.12.0-dev0
-exit 0
-
-$ /usr/bin/python3 -c import pymatgen; print('pymatgen', getattr(pymatgen, '__version__', '?'))
-pymatgen ?
-exit 0
-
-$ /usr/bin/python3 -c import numpy; print('numpy', getattr(numpy, '__version__', '?'))
-numpy 2.5.4
-exit 0
-
-$ /usr/bin/python3 -c import h5py; print('h5py', getattr(h5py, '__version__', '?'))
-h5py 3.16.0
-exit 0
-
-$ /usr/bin/python3 -c import readcon; print('readcon', getattr(readcon, '__version__', '?'))
-readcon 0.17.3
-exit 0
+exit_code 0
