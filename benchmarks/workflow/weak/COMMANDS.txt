@@ -2,10 +2,14 @@ Weak-scaling campaign for BenchBot.
 Run these from the repository root.
 Rust is 1.88, the rust-version in Cargo.toml.
 The relation is n_frames = frames_per_worker * workers.
-The default ladder is 1 2 4 8 16 32.
-Each count must be at most the online CPU count.
-A curve with fewer than six counts is not a result.
-Repeats are 6. The median is the mean of the two central sorted samples.
+The ladder is every power of two from 1 through the physical core count.
+That count is the last rung when it is not a power of two.
+Physical cores are lscpu Core(s) per socket times Socket(s).
+A rung above the physical cores is refused.
+Six is the number of serial repeats at each point.
+The median is the mean of the two central sorted samples.
+The spread is the type-7 interquartile range.
+Total wall is the sum of the repeats. The fastest sample is not reported.
 Efficiency is t(1)/t(w). The ideal line is 1.
 Do not invent a time. A skipped curve stays a stub.
 Do not record the machine name. Tables are named from the CPU model.
@@ -15,11 +19,12 @@ CUDA is a DLPack export, not a parse worker. Do not put it on either curve.
 
 == Plan
 python3 benchmarks/weak_scale.py host --json results/weak/host.json --log results/weak/logs/host.log
-python3 benchmarks/weak_scale.py plan --host results/weak/host.json --json results/weak/plan.json --log results/weak/logs/plan.log --ladder 1 2 4 8 16 32
+python3 benchmarks/weak_scale.py plan --host results/weak/host.json --json results/weak/plan.json --log results/weak/logs/plan.log
 snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 all
 
 == Thread curve, asv
 The plan's threads_asv.run field has to be true.
+asv is run with --machine optbench-ci and without --quick.
 snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 threads
 python3 benchmarks/weak_scale.py report --json results/weak/threads.json --out results/weak/tables --plot
 

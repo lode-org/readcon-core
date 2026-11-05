@@ -22,9 +22,9 @@ weak = _load("weak_scale", ROOT / "benchmarks" / "weak_scale.py")
 threads = _load("bench_threads", ROOT / "benches" / "weak_asv" / "bench_threads.py")
 
 
-def _flat_curve() -> dict:
+def _flat_curve(physical: int = 32) -> dict:
     points = []
-    for workers in weak.DEFAULT_LADDER:
+    for workers in weak.ladder_for_cores(physical):
         n_frames = weak.frames_for_workers(workers, 64)
         points.append(
             {
@@ -40,7 +40,9 @@ def _flat_curve() -> dict:
         "frames_per_worker": 64,
         "fixture": "resources/test/cuh2.con",
         "host": "Intel Xeon Processor",
-        "ncpus": 32,
+        "ncpus": physical,
+        "physical_cores": physical,
+        "serial_match": True,
         "mpi": "absent",
         "gpu": "absent",
         "commit": "abc",
@@ -51,11 +53,16 @@ def _flat_curve() -> dict:
 
 class Relation(unittest.TestCase):
     def test_frames_grow_and_work_stays_constant(self) -> None:
-        self.assertGreaterEqual(len(weak.DEFAULT_LADDER), weak.MIN_POINTS)
-        self.assertEqual(weak.DEFAULT_LADDER[0], 1)
         self.assertEqual(weak.REPEATS, 6)
+        self.assertEqual(weak.ladder_for_cores(1), (1,))
+        self.assertEqual(weak.ladder_for_cores(8), (1, 2, 4, 8))
+        self.assertEqual(weak.ladder_for_cores(6), (1, 2, 4, 6))
+        self.assertEqual(weak.ladder_for_cores(24), (1, 2, 4, 8, 16, 24))
+        self.assertEqual(weak.ladder_for_cores(32), (1, 2, 4, 8, 16, 32))
+        self.assertEqual(weak.DEFAULT_LADDER[0], 1)
+        self.assertLessEqual(max(weak.DEFAULT_LADDER), weak.physical_cores())
         shares = []
-        for workers in weak.DEFAULT_LADDER:
+        for workers in weak.ladder_for_cores(32):
             n_frames = weak.frames_for_workers(workers, 64)
             self.assertEqual(n_frames, 64 * workers)
             shares.append(weak.work_per_worker(n_frames, workers))
@@ -65,11 +72,16 @@ class Relation(unittest.TestCase):
         self.assertEqual(weak.gate_frames(16771, 49152), 3)
         self.assertEqual(weak.gate_frames(100, 100), 1)
 
-    def test_ladder_needs_six_counts_inside_the_cpu_count(self) -> None:
-        self.assertFalse(weak.ladder_fits(weak.DEFAULT_LADDER, 8))
-        self.assertTrue(weak.ladder_fits(weak.DEFAULT_LADDER, 32))
-        self.assertFalse(weak.ladder_fits((1, 2, 4, 8), 8))
+    def test_physical_ladder_fits_and_oversubscribed_fails(self) -> None:
+        self.assertTrue(weak.ladder_fits((1, 2, 4, 8), 8))
+        self.assertTrue(weak.ladder_fits((1, 2, 4, 8, 16, 32), 32))
+        self.assertTrue(weak.ladder_fits((1, 2, 4, 6), 6))
+        self.assertFalse(weak.ladder_fits((1, 2, 4, 8, 16, 32), 8))
+        self.assertFalse(weak.ladder_fits((1, 2, 4, 8, 16), 8))
+        self.assertFalse(weak.ladder_fits((1, 2, 4), 8))
         self.assertFalse(weak.ladder_fits((2, 4, 8, 16, 32, 64), 64))
+        self.assertEqual(weak.iqr_type7([1, 2, 3, 4, 5, 6]), 2.5)
+        self.assertEqual(weak.total_wall([1, 2, 3, 4, 5, 6]), 21.0)
 
     def test_median_of_six_is_the_mean_of_the_central_pair(self) -> None:
         self.assertEqual(weak.median_samples([1, 2, 3, 4, 5, 6]), 3.5)
@@ -88,12 +100,23 @@ class Report(unittest.TestCase):
         summary = weak.summarise(_flat_curve())
         self.assertTrue(summary["complete"])
         self.assertEqual(len(summary["points"]), 6)
+        self.assertTrue(summary["serial_match"])
+        self.assertEqual(summary["physical_cores"], 32)
         for point in summary["points"]:
             self.assertEqual(point["efficiency"], 1.0)
             self.assertEqual(point["relative_time"], 1.0)
             self.assertEqual(point["median_s"], weak.median_samples(point["samples_s"]))
+            self.assertEqual(point["iqr_s"], weak.iqr_type7(point["samples_s"]))
+            self.assertEqual(point["total_wall_s"], weak.total_wall(point["samples_s"]))
 
-    def test_summary_rejects_a_short_curve_and_a_changed_share(self) -> None:
+    def test_summary_rejects_oversubscribe_and_a_changed_share(self) -> None:
+        raw = _flat_curve(8)
+        summary = weak.summarise(raw)
+        self.assertEqual([point["workers"] for point in summary["points"]], [1, 2, 4, 8])
+        raw = _flat_curve(32)
+        raw["physical_cores"] = 8
+        with self.assertRaises(ValueError):
+            weak.summarise(raw)
         raw = _flat_curve()
         raw["points"] = raw["points"][:5]
         with self.assertRaises(ValueError):
@@ -167,18 +190,32 @@ class Report(unittest.TestCase):
 
 
 class HostAndLaunch(unittest.TestCase):
-    def test_this_host_cannot_publish_the_default_ladder(self) -> None:
+    def test_this_host_publishes_the_physical_ladder(self) -> None:
         host = weak.capture_host()
         text = json.dumps(host)
         weak.assert_no_machine_name(text)
         self.assertNotIn("cursor", text)
         self.assertGreaterEqual(host["ncpus"], 1)
+        self.assertEqual(host["physical_cores"], host["cores_per_socket"] * host["sockets"])
+        self.assertLessEqual(host["physical_cores"], host["ncpus"])
+        self.assertEqual(
+            host["physical_cores"] * host["threads_per_core"],
+            host["ncpus"],
+        )
         plan = weak.make_plan(host)
-        self.assertFalse(plan["ladder_fits"])
-        self.assertFalse(plan["threads_asv"]["run"])
-        self.assertFalse(plan["ranks_mpi"]["run"])
+        self.assertTrue(plan["ladder_fits"])
+        self.assertEqual(plan["ladder"], list(weak.ladder_for_cores(host["physical_cores"])))
+        self.assertTrue(all(worker <= host["physical_cores"] for worker in plan["ladder"]))
+        self.assertTrue(plan["threads_asv"]["run"])
         self.assertFalse(plan["gpu"]["run"])
         self.assertIn("DLPack", plan["gpu"]["reason"])
+        over = list(plan["ladder"]) + [host["physical_cores"] + 1]
+        refused = weak.make_plan(host, over)
+        self.assertFalse(refused["ladder_fits"])
+        self.assertFalse(refused["threads_asv"]["run"])
+        self.assertFalse(refused["ranks_mpi"]["run"])
+        if host.get("hypervisor") == "KVM":
+            self.assertIn("KVM", host["topology_note"])
 
     def test_mpi_binding_follows_the_implementation(self) -> None:
         self.assertEqual(weak.bind_args("Open MPI 4.1.6"), ["--bind-to", "core"])
@@ -188,8 +225,13 @@ class HostAndLaunch(unittest.TestCase):
             weak.bind_args("absent")
         argv = weak.mpirun_argv("MPICH 4.2.3", 4, "bin", "in.con", "out.json", 6)
         self.assertEqual(argv[:4], ["mpirun", "-bind-to", "core", "-n"])
-        self.assertIn("asv", weak.asv_thread_argv("asv.weak.conf.json", "Intel_Xeon_Processor", 6))
-        self.assertIn("time_weak_threads", weak.asv_thread_argv("c", "m", 6))
+        argv = weak.asv_thread_argv("asv.weak.conf.json", weak.ASV_MACHINE, 6)
+        self.assertIn("asv", argv)
+        self.assertIn("time_weak_threads", argv)
+        self.assertIn("--machine", argv)
+        self.assertIn("optbench-ci", argv)
+        self.assertNotIn("--quick", argv)
+        self.assertEqual(weak.ASV_MACHINE, "optbench-ci")
 
     def test_from_asv_uses_the_raw_samples(self) -> None:
         payload = {
@@ -232,7 +274,10 @@ class HostAndLaunch(unittest.TestCase):
 
     def test_refusing_the_campaign_writes_a_headed_log(self) -> None:
         host = weak.capture_host()
-        plan = weak.make_plan(host)
+        over = list(weak.ladder_for_cores(host["physical_cores"]))
+        over.append(host["physical_cores"] * 2)
+        plan = weak.make_plan(host, over)
+        self.assertFalse(plan["ladder_fits"])
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             host_path = directory / "host.json"

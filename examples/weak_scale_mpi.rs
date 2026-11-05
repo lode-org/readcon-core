@@ -10,8 +10,9 @@
 //! ```
 //!
 //! Open MPI uses `--bind-to core`. Repeats default to 6. Rank 0 writes the
-//! JSON. A rank count above the online CPU count, a repeat count below 6, or
-//! a frame count that does not divide evenly exits 2 and writes no samples.
+//! JSON. A rank count above the physical core count, a repeat count below 6,
+//! or a frame count that does not divide evenly exits 2 and writes no samples.
+//! Physical cores are `lscpu` cores per socket times sockets.
 
 use mpi::traits::*;
 use readcon_core::distrib::Comm;
@@ -56,17 +57,40 @@ fn json_escape(text: &str) -> String {
     out
 }
 
-fn online_cpus() -> usize {
-    if let Ok(text) = fs::read_to_string("/proc/cpuinfo") {
-        let count = text
-            .lines()
-            .filter(|line| line.to_ascii_lowercase().starts_with("processor"))
-            .count();
-        if count > 0 {
-            return count;
+fn lscpu_usize(label: &str) -> Option<usize> {
+    let output = std::process::Command::new("lscpu")
+        .env("LC_ALL", "C")
+        .output()
+        .ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case(label) {
+            continue;
         }
+        let mut digits = String::new();
+        for ch in value.chars() {
+            if ch.is_ascii_digit() {
+                digits.push(ch);
+            } else if !digits.is_empty() {
+                break;
+            }
+        }
+        return digits.parse().ok();
     }
-    1
+    None
+}
+
+fn physical_cores() -> usize {
+    match (
+        lscpu_usize("Core(s) per socket"),
+        lscpu_usize("Socket(s)"),
+    ) {
+        (Some(cores), Some(sockets)) if cores >= 1 && sockets >= 1 => cores * sockets,
+        _ => 0,
+    }
 }
 
 fn write_all(frames: &[ConFrame]) -> Vec<u8> {
@@ -106,17 +130,19 @@ fn main() {
     let world = universe.world();
     let comm = Comm::dup_of(&world);
     let ranks = comm.size();
-    let ncpus = online_cpus();
+    let physical = physical_cores();
 
-    if comm.rank() == 0 && (repeats < 6 || ranks > ncpus || ranks < 1) {
+    if comm.rank() == 0 && (repeats < 6 || physical < 1 || ranks > physical || ranks < 1) {
         let reason = if repeats < 6 {
             "repeats are below 6"
+        } else if physical < 1 {
+            "lscpu did not report physical cores"
         } else {
-            "rank count is above the online CPU count"
+            "rank count is above the physical core count"
         };
         write_refusal(out_path, reason);
     }
-    let refused = repeats < 6 || ranks > ncpus;
+    let refused = repeats < 6 || physical < 1 || ranks > physical;
     if refused {
         std::process::exit(2);
     }
@@ -190,7 +216,7 @@ fn main() {
             listed.push_str(&format!("{sample:.9}"));
         }
         let body = format!(
-            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{listed}],\n  \"identical\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"mpi\": \"{}\"\n}}\n",
+            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{listed}],\n  \"identical\": true,\n  \"host\": \"{}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{}\"\n}}\n",
             json_escape(&record_cpu()),
             json_escape(mpi.trim()),
         );

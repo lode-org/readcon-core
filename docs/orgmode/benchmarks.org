@@ -198,9 +198,11 @@ the code, not a promise about every host):
   =readcon.read_con= wall table.
 - Weak scaling grows the frame count with the worker count:
   =n_frames = frames_per_worker * workers=. Threads and MPI ranks are
-  separate curves. A published curve has at least six worker counts, each
-  at most the online CPU count. The default ladder is 1, 2, 4, 8, 16, 32.
-  Efficiency is =t(1)/t(w)= with a dashed ideal at 1.
+  separate curves. The ladder is every power of two from 1 through the
+  physical core count, plus that count when it is not a power of two.
+  Physical cores are lscpu cores per socket times sockets. Six is the
+  number of serial repeats at each point. Efficiency is =t(1)/t(w)=
+  with a dashed ideal at 1.
   =benchmarks/workflow/weak/Snakefile= launches asv for threads and
   =mpirun= for ranks. Tables are named from the CPU model. The CUDA
   feature is a DLPack export, not a point on those curves.

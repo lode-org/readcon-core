@@ -10,10 +10,12 @@
 //!     OUT.json [FRAMES_PER_WORKER]
 //! ```
 //!
-//! The default ladder is 1, 2, 4, 8, 16, 32 and the default repeat count is 6.
-//! A ladder that does not fit in the online CPU count exits 2 and writes
-//! `"complete": false` with no samples. The host string matches
-//! `benches/cpu_model.py`. The machine name is not recorded.
+//! The ladder is every power of two from 1 through the physical core count,
+//! plus that count when it is not a power of two. The repeat count is 6.
+//! A rung above the physical cores exits 2 and writes `"complete": false`
+//! with no samples. Physical cores are `lscpu` cores per socket times
+//! sockets. The host string matches `benches/cpu_model.py`. The machine
+//! name is not recorded.
 
 use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::frames_from_text;
@@ -23,9 +25,60 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 
-const LADDER: [usize; 6] = [1, 2, 4, 8, 16, 32];
 const REPEATS: usize = 6;
 const RELATION: &str = "n_frames = frames_per_worker * workers";
+
+fn lscpu_usize(label: &str) -> Option<usize> {
+    let output = Command::new("lscpu").env("LC_ALL", "C").output().ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case(label) {
+            continue;
+        }
+        let mut digits = String::new();
+        for ch in value.chars() {
+            if ch.is_ascii_digit() {
+                digits.push(ch);
+            } else if !digits.is_empty() {
+                break;
+            }
+        }
+        return digits.parse().ok();
+    }
+    None
+}
+
+fn physical_cores() -> usize {
+    match (
+        lscpu_usize("Core(s) per socket"),
+        lscpu_usize("Socket(s)"),
+    ) {
+        (Some(cores), Some(sockets)) if cores >= 1 && sockets >= 1 => cores * sockets,
+        _ => 0,
+    }
+}
+
+fn physical_ladder(physical: usize) -> Vec<usize> {
+    let mut points = Vec::new();
+    if physical < 1 {
+        return points;
+    }
+    let mut worker = 1usize;
+    while worker <= physical {
+        points.push(worker);
+        if worker > physical / 2 {
+            break;
+        }
+        worker = worker.saturating_mul(2);
+    }
+    if points.last().copied() != Some(physical) {
+        points.push(physical);
+    }
+    points
+}
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -139,19 +192,27 @@ fn main() {
         std::process::exit(2);
     }
     let ncpus = online_cpus();
-    if LADDER.iter().any(|workers| *workers > ncpus) {
+    let physical = physical_cores();
+    let ladder = physical_ladder(physical);
+    if physical < 1 || ladder.iter().any(|workers| *workers > physical) {
         write_refusal(
             &out_path,
-            "the ladder 1,2,4,8,16,32 does not fit in the online CPUs",
+            "lscpu did not report a physical-core ladder",
         );
         std::process::exit(2);
     }
 
     let one = fs::read_to_string(repo_root().join("resources/test/cuh2.con")).expect("fixture");
     let mut points = String::new();
-    for (index, workers) in LADDER.iter().copied().enumerate() {
+    for (index, workers) in ladder.iter().copied().enumerate() {
         let n_frames = frames_per_worker * workers;
         let text = repeat_text(&one, n_frames);
+        let serial = frames_from_text(&text, Some(1)).expect("serial parse");
+        let parallel = frames_from_text(&text, Some(workers)).expect("parallel parse");
+        if serial != parallel {
+            write_refusal(&out_path, "serial-match output failed");
+            std::process::exit(2);
+        }
         let _ = time_one(&text, workers, n_frames);
         let mut samples = Vec::with_capacity(REPEATS);
         for _ in 0..REPEATS {
@@ -175,7 +236,7 @@ fn main() {
     }
 
     let body = format!(
-        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"resources/test/cuh2.con\",\n  \"repeats\": {REPEATS},\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
+        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"resources/test/cuh2.con\",\n  \"repeats\": {REPEATS},\n  \"serial_match\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"physical_cores\": {physical},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
         json_escape(&record_cpu()),
         json_escape(&git_head()),
         json_escape(&date_utc()),

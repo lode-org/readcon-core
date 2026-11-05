@@ -1,12 +1,11 @@
 # Weak scaling. Snakemake launches asv for threads and mpirun for ranks.
 # The relation is n_frames = frames_per_worker * workers.
-# A curve needs at least six worker counts, each bound to its own CPU.
+# The ladder is the physical-core ladder. Six is the repeat count.
 # This file does not time anything itself.
 
 configfile: "benchmarks/workflow/weak/config.yaml"
 
 RESULTS = config["results"]
-LADDER = " ".join(str(worker) for worker in config["ladder"])
 
 
 rule all:
@@ -34,15 +33,12 @@ rule plan:
     output:
         json=f"{RESULTS}/plan.json",
         log=f"{RESULTS}/logs/plan.log",
-    params:
-        ladder=LADDER,
     shell:
         """
         python3 benchmarks/weak_scale.py plan \
             --host {input} \
             --json {output.json} \
-            --log {output.log} \
-            --ladder {params.ladder}
+            --log {output.log}
         """
 
 

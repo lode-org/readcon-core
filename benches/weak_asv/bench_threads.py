@@ -26,6 +26,28 @@ from weak_scale import (  # noqa: E402
 FIXTURE = ROOT / "resources" / "test" / "cuh2.con"
 
 
+def serial_match(path: str, workers: int, n_frames: int) -> None:
+    """The threaded coordinate array matches the one-thread parse.
+
+    This runs from ``setup_cache``, outside the timed call.
+    """
+    import readcon
+
+    serial = readcon.read_positions(path, n_threads=1)
+    parallel = readcon.read_positions(path, n_threads=int(workers))
+    if getattr(serial, "shape", None) != getattr(parallel, "shape", None):
+        raise AssertionError("serial-match output failed")
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+    if np is not None and not np.array_equal(serial, parallel):
+        raise AssertionError("serial-match output failed")
+    frames = readcon.read_con(path, n_threads=1)
+    if len(frames) != n_frames:
+        raise AssertionError("frame count does not follow n_frames = frames_per_worker * workers")
+
+
 def frames_per_worker() -> int:
     raw = os.environ.get("READCON_WEAK_FRAMES_PER_WORKER", "")
     if raw:
@@ -53,6 +75,7 @@ class TimeWeakThreads:
             handle, path = tempfile.mkstemp(suffix=".con")
             os.close(handle)
             Path(path).write_text(text * n_frames, encoding="utf-8")
+            serial_match(path, workers, n_frames)
             cached[workers] = {
                 "path": path,
                 "n_frames": n_frames,

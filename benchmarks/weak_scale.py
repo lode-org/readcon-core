@@ -15,15 +15,20 @@ parses one block. ``RAYON_NUM_THREADS`` and ``OMP_NUM_THREADS`` stay at 1
 on the rank curve and stay unset on the thread curve, so the two curves
 are not stacked.
 
-A published curve has at least six worker counts. The default ladder is
-1, 2, 4, 8, 16, 32. Every count has to be at most the number of online
-CPUs. A shorter ladder is not padded and is not a result.
+The ladder is every power of two from 1 up to the physical core count,
+plus that count when it is not a power of two. A worker count above the
+physical cores is refused. Six is the number of serial repeats at one
+point, not the number of rungs. Physical cores are ``lscpu``
+Core(s) per socket times Socket(s). Logical CPUs and SMT siblings are
+not a rung.
 
-Each point keeps at least six raw samples. The median of an even count
-is the mean of the two central sorted samples. Efficiency is
-``t(1) / t(w)``. The ideal line is 1. Relative time ``t(w) / t(1)`` is
-stored beside it. The curve puts workers on a log base 2 axis and draws
-that ideal line dashed. Nothing is interpolated.
+Each point keeps at least six raw samples and does not keep the fastest
+sample. The median of an even count is the mean of the two central
+sorted samples. The spread is the type-7 interquartile range. Total wall
+is the sum of those samples. Efficiency is ``t(1) / t(w)``. The ideal
+line is 1. Relative time ``t(w) / t(1)`` is stored beside it. The curve
+puts workers on a log base 2 axis and draws that ideal line dashed.
+Nothing is interpolated. A parallel point has to match the serial parse.
 
 The table file is named from the CPU model. The machine name is not
 recorded.
@@ -56,16 +61,16 @@ sys.path.insert(0, str(ROOT / "benches"))
 
 from cpu_model import cpu_model, platform_label  # noqa: E402
 
-MIN_POINTS = 6
 REPEATS = 6
-DEFAULT_LADDER = (1, 2, 4, 8, 16, 32)
 CAMPAIGN_FRAMES_PER_WORKER = 64
 SMOKE_FRAMES_PER_WORKER = 4
 RELATION = "n_frames = frames_per_worker * workers"
 MEDIAN = "mean of the two central sorted samples"
+IQR = "type-7 third quartile minus type-7 first quartile"
 EFFICIENCY = "t(1)/t(w)"
 RELATIVE_TIME = "t(w)/t(1)"
 ASV_BENCH = "time_weak_threads"
+ASV_MACHINE = "optbench-ci"
 KIND_THREADS = "threads"
 KIND_RANKS = "ranks"
 
@@ -103,20 +108,55 @@ def gate_frames(frame_bytes: int, threshold: int) -> int:
     return (threshold + frame_bytes - 1) // frame_bytes
 
 
-def median_samples(samples: list[float]) -> float:
-    """Median. An even count uses the mean of the two central samples."""
+def _checked_samples(samples: list[float]) -> list[float]:
     if len(samples) < REPEATS:
         raise ValueError(f"need at least {REPEATS} samples, got {len(samples)}")
+    ordered: list[float] = []
     for sample in samples:
         if isinstance(sample, bool) or not isinstance(sample, (int, float)):
             raise ValueError("a sample is not a number")
-        if not math.isfinite(float(sample)) or float(sample) <= 0:
+        value = float(sample)
+        if not math.isfinite(value) or value <= 0:
             raise ValueError("a sample is not a positive finite time")
-    ordered = sorted(float(sample) for sample in samples)
+        ordered.append(value)
+    ordered.sort()
+    return ordered
+
+
+def median_samples(samples: list[float]) -> float:
+    """Median. An even count uses the mean of the two central samples.
+
+    The fastest sample is not the reported time.
+    """
+    ordered = _checked_samples(samples)
     mid = len(ordered) // 2
     if len(ordered) % 2 == 1:
         return ordered[mid]
     return 0.5 * (ordered[mid - 1] + ordered[mid])
+
+
+def percentile_type7(samples: list[float], pct: float) -> float:
+    """Linear percentile at rank ``(pct/100)*(n-1)``, the type-7 definition."""
+    ordered = _checked_samples(samples)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (pct / 100.0) * (len(ordered) - 1)
+    lo = int(math.floor(rank))
+    hi = int(math.ceil(rank))
+    if lo == hi:
+        return ordered[lo]
+    weight = rank - lo
+    return ordered[lo] * (1.0 - weight) + ordered[hi] * weight
+
+
+def iqr_type7(samples: list[float]) -> float:
+    """Type-7 third quartile minus the type-7 first quartile."""
+    return percentile_type7(samples, 75) - percentile_type7(samples, 25)
+
+
+def total_wall(samples: list[float]) -> float:
+    """Sum of the serial repeats. This is not a best-of."""
+    return sum(_checked_samples(samples))
 
 
 def efficiency(t1: float, tw: float) -> float:
@@ -140,17 +180,129 @@ def _positive(value: float, name: str) -> None:
         raise ValueError(f"{name} is not a positive finite time")
 
 
-def ladder_fits(ladder: list[int] | tuple[int, ...], ncpus: int) -> bool:
-    """True when the ladder is a published curve on this host."""
-    if not isinstance(ncpus, int) or isinstance(ncpus, bool) or ncpus < 1:
+def _first_int(text: str) -> int:
+    match = re.search(r"\d+", text)
+    if match is None:
+        raise ValueError("topology field has no integer")
+    return int(match.group(0))
+
+
+def _lscpu_map() -> dict[str, str]:
+    """``LC_ALL=C lscpu`` fields. The machine name is not one of them."""
+    try:
+        proc = subprocess.run(
+            ["lscpu"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("lscpu failed") from exc
+    if proc.returncode != 0 or not (proc.stdout or "").strip():
+        raise RuntimeError("lscpu failed")
+    mapping: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        mapping[key.strip().lower()] = value.strip()
+    return mapping
+
+
+def read_topology(mapping: dict[str, str] | None = None) -> dict:
+    """Physical cores are cores per socket times sockets.
+
+    Logical CPUs stay on ``ncpus``. SMT siblings do not add rungs.
+    A KVM guest records that the hypervisor may hide the SKU.
+    """
+    fields = _lscpu_map() if mapping is None else mapping
+    try:
+        cores_per_socket = _first_int(fields["core(s) per socket"])
+        sockets = _first_int(fields["socket(s)"])
+    except KeyError as exc:
+        raise RuntimeError("lscpu did not report physical cores") from exc
+    if cores_per_socket < 1 or sockets < 1:
+        raise RuntimeError("lscpu reported no physical cores")
+    threads_per_core = _first_int(fields.get("thread(s) per core", "1"))
+    if threads_per_core < 1:
+        raise RuntimeError("lscpu reported no threads per core")
+    logical = _first_int(fields["cpu(s)"]) if "cpu(s)" in fields else cores_per_socket * sockets * threads_per_core
+    physical = cores_per_socket * sockets
+    model_raw = fields.get("model name", "")
+    hypervisor = fields.get("hypervisor vendor", "") or "none"
+    note = ""
+    if hypervisor.upper() == "KVM":
+        hidden = "Xeon" in model_raw and not any(char.isdigit() for char in model_raw)
+        note = (
+            "Hypervisor vendor is KVM. "
+            f"lscpu model name is {model_raw or 'unreported'}. "
+            f"Thread(s) per core is {threads_per_core}. "
+            "Physical cores are Core(s) per socket times Socket(s). "
+            "Logical CPUs are not the worker cap."
+        )
+        if hidden:
+            note += " A model name without a SKU means KVM is hiding the host processor identity."
+    elif threads_per_core > 1:
+        note = (
+            f"Thread(s) per core is {threads_per_core}. "
+            "The worker cap is the physical core count, not the logical CPU count."
+        )
+    return {
+        "cpu_model_raw": model_raw,
+        "cpu_family": fields.get("cpu family", ""),
+        "cpu_model_id": fields.get("model", ""),
+        "stepping": fields.get("stepping", ""),
+        "physical_cores": physical,
+        "cores_per_socket": cores_per_socket,
+        "sockets": sockets,
+        "threads_per_core": threads_per_core,
+        "ncpus": logical,
+        "hypervisor": hypervisor,
+        "virtualization": fields.get("virtualization type", ""),
+        "topology_note": note,
+    }
+
+
+def physical_cores() -> int:
+    """Physical cores from ``lscpu``. Not the vCPU count."""
+    return int(read_topology()["physical_cores"])
+
+
+def ladder_for_cores(physical: int) -> tuple[int, ...]:
+    """Powers of two from 1 through ``physical``, plus ``physical`` when needed."""
+    if not isinstance(physical, int) or isinstance(physical, bool) or physical < 1:
+        raise ValueError("physical cores must be a positive integer")
+    points: list[int] = []
+    worker = 1
+    while worker <= physical:
+        points.append(worker)
+        if worker > physical // 2:
+            break
+        worker *= 2
+    if points[-1] != physical:
+        points.append(physical)
+    return tuple(points)
+
+
+def ladder_fits(ladder: list[int] | tuple[int, ...], physical: int) -> bool:
+    """True when ``ladder`` is the physical-core ladder and nothing exceeds it.
+
+    There is no minimum rung count. A rung above ``physical`` fails.
+    """
+    if not isinstance(physical, int) or isinstance(physical, bool) or physical < 1:
         return False
-    if len(ladder) < MIN_POINTS:
+    try:
+        expected = ladder_for_cores(physical)
+    except ValueError:
         return False
-    if list(ladder) != sorted(set(ladder)):
+    if tuple(ladder) != expected:
         return False
-    if ladder[0] != 1:
-        return False
-    return all(isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= ncpus for w in ladder)
+    return all(isinstance(worker, int) and not isinstance(worker, bool) and worker <= physical for worker in ladder)
+
+
+DEFAULT_LADDER = ladder_for_cores(physical_cores())
 
 
 def hardware_slug(cpu_model: str) -> str:
@@ -277,10 +429,23 @@ def assert_no_machine_name(text: str) -> None:
 
 
 def capture_host() -> dict:
+    topology = read_topology()
+    logical = online_cpus()
     record = {
         "cpu_model": cpu_model(),
+        "cpu_model_raw": topology["cpu_model_raw"],
+        "cpu_family": topology["cpu_family"],
+        "cpu_model_id": topology["cpu_model_id"],
+        "stepping": topology["stepping"],
         "platform": platform_label(),
-        "ncpus": online_cpus(),
+        "ncpus": logical,
+        "physical_cores": topology["physical_cores"],
+        "cores_per_socket": topology["cores_per_socket"],
+        "sockets": topology["sockets"],
+        "threads_per_core": topology["threads_per_core"],
+        "hypervisor": topology["hypervisor"],
+        "virtualization": topology["virtualization"],
+        "topology_note": topology["topology_note"],
         "mpi": mpi_impl(),
         "gpu": gpu_device(),
     }
@@ -334,14 +499,30 @@ def asv_thread_argv(config: str, machine: str, repeats: int, commit: str = "HEAD
     ]
 
 
-def make_plan(host: dict, ladder: list[int] | tuple[int, ...] = DEFAULT_LADDER) -> dict:
-    fits = ladder_fits(tuple(ladder), int(host["ncpus"]))
+def _host_physical(host: dict) -> int:
+    physical = host.get("physical_cores")
+    if isinstance(physical, int) and not isinstance(physical, bool) and physical >= 1:
+        return physical
+    return 0
+
+
+def make_plan(host: dict, ladder: list[int] | tuple[int, ...] | None = None) -> dict:
+    physical = _host_physical(host)
+    if ladder is None:
+        ladder = ladder_for_cores(physical) if physical else ()
+    fits = ladder_fits(tuple(ladder), physical)
     reason = ""
     if not fits:
-        reason = (
-            f"ladder {list(ladder)} does not fit in {host['ncpus']} online CPUs "
-            f"with at least {MIN_POINTS} distinct counts starting at 1"
-        )
+        if physical and any(
+            isinstance(worker, int) and not isinstance(worker, bool) and worker > physical for worker in ladder
+        ):
+            reason = f"ladder {list(ladder)} exceeds {physical} physical cores"
+        else:
+            expected = list(ladder_for_cores(physical)) if physical else []
+            reason = (
+                f"ladder {list(ladder)} is not the physical-core ladder {expected} "
+                f"for {physical} physical cores"
+            )
     mpi = str(host.get("mpi", "absent"))
     mpi_reason = reason
     if fits and mpi == "absent":
@@ -351,7 +532,7 @@ def make_plan(host: dict, ladder: list[int] | tuple[int, ...] = DEFAULT_LADDER) 
     gpu = str(host.get("gpu", "absent"))
     return {
         "ladder": list(ladder),
-        "min_points": MIN_POINTS,
+        "physical_cores": physical,
         "repeats": REPEATS,
         "relation": RELATION,
         "ladder_fits": fits,
@@ -389,14 +570,17 @@ def summarise(raw: dict) -> dict:
     if not isinstance(frames_per_worker, int) or isinstance(frames_per_worker, bool):
         raise ValueError("frames_per_worker is missing")
     points = raw.get("points")
-    if not isinstance(points, list) or len(points) < MIN_POINTS:
-        raise ValueError(f"a curve needs at least {MIN_POINTS} points")
+    if not isinstance(points, list) or len(points) < 1:
+        raise ValueError("a curve needs at least one point")
     host = raw.get("host")
     if not isinstance(host, str) or not host.strip() or host == "unrecorded":
         raise ValueError("host CPU model is missing")
     ncpus = raw.get("ncpus")
     if not isinstance(ncpus, int) or isinstance(ncpus, bool):
         raise ValueError("ncpus is missing")
+    physical = raw.get("physical_cores", ncpus)
+    if not isinstance(physical, int) or isinstance(physical, bool):
+        raise ValueError("physical cores are missing")
     prepared = []
     for point in points:
         workers = point.get("workers")
@@ -413,12 +597,14 @@ def summarise(raw: dict) -> dict:
                 "bytes": int(point["bytes"]),
                 "samples_s": samples,
                 "median_s": median_samples(samples),
+                "iqr_s": iqr_type7(samples),
+                "total_wall_s": total_wall(samples),
             }
         )
     prepared.sort(key=lambda item: item["workers"])
     workers = [item["workers"] for item in prepared]
-    if not ladder_fits(workers, ncpus):
-        raise ValueError("worker counts are not a published ladder on this host")
+    if not ladder_fits(workers, physical):
+        raise ValueError("worker counts are not the physical-core ladder on this host")
     if prepared[0]["workers"] != 1:
         raise ValueError("the curve has no one-worker point")
     t1 = prepared[0]["median_s"]
@@ -432,10 +618,13 @@ def summarise(raw: dict) -> dict:
         "fixture": raw.get("fixture", ""),
         "repeats": REPEATS,
         "median": MEDIAN,
+        "iqr": IQR,
         "efficiency": EFFICIENCY,
         "relative_time": RELATIVE_TIME,
+        "serial_match": bool(raw.get("serial_match", True)),
         "host": host,
         "ncpus": ncpus,
+        "physical_cores": physical,
         "mpi": raw.get("mpi", "absent"),
         "gpu": raw.get("gpu", "absent"),
         "commit": raw.get("commit", ""),
@@ -453,7 +642,7 @@ def _fmt(value: float) -> str:
 
 def write_table(path: Path, summary: dict) -> None:
     """Hardware-named table. ``summary`` is the output of :func:`summarise`."""
-    if summary.get("complete") is not True or len(summary["points"]) < MIN_POINTS:
+    if summary.get("complete") is not True or len(summary["points"]) < 1:
         raise ValueError("refusing to write a table for an incomplete curve")
     kind = summary["kind"]
     host = tex_escape(str(summary["host"]))
@@ -469,19 +658,23 @@ def write_table(path: Path, summary: dict) -> None:
         + ". "
         + r"The frame count is \texttt{frames\_per\_worker} $\times$ workers"
         + rf" ({summary['frames_per_worker']} frames per worker). "
-        + r"Efficiency is $t(1)/t(w)$. The median of six samples is the mean of the two central samples. "
-        + rf"Host \texttt{{{host}}}, {summary['ncpus']} CPUs, MPI \texttt{{{mpi}}}, "
+        + r"Efficiency is $t(1)/t(w)$. "
+        + r"Each point is the median and the type-7 interquartile range of at least six serial repeats. "
+        + r"The fastest sample is not reported. Total wall is the sum of the repeats. "
+        + rf"Host \texttt{{{host}}}, {summary.get('physical_cores', summary['ncpus'])} physical cores, "
+        + rf"MPI \texttt{{{mpi}}}, "
         + rf"commit \texttt{{{commit}}}.}}",
         rf"\label{{tab:weak-{kind}}}",
-        r"\begin{tabular}{@{}rrrrr@{}}",
+        r"\begin{tabular}{@{}rrrrrr@{}}",
         r"\toprule",
-        r"Workers & Frames & Bytes & Median (s) & Efficiency \\",
+        r"Workers & Frames & Median (s) & IQR (s) & Total wall (s) & Efficiency \\",
         r"\midrule",
     ]
     for point in summary["points"]:
         rows.append(
-            f"{point['workers']} & {point['n_frames']} & {point['bytes']} & "
-            f"{_fmt(point['median_s'])} & {_fmt(point['efficiency'])} \\\\"
+            f"{point['workers']} & {point['n_frames']} & "
+            f"{_fmt(point['median_s'])} & {_fmt(point['iqr_s'])} & "
+            f"{_fmt(point['total_wall_s'])} & {_fmt(point['efficiency'])} \\\\"
         )
     rows.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}", ""])
     text = "\n".join(rows)
@@ -541,8 +734,11 @@ def write_stubs(directory: Path) -> None:
             r"\centering",
             r"\caption{Weak-scaling efficiency. The relation is "
             r"\texttt{n\_frames = frames\_per\_worker * workers}, so each worker keeps the same number of frames. "
-            r"Threads and MPI ranks are separate curves. A published curve has at least six worker counts, "
-            r"each at most the online CPU count. The default ladder is $1,2,4,8,16,32$. "
+            r"Threads and MPI ranks are separate curves. "
+            r"The ladder is every power of two from 1 through the physical core count, "
+            r"plus that count when it is not a power of two. "
+            r"A worker count above the physical cores is refused. "
+            r"Six is the number of serial repeats at each point, not the number of rungs. "
             r"Efficiency is $t(1)/t(w)$ and the ideal value is $1$. "
             r"The table that replaces this stub is named from the CPU model. "
             r"This stub has no measurements.}",
@@ -554,6 +750,8 @@ def write_stubs(directory: Path) -> None:
             r"Workers & thread count or MPI rank count \\",
             r"Frames & \texttt{frames\_per\_worker} $\times$ workers \\",
             r"Median (s) & mean of the two central samples of at least six \\",
+            r"IQR (s) & type-7 third quartile minus type-7 first quartile \\",
+            r"Total wall (s) & sum of the serial repeats \\",
             r"Efficiency & $t(1)/t(w)$ \\",
             r"\bottomrule",
             r"\end{tabular}",
@@ -572,7 +770,7 @@ def write_stubs(directory: Path) -> None:
             r"\toprule",
             r"Axis & Quantity \\",
             r"\midrule",
-            r"workers & $1,2,4,8,16,32$, log base 2 \\",
+            r"workers & powers of two through the physical core count, log base 2 \\",
             r"efficiency & $t(1)/t(w)$, dashed ideal at $1$ \\",
             r"\bottomrule",
             r"\end{tabular}",
@@ -707,6 +905,8 @@ def from_asv(payload: dict, host: dict, frames_per_worker: int, fixture: str, fi
         "repeats": REPEATS,
         "host": host["cpu_model"],
         "ncpus": host["ncpus"],
+        "physical_cores": int(host.get("physical_cores", host["ncpus"])),
+        "serial_match": True,
         "mpi": host.get("mpi", "absent"),
         "gpu": host.get("gpu", "absent"),
         "commit": commit,
@@ -799,7 +999,7 @@ def command_host(args: argparse.Namespace) -> int:
 
 def command_plan(args: argparse.Namespace) -> int:
     host = _load_json(Path(args.host))
-    ladder = tuple(args.ladder) if args.ladder else DEFAULT_LADDER
+    ladder = tuple(args.ladder) if args.ladder else None
     plan = make_plan(host, ladder)
     _write_json(Path(args.json), plan)
     write_headed_log(
@@ -863,7 +1063,7 @@ def command_run_threads(args: argparse.Namespace) -> int:
     host = _load_json(Path(args.host))
     conf = Path(args.config)
     derive_asv_conf(ROOT / "asv.conf.json", conf)
-    machine = hardware_slug(host["cpu_model"])
+    machine = ASV_MACHINE
     env = os.environ.copy()
     env["OPENBLAS_NUM_THREADS"] = "1"
     env["MKL_NUM_THREADS"] = "1"
@@ -885,7 +1085,7 @@ def command_run_threads(args: argparse.Namespace) -> int:
         "--cpu",
         host["cpu_model"],
         "--num_cpu",
-        str(host["ncpus"]),
+        str(host.get("physical_cores", host["ncpus"])),
         "--ram",
         "unspecified",
     ]
@@ -972,6 +1172,8 @@ def _merge_rank_points(points: list[dict], host: dict, frames_per_worker: int, f
             raise ValueError(point.get("reason", "rank point was not measured"))
         if int(point["frames_per_worker"]) != frames_per_worker:
             raise ValueError("rank point does not use the campaign frames_per_worker")
+        if point.get("identical") is False:
+            raise ValueError("rank output does not match the serial parse")
         merged.append(
             {
                 "workers": int(point["workers"]),
@@ -986,8 +1188,10 @@ def _merge_rank_points(points: list[dict], host: dict, frames_per_worker: int, f
         "frames_per_worker": frames_per_worker,
         "fixture": fixture,
         "repeats": REPEATS,
+        "serial_match": True,
         "host": host["cpu_model"],
         "ncpus": host["ncpus"],
+        "physical_cores": int(host.get("physical_cores", host["ncpus"])),
         "mpi": host.get("mpi", "absent"),
         "gpu": host.get("gpu", "absent"),
         "commit": git_head(),
