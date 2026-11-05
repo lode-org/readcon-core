@@ -1051,16 +1051,92 @@ unsafe impl Send for SlotWritePtr {}
 #[cfg(feature = "parallel")]
 unsafe impl Sync for SlotWritePtr {}
 
-/// Next guided claim.
-///
-/// The claim is `ceil(remaining / workers)`. That uses the frames still
-/// waiting and the worker count. It has no extra constant. The last
-/// claim on a worker is one frame when the remainder is smaller than
-/// the worker count.
+/// Minor faults of the calling thread.
 #[cfg(feature = "parallel")]
-fn guided_claim(remaining: usize, workers: usize) -> usize {
-    let workers = workers.max(1);
-    remaining.div_ceil(workers).max(1)
+fn thread_minflt() -> i64 {
+    unsafe {
+        let mut usage = std::mem::zeroed::<libc::rusage>();
+        libc::getrusage(libc::RUSAGE_THREAD, &mut usage);
+        usage.ru_minflt
+    }
+}
+
+/// Hardware LLC-miss counter for this process.
+///
+/// `-1` means the guest refused the event. This KVM guest returns
+/// `EPERM` for `perf_event_open`, so the parse explanation uses the
+/// per-worker minor faults instead.
+#[cfg(feature = "parallel")]
+fn sample_llc_misses() -> i64 {
+    #[repr(C)]
+    struct PerfEventAttr {
+        typ: u32,
+        size: u32,
+        config: u64,
+        rest: [u64; 14],
+    }
+    let mut attr = PerfEventAttr {
+        typ: 3,
+        size: std::mem::size_of::<PerfEventAttr>() as u32,
+        // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
+        config: 2 | (1 << 16),
+        rest: [0; 14],
+    };
+    let fd = unsafe {
+        libc::syscall(
+            libc::SYS_perf_event_open,
+            &attr as *const PerfEventAttr,
+            0i32,
+            -1i32,
+            -1i32,
+            0u64,
+        )
+    };
+    if fd < 0 {
+        return -1;
+    }
+    let fd = fd as libc::c_int;
+    let mut value = 0u64;
+    let n = unsafe { libc::read(fd, &mut value as *mut u64 as *mut libc::c_void, 8) };
+    unsafe {
+        libc::close(fd);
+    }
+    if n == 8 { value as i64 } else { -1 }
+}
+
+/// Pages that do not sit on node 0.
+///
+/// A guest with one memory node has no remote pages. The count is 0
+/// in that case. A wider node list sums the pages `numa_maps` records
+/// on every node other than 0.
+#[cfg(feature = "parallel")]
+fn numa_remote_pages() -> i64 {
+    let online = std::fs::read_to_string("/sys/devices/system/node/online").unwrap_or_default();
+    let online = online.trim();
+    let nodes = if let Some((start, end)) = online.split_once('-') {
+        let start: i64 = start.parse().unwrap_or(0);
+        let end: i64 = end.parse().unwrap_or(0);
+        end - start + 1
+    } else {
+        1
+    };
+    if nodes <= 1 {
+        return 0;
+    }
+    let text = std::fs::read_to_string("/proc/self/numa_maps").unwrap_or_default();
+    let mut remote = 0i64;
+    for line in text.lines() {
+        for token in line.split_whitespace() {
+            if let Some(rest) = token.strip_prefix('N') {
+                if let Some((node, pages)) = rest.split_once('=') {
+                    if node != "0" {
+                        remote += pages.parse::<i64>().unwrap_or(0);
+                    }
+                }
+            }
+        }
+    }
+    remote
 }
 
 /// Parse each frame into a slot allocated before any worker runs.
@@ -1090,8 +1166,10 @@ struct SlotParse {
     work_s: f64,
     sum_s: f64,
     max_s: f64,
-    /// One entry per claimed chunk, in chunk order. This is CPU time.
+    /// One entry per worker range, in worker order. This is CPU time.
     chunk_s: Vec<f64>,
+    /// Minor faults on each worker during its range.
+    worker_minflt: Vec<i64>,
 }
 
 /// Slot allocation and the worker parse, timed apart.
@@ -1120,17 +1198,20 @@ where
             sum_s: 0.0,
             max_s: 0.0,
             chunk_s: Vec::new(),
+            worker_minflt: Vec::new(),
         };
     }
     if workers < 2 {
         let t_alloc = std::time::Instant::now();
         let mut slots = Vec::with_capacity(n);
         let alloc_s = t_alloc.elapsed().as_secs_f64();
+        let flt0 = thread_minflt();
         let t_work = std::time::Instant::now();
         for i in 0..n {
             slots.push(parse_span(boundaries[i], span_end(boundaries, i, len)));
         }
         let work_s = t_work.elapsed().as_secs_f64();
+        let worker_minflt = vec![thread_minflt().saturating_sub(flt0)];
         return SlotParse {
             slots,
             alloc_s,
@@ -1138,71 +1219,67 @@ where
             sum_s: work_s,
             max_s: work_s,
             chunk_s: vec![work_s],
+            worker_minflt,
         };
     }
     let t_alloc = std::time::Instant::now();
     let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
         (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
     let alloc_s = t_alloc.elapsed().as_secs_f64();
-    // Guided claims. Each worker takes `ceil(remaining / workers)` frames.
-    // The counter hands that range to one worker, so each index is written
-    // once. Chunk times sit in claim order.
-    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..n)
+    // One contiguous range per worker. The width is
+    // `ceil(frames / workers)`, so equal work stays sequential and the
+    // claim count is the worker count. A short tail is the last range.
+    let share = n.div_ceil(workers);
+    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..workers)
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let chunk_slot = std::sync::atomic::AtomicUsize::new(0);
+    let chunk_flt: Vec<std::sync::atomic::AtomicI64> = (0..workers)
+        .map(|_| std::sync::atomic::AtomicI64::new(0))
+        .collect();
     let slots_ptr = SlotWritePtr(slots.as_mut_ptr());
     let t_work = std::time::Instant::now();
     {
         use rayon::prelude::*;
-        (0..workers).into_par_iter().for_each(|_| {
-            loop {
-                let start = next.load(std::sync::atomic::Ordering::Relaxed);
-                if start >= n {
-                    break;
-                }
-                let claim = guided_claim(n - start, workers);
-                let end = (start + claim).min(n);
-                if next
-                    .compare_exchange_weak(
-                        start,
-                        end,
-                        std::sync::atomic::Ordering::AcqRel,
-                        std::sync::atomic::Ordering::Relaxed,
-                    )
-                    .is_err()
-                {
-                    continue;
-                }
-                let t_chunk = std::time::Instant::now();
-                for i in start..end {
-                    // SAFETY: this compare-exchange won `i`, so this call
-                    // is the only writer of that slot. `slots` outlives
-                    // the join.
-                    unsafe {
-                        slots_ptr
-                            .write_slot(i, parse_span(boundaries[i], span_end(boundaries, i, len)));
-                    }
-                }
-                let idx = chunk_slot.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                chunk_ns[idx].store(
-                    t_chunk.elapsed().as_nanos() as u64,
-                    std::sync::atomic::Ordering::Relaxed,
-                );
+        (0..workers).into_par_iter().for_each(|worker| {
+            let start = worker * share;
+            if start >= n {
+                return;
             }
+            let end = (start + share).min(n);
+            let flt0 = thread_minflt();
+            let t_chunk = std::time::Instant::now();
+            for i in start..end {
+                // SAFETY: this worker owns `start..end`, so `i` has one
+                // writer. `slots` outlives the join.
+                unsafe {
+                    slots_ptr.write_slot(i, parse_span(boundaries[i], span_end(boundaries, i, len)));
+                }
+            }
+            chunk_ns[worker].store(
+                t_chunk.elapsed().as_nanos() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
+            chunk_flt[worker].store(
+                thread_minflt().saturating_sub(flt0),
+                std::sync::atomic::Ordering::Relaxed,
+            );
         });
     }
     let work_s = t_work.elapsed().as_secs_f64();
-    let n_chunks = chunk_slot.load(std::sync::atomic::Ordering::Relaxed);
     let mut worker_sum_s = 0.0_f64;
     let mut worker_max_s = 0.0_f64;
-    let mut chunk_s = Vec::with_capacity(n_chunks);
-    for cell in chunk_ns.iter().take(n_chunks) {
-        let seconds = cell.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
+    let mut chunk_s = Vec::new();
+    let mut worker_minflt = Vec::new();
+    for worker in 0..workers {
+        let start = worker * share;
+        if start >= n {
+            continue;
+        }
+        let seconds = chunk_ns[worker].load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
         chunk_s.push(seconds);
         worker_sum_s += seconds;
         worker_max_s = worker_max_s.max(seconds);
+        worker_minflt.push(chunk_flt[worker].load(std::sync::atomic::Ordering::Relaxed));
     }
     // Each index in `0..n` was written once. The counter visits every
     // chunk, and the last chunk is shorter when `n` does not divide the
@@ -1222,6 +1299,7 @@ where
         sum_s: worker_sum_s,
         max_s: worker_max_s,
         chunk_s,
+        worker_minflt,
     }
 }
 
@@ -1267,6 +1345,9 @@ struct TimedParse {
     worker_sum_s: f64,
     worker_max_s: f64,
     chunk_s: Vec<f64>,
+    worker_minflt: Vec<i64>,
+    llc_misses: i64,
+    numa_remote: i64,
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`].
     scan_kind: u8,
 }
@@ -1288,28 +1369,49 @@ fn host_page_size() -> usize {
     if raw > 0 { raw as usize } else { 4096 }
 }
 
-/// Touch one byte per page so the later walk faults in parallel.
+/// Fault one word on each page of `values`.
+///
+/// The page count is split by the worker count. The step is the host
+/// page, so the slice a worker faults is its own. No extra chunk size.
 #[cfg(feature = "parallel")]
-fn prefault_pages(bytes: &[u8]) {
+fn first_touch_f64(values: &mut [f64], workers: usize) {
     use rayon::prelude::*;
-    let page = host_page_size().max(1);
-    if bytes.is_empty() {
+    if values.is_empty() || workers < 2 {
         return;
     }
-    let pages = bytes.len().div_ceil(page);
-    let workers = rayon::current_num_threads().max(1);
-    let chunk = pages.div_ceil(workers).max(1);
-    (0..workers).into_par_iter().for_each(|worker| {
-        let first = worker * chunk;
-        let last = (first + chunk).min(pages);
-        let mut acc = 0u8;
-        for page_index in first..last {
-            let at = page_index * page;
-            if at < bytes.len() {
-                acc ^= bytes[at];
+    let page = host_page_size().max(std::mem::size_of::<f64>());
+    let step = (page / std::mem::size_of::<f64>()).max(1);
+    let pages = values.len().div_ceil(step);
+    let share = pages.div_ceil(workers);
+    if rayon::current_thread_index().is_some() {
+        // One chunk per page. The installed pool hands each page to one
+        // worker, so that worker faults its own slice.
+        values.par_chunks_mut(step).for_each(|chunk| {
+            if let Some(slot) = chunk.first_mut() {
+                *slot = 0.0;
             }
+        });
+        return;
+    }
+    std::thread::scope(|scope| {
+        let mut rest = values;
+        for worker in 0..workers {
+            if rest.is_empty() {
+                break;
+            }
+            let pages_here = share.min(rest.len().div_ceil(step));
+            let take = (pages_here * step).min(rest.len());
+            let (head, tail) = rest.split_at_mut(take);
+            rest = tail;
+            let _ = worker;
+            scope.spawn(move || {
+                let mut at = 0;
+                while at < head.len() {
+                    head[at] = 0.0;
+                    at += step;
+                }
+            });
         }
-        std::hint::black_box(acc);
     });
 }
 
@@ -1384,22 +1486,29 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
         return None;
     }
     use rayon::prelude::*;
-    // One task per worker. A task per frame would spend the scan on
-    // the scheduler instead of the header walk.
-    let chunk = n.div_ceil(workers).max(1);
+    // Equal byte ranges. A cut that falls inside a frame resyncs to the
+    // next frame start, and only that header is checked.
+    let byte_share = bytes.len().div_ceil(workers);
     let ok = (0..workers).into_par_iter().try_for_each(|worker| {
-        let first = worker * chunk;
-        let last = (first + chunk).min(n);
-        for index in first..last {
-            let start = index * span;
-            let end = start + span;
-            let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
-            match iter.forward_fast() {
-                Some(Ok(())) if iter.lines.pos == span => {}
-                _ => return Err(()),
-            }
+        let byte_cut = worker.saturating_mul(byte_share).min(bytes.len());
+        if byte_cut >= bytes.len() {
+            return Ok(());
         }
-        Ok(())
+        let index = if worker == 0 {
+            0
+        } else {
+            byte_cut.div_ceil(span).min(n - 1)
+        };
+        let start = index.saturating_mul(span);
+        if start >= bytes.len() {
+            return Ok(());
+        }
+        let end = (start + span).min(bytes.len());
+        let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
+        match iter.forward_fast() {
+            Some(Ok(())) if iter.lines.pos == end - start => Ok(()),
+            _ => Err(()),
+        }
     });
     ok.ok()?;
     Some((0..n).map(|index| index * span).collect())
@@ -1430,12 +1539,9 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         Some(_) => 1,
         None => threads,
     };
-    let run = |prefault: bool| {
+    let run = || {
         let fault0 = process_minflt();
         let t_scan = std::time::Instant::now();
-        if prefault {
-            prefault_pages(bytes);
-        }
         let (boundaries, scan_kind) =
             if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
                 (bounds, SCAN_EQUAL_SPAN)
@@ -1463,7 +1569,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         (parsed, scan_s, scan_kind, scan_minflt)
     };
     let (pool_s, pool, packed) = match num_threads {
-        None => (0.0, None, run(false)),
+        None => (0.0, None, run()),
         Some(n) if n <= 1 => {
             let _ = n;
             let fault0 = process_minflt();
@@ -1484,13 +1590,13 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();
-                        (wake, run(true))
+                        (wake, run())
                     });
                     // The pool stays alive for the slab, the position
                     // release, the touch, and the frame teardown.
                     (built + wake, Some(pool), body)
                 }
-                Err(_) => (t_pool.elapsed().as_secs_f64(), None, run(false)),
+                Err(_) => (t_pool.elapsed().as_secs_f64(), None, run()),
             }
         }
     };
@@ -1507,6 +1613,9 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         worker_sum_s: parsed.sum_s,
         worker_max_s: parsed.max_s,
         chunk_s: parsed.chunk_s,
+        worker_minflt: parsed.worker_minflt,
+        llc_misses: sample_llc_misses(),
+        numa_remote: numa_remote_pages(),
         scan_kind,
     }
 }
@@ -1975,8 +2084,14 @@ pub struct ReadPhaseTimes {
     pub close_s: f64,
     /// Wake of the worker pool and the other gaps inside the read.
     pub schedule_s: f64,
-    /// Minor faults during the scan, including the parallel page touch.
+    /// Minor faults during the scan.
     pub scan_minflt: i64,
+    /// Sum of per-worker minor faults during the parse.
+    pub parse_minflt: i64,
+    /// LLC read misses, or `-1` when the guest refuses the counter.
+    pub llc_misses: i64,
+    /// Pages on a node other than node 0. Zero on a one-node guest.
+    pub numa_remote: i64,
     /// Minor faults while the coordinate slab is filled.
     pub slab_minflt: i64,
     /// Minor faults during the touch checksum.
@@ -1995,6 +2110,8 @@ pub struct PhasedFrames {
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`] when
     /// `parallel` is on. Zero otherwise.
     pub scan_kind: u8,
+    /// Minor faults on each parse worker.
+    pub worker_minflt: Vec<i64>,
     /// Pool kept for the slab, the touch, and frame teardown.
     #[cfg(feature = "parallel")]
     pub pool: Option<rayon::ThreadPool>,
@@ -2061,11 +2178,13 @@ pub fn read_all_frames_phased(
         + phased.finish_s
         + close_s;
     let schedule_s = (elapsed - named).max(0.0);
+    let parse_minflt = phased.worker_minflt.iter().sum();
     Ok(PhasedFrames {
         frames: phased.frames,
         n_bytes,
         chunk_s: phased.chunk_s,
         scan_kind: phased.scan_kind,
+        worker_minflt: phased.worker_minflt,
         phases: ReadPhaseTimes {
             open_mmap_s,
             pool_s: phased.pool_s,
@@ -2079,6 +2198,9 @@ pub fn read_all_frames_phased(
             close_s,
             schedule_s,
             scan_minflt: phased.scan_minflt,
+            parse_minflt,
+            llc_misses: phased.llc_misses,
+            numa_remote: phased.numa_remote,
             mapped,
             ..ReadPhaseTimes::default()
         },
@@ -2109,6 +2231,12 @@ pub struct PhasedByteTimes {
     pub scan_kind: u8,
     /// Minor faults during the scan.
     pub scan_minflt: i64,
+    /// Minor faults on each parse worker, in worker order.
+    pub worker_minflt: Vec<i64>,
+    /// LLC read misses, or `-1` when the guest refuses the counter.
+    pub llc_misses: i64,
+    /// Pages on a node other than node 0.
+    pub numa_remote: i64,
     /// Pool kept for the slab, the touch, and frame teardown.
     #[cfg(feature = "parallel")]
     pub pool: Option<rayon::ThreadPool>,
@@ -2130,6 +2258,7 @@ pub fn frames_from_bytes_phased(
                 frames.push(part?);
             }
             let worker_parse_s = t_work.elapsed().as_secs_f64();
+            let scan_minflt = process_minflt().saturating_sub(fault0);
             return Ok(PhasedByteTimes {
                 frames,
                 pool_s: 0.0,
@@ -2142,7 +2271,10 @@ pub fn frames_from_bytes_phased(
                 worker_max_s: worker_parse_s,
                 chunk_s: vec![worker_parse_s],
                 scan_kind: SCAN_SERIAL,
-                scan_minflt: process_minflt().saturating_sub(fault0),
+                scan_minflt,
+                worker_minflt: vec![scan_minflt],
+                llc_misses: sample_llc_misses(),
+                numa_remote: numa_remote_pages(),
                 pool: None,
             });
         }
@@ -2164,6 +2296,9 @@ pub fn frames_from_bytes_phased(
             chunk_s: timed.chunk_s,
             scan_kind: timed.scan_kind,
             scan_minflt: timed.scan_minflt,
+            worker_minflt: timed.worker_minflt,
+            llc_misses: timed.llc_misses,
+            numa_remote: timed.numa_remote,
             pool: timed.pool,
         });
     }
@@ -2189,6 +2324,9 @@ pub fn frames_from_bytes_phased(
             chunk_s: vec![worker_parse_s],
             scan_kind: 0,
             scan_minflt: 0,
+            worker_minflt: Vec::new(),
+            llc_misses: -1,
+            numa_remote: 0,
         })
     }
 }
@@ -2256,8 +2394,10 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
             // a private scope of `workers` threads keeps the global pool
             // out of this phase.
             if rayon::current_thread_index().is_some() {
+                first_touch_f64(&mut values, workers);
                 copy_chunks(&mut values);
             } else {
+                first_touch_f64(&mut values, workers);
                 std::thread::scope(|scope| {
                     let mut rest = &mut values[..];
                     let mut base = 0usize;

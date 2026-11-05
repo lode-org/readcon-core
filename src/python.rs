@@ -1577,6 +1577,10 @@ struct ReadCallPhases {
     touch_s: f64,
     teardown_s: f64,
     scan_minflt: i64,
+    parse_minflt: i64,
+    llc_misses: i64,
+    numa_remote: i64,
+    worker_minflt: Vec<i64>,
     slab_minflt: i64,
     touch_minflt: i64,
     mapped: bool,
@@ -1614,6 +1618,10 @@ impl ReadCallPhases {
             touch_s: 0.0,
             teardown_s: 0.0,
             scan_minflt: phases.scan_minflt,
+            parse_minflt: phases.parse_minflt,
+            llc_misses: phases.llc_misses,
+            numa_remote: phases.numa_remote,
+            worker_minflt: Vec::new(),
             slab_minflt: phases.slab_minflt,
             touch_minflt: phases.touch_minflt,
             mapped: phases.mapped,
@@ -1647,6 +1655,10 @@ impl ReadCallPhases {
         dict.set_item("touch_s", self.touch_s)?;
         dict.set_item("teardown_s", self.teardown_s)?;
         dict.set_item("scan_minflt", self.scan_minflt)?;
+        dict.set_item("parse_minflt", self.parse_minflt)?;
+        dict.set_item("llc_misses", self.llc_misses)?;
+        dict.set_item("numa_remote", self.numa_remote)?;
+        dict.set_item("worker_minflt", &self.worker_minflt)?;
         dict.set_item("slab_minflt", self.slab_minflt)?;
         dict.set_item("touch_minflt", self.touch_minflt)?;
         dict.set_item("mapped", self.mapped)?;
@@ -1932,6 +1944,7 @@ fn con_frame_list(
     n_threads: Option<usize>,
     build: &'static str,
     chunk_s: Vec<f64>,
+    worker_minflt: Vec<i64>,
     scan_kind: &'static str,
     pool: Option<rayon::ThreadPool>,
 ) -> PyResult<Py<ConFrameList>> {
@@ -1974,6 +1987,7 @@ fn con_frame_list(
     record.release_s = release_s;
     record.python_build_s = python_build_s;
     record.chunk_s = chunk_s;
+    record.worker_minflt = worker_minflt;
     record.scan_kind = scan_kind;
     let mut cache = Vec::with_capacity(n_frames);
     cache.resize_with(n_frames, || None);
@@ -2021,6 +2035,7 @@ fn load_phased(
     Vec<f64>,
     &'static str,
     Option<rayon::ThreadPool>,
+    Vec<i64>,
 )> {
     let path_owned = path.to_owned();
     let t_enter = std::time::Instant::now();
@@ -2035,6 +2050,7 @@ fn load_phased(
                         phased.chunk_s,
                         scan_kind_name(phased.scan_kind),
                         phased.pool,
+                        phased.worker_minflt,
                     )
                 })
                 .map_err(|err| err.to_string())
@@ -2060,9 +2076,10 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool) = load_phased(py, path, n_threads)?;
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt) =
+        load_phased(py, path, n_threads)?;
     con_frame_list(
-        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, scan_kind, pool,
+        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, worker_minflt, scan_kind, pool,
     )
 }
 
@@ -2071,8 +2088,10 @@ fn read_con_eager(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool) = load_phased(py, path, n_threads)?;
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt) =
+        load_phased(py, path, n_threads)?;
     drop(pool);
+    drop(worker_minflt);
     let n_frames = frames.len();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, "eager");
     record.chunk_s = chunk_s;
@@ -2269,6 +2288,7 @@ fn read_con_mpi(
         n_threads,
         "lazy",
         Vec::new(),
+        Vec::new(),
         "serial",
         None,
     )
@@ -2331,6 +2351,9 @@ fn read_con_string(
         worker_max_s: parsed.worker_max_s,
         close_s: 0.0,
         scan_minflt: parsed.scan_minflt,
+        parse_minflt: parsed.worker_minflt.iter().copied().sum(),
+        llc_misses: parsed.llc_misses,
+        numa_remote: parsed.numa_remote,
         mapped: false,
         ..crate::iterators::ReadPhaseTimes::default()
     };
@@ -2342,6 +2365,7 @@ fn read_con_string(
         n_threads,
         "lazy",
         parsed.chunk_s,
+        parsed.worker_minflt,
         scan_kind_name(parsed.scan_kind),
         parsed.pool,
     )
