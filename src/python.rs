@@ -2391,15 +2391,63 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .call_method0("tolist")?
         .extract()?;
 
-    // Extract cell parameters (lengths + angles)
+    // Lines 3-4 are lengths and angles. `lengths_and_angles` has no
+    // angle for a zero-length edge and returns a non-finite value. The
+    // writer rebuilds those lines from `lattice_vectors`, so a zero
+    // matrix would be written as a non-finite angle and rejected on read.
+    // A zero edge keeps its length and takes a right angle, and that
+    // matrix stays out of the metadata. Periodic flags still come from
+    // the Atoms object, so a cell that was never set stays non-periodic.
     let cell_obj = ase_atoms.call_method0("get_cell")?;
-    let cellpar: Vec<f64> = cell_obj
-        .call_method0("cellpar")?
-        .call_method0("tolist")?
-        .extract()?;
-
-    let cell = [cellpar[0], cellpar[1], cellpar[2]];
-    let angles = [cellpar[3], cellpar[4], cellpar[5]];
+    let cell_matrix = cell_obj.call_method0("tolist")?;
+    let rows: [[f64; 3]; 3] = cell_matrix
+        .extract()
+        .map_err(|_| PyValueError::new_err("ASE cell must be a 3x3 matrix of finite numbers"))?;
+    if rows.iter().flatten().any(|value| !value.is_finite()) {
+        return Err(PyValueError::new_err(
+            "ASE cell must be a 3x3 matrix of finite numbers",
+        ));
+    }
+    let (lengths, raw_angles) = crate::types::lengths_and_angles(rows);
+    if lengths.iter().any(|length| !length.is_finite()) {
+        return Err(PyValueError::new_err("ASE cell lengths must be finite"));
+    }
+    let angles_defined = raw_angles.iter().all(|angle| angle.is_finite());
+    let (cell, angles) = if angles_defined {
+        let cellpar: Vec<f64> = cell_obj
+            .call_method0("cellpar")?
+            .call_method0("tolist")?
+            .extract()?;
+        if cellpar.len() == 6 && cellpar.iter().all(|value| value.is_finite()) {
+            (
+                [cellpar[0], cellpar[1], cellpar[2]],
+                [cellpar[3], cellpar[4], cellpar[5]],
+            )
+        } else {
+            (lengths, raw_angles)
+        }
+    } else {
+        (
+            lengths,
+            [
+                if raw_angles[0].is_finite() {
+                    raw_angles[0]
+                } else {
+                    90.0
+                },
+                if raw_angles[1].is_finite() {
+                    raw_angles[1]
+                } else {
+                    90.0
+                },
+                if raw_angles[2].is_finite() {
+                    raw_angles[2]
+                } else {
+                    90.0
+                },
+            ],
+        )
+    };
 
     // Extract fixed atom info from constraints
     let n_atoms = symbols.len();
@@ -2547,10 +2595,9 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
 
     let metadata = PyDict::new(py);
     metadata.set_item(meta::PBC, ase_atoms.getattr("pbc")?.call_method0("tolist")?)?;
-    metadata.set_item(
-        meta::LATTICE_VECTORS,
-        ase_atoms.getattr("cell")?.call_method0("tolist")?,
-    )?;
+    if angles_defined {
+        metadata.set_item(meta::LATTICE_VECTORS, cell_matrix)?;
+    }
     metadata.set_item(
         meta::UNITS,
         [
