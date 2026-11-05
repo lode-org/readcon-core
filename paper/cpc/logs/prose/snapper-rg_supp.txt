@@ -1,0 +1,164 @@
+\pdfminorversion=7
+\documentclass[preprint,12pt]{elsarticle}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\journal{Computer Physics Communications}
+\begin{document}
+\begin{frontmatter}
+\title{Supplement: readcon-core reads and writes the CON checkpoint format}
+\end{frontmatter}
+
+\section{Further figures}
+\label{sec:figures} Figure~\ref{fig:layout} is the CON frame beside the fields a version 1 reader keeps.
+Figure~\ref{fig:pipeline} is the three-step parse.
+Figure~\ref{fig:matrix} marks which format pairs keep a displacement.
+Figure~\ref{fig:threads} is the committed thread sweep.
+Figure~\ref{fig:layers} is the layer throughput.
+Figure~\ref{fig:roofline} places that throughput on the stored sweep.
+Figure~\ref{fig:dbin} and Figure~\ref{fig:dbbw} are the ingest rate and the bandwidth.
+Figure~\ref{fig:dbq} is the query time.
+Figure~\ref{fig:dbdisk} is the allocated bytes.
+Figure~\ref{fig:dbdedup} compares stored frames with unique hashes.
+Figure~\ref{fig:rdiff} is the displacement after a round trip and after six decimals.
+Figure~\ref{fig:fidelity} is the field matrix.
+Figure~\ref{fig:anatomy} is the byte layout of one frame.
+Figure~\ref{fig:velocity} is the displacement that follows a mislabeled velocity block.
+Figure~\ref{fig:errors} is the class of each illegal file.
+Figure~\ref{fig:dedup} is the campaign hash graph.
+Figure~\ref{fig:mask} is the held path and the frozen path.
+Figure~\ref{fig:multiples} is the energy of the three resumed bands.
+Figure~\ref{fig:mpistrong} and Figure~\ref{fig:mpiweak} are the committed MPI sweeps.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/layout.pdf}
+\caption{The CON frame and the fields a version 1 reader uses.}
+\label{fig:layout}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/pipeline.pdf}
+\caption{Scan the frame starts, parse the frames, then gather them in file order.}
+\label{fig:pipeline}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/matrix.pdf}
+\caption{Format pairs from the committed failure matrix.
+A full bar marks a numeric displacement.}
+\label{fig:matrix}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/threads.pdf}
+\caption{Speedup and efficiency from the committed thread summary.}
+\label{fig:threads}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/layers.pdf}
+\caption{Throughput of the Rust core, the C++ wrapper and the Python objects.}
+\label{fig:layers}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/roofline.pdf}
+\caption{The same layer rates on the stored sweep.}
+\label{fig:roofline}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Median ingest rate.}
+\label{fig:dbin}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
+\caption{Median ingest bandwidth.}
+\label{fig:dbbw}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Median query time.}
+\label{fig:dbq}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
+\caption{Allocated bytes of the stored corpus.}
+\label{fig:dbdisk}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_dedup.pdf}
+\caption{Stored frames against unique hashes, and the bytes of the full corpus against the unique texts.}
+\label{fig:dbdedup}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf}
+\caption{Displacement after a round trip and after a six-decimal resume.}
+\label{fig:rdiff}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/roundtrip_fidelity.pdf}
+\caption{Fields kept by a write and a read.}
+\label{fig:fidelity}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf}
+\caption{Byte layout of one frame.}
+\label{fig:anatomy}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/velocity_mislabel.pdf}
+\caption{Displacement that follows a mislabeled velocity block.}
+\label{fig:velocity}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
+\caption{Class recorded for each illegal file.}
+\label{fig:errors}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/dedup_graph.pdf}
+\caption{Campaign frames and their hashes.}
+\label{fig:dedup}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
+\caption{Energy of the held path and the frozen path from the committed neb.dat files.}
+\label{fig:mask}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
+\caption{Energy of the uninterrupted band, the round trip and the six-decimal resume.}
+\label{fig:multiples}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
+\caption{Strong-scaling speedup from the committed MPI table.}
+\label{fig:mpistrong}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
+\caption{Weak scaling from the committed MPI table.}
+\label{fig:mpiweak}
+\end{figure}
+
+\section{Bead table}
+\input{figures/generated/neb_table}
+
+\end{document}

@@ -1,0 +1,345 @@
+\pdfminorversion=7
+\usepackage[ruled,linesnumbered]{algorithm2e}
+\input{figures/generated/dlpack_macros}
+\newcommand{\DOIPENDING}{pending Zenodo deposit of this manuscript, versioned to the release tag, after acceptance}
+\title{readcon-core reads and writes the CON checkpoint format}
+ pdftitle={readcon-core reads and writes the CON checkpoint format},
+\title{readcon-core reads and writes the CON checkpoint format}
+CON is a file format used by rare-event and saddle-search codes to store atomic checkpoints.
+readcon-core formalizes that format and is the reference reader and writer.
+The parsed positions, velocities, forces, per-atom energies, masses and atom ids are exposed through DLPack.
+At 32768 atoms the NumPy \texttt{from\_dlpack} median is $\dlpackExMed$\,s and the copy median is $\dlpackCpMed$\,s, from $\dlpackRepeats$ repeats on one host.
+Text CON remains the file other codes read.
+CON \sep checkpoint format \sep DLPack \sep rare-event dynamics
+\sep file format
+\textit{RAM:} of order the parsed frame.\\
+\textit{Running time:} the DLPack exchange of a 32768-atom position array has median $\dlpackExMed$\,s and the copy has median $\dlpackCpMed$\,s, from $\dlpackRepeats$ repeats.\\
+Saddle searches, adaptive kinetic Monte Carlo, and nudged elastic band calculations checkpoint atomic configurations many times per image.
+CON is a file format used in many places for that checkpoint.
+readcon-core formalizes the file and improves the reader and the writer.
+The layout is a short header, then atoms grouped by chemical type, each line a position, a constraint flag, and a fifth integer that historical writers used as a display index \cite{chillEONSoftwareLong2014}.
+Velocities were stored in a sibling \texttt{.convel} file.
+Later files add force blocks and free-form comments on line 2.
+readcon-core exchanges the parsed position array through DLPack, and at 32768 atoms the NumPy exchange median is $\dlpackExMed$\,s against a copy median of $\dlpackCpMed$\,s.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/structures.pdf}
+\caption{Benchmark geometries drawn with xyzrender.
+Left, the four-atom CuH2 survey frame.
+Centre, the 218-atom CuH2 timing frame.
+Right, one image of the two-atom NEB band.
+Axis colours are the Ruhi palette.}
+\label{fig:structures}
+\end{figure}
+spec 2 file whose mask is 1 to 6; they still freeze the atom.
+Adding a tenth header line, overwriting the postbox on lines 5 to 6, or
+shipping a sidecar \texttt{.con.meta} breaks those parsers or
+loses pairing.
+Velocities live in a declared \texttt{sections} entry on a
+\subsection{Historical decode}
+\label{sec:historical}
+The standard reader treats column 4 as a boolean.
+A value of 0 leaves the atom free and any other value fixes x, y and z together.
+That reader does not read a units object and it does not read a declared section.
+\subsection{Spec-aware decode}
+\label{sec:spec-aware}
+The reader in this paper takes four steps.
+\begin{equation}
+r \leftarrow \mathrm{next\ record}
+\label{eq:propose}
+\end{equation}
+\begin{equation}
+\mathrm{accept}(r) \iff v(r)\in\{2,3\} \land (v(r)\neq 3 \lor \mathrm{units}(r))
+\label{eq:accept}
+\end{equation}
+\begin{equation}
+F \leftarrow \mathrm{decode}(r)
+\label{eq:update}
+\end{equation}
+\begin{equation}
+\mathrm{stop} \iff \mathrm{no\ further\ record}
+\label{eq:stop}
+\end{equation}
+Equation~\eqref{eq:propose} proposes the next header and its atom lines.
+Equation~\eqref{eq:accept} accepts the record when the declared version is 2 or 3 and a version 3 record carries units.
+Equation~\eqref{eq:update} writes the cell, the symbols and the constraint mask into the frame.
+A legacy column-4 value of 1 is stored as the mask 7.
+Equation~\eqref{eq:stop} stops at the end of the file.
+\begin{algorithm}[tbp]
+\caption{Read one CON file. Each line is the matching equation.}
+\label{alg:read}
+propose the next record\;
+accept the record when the version test holds\;
+update the frame from the accepted record\;
+stop when the file has no further record\;
+\end{algorithm}
+Figure~\ref{fig:workflow} draws those four steps.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/workflow.pdf}
+\caption{The reader proposes a record, accepts it under the version test, updates the frame, and stops at the end of the file.}
+\label{fig:workflow}
+\end{figure}
+\begin{table}[tbp]
+\centering
+\caption{Constants for the DLPack exchange.
+The same values are used at every atom count.}
+\label{tab:dlpack-params}
+\begin{tabular}{llll}
+\toprule
+symbol & meaning & key & value \\
+\midrule
+$n$ & independent repeats & repeats & $\dlpackRepeats$ \\
+$N$ & atom counts & sizes & 32, 128, 512, 2048, 8192, 32768 \\
+$w$ & discarded warmups & warmup & 1 \\
+dtype & stored positions & storage & IEEE binary64 \\
+\bottomrule
+\end{tabular}
+\end{table}
+writer, and optional chemfiles import.
+Figure~\ref{fig:architecture} draws that layering.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/architecture.pdf}
+\caption{The Rust core parses and writes CON.
+The C interface is the waist, and the language wrappers sit above it.}
+\label{fig:architecture}
+\end{figure} An optional Pest grammar
+helpers. Additive symbols appear in a 0.14.z patch when the C ABI grows. A breaking C
+Figure~\ref{fig:timing} shows the median wall time of readcon against ASE, chemfiles, MDAnalysis and h5py on the committed 10000-frame rows.
+Each point is the median of the paired repeats in \texttt{paper/cpc/bench/results/repeats.csv}.
+Figure~\ref{fig:ratios} shows the same rows as the ratio of those medians.
+A ratio below 1 means readcon returned first.
+The supplement holds the remaining figures from the same campaign files.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/timing.pdf}
+\caption{Median wall time on the 10000-frame payload.
+The readcon bar and the peer bar are the medians of the committed paired repeats.}
+\label{fig:timing}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
+\caption{readcon time divided by the peer time.
+The marker is the median ratio and the bar runs from the type 7 lower quartile to the type 7 upper quartile of the paired ratios.}
+\label{fig:ratios}
+\end{figure}
+Figure~\ref{fig:restart} draws the uninterrupted band and the two resumed bands on the chord between the end images.
+Figure~\ref{fig:restartfmt} is the energy of those bands.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/restart.pdf}
+\caption{Uninterrupted and resumed bands.
+The left panel is the distance off the chord between the end images.
+The right panel is the energy along that chord.}
+\label{fig:restart}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
+\caption{Energy of the uninterrupted band, the round trip and the six-decimal resume, along the same chord.}
+\label{fig:restartfmt}
+\end{figure}
+\(f_{\max}\).
+The energies are line-2 JSON.
+They are not a production NEB.
+The declared barrier \(E_1-E_0\) is $\nebBarrierEv$\,eV.
+The declared \(f_{\max}\) is not recomputed from the force block.
+The supplement lists the bead table.
+This paper reports the XYZ mapping.
+It does not report residue or occupancy for PDB and GRO.
+The C++ RAII header is the path for in-process drivers
+\section{DLPack exchange}
+\label{sec:dlpack}
+The Rust frame stores positions, velocities, forces, per-atom energies, masses and atom ids in contiguous arrays.
+\texttt{positions\_dlpack}, \texttt{velocities\_dlpack}, \texttt{forces\_dlpack}, \texttt{atom\_energies\_dlpack}, \texttt{masses\_dlpack} and \texttt{atom\_ids\_dlpack} borrow those arrays as DLPack views.
+The C ABI exports the same fields as \texttt{rkr\_frame\_*\_dlpack} and \texttt{rkr\_frame\_builder\_*\_dlpack}.
+The Python \texttt{xyz}, \texttt{vel} and \texttt{frc} getters allocate a fresh NumPy array from that storage, and that array implements \texttt{\_\_dlpack\_\_}.
+NumPy \texttt{from\_dlpack} and PyTorch \texttt{from\_dlpack} share that array's pointer.
+JAX \texttt{from\_dlpack} does not share the pointer on this build.
+CuPy did not import.
+A copy allocates a second array with \texttt{numpy.array(copy=True)}.
+Table~\ref{tab:dlpack-params} fixes the repeats, the sizes and the dtype.
+The hardware line is x86\_64, 8, Intel(R) Xeon(R) Processor.
+Figure~\ref{fig:dlpack} and Table~\ref{tab:dlpack} report the median and the type 7 quartiles.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/dlpack.pdf}
+\caption{Median time to exchange a position array through DLPack, and the median time to copy it, against the atom count.
+Each point is the median of $\dlpackRepeats$ repeats.}
+\label{fig:dlpack}
+\end{figure}
+\begin{table}[tbp]
+\centering
+\caption{NumPy DLPack exchange and a copy of the same position array.
+Quartiles are type 7.}
+\label{tab:dlpack}
+\input{figures/generated/dlpack_table}
+\end{table}
+The reproduction command is \texttt{python3 paper/cpc/scripts/bench\_dlpack.py} at commit \texttt{\dlpackCommit} of \url{https://github.com/lode-org/readcon-core}.
+The software archive is \texttt{10.5281/zenodo.18753567}.
+The manuscript deposit is \DOIPENDING.
+The command that regenerates the DLPack table is \texttt{python3 paper/cpc/scripts/bench\_dlpack.py}.
+\bibliography{rg_main}
+\pdfminorversion=7
+\documentclass[preprint,12pt]{elsarticle}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\journal{Computer Physics Communications}
+\begin{document}
+\begin{frontmatter}
+\title{Supplement: readcon-core reads and writes the CON checkpoint format}
+\end{frontmatter}
+\section{Further figures}
+\label{sec:figures}
+Figure~\ref{fig:layout} is the CON frame beside the fields a version 1 reader keeps.
+Figure~\ref{fig:pipeline} is the three-step parse.
+Figure~\ref{fig:matrix} marks which format pairs keep a displacement.
+Figure~\ref{fig:threads} is the committed thread sweep.
+Figure~\ref{fig:layers} is the layer throughput.
+Figure~\ref{fig:roofline} places that throughput on the stored sweep.
+Figure~\ref{fig:dbin} and Figure~\ref{fig:dbbw} are the ingest rate and the bandwidth.
+Figure~\ref{fig:dbq} is the query time.
+Figure~\ref{fig:dbdisk} is the allocated bytes.
+Figure~\ref{fig:dbdedup} compares stored frames with unique hashes.
+Figure~\ref{fig:rdiff} is the displacement after a round trip and after six decimals.
+Figure~\ref{fig:fidelity} is the field matrix.
+Figure~\ref{fig:anatomy} is the byte layout of one frame.
+Figure~\ref{fig:velocity} is the displacement that follows a mislabeled velocity block.
+Figure~\ref{fig:errors} is the class of each illegal file.
+Figure~\ref{fig:dedup} is the campaign hash graph.
+Figure~\ref{fig:mask} is the held path and the frozen path.
+Figure~\ref{fig:multiples} is the energy of the three resumed bands.
+Figure~\ref{fig:mpistrong} and Figure~\ref{fig:mpiweak} are the committed MPI sweeps.
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/layout.pdf}
+\caption{The CON frame and the fields a version 1 reader uses.}
+\label{fig:layout}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/pipeline.pdf}
+\caption{Scan the frame starts, parse the frames, then gather them in file order.}
+\label{fig:pipeline}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/matrix.pdf}
+\caption{Format pairs from the committed failure matrix.
+A full bar marks a numeric displacement.}
+\label{fig:matrix}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/threads.pdf}
+\caption{Speedup and efficiency from the committed thread summary.}
+\label{fig:threads}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/layers.pdf}
+\caption{Throughput of the Rust core, the C++ wrapper and the Python objects.}
+\label{fig:layers}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/roofline.pdf}
+\caption{The same layer rates on the stored sweep.}
+\label{fig:roofline}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Median ingest rate.}
+\label{fig:dbin}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
+\caption{Median ingest bandwidth.}
+\label{fig:dbbw}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Median query time.}
+\label{fig:dbq}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
+\caption{Allocated bytes of the stored corpus.}
+\label{fig:dbdisk}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_dedup.pdf}
+\caption{Stored frames against unique hashes, and the bytes of the full corpus against the unique texts.}
+\label{fig:dbdedup}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf}
+\caption{Displacement after a round trip and after a six-decimal resume.}
+\label{fig:rdiff}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/roundtrip_fidelity.pdf}
+\caption{Fields kept by a write and a read.}
+\label{fig:fidelity}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf}
+\caption{Byte layout of one frame.}
+\label{fig:anatomy}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/velocity_mislabel.pdf}
+\caption{Displacement that follows a mislabeled velocity block.}
+\label{fig:velocity}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
+\caption{Class recorded for each illegal file.}
+\label{fig:errors}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/dedup_graph.pdf}
+\caption{Campaign frames and their hashes.}
+\label{fig:dedup}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
+\caption{Energy of the held path and the frozen path from the committed neb.dat files.}
+\label{fig:mask}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
+\caption{Energy of the uninterrupted band, the round trip and the six-decimal resume.}
+\label{fig:multiples}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
+\caption{Strong-scaling speedup from the committed MPI table.}
+\label{fig:mpistrong}
+\end{figure}
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
+\caption{Weak scaling from the committed MPI table.}
+\label{fig:mpiweak}
+\end{figure}
+\section{Bead table}
+\input{figures/generated/neb_table}
+\end{document}
