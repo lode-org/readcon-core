@@ -46,6 +46,22 @@ rule mpi_log:
     shell:
         "python3 bench/run_mpi_v2.py"
 
+rule mpi_products:
+    input:
+        "logs/mpi.log",
+    output:
+        "src/figures/generated/mpi_macros.tex",
+        "src/figures/generated/mpi_host_table.tex",
+        "src/figures/generated/mpi_host.pdf",
+    shell:
+        "python3 scripts/mpi_from_log.py"
+
+rule mpi_fallback:
+    output:
+        "logs/mpi-fallback.log",
+    shell:
+        "python3 scripts/mpi_fallback.py"
+
 rule dlpack_log:
     output:
         "logs/dlpack-exchange.log",
@@ -66,6 +82,7 @@ rule manuscript:
         "src/figures/generated/dlpack_macros.tex",
         "src/figures/generated/host_macros.tex",
         "src/figures/generated/host_table.tex",
+        "src/figures/generated/mpi_macros.tex",
     output:
         "src/rg_main.pdf",
     shell:

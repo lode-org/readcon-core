@@ -723,14 +723,22 @@ readcon-db takes a median of 0.00489~s and the ASE database takes 0.0726~s.
 Both stores keep all 40 frames.
 The log is \path{paper/cpc/logs/db.log}.
 
-We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
-In shared mode the median is 0.0508~s at 1 rank, 0.0264~s at 2, 0.0140~s at 4 and 0.00845~s at 8.
-In scatter mode the median is 0.0495~s at 1 rank, 0.0271~s at 2, 0.0142~s at 4 and 0.00798~s at 8.
-Eight ranks are faster than four in both modes.
-The scatter-mode interquartile range at eight ranks is 0.00140~s.
+\input{figures/generated/mpi_macros}
+We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches at each count.
+\mpiSharedLine
+\mpiScatterLine
+\mpiCompareLine
+\mpiScatterIqrLine
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
 In scatter mode the waiting ranks sleep on a file lock, which needs a filesystem with coherent flock across the ranks, and where flock is not coherent they fall back to the blocking broadcast.
 The log is \path{paper/cpc/logs/mpi.log}.
+The fallback log is \path{paper/cpc/logs/mpi-fallback.log}.
+
+\input{figures/generated/mpi_host_table}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{\textbf{Distributed read on this host.}
+The marker is the type 7 median of \mpiRepeats{} serial launches and the whisker is the type 7 interquartile range. Every repeat is kept.}
+\label{fig:mpi-host} \end{figure}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn by \path{scripts/plot_restored.py} from the records under \path{paper/cpc/data}.
 The database and MPI figures in this section are earlier stored records.

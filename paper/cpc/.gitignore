@@ -8,6 +8,7 @@
 !data/h2h/*.log
 !logs/h2h/*.log
 !logs/mpi.log
+!logs/mpi-fallback.log
 !logs/db.log
 !logs/install.log
 !logs/reader-exchange.log
