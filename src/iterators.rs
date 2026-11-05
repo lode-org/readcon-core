@@ -1051,17 +1051,16 @@ unsafe impl Send for SlotWritePtr {}
 #[cfg(feature = "parallel")]
 unsafe impl Sync for SlotWritePtr {}
 
-/// Frames in one claimed chunk.
+/// Next guided claim.
 ///
-/// The idle tail is one claimed chunk. Squaring the worker count keeps
-/// that chunk at most one worker's share divided by the worker count,
-/// so another worker can take it. The grain is the frame count divided
-/// by that many claims.
+/// The claim is `ceil(remaining / workers)`. That uses the frames still
+/// waiting and the worker count. It has no extra constant. The last
+/// claim on a worker is one frame when the remainder is smaller than
+/// the worker count.
 #[cfg(feature = "parallel")]
-fn claim_grain(n: usize, workers: usize) -> usize {
+fn guided_claim(remaining: usize, workers: usize) -> usize {
     let workers = workers.max(1);
-    let claims = workers.saturating_mul(workers).max(1);
-    n.div_ceil(claims).max(1)
+    remaining.div_ceil(workers).max(1)
 }
 
 /// Parse each frame into a slot allocated before any worker runs.
@@ -1145,38 +1144,49 @@ where
     let mut slots: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> =
         (0..n).map(|_| std::mem::MaybeUninit::uninit()).collect();
     let alloc_s = t_alloc.elapsed().as_secs_f64();
-    let grain = claim_grain(n, workers);
-    let n_chunks = n.div_ceil(grain);
-    // Chunk `i` is the only writer of its slots. The counter hands that
-    // index to one worker.
-    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..n_chunks)
+    // Guided claims. Each worker takes `ceil(remaining / workers)` frames.
+    // The counter hands that range to one worker, so each index is written
+    // once. Chunk times sit in claim order.
+    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..n)
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
     let next = std::sync::atomic::AtomicUsize::new(0);
+    let chunk_slot = std::sync::atomic::AtomicUsize::new(0);
     let slots_ptr = SlotWritePtr(slots.as_mut_ptr());
     let t_work = std::time::Instant::now();
     {
         use rayon::prelude::*;
         (0..workers).into_par_iter().for_each(|_| {
             loop {
-                let chunk_index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if chunk_index >= n_chunks {
+                let start = next.load(std::sync::atomic::Ordering::Relaxed);
+                if start >= n {
                     break;
                 }
-                let base = chunk_index * grain;
-                let end = (base + grain).min(n);
+                let claim = guided_claim(n - start, workers);
+                let end = (start + claim).min(n);
+                if next
+                    .compare_exchange_weak(
+                        start,
+                        end,
+                        std::sync::atomic::Ordering::AcqRel,
+                        std::sync::atomic::Ordering::Relaxed,
+                    )
+                    .is_err()
+                {
+                    continue;
+                }
                 let t_chunk = std::time::Instant::now();
-                for i in base..end {
-                    // SAFETY: `chunk_index` was claimed once, so `i` is
-                    // unique to this iteration. `slots_ptr` addresses
-                    // `slots`, which outlives this pool join, and no
-                    // other reference writes that index.
+                for i in start..end {
+                    // SAFETY: this compare-exchange won `i`, so this call
+                    // is the only writer of that slot. `slots` outlives
+                    // the join.
                     unsafe {
                         slots_ptr
                             .write_slot(i, parse_span(boundaries[i], span_end(boundaries, i, len)));
                     }
                 }
-                chunk_ns[chunk_index].store(
+                let idx = chunk_slot.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                chunk_ns[idx].store(
                     t_chunk.elapsed().as_nanos() as u64,
                     std::sync::atomic::Ordering::Relaxed,
                 );
@@ -1184,10 +1194,11 @@ where
         });
     }
     let work_s = t_work.elapsed().as_secs_f64();
+    let n_chunks = chunk_slot.load(std::sync::atomic::Ordering::Relaxed);
     let mut worker_sum_s = 0.0_f64;
     let mut worker_max_s = 0.0_f64;
     let mut chunk_s = Vec::with_capacity(n_chunks);
-    for cell in &chunk_ns {
+    for cell in chunk_ns.iter().take(n_chunks) {
         let seconds = cell.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
         chunk_s.push(seconds);
         worker_sum_s += seconds;
@@ -1243,10 +1254,14 @@ fn parse_text_span(
 #[cfg(feature = "parallel")]
 struct TimedParse {
     slots: Vec<Result<types::ConFrame, error::ParseError>>,
+    /// Still alive so later phases of this read use the same workers.
+    /// `None` when the call stayed on the calling thread.
+    pool: Option<rayon::ThreadPool>,
     pool_s: f64,
-    /// `drop` of the local pool, which joins its workers.
+    /// Zero while `pool` is still alive. The owner times the join.
     pool_join_s: f64,
     scan_s: f64,
+    scan_minflt: i64,
     slot_alloc_s: f64,
     worker_parse_s: f64,
     worker_sum_s: f64,
@@ -1254,6 +1269,78 @@ struct TimedParse {
     chunk_s: Vec<f64>,
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`].
     scan_kind: u8,
+}
+
+/// Minor faults of this process.
+#[cfg(feature = "parallel")]
+pub fn process_minflt() -> i64 {
+    unsafe {
+        let mut usage = std::mem::zeroed::<libc::rusage>();
+        libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+        usage.ru_minflt
+    }
+}
+
+/// Page size from `sysconf`, with the POSIX page as the fallback.
+#[cfg(feature = "parallel")]
+fn host_page_size() -> usize {
+    let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    if raw > 0 { raw as usize } else { 4096 }
+}
+
+/// Touch one byte per page so the later walk faults in parallel.
+#[cfg(feature = "parallel")]
+fn prefault_pages(bytes: &[u8]) {
+    use rayon::prelude::*;
+    let page = host_page_size().max(1);
+    if bytes.is_empty() {
+        return;
+    }
+    let pages = bytes.len().div_ceil(page);
+    let workers = rayon::current_num_threads().max(1);
+    let chunk = pages.div_ceil(workers).max(1);
+    (0..workers).into_par_iter().for_each(|worker| {
+        let first = worker * chunk;
+        let last = (first + chunk).min(pages);
+        let mut acc = 0u8;
+        for page_index in first..last {
+            let at = page_index * page;
+            if at < bytes.len() {
+                acc ^= bytes[at];
+            }
+        }
+        std::hint::black_box(acc);
+    });
+}
+
+/// Move every `Ok` frame on the read's pool.
+///
+/// A serial walk of the slot vector grows with the frame count. The
+/// pool that parsed the frames does this move. One thread still walks
+/// the slots when that pool is absent.
+#[cfg(feature = "parallel")]
+fn finish_results(
+    pool: Option<&rayon::ThreadPool>,
+    slots: Vec<Result<types::ConFrame, error::ParseError>>,
+) -> Result<Vec<types::ConFrame>, error::ParseError> {
+    if slots.len() < 2 || pool.is_none() {
+        let mut frames = Vec::with_capacity(slots.len());
+        for part in slots {
+            frames.push(part?);
+        }
+        return Ok(frames);
+    }
+    let pool = pool.expect("pool");
+    pool.install(|| {
+        use rayon::prelude::*;
+        if let Some(index) = slots.par_iter().position_first(|item| item.is_err()) {
+            return Err(match slots.into_iter().nth(index) {
+                Some(Err(err)) => err,
+                _ => error::ParseError::IncompleteFrame,
+            });
+        }
+        Ok(slots.into_par_iter().map(|item| item.expect("ok")).collect())
+    })
 }
 
 /// Header walk on the calling thread.
@@ -1343,8 +1430,12 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         Some(_) => 1,
         None => threads,
     };
-    let run = || {
+    let run = |prefault: bool| {
+        let fault0 = process_minflt();
         let t_scan = std::time::Instant::now();
+        if prefault {
+            prefault_pages(bytes);
+        }
         let (boundaries, scan_kind) =
             if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
                 (bounds, SCAN_EQUAL_SPAN)
@@ -1364,23 +1455,26 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
                 (collect_frame_starts(scanner, true), scan_kind)
             };
         let scan_s = t_scan.elapsed().as_secs_f64();
+        let scan_minflt = process_minflt().saturating_sub(fault0);
         let parsed =
             parse_into_slots_timed(bytes.len(), &boundaries, parse_workers, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
-        (parsed, scan_s, scan_kind)
+        (parsed, scan_s, scan_kind, scan_minflt)
     };
-    let (pool_s, pool_join_s, packed) = match num_threads {
-        None => (0.0, 0.0, run()),
+    let (pool_s, pool, packed) = match num_threads {
+        None => (0.0, None, run(false)),
         Some(n) if n <= 1 => {
             let _ = n;
+            let fault0 = process_minflt();
             let t_scan = std::time::Instant::now();
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
+            let scan_minflt = process_minflt().saturating_sub(fault0);
             let parsed = parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
-            (0.0, 0.0, (parsed, scan_s, SCAN_SERIAL))
+            (0.0, None, (parsed, scan_s, SCAN_SERIAL, scan_minflt))
         }
         Some(n) => {
             let t_pool = std::time::Instant::now();
@@ -1390,22 +1484,24 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();
-                        (wake, run())
+                        (wake, run(true))
                     });
-                    let t_join = std::time::Instant::now();
-                    drop(pool);
-                    (built + wake, t_join.elapsed().as_secs_f64(), body)
+                    // The pool stays alive for the slab, the position
+                    // release, the touch, and the frame teardown.
+                    (built + wake, Some(pool), body)
                 }
-                Err(_) => (t_pool.elapsed().as_secs_f64(), 0.0, run()),
+                Err(_) => (t_pool.elapsed().as_secs_f64(), None, run(false)),
             }
         }
     };
-    let (parsed, scan_s, scan_kind) = packed;
+    let (parsed, scan_s, scan_kind, scan_minflt) = packed;
     TimedParse {
         slots: parsed.slots,
+        pool,
         pool_s,
-        pool_join_s,
+        pool_join_s: 0.0,
         scan_s,
+        scan_minflt,
         slot_alloc_s: parsed.alloc_s,
         worker_parse_s: parsed.work_s,
         worker_sum_s: parsed.sum_s,
@@ -1879,6 +1975,12 @@ pub struct ReadPhaseTimes {
     pub close_s: f64,
     /// Wake of the worker pool and the other gaps inside the read.
     pub schedule_s: f64,
+    /// Minor faults during the scan, including the parallel page touch.
+    pub scan_minflt: i64,
+    /// Minor faults while the coordinate slab is filled.
+    pub slab_minflt: i64,
+    /// Minor faults during the touch checksum.
+    pub touch_minflt: i64,
     /// True when the bytes came from a map rather than an owned buffer.
     pub mapped: bool,
 }
@@ -1893,6 +1995,9 @@ pub struct PhasedFrames {
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`] when
     /// `parallel` is on. Zero otherwise.
     pub scan_kind: u8,
+    /// Pool kept for the slab, the touch, and frame teardown.
+    #[cfg(feature = "parallel")]
+    pub pool: Option<rayon::ThreadPool>,
 }
 
 /// Read `path` and time open, scan, slot allocation, and the worker parse.
@@ -1926,11 +2031,22 @@ pub fn read_all_frames_phased(
     let t_close = std::time::Instant::now();
     if let crate::compression::FileContents::Mapped(map) = &contents {
         // The serial unmap of a fully resident file is the multi-worker
-        // tail. Advise the pages away on that worker count first.
+        // tail. Advise the pages away on the read's pool first.
         // One worker unmaps directly, so a serial read does not walk
         // the pages twice.
         if workers >= 2 {
-            crate::compression::advise_dontneed_parallel(map, workers);
+            #[cfg(feature = "parallel")]
+            {
+                if let Some(pool) = phased.pool.as_ref() {
+                    pool.install(|| {
+                        crate::compression::advise_dontneed_parallel(map, workers);
+                    });
+                }
+            }
+            #[cfg(not(feature = "parallel"))]
+            {
+                let _ = (map, workers);
+            }
         }
     }
     drop(contents);
@@ -1962,8 +2078,12 @@ pub fn read_all_frames_phased(
             worker_max_s: phased.worker_max_s,
             close_s,
             schedule_s,
+            scan_minflt: phased.scan_minflt,
             mapped,
+            ..ReadPhaseTimes::default()
         },
+        #[cfg(feature = "parallel")]
+        pool: phased.pool,
     })
 }
 
@@ -1987,6 +2107,11 @@ pub struct PhasedByteTimes {
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`] when
     /// `parallel` is on. Zero otherwise.
     pub scan_kind: u8,
+    /// Minor faults during the scan.
+    pub scan_minflt: i64,
+    /// Pool kept for the slab, the touch, and frame teardown.
+    #[cfg(feature = "parallel")]
+    pub pool: Option<rayon::ThreadPool>,
 }
 
 pub fn frames_from_bytes_phased(
@@ -2001,10 +2126,7 @@ pub fn frames_from_bytes_phased(
         };
         let timed = parse_bytes_timed(bytes, requested);
         let t_finish = std::time::Instant::now();
-        let mut frames = Vec::with_capacity(timed.slots.len());
-        for part in timed.slots {
-            frames.push(part?);
-        }
+        let frames = finish_results(timed.pool.as_ref(), timed.slots)?;
         let finish_s = t_finish.elapsed().as_secs_f64();
         return Ok(PhasedByteTimes {
             frames,
@@ -2018,6 +2140,8 @@ pub fn frames_from_bytes_phased(
             worker_max_s: timed.worker_max_s,
             chunk_s: timed.chunk_s,
             scan_kind: timed.scan_kind,
+            scan_minflt: timed.scan_minflt,
+            pool: timed.pool,
         });
     }
     #[cfg(not(feature = "parallel"))]
@@ -2041,6 +2165,7 @@ pub fn frames_from_bytes_phased(
             worker_max_s: worker_parse_s,
             chunk_s: vec![worker_parse_s],
             scan_kind: 0,
+            scan_minflt: 0,
         })
     }
 }
@@ -2062,7 +2187,16 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
         return None;
     }
     let stride = n_atoms.saturating_mul(3);
-    let mut values = vec![0.0_f64; frames.len().saturating_mul(stride)];
+    let total = frames.len().saturating_mul(stride);
+    let mut values = Vec::<f64>::with_capacity(total);
+    if total > 0 {
+        // The parallel writers are the first touch of these pages.
+        // A zeroed allocation would fault the whole slab on this thread.
+        // SAFETY: every index is overwritten before the buffer is read.
+        unsafe {
+            values.set_len(total);
+        }
+    }
     if stride == 0 {
         return Some(values);
     }
@@ -2078,21 +2212,53 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
     #[cfg(feature = "parallel")]
     {
         if workers >= 2 {
-            use rayon::prelude::*;
             let chunk_frames = frames.len().div_ceil(workers).max(1);
             let chunk_vals = chunk_frames.saturating_mul(stride);
-            values
-                .par_chunks_mut(chunk_vals)
-                .enumerate()
-                .for_each(|(chunk_index, dest)| {
-                    let base = chunk_index * chunk_frames;
-                    for (offset, slot) in dest.chunks_exact_mut(stride).enumerate() {
-                        let index = base + offset;
-                        if index < frames.len() {
-                            write(&frames[index], slot);
+            let copy_chunks = |dest_all: &mut [f64]| {
+                use rayon::prelude::*;
+                dest_all
+                    .par_chunks_mut(chunk_vals)
+                    .enumerate()
+                    .for_each(|(chunk_index, dest)| {
+                        let base = chunk_index * chunk_frames;
+                        for (offset, slot) in dest.chunks_exact_mut(stride).enumerate() {
+                            let index = base + offset;
+                            if index < frames.len() {
+                                write(&frames[index], slot);
+                            }
                         }
+                    });
+            };
+            // `par_chunks_mut` follows the installed pool. Outside one,
+            // a private scope of `workers` threads keeps the global pool
+            // out of this phase.
+            if rayon::current_thread_index().is_some() {
+                copy_chunks(&mut values);
+            } else {
+                std::thread::scope(|scope| {
+                    let mut rest = &mut values[..];
+                    let mut base = 0usize;
+                    let mut handles = Vec::new();
+                    while base < frames.len() {
+                        let take_frames = chunk_frames.min(frames.len() - base);
+                        let take_vals = take_frames * stride;
+                        let (dest, tail) = rest.split_at_mut(take_vals);
+                        rest = tail;
+                        let frame_slice = &frames[base..base + take_frames];
+                        handles.push(scope.spawn(move || {
+                            for (frame, slot) in
+                                frame_slice.iter().zip(dest.chunks_exact_mut(stride))
+                            {
+                                write(frame, slot);
+                            }
+                        }));
+                        base += take_frames;
+                    }
+                    for handle in handles {
+                        handle.join().expect("slab worker");
                     }
                 });
+            }
             return Some(values);
         }
     }
@@ -2199,26 +2365,42 @@ pub fn touch_option_checksum(
 fn reduce_touch(n: usize, workers: usize, one: impl Fn(usize) -> u64 + Sync) -> u64 {
     #[cfg(feature = "parallel")]
     if workers >= 2 {
-        let run = || {
+        let fold_range = |first: usize, last: usize| {
+            let mut acc = 0u64;
+            for index in first..last {
+                acc ^= one(index);
+            }
+            acc
+        };
+        let chunk = n.div_ceil(workers).max(1);
+        // Reuse the installed read pool. A fresh pool per touch is the
+        // build this phase used to pay on every call.
+        if rayon::current_thread_index().is_some() {
             use rayon::prelude::*;
-            let chunk = n.div_ceil(workers).max(1);
-            (0..workers)
+            return (0..workers)
                 .into_par_iter()
                 .map(|worker| {
                     let first = worker * chunk;
                     let last = (first + chunk).min(n);
-                    let mut acc = 0u64;
-                    for index in first..last {
-                        acc ^= one(index);
-                    }
-                    acc
+                    fold_range(first, last)
                 })
-                .reduce(|| 0u64, |left, right| left ^ right)
-        };
-        return match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => (0..n).map(&one).fold(0, |acc, item| acc ^ item),
-        };
+                .reduce(|| 0u64, |left, right| left ^ right);
+        }
+        let mut acc = 0u64;
+        std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(workers);
+            for worker in 0..workers {
+                handles.push(scope.spawn(move || {
+                    let first = worker * chunk;
+                    let last = (first + chunk).min(n);
+                    fold_range(first, last)
+                }));
+            }
+            for handle in handles {
+                acc ^= handle.join().unwrap_or(0);
+            }
+        });
+        return acc;
     }
     #[cfg(not(feature = "parallel"))]
     {

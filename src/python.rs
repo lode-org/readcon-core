@@ -1575,6 +1575,10 @@ struct ReadCallPhases {
     python_build_s: f64,
     return_s: f64,
     touch_s: f64,
+    teardown_s: f64,
+    scan_minflt: i64,
+    slab_minflt: i64,
+    touch_minflt: i64,
     mapped: bool,
     n_bytes: usize,
     n_frames: usize,
@@ -1608,6 +1612,10 @@ impl ReadCallPhases {
             python_build_s: 0.0,
             return_s: 0.0,
             touch_s: 0.0,
+            teardown_s: 0.0,
+            scan_minflt: phases.scan_minflt,
+            slab_minflt: phases.slab_minflt,
+            touch_minflt: phases.touch_minflt,
             mapped: phases.mapped,
             n_bytes,
             n_frames,
@@ -1637,6 +1645,10 @@ impl ReadCallPhases {
         dict.set_item("python_build_s", self.python_build_s)?;
         dict.set_item("return_s", self.return_s)?;
         dict.set_item("touch_s", self.touch_s)?;
+        dict.set_item("teardown_s", self.teardown_s)?;
+        dict.set_item("scan_minflt", self.scan_minflt)?;
+        dict.set_item("slab_minflt", self.slab_minflt)?;
+        dict.set_item("touch_minflt", self.touch_minflt)?;
         dict.set_item("mapped", self.mapped)?;
         dict.set_item("n_bytes", self.n_bytes)?;
         dict.set_item("n_frames", self.n_frames)?;
@@ -1660,6 +1672,8 @@ struct ConFrameList {
     n_atoms: usize,
     workers: usize,
     phases: std::sync::Mutex<ReadCallPhases>,
+    /// The pool from the read. Touch and teardown reuse it.
+    pool: std::sync::Mutex<Option<rayon::ThreadPool>>,
 }
 
 #[pyclass(name = "ConFrameListIterator")]
@@ -1746,13 +1760,89 @@ impl ConFrameList {
         };
         let values = slab.bind(py).readonly();
         let slice = values.as_slice()?;
+        let fault0 = crate::iterators::process_minflt();
         let t_touch = std::time::Instant::now();
-        let digest = crate::iterators::touch_option_checksum(&frames, slice, self.workers)
-            .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
+        let workers = self.workers;
+        let digest = {
+            let pool = self.pool.lock().expect("pool");
+            let run = || {
+                crate::iterators::touch_option_checksum(&frames, slice, workers)
+            };
+            match pool.as_ref() {
+                Some(pool) if workers >= 2 => pool.install(run),
+                _ => run(),
+            }
+        }
+        .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
         let touch_s = t_touch.elapsed().as_secs_f64();
+        let touch_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
         drop(frames);
-        self.phases.lock().expect("phases").touch_s = touch_s;
+        {
+            let mut phases = self.phases.lock().expect("phases");
+            phases.touch_s = touch_s;
+            phases.touch_minflt = touch_minflt;
+        }
         Ok((digest, touch_s))
+    }
+
+    /// Drop the parsed frames on the read's pool and join that pool.
+    ///
+    /// The seconds cover the frame drop and the pool join. A later drop
+    /// of this object is empty.
+    fn release_frames(&mut self, py: Python<'_>) -> f64 {
+        let (teardown_s, pool_join_s) = py.detach(|| self.teardown());
+        let mut phases = self.phases.lock().expect("phases");
+        phases.teardown_s = teardown_s;
+        phases.pool_join_s = pool_join_s;
+        teardown_s
+    }
+}
+
+impl ConFrameList {
+    fn teardown(&mut self) -> (f64, f64) {
+        let t0 = std::time::Instant::now();
+        let frames = std::mem::take(&mut *self.frames.lock().expect("frames"));
+        let pool = self.pool.lock().expect("pool").take();
+        let workers = self.workers.max(1);
+        if let Some(pool) = pool {
+            if frames.len() >= 2 {
+                pool.install(|| {
+                    use rayon::prelude::*;
+                    frames.into_par_iter().for_each(drop);
+                });
+            } else {
+                drop(frames);
+            }
+            let t_join = std::time::Instant::now();
+            drop(pool);
+            let pool_join_s = t_join.elapsed().as_secs_f64();
+            return (t0.elapsed().as_secs_f64(), pool_join_s);
+        }
+        if workers >= 2 && frames.len() >= 2 {
+            let chunk = frames.len().div_ceil(workers).max(1);
+            let mut chunks = Vec::new();
+            let mut rest = frames;
+            while !rest.is_empty() {
+                let take = chunk.min(rest.len());
+                let tail = rest.split_off(take);
+                chunks.push(rest);
+                rest = tail;
+            }
+            std::thread::scope(|scope| {
+                for chunk in chunks {
+                    scope.spawn(move || drop(chunk));
+                }
+            });
+        } else {
+            drop(frames);
+        }
+        (t0.elapsed().as_secs_f64(), 0.0)
+    }
+}
+
+impl Drop for ConFrameList {
+    fn drop(&mut self) {
+        self.teardown();
     }
 }
 
@@ -1778,15 +1868,28 @@ fn clear_packed_positions(frames: &mut [ConFrame], workers: usize) {
         frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
     };
     #[cfg(feature = "parallel")]
-    if workers >= 2 {
-        let run = || {
+    if workers >= 2 && frames.len() >= 2 {
+        // The read's pool is already installed by the caller. This does
+        // not build another one.
+        if rayon::current_thread_index().is_some() {
             use rayon::prelude::*;
             frames.par_iter_mut().for_each(clear);
-        };
-        match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => frames.iter_mut().for_each(clear),
+            return;
         }
+        let chunk = frames.len().div_ceil(workers).max(1);
+        std::thread::scope(|scope| {
+            let mut rest = frames;
+            while !rest.is_empty() {
+                let take = chunk.min(rest.len());
+                let (head, tail) = rest.split_at_mut(take);
+                rest = tail;
+                scope.spawn(move || {
+                    for frame in head.iter_mut() {
+                        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+                    }
+                });
+            }
+        });
         return;
     }
     frames.iter_mut().for_each(clear);
@@ -1830,20 +1933,33 @@ fn con_frame_list(
     build: &'static str,
     chunk_s: Vec<f64>,
     scan_kind: &'static str,
+    pool: Option<rayon::ThreadPool>,
 ) -> PyResult<Py<ConFrameList>> {
     let t_list = std::time::Instant::now();
     let n_frames = frames.len();
     let workers = n_threads.filter(|n| *n >= 2).unwrap_or(1);
+    let fault0 = crate::iterators::process_minflt();
     let t_slab = std::time::Instant::now();
-    let packed = py.detach(|| crate::iterators::pack_position_slab(&frames, workers));
+    let packed = py.detach(|| match pool.as_ref() {
+        Some(pool) if workers >= 2 => {
+            pool.install(|| crate::iterators::pack_position_slab(&frames, workers))
+        }
+        _ => crate::iterators::pack_position_slab(&frames, 1),
+    });
     let slab_s = t_slab.elapsed().as_secs_f64();
+    let slab_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
     let n_atoms = match packed.as_ref() {
         Some(values) if n_frames > 0 => values.len() / n_frames / 3,
         _ => 0,
     };
     let t_release = std::time::Instant::now();
     if packed.is_some() {
-        clear_packed_positions(&mut frames, workers);
+        py.detach(|| match pool.as_ref() {
+            Some(pool) if workers >= 2 => {
+                pool.install(|| clear_packed_positions(&mut frames, workers))
+            }
+            _ => clear_packed_positions(&mut frames, 1),
+        });
     }
     let release_s = t_release.elapsed().as_secs_f64();
     let t_build = std::time::Instant::now();
@@ -1854,13 +1970,20 @@ fn con_frame_list(
     let python_build_s = t_build.elapsed().as_secs_f64();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, build);
     record.slab_s = slab_s;
+    record.slab_minflt = slab_minflt;
     record.release_s = release_s;
     record.python_build_s = python_build_s;
     record.chunk_s = chunk_s;
     record.scan_kind = scan_kind;
     let mut cache = Vec::with_capacity(n_frames);
     cache.resize_with(n_frames, || None);
-    let stored: Vec<Option<ConFrame>> = frames.into_iter().map(Some).collect();
+    let stored: Vec<Option<ConFrame>> = py.detach(|| match pool.as_ref() {
+        Some(pool) if workers >= 2 => {
+            use rayon::prelude::*;
+            pool.install(|| frames.into_par_iter().map(Some).collect())
+        }
+        _ => frames.into_iter().map(Some).collect(),
+    });
     let t_return = std::time::Instant::now();
     let obj = Py::new(
         py,
@@ -1871,6 +1994,7 @@ fn con_frame_list(
             n_atoms,
             workers,
             phases: std::sync::Mutex::new(record),
+            pool: std::sync::Mutex::new(pool),
         },
     )?;
     let return_s = t_return.elapsed().as_secs_f64();
@@ -1896,6 +2020,7 @@ fn load_phased(
     usize,
     Vec<f64>,
     &'static str,
+    Option<rayon::ThreadPool>,
 )> {
     let path_owned = path.to_owned();
     let t_enter = std::time::Instant::now();
@@ -1909,6 +2034,7 @@ fn load_phased(
                         phased.n_bytes,
                         phased.chunk_s,
                         scan_kind_name(phased.scan_kind),
+                        phased.pool,
                     )
                 })
                 .map_err(|err| err.to_string())
@@ -1934,9 +2060,9 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind) = load_phased(py, path, n_threads)?;
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool) = load_phased(py, path, n_threads)?;
     con_frame_list(
-        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, scan_kind,
+        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, scan_kind, pool,
     )
 }
 
@@ -1945,7 +2071,8 @@ fn read_con_eager(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind) = load_phased(py, path, n_threads)?;
+    let (frames, phases, n_bytes, chunk_s, scan_kind, pool) = load_phased(py, path, n_threads)?;
+    drop(pool);
     let n_frames = frames.len();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, "eager");
     record.chunk_s = chunk_s;
@@ -2143,6 +2270,7 @@ fn read_con_mpi(
         "lazy",
         Vec::new(),
         "serial",
+        None,
     )
 }
 
@@ -2202,7 +2330,9 @@ fn read_con_string(
         worker_sum_s: parsed.worker_sum_s,
         worker_max_s: parsed.worker_max_s,
         close_s: 0.0,
+        scan_minflt: parsed.scan_minflt,
         mapped: false,
+        ..crate::iterators::ReadPhaseTimes::default()
     };
     con_frame_list(
         py,
@@ -2213,6 +2343,7 @@ fn read_con_string(
         "lazy",
         parsed.chunk_s,
         scan_kind_name(parsed.scan_kind),
+        parsed.pool,
     )
 }
 

@@ -201,6 +201,8 @@ struct RankSample {
     unmap_s: f64,
     release_s: f64,
     barrier_s: f64,
+    /// `wall0` until just before this rank's barrier.
+    own_wall_s: f64,
     majflt: i64,
     minflt: i64,
     n_ok: usize,
@@ -301,6 +303,7 @@ fn time_span(
     drop(file);
     let unmap_s = t.elapsed().as_secs_f64();
 
+    let own_wall_s = wall0.elapsed().as_secs_f64();
     let t = Instant::now();
     world.barrier();
     let barrier_s = t.elapsed().as_secs_f64();
@@ -316,6 +319,7 @@ fn time_span(
         unmap_s,
         release_s,
         barrier_s,
+        own_wall_s,
         majflt: fault1.saturating_sub(fault0),
         minflt: touch1.saturating_sub(touch0),
         n_ok,
@@ -345,6 +349,8 @@ fn main() {
         .get(3)
         .map(|text| text.parse::<usize>().expect("repeats"))
         .unwrap_or(6);
+    // `1` runs one untimed span first. `0` times every span.
+    let warmup_on = args.get(4).map(|text| text != "0").unwrap_or(true);
 
     let universe = mpi::initialize().expect("mpi init");
     let booted = Instant::now();
@@ -353,9 +359,9 @@ fn main() {
     let ranks = comm.size();
     let physical = physical_cores();
 
-    if comm.rank() == 0 && (repeats < 6 || physical < 1 || ranks > physical || ranks < 1) {
-        let reason = if repeats < 6 {
-            "repeats are below 6"
+    if comm.rank() == 0 && (repeats < 1 || physical < 1 || ranks > physical || ranks < 1) {
+        let reason = if repeats < 1 {
+            "repeats are below 1"
         } else if physical < 1 {
             "lscpu did not report physical cores"
         } else {
@@ -363,7 +369,7 @@ fn main() {
         };
         write_refusal(out_path, reason);
     }
-    let refused = repeats < 6 || physical < 1 || ranks > physical;
+    let refused = repeats < 1 || physical < 1 || ranks > physical;
     if refused {
         std::process::exit(2);
     }
@@ -451,9 +457,14 @@ fn main() {
     let hi = owned.end * span;
     let offsets: Vec<usize> = (0..owned.len()).map(|i| i * span).collect();
 
-    // One untimed call, same work as the timed calls. It is not a sample.
-    let warmup = time_span(&world, path, lo, hi, &offsets);
-    assert_eq!(warmup.n_ok, frames_per_worker);
+    // One untimed call when warmup is on. It is not a sample.
+    let warmup_s = if warmup_on {
+        let warmup = time_span(&world, path, lo, hi, &offsets);
+        assert_eq!(warmup.n_ok, frames_per_worker);
+        warmup.own_wall_s
+    } else {
+        0.0
+    };
     let init_to_clock_s = booted.elapsed().as_secs_f64();
 
     let mut samples = Vec::with_capacity(repeats);
@@ -466,12 +477,21 @@ fn main() {
     let mut unmap_s = Vec::with_capacity(repeats);
     let mut release_s = Vec::with_capacity(repeats);
     let mut barrier_s = Vec::with_capacity(repeats);
+    let mut phase_sum_s = Vec::with_capacity(repeats);
+    let mut per_rank_rows: Vec<Vec<f64>> = Vec::with_capacity(repeats);
     for _ in 0..repeats {
         let sample = time_span(&world, path, lo, hi, &offsets);
         assert_eq!(sample.n_ok, frames_per_worker);
         let maj = sum_i64(&world, sample.majflt);
         let minr = sum_i64(&world, sample.minflt);
         // Local phases, barrier excluded. Every rank contributes.
+        let phase_sum = sample.open_s
+            + sample.map_s
+            + sample.fault_s
+            + sample.parse_s
+            + sample.release_s
+            + sample.unmap_s;
+        // 0..5 phases, 6 phase sum, 7 own wall, 8 own barrier.
         let local = [
             sample.open_s,
             sample.map_s,
@@ -479,40 +499,38 @@ fn main() {
             sample.parse_s,
             sample.release_s,
             sample.unmap_s,
-            sample.open_s
-                + sample.map_s
-                + sample.fault_s
-                + sample.parse_s
-                + sample.release_s
-                + sample.unmap_s,
+            phase_sum,
+            sample.own_wall_s,
+            sample.barrier_s,
         ];
         let mut gathered = vec![0.0_f64; local.len() * ranks];
         world.all_gather_into(&local[..], &mut gathered[..]);
         if comm.rank() == 0 {
             let mut slow_at = 0usize;
-            let mut slow_local = 0.0_f64;
+            let mut slow_wall = 0.0_f64;
             for rank in 0..ranks {
                 let base = rank * local.len();
-                let local_s = gathered[base + 6];
-                if rank == 0 || local_s > slow_local {
-                    slow_local = local_s;
+                let wall = gathered[base + 7];
+                if rank == 0 || wall > slow_wall {
+                    slow_wall = wall;
                     slow_at = rank;
                 }
             }
             let base = slow_at * local.len();
-            // The sample is the slowest rank's own phase sum. Rank 0's
-            // barrier wait is recorded separately and is not this clock.
-            samples.push(slow_local);
+            // The sample is the slowest rank's own wall, ending before
+            // its own barrier. Coverage is its phase sum over that wall.
+            samples.push(slow_wall);
             samples_maj.push(maj);
             samples_min.push(minr);
-            // Phases are the slowest rank's own timers, not rank 0's wait.
             open_s.push(gathered[base]);
             map_s.push(gathered[base + 1]);
             fault_s.push(gathered[base + 2]);
             parse_s.push(gathered[base + 3]);
             release_s.push(gathered[base + 4]);
             unmap_s.push(gathered[base + 5]);
-            barrier_s.push(sample.barrier_s);
+            phase_sum_s.push(gathered[base + 6]);
+            barrier_s.push(gathered[base + 8]);
+            per_rank_rows.push(gathered);
         }
     }
 
@@ -528,10 +546,38 @@ fn main() {
         let unmap_txt = fmt_f64s(&unmap_s);
         let release_txt = fmt_f64s(&release_s);
         let barrier_txt = fmt_f64s(&barrier_s);
+        let phase_txt = fmt_f64s(&phase_sum_s);
+        let width = 9;
+        let mut per_rank_json = String::from("[");
+        for rank in 0..ranks {
+            if rank > 0 {
+                per_rank_json.push_str(", ");
+            }
+            let mut cols: [Vec<f64>; 9] = Default::default();
+            for row in &per_rank_rows {
+                let base = rank * width;
+                for slot in 0..width {
+                    cols[slot].push(row[base + slot]);
+                }
+            }
+            per_rank_json.push_str(&format!(
+                "{{\"rank\": {rank}, \"open_s\": [{}], \"map_s\": [{}], \"fault_s\": [{}], \"parse_s\": [{}], \"release_s\": [{}], \"unmap_s\": [{}], \"phase_sum_s\": [{}], \"wall_s\": [{}], \"barrier_s\": [{}]}}",
+                fmt_f64s(&cols[0]),
+                fmt_f64s(&cols[1]),
+                fmt_f64s(&cols[2]),
+                fmt_f64s(&cols[3]),
+                fmt_f64s(&cols[4]),
+                fmt_f64s(&cols[5]),
+                fmt_f64s(&cols[6]),
+                fmt_f64s(&cols[7]),
+                fmt_f64s(&cols[8]),
+            ));
+        }
+        per_rank_json.push(']');
         let host = json_escape(&record_cpu());
         let mpi_name = json_escape(mpi.trim());
         let body = format!(
-            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"open_s\": [{open_txt}],\n  \"map_s\": [{map_txt}],\n  \"fault_s\": [{fault_txt}],\n  \"parse_s\": [{parse_txt}],\n  \"unmap_s\": [{unmap_txt}],\n  \"release_s\": [{release_txt}],\n  \"barrier_s\": [{barrier_txt}],\n  \"clock\": \"map-fault-span\",\n  \"mpirun_in_clock\": false,\n  \"init_to_clock_s\": {init_to_clock_s:.9},\n  \"span\": {span},\n  \"page_size\": {},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n",
+            "{{\n  \"kind\": \"ranks\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"n_frames\": {total},\n  \"frames_per_worker\": {frames_per_worker},\n  \"bytes\": {bytes},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"samples_majflt\": [{maj_s}],\n  \"samples_minflt\": [{min_s}],\n  \"open_s\": [{open_txt}],\n  \"map_s\": [{map_txt}],\n  \"fault_s\": [{fault_txt}],\n  \"parse_s\": [{parse_txt}],\n  \"unmap_s\": [{unmap_txt}],\n  \"release_s\": [{release_txt}],\n  \"phase_sum_s\": [{phase_txt}],\n  \"barrier_s\": [{barrier_txt}],\n  \"per_rank\": {per_rank_json},\n  \"warmup_s\": {warmup_s:.9},\n  \"warmup_on\": {warmup_on},\n  \"clock\": \"map-fault-span\",\n  \"mpirun_in_clock\": false,\n  \"init_to_clock_s\": {init_to_clock_s:.9},\n  \"span\": {span},\n  \"page_size\": {},\n  \"cpus_allowed\": [{allowed_list}],\n  \"identical\": true,\n  \"host\": \"{host}\",\n  \"physical_cores\": {physical},\n  \"mpi\": \"{mpi_name}\"\n}}\n",
             page_size()
         );
         if let Some(parent) = out_path.parent() {

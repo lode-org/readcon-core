@@ -1,4 +1,4 @@
-"""Limiter r7 measurements.
+"""Limiter measurements.
 
 The ladder is every power of two up to the physical core count.
 Six samples are taken in round-robin order.
@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import math
 import os
 import subprocess
+import sys
 import time
 from itertools import combinations
 from pathlib import Path
@@ -31,6 +33,7 @@ PHASE_KEYS = (
     "open_mmap_s",
     "pool_s",
     "pool_join_s",
+    "schedule_s",
     "scan_s",
     "slot_alloc_s",
     "worker_parse_s",
@@ -42,6 +45,7 @@ PHASE_KEYS = (
     "python_build_s",
     "return_s",
     "touch_s",
+    "teardown_s",
 )
 
 
@@ -117,6 +121,11 @@ def call_read(path: Path, workers: int, build: str, digest: int | None) -> tuple
             raise SystemExit(f"checksum mismatch at {workers} workers")
     else:
         phases["touch_s"] = 0.0
+    if hasattr(frames, "release_frames"):
+        phases["teardown_s"] = float(frames.release_frames())
+    else:
+        del frames
+        phases["teardown_s"] = 0.0
     dt = time.perf_counter() - t0
     gc.enable()
     phases["wall_s"] = dt
@@ -286,15 +295,24 @@ def rank_phase_coverage(payload: dict, index: int) -> float:
     wall = float(payload["samples_s"][index])
     if wall <= 0.0:
         return 0.0
-    covered = sum(float(payload[key][index]) for key in RANK_PHASES)
+    if "phase_sum_s" in payload:
+        covered = float(payload["phase_sum_s"][index])
+    else:
+        covered = sum(float(payload[key][index]) for key in RANK_PHASES if key != "barrier_s")
     return covered / wall
 
 
-def run_mpi(binary: str, ranks: int, path: Path, out: Path, repeats: int) -> dict:
+def steal_ticks() -> int:
+    fields = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()
+    return int(fields[8])
+
+
+def run_mpi(binary: str, ranks: int, path: Path, out: Path, repeats: int, warmup: int) -> dict:
     out.parent.mkdir(parents=True, exist_ok=True)
     mhz = cpu_mhz()
     env = os.environ.copy()
     env["READCON_WEAK_MPI_IMPL"] = "Open MPI"
+    steal0 = steal_ticks()
     cmd = [
         "mpirun",
         "--bind-to",
@@ -305,46 +323,74 @@ def run_mpi(binary: str, ranks: int, path: Path, out: Path, repeats: int) -> dic
         str(path),
         str(out),
         str(repeats),
+        str(warmup),
     ]
     proc = subprocess.run(cmd, env=env, text=True, capture_output=True)
+    steal1 = steal_ticks()
     if proc.returncode != 0:
         raise SystemExit(f"mpirun failed ranks={ranks} code={proc.returncode} {proc.stderr[-400:]}")
     payload = json.loads(out.read_text(encoding="utf-8"))
     payload["mhz"] = mhz
     payload["binary_path"] = binary
+    payload["steal_ticks"] = steal1 - steal0
     return payload
 
 
 def rank_curve(binary: str, paths: dict[int, Path], out_dir: Path) -> list[dict]:
     rows = []
-    for ranks, path in paths.items():
-        payload = run_mpi(binary, ranks, path, out_dir / f"rank-{ranks}.json", REPEATS)
-        if not payload.get("identical", False):
-            raise SystemExit(f"rank bytes differ at {ranks}")
-        samples = [float(x) for x in payload["samples_s"]]
-        cover = [rank_phase_coverage(payload, i) for i in range(len(samples))]
-        phases = {key: [float(x) for x in payload.get(key, [])] for key in RANK_PHASES}
+    launches: dict[int, list[dict]] = {ranks: [] for ranks in paths}
+    for repeat in range(REPEATS):
+        for ranks, path in paths.items():
+            payload = run_mpi(
+                binary,
+                ranks,
+                path,
+                out_dir / f"rank-{ranks}-{repeat}.json",
+                1,
+                1,
+            )
+            if not payload.get("identical", False):
+                raise SystemExit(f"rank bytes differ at {ranks}")
+            launches[ranks].append(payload)
+            print(
+                f"ranks={ranks} repeat={repeat} sample_s={float(payload['samples_s'][0]):.6f} "
+                f"warmup_s={float(payload.get('warmup_s', 0.0)):.6f} "
+                f"steal_ticks={payload.get('steal_ticks', 0)}",
+                flush=True,
+            )
+    for ranks, payloads in launches.items():
+        samples = [float(item["samples_s"][0]) for item in payloads]
+        cover = [rank_phase_coverage(item, 0) for item in payloads]
+        phases = {
+            key: [float(item[key][0]) for item in payloads if key in item]
+            for key in RANK_PHASES
+        }
+        if "phase_sum_s" in payloads[0]:
+            phases["phase_sum_s"] = [float(item["phase_sum_s"][0]) for item in payloads]
         print(
             f"ranks={ranks} median_s={median(samples):.6f} "
-            f"coverage={median(cover):.4f} clock={payload.get('clock', '')}",
+            f"coverage={median(cover):.4f} clock={payloads[0].get('clock', '')}",
             flush=True,
         )
         rows.append(
             {
                 "ranks": ranks,
                 "samples_s": samples,
-                "samples_majflt": payload.get("samples_majflt", []),
-                "samples_minflt": payload.get("samples_minflt", []),
+                "samples_majflt": [item.get("samples_majflt", [0])[0] for item in payloads],
+                "samples_minflt": [item.get("samples_minflt", [0])[0] for item in payloads],
                 "phases": phases,
                 "coverage_samples": cover,
                 "coverage_median": median(cover),
-                "cpus_allowed": payload.get("cpus_allowed", []),
-                "clock": payload.get("clock", ""),
-                "mpirun_in_clock": payload.get("mpirun_in_clock", None),
-                "init_to_clock_s": payload.get("init_to_clock_s", None),
-                "page_size": payload.get("page_size"),
-                "mhz": payload["mhz"],
+                "cpus_allowed": payloads[0].get("cpus_allowed", []),
+                "clock": payloads[0].get("clock", ""),
+                "mpirun_in_clock": payloads[0].get("mpirun_in_clock", None),
+                "init_to_clock_s": [item.get("init_to_clock_s") for item in payloads],
+                "page_size": payloads[0].get("page_size"),
+                "mhz": [item["mhz"] for item in payloads],
                 "identical": True,
+                "warmup_s": [float(item.get("warmup_s", 0.0)) for item in payloads],
+                "steal_ticks": [int(item.get("steal_ticks", 0)) for item in payloads],
+                "per_rank": [item.get("per_rank", []) for item in payloads],
             }
         )
     t1 = median(rows[0]["samples_s"])
@@ -354,7 +400,7 @@ def rank_curve(binary: str, paths: dict[int, Path], out_dir: Path) -> list[dict]
         row["iqr_s"] = iqr(row["samples_s"])
         row["total_wall_s"] = sum(row["samples_s"])
         row["efficiency"] = t1 / tw
-        for key in RANK_PHASES:
+        for key in (*RANK_PHASES, "phase_sum_s"):
             vals = row["phases"].get(key) or []
             if vals:
                 row[f"{key}_median"] = median(vals)
@@ -382,6 +428,7 @@ def rank_compare(earlier: str, later: str, path1: Path, path8: Path, out_dir: Pa
                     path,
                     out_dir / f"mw-{label}-{ranks}-{batch}.json",
                     REPEATS,
+                    1,
                 )
                 if not payload.get("identical", False):
                     raise SystemExit(f"mw bytes differ {label} ranks={ranks}")
@@ -567,9 +614,124 @@ def unequal_scan(text: str, work: Path) -> dict:
         "scaling": "strong",
         "path_bytes": path.stat().st_size,
         "n_frames": n_frames,
-        "note": "one fixed file with alternating frame lengths; strong scaling, not weak",
+        "note": "one fixed file with alternating frame lengths; this row is strong scaling",
         "points": points,
     }
+
+
+def serial_ab(base_bin: str, tip_bin: str, files: list[tuple[str, Path]], out_dir: Path) -> dict:
+    """Interleave the land binary and the tip binary on the same files."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    modes = ("default", "one")
+    bag: dict[tuple[str, str, str], list[float]] = {}
+    for label, _path in files:
+        for mode in modes:
+            bag[(label, "base", mode)] = []
+            bag[(label, "tip", mode)] = []
+    for repeat in range(REPEATS):
+        order = (("base", base_bin), ("tip", tip_bin))
+        if repeat % 2 == 1:
+            order = (("tip", tip_bin), ("base", base_bin))
+        for label, path in files:
+            for mode in modes:
+                for arm, binary in order:
+                    dest = out_dir / f"serial-{label}-{arm}-{mode}-{repeat}.json"
+                    proc = subprocess.run(
+                        [binary, str(path), str(dest), "1", mode],
+                        text=True,
+                        capture_output=True,
+                    )
+                    if proc.returncode != 0:
+                        raise SystemExit(
+                            f"serial probe failed {label} {arm} {mode} {proc.stderr[-300:]}"
+                        )
+                    payload = json.loads(dest.read_text(encoding="utf-8"))
+                    bag[(label, arm, mode)].append(float(payload["samples_s"][0]))
+                    print(
+                        f"serial file={label} arm={arm} mode={mode} "
+                        f"launch_median_s={bag[(label, arm, mode)][-1]:.6f}",
+                        flush=True,
+                    )
+    rows = []
+    for label, _path in files:
+        for mode in modes:
+            base_samples = bag[(label, "base", mode)]
+            tip_samples = bag[(label, "tip", mode)]
+            rows.append(
+                {
+                    "file": label,
+                    "mode": mode,
+                    "base_median_s": median(base_samples),
+                    "base_iqr_s": iqr(base_samples),
+                    "base_samples_s": base_samples,
+                    "tip_median_s": median(tip_samples),
+                    "tip_iqr_s": iqr(tip_samples),
+                    "tip_samples_s": tip_samples,
+                }
+            )
+    return {"repeats": REPEATS, "rows": rows}
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def python_open_ab(
+    base_path: str,
+    tip_path: str,
+    probe: Path,
+    files: list[tuple[str, Path]],
+) -> dict:
+    bag: dict[tuple[str, str], list[float]] = {}
+    for label, _path in files:
+        for arm in ("base", "tip"):
+            bag[(label, arm)] = []
+    for repeat in range(REPEATS):
+        order = (("base", base_path), ("tip", tip_path))
+        if repeat % 2 == 1:
+            order = (("tip", tip_path), ("base", base_path))
+        for label, path in files:
+            for arm, pythonpath in order:
+                env = os.environ.copy()
+                env["PYTHONPATH"] = pythonpath
+                proc = subprocess.run(
+                    [sys.executable, str(probe), str(path)],
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                )
+                if proc.returncode != 0:
+                    raise SystemExit(
+                        f"python probe failed {label} {arm} {proc.stderr[-300:]}"
+                    )
+                sample = float(proc.stdout.strip().splitlines()[-1])
+                bag[(label, arm)].append(sample)
+                print(
+                    f"python file={label} arm={arm} sample_s={sample:.6f}",
+                    flush=True,
+                )
+    rows = []
+    for label, _path in files:
+        base_samples = bag[(label, "base")]
+        tip_samples = bag[(label, "tip")]
+        rows.append(
+            {
+                "file": label,
+                "mode": "open-only",
+                "n_threads": 1,
+                "base_median_s": median(base_samples),
+                "base_iqr_s": iqr(base_samples),
+                "base_samples_s": base_samples,
+                "tip_median_s": median(tip_samples),
+                "tip_iqr_s": iqr(tip_samples),
+                "tip_samples_s": tip_samples,
+            }
+        )
+    return {"repeats": REPEATS, "rows": rows}
 
 
 def main() -> None:
@@ -581,6 +743,13 @@ def main() -> None:
     parser.add_argument("--mpi-later", type=Path, default=None)
     parser.add_argument("--mpi-earlier", type=Path, default=None)
     parser.add_argument("--skip-ranks", action="store_true")
+    parser.add_argument("--serial-base", type=Path, default=None)
+    parser.add_argument("--serial-tip", type=Path, default=None)
+    parser.add_argument("--serial-base-tree", default="")
+    parser.add_argument("--serial-tip-tree", default="")
+    parser.add_argument("--python-base", default="")
+    parser.add_argument("--python-tip", default="")
+    parser.add_argument("--py-probe", type=Path, default=None)
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=True)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -624,7 +793,7 @@ def main() -> None:
     )
     print("unequal-frame scan", flush=True)
     payload["unequal_scan"] = unequal_scan(text, args.work)
-    out_json = args.out / "limiter-r7.json"
+    out_json = args.out / "limiter-r9.json"
     out_json.write_text(json.dumps(payload), encoding="utf-8")
     if not args.skip_ranks:
         if args.mpi_later is None:
@@ -632,7 +801,37 @@ def main() -> None:
         print("rank ladder", flush=True)
         payload["ranks"] = rank_curve(str(args.mpi_later), paths, args.out / "rank-runs")
         out_json.write_text(json.dumps(payload), encoding="utf-8")
-    print("wrote limiter-r7.json", flush=True)
+    if args.serial_base is not None and args.serial_tip is not None:
+        small = args.work / "small-one.con"
+        write_frames(text, 1, small)
+        mib = args.work / "small-1mib.con"
+        repeat_frames(text, 1024 * 1024, mib)
+        print("serial base versus tip", flush=True)
+        payload["serial_ab"] = serial_ab(
+            str(args.serial_base),
+            str(args.serial_tip),
+            [("one-frame", small), ("one-mib", mib), ("worker-file", paths[1])],
+            args.out / "serial-ab",
+        )
+        payload["serial_ab"]["base_sha256"] = sha256_file(args.serial_base)
+        payload["serial_ab"]["tip_sha256"] = sha256_file(args.serial_tip)
+        payload["serial_ab"]["base_tree"] = args.serial_base_tree
+        payload["serial_ab"]["tip_tree"] = args.serial_tip_tree
+        out_json.write_text(json.dumps(payload), encoding="utf-8")
+    if args.python_base and args.python_tip and args.py_probe is not None:
+        small = args.work / "small-one.con"
+        write_frames(text, 1, small)
+        mib = args.work / "small-1mib.con"
+        repeat_frames(text, 1024 * 1024, mib)
+        print("python open-only base versus tip", flush=True)
+        payload["python_ab"] = python_open_ab(
+            args.python_base,
+            args.python_tip,
+            args.py_probe,
+            [("one-frame", small), ("one-mib", mib), ("worker-file", paths[1])],
+        )
+        out_json.write_text(json.dumps(payload), encoding="utf-8")
+    print("wrote limiter-r9.json", flush=True)
     for name, curve in (("touch", touch), ("open-only", opened)):
         for point in curve["points"]:
             med = phase_medians(point)

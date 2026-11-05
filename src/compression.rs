@@ -326,16 +326,25 @@ pub fn advise_dontneed_parallel(map: &memmap2::Mmap, workers: usize) {
         return;
     }
     let step = len.div_ceil(workers);
+    let advise_one = |worker: usize| {
+        let start = worker.saturating_mul(step);
+        if start >= len {
+            return;
+        }
+        let end = (start + step).min(len);
+        let _ = release(map, start, end);
+    };
+    // Inside the read's pool this stays on those workers. Outside it,
+    // a private scope avoids the global pool.
+    #[cfg(feature = "parallel")]
+    if rayon::current_thread_index().is_some() {
+        use rayon::prelude::*;
+        (0..workers).into_par_iter().for_each(advise_one);
+        return;
+    }
     std::thread::scope(|scope| {
         for worker in 0..workers {
-            let start = worker.saturating_mul(step);
-            if start >= len {
-                break;
-            }
-            let end = (start + step).min(len);
-            scope.spawn(move || {
-                let _ = release(map, start, end);
-            });
+            scope.spawn(move || advise_one(worker));
         }
     });
 }
