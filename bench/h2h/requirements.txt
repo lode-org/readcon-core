@@ -1,0 +1,11 @@
+ase==3.29.0
+chemfiles==0.10.4
+MDAnalysis==2.11.0
+ovito==3.17.2
+gemmi==0.7.5
+pymatgen==2026.10.24
+numpy==2.5.4
+matplotlib==3.11.2
+maturin==1.16.0
+meson>=1.8
+ninja
