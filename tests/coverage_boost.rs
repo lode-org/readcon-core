@@ -253,7 +253,7 @@ fn storage_dtype_all_kinds_kind_nrows_project_and_json() {
     assert_eq!(back.positions, ElementKind::Float64);
     let mut md = std::collections::BTreeMap::new();
     all.insert_into(&mut md);
-    assert!(md.contains_key("storage_dtypes") || md.values().count() > 0 || !md.is_empty() || true);
+    assert!(md.contains_key("storage_dtypes"));
     // from_metadata
     let mut meta_map = std::collections::BTreeMap::new();
     meta_map.insert(
@@ -293,7 +293,8 @@ fn units_compound_expressions_and_errors() {
     let _ = parse_unit_expression("kJ/mol");
     assert!(parse_unit_expression("").is_err());
     assert!(parse_unit_expression("not_a_unit_xyz").is_err());
-    assert!(parse_unit_expression("eV/").is_err() || parse_unit_expression("eV*").is_err() || true);
+    assert!(parse_unit_expression("eV^").is_err());
+    assert!(parse_unit_expression("(").is_err());
     let fac = unit_conversion_factor("angstrom", "angstrom").unwrap();
     assert!((fac - 1.0).abs() < 1e-12);
     let fac2 = unit_conversion_factor("eV", "meV").unwrap();
