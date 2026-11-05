@@ -1,128 +1,14 @@
-rev_parse 579738a9387e8d0ea55496f45dd057812cfab892
-tree 883acd30e768d6682532ba02438720630480b89a
-role eon_checkout
+rev_parse 0084681808f8e57d6e3c4d982d33c62b4c039064
+tree ea490b7d05bc8b4f40740b9816498379f6f0d7de
+command ninja -C paper/cpc/bench/work/peers/eon/build-h2h client/python/_core.abi3.so
+eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
 eon_version 3.6.0
-command meson setup paper/cpc/bench/work/peers/eon/build-h2h paper/cpc/bench/work/peers/eon -Dwith_pyeonclient=true -Dwith_tests=false -Dinstall_eon_server=true -Ddefault_library=static
-command meson setup paper/cpc/bench/work/peers/eon/build-h2h paper/cpc/bench/work/peers/eon -Dwith_pyeonclient=true -Dwith_tests=false -Dinstall_eon_server=true -Ddefault_library=static
-meson_version 1.12.1
-exit_setup 0
---- setup log ---
-t version: 1.15.1
-potentials-schema| Build targets in project: 153
-potentials-schema| Subproject potentials-schema finished.
-
-rgpot| Run-time dependency dl found: YES
-rgpot| Dependency dl for host machine found: YES unknown (cached)
-rgpot| Dependency threads for host machine found: YES unknown (cached)
-rgpot| Dependency dl for host machine found: YES unknown (cached)
-rgpot| Compiler for Fortran supports arguments -std=f2018: YES
-rgpot| Compiler for Fortran supports arguments -fimplicit-none: YES
-rgpot| Compiler for Fortran supports arguments -Wall: YES
-rgpot| Compiler for Fortran supports arguments -Wno-unused-dummy-argument: YES (cached)
-rgpot| Compiler for Fortran supports arguments -fvisibility=hidden: YES
-rgpot| Compiler for Fortran supports arguments -std=f2018: YES (cached)
-rgpot| Compiler for Fortran supports arguments -fimplicit-none: YES (cached)
-rgpot| Compiler for Fortran supports arguments -Wall: YES (cached)
-rgpot| Compiler for Fortran supports arguments -Wno-unused-dummy-argument: YES (cached)
-rgpot| Compiler for C++ supports link arguments -Wl,--exclude-libs,librgpot_fortran_kernels.a: YES
-rgpot| Compiler for C++ supports link arguments -Wl,--exclude-libs,libvesin_fortran.a: YES
-rgpot| Dependency dl for host machine found: YES unknown (cached)
-rgpot| Dependency dl for host machine found: YES unknown (cached)
-rgpot| Build targets in project: 180
-rgpot| Subproject rgpot finished.
-
-Program ./paper/cpc/bench/work/peers/eon/scripts/install_wrap_rgpot.py found: YES (./paper/cpc/bench/work/peers/eon/scripts/install_wrap_rgpot.py)
-Run-time dependency vesin found: NO  (tried pkg-config and cmake)
-Run-time dependency vesin found: NO  (tried cmake)
-Library vesin found: NO
-Message: vesin: from the rgpot subproject
-Run-time dependency readcon-core found: NO  (tried pkg-config)
-
-Executing subproject readcon-core for machine: host 
-
-readcon-core| Project name: readcon-core
-readcon-core| Project version: 0.17.1
-readcon-core| C compiler for the host machine: gcc (gcc 13.3.0 "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0")
-readcon-core| C linker for the host machine: gcc ld.bfd 2.42
-readcon-core| Program cargo found: YES (/usr/local/rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo)
-readcon-core| Program rustc found: YES (/usr/local/rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc)
-readcon-core| Program python3 found: YES (/usr/bin/python3)
-readcon-core| Dependency threads for host machine found: YES unknown (cached)
-readcon-core| Library dl found: YES
-readcon-core| Library m found: YES
-readcon-core| Build targets in project: 183
-readcon-core| Subproject readcon-core finished.
-
-Message: rgpot: pkg-config not found; falling back to subproject wrap
-Configuring version.h using configuration
-Program capnp found: YES (/usr/bin/capnp)
-Run-time dependency capnp found: YES 1.0.1
-Message: pyeonclient: nanobind 3.1.0
-Message: pyeonclient: free-threaded interpreter = false
-Message: pyeonclient: robin_map include = ~/.local/lib/python3.12/site-packages/nanobind/ext/robin_map/include
-Message: pyeonclient: version 0.4.2
-Message: pyeonclient: STABLE_ABI build (abi3, Py_LIMITED_API=3.12)
-Found pkg-config: YES (/usr/bin/pkg-config) 1.8.1
-Run-time dependency python found: YES 3.12
-Program cp found: YES (/usr/bin/cp)
-Build targets in project: 197
-
-eon 3.6.0
-
-  Subprojects (for host machine)
-    highway           : YES
-    inih              : YES
-    nlohmann_json     : YES
-    potentials-schema : YES (from rgpot)
-    quill             : YES
-    readcon-core      : YES
-    rgpot             : YES
-
-  User defined options
-    default_library   : static
-    install_eon_server: true
-    with_pyeonclient  : true
-    with_tests        : false
-
-Found ninja-1.11.1 at /usr/bin/ninja
-
-Generating targets:   0%|          | 0/197 eta ?
-Generating targets:  90%|████████▉ | 177/197 eta 00:00
-                                                      
-
-Writing build.ninja:   0%|          | 0/657 eta ?
-                                                 
-
-command ninja client/python/_core.abi3.so
---- ninja log tail ---
-      |                     ^~~
-../include/eon/potentials/RgpotAdapter/RgpotAdapter.h:80:21: warning: missing initializer for member ‘rgpot::ForceOut::has_stress’ [-Wmissing-field-initializers]
-../include/eon/potentials/RgpotAdapter/RgpotAdapter.h: In instantiation of ‘void RgpotAdapter<RPot>::forceBatch(long int, long int, const double* const*, const int* const*, double* const*, double*, double*, const double* const*) [with RPot = rgpot::ExprPot]’:
-../include/eon/potentials/RgpotAdapter/RgpotAdapter.h:118:8:   required from here
-../include/eon/potentials/RgpotAdapter/RgpotAdapter.h:130:20: warning: missing initializer for member ‘rgpot::ForceOut::stress’ [-Wmissing-field-initializers]
-  130 |       out.push_back(rgpot::ForceOut{forces[i], 0.0, 0.0});
-      |       ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-../include/eon/potentials/RgpotAdapter/RgpotAdapter.h:130:20: warning: missing initializer for member ‘rgpot::ForceOut::has_stress’ [-Wmissing-field-initializers]
-[135/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_enums.cpp.o
-[136/151] Compiling C++ object client/libeonclib.a.p/PIQTSTJob.cpp.o
-[137/151] Compiling C++ object client/libeonclib.a.p/SaddleSearchJob.cpp.o
-[138/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_potential.cpp.o
-[139/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_saddle.cpp.o
-[140/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_ase.cpp.o
-[141/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_jobs.cpp.o
-[142/151] Compiling C++ object client/libeonclib.a.p/ARTnSaddleSearch.cpp.o
-[143/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_eigenmode.cpp.o
-[144/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_parameters.cpp.o
-[145/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_matter.cpp.o
-[146/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_analysis.cpp.o
-[147/151] Linking static target client/libeonclib.a
-[148/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_neb.cpp.o
-[149/151] Compiling C++ object client/python/_core.abi3.so.p/_home_ubuntu_.local_lib_python3.12_site-packages_nanobind_src_nb_combined.cpp.o
-In file included from ~/.local/lib/python3.12/site-packages/nanobind/src/nb_combined.cpp:91:
-~/.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp: In function ‘std::atomic<long unsigned int>& nanobind::detail::alloc_word(type_data*)’:
-~/.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp:131:13: warning: dereferencing type-punned pointer will break strict-aliasing rules [-Wstrict-aliasing]
+ninja: Entering directory `paper/cpc/bench/work/peers/eon/build-h2h'
+[1/2] Compiling C++ object client/python/_core.abi3.so.p/local-site_lib_python3.12_site-packages_nanobind_src_nb_combined.cpp.o
+In file included from .local/lib/python3.12/site-packages/nanobind/src/nb_combined.cpp:91:
+.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp: In function ‘std::atomic<long unsigned int>& nanobind::detail::alloc_word(type_data*)’:
+.local/lib/python3.12/site-packages/nanobind/src/trampoline.cpp:131:13: warning: dereferencing type-punned pointer will break strict-aliasing rules [-Wstrict-aliasing]
   131 |     return *(std::atomic<uintptr_t> *) &td->trampoline_allocs;
       |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-[150/151] Compiling C++ object client/python/_core.abi3.so.p/bind_bind_sampling.cpp.o
-[151/151] Linking target client/python/_core.abi3.so
-exit_ninja 0
+[2/2] Linking target client/python/_core.abi3.so
+exit_code 0
