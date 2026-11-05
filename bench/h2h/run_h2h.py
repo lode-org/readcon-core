@@ -245,6 +245,8 @@ def timed_load(libs, code: str, path: Path, mode: str):
         return list(libs["readcon"].iter_con(os.fspath(path), mmap=True))
     if code == "readcon" and mode == "pdb":
         return libs["readcon"].read_pdb(os.fspath(path))
+    if code == "readcon" and mode == "extxyz":
+        return libs["readcon"].read_extxyz(os.fspath(path))
     if code == "readcon" and mode == "chemfiles":
         # chemfiles has no extxyz name. XYZ is the reader for that text.
         fmt = "XYZ" if path.suffix == ".extxyz" else None
@@ -608,6 +610,8 @@ def execute(repeats: int, source: Path, log_dir: Path) -> None:
             for code in ("readcon", *OTHER_CODES):
                 if code == "readcon" and suffix == ".pdb":
                     mode = "pdb"
+                elif code == "readcon" and suffix == ".extxyz":
+                    mode = "extxyz"
                 elif code == "readcon":
                     mode = "chemfiles"
                 else:
@@ -684,8 +688,14 @@ def execute(repeats: int, source: Path, log_dir: Path) -> None:
                                 "cache": cache,
                                 "code": code,
                                 "format": suffix,
-                                "mode": "pdb" if code == "readcon" and suffix == ".pdb" else (
-                                    "chemfiles" if code == "readcon" else "native"
+                                "mode": (
+                                    "pdb"
+                                    if code == "readcon" and suffix == ".pdb"
+                                    else "extxyz"
+                                    if code == "readcon" and suffix == ".extxyz"
+                                    else "chemfiles"
+                                    if code == "readcon"
+                                    else "native"
                                 ),
                                 "path": os.fspath(others[spec["id"]][suffix]),
                                 "reference": os.fspath(refs[spec["id"]]),

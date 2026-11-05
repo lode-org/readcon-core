@@ -2489,6 +2489,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
+    m.add_function(wrap_pyfunction!(read_pdb, m)?)?;
+    m.add_function(wrap_pyfunction!(read_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_nth, m)?)?;
@@ -2574,6 +2576,64 @@ fn chemfiles_opts_from_kwargs(
         topology_format: None,
         guess_bonds,
     }
+}
+
+/// Read an extended XYZ file into positions, masses and the cell.
+///
+/// The comment line gives the lattice and the column order. Positions
+/// have shape `(frames, atoms, 3)`. Masses have shape `(frames, atoms)`.
+/// The cell has shape `(frames, 6)`.
+#[pyfunction]
+fn read_extxyz<'py>(
+    py: Python<'py>,
+    path: &str,
+) -> PyResult<(
+    Bound<'py, numpy::PyArray3<f64>>,
+    Bound<'py, numpy::PyArray2<f64>>,
+    Bound<'py, numpy::PyArray2<f64>>,
+)> {
+    let tables = crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(path))
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
+    let positions = ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let masses = ndarray::Array2::from_shape_vec((tables.n_frames, tables.n_atoms), tables.masses)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let cell = ndarray::Array2::from_shape_vec((tables.n_frames, 6), tables.cell)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    Ok((
+        positions.into_pyarray(py),
+        masses.into_pyarray(py),
+        cell.into_pyarray(py),
+    ))
+}
+
+/// Read a PDB file into positions, masses and the cell.
+///
+/// Positions have shape `(frames, atoms, 3)`. Masses have shape
+/// `(frames, atoms)`. The cell has shape `(frames, 6)` and stores
+/// lengths then angles. One scan fills those arrays.
+#[pyfunction]
+fn read_pdb<'py>(
+    py: Python<'py>,
+    path: &str,
+) -> PyResult<(
+    Bound<'py, numpy::PyArray3<f64>>,
+    Bound<'py, numpy::PyArray2<f64>>,
+    Bound<'py, numpy::PyArray2<f64>>,
+)> {
+    let tables = crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(path))
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
+    let positions = ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let masses = ndarray::Array2::from_shape_vec((tables.n_frames, tables.n_atoms), tables.masses)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let cell = ndarray::Array2::from_shape_vec((tables.n_frames, 6), tables.cell)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    Ok((
+        positions.into_pyarray(py),
+        masses.into_pyarray(py),
+        cell.into_pyarray(py),
+    ))
 }
 
 /// Read frames from a chemfiles-supported path (XYZ, PDB, GRO, …)
