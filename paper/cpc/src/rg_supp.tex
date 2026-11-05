@@ -468,7 +468,10 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \FloatBarrier
 \section{Timing}\label{sec:supp-timing}
-This section gives the host, the payloads, the method and the tables behind Section~\ref{sec:performance}, and Section~\ref{sec:supp-perf} names the records.
+This section records a stored campaign from a checkout that is not this branch.
+Section~\ref{sec:performance} does not use these tables.
+The measurements of that section are Section~\ref{sec:host} of the main text.
+Section~\ref{sec:supp-perf} names the stored records.
 
 \subsection{Host and payloads}
 The host of every timing is one Kernel-based Virtual Machine (\rcHypervisor) guest, whose processor reports itself as \texttt{\rcCpu}, of family~\rcFamily, model~\rcModel{} and stepping~\rcStepping.
@@ -736,7 +739,8 @@ The \texttt{git\_sha} of the record is the commit of the checkout that ran the p
 The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
-The timings of Section~\ref{sec:performance} ran readcon~\rcModuleVersion, ASE~\rcVerAse, chemfiles~\rcVerChemfiles, MDAnalysis~\rcVerMda, h5py~\rcVerHfivepy, OVITO~\rcVerOvito{} and NumPy~\rcVerNumpy{} under Python~\rcPython.
+The stored campaign used readcon~\rcModuleVersion, ASE~\rcVerAse, chemfiles~\rcVerChemfiles, MDAnalysis~\rcVerMda, h5py~\rcVerHfivepy, OVITO~\rcVerOvito{} and NumPy~\rcVerNumpy{} under Python~\rcPython.
+Those versions are not the readers of Section~\ref{sec:host}.
 g++~\rcCxx{} compiled the two C++ programs, one against readcon-core built with the \texttt{parallel} feature and one against the chemfiles~\rcVerChemfilesCpp{} library of the conda-forge package \texttt{chemfiles-lib-0.10.4-h5ebf4e1\_0}, which \path{paper/cpc/environment/conda-linux-64.txt} lists.
 The Rust code was built with rustc~\rcRustc, and the tools are memray~\rcMemray{} and Valgrind~\rcValgrind.
 The head-to-head campaigns of Section~\ref{sec:supp-h2h} ran the same readcon module, h5py and ASE; their C++ cells link chemfiles~\hhChemfilesVersion{} built by g++~\hhGxxVersion{} and clang++~\hhClangVersion{} at \texttt{-O2} and \texttt{-O3}, the level of the readcon program of the cell.

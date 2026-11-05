@@ -1,0 +1,20 @@
+date_utc=2026-11-05T00:48:04Z
+uname_m=x86_64
+nproc=8
+cpu=Intel(R) Xeon(R) Processor
+head=76b3903ea93926b597c6d31b260f5d341129f739
+pwd=.
+tmpdir=paper/cpc/bench/work/h2h
+status=
+command=python3 paper/cpc/bench/h2h_v3.py
+reader=pymatgen
+frames=200
+atoms=48
+baseline_rss_bytes=38215680
+repeat 0 seconds 0.205050 rss_bytes 80502784 rss_above_baseline 42287104 frames 200 sum 184028.275694
+repeat 1 seconds 0.196103 rss_bytes 80650240 rss_above_baseline 42434560 frames 200 sum 184028.275694
+repeat 2 seconds 0.202143 rss_bytes 80510976 rss_above_baseline 42295296 frames 200 sum 184028.275694
+repeat 3 seconds 0.199279 rss_bytes 80691200 rss_above_baseline 42475520 frames 200 sum 184028.275694
+repeat 4 seconds 0.191136 rss_bytes 80531456 rss_above_baseline 42315776 frames 200 sum 184028.275694
+repeat 5 seconds 0.192906 rss_bytes 80756736 rss_above_baseline 42541056 frames 200 sum 184028.275694
+exit=0

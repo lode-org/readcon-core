@@ -1,0 +1,21 @@
+quantity	reader	file	n	median	iqr	unit	rss_above_baseline_bytes	frames	equal	log
+h2h_wall	ase-eon	CON	6	2.608650e-02	1.020000e-04	s	46520320	200	true	logs/h2h/ase-eon.log
+h2h_wall	ase-extxyz	XYZ	6	2.918900e-02	2.857500e-04	s	46254080	200	true	logs/h2h/ase-extxyz.log
+h2h_wall	chemfiles	XYZ	6	4.653000e-03	2.940000e-04	s	0	200	false	logs/h2h/chemfiles.log
+h2h_wall	mdanalysis	XYZ	6	7.828500e-03	1.010000e-04	s	90521600	200	true	logs/h2h/mdanalysis.log
+h2h_wall	ovito	XYZ	6	1.830000e-02	1.101750e-03	s	52838400	200	true	logs/h2h/ovito.log
+h2h_wall	pymatgen	XYZ	6	1.976910e-01	7.721750e-03	s	42375168	200	true	logs/h2h/pymatgen.log
+h2h_wall	python-con	CON	6	5.985500e-03	3.867500e-04	s	0	200	true	logs/h2h/python-con.log
+h2h_wall	readcon	CON	6	6.607500e-03	5.466500e-03	s	0	200	true	logs/h2h/readcon.log
+h2h_ref	chemfiles	XYZ	200			max_abs_angstrom		200	false	logs/h2h/chemfiles-ref.log
+h2h_build	eon					missing			false	logs/h2h/eon.log
+mpi_wall	scatter-rank1	CON	6	5.274263e-02	3.393851e-03	s		4000	true	logs/mpi.log
+mpi_wall	scatter-rank2	CON	6	3.108121e-02	3.574367e-04	s		4000	true	logs/mpi.log
+mpi_wall	scatter-rank4	CON	6	1.605767e-02	1.224139e-03	s		4000	true	logs/mpi.log
+mpi_wall	scatter-rank8	CON	6	1.455157e-02	6.066579e-03	s		4000	true	logs/mpi.log
+mpi_wall	shared-rank1	CON	6	5.559690e-02	4.420761e-03	s		4000	true	logs/mpi.log
+mpi_wall	shared-rank2	CON	6	2.896367e-02	7.004087e-04	s		4000	true	logs/mpi.log
+mpi_wall	shared-rank4	CON	6	1.562632e-02	1.259391e-03	s		4000	true	logs/mpi.log
+mpi_wall	shared-rank8	CON	6	9.585121e-03	2.526872e-04	s		4000	true	logs/mpi.log
+db_wall	readcon-db	CON	6	4.882654e-03	6.468760e-04	s	262144	40	true	logs/db.log
+db_wall	ase.db	CON	6	7.756277e-02	1.659678e-02	s	60438528	40	true	logs/db.log

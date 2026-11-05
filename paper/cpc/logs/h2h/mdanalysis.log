@@ -1,0 +1,20 @@
+date_utc=2026-11-05T00:48:04Z
+uname_m=x86_64
+nproc=8
+cpu=Intel(R) Xeon(R) Processor
+head=76b3903ea93926b597c6d31b260f5d341129f739
+pwd=.
+tmpdir=paper/cpc/bench/work/h2h
+status=
+command=python3 paper/cpc/bench/h2h_v3.py
+reader=mdanalysis
+frames=200
+atoms=48
+baseline_rss_bytes=38215680
+repeat 0 seconds 0.007961 rss_bytes 128704512 rss_above_baseline 90488832 frames 200 sum 184028.275714
+repeat 1 seconds 0.007770 rss_bytes 129105920 rss_above_baseline 90890240 frames 200 sum 184028.275714
+repeat 2 seconds 0.007885 rss_bytes 128913408 rss_above_baseline 90697728 frames 200 sum 184028.275714
+repeat 3 seconds 0.007769 rss_bytes 128667648 rss_above_baseline 90451968 frames 200 sum 184028.275714
+repeat 4 seconds 0.007858 rss_bytes 128770048 rss_above_baseline 90554368 frames 200 sum 184028.275714
+repeat 5 seconds 0.007799 rss_bytes 128700416 rss_above_baseline 90484736 frames 200 sum 184028.275714
+exit=0

@@ -1,0 +1,20 @@
+date_utc=2026-11-05T00:48:04Z
+uname_m=x86_64
+nproc=8
+cpu=Intel(R) Xeon(R) Processor
+head=76b3903ea93926b597c6d31b260f5d341129f739
+pwd=.
+tmpdir=paper/cpc/bench/work/h2h
+status=
+command=python3 paper/cpc/bench/h2h_v3.py
+reader=chemfiles
+frames=200
+atoms=48
+baseline_rss_bytes=38215680
+repeat 0 seconds 0.004680 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+repeat 1 seconds 0.004966 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+repeat 2 seconds 0.004626 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+repeat 3 seconds 0.005436 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+repeat 4 seconds 0.004592 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+repeat 5 seconds 0.004517 rss_bytes 38215680 rss_above_baseline 0 frames 200 sum 183759.186536
+exit=0

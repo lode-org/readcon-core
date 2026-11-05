@@ -228,7 +228,7 @@ CON 3.1 formalizes that text, and readcon-core improves it with a JSON header li
 A borrowed DLPack view of the positions costs \dlpackRatio{} times an explicit copy (Section~\ref{sec:dlpack}).
 readcon-core is its reference reader and writer, one Rust core behind C, C++, Python, Julia and Fortran interfaces, a layout that it takes from chemfiles \cite{frauxChemfileschemfilesVersion01042023}.
 Section~\ref{sec:worked} reads one frame line by line and measures what each field changes when a reader gets it wrong, and Section~\ref{sec:format} states the grammar and its version rule.
-Sections~\ref{sec:implementation} and~\ref{sec:conformance} give the reader and test it against the corpora, Section~\ref{sec:cases} resumes saddle searches from checkpoints that we wrote and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} times the reads against ASE, chemfiles, MDAnalysis, OVITO, h5py and the native binary readers.
+Sections~\ref{sec:implementation} and~\ref{sec:conformance} give the reader and test it against the corpora, Section~\ref{sec:cases} resumes saddle searches from checkpoints that we wrote and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} times readcon-core against ASE, MDAnalysis, OVITO, pymatgen and a pure Python parse of the same CON file.
 Unlike H5MD, TNG and extended XYZ, the CON 3.1 specification defines all four fields that a restart reads, and its corpus of legal and illegal files decides the verdict of any reader on each clause.
 readcon-core is the only reader in this comparison that returns the fixed-component mask, the atom identifier and the velocity time unit from places that specification defines.
 No other reader both accepts a later minor of a known major and decides each file of the conformance corpus.
@@ -734,7 +734,8 @@ With the height free, the problem a reader solves when the file has lost the hol
 
 \subsection{eOn resuming a Morse band}\label{sec:eon-band}
 The public eOn client resumes from its own output files.
-The eOn client built from source on this branch is timed as a reader in Section~\ref{sec:host}.
+The client sources on this branch include the readcon-core header, and the client directory has no CMake build file, so Section~\ref{sec:host} does not time that client as a separate reader.
+ASE's eon parser is the independent CON reader timed there.
 The candidate band counts are not reported.
 The default band optimiser of eOn is the limited-memory form, L-BFGS, of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and its memory vectors are stored in no geometry file.
 A restart therefore cannot repeat an L-BFGS path from the geometry alone.
@@ -765,62 +766,77 @@ The candidate timing campaign is not reported.
 \begin{figure*}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{Wall time of the readers measured on this branch.
+\caption{Wall time of the readers that match the reference on this branch.
 The bar is the median of six repeats and the whisker is the type 7 interquartile range.
-The logs behind the bars are the files under \path{logs/h2h}.}
+The logs behind the bars are the files under \texttt{logs/h2h}.}
 \label{fig:timing}
 \end{figure*}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
+\caption{readcon-core median wall time divided by the median of each reader in Figure~\ref{fig:timing}.
+The horizontal line is 1.
+A bar above the line is a reader whose median is lower than the readcon-core median.}
+\label{fig:ratios}
+\end{figure}
 
 \FloatBarrier
 \section{Measurements on this host}\label{sec:host}
 We read one trajectory of 200 frames and 48 copper atoms on this host, one reader at a time, six times for each reader.
-The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}.
-NumPy parses the XYZ text in a median of 0.00798~s, and readcon-core reads the CON file in a median of 0.0158~s.
-The ASE reader of the eOn format, MDAnalysis and the ASE extended XYZ reader take 0.284~s, 0.291~s and 0.295~s.
-NumPy is the fastest reader in this set.
-Those five readers return coordinates that match the reference.
-pymatgen reads one POSCAR frame in a median of 0.605~s, so that read is not the 200-frame trajectory.
-The chemfiles bindings, the eOn client and OVITO did not build from source in this run.
-Table~\ref{tab:host} records the median wall time, the type 7 interquartile range, the throughput and the peak resident set.
+Each library is imported before the clock starts.
+The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}, and the head-to-head logs name commit \texttt{76b3903e}.
+readcon-core, the ASE eon parser and a pure Python baseline parse the same CON file.
+The baseline splits the CON coordinate rows in Python, and it is not a library reader.
+MDAnalysis, OVITO, the ASE extended XYZ reader and pymatgen parse the XYZ file written from the same coordinates, and pymatgen reads all 200 frames.
+Table~\ref{tab:host} records the median wall time, the type 7 interquartile range, the throughput and the peak resident set above a child process that only imports NumPy.
+That child peaks at 38.2~MB, and a zero in the last column means the reader never rose above it.
+
+The pure Python baseline median is 0.00599~s, and its interquartile range is 0.000387~s.
+The readcon-core median is 0.00661~s, and its interquartile range is 0.00547~s, which covers the baseline median and the MDAnalysis median of 0.00783~s.
+OVITO takes 0.0183~s, the ASE eon parser 0.0261~s, the ASE extended XYZ reader 0.0292~s and pymatgen 0.198~s.
+Every reader in the table returns a coordinate sum that matches the reference.
+chemfiles 0.10.4 returns 200 frames, and 154 of them differ from the reference by more than \(10^{-6}\,\text{\AA}\), up to 11.5~\AA, so chemfiles is not in the table (\path{logs/h2h/chemfiles-ref.log}).
+The eOn client checkout has no \path{client/CMakeLists.txt}, and its CON header includes \texttt{readcon-core.hpp}, so this branch does not time that client (\path{logs/h2h/eon.log}).
+OVITO 3.17.2 is the published wheel.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
-\caption{Serial reads of 200 frames of 48 copper atoms, six repeats.
-pymatgen reads one frame.
-The throughput is atoms times frames divided by the median wall time.}
+\caption{Serial reads of 200 frames of 48 copper atoms, six repeats, after the import.
+The file column is the format that reader parsed.
+The throughput is atoms times frames divided by the median wall time.
+RSS is the peak resident set above a process that only imports NumPy.}
 \label{tab:host}
-\begin{tabular}{@{}lrrrr@{}}
+\begin{tabular}{@{}llrrrr@{}}
 \toprule
-Reader & Median (s) & IQR (s) & Atoms/s & RSS (MB) \\
+Reader & File & Median (s) & IQR (s) & Atoms/s & RSS (MB) \\
 \midrule
-NumPy & 0.00798 & 0.000558 & \num{1.20e6} & 38.2 \\
-readcon-core & 0.0158 & 0.00845 & \num{6.21e5} & 38.2 \\
-ASE, eOn format & 0.284 & 0.00747 & \num{3.38e4} & 85.1 \\
-MDAnalysis & 0.291 & 0.0112 & \num{3.29e4} & 129 \\
-ASE, extended XYZ & 0.295 & 0.00709 & \num{3.26e4} & 84.9 \\
-pymatgen & 0.605 & 0.00809 & 79.3 & 129 \\
+Python CON baseline & CON & 0.00599 & 0.000387 & \num{1.60e6} & 0 \\
+readcon-core & CON & 0.00661 & 0.00547 & \num{1.45e6} & 0 \\
+MDAnalysis & XYZ & 0.00783 & 0.000101 & \num{1.23e6} & 90.5 \\
+OVITO & XYZ & 0.0183 & 0.00110 & \num{5.25e5} & 52.8 \\
+ASE, eOn format & CON & 0.0261 & 0.000102 & \num{3.68e5} & 46.5 \\
+ASE, extended XYZ & XYZ & 0.0292 & 0.000286 & \num{3.29e5} & 46.3 \\
+pymatgen & XYZ & 0.198 & 0.00772 & \num{4.86e4} & 42.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/peer_host.pdf}
-\caption{Median wall time of the six readers.
-The bar is the median and the whisker is the type 7 interquartile range.}
-\label{fig:host}
-\end{figure}
-
-We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each.
-readcon-db takes a median of 0.00578~s and the ASE database takes 0.389~s.
+We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each, with each library imported before the clock.
+readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.
 Both stores keep all 40 frames.
-The peak resident sets are 29.1~MB and 89.4~MB.
+The peaks above a NumPy-import child are 0.262~MB and 60.4~MB, and the log names commit \texttt{30a962b9}.
 
-We time a distributed read of 80 frames of 32 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
-In shared mode the median is 0.00184~s at 1 rank, 0.00128~s at 2, 0.000962~s at 4 and 0.00364~s at 8.
-Four ranks are faster than one rank, and eight ranks are slower than four.
-Each launch returns the block of frames that the partition assigns to rank 0.
+We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
+One read takes well over a millisecond.
+In shared mode the median is 0.0556~s at 1 rank, 0.0290~s at 2, 0.0156~s at 4 and 0.00959~s at 8.
+In scatter mode the median is 0.0527~s at 1 rank, 0.0311~s at 2, 0.0161~s at 4 and 0.0146~s at 8.
+Eight ranks are faster than four on both medians.
+The scatter-mode interquartile range at eight ranks is 0.00607~s, and that range overlaps the four-rank median.
+Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
+One thread parses without building a thread pool.
+Each launch returns the block of frames that the partition assigns to rank 0, and the log names commit \texttt{76b3903e}.
 
 \FloatBarrier
 \section{Stored campaigns}\label{sec:stored}
@@ -985,7 +1001,7 @@ The library of a commit is its files \path{src}, \path{include}, \path{build.rs}
 Its digest, the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, begins \texttt{\readcondigest} for that commit, and every record names its library by that digest.
 The scripts, records and sources of this paper are the directory \path{paper/cpc}.
 The scripts in \path{paper/cpc/scripts} regenerate every table, figure and printed number from the records, each generated table names its script, and \path{paper/cpc/data/trace/numbers.csv} names the record and the rule behind each number printed in the text and the captions.
-The specification and the conformance corpus are \path{docs/orgmode/spec.org} and \path{resources/conformance} of that commit, the CON 3.1 corpus is \path{paper/cpc/data/corpus31}, and the timing records are in \path{paper/cpc/bench/results/r0174}.
+The specification and the conformance corpus are \path{docs/orgmode/spec.org} and \path{resources/conformance} of that commit, the CON 3.1 corpus is \path{paper/cpc/data/corpus31}, and the timing records of this branch are in \path{paper/cpc/logs}.
 Section~\ref*{sec:supp-repro} gives the commands that install readcon-core, rebuild the paper with TeX Live or Tectonic and rerun each measurement, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
 
 \FloatBarrier

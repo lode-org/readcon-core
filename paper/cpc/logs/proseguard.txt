@@ -1,0 +1,13 @@
+proseguard_main_exit=0
+paper/cpc/src/rg_main.tex:642: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
+
+proseguard: 1 finding(s), 0 actionable
+
+proseguard_supp_exit=0
+paper/cpc/src/rg_supp.tex:114: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
+paper/cpc/src/rg_supp.tex:133: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
+paper/cpc/src/rg_supp.tex:401: [suggestion] rgoswami.Nominalizations (lexical) Prefer 'specifying' over the nominalization 'the specification of'. → specifying
+
+proseguard: 3 finding(s), 0 actionable
+snap_main_exit=0
+snap_supp_exit=0

@@ -1,0 +1,10 @@
+date_utc=2026-11-05T00:52:00Z
+head=76b3903ea93926b597c6d31b260f5d341129f739
+reader=chemfiles
+file=traj.xyz
+frames=200
+max_abs_angstrom=11.542876
+frames_above_1e-6=154
+equal=false
+note=read_step positions do not match the reference, so chemfiles is not in the table
+exit=1

@@ -1,0 +1,23 @@
+date_utc=2026-11-05T00:51:00Z
+uname_m=x86_64
+nproc=8
+cpu=Intel(R) Xeon(R) Processor
+head=30a962b97935f90491025ab5a62d88bf90191a89
+pwd=.
+tmpdir=paper/cpc/bench/work/v2
+command=python3 paper/cpc/bench/db_v2.py
+repeats=6
+baseline_rss_bytes=29057024
+repeat 0 kind readcon-db seconds 0.005079737000414752 rss_bytes 29057024 rss_above_baseline 0 frames 40 error 
+repeat 0 kind ase.db seconds 0.08975329500026419 rss_bytes 89493504 rss_above_baseline 60436480 frames 40 error 
+repeat 1 kind ase.db seconds 0.07571768400066503 rss_bytes 89575424 rss_above_baseline 60518400 frames 40 error 
+repeat 1 kind readcon-db seconds 0.004121423000469804 rss_bytes 29319168 rss_above_baseline 262144 frames 40 error 
+repeat 2 kind readcon-db seconds 0.004276626999853761 rss_bytes 29319168 rss_above_baseline 262144 frames 40 error 
+repeat 2 kind ase.db seconds 0.06812191700009862 rss_bytes 89497600 rss_above_baseline 60440576 frames 40 error 
+repeat 3 kind ase.db seconds 0.06739763400037191 rss_bytes 89612288 rss_above_baseline 60555264 frames 40 error 
+repeat 3 kind readcon-db seconds 0.004793566999978793 rss_bytes 29319168 rss_above_baseline 262144 frames 40 error 
+repeat 4 kind readcon-db seconds 0.005754333000368206 rss_bytes 29319168 rss_above_baseline 262144 frames 40 error 
+repeat 4 kind ase.db seconds 0.07940785400023742 rss_bytes 89276416 rss_above_baseline 60219392 frames 40 error 
+repeat 5 kind ase.db seconds 0.08902090399988083 rss_bytes 89411584 rss_above_baseline 60354560 frames 40 error 
+repeat 5 kind readcon-db seconds 0.004971741000190377 rss_bytes 29319168 rss_above_baseline 262144 frames 40 error 
+exit=0

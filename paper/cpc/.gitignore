@@ -6,6 +6,11 @@
 *.log
 !bench/install.log
 !data/h2h/*.log
+!logs/h2h/*.log
+!logs/mpi.log
+!logs/db.log
+!logs/install.log
+!logs/NUMBERS.tsv
 *.out
 *.synctex.gz
 *.spl
