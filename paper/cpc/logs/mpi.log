@@ -1,3 +1,6 @@
+rev_parse 109cbc4b338dfba23bf868c17d12b18d96e9cd04
+tree 08427ad6094194cf036bfe7dd1493619172075f9
+command python3 paper/cpc/bench/run_mpi_v2.py
 date_utc=2026-11-05T00:47:46Z
 uname_m=x86_64
 nproc=8

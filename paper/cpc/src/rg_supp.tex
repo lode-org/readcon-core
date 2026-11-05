@@ -1,3 +1,4 @@
+% snapper:off
 % Supplementary material of the Computer Physics Communications manuscript.
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
@@ -102,17 +103,14 @@ belowskip=0.4em
  pdfsubject={},
  pdflang={English}}
 \begin{document}
+% snapper:on
 
-\begin{frontmatter}
-\input{authors.tex}
-\begin{abstract}
-This supplement gives the normative specification of CON 3.1.
+\begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement gives the normative specification of CON 3.1.
 CON is a geometry format used in many codes, and readcon-core formalizes it.
 The supplement also states the reader rules.
 It then gives the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
 The last sections give the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
-\end{abstract}
-\end{frontmatter}
+\end{abstract} \end{frontmatter}
 
 We keep the specification, the corpora and the timing records in this supplement.
 We name the script that writes each table.
@@ -128,8 +126,7 @@ We build the library from the public commit named in the manuscript.
 We run one cell at a time on one host.
 We keep the machine line to the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative}
-This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} at git blob \texttt{\specTextBlob}.
+\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} at git blob \texttt{\specTextBlob}.
 \texttt{scripts/\allowbreak gen\_spec\_supp.py -{}-as-is} typesets that file, and its \texttt{-{}-check} fails unless the typeset text matches the file.
 That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
 The library test \texttt{tests/\allowbreak ci\_gates.rs} runs \texttt{scripts/\allowbreak check\_spec\_text.sh}, which fails when the two differ.
@@ -145,15 +142,10 @@ The reader-compatibility notes and the references of the source are omitted, bec
 
 \input{figures/generated/corpus_table} \input{figures/generated/drift_table} \input{figures/generated/survey_table}
 
-\FloatBarrier
-\section{Reader rules}\label{sec:appendix-rules}
-Tables~\ref{tab:rules}, \ref{tab:rules-numbers} and~\ref{tab:rules-framing} collect the edge cases a reader applies, stated as input and outcome.
+\FloatBarrier \section{Reader rules}\label{sec:appendix-rules} Tables~\ref{tab:rules}, \ref{tab:rules-numbers} and~\ref{tab:rules-framing} collect the edge cases a reader applies, stated as input and outcome.
 Each row restates clauses of Section~\ref{sec:spec-normative}.
 
-\begin{table}[tbp]
-\centering
-\small
-\caption{Reader rules for masks, identifiers, versions, metadata and sections.}
+\begin{table}[tbp] \centering \small \caption{Reader rules for masks, identifiers, versions, metadata and sections.}
 \label{tab:rules}
 \begin{tabular}{@{}p{0.50\linewidth}p{0.44\linewidth}@{}}
 \toprule
@@ -185,10 +177,7 @@ Section blocks & Read in the order \texttt{sections} lists. \\
 \end{tabular}
 \end{table}
 
-\begin{table}[tbp]
-\centering
-\small
-\caption{Rules for velocities, the cell and numbers.}
+\begin{table}[tbp] \centering \small \caption{Rules for velocities, the cell and numbers.}
 \label{tab:rules-numbers}
 \begin{tabular}{@{}p{0.50\linewidth}p{0.44\linewidth}@{}}
 \toprule
@@ -212,10 +201,7 @@ Form feed, vertical tab, lone CR or no-break space inside a line & Part of the f
 \end{tabular}
 \end{table}
 
-\begin{table}[tbp]
-\centering
-\small
-\caption{Rules for framing and compression.}
+\begin{table}[tbp] \centering \small \caption{Rules for framing and compression.}
 \label{tab:rules-framing}
 \begin{tabular}{@{}p{0.50\linewidth}p{0.44\linewidth}@{}}
 \toprule
@@ -241,9 +227,7 @@ zstd input to a build without the \texttt{zstd} feature & Refused as unsupported
 \end{tabular}
 \end{table}
 
-\FloatBarrier
-\section{Test run and source lines}\label{sec:supp-testrun}
-Listing~\ref{lst:testrun} runs the \texttt{rust\_usage} example of the release on the file of Listing~\ref{lst:frame} in a clone of the bundle.
+\FloatBarrier \section{Test run and source lines}\label{sec:supp-testrun} Listing~\ref{lst:testrun} runs the \texttt{rust\_usage} example of the release on the file of Listing~\ref{lst:frame} in a clone of the bundle.
 The program prints the cell, the counts and the first five atoms with their fixed flags, identifiers and velocities.
 \texttt{scripts/\allowbreak test\_run.py} then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
 In both modes the program reads the flat cell and prints its angles.
@@ -254,10 +238,7 @@ In both modes it stops on the impossible cell with the error \texttt{cell angles
 
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
-\begin{table}[tbp]
-\centering
-\small
-\caption{Source lines of the reader and the writers, in the files under \texttt{src} of the \readconcommitrole{} \texttt{\readconcommitshort}.
+\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of the \readconcommitrole{} \texttt{\readconcommitshort}.
 \texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{paper/\allowbreak cpc/\allowbreak data/\allowbreak src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
@@ -288,9 +269,7 @@ Binary image: CRC-32C check & \texttt{\srcRcbinCrc} \\
 \end{tabular}
 \end{table}
 
-\FloatBarrier
-\section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31}
-This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
+\FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
 \path{paper/cpc/data/corpus31} contains the \cthreeoneFiles{} files of that corpus, which \texttt{scripts/\allowbreak make\_corpus31.py} writes byte for byte, and its \texttt{manifest.toml} names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
 \path{paper/cpc/data/corpus31-results.json} is the record of \texttt{scripts/\allowbreak corpus31\_results.py}: the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
 \texttt{scripts/\allowbreak corpus\_paths.py} writes \path{paper/cpc/data/corpus_paths.json}.
@@ -326,9 +305,7 @@ Every read returns the frame count, the coordinates and the section presence of 
 One case in every 305 is also padded with blank lines past the mapping threshold and read as a mapped file at one to sixteen threads, and each read returns the outcome of a one-thread read of the padded text.
 \texttt{cargo test -{}-release -{}-lib differential\_19545} runs it.
 
-\begin{footnotesize}
-\input{figures/generated/corpus31_table}
-\end{footnotesize}
+\begin{footnotesize} \input{figures/generated/corpus31_table} \end{footnotesize}
 
 \input{figures/generated/corpus_paths_table}
 
@@ -341,9 +318,7 @@ The Python rewrite of that block stays at version 3.0 and keeps its fs label, so
 
 \input{figures/generated/versionsafety_table}
 
-\FloatBarrier
-\section{Survey frame, grading and drift files}\label{sec:supp-failure}
-The survey frame of Table~\ref{tab:survey} is a Pt(100) slab of \(2\times2\times2\) atoms with 6\hspace*{.2em}\AA{} of vacuum and one Pt adatom 1.8\hspace*{.2em}\AA{} above the hollow site; Listing~\ref{lst:frame} prints it.
+\FloatBarrier \section{Survey frame, grading and drift files}\label{sec:supp-failure} The survey frame of Table~\ref{tab:survey} is a Pt(100) slab of \(2\times2\times2\) atoms with 6\hspace*{.2em}\AA{} of vacuum and one Pt adatom 1.8\hspace*{.2em}\AA{} above the hollow site; Listing~\ref{lst:frame} prints it.
 Every coordinate carries a uniform offset of up to \(10^{-3}\,\text{\AA}\) from a fixed seed, so writing it back takes all seventeen significant digits.
 The bottom four atoms are held in every component, and the adatom is held in \(z\).
 The identifiers are 17, 3, 11, 5, 23, 2, 13, 7 and 41 in row order.
@@ -359,10 +334,7 @@ It is fixed by the format when the format's own specification defines the name a
 A label is an identifier that came back only inside the site name of a Crystallographic Information File (CIF).
 A file is named ``H5MD, private mask dataset'' when it has the H5MD root group and its version and keeps the mask in a dataset that H5MD does not define.
 
-\begin{table}[tbp]
-\centering
-\small
-\caption{What each library is given for the mask, the identifiers, the velocities and the periodicity of the survey frame.}
+\begin{table}[tbp] \centering \small \caption{What each library is given for the mask, the identifiers, the velocities and the periodicity of the survey frame.}
 \label{tab:mechanisms}
 \begin{tabular}{@{}p{0.24\linewidth}p{0.70\linewidth}@{}}
 \toprule
@@ -389,9 +361,7 @@ The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{ker
 On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals (\path{paper/cpc/data/failure/drift_extxyz.json}).
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
-\FloatBarrier
-\section{Records beside the checkpoint}\label{sec:supp-neighbours}
-Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
+\FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbours} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
 Restart-exact means binary64 coordinates, the per-component mask, the identifier and the periodic flags all come back.
 Velocities is how the file states the velocity unit.
 Metadata is the version or schema that another reader can apply.
@@ -401,15 +371,10 @@ Tables~\ref{tab:spec-compare} and~\ref{tab:spec-compare-values} give, one row pe
 The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2026,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
 Other records sit beside a saddle search without being measured here: the archives of the Protein Data Bank (PDB), wwPDB and mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000}; the column files of LAMMPS and the Atomsk converter \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015}; the quantum-chemistry objects of cclib, IOData, TREXIO and QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021}; the published geometries of OPTIMADE, the Novel Materials Discovery (NOMAD) laboratory, Catalysis-Hub, Transition1x and OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}; the analysis tools MDTraj, Visual Molecular Dynamics (VMD), d-SEAMS, essential dynamics and parallel H5MD analysis over the Message Passing Interface (MPI) \cite{mcgibbonMdtrajModernOpen2015,humphreyVmdVisualMolecular1996,goswamiDseamsDeferredStructural2020,meyerEssentialDynamicsTool2006,jakupovicMpiparallelMolecularDynamics2021}; the array stores Zarr and ADIOS2 and portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993}; the initial boxes of PACKMOL \cite{martinezPackmolPackageBuilding2009}; the program checkpoints of PLUMED and ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019}; and the live steps of i-PI and the MolSSI Driver Interface (MDI) \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
 
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{Restart record against the other routes of Table~\ref{tab:survey}.
+\begin{table}[tbp] \centering \scriptsize \caption{Restart record against the other routes of Table~\ref{tab:survey}.
 ``Scan'' means the reader walks the file to find a frame.
 ``Offsets'' means the reader records a byte offset during that walk, which stays serial because each start depends on the counts before it.}
-\label{tab:compare}
-\setlength{\tabcolsep}{4pt}
-\resizebox{\textwidth}{!}{%
+\label{tab:compare} \setlength{\tabcolsep}{4pt} \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}p{0.40\linewidth}llll@{}}
 \toprule
 Record & Restart-exact & Velocities & Metadata & Indexed \\
@@ -423,14 +388,11 @@ H5MD (h5py), private mask dataset & yes, mask by convention & declared & version
 H5MD, MDAnalysis & single precision & declared & versioned & yes \\
 CIF, Open Babel & no & omitted & none & no \\
 \bottomrule
-\end{tabular}}
-\end{table}
+\end{tabular}} \end{table}
 
 \input{figures/generated/survey_compare}
 
-\FloatBarrier
-\section{Restart protocol}\label{sec:supp-restart}
-The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
+\FloatBarrier \section{Restart protocol}\label{sec:supp-restart} The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
 Endpoints were relaxed with the Broyden-{}-Fletcher-{}-Goldfarb-{}-Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
 Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
@@ -440,23 +402,17 @@ Each route writes all seven images and reads them back with the reader the route
 \input{figures/generated/restart_kernels}
 
 
-\FloatBarrier
-\section{Velocity unit and identifiers}\label{sec:supp-velocity}
-Figure~\ref{fig:supp-velocity} is the step of Section~\ref{sec:cases} on the \(\velFixtureAtoms\)-atom fixture.
+\FloatBarrier \section{Velocity unit and identifiers}\label{sec:supp-velocity} Figure~\ref{fig:supp-velocity} is the step of Section~\ref{sec:cases} on the \(\velFixtureAtoms\)-atom fixture.
 The fixture declares the natural unit, \(\velNaturalFs\,\mathrm{fs}\) for the CODATA 2018 constants.
 A misread scales the kinetic energy by the square of that number, \(\velFactorSq\).
 The step integrates the EMT forces of the fixture with velocity Verlet over \(1\,\mathrm{fs}\), once with the declared unit and once with the numbers read as \(\text{\AA}/\mathrm{fs}\).
 Each bar is the length of that displacement for one atom.
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/velocity_mislabel.pdf}
-\caption{Position difference after one velocity Verlet step of \(1\,\mathrm{fs}\) on the \(\velFixtureAtoms\)-atom fixture, between the declared natural unit and the same numbers read as \(\text{\AA}/\mathrm{fs}\).
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/velocity_mislabel.pdf} \caption{Position difference after one velocity Verlet step of \(1\,\mathrm{fs}\) on the \(\velFixtureAtoms\)-atom fixture, between the declared natural unit and the same numbers read as \(\text{\AA}/\mathrm{fs}\).
 The kinetic energy goes from \(\velFixtureKe\,\mathrm{eV}\) to \(\velFixtureKeFs\,\mathrm{eV}\), a ratio of \(\velFactorSq\).
 The root mean square over the Cartesian components is \(\velVerletRmsd\,\text{\AA}\) and the largest component \(\velVerletMax\,\text{\AA}\).
 Each bar is the length of the displacement of one atom.}
-\label{fig:supp-velocity}
-\end{figure}
+\label{fig:supp-velocity} \end{figure}
 
 Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN-{}-HNC system \cite{vanmourikAbInitioGlobal2001}.
 On both, readcon-core returns every atom free, the identifiers \texttt{0 1 2} and the declared natural unit.
@@ -465,15 +421,44 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \input{figures/generated/hcn_table}
 
-\FloatBarrier
-\section{Timing}\label{sec:supp-timing}
-The candidate timing campaign is not reported.
+\FloatBarrier \section{Timing}\label{sec:supp-timing} The candidate timing campaign is not reported.
 Section~\ref{sec:performance} of the main text uses the measurements in Section~\ref{sec:host}.
 Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 
-\section{Measured versions}\label{sec:supp-versions}
-The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
+Tables~\ref{tab:xyz} and~\ref{tab:hdf5} are context for choosing a format.
+readcon reads neither XYZ nor HDF5.
+h5py reads the same frames in 0.697~s against readcon's 1.132~s on the CON file.
+The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
+
+\begin{table}[tbp] \centering \footnotesize \caption{Context for choosing a format: XYZ reads of the same 100000 frames.}
+\label{tab:xyz}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+NumPy & 1.238 & 0.0480 & 391 & 100000/100000 \\
+chemfiles & 1.324 & 0.0240 & 166 & 100000/100000 \\
+OVITO & 5.174 & 0.624 & 172 & 100000/100000 \\
+ASE, extended XYZ & 8.324 & 0.214 & 346 & 100000/100000 \\
+pymatgen & 25.49 & 1.49 & 2119 & 100000/100000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp] \centering \footnotesize \caption{Context for choosing a format: HDF5 reads of the same 100000 frames.}
+\label{tab:hdf5}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+h5py & 0.697 & 0.101 & 759 & 100000/100000 \\
+MDAnalysis & 50.6 & 0.694 & 139 & 100000/100000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
@@ -483,9 +468,7 @@ On files of two frames whose line~1 is empty, the first refuses the file and the
 Only the second refuses a file with a legacy velocity label in capitals or separated by tabs, which the other three read.
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.
 
-\FloatBarrier
-\section{Reproduction}\label{sec:supp-repro}
-Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
+\FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 Each of them was written by readcon-core~\readconversion{} built from the library of the \readconcommitrole{} \texttt{\readconcommitshort}, and each names that library by its digest, \texttt{\readcondigest}.
 Two of them also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 \texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
@@ -655,5 +638,4 @@ python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
 
 \bibliographystyle{elsarticle-num}
 
-\bibliography{rg_main}
-\end{document}
+\bibliography{rg_main} \end{document}

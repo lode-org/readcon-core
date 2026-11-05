@@ -1,8 +1,10 @@
+rev_parse 0cafb24ffb4b53c7f9749cd4a27a7334f4ebb92a
+tree 50e030a928f1a2885164bb76944426c2466d0bb3
+command python3 paper/cpc/scripts/bench_dlpack.py
 date_utc 2026-11-05T00:23:33Z
 uname_m x86_64
 nproc 8
 cpu_model Intel(R) Xeon(R) Processor
-clone_url https://github.com/lode-org/readcon-core
 head 0cafb24ffb4b53c7f9749cd4a27a7334f4ebb92a
 git_status_begin
 (clean)

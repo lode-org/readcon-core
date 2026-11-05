@@ -1,3 +1,6 @@
+rev_parse 8a5f0fb52beb236365126188b7d5d93f556ec8d9
+tree ba93303babf4c93a8f444e5d3e2ea09bc032fce1
+command python3 paper/cpc/bench/db_v2.py
 date_utc=2026-11-05T00:51:00Z
 uname_m=x86_64
 nproc=8

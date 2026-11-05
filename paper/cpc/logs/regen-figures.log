@@ -1,3 +1,6 @@
+rev_parse 3aeb71190cdbc2fc8d244224c6a9f685233fcc6e
+tree a3ef17838cc8db745ea7c008f578681d0feb90b8
+command python3 paper/cpc/scripts/regen_figures.py
 regen figures
 ok gen_figures
 ok structures_svg

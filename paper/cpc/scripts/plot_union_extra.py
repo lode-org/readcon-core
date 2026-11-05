@@ -180,10 +180,31 @@ def _summary_rows() -> list[dict[str, str]]:
     return rows
 
 
+# All-frame CON readers. First-frame rows stay out of these figures.
+CON_ARMS = (
+    "readcon_tip",
+    "readcon_v0173",
+    "readcon_base",
+    "ase_eon",
+    "eon_py",
+    "eon_cpp",
+    "readcon_db",
+)
+CON_LABELS = {
+    "readcon_tip": "readcon tip",
+    "readcon_v0173": "readcon 0.17.3",
+    "readcon_base": "readcon main",
+    "ase_eon": "ASE ase.io (format eon)",
+    "eon_py": "eOn loadcons",
+    "eon_cpp": "eOn ConFileIO",
+    "readcon_db": "readcon-db",
+}
+
+
 def ratios(theme) -> None:
     arms = _reader_samples()
     tip = arms["readcon_tip"]
-    order = [name for name in ("readcon_base", "ase_eon", "readcon_db") if name in arms]
+    order = [name for name in CON_ARMS if name in arms and name != "readcon_tip"]
     fig, ax = plt.subplots(figsize=(7.2, 3.2))
     y = list(range(len(order)))
     med, lo, hi = [], [], []
@@ -197,7 +218,7 @@ def ratios(theme) -> None:
     ax.errorbar(med, y, xerr=xerr, fmt="o", color=TEAL, ecolor=CORAL, capsize=3)
     ax.axvline(1.0, color=BLACK, lw=0.6)
     ax.set_yticks(y)
-    ax.set_yticklabels(order, fontsize=8)
+    ax.set_yticklabels([CON_LABELS.get(name, name) for name in order], fontsize=8)
     ax.set_xlabel("other CON time / readcon tip time")
     ax.set_xscale("log")
     pf._theme_axes([ax], theme)
@@ -230,38 +251,32 @@ def threads(theme) -> None:
 
 
 def timing(theme) -> None:
-    """Type 7 medians on the 100000-frame files. Each panel is one format."""
+    """Type 7 medians for all-frame CON readers of the same file."""
     arms = _reader_samples()
-    groups = {
-        "CON": ["readcon_tip", "readcon_base", "ase_eon", "readcon_db"],
-        "XYZ": ["numpy", "chemfiles", "ovito", "ase_extxyz", "pymatgen"],
-        "HDF5": ["h5py", "mdanalysis"],
-    }
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 3.4))
-    for ax, (title, order) in zip(axes, groups.items(), strict=True):
-        order = [name for name in order if name in arms]
-        meds = [_type7(arms[name])[0] for name in order]
-        x = np.arange(len(order))
-        ax.bar(x, meds, color=CYCLE[: len(order)], edgecolor=BLACK, linewidth=0.4)
-        ax.set_xticks(x)
-        ax.set_xticklabels(order, fontsize=6, rotation=30, ha="right")
-        ax.set_yscale("log")
-        ax.set_title(title)
-    axes[0].set_ylabel("median wall time (s)")
-    pf._theme_axes(list(axes), theme)
+    order = [name for name in CON_ARMS if name in arms]
+    meds = [_type7(arms[name])[0] for name in order]
+    fig, ax = plt.subplots(figsize=(7.2, 3.4))
+    x = np.arange(len(order))
+    ax.bar(x, meds, color=[CYCLE[i % len(CYCLE)] for i in range(len(order))], edgecolor=BLACK, linewidth=0.4)
+    ax.set_xticks(x)
+    ax.set_xticklabels([CON_LABELS.get(name, name) for name in order], fontsize=7, rotation=30, ha="right")
+    ax.set_yscale("log")
+    ax.set_ylabel("median wall time (s)")
+    pf._theme_axes([ax], theme)
     pf._save(fig, "timing", None)
 
 
 def memory(theme) -> None:
-    """VmHWM after the read minus VmHWM after the import, in MiB."""
-    rows = [row for row in _summary_rows() if "mib_median" in row]
-    order = [row["arm"] for row in rows]
-    meds = [float(row["mib_median"]) for row in rows]
+    """VmHWM after the read minus VmHWM after the import, in MiB, CON arms."""
+    rows = [row for row in _summary_rows() if "mib_median" in row and row.get("arm") in CON_ARMS]
+    order = [name for name in CON_ARMS if any(row["arm"] == name for row in rows)]
+    by_arm = {row["arm"]: float(row["mib_median"]) for row in rows}
+    meds = [by_arm[name] for name in order]
     fig, ax = plt.subplots(figsize=(7.2, 3.4))
     x = np.arange(len(order))
     ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
     ax.set_xticks(x)
-    ax.set_xticklabels(order, fontsize=6, rotation=30, ha="right")
+    ax.set_xticklabels([CON_LABELS.get(name, name) for name in order], fontsize=7, rotation=30, ha="right")
     ax.set_ylabel("MiB above the import")
     pf._theme_axes([ax], theme)
     pf._save(fig, "memory", None)
