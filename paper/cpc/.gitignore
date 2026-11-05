@@ -10,13 +10,15 @@
 !logs/mpi.log
 !logs/db.log
 !logs/install.log
+!logs/reader-exchange.log
+!logs/dlpack-exchange.log
+!logs/build.log
 !logs/NUMBERS.tsv
 *.out
 *.synctex.gz
 *.spl
 *.tectonic.txt
 auto/
-<<<<<<< HEAD
 bench/work/
 bench/results/
 src/rg_main.pdf
@@ -28,8 +30,6 @@ evidence/work/
 __pycache__/
 target/
 .texcache/
-=======
 build/
 logs/reader-work/
 logs/dlpack-work/
->>>>>>> 0cafb24f (doc(paper): correct the flagged sentences and the figure runner)
