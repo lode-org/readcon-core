@@ -785,7 +785,7 @@ A bar above the line is a reader whose median is lower than the readcon-core med
 \section{Measurements on this host}\label{sec:host}
 We read one trajectory of 200 frames and 48 copper atoms on this host, one reader at a time, six times for each reader.
 Each library is imported before the clock starts.
-The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}, and the head-to-head logs name commit \texttt{76b3903e}.
+The machine line is \texttt{x86\_64}, 8, \texttt{Intel(R) Xeon(R) Processor}, and the head-to-head logs name commit \texttt{109cbc4b}.
 readcon-core, the ASE eon parser and a pure Python baseline parse the same CON file.
 The baseline splits the CON coordinate rows in Python, and it is not a library reader.
 MDAnalysis, OVITO, the ASE extended XYZ reader and pymatgen parse the XYZ file written from the same coordinates, and pymatgen reads all 200 frames.
@@ -826,7 +826,7 @@ pymatgen & XYZ & 0.198 & 0.00772 & \num{4.86e4} & 42.4 \\
 We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each, with each library imported before the clock.
 readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.
 Both stores keep all 40 frames.
-The peaks above a NumPy-import child are 0.262~MB and 60.4~MB, and the log names commit \texttt{30a962b9}.
+The peaks above a NumPy-import child are 0.262~MB and 60.4~MB, and the log names commit \texttt{8a5f0fb5}.
 
 We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, six launches at each count.
 One read takes well over a millisecond.
@@ -836,7 +836,7 @@ Eight ranks are faster than four on both medians.
 The scatter-mode interquartile range at eight ranks is 0.00607~s, and that range overlaps the four-rank median.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
 One thread parses without building a thread pool.
-Each launch returns the block of frames that the partition assigns to rank 0, and the log names commit \texttt{76b3903e}.
+Each launch returns the block of frames that the partition assigns to rank 0, and the log names commit \texttt{109cbc4b}.
 
 \FloatBarrier
 \section{Stored campaigns}\label{sec:stored}
