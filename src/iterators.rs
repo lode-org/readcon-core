@@ -1027,9 +1027,7 @@ fn span_end(boundaries: &[usize], index: usize, len: usize) -> usize {
 /// partition. The pointer stays valid until those workers join.
 #[cfg(feature = "parallel")]
 #[derive(Copy, Clone)]
-struct SlotWritePtr(
-    *mut std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>,
-);
+struct SlotWritePtr(*mut std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>);
 
 #[cfg(feature = "parallel")]
 impl SlotWritePtr {
@@ -1055,13 +1053,14 @@ unsafe impl Sync for SlotWritePtr {}
 
 /// Frames in one claimed chunk.
 ///
-/// Eight equal chunks left the slowest chunk on the wall while the
-/// others sat idle. Sixteen claims per worker makes that leftover one
-/// chunk, which another worker can take.
+/// The idle tail is one claimed chunk. Squaring the worker count keeps
+/// that chunk at most one worker's share divided by the worker count,
+/// so another worker can take it. The grain is the frame count divided
+/// by that many claims.
 #[cfg(feature = "parallel")]
 fn claim_grain(n: usize, workers: usize) -> usize {
     let workers = workers.max(1);
-    let claims = workers.saturating_mul(16);
+    let claims = workers.saturating_mul(workers).max(1);
     n.div_ceil(claims).max(1)
 }
 
@@ -1173,10 +1172,8 @@ where
                     // `slots`, which outlives this pool join, and no
                     // other reference writes that index.
                     unsafe {
-                        slots_ptr.write_slot(
-                            i,
-                            parse_span(boundaries[i], span_end(boundaries, i, len)),
-                        );
+                        slots_ptr
+                            .write_slot(i, parse_span(boundaries[i], span_end(boundaries, i, len)));
                     }
                 }
                 chunk_ns[chunk_index].store(
@@ -1247,6 +1244,8 @@ fn parse_text_span(
 struct TimedParse {
     slots: Vec<Result<types::ConFrame, error::ParseError>>,
     pool_s: f64,
+    /// `drop` of the local pool, which joins its workers.
+    pool_join_s: f64,
     scan_s: f64,
     slot_alloc_s: f64,
     worker_parse_s: f64,
@@ -1331,13 +1330,14 @@ fn parse_frames_parallel_bytes(
 ///
 /// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
 /// stays on the calling thread. `None` follows [`scan_thread_count`].
-/// The pool build is `pool_s` and is not inside the scan or the parse.
+/// The pool build is `pool_s`. The pool join is `pool_join_s`.
+/// Neither one is inside the scan or the parse.
 #[cfg(feature = "parallel")]
 fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     let threads = scan_thread_count(num_threads, bytes.len());
-    // The scan stays serial below `SCAN_PARALLEL_MIN`. An explicit pool
-    // still parses on that many workers. Equal-length frames walk their
-    // spans on that pool instead of one serial header walk.
+    // There is no byte-length cutoff. Two or more workers scan a short
+    // file as well as a long one. Equal-length frames walk their spans
+    // on that pool instead of one serial header walk.
     let parse_workers = match num_threads {
         Some(n) if n >= 2 => n,
         Some(_) => 1,
@@ -1370,8 +1370,8 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             });
         (parsed, scan_s, scan_kind)
     };
-    let (pool_s, packed) = match num_threads {
-        None => (0.0, run()),
+    let (pool_s, pool_join_s, packed) = match num_threads {
+        None => (0.0, 0.0, run()),
         Some(n) if n <= 1 => {
             let _ = n;
             let t_scan = std::time::Instant::now();
@@ -1380,7 +1380,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             let parsed = parse_into_slots_timed(bytes.len(), &boundaries, 1, |start, end| {
                 parse_byte_span(bytes, start, end)
             });
-            (0.0, (parsed, scan_s, SCAN_SERIAL))
+            (0.0, 0.0, (parsed, scan_s, SCAN_SERIAL))
         }
         Some(n) => {
             let t_pool = std::time::Instant::now();
@@ -1388,10 +1388,11 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
                 Ok(pool) => {
                     let pool_s = t_pool.elapsed().as_secs_f64();
                     let packed = pool.install(run);
+                    let t_join = std::time::Instant::now();
                     drop(pool);
-                    (pool_s, packed)
+                    (pool_s, t_join.elapsed().as_secs_f64(), packed)
                 }
-                Err(_) => (t_pool.elapsed().as_secs_f64(), run()),
+                Err(_) => (t_pool.elapsed().as_secs_f64(), 0.0, run()),
             }
         }
     };
@@ -1399,6 +1400,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     TimedParse {
         slots: parsed.slots,
         pool_s,
+        pool_join_s,
         scan_s,
         slot_alloc_s: parsed.alloc_s,
         worker_parse_s: parsed.work_s,
@@ -1499,18 +1501,6 @@ pub fn read_all_frames_indexed(
         .map(|r| r.map_err(|e| Box::new(e) as Box<dyn std::error::Error>))
         .collect()
 }
-
-/// Minimum buffer length for a chunked newline scan.
-///
-/// On this host the sizes were 4, 8, 16, 32, 64, and 128 MiB of
-/// repeated `cuh2.con`. A size clears when the chunked median beats
-/// one serial walk at 2, 4, and 8 workers and each gap exceeds the
-/// chunked interquartile range. 4 MiB does not clear. 8 MiB clears
-/// and 16 MiB does not, so that pass is not the start of a run.
-/// 32, 64, and 128 MiB clear. The constant is 32 MiB, the first size
-/// of that run. The samples are the scan-crossover row.
-#[cfg(feature = "parallel")]
-pub const SCAN_PARALLEL_MIN: usize = 32 * 1024 * 1024;
 
 enum IndexStep {
     Stay(usize),
@@ -1637,15 +1627,25 @@ fn newline_positions(bytes: &[u8], threads: usize) -> Vec<usize> {
     newline_positions_at_cuts(bytes, &equal_cuts(bytes.len(), threads))
 }
 
+/// Worker count for a newline scan.
+///
+/// `Some(n)` with `n >= 2` uses that many workers at every file length.
+/// A file shorter than two bytes has nothing to split, and [`equal_cuts`]
+/// drops a cut that lands on the same byte as the previous one, so a
+/// short file does not invent an empty chunk. `None` uses the machine's
+/// parallelism on the same rule. `Some(0)` and `Some(1)` stay on the
+/// calling thread. There is no byte-length cutoff: a cutoff taken from
+/// one host was not monotone across neighboring sizes.
 #[cfg(feature = "parallel")]
 fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
     let requested = match num_threads {
+        Some(0) | Some(1) => return 1,
         Some(n) => n,
         None => std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1),
     };
-    if requested < 2 || len < SCAN_PARALLEL_MIN {
+    if requested < 2 || len < 2 {
         1
     } else {
         requested
@@ -1711,9 +1711,10 @@ fn frame_start_offsets_at_cuts(text: &str, cuts: &[usize]) -> Vec<usize> {
 ///
 /// Stops at the first skip error (that start is still included).
 ///
-/// With the `parallel` feature, a buffer of at least
-/// [`SCAN_PARALLEL_MIN`] bytes is split into chunks and the newline bytes
-/// are scanned together. The chunks are not aligned to lines. A header
+/// With the `parallel` feature and more than one worker, the buffer is
+/// split into chunks and the newline bytes are scanned together. The
+/// length of the buffer does not choose the worker count. The chunks
+/// are not aligned to lines. A header
 /// that straddles a cut is one line, because each `\n` is recorded by the
 /// chunk that holds that byte and the lists are stitched in order. The
 /// returned offsets match the serial walk.
@@ -1770,8 +1771,8 @@ pub fn parse_frames_parallel(
 
 /// Like [`parse_frames_parallel`], but runs both phases on an explicit
 /// Rayon pool with `num_threads` workers when `Some(n)` (`n` is clamped
-/// to at least 1). `None` uses the global pool when the buffer is at
-/// least [`SCAN_PARALLEL_MIN`] bytes, and the calling thread otherwise.
+/// to at least 1). `None` uses the global pool for a buffer of at least
+/// two bytes, and the calling thread otherwise.
 ///
 /// Phase 2 splits the frame offsets into one contiguous range per
 /// worker. Each worker writes its frames into slots allocated before
@@ -1865,6 +1866,9 @@ pub struct ReadPhaseTimes {
     pub open_mmap_s: f64,
     /// Rayon pool construction. Zero when the call stays on one thread.
     pub pool_s: f64,
+    /// Joining the local pool after the scan and the parse. Zero when
+    /// the call stays on one thread.
+    pub pool_join_s: f64,
     pub scan_s: f64,
     pub slot_alloc_s: f64,
     pub worker_parse_s: f64,
@@ -1926,6 +1930,7 @@ pub fn read_all_frames_phased(
         phases: ReadPhaseTimes {
             open_mmap_s,
             pool_s: phased.pool_s,
+            pool_join_s: phased.pool_join_s,
             scan_s: phased.scan_s,
             slot_alloc_s: phased.slot_alloc_s,
             worker_parse_s: phased.worker_parse_s,
@@ -1946,6 +1951,7 @@ pub fn read_all_frames_phased(
 pub struct PhasedByteTimes {
     pub frames: Vec<types::ConFrame>,
     pub pool_s: f64,
+    pub pool_join_s: f64,
     pub scan_s: f64,
     pub slot_alloc_s: f64,
     pub worker_parse_s: f64,
@@ -1979,6 +1985,7 @@ pub fn frames_from_bytes_phased(
         return Ok(PhasedByteTimes {
             frames,
             pool_s: timed.pool_s,
+            pool_join_s: timed.pool_join_s,
             scan_s: timed.scan_s,
             slot_alloc_s: timed.slot_alloc_s,
             worker_parse_s: timed.worker_parse_s,
@@ -2001,6 +2008,7 @@ pub fn frames_from_bytes_phased(
         Ok(PhasedByteTimes {
             frames,
             pool_s: 0.0,
+            pool_join_s: 0.0,
             scan_s: 0.0,
             slot_alloc_s: 0.0,
             worker_parse_s,
@@ -2201,7 +2209,7 @@ fn reduce_touch(n: usize, workers: usize, one: impl Fn(usize) -> u64 + Sync) -> 
 /// chunks, stitches the newline index, and walks frame starts. The
 /// pool is built before the timer starts. The serial walk is
 /// [`frame_start_offsets_serial`]. The returned offsets are the frame
-/// starts. The size gate used by the hot path is not applied here.
+/// starts. The caller chooses the worker count. File length does not.
 pub fn measure_newline_scan(text: &str, threads: usize, chunked: bool) -> (Vec<usize>, f64) {
     #[cfg(feature = "parallel")]
     {
@@ -2387,11 +2395,13 @@ mod parallel_header_scan_tests {
         for n in [2usize, 3, 4, 8] {
             out.push(equal_cuts(bytes.len(), n));
         }
-        for &start in &serial {
-            let window = (start + 160).min(bytes.len());
+        for (index, &start) in serial.iter().enumerate() {
+            let next = serial.get(index + 1).copied().unwrap_or(bytes.len());
+            // The header ends at the coordinate label. The window is that
+            // header, not a fixed count of bytes past the frame start.
+            let window = super::header_window_end(bytes, start, next);
             let mut line = start;
-            let mut straddled = 0usize;
-            while line < window && straddled < 9 {
+            while line < window {
                 let Some(rel) = memchr::memchr(b'\n', &bytes[line..window]) else {
                     break;
                 };
@@ -2401,7 +2411,6 @@ mod parallel_header_scan_tests {
                     // mid is inside the line, so the header byte sits across two chunks.
                     assert!(mid > line && mid < end);
                     out.push(vec![0, mid, bytes.len()]);
-                    straddled += 1;
                 }
                 line = end + 1;
             }
@@ -2463,25 +2472,56 @@ mod parallel_header_scan_tests {
             assert_slab(&one.repeat(3));
         }
         // The bytes parser (the read_con path) uses the same stitch.
-        // Repeat until the buffer crosses the measured chunked-scan gate.
+        // The single frame is the short file. The repeat is a wider file.
+        // Both use the requested worker count. There is no length cutoff.
         let one = fixture("cuh2.con");
-        let wide = one.repeat(SCAN_PARALLEL_MIN.div_ceil(one.len()).max(1));
-        assert!(wide.len() >= SCAN_PARALLEL_MIN);
-        let serial = frame_start_offsets_serial(&wide);
-        for workers in [2usize, 3, 4, 8] {
-            let parallel = frame_start_offsets_with_threads(&wide, Some(workers));
-            assert_eq!(parallel, serial, "workers={workers}");
-            let parsed = frames_from_bytes(wide.as_bytes(), Some(workers)).expect("bytes parse");
-            assert_eq!(parsed.len(), serial.len());
-            let seq = frames_from_text(&wide, Some(1)).expect("serial parse");
-            assert_eq!(parsed.len(), seq.len());
-            assert_eq!(parsed[0].atom_data[0].x, seq[0].atom_data[0].x);
-            assert_eq!(
-                parsed.last().unwrap().atom_data.last().unwrap().z,
-                seq.last().unwrap().atom_data.last().unwrap().z
-            );
+        for wide in [one.clone(), one.repeat(8)] {
+            let serial = frame_start_offsets_serial(&wide);
+            for workers in [2usize, 3, 4, 8] {
+                let parallel = frame_start_offsets_with_threads(&wide, Some(workers));
+                assert_eq!(parallel, serial, "workers={workers} bytes={}", wide.len());
+                let parsed =
+                    frames_from_bytes(wide.as_bytes(), Some(workers)).expect("bytes parse");
+                assert_eq!(parsed.len(), serial.len());
+                let seq = frames_from_text(&wide, Some(1)).expect("serial parse");
+                assert_eq!(parsed.len(), seq.len());
+                assert_eq!(parsed[0].atom_data[0].x, seq[0].atom_data[0].x);
+                assert_eq!(
+                    parsed.last().unwrap().atom_data.last().unwrap().z,
+                    seq.last().unwrap().atom_data.last().unwrap().z
+                );
+            }
         }
     }
+}
+
+/// End of the header window used by straddle cuts.
+///
+/// The header runs up to the line that starts the coordinate block.
+/// When that label is absent the window is the next frame start.
+#[cfg(all(test, feature = "parallel"))]
+fn header_window_end(bytes: &[u8], start: usize, limit: usize) -> usize {
+    let limit = limit.min(bytes.len());
+    let marker = b"Coordinates";
+    let mut line = start;
+    while line < limit {
+        let rest = &bytes[line..limit];
+        let rel = memchr::memchr(b'\n', rest).unwrap_or(rest.len());
+        let content_end = line + rel;
+        let content = &bytes[line..content_end];
+        let trimmed = match content.iter().position(|byte| !byte.is_ascii_whitespace()) {
+            Some(index) => &content[index..],
+            None => b"",
+        };
+        if trimmed.starts_with(marker) {
+            return line;
+        }
+        if content_end >= limit {
+            break;
+        }
+        line = content_end + 1;
+    }
+    limit
 }
 
 #[cfg(all(test, feature = "parallel"))]

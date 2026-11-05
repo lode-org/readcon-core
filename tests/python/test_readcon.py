@@ -62,6 +62,7 @@ class TestReadCon:
         assert eager_phases["build"] == "eager"
         for key in (
             "open_mmap_s",
+            "pool_join_s",
             "scan_s",
             "slot_alloc_s",
             "worker_parse_s",

@@ -1560,6 +1560,7 @@ fn write_coords(
 struct ReadCallPhases {
     open_mmap_s: f64,
     pool_s: f64,
+    pool_join_s: f64,
     scan_s: f64,
     slot_alloc_s: f64,
     worker_parse_s: f64,
@@ -1591,6 +1592,7 @@ impl ReadCallPhases {
         Self {
             open_mmap_s: phases.open_mmap_s,
             pool_s: phases.pool_s,
+            pool_join_s: phases.pool_join_s,
             scan_s: phases.scan_s,
             slot_alloc_s: phases.slot_alloc_s,
             worker_parse_s: phases.worker_parse_s,
@@ -1617,6 +1619,7 @@ impl ReadCallPhases {
         let dict = PyDict::new(py);
         dict.set_item("open_mmap_s", self.open_mmap_s)?;
         dict.set_item("pool_s", self.pool_s)?;
+        dict.set_item("pool_join_s", self.pool_join_s)?;
         dict.set_item("scan_s", self.scan_s)?;
         dict.set_item("slot_alloc_s", self.slot_alloc_s)?;
         dict.set_item("worker_parse_s", self.worker_parse_s)?;
@@ -1915,14 +1918,7 @@ fn read_con_lazy(
 ) -> PyResult<Py<ConFrameList>> {
     let (frames, phases, n_bytes, chunk_s, scan_kind) = load_phased(py, path, n_threads)?;
     con_frame_list(
-        py,
-        frames,
-        phases,
-        n_bytes,
-        n_threads,
-        "lazy",
-        chunk_s,
-        scan_kind,
+        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, scan_kind,
     )
 }
 
@@ -2120,7 +2116,16 @@ fn read_con_mpi(
         worker_parse_s,
         ..crate::iterators::ReadPhaseTimes::default()
     };
-    con_frame_list(py, rf.frames, phases, 0, n_threads, "lazy", Vec::new(), "serial")
+    con_frame_list(
+        py,
+        rf.frames,
+        phases,
+        0,
+        n_threads,
+        "lazy",
+        Vec::new(),
+        "serial",
+    )
 }
 
 #[cfg(not(feature = "mpi"))]
@@ -2170,6 +2175,7 @@ fn read_con_string(
     let phases = crate::iterators::ReadPhaseTimes {
         open_mmap_s,
         pool_s: parsed.pool_s,
+        pool_join_s: parsed.pool_join_s,
         scan_s: parsed.scan_s,
         slot_alloc_s: parsed.slot_alloc_s,
         worker_parse_s: parsed.worker_parse_s,
