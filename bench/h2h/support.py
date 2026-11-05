@@ -358,7 +358,10 @@ def format_result(row: dict, extra: dict | None = None) -> str:
     lines.append(f"coords_ok {int(bool(row.get('coords_ok')))}")
     lines.append(f"correct {int(bool(row.get('correct')))}")
     reason = row.get("reason") or ""
-    lines.append(f"reason {reason if reason else 'ok'}")
+    if row.get("correct") and not reason:
+        reason = "ok"
+        row["reason"] = reason
+    lines.append(f"reason {reason}")
     if extra:
         for key, value in extra.items():
             lines.append(f"{key} {value}")

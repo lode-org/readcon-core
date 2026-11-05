@@ -496,11 +496,14 @@ def run_native(kind: str) -> None:
             started = time.perf_counter()
             loaded = np.load(npy)
             samples.append(time.perf_counter() - started)
+        loaded = np.asarray(loaded)
+        if loaded.ndim == 3 and loaded.shape[0] == 1:
+            loaded = loaded[0]
         row = _native_row(
             "numpy",
             "npy",
             samples,
-            loaded.shape[0],
+            int(loaded.shape[0]),
             1,
             None,
             loaded,
