@@ -1,5 +1,7 @@
-rev_parse c74a53c5bd8058fcf8819c8805e56de39db4541c
-tree 9ec01de647722c003359062c54f82b234f217e3d
+rev_parse 579738a9387e8d0ea55496f45dd057812cfab892
+tree 883acd30e768d6682532ba02438720630480b89a
+role eon_checkout
+eon_version 3.6.0
 command meson setup paper/cpc/bench/work/peers/eon/build-h2h paper/cpc/bench/work/peers/eon -Dwith_pyeonclient=true -Dwith_tests=false -Dinstall_eon_server=true -Ddefault_library=static
 command meson setup paper/cpc/bench/work/peers/eon/build-h2h paper/cpc/bench/work/peers/eon -Dwith_pyeonclient=true -Dwith_tests=false -Dinstall_eon_server=true -Ddefault_library=static
 meson_version 1.12.1

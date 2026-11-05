@@ -426,37 +426,13 @@ Section~\ref{sec:performance} of the main text uses the measurements in Section~
 Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 
-Tables~\ref{tab:xyz} and~\ref{tab:hdf5} are context for choosing a format.
+Table~\ref{tab:format-context} is context for choosing a format.
 readcon reads neither XYZ nor HDF5.
-h5py reads the same frames in 0.697~s against readcon's 1.132~s on the CON file.
+\input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
+The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
-\begin{table}[tbp] \centering \footnotesize \caption{Context for choosing a format: XYZ reads of the same 100000 frames.}
-\label{tab:xyz}
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Reader & Median (s) & IQR (s) & MiB & Matched \\
-\midrule
-NumPy & 1.238 & 0.0480 & 391 & 100000/100000 \\
-chemfiles & 1.324 & 0.0240 & 166 & 100000/100000 \\
-OVITO & 5.174 & 0.624 & 172 & 100000/100000 \\
-ASE, extended XYZ & 8.324 & 0.214 & 346 & 100000/100000 \\
-pymatgen & 25.49 & 1.49 & 2119 & 100000/100000 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[tbp] \centering \footnotesize \caption{Context for choosing a format: HDF5 reads of the same 100000 frames.}
-\label{tab:hdf5}
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Reader & Median (s) & IQR (s) & MiB & Matched \\
-\midrule
-h5py & 0.697 & 0.101 & 759 & 100000/100000 \\
-MDAnalysis & 50.6 & 0.694 & 139 & 100000/100000 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{figures/generated/format_context}
 
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).

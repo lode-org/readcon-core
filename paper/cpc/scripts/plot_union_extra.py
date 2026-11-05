@@ -187,7 +187,6 @@ CON_ARMS = (
     "readcon_base",
     "ase_eon",
     "eon_py",
-    "eon_cpp",
     "readcon_db",
 )
 CON_LABELS = {
@@ -196,7 +195,6 @@ CON_LABELS = {
     "readcon_base": "readcon main",
     "ase_eon": "ASE ase.io (format eon)",
     "eon_py": "eOn loadcons",
-    "eon_cpp": "eOn ConFileIO",
     "readcon_db": "readcon-db",
 }
 

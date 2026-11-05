@@ -1,49 +1,46 @@
 # Appendix C measurements
 
-Five paired, interleaved repeats of ingest and of three queries. Each series
-is the median, the minimum, and the maximum of those five. A megabyte is
-1e6 bytes. Threads were pinned to 1. Every timed query checked the hit count
-and the sum of frame indexes before the sample was kept. All 20 ingests and
-all 180 queries passed that check.
+Five paired, interleaved repeats of ingest and of three queries.
+Each series is the median, the minimum, and the maximum of those five.
+A megabyte is 1e6 bytes.
+Threads were pinned to 1.
+Every timed query checked the hit count and the sum of frame indexes before the sample was kept.
+All 20 ingests and all 180 queries passed that check.
 
-The timed corpora are 1000 and 10000 frames. A repeat at 100000 frames does
-not finish in two minutes: `ase.db` ingest is about 200 frames per second, so
-that ingest alone is several minutes. One million frames does not fit in the
-2 GiB LMDB map (`MDB_MAP_FULL`). Those sizes are not in the tables.
+The timed corpora are 1000 and 10000 frames.
+A repeat at 100000 frames does not finish in two minutes: `ase.db` ingest is about 200 frames per second, so that ingest alone is several minutes.
+One million frames does not fit in the 2 GiB LMDB map (`MDB_MAP_FULL`).
+Those sizes are not in the tables.
 
 ## Machine
 
-Intel Xeon, 8 CPUs, 47.07 GiB RAM. Python 3.12.3, rustc 1.88.0, readcon-db
-0.1.8, readcon-core 0.16.2, ASE 3.29.0, numpy 2.5.4. `page_cache_drop` is
-false: cold queries are a `posix_fadvise` `DONTNEED` hint, then a fresh
-process. Warm is the next query in that process.
+Intel Xeon, 8 CPUs, 47.07 GiB RAM.
+Python 3.12.3, rustc 1.88.0, readcon-db 0.1.8, readcon-core 0.16.2, ASE 3.29.0, numpy 2.5.4.
+`page_cache_drop` is false: cold queries are a `posix_fadvise` `DONTNEED` hint, then a fresh process.
+Warm is the next query in that process.
 
 ## Workloads
 
-ASE EMT searches, same atom order on both ends of HCN/HNC (H, C, N): HCN/HNC
-NEB (157 frames), Cu adatom NEB (159), Pt–H NEB (83), Pt adatom dimer (71).
-The aKMC trace stores the current state and the saddle at each of 4000 steps
-for three systems (24000 frames). Hop counts: HCN/HNC 0 (saddle 197.6 eV;
-EMT on H, C, and N is not a quantitative barrier), Cu 0 (saddle 5.23 eV,
-barrier about 1.09 eV), Pt–H 1664 (barrier about 0.03 eV). eOn was not used.
+ASE EMT searches, same atom order on both ends of HCN/HNC (H, C, N): HCN/HNC NEB (157 frames), Cu adatom NEB (159), Pt–H NEB (83), Pt adatom dimer (71).
+The aKMC trace stores the current state and the saddle at each of 4000 steps for three systems (24000 frames).
+Hop counts: HCN/HNC 0 (saddle 197.6 eV; EMT on H, C, and N is not a quantitative barrier), Cu 0 (saddle 5.23 eV, barrier about 1.09 eV), Pt–H 1664 (barrier about 0.03 eV).
+eOn was not used.
 
-The scale files repeat that ensemble. Both timed corpora have as many distinct
-xxHash3-128 values as frames (1000 and 10000), so the ingest timing is not a
-deduplication win. The composition query is `Cu:9` (292 hits at 1000 frames,
-index sum 135816; 2542 hits at 10000 frames, index sum 12511844). Energy and
-max-force windows sit in gaps between samples. The oracle rejected a window
-on which the per-atom Euclidean maximum and `sqrt` of the maximum sum of
-squares would disagree, and both oracles were accepted.
+The scale files repeat that ensemble.
+Both timed corpora have as many distinct xxHash3-128 values as frames (1000 and 10000), so the ingest timing is not a deduplication win.
+The composition query is `Cu:9` (292 hits at 1000 frames, index sum 135816; 2542 hits at 10000 frames, index sum 12511844).
+Energy and max-force windows sit in gaps between samples.
+The oracle rejected a window on which the per-atom Euclidean maximum and `sqrt` of the maximum sum of squares would disagree, and both oracles were accepted.
 
-`from_ase` leaves the user line empty. An empty user line is legal CON. The
-generator writes the user line `cpc-eval` so `readcon.iter_con` can read the
-corpus. That is a workaround for the reader bug in
-`eval/bugs/empty-user-line.md`, not a change to the CON rules.
+`from_ase` leaves the user line empty.
+An empty user line is legal CON.
+The generator writes the user line `cpc-eval` so `readcon.iter_con` can read the corpus.
+That is a workaround for the reader bug in `eval/bugs/empty-user-line.md`, not a change to the CON rules.
 
 ## Correctness
 
-Nine checks, nine pass. The hash-index check failed before the unit-change
-fix and passes on this tree.
+Nine checks, nine pass.
+The hash-index check failed before the unit-change fix and passes on this tree.
 
 | check | pass |
 | --- | --- |
@@ -57,29 +54,26 @@ fix and passes on this tree.
 | numeric_cache_ignored | yes |
 | hash_index_survives_rewrite_of_duplicate | yes |
 
-Identical bytes share one hash-index entry and each frame still keeps its own
-text. A one-digit coordinate change produces a new digest; both digests remain
-findable. `reindex` rebuilds secondary indexes from the stored CON text and
-leaves `frames_soa` in place. A cell without metadata `pbc` matches no
-periodicity mask.
+Identical bytes share one hash-index entry and each frame still keeps its own text.
+A one-digit coordinate change produces a new digest; both digests remain findable.
+`reindex` rebuilds secondary indexes from the stored CON text and leaves `frames_soa` in place.
+A cell without metadata `pbc` matches no periodicity mask.
 
 ## Ingest
 
-The clock starts before `append_trajectory_path` (or the ASE write loop) and
-stops after a composition check. These five repeats were run again for ingest
-only. Queries above are the earlier five repeats. System order rotates on
-each repeat.
+The clock starts before `append_trajectory_path` (or the ASE write loop) and stops after a composition check.
+These five repeats were run again for ingest only.
+Queries above are the earlier five repeats.
+System order rotates on each repeat.
 
-`ase.db` commits every `write`. `ase.db-txn` holds the connection with
-`with db:`, which is the batch write ASE documents. Inside that block ASE
-still commits every 5000 rows, so 1000 frames is one commit and 10000 frames
-is two commits, plus the commit when the block ends.
+`ase.db` commits every `write`.
+`ase.db-txn` holds the connection with `with db:`, which is the batch write ASE documents.
+Inside that block ASE still commits every 5000 rows, so 1000 frames is one commit and 10000 frames is two commits, plus the commit when the block ends.
 
-The CON directory has no write loop and no per-row commit. Its files are
-64-frame chunks (16 files at 1000 frames, 157 at 10000). A composition scan
-of those chunks and of the one concatenated file agree: warm time is 0.014 s
-at 1000 frames and 0.14 s at 10000 frames either way. There is no second
-directory ingest.
+The CON directory has no write loop and no per-row commit.
+Its files are 64-frame chunks (16 files at 1000 frames, 157 at 10000).
+A composition scan of those chunks and of the one concatenated file agree: warm time is 0.014 s at 1000 frames and 0.14 s at 10000 frames either way.
+There is no second directory ingest.
 
 | frames | system | seconds | frames/s | MB/s |
 | --- | --- | --- | --- | --- |
@@ -90,19 +84,19 @@ directory ingest.
 | 10000 | ase.db | 48.41 (45.51–50.74) | 206.6 (197.1–219.7) | 0.2256 (0.2153–0.2400) |
 | 10000 | ase.db-txn | 5.985 (5.884–6.286) | 1671 (1591–1700) | 1.825 (1.738–1.857) |
 
-Each cell is median (minimum–maximum). A repeat's wall time, including both
-ASE writes, was 6.1–7.2 s at 1000 frames and 52.7–57.8 s at 10000 frames.
+Each cell is median (minimum–maximum).
+A repeat's wall time, including both ASE writes, was 6.1–7.2 s at 1000 frames and 52.7–57.8 s at 10000 frames.
 
-Figures: `eval/results/figures/ingest_throughput.pdf`,
-`eval/results/figures/ingest_bandwidth.pdf`. Error bars run from the minimum
-to the maximum.
+Figures: `eval/results/figures/ingest_throughput.pdf`, `eval/results/figures/ingest_bandwidth.pdf`.
+Error bars run from the minimum to the maximum.
 
 ## Queries
 
-Rust `Select` for readcon-db does not add a natoms predicate. ASE queries use
-the bit-exact oracle bounds. Cold is the first query after the fadvise hint.
-Warm is the second query in the same process. Cells are seconds, median
-(minimum–maximum).
+Rust `Select` for readcon-db does not add a natoms predicate.
+ASE queries use the bit-exact oracle bounds.
+Cold is the first query after the fadvise hint.
+Warm is the second query in the same process.
+Cells are seconds, median (minimum–maximum).
 
 | frames | query | cache | readcon-db | ase.db | CON directory |
 | --- | --- | --- | --- | --- | --- |
@@ -121,17 +115,14 @@ Warm is the second query in the same process. Cells are seconds, median
 
 Figure: `eval/results/figures/query_latency.pdf`.
 
-Energy windows (eV), from the oracle bit patterns: 4.204617021467001 to
-4.521918223411915 at 1000 frames (201 hits); 3.582985061659346 to
-4.343762117629726 at 10000 frames (2001 hits). Max-force windows (eV/Å):
-0.7997694584862253 to 1.3970191198007356 (201 hits); 0.9288952799164887 to
-1.571054798023666 (2001 hits).
+Energy windows (eV), from the oracle bit patterns: 4.204617021467001 to 4.521918223411915 at 1000 frames (201 hits); 3.582985061659346 to 4.343762117629726 at 10000 frames (2001 hits).
+Max-force windows (eV/Å): 0.7997694584862253 to 1.3970191198007356 (201 hits); 0.9288952799164887 to 1.571054798023666 (2001 hits).
 
 ## Disk
 
-Allocated bytes. For readcon-db and ase.db the allocated figure is the median
-of the five ingests; the minimum and the maximum are in parentheses when they
-differ. On this filesystem the readcon-db file size equals the allocated size.
+Allocated bytes.
+For readcon-db and ase.db the allocated figure is the median of the five ingests; the minimum and the maximum are in parentheses when they differ.
+On this filesystem the readcon-db file size equals the allocated size.
 The 2 GiB value is the map ceiling, not the file.
 
 | store | 1000 frames | 10000 frames |
@@ -144,54 +135,46 @@ The 2 GiB value is the map ceiling, not the file.
 | ase.db | 966656 (962560–974848) | 8929280 (8921088–8953856) |
 | ase.db-txn | 958464 (954368–974848) | 8912896 (8904704–8945664) |
 
-readcon-db is 2.50 times the raw CON text (2723840/1088101 and
-27340800/10923745): the stored text plus indexes. Both ase.db files are
-smaller than the raw text. zstd level 3 is smaller than gzip level 6 at 1000
-frames and larger at 10000 frames.
+readcon-db is 2.50 times the raw CON text (2723840/1088101 and 27340800/10923745): the stored text plus indexes.
+Both ase.db files are smaller than the raw text. zstd level 3 is smaller than gzip level 6 at 1000 frames and larger at 10000 frames.
 
 Figure: `eval/results/figures/disk_footprint.pdf`.
 
 ## Repeated states
 
-One ingest of `akmc_trace.con` (24000 frames, 27864917 bytes). The hash index
-keeps the first key for each xxHash3-128. Stored texts are not shared: stored
-blob bytes equal the raw file (27864917). Unique hashes: 7. Unique text: 8319
-bytes (0.0002985 of the stored blobs). A corpus of those seven texts allocates
-98304 bytes; the full corpus allocates 74911744 bytes.
+One ingest of `akmc_trace.con` (24000 frames, 27864917 bytes).
+The hash index keeps the first key for each xxHash3-128.
+Stored texts are not shared: stored blob bytes equal the raw file (27864917).
+Unique hashes: 7.
+Unique text: 8319 bytes (0.0002985 of the stored blobs).
+A corpus of those seven texts allocates 98304 bytes; the full corpus allocates 74911744 bytes.
 
-The seven texts are the unhopped HCN state and its saddle, the unhopped Cu
-state and its saddle, and both Pt–H states plus that saddle.
+The seven texts are the unhopped HCN state and its saddle, the unhopped Cu state and its saddle, and both Pt–H states plus that saddle.
 
 Figure: `eval/results/figures/dedup.pdf`.
 
 ## Bugs
 
-`set_trajectory_units` used to delete the `frame_by_hash` posting even when
-another frame still stored those bytes. The posting now moves to a frame that
-still has the digest, or is removed when none does. A sole frame's old digest
-is dropped and its new digest is posted. The eval check and the library
-regression tests cover both cases.
+`set_trajectory_units` used to delete the `frame_by_hash` posting even when another frame still stored those bytes.
+The posting now moves to a frame that still has the digest, or is removed when none does.
+A sole frame's old digest is dropped and its new digest is posted.
+The eval check and the library regression tests cover both cases.
 
 These two are unchanged:
 
-1. Python `ConCorpus.select` always applies `natoms_range`, including the
-   default `0` to `u32::MAX` (`src/python.rs`). Every Python query therefore
-   walks `idx_natoms`. The timed readcon-db queries use the Rust `Select` API
-   and do not add that predicate.
-2. `readcon.iter_con` (`PyConFrameIterator::__next__` in readcon-core
-   `src/python.rs`) skips a leading newline, so an empty user line shifts the
-   header and the parse fails. `read_con` on one such frame keeps the empty
-   user line. Two concatenated frames also break `count_frames` and velocity
-   parsing. Reproducer: `eval/bugs/empty-user-line.con`. The evaluation user
-   line `cpc-eval` is only a workaround.
+1. Python `ConCorpus.select` always applies `natoms_range`, including the default `0` to `u32::MAX` (`src/python.rs`).
+   Every Python query therefore walks `idx_natoms`.
+   The timed readcon-db queries use the Rust `Select` API and do not add that predicate.
+2. `readcon.iter_con` (`PyConFrameIterator::__next__` in readcon-core `src/python.rs`) skips a leading newline, so an empty user line shifts the header and the parse fails.
+   `read_con` on one such frame keeps the empty user line.
+   Two concatenated frames also break `count_frames` and velocity parsing.
+   Reproducer: `eval/bugs/empty-user-line.con`.
+   The evaluation user line `cpc-eval` is only a workaround.
 
 ## Limits
 
 Ingest parallelism in a directory load was not used; the thread cap is 1.
-Cold times are fadvise hints, not a guaranteed cache drop. This evaluation
-commit keeps the LMDB map at the 2 GiB constant, so one million frames
-returns `MDB_MAP_FULL`. In readcon-db 0.1.8 that same 2 GiB value is
-`DEFAULT_MAP_SIZE`: `open_with_map_size` and `READCON_DB_MAP_SIZE` raise it,
-and a write that hits `MDB_MAP_FULL` grows the map and retries. ASE's
-database lock waits forever if a dead process leaves `*.db.lock`; the ASE
-ingest helper removes that lock before connect.
+Cold times are fadvise hints, not a guaranteed cache drop.
+This evaluation commit keeps the LMDB map at the 2 GiB constant, so one million frames returns `MDB_MAP_FULL`.
+In readcon-db 0.1.8 that same 2 GiB value is `DEFAULT_MAP_SIZE`: `open_with_map_size` and `READCON_DB_MAP_SIZE` raise it, and a write that hits `MDB_MAP_FULL` grows the map and retries.
+ASE's database lock waits forever if a dead process leaves `*.db.lock`; the ASE ingest helper removes that lock before connect.

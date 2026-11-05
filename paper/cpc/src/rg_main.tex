@@ -70,6 +70,7 @@ Elsevier%
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
+\input{figures/generated/host_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
 \newcommand{\DOIPENDING}{The version DOI for the public commit is not minted.}
@@ -688,53 +689,35 @@ A point above the line means the tip is that many times as fast.}
 
 \FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames and 32 copper atoms, six times for each arm, interleaved, each sample a fresh process.
 Each library is imported before the clock starts.
-The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor, and the log names commit \texttt{61383466}.
+The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor, and the log names commit \texttt{de9175b6}.
 CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file.
 readcon does not read XYZ.
 readcon does not read HDF5.
 Memory is the VmHWM after the read minus the VmHWM after the import.
 
-\subsection{Results}\label{sec:results} On the CON file, readcon at the tip takes 1.132~s (IQR 0.120~s).
-readcon-core 0.17.3 takes 2.248~s (IQR 0.131~s).
-The tip reads the file 1.99 times faster than readcon-core 0.17.3.
-readcon at main \texttt{ac4f4379} takes 2.155~s (IQR 0.418~s), and the tip is 1.90 times as fast.
-ASE ase.io (format eon) takes 11.00~s (IQR 0.131~s), and the tip is 9.72 times as fast.
-eOn 3.6.0 \texttt{loadcons} takes 14.75~s (IQR 0.309~s), and the tip is 13.0 times as fast.
-The eOn \texttt{ConFileIO} loop takes 1.683~s (IQR 0.187~s), and the tip is 1.49 times as fast.
-readcon-db ingests the same file in 11.47~s (IQR 0.0306~s), and the read is 10.1 times as fast as that ingest.
+\subsection{Results}\label{sec:results} On the coordinate file, readcon at the tip takes \rcTipMedian~s.
+readcon-core 0.17.3 takes \rcReleaseMedian~s.
+The tip reads the file \rcTipOverRelease{} times faster than readcon-core 0.17.3.
+ASE ase.io (format eon) takes 11.34~s, and the tip is 61.7 times as fast.
+eOn 3.6.0 \texttt{loadcons} takes 14.90~s, and the tip is 81.1 times as fast.
+The row labelled readcon through the eOn C++ API is readcon's own parser called from that API.
+It takes 1.750~s.
+readcon-db ingests the same file in 11.71~s, and the read is 63.7 times as fast as that ingest.
 Every all-frame arm matches 100000 of 100000 frames, and the failure count is 0.
-The read adds 1158~MiB at the tip.
-ASE ase.io (format eon) adds 384~MiB, chemfiles adds 166~MiB and OVITO adds 172~MiB.
-readcon-core 0.17.3 adds 2531~MiB, the \texttt{ConFileIO} loop adds 1059~MiB, and \texttt{loadcons} adds 2965~MiB.
+The read adds \rcTipMib~MiB at the tip.
+ASE ase.io (format eon) adds 384~MiB.
+chemfiles adds 166~MiB and OVITO adds 172~MiB, and those two figures read XYZ.
 
 The first-frame rows read one frame of the same file.
-\texttt{Matter.con2matter} takes 0.333~s (IQR 0.0143~s) and matches 1 of 1 frame.
-readcon's first-frame read takes 0.0552~s (IQR 0.0170~s) and matches 1 of 1 frame.
-The eOn build log is \path{paper/cpc/logs/eon-build.log}, and the driver log is \path{paper/cpc/logs/eon-driver.log}.
+\texttt{Matter.con2matter} takes 0.343~s and matches 1 of 1 frame.
+readcon's first-frame read takes 0.0535~s and matches 1 of 1 frame.
+The eOn build log is \path{paper/cpc/logs/eon-build.log}, and it names eOn commit \texttt{579738a}.
 
-readcon does not read XYZ.
-readcon does not read HDF5.
-The times for those formats are context for choosing a format, in Section~\ref*{sec:supp-timing}.
+The times for XYZ, HDF5 and the mapped binary coordinate file are context for choosing a format, in Section~\ref*{sec:supp-timing}.
+h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s.
+The mapped binary file reads them in \rcConbinMedian~s.
 
-\begin{table}[tbp] \centering \footnotesize \caption{All-frame CON reads of 100000 frames, six fresh processes, type 7 median.
-The last two rows are first-frame reads of the same file.}
-\label{tab:host}
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Reader & Median (s) & IQR (s) & MiB & Matched \\
-\midrule
-readcon, tip & 1.132 & 0.120 & 1158 & 100000/100000 \\
-readcon-core 0.17.3 & 2.248 & 0.131 & 2531 & 100000/100000 \\
-readcon, main & 2.155 & 0.418 & 2531 & 100000/100000 \\
-ASE ase.io (format eon) & 11.00 & 0.131 & 384 & 100000/100000 \\
-eOn \texttt{loadcons} & 14.75 & 0.309 & 2965 & 100000/100000 \\
-eOn \texttt{ConFileIO} & 1.683 & 0.187 & 1059 & 100000/100000 \\
-readcon-db & 11.47 & 0.0306 & 398 & 100000/100000 \\
-readcon, first frame & 0.0552 & 0.0170 & 131 & 1/1 \\
-eOn \texttt{con2matter}, first frame & 0.333 & 0.0143 & 263 & 1/1 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{figures/generated/host_table}
 
 We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE database, six times each.
 readcon-db takes a median of 0.00488~s and the ASE database takes 0.0776~s.

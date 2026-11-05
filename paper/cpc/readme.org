@@ -13,19 +13,8 @@ Each record that a readcon-core build wrote carries a =provenance= block (=scrip
 
 With =readcon-core.bundle= and =paper-cpc.tar.gz= in one directory, and git, conda and TeX Live on the path:
 
-#+begin_src bash
-git clone readcon-core.bundle readcon-core
-cd readcon-core
-tar -xzf ../paper-cpc.tar.gz
-git checkout "$(python3 paper/cpc/scripts/gen_release.py --commit)"
-conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt
-conda activate readcon-cpc
-python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt
-python3 -m pip install .
-python3 paper/cpc/scripts/regen_paper.py
-bash paper/cpc/scripts/build_tex.sh
-python3 paper/cpc/scripts/trace_numbers.py --check
-#+end_src
+#+begin_src bash git clone readcon-core.bundle readcon-core cd readcon-core tar -xzf ../paper-cpc.tar.gz git checkout "$(python3 paper/cpc/scripts/gen_release.py --commit)" conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt conda activate readcon-cpc python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt python3 -m pip install .
+python3 paper/cpc/scripts/regen_paper.py bash paper/cpc/scripts/build_tex.sh python3 paper/cpc/scripts/trace_numbers.py --check #+end_src
 
 These are the commands of the listing in the section Reproduction of the supplement, which prints the commit of =src/commit.tex= in its =git checkout=; here =gen_release.py --commit= reads that file, with any Python 3, after the unpacking.
 The PDFs were typeset with the TeX Live 2023 of Ubuntu 24.04, whose =pdftex --version= prints =pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)=.

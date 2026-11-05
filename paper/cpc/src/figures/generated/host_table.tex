@@ -1,0 +1,21 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{All-frame coordinate reads of 100000 frames, six fresh processes, type 7 median. The last two rows are first-frame reads of the same file. The eOn C++ row is readcon through that API.}
+\label{tab:host}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+readcon, tip & 0.1837 & 0.0132 & 205.2 & 100000/100000 \\
+readcon-core 0.17.3 & 2.321 & 0.109 & 2531 & 100000/100000 \\
+readcon, main & 2.366 & 0.205 & 2531 & 100000/100000 \\
+ASE ase.io (format eon) & 11.34 & 0.1 & 383.8 & 100000/100000 \\
+eOn \texttt{loadcons} & 14.9 & 0.452 & 3046 & 100000/100000 \\
+readcon through the eOn C++ API & 1.75 & 0.095 & 1059 & 100000/100000 \\
+readcon-db & 11.71 & 0.248 & 397.9 & 100000/100000 \\
+readcon, first frame & 0.0535 & 0.0103 & 130.9 & 1/1 \\
+eOn \texttt{con2matter}, first frame & 0.343 & 0.0228 & 263.1 & 1/1 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,53 @@
+# Rebuild the corpora, the reader exchange, and the tables the paper inputs.
+# Run from paper/cpc: snakemake -c1 all
+
+rule all:
+    input:
+        "data/corpus31/manifest.toml",
+        "logs/reader-exchange.log",
+        "src/figures/generated/host_macros.tex",
+        "src/figures/generated/host_table.tex",
+        "src/figures/generated/format_context.tex",
+        "src/figures/generated/timing.pdf",
+        "src/figures/generated/ratios.pdf",
+        "src/figures/generated/memory.pdf",
+
+rule corpus31:
+    output:
+        "data/corpus31/manifest.toml",
+    shell:
+        "python3 scripts/make_corpus31.py --out data/corpus31"
+
+rule reader_exchange:
+    output:
+        "logs/reader-exchange.log",
+    shell:
+        "python3 scripts/bench_readers.py"
+
+rule host_tables:
+    input:
+        "logs/reader-exchange.log",
+    output:
+        "src/figures/generated/host_macros.tex",
+        "src/figures/generated/host_table.tex",
+        "src/figures/generated/format_context.tex",
+    shell:
+        "python3 scripts/host_from_log.py"
+
+rule reader_figures:
+    input:
+        "logs/reader-exchange.log",
+    output:
+        "src/figures/generated/timing.pdf",
+        "src/figures/generated/ratios.pdf",
+        "src/figures/generated/memory.pdf",
+    shell:
+        """
+        cd scripts && python3 - << 'PY'
+        import plot_union_extra as u
+        theme = u._theme()
+        u.timing(theme)
+        u.ratios(theme)
+        u.memory(theme)
+        PY
+        """

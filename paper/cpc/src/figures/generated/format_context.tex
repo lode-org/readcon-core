@@ -1,0 +1,20 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Context for choosing a format. These readers open XYZ, HDF5, or the mapped binary coordinate file.}
+\label{tab:format-context}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+NumPy & 1.316 & 0.0571 & 390.9 & 100000/100000 \\
+chemfiles & 1.397 & 0.13 & 166 & 100000/100000 \\
+OVITO & 4.983 & 0.281 & 172 & 100000/100000 \\
+ASE, extended XYZ & 8.475 & 0.298 & 345.7 & 100000/100000 \\
+pymatgen & 27.76 & 0.812 & 2119 & 100000/100000 \\
+h5py & 0.7702 & 0.158 & 758.7 & 100000/100000 \\
+MDAnalysis & 52 & 0.38 & 139.3 & 100000/100000 \\
+CON-bin mmap & 0.006633 & 0.00108 & 146.8 & 100000/100000 \\
+\bottomrule
+\end{tabular}
+\end{table}
