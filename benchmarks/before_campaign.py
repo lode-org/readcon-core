@@ -10,7 +10,6 @@ The spread is the type-7 interquartile range.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import gc
 import math
 import resource
@@ -19,10 +18,10 @@ import subprocess
 import time
 from pathlib import Path
 
+import touch_fold
+
 REPEATS = 6
 LADDER = (1, 2, 4, 8)
-MASK = (1 << 64) - 1
-MIX = 0x9E3779B185EBCA87
 
 
 def percentile_type7(samples: list[float], pct: float) -> float:
@@ -48,71 +47,6 @@ def median(samples: list[float]) -> float:
 
 def iqr(samples: list[float]) -> float:
     return percentile_type7(samples, 75) - percentile_type7(samples, 25)
-
-
-def mix(hash_value: int, item: int) -> int:
-    return ((hash_value * MIX) ^ item) & MASK
-
-
-def load_fold(lib_path: Path):
-    lib = ctypes.CDLL(str(lib_path))
-    lib.fold_shared_symbols.restype = ctypes.c_uint64
-    lib.fold_shared_symbols.argtypes = [
-        ctypes.c_uint64,
-        ctypes.c_uint64,
-        ctypes.POINTER(ctypes.c_void_p),
-        ctypes.c_uint64,
-        ctypes.POINTER(ctypes.c_uint64),
-        ctypes.POINTER(ctypes.c_void_p),
-        ctypes.c_uint64,
-        ctypes.c_uint64,
-        ctypes.c_uint64,
-    ]
-    return lib
-
-
-def f64_bits(value: float) -> int:
-    import struct
-
-    return struct.unpack("<Q", struct.pack("<d", float(value)))[0]
-
-
-def shared_digest(frames, fold) -> int:
-    first = frames[0]
-    last = frames[-1]
-    symbols = [atom.symbol.encode("utf-8") for atom in first.atoms]
-    last_symbols = [atom.symbol.encode("utf-8") for atom in last.atoms]
-    if symbols != last_symbols:
-        raise SystemExit("symbol sequence differs across frames")
-    cell = [f64_bits(value) for value in first.cell]
-    if [f64_bits(value) for value in last.cell] != cell:
-        raise SystemExit("cell lengths differ across frames")
-    n_frames = len(frames)
-    held = []
-    ptrs = (ctypes.c_void_p * n_frames)()
-    for index, frame in enumerate(frames):
-        xyz = frame.xyz.reshape(-1)
-        held.append(xyz)
-        ptrs[index] = xyz.ctypes.data
-    n_coords = held[0].shape[0]
-    sym_keep = [ctypes.create_string_buffer(item) for item in symbols]
-    sym_lens = (ctypes.c_uint64 * len(sym_keep))(*[len(item) - 1 for item in sym_keep])
-    sym_ptrs = (ctypes.c_void_p * len(sym_keep))()
-    for index, item in enumerate(sym_keep):
-        sym_ptrs[index] = ctypes.cast(item, ctypes.c_void_p)
-    return int(
-        fold.fold_shared_symbols(
-            n_frames,
-            n_coords,
-            ptrs,
-            len(sym_keep),
-            sym_lens,
-            sym_ptrs,
-            cell[0],
-            cell[1],
-            cell[2],
-        )
-    )
 
 
 def meminfo() -> str:
@@ -142,7 +76,7 @@ def call_read(path: Path, workers: int, build: str, expect: int | None, fold) ->
     frames = readcon.read_con(str(path), n_threads=workers)
     digest = 0
     if build == "touch":
-        digest = shared_digest(frames, fold)
+        digest = touch_fold.shared_digest(frames, fold)
         if expect is not None and digest != expect:
             raise SystemExit(f"digest mismatch workers={workers} got={digest} expect={expect}")
     elif len(frames) < 1:
@@ -175,7 +109,11 @@ def round_robin(paths: dict[int, Path], build: str, expects: dict[int, int], fol
         for workers, path in paths.items():
             expect = expects.get(workers) if build == "touch" else None
             dt, flt, maj, resident = call_read(path, workers, build, expect, fold)
-            digest_text = f" digest={expect}" if build == "touch" else " touch_s=0"
+            digest_text = (
+                f" checksum={touch_fold.FUNCTION} digest={expect}"
+                if build == "touch"
+                else " touch_s=0"
+            )
             print(
                 f"hostname={host} before {build} workers={workers} sample_s={dt:.6f} "
                 f"minflt={flt} majflt={maj} rss_kb={resident} "
@@ -259,7 +197,10 @@ def main() -> None:
     parser.add_argument("--fold-lib", type=Path, required=True)
     args = parser.parse_args()
     host = socket.gethostname()
-    fold = load_fold(args.fold_lib)
+    fold = touch_fold.load_fold(args.fold_lib)
+    print(f"checksum-function={touch_fold.FUNCTION}", flush=True)
+    print(f"harness-sha256={touch_fold.harness_sha()}", flush=True)
+    print(f"fold-lib-sha256={touch_fold.file_sha(args.fold_lib)}", flush=True)
     expects = {
         1: 7345014615454105600,
         2: 10387267436995117056,
