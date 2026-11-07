@@ -199,6 +199,8 @@ allow_exact = {
     "paper/cpc/bench/mpi_cost/Cargo.lock",
     "paper/cpc/bench/dlpack_cost/Cargo.lock",
     "paper/cpc/bench/readcon-bench/Cargo.lock",
+    # The release-guard fixtures name the current package version on purpose.
+    "tests/python/test_check_release_artifacts.py",
     # The one macro the paper reads. scripts/cargo_version_tex.py writes
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
