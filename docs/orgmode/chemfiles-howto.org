@@ -9,6 +9,8 @@
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 #+end_export
 
+#+INCLUDE: "rfc2119-note.inc"
+
 ([[file:howto.org][howto]]) or finish [[file:chemfiles-tutorial.org][the chemfiles tutorial]] once.
 
 * How to convert a single structure file (XYZ, PDB, GRO, …) to CON
@@ -27,7 +29,7 @@ w.write_frame(&frame)?;
 #+end_src
 
 Chemfiles selects the reader from the path. If the format has topology, CON
-line-2 JSON may include =bonds= (0-based =atom_data= indices after import
+line-2 JSON MAY include =bonds= (0-based =atom_data= indices after import
 remap) and =chemfiles_residues=. Line-2 =units.time= is =ps= (chemfiles
 velocities are Å/ps), not the CON-native default =fs=.
 
@@ -137,8 +139,8 @@ let r = evaluate_selection_on_con_frame("angles: all", frame)?;
 assert_eq!(r.context_size, 3);
 #+end_src
 
-Angles/dihedrals are *derived by chemfiles from bonds* at projection time;
-you do not store angle arrays on disk in v0.13.
+Angles and dihedrals are *derived by chemfiles from bonds* at projection time.
+Writers MUST NOT store angle arrays on disk in v0.13.
 
 * How to use the C API for selection
 
@@ -171,7 +173,7 @@ cargo build                            # stubs; FeatureDisabled on import/select
 #+end_src
 
 Selection symbols still import in Python/Rust; they error clearly. Use this
-for CI that must not compile CMake/chemfiles.
+for CI that MUST NOT compile CMake/chemfiles.
 
 * How to install full chemfiles support
 
@@ -182,7 +184,7 @@ cargo build --features chemfiles
 maturin develop --features python,chemfiles
 #+end_src
 
-Do not install =readcon= and =readcon-chemfiles= together (module clash).
+Users MUST NOT install =readcon= and =readcon-chemfiles= together (module clash).
 
 * How to batch-convert a directory of foreign trajectories
 

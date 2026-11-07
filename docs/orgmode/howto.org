@@ -14,6 +14,8 @@ These pages answer *how do I …* once you already know the shape of a CON file
 from the :doc:`tutorial`. Pick a language section and copy the block that matches
 your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Querying the spec version
 
 /Added in v0.5.0. Per-frame spec_version added in v0.6.0.
@@ -502,7 +504,7 @@ output = readcon.write_con_string(frames, precision=17)
 /Added in v0.4.0.  atom_id, velocity, mass, forces, and per-axis
 fixed-mask transfer are preserved.
 
-Convert between =ConFrame= and ASE =Atoms= objects.  ASE must be
+Convert between =ConFrame= and ASE =Atoms= objects.  ASE MUST be
 installed (it is an optional dependency).  The conversion preserves
 atom_id (via a custom per-atom array), velocities, forces, masses,
 and per-axis fixed masks.
