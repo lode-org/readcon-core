@@ -638,16 +638,19 @@ fn split_stream_sum(path: &Path, threads: usize, limits: &QueueLimits) -> Result
         for (span, end) in ranges {
             let err_tx = err_tx.clone();
             handles.push(scope.spawn(move || {
-                match stream_one_span(path, SpanGeom {
-                    base,
-                    span,
-                    end,
-                    page,
-                    payload_off: payload.offset,
-                    payload_end: payload.end,
-                    request,
-                    depth,
-                }) {
+                match stream_one_span(
+                    path,
+                    SpanGeom {
+                        base,
+                        span,
+                        end,
+                        page,
+                        payload_off: payload.offset,
+                        payload_end: payload.end,
+                        request,
+                        depth,
+                    },
+                ) {
                     Ok(part) => part,
                     Err(err) => {
                         let _ = err_tx.send(err);

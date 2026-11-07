@@ -29,10 +29,19 @@ jobs:
 
       - name: Assemble slim and vendor cxx tarballs
         run: |
-          mkdir -p dist-cxx
-          bash scripts/package-cxx.sh dist-cxx
-          bash scripts/package-cxx.sh dist-cxx --vendor
-          ls -lh dist-cxx
+          set -euo pipefail
+          ver="$(tr -d '[:space:]' < VERSION)"
+          mkdir -p dist-cxx build-cxx/slim build-cxx/vendor
+          bash scripts/package-cxx.sh build-cxx/slim
+          bash scripts/package-cxx.sh build-cxx/vendor --vendor
+          # Release assets are the two archives and their sha256 sidecars.
+          # Wrap files stay in build-cxx so the vendor hash cannot replace
+          # the slim wrap, and they are not uploaded.
+          cp "build-cxx/slim/readcon-core-cxx-${ver}.tar.gz" dist-cxx/
+          cp "build-cxx/slim/readcon-core-cxx-${ver}.tar.gz.sha256" dist-cxx/
+          cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz" dist-cxx/
+          cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz.sha256" dist-cxx/
+          ls -lh dist-cxx build-cxx/slim build-cxx/vendor
 
       - name: Require tarball names to match the tag
         env:

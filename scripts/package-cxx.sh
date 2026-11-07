@@ -174,9 +174,32 @@ echo "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 echo "sha256:${SHA}"
 echo "${SHA}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz.sha256"
 
-if [[ -f "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in" ]]; then
-    sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
-        "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in" \
-        > "${OUTPUT_DIR}/readcon-core.wrap"
-    echo "${OUTPUT_DIR}/readcon-core.wrap"
+# A Meson wrap for this archive only. The filename is the archive name, so a
+# vendor build cannot replace the slim wrap. These files are build provenance.
+# The release directory copied by cxx_tarball.yml does not include them.
+if [[ "$VENDOR" -eq 0 && ! -f "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in" ]]; then
+    echo "missing packaging/wrapdb/readcon-core.wrap.in" >&2
+    exit 1
 fi
+if [[ "$VENDOR" -eq 1 ]]; then
+    WRAP_NAME="readcon-core-cxx-${VERSION}-vendor.wrap"
+    cat > "${OUTPUT_DIR}/${WRAP_NAME}" <<EOF
+# archive = readcon-core-cxx-${VERSION}-vendor.tar.gz
+[wrap-file]
+directory = readcon-core-cxx-${VERSION}-vendor
+source_url = https://github.com/lode-org/readcon-core/releases/download/v${VERSION}/readcon-core-cxx-${VERSION}-vendor.tar.gz
+source_filename = readcon-core-cxx-${VERSION}-vendor.tar.gz
+source_hash = sha256:${SHA}
+
+[provide]
+dependency_names = readcon-core
+EOF
+else
+    WRAP_NAME="readcon-core-cxx-${VERSION}.wrap"
+    {
+        echo "# archive = readcon-core-cxx-${VERSION}.tar.gz"
+        sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
+            "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in"
+    } > "${OUTPUT_DIR}/${WRAP_NAME}"
+fi
+echo "${OUTPUT_DIR}/${WRAP_NAME}"
