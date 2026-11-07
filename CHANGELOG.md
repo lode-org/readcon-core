@@ -4,6 +4,67 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 
 <!-- towncrier release notes start -->
+
+## v0.18.0 - 2026-11-07
+
+### Features
+
+- The package version lives in `VERSION`.
+  cogapp writes every other copy of it
+  (https://cog.readthedocs.io/en/latest/).
+  CMake, Meson, Sphinx and the org-to-rst export read that file directly.
+  Release notes come from towncrier fragments
+  (https://towncrier.readthedocs.io/en/stable/).
+- The pull request benchmark compares both commits on one runner.
+  A memory row uses one allocator granule over the base peak.
+  The comment table shows each row's own upper bound.
+- Weak scaling grows the frame count with the thread or rank count.
+  The Snakemake workflow launches asv for threads and mpirun for ranks.
+  The ladder stops at the physical core count. Six repeats are the sample count
+  at each point. Tables are named from the CPU model.
+- A trajectory coordinate read allocates one float64 array.
+  Parsing writes each frame into that array.
+  A frame coordinate property is a view of it.
+  Atom objects are built when a caller asks for them.
+
+### Bugfixes
+
+- A bench host is the CPU model when that run stored one.
+  Otherwise, it reads unrecorded, and a rerun stores no machine name.
+- Fortran lists the package version once, so the bindings compile.
+  A Windows checkout may store a carriage return in VERSION.
+  The build accepts that line ending.
+  The heading test is not a second copy of the package version.
+- The Python reader moves a parsed frame into its wrapper.
+  It no longer clones every atom on the GIL thread after the parallel parse.
+- The coordinate parse splits frames by their start offsets.
+  Each worker writes its frames into slots allocated before the parse.
+  The frame list matches the serial parse.
+- The frame-start scan splits the buffer into chunks and stitches newline
+  positions across a header that crosses a chunk edge.
+  The offsets match the serial scan.
+- The weak-scaling ladder is capped at the physical core count.
+  Six repeats are the sample count at one point.
+  A rung above the physical cores is refused.
+- read_con maps a large file and builds each Python frame on first use.
+  The coordinate slab is filled off the GIL.
+  Phase times cover open, scan, slot allocation, the worker parse, and the
+  return.
+- A leading zstd skippable frame is recognised as zstd.
+  A file that starts with one decompresses with the frames after it.
+  A build without the zstd feature asks for that feature.
+- A zero-length cell edge keeps its length and takes a right angle.
+  The written angle line is finite.
+  A cell that was never set stays non-periodic.
+- Extended XYZ scanning fills positions, masses and the cell in one token walk.
+- Each rank reads the byte range of its own frames.
+
+### Documentation
+
+- Documentation names the RFC 2119 words MUST, MUST NOT, SHOULD, SHOULD NOT,
+  and MAY.
+
+
 ## v0.17.3 - 2026-10-31
 
 ### Added
@@ -1200,6 +1261,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.18.0]: https://github.com/lode-org/readcon-core/compare/v0.17.3...v0.18.0
 [v0.17.3]: https://github.com/lode-org/readcon-core/compare/v0.17.2...v0.17.3
 [v0.17.2]: https://github.com/lode-org/readcon-core/compare/v0.17.1...v0.17.2
 [v0.17.1]: https://github.com/lode-org/readcon-core/compare/v0.17.0...v0.17.1
