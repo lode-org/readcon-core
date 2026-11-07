@@ -126,3 +126,33 @@ fn c_writer_reports_repeated_atom_id() {
         free_rkr_writer(writer);
     }
 }
+
+#[test]
+fn binding_writer_reports_repeated_atom_id() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("duplicate.con");
+    let name = CString::new(path.to_str().unwrap()).unwrap();
+    unsafe {
+        let writer = create_writer_from_path_c(name.as_ptr());
+        assert!(!writer.is_null());
+        let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [true, false, false], 1, 1.008);
+        builder.add_atom("H", 1.0, 0.0, 0.0, [false, true, false], 1, 1.008);
+        let mut frame = builder.build().unwrap();
+        let handle = (&mut frame as *mut _) as *mut RKRConFrame;
+        let handles = [handle];
+        assert_eq!(
+            rkr_writer_extend_binding(writer, handles.as_ptr(), 1),
+            RKRStatus::RKR_STATUS_IO_ERROR
+        );
+        let message = CStr::from_ptr(rkr_last_error_message()).to_str().unwrap();
+        assert!(message.contains("atom id 1 is repeated"), "{message}");
+        assert_eq!(
+            CStr::from_ptr(rkr_status_message(RKRStatus::RKR_STATUS_IO_ERROR))
+                .to_str()
+                .unwrap(),
+            "I/O error"
+        );
+        free_rkr_writer(writer);
+    }
+}

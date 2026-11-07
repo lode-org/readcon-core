@@ -1320,6 +1320,8 @@ pub unsafe extern "C" fn rkr_frame_binding_rewrite(
 ///
 /// Unlike [`rkr_frame_binding_rewrite`], this does not allocate a second
 /// copy of the atoms. The stamp is restored before the function returns.
+/// A format failure stays `RKR_STATUS_IO_ERROR`, and
+/// [`rkr_last_error_message`] returns the underlying text.
 ///
 /// # Safety
 /// `writer_handle` and `frame_handles` must be valid. Each frame is mutated
@@ -1342,10 +1344,12 @@ pub unsafe extern "C" fn rkr_writer_extend_binding(
         let Some(frame) = (unsafe { (handle as *mut ConFrame).as_mut() }) else {
             return RKRStatus::RKR_STATUS_NULL_POINTER;
         };
-        if writer.write_frame_binding(frame).is_err() {
+        if let Err(err) = writer.write_frame_binding(frame) {
+            set_last_error(&err.to_string());
             return RKRStatus::RKR_STATUS_IO_ERROR;
         }
     }
+    clear_last_error();
     RKRStatus::RKR_STATUS_SUCCESS
 }
 

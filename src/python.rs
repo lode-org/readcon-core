@@ -1084,19 +1084,28 @@ impl PyConFrame {
 
     fn from_owned(py: Python<'_>, mut frame: ConFrame) -> PyResult<Self> {
         let n_atoms = frame.positions.nrows();
-        let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
-        if let Some(src) = frame.positions.f64_slice() {
-            data.extend_from_slice(src);
-        } else {
-            for i in 0..n_atoms {
-                data.extend_from_slice(&frame.positions.as_f64_row(i));
+        // The coordinate view is a NumPy array. Building it calls the
+        // NumPy C API, which panics when the numpy module is absent.
+        // A read that only writes the frames back keeps the parser's
+        // coordinates on the frame instead.
+        let xyz_owned = if py.import("numpy").is_ok() {
+            let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
+            if let Some(src) = frame.positions.f64_slice() {
+                data.extend_from_slice(src);
+            } else {
+                for i in 0..n_atoms {
+                    data.extend_from_slice(&frame.positions.as_f64_row(i));
+                }
             }
-        }
-        let xyz = Array2::from_shape_vec((n_atoms, 3), data)
-            .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
-            .into_pyarray(py)
-            .unbind();
-        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+            let xyz = Array2::from_shape_vec((n_atoms, 3), data)
+                .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
+                .into_pyarray(py)
+                .unbind();
+            frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+            Some(xyz)
+        } else {
+            None
+        };
         let cell = frame.header.boxl;
         let angles = frame.header.angles;
         let prebox_header = [
@@ -1119,7 +1128,7 @@ impl PyConFrame {
             n_atoms,
             slab: None,
             slab_index: 0,
-            xyz_owned: Some(xyz),
+            xyz_owned,
         })
     }
 
@@ -1984,12 +1993,20 @@ fn con_frame_list(
     let workers = n_threads.filter(|n| *n >= 2).unwrap_or(1);
     let fault0 = crate::iterators::process_minflt();
     let t_slab = std::time::Instant::now();
-    let packed = py.detach(|| match pool.as_ref() {
-        Some(pool) if workers >= 2 => {
-            pool.install(|| crate::iterators::pack_position_slab(&frames, workers))
-        }
-        _ => crate::iterators::pack_position_slab(&frames, 1),
-    });
+    // `into_pyarray` panics if the numpy module is not installed. The
+    // shared slab is the coordinate view; the frames still hold the
+    // parsed coordinates when that view cannot be built.
+    let numpy_ok = py.import("numpy").is_ok();
+    let packed = if numpy_ok {
+        py.detach(|| match pool.as_ref() {
+            Some(pool) if workers >= 2 => {
+                pool.install(|| crate::iterators::pack_position_slab(&frames, workers))
+            }
+            _ => crate::iterators::pack_position_slab(&frames, 1),
+        })
+    } else {
+        None
+    };
     let slab_s = t_slab.elapsed().as_secs_f64();
     let slab_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
     let n_atoms = match packed.as_ref() {
@@ -2281,7 +2298,7 @@ fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyC
         && frames
             .iter()
             .all(|frame| frame.positions.nrows() == n_atoms);
-    if !rectangular {
+    if !rectangular || py.import("numpy").is_err() {
         return frames
             .into_iter()
             .map(|frame| PyConFrame::from_con_frame(py, &frame))
