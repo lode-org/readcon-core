@@ -22,7 +22,15 @@ correctly rounded value of the decimal in the file (the ulps column, and per
 reader for the reference frame in the sidecar).
 """
 from __future__ import annotations
-import csv, ctypes, hashlib, json, os, struct, sys, tempfile, warnings
+import csv
+import ctypes
+import hashlib
+import json
+import os
+import struct
+import sys
+import tempfile
+import warnings
 from importlib import metadata
 from pathlib import Path
 import numpy as np
@@ -239,7 +247,8 @@ def _lib():
 
 
 def part_b():
-    import provenance, readcon
+    import provenance
+    import readcon
     lib = _lib()
     rows = []
     corpus = sorted((REPO / "resources" / "conformance").glob("*/*.con"))

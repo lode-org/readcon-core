@@ -22,7 +22,10 @@ fn displacements_set_read_and_build() {
     assert!(b.displacements().is_empty());
     assert!(matches!(
         b.set_displacements_from_flat(&[0.0; 5]),
-        Err(ParseError::InvalidVectorLength { expected: 9, found: 5 })
+        Err(ParseError::InvalidVectorLength {
+            expected: 9,
+            found: 5
+        })
     ));
     let flat = [0.1, 0.2, 0.3, 1.1, 1.2, 1.3, 2.1, 2.2, 2.3];
     b.set_displacements_from_flat(&flat).unwrap();
@@ -53,14 +56,20 @@ fn spreads_validate_set_read_and_build() {
     assert!(b.spreads().is_empty());
     assert!(matches!(
         b.set_spreads_from_flat(&[0.0; 4]),
-        Err(ParseError::InvalidVectorLength { expected: 6, found: 4 })
+        Err(ParseError::InvalidVectorLength {
+            expected: 6,
+            found: 4
+        })
     ));
     // A negative or non-finite spread is refused before any write.
     assert!(matches!(
         b.set_spreads_from_flat(&[0.1, 0.1, 0.1, 0.1, -0.1, 0.1]),
         Err(ParseError::ValidationError(_))
     ));
-    assert!(b.set_spreads_from_flat(&[0.1, 0.1, f64::NAN, 0.1, 0.1, 0.1]).is_err());
+    assert!(
+        b.set_spreads_from_flat(&[0.1, 0.1, f64::NAN, 0.1, 0.1, 0.1])
+            .is_err()
+    );
     assert!(b.spreads().is_empty());
     let flat = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
     b.set_spreads_from_flat(&flat).unwrap();
@@ -106,11 +115,8 @@ fn sectioned_atoms(n: usize) -> Vec<AtomDatum> {
 fn positions_reusing_constructor_fills_every_section() {
     let template = builder(3).build().unwrap();
     let atoms = sectioned_atoms(3);
-    let positions = FloatArray2::from_f64_row_major(
-        3,
-        3,
-        atoms.iter().flat_map(|a| [a.x, a.y, a.z]).collect(),
-    );
+    let positions =
+        FloatArray2::from_f64_row_major(3, 3, atoms.iter().flat_map(|a| [a.x, a.y, a.z]).collect());
     let frame =
         con_frame_from_atom_data_with_positions(template.header.clone(), atoms.clone(), positions);
     assert_eq!(frame.positions.as_f64_row(2), [2.0, 0.5, 1.5]);
@@ -128,9 +134,15 @@ fn positions_reusing_constructor_fills_every_section() {
     // The AoS constructor agrees section for section.
     let reference = con_frame_from_atom_data(template.header.clone(), atoms);
     for i in 0..3 {
-        assert_eq!(frame.velocities.as_f64_row(i), reference.velocities.as_f64_row(i));
+        assert_eq!(
+            frame.velocities.as_f64_row(i),
+            reference.velocities.as_f64_row(i)
+        );
         assert_eq!(frame.spreads.as_f64_row(i), reference.spreads.as_f64_row(i));
-        assert_eq!(frame.atom_energies.get_f64(i), reference.atom_energies.get_f64(i));
+        assert_eq!(
+            frame.atom_energies.get_f64(i),
+            reference.atom_energies.get_f64(i)
+        );
     }
 }
 

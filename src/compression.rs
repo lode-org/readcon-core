@@ -568,11 +568,23 @@ mod tests {
 
     #[test]
     fn skippable_frame_magic_is_zstd() {
-        assert_eq!(detect_compression(&[0x50, 0x2a, 0x4d, 0x18]), Compression::Zstd);
-        assert_eq!(detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]), Compression::Zstd);
-        assert_eq!(detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]), Compression::None);
+        assert_eq!(
+            detect_compression(&[0x50, 0x2a, 0x4d, 0x18]),
+            Compression::Zstd
+        );
+        assert_eq!(
+            detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]),
+            Compression::Zstd
+        );
+        assert_eq!(
+            detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]),
+            Compression::None
+        );
         assert_eq!(detect_compression(&[0x50, 0x2a, 0x4d]), Compression::None);
-        assert_eq!(detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]), Compression::Zstd);
+        assert_eq!(
+            detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]),
+            Compression::Zstd
+        );
     }
 
     fn skippable_prefix(nibble: u8, payload: &[u8]) -> Vec<u8> {

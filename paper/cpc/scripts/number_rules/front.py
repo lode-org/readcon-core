@@ -7,7 +7,7 @@ import inspect
 import re
 
 import scipy.constants
-from numbers_lib import Rule, grep, jget, row, text
+from numbers_lib import Rule, grep, jget, text
 
 DOC = "rg_main.tex"
 SUPP = "rg_supp.tex"

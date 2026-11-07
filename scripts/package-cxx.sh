@@ -154,8 +154,13 @@ mkdir -p "$DEST/tests"
 cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
 cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
 
-tar -C "$TMP_DIR" -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
-gzip -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
+# Fixed mtime, owner, and gzip header so two builds of one tree share a digest.
+tar -C "$TMP_DIR" \
+    --sort=name \
+    --mtime='UTC 2026-11-07 00:00:00' \
+    --owner=0 --group=0 --numeric-owner \
+    -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
+gzip -n -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
 SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"

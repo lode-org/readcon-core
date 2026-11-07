@@ -1326,7 +1326,9 @@ where
     for index in 0..n {
         owned.push(unsafe { slots.as_mut_ptr().add(index).read().assume_init() });
     }
-    unsafe { slots.set_len(0); }
+    unsafe {
+        slots.set_len(0);
+    }
     recycle_slot_buf(slots);
     let slots = owned;
     SlotParse {
@@ -1440,9 +1442,9 @@ fn recycle_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache() -> &'static std::sync::Mutex<
-    Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
-> {
+fn slot_cache()
+-> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+{
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
     > = std::sync::Mutex::new(Vec::new());
@@ -1463,7 +1465,12 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
         return Some(Arc::clone(pool));
     }
     keep_parse_pages();
-    let pool = Arc::new(rayon::ThreadPoolBuilder::new().num_threads(workers).build().ok()?);
+    let pool = Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+            .ok()?,
+    );
     guard.push((workers, Arc::clone(&pool)));
     Some(pool)
 }
@@ -1557,7 +1564,10 @@ fn finish_results(
                 _ => error::ParseError::IncompleteFrame,
             });
         }
-        Ok(slots.into_par_iter().map(|item| item.expect("ok")).collect())
+        Ok(slots
+            .into_par_iter()
+            .map(|item| item.expect("ok"))
+            .collect())
     })
 }
 
@@ -1708,10 +1718,13 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             };
         let scan_s = t_scan.elapsed().as_secs_f64();
         let scan_minflt = process_minflt().saturating_sub(fault0);
-        let parsed =
-            parse_into_slots_timed(bytes, bytes.len(), &boundaries, parse_workers, |start, end| {
-                parse_byte_span(bytes, start, end)
-            });
+        let parsed = parse_into_slots_timed(
+            bytes,
+            bytes.len(),
+            &boundaries,
+            parse_workers,
+            |start, end| parse_byte_span(bytes, start, end),
+        );
         recycle_starts(boundaries);
         (parsed, scan_s, scan_kind, scan_minflt)
     };
@@ -1725,9 +1738,10 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
             let scan_s = t_scan.elapsed().as_secs_f64();
             let scan_minflt = process_minflt().saturating_sub(fault0);
-            let parsed = parse_into_slots_timed(bytes, bytes.len(), &boundaries, 1, |start, end| {
-                parse_byte_span(bytes, start, end)
-            });
+            let parsed =
+                parse_into_slots_timed(bytes, bytes.len(), &boundaries, 1, |start, end| {
+                    parse_byte_span(bytes, start, end)
+                });
             (0.0, None, (parsed, scan_s, SCAN_SERIAL, scan_minflt))
         }
         Some(n) => {
@@ -2199,9 +2213,13 @@ pub fn parse_frames_at_offsets(
         None => rayon::current_num_threads().max(1),
     };
     let run = || {
-        parse_into_slots(file_contents.as_bytes(), file_contents.len(), boundaries, workers, |start, end| {
-            parse_text_span(file_contents, start, end)
-        })
+        parse_into_slots(
+            file_contents.as_bytes(),
+            file_contents.len(),
+            boundaries,
+            workers,
+            |start, end| parse_text_span(file_contents, start, end),
+        )
     };
     match num_threads {
         Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
@@ -2973,10 +2991,13 @@ mod parallel_header_scan_tests {
             }
         }
         let tailed = format!("{text}\n   \n\t\n");
-        assert_cuts_match(
-            &tailed,
-            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
-        );
+        assert_cuts_match(&tailed, &[
+            0,
+            3,
+            tailed.len() / 2,
+            tailed.len() - 1,
+            tailed.len(),
+        ]);
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
         assert_crlf_gap_cut(&crlf);

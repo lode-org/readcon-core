@@ -43,7 +43,8 @@ fn next_token(line: &[u8], mut index: usize) -> Option<(usize, usize)> {
 }
 
 fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
-    let (value, consumed) = fast_float2::parse_partial::<f64, _>(bytes).map_err(|_| "float".to_string())?;
+    let (value, consumed) =
+        fast_float2::parse_partial::<f64, _>(bytes).map_err(|_| "float".to_string())?;
     if consumed == 0 {
         return Err("float".to_string());
     }
@@ -80,12 +81,21 @@ fn column_layout(properties: &[u8]) -> Result<(usize, Option<usize>), String> {
     let mut mass = None;
     let mut rest = properties;
     while !rest.is_empty() {
-        let name_end = rest.iter().position(|byte| *byte == b':').ok_or("properties")?;
+        let name_end = rest
+            .iter()
+            .position(|byte| *byte == b':')
+            .ok_or("properties")?;
         let name = &rest[..name_end];
         rest = &rest[name_end + 1..];
-        let kind_end = rest.iter().position(|byte| *byte == b':').ok_or("properties")?;
+        let kind_end = rest
+            .iter()
+            .position(|byte| *byte == b':')
+            .ok_or("properties")?;
         rest = &rest[kind_end + 1..];
-        let count_end = rest.iter().position(|byte| *byte == b':').unwrap_or(rest.len());
+        let count_end = rest
+            .iter()
+            .position(|byte| *byte == b':')
+            .unwrap_or(rest.len());
         let count = parse_f64(&rest[..count_end])? as usize;
         if name == b"pos" {
             pos = Some(offset);
@@ -106,18 +116,24 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
     let mut rest = trim(lattice);
     for slot in values.iter_mut() {
         rest = trim(rest);
-        let (value, consumed) = fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "lattice".to_string())?;
+        let (value, consumed) =
+            fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "lattice".to_string())?;
         if consumed == 0 {
             return Err("lattice".to_string());
         }
         *slot = value;
         rest = rest.get(consumed..).unwrap_or(b"");
     }
-    let length = |i: usize| (values[i] * values[i] + values[i + 1] * values[i + 1] + values[i + 2] * values[i + 2]).sqrt();
+    let length = |i: usize| {
+        (values[i] * values[i] + values[i + 1] * values[i + 1] + values[i + 2] * values[i + 2])
+            .sqrt()
+    };
     let la = length(0);
     let lb = length(3);
     let lc = length(6);
-    let dot = |i: usize, j: usize| values[i] * values[j] + values[i + 1] * values[j + 1] + values[i + 2] * values[j + 2];
+    let dot = |i: usize, j: usize| {
+        values[i] * values[j] + values[i + 1] * values[j + 1] + values[i + 2] * values[j + 2]
+    };
     let angle = |cos_v: f64| cos_v.clamp(-1.0, 1.0).acos().to_degrees();
     let gamma = angle(dot(0, 3) / (la * lb));
     let beta = angle(dot(0, 6) / (la * lc));
@@ -125,7 +141,11 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
     Ok([la, lb, lc, alpha, beta, gamma])
 }
 
-fn atom_values(line: &[u8], pos_col: usize, mass_col: Option<usize>) -> Result<(f64, f64, f64, f64), String> {
+fn atom_values(
+    line: &[u8],
+    pos_col: usize,
+    mass_col: Option<usize>,
+) -> Result<(f64, f64, f64, f64), String> {
     let mut index = 0;
     let mut column = 0;
     let mut coords = [0.0; 3];

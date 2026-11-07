@@ -53,7 +53,6 @@ import argparse
 import itertools
 import json
 import math
-import sys
 from pathlib import Path
 
 # Keep in lockstep with the Snakefile, which imports these names.

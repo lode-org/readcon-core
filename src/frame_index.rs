@@ -261,7 +261,9 @@ fn block_hash(block: &[u8]) -> u64 {
     let (strides, rest) = block.as_chunks::<64>();
     for stride in strides {
         for (lane, w) in lanes.iter_mut().zip(stride.as_chunks::<8>().0) {
-            *lane = (*lane ^ u64::from_le_bytes(*w)).wrapping_mul(K).rotate_left(31);
+            *lane = (*lane ^ u64::from_le_bytes(*w))
+                .wrapping_mul(K)
+                .rotate_left(31);
         }
     }
     let tail = fnv1a(FNV_OFFSET, rest);
@@ -624,7 +626,15 @@ mod tests {
     fn content_hash_sees_every_byte_and_block_order() {
         let base: Vec<u8> = (0..HASH_BLOCK * 3 + 77).map(|i| (i % 251) as u8).collect();
         let h = content_hash(&base);
-        for at in [0, 63, 64, HASH_BLOCK - 1, HASH_BLOCK, 2 * HASH_BLOCK + 5, base.len() - 1] {
+        for at in [
+            0,
+            63,
+            64,
+            HASH_BLOCK - 1,
+            HASH_BLOCK,
+            2 * HASH_BLOCK + 5,
+            base.len() - 1,
+        ] {
             let mut b = base.clone();
             b[at] ^= 0x20;
             assert_ne!(content_hash(&b), h, "byte {at}");

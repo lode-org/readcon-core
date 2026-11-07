@@ -10,7 +10,6 @@ The summary is the median and the type 7 quartiles
 
 from __future__ import annotations
 
-import os
 import platform
 import subprocess
 import sys
@@ -242,7 +241,7 @@ def main() -> int:
     write_tex(exchange_summaries, copy_summaries, lead_view, lead_copy, head)
     lines.append("exit_code 0")
     LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"wrote paper/cpc/logs/dlpack-exchange.log")
+    print("wrote paper/cpc/logs/dlpack-exchange.log")
     return 0
 
 

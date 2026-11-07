@@ -52,10 +52,7 @@ fn lscpu_usize(label: &str) -> Option<usize> {
 }
 
 fn physical_cores() -> usize {
-    match (
-        lscpu_usize("Core(s) per socket"),
-        lscpu_usize("Socket(s)"),
-    ) {
+    match (lscpu_usize("Core(s) per socket"), lscpu_usize("Socket(s)")) {
         (Some(cores), Some(sockets)) if cores >= 1 && sockets >= 1 => cores * sockets,
         _ => 0,
     }
@@ -195,10 +192,7 @@ fn main() {
     let physical = physical_cores();
     let ladder = physical_ladder(physical);
     if physical < 1 || ladder.iter().any(|workers| *workers > physical) {
-        write_refusal(
-            &out_path,
-            "lscpu did not report a physical-core ladder",
-        );
+        write_refusal(&out_path, "lscpu did not report a physical-core ladder");
         std::process::exit(2);
     }
 

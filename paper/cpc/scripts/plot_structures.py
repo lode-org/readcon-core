@@ -20,7 +20,6 @@ rendering. Panel chrome is black on white, in Latin Modern.
 from __future__ import annotations
 
 import shutil
-import sys
 from pathlib import Path
 
 import numpy as np

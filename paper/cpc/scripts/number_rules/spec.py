@@ -6,7 +6,7 @@ the parser constants are read from the Rust sources.
 
 from __future__ import annotations
 
-from numbers_lib import Rule, grep, jget
+from numbers_lib import Rule, jget
 
 CROSSCHECK = "data/corpus_crosscheck.json"
 TYPES = "/src/types.rs"

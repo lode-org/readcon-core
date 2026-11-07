@@ -294,7 +294,7 @@ def main() -> None:
     kernels = " ".join(
         part
         for part in [
-            f"The counts in units in the last place of Table~\\ref*{{tab:restartfmt}} were recorded on host "
+            "The counts in units in the last place of Table~\\ref*{tab:restartfmt} were recorded on host "
             r"\rfHost{} with the kernels of \texttt{scripts/numeric\_pins.py}: one OpenBLAS thread on its Nehalem "
             "kernels and NumPy at its x86-64-v2 baseline, which every x86-64-v2 host runs." if notes else "",
             kernel_sentence(runs),

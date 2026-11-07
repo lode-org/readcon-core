@@ -218,8 +218,12 @@ fn null_handle_len_records_null_argument() {
     use readcon_core::ffi::{rkr_last_error_message, rkr_trajectory_len};
     let last = || {
         let msg = rkr_last_error_message();
-        (!msg.is_null())
-            .then(|| unsafe { std::ffi::CStr::from_ptr(msg) }.to_str().unwrap().to_owned())
+        (!msg.is_null()).then(|| {
+            unsafe { std::ffi::CStr::from_ptr(msg) }
+                .to_str()
+                .unwrap()
+                .to_owned()
+        })
     };
     let missing = c"/nonexistent/x.con";
     assert!(unsafe { readcon_core::ffi::rkr_trajectory_open(missing.as_ptr(), 0) }.is_null());

@@ -33,7 +33,13 @@ Writes data/failure/matrix.csv and data/failure/matrix.json.
 """
 from __future__ import annotations
 
-import csv, json, os, struct, sys, tempfile, traceback, warnings
+import csv
+import json
+import struct
+import sys
+import tempfile
+import traceback
+import warnings
 from pathlib import Path
 
 import numpy as np

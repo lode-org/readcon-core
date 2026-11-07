@@ -14,7 +14,14 @@ Writes data/failure/version_safety.csv and its JSON sidecar with the build,
 host and the C library that was loaded; --out DIR writes them to DIR.
 """
 from __future__ import annotations
-import argparse, csv, ctypes, json, os, sys, tempfile, warnings
+import argparse
+import csv
+import ctypes
+import json
+import os
+import sys
+import tempfile
+import warnings
 from pathlib import Path
 warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parents[1]

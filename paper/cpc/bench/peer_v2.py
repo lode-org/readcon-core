@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import resource
 import subprocess
 import sys
 import time
@@ -44,7 +43,7 @@ def header() -> list[str]:
         "pwd=.",
         "tmpdir=paper/cpc/bench/work/v2",
         f"status={status.replace(chr(10), ' | ')}",
-        f"command=python3 paper/cpc/bench/peer_v2.py",
+        "command=python3 paper/cpc/bench/peer_v2.py",
         f"frames={N_FRAMES}",
         f"atoms={N_ATOMS}",
         f"repeats={REPEATS}",

@@ -70,8 +70,8 @@ def generate_atom_lines():
         lines.append(f"   {x:.17f}    {y:.17f}    {z:.17f} 7    {i}\n")
     lines.append("H\n")
     lines.append("Coordinates of Component 2\n")
-    lines.append(f"   8.682300    9.947000   11.733000 0  216\n")
-    lines.append(f"   7.942100    9.947000   11.733000 0  217\n")
+    lines.append("   8.682300    9.947000   11.733000 0  216\n")
+    lines.append("   7.942100    9.947000   11.733000 0  217\n")
     return "".join(lines)
 
 
@@ -131,7 +131,7 @@ def bench_c_reader(path):
                 print(f"  C reader: build failed ({e})")
                 return None
         else:
-            print(f"  C reader: source not found")
+            print("  C reader: source not found")
             return None
 
     try:

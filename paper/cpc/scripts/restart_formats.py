@@ -38,7 +38,15 @@ numeric_pins and writes only data/failure/restart_kernels/NAME.json, the steps
 and the residues of every route at full precision.
 """
 from __future__ import annotations
-import csv, io, json, os, re, shutil, sys, tempfile, warnings
+import csv
+import io
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import warnings
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 KERNELS = sys.argv[sys.argv.index("--kernels") + 1] if "--kernels" in sys.argv[1:-1] else None
@@ -77,7 +85,8 @@ SITES = ((0, 0), (1, 0))
 
 def roundoff_host():
     """CPU, kernel and numerical stack of this process: the residues at roundoff scale depend on them."""
-    import platform, threadpoolctl
+    import platform
+    import threadpoolctl
     np.linalg.eigh(np.eye(2))  # threadpoolctl lists a BLAS only once it is loaded
     cpu = {}
     for line in Path("/proc/cpuinfo").read_text().splitlines():

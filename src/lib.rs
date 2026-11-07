@@ -9,6 +9,7 @@ pub mod distrib_read;
 #[cfg(feature = "mpi")]
 pub mod distrib_write;
 pub mod error;
+pub mod extxyz_scan;
 pub mod ffi;
 pub mod frame_index;
 #[cfg(feature = "grammar")]
@@ -18,7 +19,6 @@ pub mod hostlabel;
 /// Campaign screening scalars / CON ingest contracts for corpus stores (`readcon-db`).
 pub mod index_proj;
 pub mod iterators;
-pub mod extxyz_scan;
 pub mod parser;
 pub mod pdb_scan;
 /// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.

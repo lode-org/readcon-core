@@ -32,7 +32,8 @@ fn trim(bytes: &[u8]) -> &[u8] {
 
 fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
     let token = trim(bytes);
-    let (value, consumed) = fast_float2::parse_partial::<f64, _>(token).map_err(|_| "float".to_string())?;
+    let (value, consumed) =
+        fast_float2::parse_partial::<f64, _>(token).map_err(|_| "float".to_string())?;
     if consumed == 0 {
         return Err("float".to_string());
     }
@@ -66,7 +67,8 @@ fn parse_cryst(line: &[u8], cell: &mut [f64; 6]) -> Result<(), String> {
     let mut rest = trim(line.get(6..).unwrap_or(b""));
     for slot in cell.iter_mut() {
         rest = trim(rest);
-        let (value, consumed) = fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "cryst".to_string())?;
+        let (value, consumed) =
+            fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "cryst".to_string())?;
         if consumed == 0 {
             return Err("cryst".to_string());
         }
@@ -125,7 +127,11 @@ pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
         return Err("no atoms".to_string());
     }
     let n_atoms = frame_positions[0].len() / 3;
-    if n_atoms == 0 || frame_positions.iter().any(|frame| frame.len() != n_atoms * 3) {
+    if n_atoms == 0
+        || frame_positions
+            .iter()
+            .any(|frame| frame.len() != n_atoms * 3)
+    {
         return Err("frame size".to_string());
     }
     let n_frames = frame_positions.len();

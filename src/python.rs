@@ -1578,7 +1578,7 @@ struct ReadCallPhases {
     teardown_s: f64,
     scan_minflt: i64,
     parse_minflt: i64,
-            numa_remote: i64,
+    numa_remote: i64,
     worker_minflt: Vec<i64>,
     share_frames: Vec<u64>,
     share_bytes: Vec<u64>,
@@ -1659,7 +1659,10 @@ impl ReadCallPhases {
         dict.set_item("scan_minflt", self.scan_minflt)?;
         dict.set_item("parse_minflt", self.parse_minflt)?;
         dict.set_item("numa_remote", self.numa_remote)?;
-        dict.set_item("fault_proxy", "minor faults per worker; the guest denies perf_event_open")?;
+        dict.set_item(
+            "fault_proxy",
+            "minor faults per worker; the guest denies perf_event_open",
+        )?;
         dict.set_item("worker_minflt", &self.worker_minflt)?;
         dict.set_item("share_frames", &self.share_frames)?;
         dict.set_item("share_bytes", &self.share_bytes)?;
@@ -1781,9 +1784,7 @@ impl ConFrameList {
         let workers = self.workers;
         let digest = {
             let pool = self.pool.lock().expect("pool");
-            let run = || {
-                crate::iterators::touch_option_checksum(&frames, slice, workers)
-            };
+            let run = || crate::iterators::touch_option_checksum(&frames, slice, workers);
             match pool.as_ref() {
                 Some(pool) if workers >= 2 => pool.install(run),
                 _ => run(),
@@ -2031,18 +2032,15 @@ fn con_frame_list(
         _ => frames.into_iter().map(Some).collect(),
     });
     let t_return = std::time::Instant::now();
-    let obj = Py::new(
-        py,
-        ConFrameList {
-            frames: std::sync::Mutex::new(stored),
-            cache: std::sync::Mutex::new(cache),
-            slab,
-            n_atoms,
-            workers,
-            phases: std::sync::Mutex::new(record),
-            pool: std::sync::Mutex::new(pool),
-        },
-    )?;
+    let obj = Py::new(py, ConFrameList {
+        frames: std::sync::Mutex::new(stored),
+        cache: std::sync::Mutex::new(cache),
+        slab,
+        n_atoms,
+        workers,
+        phases: std::sync::Mutex::new(record),
+        pool: std::sync::Mutex::new(pool),
+    })?;
     let return_s = t_return.elapsed().as_secs_f64();
     let list_s = t_list.elapsed().as_secs_f64();
     let accounted = slab_s + release_s + python_build_s + return_s;
@@ -2112,11 +2110,30 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt, share_frames, share_bytes) =
-        load_phased(py, path, n_threads)?;
+    let (
+        frames,
+        phases,
+        n_bytes,
+        chunk_s,
+        scan_kind,
+        pool,
+        worker_minflt,
+        share_frames,
+        share_bytes,
+    ) = load_phased(py, path, n_threads)?;
     con_frame_list(
-        py, frames, phases, n_bytes, n_threads, "lazy", chunk_s, worker_minflt, share_frames,
-        share_bytes, scan_kind, pool,
+        py,
+        frames,
+        phases,
+        n_bytes,
+        n_threads,
+        "lazy",
+        chunk_s,
+        worker_minflt,
+        share_frames,
+        share_bytes,
+        scan_kind,
+        pool,
     )
 }
 
@@ -2125,8 +2142,17 @@ fn read_con_eager(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<(Py<PyAny>, Py<PyDict>)> {
-    let (frames, phases, n_bytes, chunk_s, scan_kind, pool, worker_minflt, share_frames, share_bytes) =
-        load_phased(py, path, n_threads)?;
+    let (
+        frames,
+        phases,
+        n_bytes,
+        chunk_s,
+        scan_kind,
+        pool,
+        worker_minflt,
+        share_frames,
+        share_bytes,
+    ) = load_phased(py, path, n_threads)?;
     drop(pool);
     drop(worker_minflt);
     drop(share_frames);
@@ -3111,34 +3137,30 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .call_method0("tolist")?
             .extract()?;
         if cellpar.len() == 6 && cellpar.iter().all(|value| value.is_finite()) {
-            (
-                [cellpar[0], cellpar[1], cellpar[2]],
-                [cellpar[3], cellpar[4], cellpar[5]],
-            )
+            ([cellpar[0], cellpar[1], cellpar[2]], [
+                cellpar[3], cellpar[4], cellpar[5],
+            ])
         } else {
             (lengths, raw_angles)
         }
     } else {
-        (
-            lengths,
-            [
-                if raw_angles[0].is_finite() {
-                    raw_angles[0]
-                } else {
-                    90.0
-                },
-                if raw_angles[1].is_finite() {
-                    raw_angles[1]
-                } else {
-                    90.0
-                },
-                if raw_angles[2].is_finite() {
-                    raw_angles[2]
-                } else {
-                    90.0
-                },
-            ],
-        )
+        (lengths, [
+            if raw_angles[0].is_finite() {
+                raw_angles[0]
+            } else {
+                90.0
+            },
+            if raw_angles[1].is_finite() {
+                raw_angles[1]
+            } else {
+                90.0
+            },
+            if raw_angles[2].is_finite() {
+                raw_angles[2]
+            } else {
+                90.0
+            },
+        ])
     };
 
     // Extract fixed atom info from constraints
