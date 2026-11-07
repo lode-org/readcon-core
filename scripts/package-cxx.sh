@@ -153,6 +153,9 @@ rm -rf "$DEST/tests" "$DEST/benches" "$DEST/benchmarks" "$DEST/julia" \
 # The wrap digest names this archive. Leaving that file inside the archive
 # makes the digest change every time the file is updated.
 rm -rf "$DEST/packaging/wrapdb" || true
+# cargo package records the git commit. That would change the digest of the
+# commit that records the digest.
+rm -f "$DEST/.cargo_vcs_info.json" || true
 mkdir -p "$DEST/tests"
 cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
 cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
