@@ -9,9 +9,12 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
-- A tag publishes wheels, sdists, and the cxx archive only when VERSION and
-  each filename version are that tag.
-  An archive named for another version is refused.
+- The release job checks versions before it uploads anything. It refuses
+  a wheel, sdist, or cxx archive unless VERSION and the filename match the
+  tag.
+- The same check refuses a C library archive unless VERSION and the filename
+  match the tag. It refuses a cargo-dist archive unless dist-manifest.json
+  names that tag and version.
 
 
 ## v0.18.0 - 2026-11-07
