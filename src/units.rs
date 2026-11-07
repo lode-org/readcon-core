@@ -32,24 +32,30 @@ impl Dimension {
 
     fn mul(self, other: Self) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] + other.exponents[i];
+        for (slot, (left, right)) in e
+            .iter_mut()
+            .zip(self.exponents.iter().zip(other.exponents.iter()))
+        {
+            *slot = left + right;
         }
         Self { exponents: e }
     }
 
     fn div(self, other: Self) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] - other.exponents[i];
+        for (slot, (left, right)) in e
+            .iter_mut()
+            .zip(self.exponents.iter().zip(other.exponents.iter()))
+        {
+            *slot = left - right;
         }
         Self { exponents: e }
     }
 
     fn pow(self, p: f64) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] * p;
+        for (slot, exp) in e.iter_mut().zip(self.exponents.iter()) {
+            *slot = exp * p;
         }
         Self { exponents: e }
     }

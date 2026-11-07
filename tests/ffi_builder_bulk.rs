@@ -333,7 +333,7 @@ fn ffi_null_and_error_paths() {
         let _ = rkr_frame_spec_version(ptr::null());
         assert!(rkr_frame_composition_formula(ptr::null()).is_null());
         assert!(rkr_frame_metadata_json(ptr::null()).is_null());
-        assert!(rkr_symbol_to_z(ptr::null()) == 0 || true);
+        let _ = rkr_symbol_to_z(ptr::null());
         let bad = CString::new("Xx").unwrap();
         let _ = rkr_symbol_to_z(bad.as_ptr());
         let _ = rkr_z_to_symbol(0);
@@ -452,7 +452,7 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         let xyz = rkr_frame_xyz_f64(frame, &mut nn);
         assert!(!xyz.is_null());
         assert_eq!(nn, nat);
-        assert!((unsafe { *xyz } - buf[0]).abs() < 1e-15);
+        assert!((*xyz - buf[0]).abs() < 1e-15);
         let mut view = RKRArrayView {
             data: ptr::null(),
             n: 0,

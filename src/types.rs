@@ -1041,13 +1041,13 @@ impl ConFrame {
         if self.forces.nrows() > 0 {
             self.forces.project_to(dtypes.forces);
         }
-        if self.atom_energies.len() > 0 {
+        if !self.atom_energies.is_empty() {
             self.atom_energies.project_to(dtypes.energies);
         }
-        if self.charges.len() > 0 {
+        if !self.charges.is_empty() {
             self.charges.project_to(dtypes.energies);
         }
-        if self.spins.len() > 0 {
+        if !self.spins.is_empty() {
             self.spins.project_to(dtypes.energies);
         }
         if self.magmoms.nrows() > 0 {
@@ -1059,7 +1059,7 @@ impl ConFrame {
         if self.spreads.nrows() > 0 {
             self.spreads.project_to(dtypes.forces);
         }
-        if self.masses.len() > 0 {
+        if !self.masses.is_empty() {
             self.masses.project_to(dtypes.masses);
         }
         dtypes.insert_into(&mut self.header.metadata);
@@ -1159,21 +1159,21 @@ impl ConFrame {
             if self.atom_energies.len() != n {
                 self.atom_energies = FloatArray1::zeros(dt.energies, n);
             }
-        } else if self.atom_energies.len() != 0 {
+        } else if !self.atom_energies.is_empty() {
             self.atom_energies = FloatArray1::zeros(dt.energies, 0);
         }
         if has_chg {
             if self.charges.len() != n {
                 self.charges = FloatArray1::zeros(dt.energies, n);
             }
-        } else if self.charges.len() != 0 {
+        } else if !self.charges.is_empty() {
             self.charges = FloatArray1::zeros(dt.energies, 0);
         }
         if has_spn {
             if self.spins.len() != n {
                 self.spins = FloatArray1::zeros(dt.energies, n);
             }
-        } else if self.spins.len() != 0 {
+        } else if !self.spins.is_empty() {
             self.spins = FloatArray1::zeros(dt.energies, 0);
         }
         if has_mm {
@@ -1270,7 +1270,7 @@ impl ConFrame {
         &self,
         device: dlpk::sys::DLDevice,
     ) -> Result<Option<dlpk::DLPackTensor>, crate::error::ParseError> {
-        if self.atom_energies.len() == 0 {
+        if self.atom_energies.is_empty() {
             return Ok(None);
         }
         Ok(Some(self.atom_energies.as_dlpack(device)?))
@@ -3567,7 +3567,7 @@ mod tests {
             .positions_as_dlpack(dlpk::sys::DLDevice::cpu())
             .unwrap();
         assert_eq!(t.shape(), &[1, 3]);
-        assert!(frame.header.metadata.get(meta::STORAGE_DTYPES).is_some());
+        assert!(frame.header.metadata.contains_key(meta::STORAGE_DTYPES));
         let row = frame.positions.as_f64_row(0);
         assert!((row[0] - 1.0).abs() < 1e-5);
     }

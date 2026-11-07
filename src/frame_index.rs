@@ -173,9 +173,7 @@ fn reject_with_absolute_utf8(
         None => bytes.len(),
     };
     let end = end.min(bytes.len());
-    if let Err(adjusted) = std::str::from_utf8(&bytes[..end]) {
-        return Err(adjusted);
-    }
+    std::str::from_utf8(&bytes[..end])?;
     std::str::from_utf8(bytes).map(|_| ())
 }
 

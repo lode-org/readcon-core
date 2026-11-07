@@ -543,6 +543,9 @@ fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
     Ok((val, j))
 }
 
+/// One parsed coordinate row: xyz, fixed flags, and the atom id.
+type ParsedCoord = ([f64; 3], [bool; 3], u64);
+
 /// One coordinate or vector row starting at `i`.
 ///
 /// Stops at newline or end of `bytes` and returns the index just past the
@@ -555,7 +558,7 @@ fn parse_coord_fields(
     i: usize,
     spec_version: u32,
     default_id: Option<u64>,
-) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+) -> Result<(ParsedCoord, usize), ParseError> {
     if let Some(parsed) = parse_coord_fields_fast(bytes, i, spec_version, default_id) {
         return Ok(parsed);
     }
@@ -569,10 +572,10 @@ fn parse_coord_fields_fast(
     i: usize,
     spec_version: u32,
     default_id: Option<u64>,
-) -> Option<(([f64; 3], [bool; 3], u64), usize)> {
+) -> Option<(ParsedCoord, usize)> {
     let mut i = skip_field_ws(bytes, i);
     let mut xyz = [0.0f64; 3];
-    for slot in 0..3 {
+    for dest in &mut xyz {
         if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
             return None;
         }
@@ -587,7 +590,7 @@ fn parse_coord_fields_fast(
         if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
             return None;
         }
-        xyz[slot] = val;
+        *dest = val;
         i = skip_field_ws(bytes, next);
     }
     let (fixed, next) = parse_flag_fast(bytes, i, spec_version)?;
@@ -655,7 +658,7 @@ fn parse_coord_fields_detailed(
     i: usize,
     spec_version: u32,
     default_id: Option<u64>,
-) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+) -> Result<(ParsedCoord, usize), ParseError> {
     let line_start = i;
     let mut i = skip_field_ws(bytes, i);
     if i >= bytes.len() || bytes[i] == b'\n' {
@@ -665,7 +668,7 @@ fn parse_coord_fields_detailed(
         });
     }
     let mut xyz = [0.0f64; 3];
-    for slot in 0..3 {
+    for (slot, dest) in xyz.iter_mut().enumerate() {
         if i >= bytes.len() || bytes[i] == b'\n' {
             return Err(ParseError::InvalidVectorLength {
                 expected: 5,
@@ -676,7 +679,7 @@ fn parse_coord_fields_detailed(
             return Err(utf8_or_number(bytes, line_start, i));
         }
         let (val, next) = parse_f64_at(bytes, i, line_start)?;
-        xyz[slot] = val;
+        *dest = val;
         i = skip_field_ws(bytes, next);
     }
     let (fixed, next) = parse_flag_at(bytes, i, spec_version)?;
@@ -712,7 +715,7 @@ pub(crate) fn parse_coord_row_at(
     i: usize,
     spec_version: u32,
     default_id: u64,
-) -> Result<(([f64; 3], [bool; 3], u64), usize), ParseError> {
+) -> Result<(ParsedCoord, usize), ParseError> {
     if i >= bytes.len() {
         return Err(ParseError::IncompleteFrame);
     }
@@ -1328,7 +1331,7 @@ pub fn parse_frame_header<'a>(
             lines.next().ok_or(ParseError::IncompleteHeader)?,
             natm_types,
         )?;
-        if natms_per_type.iter().any(|n| *n == 0) {
+        if natms_per_type.contains(&0) {
             return Err(ParseError::InvalidCount(
                 "each per-type count must be >= 1".into(),
             ));
@@ -1484,10 +1487,12 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
-            &mut pos_flat,
-            &mut ids,
-            &mut positions_other,
-            &mut atom_data,
+            CoordSink {
+                pos_flat: &mut pos_flat,
+                ids: &mut ids,
+                positions_other: &mut positions_other,
+                atom_data: &mut atom_data,
+            },
         )?;
     }
     let positions = if f64_positions {
@@ -1500,6 +1505,13 @@ where
     ))
 }
 
+struct CoordSink<'a> {
+    pos_flat: &'a mut Vec<f64>,
+    ids: &'a mut Vec<u64>,
+    positions_other: &'a mut Option<crate::storage_dtype::FloatArray2>,
+    atom_data: &'a mut Vec<AtomDatum>,
+}
+
 /// Parse `n` coordinate rows into flat SoA buffers.
 #[inline(always)]
 fn ingest_coord_rows<'a, L>(
@@ -1508,14 +1520,17 @@ fn ingest_coord_rows<'a, L>(
     spec_version: u32,
     mut global_atom_idx: u64,
     symbol: &Arc<str>,
-    pos_flat: &mut Vec<f64>,
-    ids: &mut Vec<u64>,
-    positions_other: &mut Option<crate::storage_dtype::FloatArray2>,
-    atom_data: &mut Vec<AtomDatum>,
+    sink: CoordSink<'_>,
 ) -> Result<u64, ParseError>
 where
     L: LineStream<'a>,
 {
+    let CoordSink {
+        pos_flat,
+        ids,
+        positions_other,
+        atom_data,
+    } = sink;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         if let Some(pos) = positions_other.as_mut() {
@@ -2153,12 +2168,11 @@ fn parse_vector_named_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
-    section_name: &str,
-    component_label: &str,
-    label_kind: &str,
+    names: (&str, &str, &str),
     mut set_value: impl FnMut(&mut AtomDatum, [f64; 3]),
     mut check_row: impl FnMut(usize, [f64; 3]) -> Result<(), ParseError>,
 ) -> Result<bool, ParseError> {
+    let (section_name, component_label, label_kind) = names;
     let validate = header.strict_validation;
     if !open_section(lines)? {
         return Ok(false);
@@ -2208,9 +2222,7 @@ pub fn parse_magmom_section<'a>(
         lines,
         header,
         atom_data,
-        SECTION_MAGMOMS,
-        "Magmoms of Component",
-        "Magmoms",
+        (SECTION_MAGMOMS, "Magmoms of Component", "Magmoms"),
         |a, v| a.set_magmom(Some(v)),
         |_, _| Ok(()),
     )
@@ -2226,9 +2238,11 @@ pub fn parse_displacement_section<'a>(
         lines,
         header,
         atom_data,
-        SECTION_DISPLACEMENTS,
-        "Displacements of Component",
-        "Displacements",
+        (
+            SECTION_DISPLACEMENTS,
+            "Displacements of Component",
+            "Displacements",
+        ),
         |a, v| a.set_displacement(Some(v)),
         |_, _| Ok(()),
     )
@@ -2245,9 +2259,7 @@ pub fn parse_spread_section<'a>(
         lines,
         header,
         atom_data,
-        SECTION_SPREADS,
-        "Spreads of Component",
-        "Spreads",
+        (SECTION_SPREADS, "Spreads of Component", "Spreads"),
         |a, v| a.set_spread(Some(v)),
         |atom_idx, vals| {
             if !vals.iter().all(|v| v.is_finite()) {
@@ -2340,10 +2352,7 @@ mod tests {
                 assert_eq!(header.masses_per_type, vec![12.011, 1.008]);
             }
             Err(e) => {
-                panic!(
-                    "Parsing failed when it should have succeeded. Error: {:?}",
-                    e
-                );
+                panic!("Parsing failed when it should have succeeded. Error: {e:?}");
             }
         }
     }
@@ -2369,7 +2378,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_missing_spec_version() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{}",
             "10.0 20.0 30.0",
@@ -2392,7 +2401,7 @@ mod tests {
     #[test]
     fn test_parse_frame_header_legacy_no_json() {
         // A non-JSON line 2 is treated as a legacy (v1) file.
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "0.0000 TIME",
             "10.0 20.0 30.0",
@@ -2412,7 +2421,7 @@ mod tests {
     #[test]
     fn test_parse_frame_header_malformed_json() {
         // Line 2 starts with '{' but is not valid JSON -- this IS an error.
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{broken json",
             "10.0 20.0 30.0",
@@ -2434,7 +2443,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_unsupported_version() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":999}",
             "10.0 20.0 30.0",
@@ -2456,7 +2465,7 @@ mod tests {
 
     #[test]
     fn test_v3_missing_units_rejected() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":3}",
             "10.0 20.0 30.0",
@@ -2478,7 +2487,7 @@ mod tests {
 
     #[test]
     fn test_v3_invalid_units_rejected() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             r#"{"con_spec_version":3,"units":{"length":"eV","energy":"angstrom"}}"#,
             "10.0 20.0 30.0",
@@ -2495,7 +2504,7 @@ mod tests {
 
     #[test]
     fn test_v3_valid_units_exposes_length_energy() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"}}"#,
             "10.0 20.0 30.0",
@@ -2517,7 +2526,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_extra_metadata_preserved() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"generator\":\"test\"}",
             "10.0 20.0 30.0",
@@ -2539,7 +2548,7 @@ mod tests {
 
     #[test]
     fn test_parse_frame_header_invalid_natms_per_type() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 20.0 30.0",
@@ -2600,7 +2609,7 @@ mod tests {
 
     #[test]
     fn test_column_4_value_1_is_x_only_on_spec_2() {
-        let lines = vec![
+        let lines = [
             "Generated by probe",
             "{\"con_spec_version\":2}",
             "20.0 20.0 20.0",
@@ -2622,7 +2631,7 @@ mod tests {
 
     #[test]
     fn test_column_4_value_1_is_all_fixed_on_spec_1() {
-        let lines = vec![
+        let lines = [
             "Generated by probe",
             "0.0000 TIME",
             "20.0 20.0 20.0",
@@ -2708,7 +2717,7 @@ mod tests {
     #[test]
     fn test_parse_single_frame_too_few_columns_fails() {
         // Only 3 columns (missing fixed_flag too) should still fail.
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 20.0 30.0",
@@ -2898,7 +2907,7 @@ Velocities of Component 1
 
     #[test]
     fn test_validate_must_be_boolean_when_present() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"validate\":\"yes\",\"sections\":[]}",
             "10.0 20.0 30.0",
@@ -2918,7 +2927,7 @@ Velocities of Component 1
 
     #[test]
     fn test_validate_true_requires_sections_key() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"validate\":true}",
             "10.0 20.0 30.0",
@@ -2938,7 +2947,7 @@ Velocities of Component 1
 
     #[test]
     fn test_sections_must_be_string_array_when_present() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"sections\":[\"velocities\",7]}",
             "10.0 20.0 30.0",
@@ -3052,7 +3061,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_non_finite_cell_geometry_rejected_in_strict_mode() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
             "10.0 NaN 30.0",
@@ -3072,7 +3081,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_validate_true_rejects_non_physical_cell_geometry() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
             "0.0 20.0 30.0",
@@ -3092,7 +3101,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_validate_true_rejects_reserved_metadata_type_mismatch() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"sections\":[],\"validate\":true,\"energy\":\"low\"}",
             "10.0 20.0 30.0",
@@ -3112,7 +3121,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_validate_true_rejects_malformed_bonds() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"sections\":[],\"validate\":true,\"bonds\":[[0]]}",
             "10.0 20.0 30.0",
@@ -3132,7 +3141,7 @@ Coordinates of Component 1
     #[test]
     fn test_bonds_metadata_round_trip_in_header() {
         use crate::types::{Bond, meta};
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2,\"bonds\":[[0,1],{\"i\":0,\"j\":2,\"order\":1}]}",
             "10.0 20.0 30.0",
@@ -3156,7 +3165,7 @@ Coordinates of Component 1
 
     #[test]
     fn test_parse_velocity_section_absent() {
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 20.0 30.0",
@@ -3237,7 +3246,7 @@ Coordinates of Component 1
     #[test]
     fn test_parse_all_four_column_lines() {
         // All atom lines have only 4 columns; atom_index defaults to sequential.
-        let lines = vec![
+        let lines = [
             "PREBOX1",
             "{\"con_spec_version\":2}",
             "10.0 10.0 10.0",

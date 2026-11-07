@@ -101,7 +101,7 @@ fn main() {
         .filter_map(|result| match result {
             Ok(frame) => Some(frame),
             Err(e) => {
-                eprintln!("-> Note: Discarding an incomplete frame. Error: {:?}", e);
+                eprintln!("-> Note: Discarding an incomplete frame. Error: {e:?}");
                 None
             }
         })
@@ -125,23 +125,23 @@ fn main() {
         );
         println!("  - Total atoms: {}", last_frame.atom_data.len());
         if let Some(last_atom) = last_frame.atom_data.last() {
-            println!("  - Last atom: {:?}", last_atom);
+            println!("  - Last atom: {last_atom:?}");
         }
     }
 
     if let Some(output_fname_str) = args.get(2) {
-        println!("\n-> Writing all frames to '{}'...", output_fname_str);
+        println!("\n-> Writing all frames to '{output_fname_str}'...");
         match ConFrameWriter::from_path(output_fname_str) {
             Ok(mut writer) => {
                 if let Err(e) = writer.extend(all_frames.iter()) {
-                    eprintln!("Error writing to output file: {}", e);
+                    eprintln!("Error writing to output file: {e}");
                     process::exit(1);
                 } else {
                     println!("-> Successfully wrote all frames to the output file.");
                 }
             }
             Err(e) => {
-                eprintln!("Failed to create output file: {}", e);
+                eprintln!("Failed to create output file: {e}");
                 process::exit(1);
             }
         }

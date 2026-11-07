@@ -155,7 +155,7 @@ fn core_scenarios() -> Vec<Scenario> {
 }
 
 fn all_scenarios() -> Vec<Scenario> {
-    let mut s = core_scenarios();
+    let s = core_scenarios();
     #[cfg(feature = "chemfiles")]
     {
         s.push(("chemfiles_xyz_path", scenario_xyz_to_con));

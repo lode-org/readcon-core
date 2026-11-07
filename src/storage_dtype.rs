@@ -349,9 +349,7 @@ impl Array2Storage {
             Self::I16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::I32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::I64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => {
-                a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8)
-            }
+            Self::U8(a) | Self::Bool(a) => a.as_slice_memory_order().map(|s| s.as_ptr()),
             Self::U16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::U32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::U64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
@@ -673,6 +671,10 @@ impl Array1Storage {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Self::F64(a) => a.len(),
@@ -709,7 +711,7 @@ impl Array1Storage {
             Self::I16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::I32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::I64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr()),
             Self::U16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::U32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::U64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
@@ -859,6 +861,10 @@ impl IdArray1 {
                 )));
             }
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn len(&self) -> usize {

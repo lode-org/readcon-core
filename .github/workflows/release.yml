@@ -258,6 +258,13 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
+      - name: Require dist metadata to match the tag
+        shell: bash
+        run: |
+          python3 scripts/check_release_artifacts.py \
+            --tag "${{ github.ref_name }}" \
+            --dist target/distrib \
+            --manifest target/distrib/plan-dist-manifest.json
       - id: host
         shell: bash
         run: |
@@ -278,6 +285,13 @@ jobs:
           pattern: artifacts-*
           path: artifacts
           merge-multiple: true
+      - name: Require GitHub release files to match the tag
+        shell: bash
+        run: |
+          python3 scripts/check_release_artifacts.py \
+            --tag "${{ needs.plan.outputs.tag }}" \
+            --dist artifacts \
+            --manifest artifacts/plan-dist-manifest.json
       - name: Cleanup
         run: |
           # Remove the granular manifests

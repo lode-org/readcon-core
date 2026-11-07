@@ -178,7 +178,7 @@ fn convert_errors_and_path_helpers() {
     assert!(matches!(from_io, ConvertError::Io(_)));
     let from_cf: ConvertError = ChemfilesImportError::FeatureDisabled.into();
     assert!(matches!(from_cf, ConvertError::Chemfiles(_)));
-    assert!(from_cf.to_string().len() > 0);
+    assert!(!from_cf.to_string().is_empty());
     assert!(from_cf.source().is_some());
 
     // missing input
@@ -265,7 +265,9 @@ fn storage_dtype_all_kinds_kind_nrows_project_and_json() {
     assert_eq!(back.positions, ElementKind::Float64);
     let mut md = std::collections::BTreeMap::new();
     all.insert_into(&mut md);
-    assert!(md.contains_key("storage_dtypes") || md.values().count() > 0 || !md.is_empty() || true);
+    let _ = md.contains_key("storage_dtypes");
+    let _ = md.values().count();
+    let _ = md.is_empty();
     // from_metadata
     let mut meta_map = std::collections::BTreeMap::new();
     meta_map.insert(
@@ -305,7 +307,8 @@ fn units_compound_expressions_and_errors() {
     let _ = parse_unit_expression("kJ/mol");
     assert!(parse_unit_expression("").is_err());
     assert!(parse_unit_expression("not_a_unit_xyz").is_err());
-    assert!(parse_unit_expression("eV/").is_err() || parse_unit_expression("eV*").is_err() || true);
+    let _ = parse_unit_expression("eV/");
+    let _ = parse_unit_expression("eV*");
     let fac = unit_conversion_factor("angstrom", "angstrom").unwrap();
     assert!((fac - 1.0).abs() < 1e-12);
     let fac2 = unit_conversion_factor("eV", "meV").unwrap();
@@ -393,7 +396,7 @@ fn index_proj_and_helpers_extra() {
     let spans = frame_byte_spans(&multi).unwrap();
     assert!(!spans.is_empty());
     assert!(!spans[0].is_empty());
-    assert!(spans[0].len() > 0);
+    assert!(!spans[0].is_empty());
     let _ = spans[0].slice(&multi);
     let hist = symbol_histogram(&multi).unwrap();
     assert!(!hist.is_empty());

@@ -125,16 +125,19 @@ impl MetadataCacheEntry {
     fn matches(
         &self,
         spec_version: u32,
-        has_velocities: bool,
-        has_forces: bool,
-        has_energies: bool,
-        has_charges: bool,
-        has_spins: bool,
-        has_magmoms: bool,
-        has_displacements: bool,
-        has_spreads: bool,
+        sections: [bool; 8],
         metadata: &std::collections::BTreeMap<String, serde_json::Value>,
     ) -> bool {
+        let [
+            has_velocities,
+            has_forces,
+            has_energies,
+            has_charges,
+            has_spins,
+            has_magmoms,
+            has_displacements,
+            has_spreads,
+        ] = sections;
         self.spec_version == spec_version
             && self.has_velocities == has_velocities
             && self.has_forces == has_forces
@@ -277,14 +280,9 @@ impl<W: Write> ConFrameWriter<W> {
             && self.metadata_cache.as_ref().is_some_and(|c| {
                 c.matches(
                     spec_version,
-                    has_vel,
-                    has_frc,
-                    has_eng,
-                    has_chg,
-                    has_spn,
-                    has_mm,
-                    has_dsp,
-                    has_spr,
+                    [
+                        has_vel, has_frc, has_eng, has_chg, has_spn, has_mm, has_dsp, has_spr,
+                    ],
                     &frame.header.metadata,
                 )
             });
@@ -419,7 +417,7 @@ impl<W: Write> ConFrameWriter<W> {
         if !zero_frame
             && (frame.header.natm_types == 0
                 || frame.atom_data.is_empty()
-                || frame.header.natms_per_type.iter().any(|n| *n == 0))
+                || frame.header.natms_per_type.contains(&0))
         {
             return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
                 "each per-type count must be >= 1".into(),
@@ -494,9 +492,7 @@ impl<W: Write> ConFrameWriter<W> {
                     push_xyz_line(
                         buf,
                         ryu,
-                        atom.x,
-                        atom.y,
-                        atom.z,
+                        [atom.x, atom.y, atom.z],
                         prec,
                         written_fixed_flag(atom.fixed, frame.header.spec_version),
                         atom.atom_id,
@@ -522,9 +518,7 @@ impl<W: Write> ConFrameWriter<W> {
                         push_xyz_line(
                             buf,
                             ryu,
-                            vx,
-                            vy,
-                            vz,
+                            [vx, vy, vz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
@@ -551,9 +545,7 @@ impl<W: Write> ConFrameWriter<W> {
                         push_xyz_line(
                             buf,
                             ryu,
-                            fx,
-                            fy,
-                            fz,
+                            [fx, fy, fz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
@@ -652,9 +644,7 @@ impl<W: Write> ConFrameWriter<W> {
                         push_xyz_line(
                             buf,
                             ryu,
-                            mx,
-                            my,
-                            mz,
+                            [mx, my, mz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
@@ -678,9 +668,7 @@ impl<W: Write> ConFrameWriter<W> {
                         push_xyz_line(
                             buf,
                             ryu,
-                            dx,
-                            dy,
-                            dz,
+                            [dx, dy, dz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
@@ -715,9 +703,7 @@ impl<W: Write> ConFrameWriter<W> {
                         push_xyz_line(
                             buf,
                             ryu,
-                            sx,
-                            sy,
-                            sz,
+                            [sx, sy, sz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
                             atom.atom_id,
@@ -858,13 +844,12 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
 fn push_xyz_line(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
-    x: f64,
-    y: f64,
-    z: f64,
+    xyz: [f64; 3],
     prec: FloatFormat,
     fixed: u8,
     atom_id: u64,
 ) {
+    let [x, y, z] = xyz;
     push_f64(buf, ryu, x, prec);
     buf.push(b' ');
     push_f64(buf, ryu, y, prec);

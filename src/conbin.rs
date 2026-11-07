@@ -638,17 +638,16 @@ fn split_stream_sum(path: &Path, threads: usize, limits: &QueueLimits) -> Result
         for (span, end) in ranges {
             let err_tx = err_tx.clone();
             handles.push(scope.spawn(move || {
-                match stream_one_span(
-                    path,
+                match stream_one_span(path, SpanGeom {
                     base,
                     span,
                     end,
                     page,
-                    payload.offset,
-                    payload.end,
+                    payload_off: payload.offset,
+                    payload_end: payload.end,
                     request,
                     depth,
-                ) {
+                }) {
                     Ok(part) => part,
                     Err(err) => {
                         let _ = err_tx.send(err);
@@ -670,8 +669,7 @@ fn split_stream_sum(path: &Path, threads: usize, limits: &QueueLimits) -> Result
 }
 
 #[cfg(target_os = "linux")]
-fn stream_one_span(
-    path: &Path,
+struct SpanGeom {
     base: usize,
     span: usize,
     end: usize,
@@ -680,7 +678,20 @@ fn stream_one_span(
     payload_end: usize,
     request: usize,
     depth: usize,
-) -> Result<f64, String> {
+}
+
+#[cfg(target_os = "linux")]
+fn stream_one_span(path: &Path, geom: SpanGeom) -> Result<f64, String> {
+    let SpanGeom {
+        base,
+        span,
+        end,
+        page,
+        payload_off,
+        payload_end,
+        request,
+        depth,
+    } = geom;
     let fd = File::open(path).map_err(|err| err.to_string())?;
     let pieces = piece_list(span, end, request);
     let depth = depth.max(1);
@@ -744,7 +755,7 @@ fn pages_all_resident(ptr: *mut libc::c_void, len: usize, page: usize) -> Result
     if len == 0 {
         return Ok(true);
     }
-    let pages = (len + page - 1) / page;
+    let pages = len.div_ceil(page);
     let mut vec = vec![0u8; pages];
     let rc = unsafe { libc::mincore(ptr, len, vec.as_mut_ptr()) };
     if rc != 0 {
@@ -770,7 +781,7 @@ fn populate_followup(code: i32) -> Result<(), i32> {
 
 #[cfg(target_os = "linux")]
 fn touch_pages(addr: usize, off: usize, len: usize, page: usize) {
-    let pages = (len + page - 1) / page;
+    let pages = len.div_ceil(page);
     for index in 0..pages {
         let at = index * page;
         if at >= len {
@@ -792,7 +803,7 @@ fn wait_resident(addr: usize, off: usize, len: usize, page: usize) -> Result<(),
         return Err("madvise address is not page-aligned".into());
     }
     let start = (addr + off) as *mut libc::c_void;
-    let pages = ((len + page - 1) / page).max(1);
+    let pages = len.div_ceil(page).max(1);
     let mut tried = 0usize;
     loop {
         let rc = unsafe { libc::madvise(start, len, libc::MADV_POPULATE_READ) };
@@ -1003,16 +1014,13 @@ fn chunk_each(
             };
             handles.push(scope.spawn(move || chunk_worker(map, start, end, window, page, op)));
         }
-        handles
-            .into_iter()
-            .map(|handle| {
-                handle.join().unwrap_or_else(|_| {
-                    Err(ParseError::ValidationError(
-                        "CON-bin prefetch thread panicked".into(),
-                    ))
-                })
+        handles.into_iter().try_for_each(|handle| {
+            handle.join().unwrap_or_else(|_| {
+                Err(ParseError::ValidationError(
+                    "CON-bin prefetch thread panicked".into(),
+                ))
             })
-            .collect::<Result<(), ParseError>>()
+        })
     })
 }
 
@@ -1163,17 +1171,12 @@ fn advise_spans(
             start += take;
             handles.push(scope.spawn(move || map.advise_range(advice, off, take)));
         }
-        handles
-            .into_iter()
-            .map(|handle| {
-                handle
-                    .join()
-                    .unwrap_or_else(|_| {
-                        Err(std::io::Error::other("CON-bin populate thread panicked"))
-                    })
-                    .map_err(|err| ParseError::ValidationError(err.to_string()))
-            })
-            .collect::<Result<(), ParseError>>()
+        handles.into_iter().try_for_each(|handle| {
+            handle
+                .join()
+                .unwrap_or_else(|_| Err(std::io::Error::other("CON-bin populate thread panicked")))
+                .map_err(|err| ParseError::ValidationError(err.to_string()))
+        })
     })
 }
 
@@ -1186,7 +1189,7 @@ pub fn read_header(path: &Path) -> Result<ConBinHeader, ParseError> {
 }
 
 fn bytes_of<T>(values: &mut [T]) -> &mut [u8] {
-    let len = values.len() * std::mem::size_of::<T>();
+    let len = std::mem::size_of_val(values);
     // SAFETY: `values` is a live slice. The byte view covers exactly those
     // elements and is not used after `values` is borrowed again.
     unsafe { std::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<u8>(), len) }
@@ -1439,8 +1442,7 @@ fn pread_parallel(
         }
         handles
             .into_iter()
-            .map(|handle| handle.join().unwrap_or(Err(ParseError::IncompleteFrame)))
-            .collect::<Result<(), ParseError>>()
+            .try_for_each(|handle| handle.join().unwrap_or(Err(ParseError::IncompleteFrame)))
     })
 }
 
@@ -1520,17 +1522,13 @@ fn pread_parallel_uninit(
         }
         handles
             .into_iter()
-            .map(|handle| handle.join().unwrap_or(Err(ParseError::IncompleteFrame)))
-            .collect::<Result<(), ParseError>>()
+            .try_for_each(|handle| handle.join().unwrap_or(Err(ParseError::IncompleteFrame)))
     })
 }
 
 fn write_values<T>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
     let bytes = unsafe {
-        std::slice::from_raw_parts(
-            values.as_ptr().cast::<u8>(),
-            values.len() * std::mem::size_of::<T>(),
-        )
+        std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
     };
     file.write_all(bytes)
         .map_err(|err| ParseError::ValidationError(err.to_string()))
@@ -1880,7 +1878,7 @@ mod tests {
         };
         assert_ne!(ptr, libc::MAP_FAILED);
         let page = page_size().unwrap();
-        let pages = (len + page - 1) / page;
+        let pages = len.div_ceil(page);
         let mut vec = vec![0u8; pages];
         let rc = unsafe { libc::mincore(ptr, len, vec.as_mut_ptr()) };
         assert_eq!(rc, 0);

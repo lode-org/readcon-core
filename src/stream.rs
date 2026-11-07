@@ -174,10 +174,7 @@ impl<R: Read> ConFrameReader<R> {
 /// `text` ends in a newline, so every piece is a whole line.
 fn settled(text: &[u8], pos: usize) -> bool {
     let mut lines = text[pos.min(text.len())..].split_inclusive(|&b| b == b'\n');
-    lines
-        .find(|line| !line.iter().all(u8::is_ascii_whitespace))
-        .is_some()
-        && lines.next().is_some()
+    lines.any(|line| !line.iter().all(u8::is_ascii_whitespace)) && lines.next().is_some()
 }
 
 impl<R: Read> Iterator for ConFrameReader<R> {

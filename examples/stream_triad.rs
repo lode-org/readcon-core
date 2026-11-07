@@ -53,6 +53,8 @@ fn run(n: usize, scalar: f64, repeats: usize) -> (Vec<f64>, Vec<f64>, Vec<f64>, 
     let mut triad = Vec::with_capacity(repeats);
     for _ in 0..repeats {
         let t = Instant::now();
+        // This is the timed STREAM copy. A memcpy would change the measurement.
+        #[allow(clippy::manual_memcpy)]
         for i in 0..n {
             c[i] = a[i];
         }

@@ -137,10 +137,7 @@ impl<'a> MemchrLines<'a> {
                 line_no_for_pos(nl, len, self.pos)
             }
         };
-        let Some(span) = indexed_span(self.newlines.as_deref().unwrap(), self.bytes, line_no)
-        else {
-            return None;
-        };
+        let span = indexed_span(self.newlines.as_deref().unwrap(), self.bytes, line_no)?;
         let trimmed = &self.bytes[span.start..span.content_end];
         if self.check_utf8 {
             match std::str::from_utf8(trimmed) {
@@ -518,7 +515,7 @@ impl<'a> ConFrameIterator<'a> {
             },
             None => return Some(Err(error::ParseError::IncompleteHeader)),
         };
-        if natms_per_type.iter().any(|n| *n == 0) {
+        if natms_per_type.contains(&0) {
             return Some(Err(error::ParseError::InvalidCount(
                 "each per-type count must be >= 1".into(),
             )));

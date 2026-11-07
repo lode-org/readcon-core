@@ -188,6 +188,10 @@ pub extern "C" fn rkr_frame_index_energy(frame_handle: *const RKRConFrame) -> f6
 }
 
 /// Canonical multiset formula (`Cu:2|H:2`) for campaign `idx_formula`. Free with `rkr_free_string`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_composition_formula(
     frame_handle: *const RKRConFrame,
@@ -250,6 +254,10 @@ pub extern "C" fn rkr_frame_index_natoms(frame_handle: *const RKRConFrame) -> u3
 
 /// Compact JSON of [`crate::index_proj::FrameIndexProjection`] (campaign screening fields).
 /// Free with `rkr_free_string`. NULL on error.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_index_projection_json(
     frame_handle: *const RKRConFrame,
@@ -724,6 +732,10 @@ pub unsafe extern "C" fn con_frame_iterator_next(
 
 /// Skip one frame without parsing atoms. `RKR_STATUS_SUCCESS` on skip,
 /// `RKR_STATUS_INDEX_OUT_OF_BOUNDS` at EOF, other codes on parse error.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIterator) -> RKRStatus {
     if iterator.is_null() {
@@ -739,6 +751,10 @@ pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIter
 
 /// Skip `n` frames without parsing atoms. Returns the number skipped, or
 /// `usize::MAX` on a null iterator.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_skip(
     iterator: *mut CConFrameIterator,
@@ -752,6 +768,10 @@ pub unsafe extern "C" fn con_frame_iterator_skip(
 }
 
 /// Skip `index` frames, then parse the next. NULL at EOF or on error.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn con_frame_iterator_nth(
     iterator: *mut CConFrameIterator,
@@ -772,6 +792,10 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
 }
 
 /// Count frames on a path (skip walk, no atom parse). `usize::MAX` on error.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_count_frames(filename_c: *const c_char) -> usize {
     if filename_c.is_null() {
@@ -785,6 +809,10 @@ pub unsafe extern "C" fn rkr_count_frames(filename_c: *const c_char) -> usize {
 }
 
 /// Skip `index` frames on a path, then parse one. Caller frees with `free_rkr_frame`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_read_nth_frame(
     filename_c: *const c_char,
@@ -1389,6 +1417,10 @@ pub unsafe extern "C" fn rkr_writer_set_canonical(
 }
 
 /// Returns 1 if the writer is in canonical mode, 0 otherwise (or on null handle).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_writer_is_canonical(writer_handle: *const RKRConFrameWriter) -> u8 {
     match unsafe { (writer_handle as *const RkrWriter).as_ref() } {
@@ -2586,6 +2618,10 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack(
     unsafe { rkr_frame_builder_velocities_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_velocities_dlpack_ex(
     builder_handle: *const RKRConFrameBuilder,
@@ -2622,6 +2658,10 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack(
     unsafe { rkr_frame_builder_forces_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_forces_dlpack_ex(
     builder_handle: *const RKRConFrameBuilder,
@@ -2746,6 +2786,10 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack(
     }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_atom_energies_dlpack_ex(
     builder_handle: *const RKRConFrameBuilder,
@@ -2779,6 +2823,10 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack(
     unsafe { rkr_frame_builder_masses_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_masses_dlpack_ex(
     builder_handle: *const RKRConFrameBuilder,
@@ -2808,6 +2856,10 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack(
     unsafe { rkr_frame_builder_atom_ids_dlpack_ex(builder_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_ex(
     builder_handle: *const RKRConFrameBuilder,
@@ -3932,6 +3984,10 @@ pub unsafe extern "C" fn rkr_mts_block_free(block: *mut metatensor::c_api::mts_b
     unsafe { crate::metatensor_export::mts_block_free_sys(block) };
 }
 /// Positions `[N,3]` TensorBlock. Caller frees with `rkr_mts_block_free` / `mts_block_free`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
@@ -3955,6 +4011,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
@@ -3979,6 +4039,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
@@ -4003,6 +4067,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(feature = "metatensor")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
@@ -4027,6 +4095,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
         Ok(Err(_)) | Err(_) => RKRStatus::RKR_STATUS_INTERNAL_ERROR,
     }
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "zstd"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_zstd_c(
@@ -4034,6 +4106,10 @@ pub unsafe extern "C" fn create_writer_zstd_c(
 ) -> *mut RKRConFrameWriter {
     ptr::null_mut()
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "zstd"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
@@ -4048,12 +4124,22 @@ pub unsafe extern "C" fn create_writer_zstd_with_precision_c(
 #[cfg(not(feature = "metatensor"))]
 // No #[repr(C)]: cbindgen then emits an incomplete struct, which C and C++
 // accept under -pedantic. The zero-length field keeps it unconstructible.
+// The name is the C type. Renaming it would change the exported ABI.
+#[allow(non_camel_case_types)]
 pub struct mts_block_t {
     _private: [u8; 0],
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mts_block_free(_block: *mut mts_block_t) {}
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
@@ -4065,6 +4151,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_positions_block(
     }
     RKRStatus::RKR_STATUS_FEATURE_DISABLED
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
@@ -4076,6 +4166,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_velocities_block(
     }
     RKRStatus::RKR_STATUS_FEATURE_DISABLED
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
@@ -4087,6 +4181,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_forces_block(
     }
     RKRStatus::RKR_STATUS_FEATURE_DISABLED
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[cfg(not(feature = "metatensor"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
@@ -4100,6 +4198,10 @@ pub unsafe extern "C" fn rkr_frame_metatensor_atom_energies_block(
 }
 // ----- Frame section buffers (no CFrame AoS required) -------------------------
 /// Number of atoms on the frame (atom_data order).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_atom_count(frame_handle: *const RKRConFrame) -> usize {
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
@@ -4108,6 +4210,10 @@ pub unsafe extern "C" fn rkr_frame_atom_count(frame_handle: *const RKRConFrame) 
     frame.atom_data.len()
 }
 /// Borrow positions SoA. `out->data` is valid until `free_rkr_frame`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_xyz_view(
     frame_handle: *const RKRConFrame,
@@ -4117,6 +4223,10 @@ pub unsafe extern "C" fn rkr_frame_xyz_view(
 }
 
 /// Borrow velocities SoA, or `SECTION_ABSENT`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_velocities_view(
     frame_handle: *const RKRConFrame,
@@ -4126,6 +4236,10 @@ pub unsafe extern "C" fn rkr_frame_velocities_view(
 }
 
 /// Borrow forces SoA, or `SECTION_ABSENT`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_view(
     frame_handle: *const RKRConFrame,
@@ -4185,6 +4299,10 @@ pub unsafe extern "C" fn rkr_frame_spreads_view(
 }
 
 /// Borrow per-atom energies, or `SECTION_ABSENT`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_energies_view(
     frame_handle: *const RKRConFrame,
@@ -4194,6 +4312,10 @@ pub unsafe extern "C" fn rkr_frame_energies_view(
 }
 
 /// Borrow per-atom masses.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_masses_view(
     frame_handle: *const RKRConFrame,
@@ -4203,6 +4325,10 @@ pub unsafe extern "C" fn rkr_frame_masses_view(
 }
 
 /// Borrow `atom_id` column (always u64).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_atom_ids_view(
     frame_handle: *const RKRConFrame,
@@ -4231,6 +4357,10 @@ pub unsafe extern "C" fn rkr_frame_atom_ids_view(
 
 /// Row-major f64 xyz pointer, or NULL if storage is not float64.
 /// `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_xyz_f64(
     frame_handle: *const RKRConFrame,
@@ -4240,6 +4370,10 @@ pub unsafe extern "C" fn rkr_frame_xyz_f64(
 }
 
 /// Row-major f64 velocities pointer, or NULL if absent / not float64.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_velocities_f64(
     frame_handle: *const RKRConFrame,
@@ -4249,6 +4383,10 @@ pub unsafe extern "C" fn rkr_frame_velocities_f64(
 }
 
 /// Row-major f64 forces pointer, or NULL if absent / not float64.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_f64(
     frame_handle: *const RKRConFrame,
@@ -4315,7 +4453,7 @@ fn fill_array1_view(
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
     let arr = get(frame);
-    if section && arr.len() == 0 {
+    if section && arr.is_empty() {
         unsafe { *out = RKRArrayView::empty() };
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
@@ -4352,6 +4490,10 @@ fn f64_col_ptr(
 
 /// Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
 /// Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_positions(
     frame_handle: *const RKRConFrame,
@@ -4422,12 +4564,12 @@ fn copy_array1_f64(
         return RKRStatus::RKR_STATUS_NULL_POINTER;
     };
     let arr = get(frame);
-    let n = if arr.len() > 0 {
+    let n = if !arr.is_empty() {
         arr.len()
     } else {
         frame.atom_data.len()
     };
-    if section && arr.len() == 0 {
+    if section && arr.is_empty() {
         return RKRStatus::RKR_STATUS_SECTION_ABSENT;
     }
     if out_len < n {
@@ -4438,12 +4580,16 @@ fn copy_array1_f64(
         dest.copy_from_slice(&src[..n.min(src.len())]);
         return RKRStatus::RKR_STATUS_SUCCESS;
     }
-    for i in 0..n {
-        dest[i] = arr.get_f64(i);
+    for (slot, dest_i) in dest.iter_mut().enumerate() {
+        *dest_i = arr.get_f64(slot);
     }
     RKRStatus::RKR_STATUS_SUCCESS
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_velocities(
     frame_handle: *const RKRConFrame,
@@ -4452,6 +4598,10 @@ pub unsafe extern "C" fn rkr_frame_copy_velocities(
 ) -> RKRStatus {
     copy_array2_f64(frame_handle, out, out_len, |f| &f.velocities, true)
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_forces(
     frame_handle: *const RKRConFrame,
@@ -4486,6 +4636,10 @@ pub unsafe extern "C" fn rkr_frame_copy_spreads(
 ) -> RKRStatus {
     copy_array2_f64(frame_handle, out, out_len, |f| &f.spreads, true)
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
     frame_handle: *const RKRConFrame,
@@ -4494,6 +4648,10 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
 ) -> RKRStatus {
     copy_array1_f64(frame_handle, out, out_len, |f| &f.atom_energies, true)
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_masses(
     frame_handle: *const RKRConFrame,
@@ -4502,6 +4660,10 @@ pub unsafe extern "C" fn rkr_frame_copy_masses(
 ) -> RKRStatus {
     copy_array1_f64(frame_handle, out, out_len, |f| &f.masses, false)
 }
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     frame_handle: *const RKRConFrame,
@@ -4618,13 +4780,12 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     } else {
         unsafe { std::slice::from_raw_parts(dl.shape, ndim) }
     };
-    let nelem = if ndim == 2 && shape[0] == n as i64 && shape[1] == 3 {
-        need
-    } else if ndim == 1 && shape[0] == need as i64 {
-        need
-    } else {
+    let shape_ok = (ndim == 2 && shape[0] == n as i64 && shape[1] == 3)
+        || (ndim == 1 && shape[0] == need as i64);
+    if !shape_ok {
         return RKRStatus::RKR_STATUS_VALIDATION_ERROR;
-    };
+    }
+    let nelem = need;
     let code = dl.dtype.code as u8;
     let bits = dl.dtype.bits;
     if dl.data.is_null() {
@@ -4653,6 +4814,10 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
 
 /// DLPack positions from a frame (default float64 / CPU). Prefer
 /// [`rkr_frame_positions_as_dlpack`] for metatensor-style device negotiation.
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_positions_dlpack(
     frame_handle: *const RKRConFrame,
@@ -4697,6 +4862,10 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
 }
 
 /// DLPack velocities from a frame, or `SECTION_ABSENT` if missing (f64/CPU).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
     frame_handle: *const RKRConFrame,
@@ -4705,6 +4874,10 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack(
     unsafe { rkr_frame_velocities_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
     frame_handle: *const RKRConFrame,
@@ -4737,6 +4910,10 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
 }
 
 /// DLPack forces from a frame, or `SECTION_ABSENT` if missing (f64/CPU default).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_dlpack(
     frame_handle: *const RKRConFrame,
@@ -4745,6 +4922,10 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack(
     unsafe { rkr_frame_forces_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
     frame_handle: *const RKRConFrame,
@@ -4879,6 +5060,10 @@ pub unsafe extern "C" fn rkr_frame_spreads_dlpack_ex(
 }
 
 /// DLPack per-atom energies, or `SECTION_ABSENT` if missing (f64/CPU default).
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
     frame_handle: *const RKRConFrame,
@@ -4887,6 +5072,10 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack(
     unsafe { rkr_frame_atom_energies_dlpack_ex(frame_handle, std::ptr::null(), out_tensor) }
 }
 
+/// # Safety
+///
+/// A non-null pointer argument must point at a live value of its declared
+/// type for this call. A null pointer is handled inside the function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
     frame_handle: *const RKRConFrame,
