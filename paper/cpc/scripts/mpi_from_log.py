@@ -32,7 +32,10 @@ def samples(text: str) -> dict[tuple[str, int], list[float]]:
 def type7(values: list[float]) -> tuple[float, float]:
     array = np.asarray(values, dtype=float)
     median = float(np.percentile(array, 50, method="linear"))
-    iqr = float(np.percentile(array, 75, method="linear") - np.percentile(array, 25, method="linear"))
+    iqr = float(
+        np.percentile(array, 75, method="linear")
+        - np.percentile(array, 25, method="linear")
+    )
     return median, iqr
 
 
@@ -52,18 +55,32 @@ def main() -> int:
         for ranks in RANKS:
             values = found.get((mode, ranks), [])
             if len(values) < 6:
-                print(f"mpi log has {len(values)} repeats for {mode} {ranks}", file=sys.stderr)
+                print(
+                    f"mpi log has {len(values)} repeats for {mode} {ranks}",
+                    file=sys.stderr,
+                )
                 return 1
     shared_eight, _ = stats[("shared", 8)]
     shared_four, _ = stats[("shared", 4)]
     scatter_eight, scatter_iqr = stats[("scatter", 8)]
     scatter_four, _ = stats[("scatter", 4)]
+
     def place(mode: str, ranks: int) -> str:
         unit = "rank" if ranks == 1 else "ranks"
         return f"{fmt(stats[(mode, ranks)][0])}~s at {ranks} {unit}"
 
-    shared_line = "In shared mode the median is " + ", ".join(place("shared", ranks) for ranks in RANKS[:-1]) + " and " + place("shared", 8)
-    scatter_line = "In scatter mode the median is " + ", ".join(place("scatter", ranks) for ranks in RANKS[:-1]) + " and " + place("scatter", 8)
+    shared_line = (
+        "In shared mode the median is "
+        + ", ".join(place("shared", ranks) for ranks in RANKS[:-1])
+        + " and "
+        + place("shared", 8)
+    )
+    scatter_line = (
+        "In scatter mode the median is "
+        + ", ".join(place("scatter", ranks) for ranks in RANKS[:-1])
+        + " and "
+        + place("scatter", 8)
+    )
     if shared_eight < shared_four and scatter_eight < scatter_four:
         compare = "Eight ranks are faster than four in both modes"
     else:
@@ -71,7 +88,9 @@ def main() -> int:
             f"In shared mode the eight-rank median is {fmt(shared_eight)}~s and the four-rank median is {fmt(shared_four)}~s, "
             f"and in scatter mode the eight-rank median is {fmt(scatter_eight)}~s and the four-rank median is {fmt(scatter_four)}~s"
         )
-    iqr_line = f"The scatter-mode interquartile range at eight ranks is {fmt(scatter_iqr)}~s"
+    iqr_line = (
+        f"The scatter-mode interquartile range at eight ranks is {fmt(scatter_iqr)}~s"
+    )
     lines = [
         "% Generated from paper/cpc/logs/mpi.log by scripts/mpi_from_log.py.",
         f"\\newcommand{{\\mpiRepeats}}{{{repeats}}}",
@@ -92,7 +111,9 @@ def main() -> int:
     for mode in MODES:
         for ranks in RANKS:
             median, iqr = stats[(mode, ranks)]
-            body.append(f"{mode} & {ranks} & {len(found[(mode, ranks)])} & {fmt(median)} & {fmt(iqr)} \\\\")
+            body.append(
+                f"{mode} & {ranks} & {len(found[(mode, ranks)])} & {fmt(median)} & {fmt(iqr)} \\\\"
+            )
     table = "\n".join(
         [
             "% Generated from paper/cpc/logs/mpi.log by scripts/mpi_from_log.py.",
@@ -118,10 +139,15 @@ def main() -> int:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
-    for mode, color, marker in (("shared", "#004D40", "o"), ("scatter", "#FF655D", "s")):
+    for mode, color, marker in (
+        ("shared", "#004D40", "o"),
+        ("scatter", "#FF655D", "s"),
+    ):
         medians = [stats[(mode, ranks)][0] for ranks in RANKS]
         iqrs = [stats[(mode, ranks)][1] for ranks in RANKS]
-        ax.errorbar(RANKS, medians, yerr=iqrs, marker=marker, color=color, label=mode, capsize=3)
+        ax.errorbar(
+            RANKS, medians, yerr=iqrs, marker=marker, color=color, label=mode, capsize=3
+        )
     ax.set_xlabel("ranks")
     ax.set_ylabel("median wall time (s)")
     ax.set_xticks(list(RANKS))

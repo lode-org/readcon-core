@@ -27,6 +27,7 @@ they were.
 
     python3 paper/cpc/scripts/run_restart_walls.py
 """
+
 from __future__ import annotations
 
 import csv
@@ -44,8 +45,18 @@ sys.path.insert(0, str(ROOT / "bench"))
 
 OUT = Path(os.environ.get("RUN05_OUT", ROOT / "data" / "restart_walls"))
 REPEAT_FIELDS = ["route", "round", "steps", "converged", "force_calls", "wall_s"]
-SUMMARY_FIELDS = ["route", "steps", "converged", "force_calls", "wall_s", "wall_q1_s", "wall_q3_s", "wall_iqr_s",
-                  "n_repeats", "error"]
+SUMMARY_FIELDS = [
+    "route",
+    "steps",
+    "converged",
+    "force_calls",
+    "wall_s",
+    "wall_q1_s",
+    "wall_q3_s",
+    "wall_iqr_s",
+    "n_repeats",
+    "error",
+]
 
 
 def child(route: str) -> None:
@@ -62,18 +73,34 @@ def child(route: str) -> None:
     t0 = time.perf_counter()
     res = rf.run(imgs, start=start)
     wall = time.perf_counter() - t0
-    print(json.dumps({"seconds": wall, "steps": res["step"], "converged": bool(res["converged"]),
-                      "force_calls": res["calls"]}), flush=True)
+    print(
+        json.dumps(
+            {
+                "seconds": wall,
+                "steps": res["step"],
+                "converged": bool(res["converged"]),
+                "force_calls": res["calls"],
+            }
+        ),
+        flush=True,
+    )
 
 
 def leg(route: str):
     def run_once() -> dict:
-        proc = subprocess.run([sys.executable, __file__, "--child", route], capture_output=True, text=True,
-                              check=False)
+        proc = subprocess.run(
+            [sys.executable, __file__, "--child", route],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if proc.returncode != 0:
-            raise SystemExit(f"{route}: the resumed leg exited {proc.returncode}; restart_formats.csv records no "
-                             f"error for it, so no output is written:\n{proc.stderr[-2000:]}")
+            raise SystemExit(
+                f"{route}: the resumed leg exited {proc.returncode}; restart_formats.csv records no "
+                f"error for it, so no output is written:\n{proc.stderr[-2000:]}"
+            )
         return json.loads(proc.stdout.strip().splitlines()[-1])
+
     return run_once
 
 
@@ -95,45 +122,74 @@ def main() -> None:
     with (ROOT / "data" / "failure" / "restart_formats.csv").open(newline="") as fh:
         recorded = {row["route"]: row["error"] for row in csv.DictReader(fh)}
     routes = ["uninterrupted"] + [name for name, _ in rf.ROUTES]
-    bad = [f"{name}: restart_formats.csv records {recorded.get(name, 'no row')!r}" for name in routes
-           if recorded.get(name) != ""]
+    bad = [
+        f"{name}: restart_formats.csv records {recorded.get(name, 'no row')!r}"
+        for name in routes
+        if recorded.get(name) != ""
+    ]
     if bad:
-        raise SystemExit("routes without a clean row in restart_formats.csv:\n  " + "\n  ".join(bad))
+        raise SystemExit(
+            "routes without a clean row in restart_formats.csv:\n  " + "\n  ".join(bad)
+        )
     record = interleave.campaign({name: leg(name) for name in routes})
     rows, repeats = [], []
     for name in routes:
         cell = record["cells"][name]
         printed = cell["printed"]
-        rows.append(dict(route=name, steps=printed["steps"], converged=printed["converged"],
-                         force_calls=printed["force_calls"], wall_s=f"{cell['median_s']:.6f}",
-                         wall_q1_s=f"{cell['q1_s']:.6f}", wall_q3_s=f"{cell['q3_s']:.6f}",
-                         wall_iqr_s=f"{cell['iqr_s']:.6f}", n_repeats=cell["n"], error=""))
+        rows.append(
+            dict(
+                route=name,
+                steps=printed["steps"],
+                converged=printed["converged"],
+                force_calls=printed["force_calls"],
+                wall_s=f"{cell['median_s']:.6f}",
+                wall_q1_s=f"{cell['q1_s']:.6f}",
+                wall_q3_s=f"{cell['q3_s']:.6f}",
+                wall_iqr_s=f"{cell['iqr_s']:.6f}",
+                n_repeats=cell["n"],
+                error="",
+            )
+        )
     order = record["protocol"]["order"]
     for index, names in enumerate(order):
         for name in names:
             printed = record["cells"][name]["printed"]
-            repeats.append(dict(route=name, round=index, steps=printed["steps"], converged=printed["converged"],
-                                force_calls=printed["force_calls"],
-                                wall_s=f"{record['cells'][name]['samples_s'][index]:.6f}"))
+            repeats.append(
+                dict(
+                    route=name,
+                    round=index,
+                    steps=printed["steps"],
+                    converged=printed["converged"],
+                    force_calls=printed["force_calls"],
+                    wall_s=f"{record['cells'][name]['samples_s'][index]:.6f}",
+                )
+            )
     OUT.mkdir(parents=True, exist_ok=True)
     write_csv(OUT / "restart_walls.csv", SUMMARY_FIELDS, rows)
     write_csv(OUT / "restart_walls_repeats.csv", REPEAT_FIELDS, repeats)
-    (OUT / "restart_walls.json").write_text(json.dumps({
-        "script": "paper/cpc/scripts/run_restart_walls.py",
-        "timed": "resumed leg",
-        "clock": "time.perf_counter around restart_formats.run on the band read back at step K "
-                 "(on the whole band for the uninterrupted row), in a fresh process per run; that call counts "
-                 "force_calls",
-        "wall_repeats": record["protocol"]["rounds"],
-        "protocol": record["protocol"],
-        "hardware": record["hardware"],
-        "task_s": round(time.perf_counter() - t_task, 1),
-        "outputs": ["restart_walls.csv", "restart_walls_repeats.csv"],
-        "provenance": provenance.record(),
-    }, indent=1))
+    (OUT / "restart_walls.json").write_text(
+        json.dumps(
+            {
+                "script": "paper/cpc/scripts/run_restart_walls.py",
+                "timed": "resumed leg",
+                "clock": "time.perf_counter around restart_formats.run on the band read back at step K "
+                "(on the whole band for the uninterrupted row), in a fresh process per run; that call counts "
+                "force_calls",
+                "wall_repeats": record["protocol"]["rounds"],
+                "protocol": record["protocol"],
+                "hardware": record["hardware"],
+                "task_s": round(time.perf_counter() - t_task, 1),
+                "outputs": ["restart_walls.csv", "restart_walls_repeats.csv"],
+                "provenance": provenance.record(),
+            },
+            indent=1,
+        )
+    )
     for r in rows:
-        print(f"  {r['route']}: wall_s={r['wall_s']} IQR={r['wall_iqr_s']} force_calls={r['force_calls']}",
-              flush=True)
+        print(
+            f"  {r['route']}: wall_s={r['wall_s']} IQR={r['wall_iqr_s']} force_calls={r['force_calls']}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

@@ -46,9 +46,9 @@ import readcon
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "scripts"))
 
-import provenance
-import restart_formats as rf
-import velocity_case
+import provenance  # noqa: E402
+import restart_formats as rf  # noqa: E402
+import velocity_case  # noqa: E402
 
 
 def package_module_path(module_file: str) -> str:
@@ -63,7 +63,11 @@ def package_module_path(module_file: str) -> str:
 
 WORK = ROOT / "work" / "e1"
 RESULTS = ROOT / "results"
-EON = os.environ.get("EONCLIENT") or shutil.which("eonclient") or str(ROOT.parent / ".pixi" / "envs" / "eon" / "bin" / "eonclient")
+EON = (
+    os.environ.get("EONCLIENT")
+    or shutil.which("eonclient")
+    or str(ROOT.parent / ".pixi" / "envs" / "eon" / "bin" / "eonclient")
+)
 # readcon unit_conversion_factor(natural, "fs"); see src/units.rs.
 NATURAL_TO_FS = 10.180505710759414
 FMAX = 0.01
@@ -74,13 +78,29 @@ INTERRUPT_AT = 25
 # eOn 3.6.0 band steepest descent takes alpha = 0.1 whatever sd_alpha says,
 # which oscillates on this slab unless max_move caps the step.
 BAND_OPTIMIZERS = {
-    "sd": {"opt_method": "sd", "max_move": 0.0005, "results": "e1_restart.json", "work": "neb"},
-    "lbfgs": {"opt_method": "lbfgs", "max_move": 0.05, "results": "e1_restart_lbfgs_control.json", "work": "neb_lbfgs"},
+    "sd": {
+        "opt_method": "sd",
+        "max_move": 0.0005,
+        "results": "e1_restart.json",
+        "work": "neb",
+    },
+    "lbfgs": {
+        "opt_method": "lbfgs",
+        "max_move": 0.05,
+        "results": "e1_restart_lbfgs_control.json",
+        "work": "neb_lbfgs",
+    },
 }
 # The file each eOn 3.6.0 optimiser class opens when it is constructed
 # (eonc::log::FileScoped in LBFGS.h, SteepestDescent.h, ConjugateGradients.h,
 # FIRE.h, Quickmin.h), and the optimizer_backend spelling of that class.
-OPTIMIZER_LOGS = {"_lbfgs.log": "lbfgs", "_sd.log": "sd", "_cg.log": "cg", "_fire.log": "fire", "_quickmin.log": "qm"}
+OPTIMIZER_LOGS = {
+    "_lbfgs.log": "lbfgs",
+    "_sd.log": "sd",
+    "_cg.log": "cg",
+    "_fire.log": "fire",
+    "_quickmin.log": "qm",
+}
 
 
 def cpu_name() -> str:
@@ -95,7 +115,10 @@ def cpu_name() -> str:
     cores = os.cpu_count()
     return f"{name}, family {family}, model {model}, {cores} hardware threads"
 
-def run(cmd: list[str], cwd: Path, timeout: float = 180, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+
+def run(
+    cmd: list[str], cwd: Path, timeout: float = 180, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -107,22 +130,31 @@ def run(cmd: list[str], cwd: Path, timeout: float = 180, env: dict[str, str] | N
     )
 
 
-def eon_run(work: Path, timeout: float) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+def eon_run(
+    work: Path, timeout: float
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run eonclient in work with a TMPDIR of its own; also return the optimisers it constructed."""
     with tempfile.TemporaryDirectory(prefix="e1_eon_tmp_") as tmp:
         proc = run([EON], work, timeout=timeout, env=dict(os.environ, TMPDIR=tmp))
         logs = Path(tmp) / "eon_logs"
-        built = sorted(OPTIMIZER_LOGS.get(p.name, p.name) for p in logs.glob("*.log")) if logs.is_dir() else []
+        built = (
+            sorted(OPTIMIZER_LOGS.get(p.name, p.name) for p in logs.glob("*.log"))
+            if logs.is_dir()
+            else []
+        )
     return proc, built
 
 
-def check_optimizer(work: Path, requested: str, info: dict[str, str], built: list[str]) -> None:
+def check_optimizer(
+    work: Path, requested: str, info: dict[str, str], built: list[str]
+) -> None:
     backend = info.get("optimizer_backend")
     if backend != requested or built != [requested]:
         raise SystemExit(
             f"{work}: requested optimiser {requested}, but eOn reports optimizer_backend {backend} "
             f"and constructed {built}; no record written"
         )
+
 
 def eon_version() -> str:
     proc = run([EON, "--version"], WORK, timeout=30)
@@ -131,6 +163,7 @@ def eon_version() -> str:
         if line.startswith("3.") or line.startswith("eOn"):
             return line.strip()
     return text.splitlines()[0].strip() if text else "unknown"
+
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -143,7 +176,12 @@ def recipe_sources(recipe: Path) -> list[dict]:
         text = line.strip()
         if line.startswith("  source:"):
             inside = True
-        elif inside and line.startswith("  ") and not line.startswith("   ") and not text.startswith("-"):
+        elif (
+            inside
+            and line.startswith("  ")
+            and not line.startswith("   ")
+            and not text.startswith("-")
+        ):
             break
         elif inside and text.startswith("- url:"):
             sources.append({"url": text.split(":", 1)[1].strip()})
@@ -156,7 +194,10 @@ def tag_commit(repository: str, tag: str) -> str:
     """The commit a public tag points to, from ``git ls-remote``."""
     proc = subprocess.run(
         ["git", "ls-remote", repository, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
-        text=True, capture_output=True, timeout=60, check=True,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=True,
     )
     refs = dict(reversed(line.split("\t")) for line in proc.stdout.splitlines())
     commit = refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}")
@@ -177,7 +218,11 @@ def eon_package(meta: dict) -> dict:
         "sources": recipe_sources(info / "recipe" / "rendered_recipe.yaml"),
     }
     tag = f"v{meta['version']}"
-    out["source_tag"] = {"repository": out["dev_url"], "tag": tag, "commit": tag_commit(out["dev_url"], tag)}
+    out["source_tag"] = {
+        "repository": out["dev_url"],
+        "tag": tag,
+        "commit": tag_commit(out["dev_url"], tag),
+    }
     return out
 
 
@@ -195,9 +240,13 @@ def eon_build() -> dict:
         if meta.get("name") == "eon":
             # pixi records the channel without the platform directory and conda with it; the URL names both alike.
             channel = meta["url"].rsplit("/", 2)[0]
-            out["conda_package"] = {key: channel if key == "channel" else meta.get(key)
-                                    for key in ("name", "version", "build", "channel", "url", "sha256")}
-            out["readcon_core_shipped_in_eon_package"] = any("libreadcon_core" in name for name in meta.get("files", []))
+            out["conda_package"] = {
+                key: channel if key == "channel" else meta.get(key)
+                for key in ("name", "version", "build", "channel", "url", "sha256")
+            }
+            out["readcon_core_shipped_in_eon_package"] = any(
+                "libreadcon_core" in name for name in meta.get("files", [])
+            )
             out["package"] = eon_package(meta)
     linked = run(["ldd", str(client)], WORK, timeout=30).stdout
     for line in linked.splitlines():
@@ -229,7 +278,11 @@ def write_frame(path: Path, atoms, masks: list[int], velocities=None) -> None:
         fixed = [bool(mask & 1), bool(mask & 2), bool(mask & 4)]
         kwargs = {}
         if velocities is not None:
-            kwargs = {"vx": float(velocities[i, 0]), "vy": float(velocities[i, 1]), "vz": float(velocities[i, 2])}
+            kwargs = {
+                "vx": float(velocities[i, 0]),
+                "vy": float(velocities[i, 1]),
+                "vz": float(velocities[i, 2]),
+            }
         py_atoms.append(
             readcon.Atom(
                 symbol=symbol,
@@ -264,6 +317,7 @@ def write_frame(path: Path, atoms, masks: list[int], velocities=None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     readcon.write_con(str(path), [frame])
 
+
 def positions_of(path: Path) -> np.ndarray:
     frames = readcon.read_con(str(path))
     out = []
@@ -272,6 +326,7 @@ def positions_of(path: Path) -> np.ndarray:
         out.append(xyz)
     return np.stack(out, axis=0)
 
+
 def rmsd(a: np.ndarray, b: np.ndarray) -> float:
     n = min(len(a), len(b))
     if a.shape != b.shape:
@@ -279,13 +334,16 @@ def rmsd(a: np.ndarray, b: np.ndarray) -> float:
         b = b[:n]
     return float(np.sqrt(np.mean((a - b) ** 2)))
 
+
 def max_abs(a: np.ndarray, b: np.ndarray) -> float:
     n = min(a.shape[0], b.shape[0])
     return float(np.max(np.abs(a[:n] - b[:n])))
 
+
 def cell_lengths(path: Path) -> np.ndarray:
     frame = readcon.read_con(str(path))[0]
     return np.asarray(frame.cell[:3], dtype=float)
+
 
 def compare_geom(a: np.ndarray, b: np.ndarray, lengths: np.ndarray) -> dict:
     """Raw and minimum-image differences. z is not periodic on this slab."""
@@ -296,7 +354,9 @@ def compare_geom(a: np.ndarray, b: np.ndarray, lengths: np.ndarray) -> dict:
     wrapped = delta.copy()
     for axis in (0, 1):
         length = float(lengths[axis])
-        wrapped[..., axis] = delta[..., axis] - length * np.round(delta[..., axis] / length)
+        wrapped[..., axis] = delta[..., axis] - length * np.round(
+            delta[..., axis] / length
+        )
     return {
         "bit_identical": bool(np.array_equal(a, b)),
         "rmsd_A": float(np.sqrt(np.mean(delta**2))),
@@ -306,6 +366,7 @@ def compare_geom(a: np.ndarray, b: np.ndarray, lengths: np.ndarray) -> dict:
         "n_sites_raw_gt_1A": int(np.sum(np.max(np.abs(delta), axis=-1) > 1.0)),
         "pbc_xy_only": True,
     }
+
 
 def iteration_table(work: Path) -> list[dict]:
     log = work / "client_quill.log"
@@ -330,11 +391,13 @@ def iteration_table(work: Path) -> list[dict]:
             continue
     return rows
 
+
 def scrub_client_logs(root: Path) -> None:
     """Drop client logs. They record the machine name, which this pack does not keep."""
     for name in ("client_quill.log", "client_traceback.log"):
         for path in root.rglob(name):
             path.unlink(missing_ok=True)
+
 
 def parse_results(path: Path) -> dict[str, str]:
     """eOn writes ``value key`` with the key as the last token.
@@ -353,15 +416,25 @@ def parse_results(path: Path) -> dict[str, str]:
             out[key] = value
     return out
 
+
 def _peak_force(info: dict[str, str]) -> float | None:
     forces = []
     for key, value in info.items():
-        if key.startswith("image") and key.endswith("_force") and "projected" not in key:
+        if (
+            key.startswith("image")
+            and key.endswith("_force")
+            and "projected" not in key
+        ):
             forces.append(float(value))
     return float(max(forces)) if forces else None
 
+
 def _max_projected_force(info: dict[str, str]) -> float | None:
-    forces = [float(v) for k, v in info.items() if k.startswith("image") and k.endswith("_projected_force")]
+    forces = [
+        float(v)
+        for k, v in info.items()
+        if k.startswith("image") and k.endswith("_projected_force")
+    ]
     return float(max(forces)) if forces else None
 
 
@@ -373,6 +446,7 @@ def barrier_from_results(info: dict[str, str]) -> float | None:
     if not energies:
         return None
     return float(max(energies))
+
 
 def neb_config(band: dict, max_iterations: int, initial_path: str = "") -> str:
     init = "linear"
@@ -400,7 +474,7 @@ converged_force = {FMAX}
 initializer = {init}
 {band_line}{path_line}
 [Optimizer]
-{opt_line}max_move = {band['max_move']}
+{opt_line}max_move = {band["max_move"]}
 converged_force = {FMAX}
 max_iterations = {max_iterations}
 """
@@ -415,6 +489,7 @@ def build_hop() -> tuple[object, object, list[int], int]:
     masks[adatom] = 4
     return reactant, product, masks, adatom
 
+
 def residual_force(con: Path) -> dict:
     """eOn's own single-point maximum atom force on a minimised endpoint."""
     work = con.parent / (con.stem + "_point")
@@ -422,7 +497,9 @@ def residual_force(con: Path) -> dict:
         shutil.rmtree(work)
     work.mkdir(parents=True)
     shutil.copy(con, work / "pos.con")
-    (work / "config.ini").write_text("[Main]\njob = point\n\n[Potential]\npotential = morse_pt\n")
+    (work / "config.ini").write_text(
+        "[Main]\njob = point\n\n[Potential]\npotential = morse_pt\n"
+    )
     run([EON], work, timeout=60)
     info = parse_results(work / "results.dat")
     shutil.rmtree(work)
@@ -458,7 +535,9 @@ max_iterations = {ENDPOINT_MAX_ITERATIONS}
     elapsed = time.perf_counter() - t0
     produced = work / "min.con"
     if not produced.is_file():
-        raise SystemExit(f"minimisation wrote no min.con under {work}: {proc.stderr[-400:]}")
+        raise SystemExit(
+            f"minimisation wrote no min.con under {work}: {proc.stderr[-400:]}"
+        )
     info = parse_results(work / "results.dat")
     check_optimizer(work, ENDPOINT_OPTIMIZER, info, built)
     shutil.copy(produced, dst)
@@ -484,6 +563,7 @@ def round_trip(src: Path, dst: Path, precision: int | None) -> None:
         readcon.write_con(str(dst), frames)
     else:
         readcon.write_con(str(dst), frames, precision=precision)
+
 
 def split_eon_frames(band: Path) -> list[str]:
     """The frames of an eOn band file as eOn wrote them, without a parse."""
@@ -511,7 +591,10 @@ def prepare_resume(band: Path, dest_dir: Path, tag: str, route: str) -> str:
         texts = split_eon_frames(band)
     else:
         kwargs = {} if route == "round" else {"precision": 6}
-        texts = [readcon.write_con_string([frame], **kwargs) for frame in readcon.read_con(str(band))]
+        texts = [
+            readcon.write_con_string([frame], **kwargs)
+            for frame in readcon.read_con(str(band))
+        ]
     names = []
     for i, text in enumerate(texts):
         name = f"image_{tag}_{i:02d}.con"
@@ -533,10 +616,14 @@ def force_call_seconds(con: Path) -> float:
         samples.append(time.perf_counter() - t0)
     return float(np.median(samples))
 
+
 def _positive_steps(table: list[dict]) -> int:
     return sum(1 for row in table if row["step_size_A"] > 0.0)
 
-def band_job(work: Path, config: str, inputs: dict[str, Path], optimizer: str | None) -> dict:
+
+def band_job(
+    work: Path, config: str, inputs: dict[str, Path], optimizer: str | None
+) -> dict:
     """One eOn band run; ``optimizer`` is the band optimiser the run must report, None for eOn's default."""
     if work.exists():
         shutil.rmtree(work)
@@ -553,7 +640,11 @@ def band_job(work: Path, config: str, inputs: dict[str, Path], optimizer: str | 
     table = iteration_table(work)
     scrub_client_logs(work)
     band = work / "neb.con"
-    relative = [f.metadata.get("relative_energy") for f in readcon.read_con(str(band))] if band.is_file() else []
+    relative = (
+        [f.metadata.get("relative_energy") for f in readcon.read_con(str(band))]
+        if band.is_file()
+        else []
+    )
     return {
         "returncode": proc.returncode,
         "seconds": elapsed,
@@ -561,12 +652,16 @@ def band_job(work: Path, config: str, inputs: dict[str, Path], optimizer: str | 
         "optimizers_constructed": built,
         "has_neb": band.is_file(),
         "barrier_eV": barrier_from_results(info),
-        "barrier_con_eV": float(max(relative)) if relative and None not in relative else None,
+        "barrier_con_eV": float(max(relative))
+        if relative and None not in relative
+        else None,
         "termination": info.get("termination_reason_text"),
         "iterations": table[-1]["iteration"] if table else None,
         "first_iteration_step_A": table[0]["step_size_A"] if table else None,
         "optimizer_steps": _positive_steps(table),
-        "force_calls": int(info["total_force_calls"]) if "total_force_calls" in info else None,
+        "force_calls": int(info["total_force_calls"])
+        if "total_force_calls" in info
+        else None,
         "max_projected_force_eV_A": _max_projected_force(info),
         "peak_force_eV_A": _peak_force(info),
         "final_force_norm": table[-1]["force"] if table else None,
@@ -580,7 +675,9 @@ def neb_campaign(reactant: Path, product: Path, key: str) -> dict:
     optimizer = band["opt_method"]
     base = WORK / band["work"]
     ends = {"reactant.con": reactant, "product.con": product}
-    full = band_job(base / "full", neb_config(band, NEB_MAX_ITERATIONS), ends, optimizer)
+    full = band_job(
+        base / "full", neb_config(band, NEB_MAX_ITERATIONS), ends, optimizer
+    )
     short = band_job(base / "short", neb_config(band, INTERRUPT_AT), ends, optimizer)
     full_xyz = positions_of(base / "full" / "neb.con")
     lengths = cell_lengths(base / "full" / "neb.con")
@@ -595,15 +692,34 @@ def neb_campaign(reactant: Path, product: Path, key: str) -> dict:
             shutil.rmtree(stage)
         list_name = prepare_resume(checkpoint, stage, tag, route)
         inputs = {path.name: path for path in sorted(stage.iterdir())}
-        row = band_job(work, neb_config(band, NEB_MAX_ITERATIONS, list_name), inputs, optimizer)
+        row = band_job(
+            work, neb_config(band, NEB_MAX_ITERATIONS, list_name), inputs, optimizer
+        )
         shutil.rmtree(stage)
         row["route"] = route
-        loaded = np.stack([np.asarray(f.coords_array(), dtype=float) for f in readcon.read_con(str(checkpoint))])
-        written = [readcon.read_con_string(text)[0] for text in (
-            split_eon_frames(checkpoint) if route == "eon" else
-            [readcon.write_con_string([f], **({} if route == "round" else {"precision": 6})) for f in readcon.read_con(str(checkpoint))]
-        )]
-        row["checkpoint_max_abs_A"] = max_abs(loaded, np.stack([np.asarray(f.coords_array(), dtype=float) for f in written]))
+        loaded = np.stack(
+            [
+                np.asarray(f.coords_array(), dtype=float)
+                for f in readcon.read_con(str(checkpoint))
+            ]
+        )
+        written = [
+            readcon.read_con_string(text)[0]
+            for text in (
+                split_eon_frames(checkpoint)
+                if route == "eon"
+                else [
+                    readcon.write_con_string(
+                        [f], **({} if route == "round" else {"precision": 6})
+                    )
+                    for f in readcon.read_con(str(checkpoint))
+                ]
+            )
+        ]
+        row["checkpoint_max_abs_A"] = max_abs(
+            loaded,
+            np.stack([np.asarray(f.coords_array(), dtype=float) for f in written]),
+        )
         if row["has_neb"]:
             versus = compare_geom(positions_of(work / "neb.con"), full_xyz, lengths)
             row["versus_uninterrupted_final"] = versus
@@ -615,20 +731,36 @@ def neb_campaign(reactant: Path, product: Path, key: str) -> dict:
         if row["barrier_con_eV"] is not None and full["barrier_con_eV"] is not None:
             row["barrier_con_delta_eV"] = row["barrier_con_eV"] - full["barrier_con_eV"]
         row["total_optimizer_steps"] = short["optimizer_steps"] + row["optimizer_steps"]
-        row["extra_optimizer_steps"] = row["total_optimizer_steps"] - full["optimizer_steps"]
-        if row["force_calls"] is not None and short["force_calls"] is not None and full["force_calls"] is not None:
-            row["extra_force_calls"] = short["force_calls"] + row["force_calls"] - full["force_calls"]
+        row["extra_optimizer_steps"] = (
+            row["total_optimizer_steps"] - full["optimizer_steps"]
+        )
+        if (
+            row["force_calls"] is not None
+            and short["force_calls"] is not None
+            and full["force_calls"] is not None
+        ):
+            row["extra_force_calls"] = (
+                short["force_calls"] + row["force_calls"] - full["force_calls"]
+            )
         return row
 
-    rows = {tag: resume(f"resume_{route}", route) for tag, route in
-            (("resume_eon", "eon"), ("resume_roundtrip", "round"), ("resume_fixed6", "fixed6"))}
+    rows = {
+        tag: resume(f"resume_{route}", route)
+        for tag, route in (
+            ("resume_eon", "eon"),
+            ("resume_roundtrip", "round"),
+            ("resume_fixed6", "fixed6"),
+        )
+    }
     return {
         "optimizer": optimizer,
         "config_keys": {
             "[Nudged Elastic Band] opt_method": optimizer,
             "[Optimizer] opt_method": optimizer,
         },
-        "optimizer_backend_every_run": sorted({row["optimizer_backend"] for row in (full, short, *rows.values())}),
+        "optimizer_backend_every_run": sorted(
+            {row["optimizer_backend"] for row in (full, short, *rows.values())}
+        ),
         "max_move_A": band["max_move"],
         "converged_force_eV_A": FMAX,
         "max_iterations": NEB_MAX_ITERATIONS,
@@ -658,7 +790,9 @@ def default_band_optimizer(reactant: Path, product: Path) -> dict:
     probe = band_job(work, neb_config(unnamed, NEB_MAX_ITERATIONS), ends, None)
     shutil.rmtree(work)
     if len(probe["optimizers_constructed"]) != 1:
-        raise SystemExit(f"the band without opt_method constructed {probe['optimizers_constructed']}")
+        raise SystemExit(
+            f"the band without opt_method constructed {probe['optimizers_constructed']}"
+        )
     return {
         "config_keys": "no opt_method under [Nudged Elastic Band] or [Optimizer]",
         "band_optimizer": probe["optimizers_constructed"][0],
@@ -718,7 +852,11 @@ converged_angle = 8
         return {
             "returncode": proc.returncode,
             "seconds": time.perf_counter() - t0,
-            "results": {k: info[k] for k in info if "energy" in k or "termination" in k or "eigen" in k},
+            "results": {
+                k: info[k]
+                for k in info
+                if "energy" in k or "termination" in k or "eigen" in k
+            },
             "stderr_tail": (proc.stderr or "")[-400:],
             "files": sorted(p.name for p in work.glob("*.con")),
         }
@@ -754,6 +892,7 @@ converged_angle = 8
         if energy(plain) is not None and energy(fixed) is not None:
             cmp["fixed6_saddle_energy_delta_eV"] = energy(fixed) - energy(plain)
     return {"plain": plain, "round": rounded, "fixed6": fixed, "compare": cmp}
+
 
 def dynamics_campaign(reactant: Path) -> dict:
     work = WORK / "dynamics"
@@ -815,6 +954,7 @@ thermostat = none
         "continue": resumed,
     }
 
+
 def _rerun_dynamics(work: Path, pos: Path, extra_time: float) -> dict:
     if work.exists():
         shutil.rmtree(work)
@@ -844,6 +984,7 @@ thermostat = none
         "stderr_tail": (proc.stderr or "")[-300:],
     }
 
+
 def velocity_factor(atoms, masks) -> dict:
     """Write the 28-atom velocity fixture and take its numbers from velocity_case.
 
@@ -860,7 +1001,9 @@ def velocity_factor(atoms, masks) -> dict:
         write_frame(path, atoms, masks, velocities=vel_nat)
     frames = readcon.read_con(str(path))
     got = np.array([[a.vx, a.vy, a.vz] for a in frames[0].atoms], dtype=float)
-    if not np.array_equal(got, vel_nat) or not np.array_equal(positions_of(path)[0], atoms.get_positions()):
+    if not np.array_equal(got, vel_nat) or not np.array_equal(
+        positions_of(path)[0], atoms.get_positions()
+    ):
         raise SystemExit(f"{path} is not the seeded draw on the unminimised slab")
     unit = velocity_case.natural_fs()
     shared = velocity_case.slab_28(path, unit["readcon_fs"], unit["kB_eV_per_K"])
@@ -920,16 +1063,22 @@ def main() -> None:
             "neither key."
         ),
     }
-    summary["minimize_reactant"] = minimize_endpoint(geom / "reactant.con", geom / "reactant_min.con")
-    summary["minimize_product"] = minimize_endpoint(geom / "product.con", geom / "product_min.con")
+    summary["minimize_reactant"] = minimize_endpoint(
+        geom / "reactant.con", geom / "reactant_min.con"
+    )
+    summary["minimize_product"] = minimize_endpoint(
+        geom / "product.con", geom / "product_min.con"
+    )
     reactant = geom / "reactant_min.con"
     product = geom / "product_min.con"
     summary["morse_single_point_seconds_median"] = force_call_seconds(reactant)
     campaigns = {key: neb_campaign(reactant, product, key) for key in BAND_OPTIMIZERS}
     summary["converged_barrier_spread"] = {
-        "sd_minus_lbfgs_eV": campaigns["sd"]["full"]["barrier_eV"] - campaigns["lbfgs"]["full"]["barrier_eV"],
+        "sd_minus_lbfgs_eV": campaigns["sd"]["full"]["barrier_eV"]
+        - campaigns["lbfgs"]["full"]["barrier_eV"],
         "sd_minus_lbfgs_con_eV": (
-            campaigns["sd"]["full"]["barrier_con_eV"] - campaigns["lbfgs"]["full"]["barrier_con_eV"]
+            campaigns["sd"]["full"]["barrier_con_eV"]
+            - campaigns["lbfgs"]["full"]["barrier_con_eV"]
         ),
         "note": "Both uninterrupted bands end GOOD at converged_force_eV_A, each with its own band optimizer.",
     }
@@ -940,19 +1089,60 @@ def main() -> None:
     summary["velocity"] = velocity_factor(reactant_atoms, masks)
     scrub_client_logs(WORK)
     for key, band in BAND_OPTIMIZERS.items():
-        record = dict(summary, optimizer=campaigns[key]["optimizer"], neb=campaigns[key])
+        record = dict(
+            summary, optimizer=campaigns[key]["optimizer"], neb=campaigns[key]
+        )
         if key == "sd":
             record["neb_lbfgs"] = campaigns["lbfgs"]
         (RESULTS / band["results"]).write_text(json.dumps(record, indent=2) + "\n")
     for key, campaign in campaigns.items():
-        print(key, campaign["optimizer_backend_every_run"], "interrupt", campaign["interrupt_max_iterations"],
-              "iterations,", campaign["interrupt_optimizer_steps"], "steps")
-        print(key, json.dumps({
-            "full": {k: campaign["full"][k] for k in ("termination", "iterations", "optimizer_steps", "barrier_eV", "max_projected_force_eV_A")},
-            **{tag: {k: campaign[tag].get(k) for k in ("termination", "optimizer_steps", "barrier_eV", "barrier_delta_eV", "extra_optimizer_steps", "mic_max_abs_A", "max_projected_force_eV_A")}
-               for tag in ("resume_eon", "resume_roundtrip", "resume_fixed6")},
-        }, indent=1))
-    print("endpoints", summary["minimize_reactant"]["residual"], summary["minimize_product"]["residual"])
+        print(
+            key,
+            campaign["optimizer_backend_every_run"],
+            "interrupt",
+            campaign["interrupt_max_iterations"],
+            "iterations,",
+            campaign["interrupt_optimizer_steps"],
+            "steps",
+        )
+        print(
+            key,
+            json.dumps(
+                {
+                    "full": {
+                        k: campaign["full"][k]
+                        for k in (
+                            "termination",
+                            "iterations",
+                            "optimizer_steps",
+                            "barrier_eV",
+                            "max_projected_force_eV_A",
+                        )
+                    },
+                    **{
+                        tag: {
+                            k: campaign[tag].get(k)
+                            for k in (
+                                "termination",
+                                "optimizer_steps",
+                                "barrier_eV",
+                                "barrier_delta_eV",
+                                "extra_optimizer_steps",
+                                "mic_max_abs_A",
+                                "max_projected_force_eV_A",
+                            )
+                        }
+                        for tag in ("resume_eon", "resume_roundtrip", "resume_fixed6")
+                    },
+                },
+                indent=1,
+            ),
+        )
+    print(
+        "endpoints",
+        summary["minimize_reactant"]["residual"],
+        summary["minimize_product"]["residual"],
+    )
     print("default band optimizer", summary["default_band_optimizer"])
     print("dimer", summary["dimer"].get("compare"))
     print("velocity", summary["velocity"]["ke_true_eV"], summary["velocity"]["ratio"])

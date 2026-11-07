@@ -128,8 +128,12 @@ def free_mask(atoms) -> np.ndarray:
         if isinstance(constraint, FixAtoms):
             mask[list(constraint.get_indices()), :] = False
         elif isinstance(constraint, (FixCartesian, FixScaled)):
-            if isinstance(constraint, FixScaled) and np.count_nonzero(cell - np.diag(np.diag(cell))):
-                raise RuntimeError("FixScaled axes are not the Cartesian axes in this cell")
+            if isinstance(constraint, FixScaled) and np.count_nonzero(
+                cell - np.diag(np.diag(cell))
+            ):
+                raise RuntimeError(
+                    "FixScaled axes are not the Cartesian axes in this cell"
+                )
             fixed = np.asarray(constraint.mask, dtype=bool)
             mask[list(constraint.get_indices()), :] &= ~fixed
         else:
@@ -167,7 +171,9 @@ def free_hessian(atoms) -> tuple[list[tuple[int, int]], np.ndarray]:
     return coords, 0.5 * (hessian + hessian.T)
 
 
-def hessian_modes(atoms, adatom: int, hessian: tuple[list[tuple[int, int]], np.ndarray] | None = None) -> dict:
+def hessian_modes(
+    atoms, adatom: int, hessian: tuple[list[tuple[int, int]], np.ndarray] | None = None
+) -> dict:
     """Mass-weighted Hessian on coordinates the constraints leave free; ``hessian`` is free_hessian(atoms) if given."""
     coords, hessian = free_hessian(atoms) if hessian is None else hessian
     n = len(coords)
@@ -183,7 +189,9 @@ def hessian_modes(atoms, adatom: int, hessian: tuple[list[tuple[int, int]], np.n
     imag_index = int(np.argmin(omega2))
     cart = np.zeros((len(atoms), 3))
     for component, (atom_index, axis) in enumerate(coords):
-        cart[atom_index, axis] = vectors[component, imag_index] / np.sqrt(masses[atom_index])
+        cart[atom_index, axis] = vectors[component, imag_index] / np.sqrt(
+            masses[atom_index]
+        )
     cart_norm = float(np.linalg.norm(cart))
     adatom_xy = float(np.linalg.norm(cart[adatom, :2]))
     positive_omega2 = omega2[omega2 > OMEGA2_ZERO]
@@ -197,7 +205,9 @@ def hessian_modes(atoms, adatom: int, hessian: tuple[list[tuple[int, int]], np.n
         "n_real": len(real),
         "imaginary_meV": [1000.0 * value for value in imag],
         "real_meV": [1000.0 * value for value in real],
-        "softest_mode_adatom_xy_weight": None if cart_norm == 0.0 else adatom_xy / cart_norm,
+        "softest_mode_adatom_xy_weight": None
+        if cart_norm == 0.0
+        else adatom_xy / cart_norm,
         "positive_frequencies_Hz": [float(value) for value in nu_hz],
         "sum_log_positive_Hz": float(np.sum(np.log(nu_hz))) if len(nu_hz) else None,
     }
@@ -206,11 +216,16 @@ def hessian_modes(atoms, adatom: int, hessian: tuple[list[tuple[int, int]], np.n
 def newton_refine(atoms) -> dict:
     """Newton steps H^-1 F on the free coordinates, the Hessian recomputed at each step, to NEWTON_FMAX."""
     start = atoms.get_positions().copy()
-    before = {"fmax_eV_A": max_force(atoms), "energy_eV": float(atoms.get_potential_energy())}
+    before = {
+        "fmax_eV_A": max_force(atoms),
+        "energy_eV": float(atoms.get_potential_energy()),
+    }
     steps = 0
     while max_force(atoms) >= NEWTON_FMAX:
         if steps == NEWTON_STEPS:
-            raise RuntimeError(f"Newton steps left fmax at {max_force(atoms)} eV/A after {steps} steps")
+            raise RuntimeError(
+                f"Newton steps left fmax at {max_force(atoms)} eV/A after {steps} steps"
+            )
         coords, hessian = free_hessian(atoms)
         forces = atoms.get_forces()
         step = np.linalg.solve(hessian, np.array([forces[a, ax] for a, ax in coords]))
@@ -226,7 +241,9 @@ def newton_refine(atoms) -> dict:
         "fmax_eV_A": max_force(atoms),
         "energy_before_eV": before["energy_eV"],
         "energy_eV": float(atoms.get_potential_energy()),
-        "largest_atom_move_A": float(np.linalg.norm(atoms.get_positions() - start, axis=1).max()),
+        "largest_atom_move_A": float(
+            np.linalg.norm(atoms.get_positions() - start, axis=1).max()
+        ),
     }
 
 
@@ -244,8 +261,10 @@ def at_stationary_point(atoms, adatom: int, index: int) -> tuple[dict, dict | No
     refinement = newton_refine(point)
     refined = hessian_modes(point, adatom)
     if refined["n_imaginary"] != index or refined["n_zero"] != 0:
-        raise RuntimeError(f"Newton steps reached a point with {refined['n_imaginary']} imaginary and "
-                           f"{refined['n_zero']} zero modes, not {index} and 0")
+        raise RuntimeError(
+            f"Newton steps reached a point with {refined['n_imaginary']} imaginary and "
+            f"{refined['n_zero']} zero modes, not {index} and 0"
+        )
     refinement["imaginary_meV_before"] = modes["imaginary_meV"]
     return refined, refinement
 
@@ -272,7 +291,9 @@ def vineyard(reactant_modes: dict, saddle_modes: dict) -> dict:
                 f"{reactant_modes['n_real']} and {saddle_modes['n_real']}"
             ),
         }
-    log_pref = reactant_modes["sum_log_positive_Hz"] - saddle_modes["sum_log_positive_Hz"]
+    log_pref = (
+        reactant_modes["sum_log_positive_Hz"] - saddle_modes["sum_log_positive_Hz"]
+    )
     return {
         "defined": True,
         "formula": (
@@ -299,7 +320,13 @@ def adatom_xy(image, adatom: int, reference, cell_atoms) -> np.ndarray:
     return disp[:2]
 
 
-def judge(reading: str, neb: dict, reactant_modes: dict, saddle_modes: dict, adatom_axes: list[str]) -> dict:
+def judge(
+    reading: str,
+    neb: dict,
+    reactant_modes: dict,
+    saddle_modes: dict,
+    adatom_axes: list[str],
+) -> dict:
     lateral_free = any(axis in adatom_axes for axis in "xy")
     reasons = []
     if not lateral_free:
@@ -314,7 +341,9 @@ def judge(reading: str, neb: dict, reactant_modes: dict, saddle_modes: dict, ada
         reasons.append("No interior image is higher than both endpoints.")
     fraction = neb["adatom_hop_fraction"][neb["interior_peak_image"]]
     if fraction is None or not (0.15 <= fraction <= 0.85):
-        reasons.append("The highest interior image is not partway along the adatom hop.")
+        reasons.append(
+            "The highest interior image is not partway along the adatom hop."
+        )
     moved = max(neb["adatom_off_initial_line_A"][1:-1])
     if moved < 1.0e-4:
         reasons.append(
@@ -329,14 +358,18 @@ def judge(reading: str, neb: dict, reactant_modes: dict, saddle_modes: dict, ada
         saddle_modes["softest_mode_adatom_xy_weight"] is not None
         and saddle_modes["softest_mode_adatom_xy_weight"] < 0.3
     ):
-        reasons.append("The imaginary mode is not carried by the adatom's lateral motion.")
+        reasons.append(
+            "The imaginary mode is not carried by the adatom's lateral motion."
+        )
     if reactant_modes["n_imaginary"] != 0:
         reasons.append("The reactant is not a minimum in the free coordinates.")
     represents = not reasons
     return {
         "reading": reading,
         "represents_hop": represents,
-        "reason": "The band is a converged hop saddle." if represents else " ".join(reasons),
+        "reason": "The band is a converged hop saddle."
+        if represents
+        else " ".join(reasons),
         "adatom_moved_off_line_A": moved,
     }
 
@@ -356,7 +389,11 @@ def prepare_pair(kind: str, reference, product_positions, bottom, adatom, masks)
     product = reference.copy()
     product.set_positions(product_positions, apply_constraint=False)
     if kind in ("correct", "free"):
-        constraints = correct_constraints if kind == "correct" else lambda b, _a: free_constraints(b)
+        constraints = (
+            correct_constraints
+            if kind == "correct"
+            else lambda b, _a: free_constraints(b)
+        )
         reactant.set_constraint(constraints(bottom, adatom))
         product.set_constraint(constraints(bottom, adatom))
         return reactant, product, None
@@ -365,15 +402,21 @@ def prepare_pair(kind: str, reference, product_positions, bottom, adatom, masks)
     product.set_constraint(correct_constraints(bottom, adatom))
     with tempfile.TemporaryDirectory() as td:
         loaded_r, loaded_p = routes[kind]([reactant, product], Path(td))
-    return loaded_r, loaded_p, {
-        "route": kind,
-        "ase_constraints": [repr(constraint) for constraint in loaded_r.constraints],
-        "free_modes": rf.free_modes(loaded_r),
-        "max_coordinate_change_A": max(
-            float(np.abs(a.positions - b.positions).max())
-            for a, b in ((reactant, loaded_r), (product, loaded_p))
-        ),
-    }
+    return (
+        loaded_r,
+        loaded_p,
+        {
+            "route": kind,
+            "ase_constraints": [
+                repr(constraint) for constraint in loaded_r.constraints
+            ],
+            "free_modes": rf.free_modes(loaded_r),
+            "max_coordinate_change_A": max(
+                float(np.abs(a.positions - b.positions).max())
+                for a, b in ((reactant, loaded_r), (product, loaded_p))
+            ),
+        },
+    )
 
 
 def band_and_modes() -> None:
@@ -400,15 +443,29 @@ def band_and_modes() -> None:
         "n_images": N_IMAGES,
     }
     readings = [
-        ("correct", "correct", "FixCartesian z on the adatom plus FixAtoms on the bottom layer"),
-        ("free", "free", "FixAtoms on the bottom layer only; the adatom is free on every axis"),
+        (
+            "correct",
+            "correct",
+            "FixCartesian z on the adatom plus FixAtoms on the bottom layer",
+        ),
+        (
+            "free",
+            "free",
+            "FixAtoms on the bottom layer only; the adatom is free on every axis",
+        ),
     ] + [
-        (name, route, f"endpoints written and read back through '{route}' before the relaxation")
+        (
+            name,
+            route,
+            f"endpoints written and read back through '{route}' before the relaxation",
+        )
         for name, route in ROUND_TRIPS
     ]
     summary["round_trips"] = {}
     for name, kind, label in readings:
-        record = reading(kind, label, reference, product_positions, bottom, adatom, masks)
+        record = reading(
+            kind, label, reference, product_positions, bottom, adatom, masks
+        )
         if kind in ("correct", "free"):
             summary[kind] = record
         else:
@@ -476,7 +533,11 @@ def reading(kind, label, reference, product_positions, bottom, adatom, masks) ->
             reactant.positions[adatom], product.positions[adatom], reactant
         ),
         "neb": neb,
-        "newton": {"reactant": reactant_newton, "product": product_newton, "saddle": saddle_newton},
+        "newton": {
+            "reactant": reactant_newton,
+            "product": product_newton,
+            "saddle": saddle_newton,
+        },
         "reactant_modes": reactant_modes,
         "product_modes": product_modes,
         "saddle_modes": saddle_modes,
@@ -503,10 +564,18 @@ def finish(summary: dict) -> None:
     correct_pref = summary["correct"]["vineyard"]
     free_pref = summary["free"]["vineyard"]
     if not (correct_pref.get("defined") and free_pref.get("defined")):
-        raise SystemExit("a Vineyard prefactor needs a first-order saddle in both free subspaces: "
-                         f"held {correct_pref.get('reason')}, free {free_pref.get('reason')}")
-    summary["prefactor_ratio_free_over_held"] = free_pref["prefactor_Hz"] / correct_pref["prefactor_Hz"]
-    by_reading = {"correct": summary["correct"], "free": summary["free"], **summary["round_trips"]}
+        raise SystemExit(
+            "a Vineyard prefactor needs a first-order saddle in both free subspaces: "
+            f"held {correct_pref.get('reason')}, free {free_pref.get('reason')}"
+        )
+    summary["prefactor_ratio_free_over_held"] = (
+        free_pref["prefactor_Hz"] / correct_pref["prefactor_Hz"]
+    )
+    by_reading = {
+        "correct": summary["correct"],
+        "free": summary["free"],
+        **summary["round_trips"],
+    }
     held = summary["correct"]["vineyard"].get("prefactor_Hz")
     summary["prefactor_by_reading"] = {
         name: {
@@ -520,7 +589,8 @@ def finish(summary: dict) -> None:
             "prefactor_Hz": record["vineyard"].get("prefactor_Hz"),
             "prefactor_over_held": (
                 record["vineyard"]["prefactor_Hz"] / held
-                if held and record["vineyard"]["defined"] else None
+                if held and record["vineyard"]["defined"]
+                else None
             ),
             "reason": record["vineyard"].get("reason"),
         }
@@ -581,7 +651,11 @@ def write_tex(summary: dict) -> None:
     for name, item in summary["prefactor_by_reading"].items():
         tag, label = TEX_TAGS[name]
         barrier = "--" if item["barrier_eV"] is None else sig(item["barrier_eV"], 4)
-        pref = "undefined" if not item["vineyard_defined"] else sci(item["prefactor_Hz"], 3)
+        pref = (
+            "undefined"
+            if not item["vineyard_defined"]
+            else sci(item["prefactor_Hz"], 3)
+        )
         lines += [
             rf"\newcommand{{\eFiveBarrier{tag}}}{{{barrier}}}",
             rf"\newcommand{{\eFiveModes{tag}}}{{{item['saddle_free_dof']}}}",
@@ -589,9 +663,15 @@ def write_tex(summary: dict) -> None:
             rf"\newcommand{{\eFivePrefactor{tag}}}{{{pref}}}",
         ]
         if item["prefactor_over_held"] is not None and name != "correct":
-            lines.append(rf"\newcommand{{\eFivePrefactorRatio{tag}}}{{{sig(item['prefactor_over_held'], 3)}}}")
+            lines.append(
+                rf"\newcommand{{\eFivePrefactorRatio{tag}}}{{{sig(item['prefactor_over_held'], 3)}}}"
+            )
         axes = " ".join(item["adatom_free_axes"]) or "none"
-        cell = "undefined" if not item["vineyard_defined"] else num(sci(item["prefactor_Hz"], 3))
+        cell = (
+            "undefined"
+            if not item["vineyard_defined"]
+            else num(sci(item["prefactor_Hz"], 3))
+        )
         rows.append(
             f"{label} & {axes} & {item['saddle_free_dof']} & {item['saddle_imaginary']} & {barrier} & {cell} \\\\"
         )
@@ -632,9 +712,12 @@ def run_neb_on(neb, images, adatom: int) -> dict:
         default_interpolate["error_type"] = type(exc).__name__
         default_interpolate["error"] = str(exc)
         neb.interpolate(mic=True, apply_constraint=False)
-        default_interpolate["applied"] = "apply_constraint=False after the default call failed"
+        default_interpolate["applied"] = (
+            "apply_constraint=False after the default call failed"
+        )
     start_xy = [
-        adatom_xy(image, adatom, images[0].positions[adatom], images[0]) for image in images
+        adatom_xy(image, adatom, images[0].positions[adatom], images[0])
+        for image in images
     ]
     stages = []
 
@@ -673,7 +756,10 @@ def run_neb_on(neb, images, adatom: int) -> dict:
     path = [float(value) for value in fitted.path]
     hop = adatom_xy(images[-1], adatom, images[0].positions[adatom], images[0])
     hop_norm = float(np.linalg.norm(hop))
-    xy = [adatom_xy(image, adatom, images[0].positions[adatom], images[0]) for image in images]
+    xy = [
+        adatom_xy(image, adatom, images[0].positions[adatom], images[0])
+        for image in images
+    ]
     fractions = []
     off_line = []
     for point, start in zip(xy, start_xy):
@@ -710,15 +796,25 @@ def run_neb_on(neb, images, adatom: int) -> dict:
         "interior_peak_image": int(interior_peak),
         "adatom_hop_fraction": fractions,
         "adatom_off_initial_line_A": off_line,
-        "adatom_xy_at_interior_peak_A": [float(xy[interior_peak][0]), float(xy[interior_peak][1])],
-        "adatom_lateral_displacement_at_interior_peak_A": float(np.linalg.norm(xy[interior_peak])),
+        "adatom_xy_at_interior_peak_A": [
+            float(xy[interior_peak][0]),
+            float(xy[interior_peak][1]),
+        ],
+        "adatom_lateral_displacement_at_interior_peak_A": float(
+            np.linalg.norm(xy[interior_peak])
+        ),
         "adatom_lateral_displacement_reactant_to_product_A": hop_norm,
         "adatom_lateral_path_length_A": float(
-            sum(np.linalg.norm(np.asarray(xy[i + 1]) - np.asarray(xy[i])) for i in range(len(xy) - 1))
+            sum(
+                np.linalg.norm(np.asarray(xy[i + 1]) - np.asarray(xy[i]))
+                for i in range(len(xy) - 1)
+            )
         ),
         "unprojected_force_on_adatom_xyz_eV_A": [float(v) for v in raw_on_adatom],
         "unprojected_force_on_adatom_xy_eV_A": float(np.linalg.norm(raw_on_adatom[:2])),
-        "unprojected_force_on_adatom_at_interior_peak_eV_A": float(np.linalg.norm(raw_on_adatom)),
+        "unprojected_force_on_adatom_at_interior_peak_eV_A": float(
+            np.linalg.norm(raw_on_adatom)
+        ),
     }
 
 
@@ -726,7 +822,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tables", action="store_true", help="rewrite the TeX from the committed record only")
+    parser.add_argument(
+        "--tables",
+        action="store_true",
+        help="rewrite the TeX from the committed record only",
+    )
     if parser.parse_args().tables:
         write_tex(json.loads((RESULTS / "e5_prefactor.json").read_text()))
     else:

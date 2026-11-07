@@ -25,6 +25,7 @@ read at four thread settings from three files.
 The tests build in target/every_path, so the libraries other scripts load stay
 as they are.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,52 +49,92 @@ FEATURES = ("zstd", "parallel")
 
 THREAD_SETTINGS = 4
 FILES = 3
-RESULT = re.compile(r"^test result: (\w+)\. (\d+) passed; (\d+) failed; (\d+) ignored", re.M)
+RESULT = re.compile(
+    r"^test result: (\w+)\. (\d+) passed; (\d+) failed; (\d+) ignored", re.M
+)
 
 
 def test_files() -> list[str]:
-    return sorted(path.stem for path in (REPO / "tests").glob("*.rs")
-                  if re.search(r"^mod every_path;", path.read_text(), re.M))
+    return sorted(
+        path.stem
+        for path in (REPO / "tests").glob("*.rs")
+        if re.search(r"^mod every_path;", path.read_text(), re.M)
+    )
 
 
 def command(name: str) -> list[str]:
-    return ["cargo", "test", "--release", "--features", ",".join(FEATURES), "--test", name,
-            "--", "--test-threads=1"]
+    return [
+        "cargo",
+        "test",
+        "--release",
+        "--features",
+        ",".join(FEATURES),
+        "--test",
+        name,
+        "--",
+        "--test-threads=1",
+    ]
 
 
 def run(name: str, log: Path) -> dict:
     env = {**os.environ, "CARGO_TARGET_DIR": str(TARGET), "EVERY_PATH_LOG": str(log)}
-    proc = subprocess.run(command(name), cwd=REPO, env=env, capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        command(name), cwd=REPO, env=env, capture_output=True, text=True, check=False
+    )
     if proc.returncode != 0:
         tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-20:])
-        raise SystemExit(f"{' '.join(command(name))} ended with exit status {proc.returncode}:\n{tail}")
+        raise SystemExit(
+            f"{' '.join(command(name))} ended with exit status {proc.returncode}:\n{tail}"
+        )
     results = RESULT.findall(proc.stdout)
-    if not results or any(status != "ok" or int(failed) for status, _, failed, _ in results):
+    if not results or any(
+        status != "ok" or int(failed) for status, _, failed, _ in results
+    ):
         raise SystemExit(f"tests/{name}.rs: no passing test result in the cargo output")
-    reads = [tuple(int(field) for field in line.split()) for line in log.read_text().splitlines()] \
-        if log.is_file() else []
+    reads = (
+        [
+            tuple(int(field) for field in line.split())
+            for line in log.read_text().splitlines()
+        ]
+        if log.is_file()
+        else []
+    )
     if not reads:
-        raise SystemExit(f"tests/{name}.rs logged no input; does tests/every_path/mod.rs read EVERY_PATH_LOG?")
+        raise SystemExit(
+            f"tests/{name}.rs logged no input; does tests/every_path/mod.rs read EVERY_PATH_LOG?"
+        )
     if len(reads) % 2:
-        raise SystemExit(f"tests/{name}.rs logged {len(reads)} reads; each input logs two")
+        raise SystemExit(
+            f"tests/{name}.rs logged {len(reads)} reads; each input logs two"
+        )
     odd = [read for read in reads if read[1:] != (THREAD_SETTINGS, FILES)]
     if odd:
-        raise SystemExit(f"tests/{name}.rs read {len(odd)} inputs at other thread settings or files: {odd[:3]}")
+        raise SystemExit(
+            f"tests/{name}.rs read {len(odd)} inputs at other thread settings or files: {odd[:3]}"
+        )
     inputs = len(reads) // 2
     pairs = list(zip(reads[0::2], reads[1::2]))
     padded = sum(pad[0] >= given[0] for given, pad in pairs)
     if padded < inputs:
-        raise SystemExit(f"tests/{name}.rs logged {padded} padded reads at least as long as the given read, for {inputs} inputs")
-    return {"tests": sum(int(passed) for _, passed, _, _ in results),
-            "ignored": sum(int(ignored) for _, _, _, ignored in results),
-            "inputs": inputs, "reads": len(reads), "reads_from_64k": padded,
-            "given_from_64k": padded - inputs}
+        raise SystemExit(
+            f"tests/{name}.rs logged {padded} padded reads at least as long as the given read, for {inputs} inputs"
+        )
+    return {
+        "tests": sum(int(passed) for _, passed, _, _ in results),
+        "ignored": sum(int(ignored) for _, _, _, ignored in results),
+        "inputs": inputs,
+        "reads": len(reads),
+        "reads_from_64k": padded,
+        "given_from_64k": padded - inputs,
+    }
 
 
 def toolchain() -> dict:
     def version(tool: str) -> str | None:
         try:
-            out = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout.strip()
+            out = subprocess.run(
+                [tool, "--version"], capture_output=True, text=True, check=True
+            ).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return None
         return out.removeprefix(f"{tool} ")
@@ -106,9 +147,20 @@ def measure() -> dict:
     if not names:
         raise SystemExit("no test file declares mod every_path")
     with tempfile.TemporaryDirectory() as tmp:
-        per_file = {f"tests/{name}.rs": run(name, Path(tmp) / f"{name}.log") for name in names}
-    totals = {key: sum(row[key] for row in per_file.values())
-              for key in ("tests", "ignored", "inputs", "reads", "reads_from_64k", "given_from_64k")}
+        per_file = {
+            f"tests/{name}.rs": run(name, Path(tmp) / f"{name}.log") for name in names
+        }
+    totals = {
+        key: sum(row[key] for row in per_file.values())
+        for key in (
+            "tests",
+            "ignored",
+            "inputs",
+            "reads",
+            "reads_from_64k",
+            "given_from_64k",
+        )
+    }
     totals["test_files"] = len(per_file)
     return {
         "command": " ".join(command("<file>")),
@@ -117,25 +169,48 @@ def measure() -> dict:
         "thread_settings": ["1", "2", "8", "default"],
         "files": ["plain", "gzip", "zstd"],
         "results": {"totals": totals, "test_files": per_file},
-        "provenance": {"build": {"readcon_version": provenance.library_version(), **toolchain(),
-                                 **provenance.source_identity()},
-                       "host": provenance.host()},
+        "provenance": {
+            "build": {
+                "readcon_version": provenance.library_version(),
+                **toolchain(),
+                **provenance.source_identity(),
+            },
+            "host": provenance.host(),
+        },
     }
 
 
 def macros(results: dict) -> str:
     t = results["totals"]
-    values = {"everyPathInputs": f"{t['inputs']:,}", "everyPathTestFiles": t["test_files"],
-              "everyPathTests": t["tests"], "everyPathReads": f"{t['reads']:,}"}
-    return ("% Written by paper/cpc/scripts/every_path_count.py from data/every_path.json.\n"
-            + "".join(f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()))
+    values = {
+        "everyPathInputs": f"{t['inputs']:,}",
+        "everyPathTestFiles": t["test_files"],
+        "everyPathTests": t["tests"],
+        "everyPathReads": f"{t['reads']:,}",
+    }
+    return (
+        "% Written by paper/cpc/scripts/every_path_count.py from data/every_path.json.\n"
+        + "".join(
+            f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+        )
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=OUT, help="record (default: %(default)s)")
-    parser.add_argument("--check", action="store_true", help="compare a rerun with --out instead of writing it")
-    parser.add_argument("--tables", action="store_true", help="rewrite the TeX from --out only; run nothing")
+    parser.add_argument(
+        "--out", type=Path, default=OUT, help="record (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="compare a rerun with --out instead of writing it",
+    )
+    parser.add_argument(
+        "--tables",
+        action="store_true",
+        help="rewrite the TeX from --out only; run nothing",
+    )
     args = parser.parse_args()
     if args.tables:
         MACROS.write_text(macros(json.loads(args.out.read_text())["results"]))
@@ -143,12 +218,17 @@ def main() -> int:
         return 0
     record = measure()
     t = record["results"]["totals"]
-    print(f"every path: {t['inputs']} inputs from {t['test_files']} test files ({t['tests']} tests), "
-          f"each read as given and padded to the mapping threshold at {THREAD_SETTINGS} thread settings from {FILES} files")
+    print(
+        f"every path: {t['inputs']} inputs from {t['test_files']} test files ({t['tests']} tests), "
+        f"each read as given and padded to the mapping threshold at {THREAD_SETTINGS} thread settings from {FILES} files"
+    )
     if args.check:
         stored = json.loads(args.out.read_text())
-        same = (stored["results"] == record["results"] and stored["provenance"]["build"]["library_digest"]
-                == record["provenance"]["build"]["library_digest"])
+        same = (
+            stored["results"] == record["results"]
+            and stored["provenance"]["build"]["library_digest"]
+            == record["provenance"]["build"]["library_digest"]
+        )
         if not same:
             print(f"{args.out} differs from this run", file=sys.stderr)
             return 1

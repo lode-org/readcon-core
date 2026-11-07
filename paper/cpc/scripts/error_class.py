@@ -10,12 +10,21 @@ from __future__ import annotations
 import re
 
 MESSAGES = (
-    (re.compile(r"file ended unexpectedly while parsing frame header"), "IncompleteHeader"),
+    (
+        re.compile(r"file ended unexpectedly while parsing frame header"),
+        "IncompleteHeader",
+    ),
     (re.compile(r"file ended unexpectedly while reading atom data"), "IncompleteFrame"),
-    (re.compile(r"file ended unexpectedly while reading .* section"), "IncompleteSection"),
+    (
+        re.compile(r"file ended unexpectedly while reading .* section"),
+        "IncompleteSection",
+    ),
     (re.compile(r"expected \d+ values on line, found \d+"), "InvalidVectorLength"),
     (re.compile(r"invalid number format: "), "InvalidNumberFormat"),
-    (re.compile(r'line 2 must be a JSON object containing "con_spec_version"'), "MissingSpecVersion"),
+    (
+        re.compile(r'line 2 must be a JSON object containing "con_spec_version"'),
+        "MissingSpecVersion",
+    ),
     (re.compile(r"unsupported con_spec_version: "), "UnsupportedVersion"),
     (re.compile(r"invalid JSON metadata on line 2: "), "InvalidMetadataJson"),
     (re.compile(r"unknown section type in metadata: "), "UnknownSection"),
@@ -27,7 +36,11 @@ MESSAGES = (
     (re.compile(r"stream did not contain valid UTF-8"), "ValidationError"),
     (re.compile(r"zstd-compressed input detected"), "Compression"),
 )
-SECTION_CLASSES = {"IncompleteVelocitySection", "IncompleteForceSection", "IncompleteEnergySection"}
+SECTION_CLASSES = {
+    "IncompleteVelocitySection",
+    "IncompleteForceSection",
+    "IncompleteEnergySection",
+}
 
 
 def normal(cls: str | None) -> str | None:
@@ -43,7 +56,7 @@ def classify(exc: BaseException) -> tuple[str, int | None, bool]:
     line = None
     located = re.match(r"line (\d+): ", message)
     if located:
-        line, message = int(located[1]), message[located.end():]
+        line, message = int(located[1]), message[located.end() :]
     for pattern, cls in MESSAGES:
         if pattern.match(message):
             return cls, line, False

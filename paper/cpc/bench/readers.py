@@ -35,17 +35,28 @@ def r_readcon(path: str, threads: int):
     for frame in readcon.read_con(path, n_threads=threads):
         atoms = frame.atoms
         meta = frame.metadata
-        records.append((frame.xyz, frame.vel, np.array([a.fixed for a in atoms], dtype=bool),
-                        frame.atom_ids_array(), bench_child.numbers_of([a.symbol for a in atoms]),
-                        bench_child.con_cell(frame, meta), pbc_of(meta), frame))
+        records.append(
+            (
+                frame.xyz,
+                frame.vel,
+                np.array([a.fixed for a in atoms], dtype=bool),
+                frame.atom_ids_array(),
+                bench_child.numbers_of([a.symbol for a in atoms]),
+                bench_child.con_cell(frame, meta),
+                pbc_of(meta),
+                frame,
+            )
+        )
     return records
 
 
 def r_readcon_coords(path: str, threads: int):
     import readcon
 
-    return [(frame.xyz, bench_child.numbers_of([a.symbol for a in frame.atoms]), frame)
-            for frame in readcon.read_con(path, n_threads=threads)]
+    return [
+        (frame.xyz, bench_child.numbers_of([a.symbol for a in frame.atoms]), frame)
+        for frame in readcon.read_con(path, n_threads=threads)
+    ]
 
 
 def r_readcon_fields(path: str, threads: int):
@@ -58,7 +69,12 @@ def r_readcon_fields(path: str, threads: int):
 READERS = {
     "readcon": ("moc", r_readcon, "traj.con", "warm.con"),
     "readcon_fields": ("mode", r_readcon_fields, "traj.con", "warm.con"),
-    "readcon_coords": ("coords", r_readcon_coords, "traj_coords.con", "warm_coords.con"),
+    "readcon_coords": (
+        "coords",
+        r_readcon_coords,
+        "traj_coords.con",
+        "warm_coords.con",
+    ),
     "ase_eon": ("coords", bench_child.r_ase_eon, "traj_coords.con", "warm_coords.con"),
     "ase_extxyz": ("moc", bench_child.r_ase_extxyz, "traj.extxyz", "warm.extxyz"),
     "extxyz_c": ("moc", bench_child.r_extxyz_c, "traj.extxyz", "warm.extxyz"),
@@ -72,8 +88,17 @@ READERS = {
 
 
 CHECKED = {
-    "moc": ("frames", "atoms", "sum_positions", "sum_velocities", "n_fixed", "sum_ids", "sum_numbers",
-            "sum_cell", "n_pbc"),
+    "moc": (
+        "frames",
+        "atoms",
+        "sum_positions",
+        "sum_velocities",
+        "n_fixed",
+        "sum_ids",
+        "sum_numbers",
+        "sum_cell",
+        "n_pbc",
+    ),
     "coords": ("frames", "atoms", "sum_positions", "sum_numbers"),
     "single": ("frames", "atoms", "sum_positions", "sum_velocities"),
     "mode": ("frames", "atoms"),
@@ -85,13 +110,19 @@ def mismatches(printed: dict, reference: dict) -> list[str]:
     expected = dict(reference)
     if printed["contract"] == "single":
         expected.update(reference["binary32"])
-    return [key for key in CHECKED[printed["contract"]] if printed.get(key) != expected[key]]
+    return [
+        key for key in CHECKED[printed["contract"]] if printed.get(key) != expected[key]
+    ]
 
 
 def cells() -> list[tuple[str, int]]:
     """Every (reader, threads) cell: the readcon readers at both thread counts, the peers at one thread."""
-    return [(reader, threads) for reader in READERS for threads in THREADS
-            if threads == 1 or reader.startswith("readcon")]
+    return [
+        (reader, threads)
+        for reader in READERS
+        for threads in THREADS
+        if threads == 1 or reader.startswith("readcon")
+    ]
 
 
 def pin(threads: int) -> None:

@@ -32,8 +32,12 @@ def header() -> list[str]:
         if line.startswith("model name"):
             cpu = line.split(":", 1)[1].strip()
             break
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    status = subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    status = subprocess.check_output(
+        ["git", "status", "--short"], cwd=ROOT, text=True
+    ).strip()
     return [
         f"date_utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
         f"uname_m={os.uname().machine}",
@@ -104,7 +108,16 @@ def write_extxyz(path: Path, frames: np.ndarray) -> None:
 def write_poscar_stack(path: Path, frames: np.ndarray) -> None:
     """One extended XYZ is the multi-frame file. POSCAR holds frame 0 for pymatgen."""
     frame = frames[0]
-    lines = ["Cu", "1.0", "20 0 0", "0 20 0", "0 0 20", "Cu", str(len(frame)), "Cartesian"]
+    lines = [
+        "Cu",
+        "1.0",
+        "20 0 0",
+        "0 20 0",
+        "0 0 20",
+        "Cu",
+        str(len(frame)),
+        "Cartesian",
+    ]
     for x, y, z in frame:
         lines.append(f"{x:.10f} {y:.10f} {z:.10f}")
     path.write_text("\n".join(lines) + "\n")
@@ -232,7 +245,15 @@ def main() -> None:
     write_extxyz(paths["ext"], frames)
     write_poscar_stack(paths["poscar"], frames)
     np.save(paths["ref"], frames)
-    readers = ["readcon", "ase-extxyz", "ase-eon", "mdanalysis", "pymatgen", "chemfiles", "numpy"]
+    readers = [
+        "readcon",
+        "ase-extxyz",
+        "ase-eon",
+        "mdanalysis",
+        "pymatgen",
+        "chemfiles",
+        "numpy",
+    ]
     log = OUT / "peer.log"
     lines = header()
     rows = []
@@ -250,9 +271,20 @@ def main() -> None:
     log.write_text("\n".join(lines) + "\n")
     by = {}
     for reader in readers:
-        got = [row for row in rows if row["reader"] == reader and row.get("seconds") is not None and "error" not in row]
+        got = [
+            row
+            for row in rows
+            if row["reader"] == reader
+            and row.get("seconds") is not None
+            and "error" not in row
+        ]
         if not got:
-            by[reader] = {"error": next((row.get("error") for row in rows if row["reader"] == reader), "no run")}
+            by[reader] = {
+                "error": next(
+                    (row.get("error") for row in rows if row["reader"] == reader),
+                    "no run",
+                )
+            }
             continue
         seconds = [row["seconds"] for row in got]
         rss = [row["rss_bytes"] for row in got]
@@ -267,7 +299,9 @@ def main() -> None:
             "frames": nframes,
             "atoms": atoms,
         }
-    (OUT / "peer.json").write_text(json.dumps({"readers": by, "repeats": REPEATS}, indent=2) + "\n")
+    (OUT / "peer.json").write_text(
+        json.dumps({"readers": by, "repeats": REPEATS}, indent=2) + "\n"
+    )
     print(json.dumps(by, indent=2))
 
 

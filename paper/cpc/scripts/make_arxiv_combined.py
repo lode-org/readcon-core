@@ -36,11 +36,19 @@ import regen_paper  # noqa: E402
 NAME = "main"
 TARBALL = "readcon-arxiv-v2.tar.gz"
 BIB = "\\bibliographystyle{elsarticle-num}\n\\bibliography{rg_main}\n"
-XR = re.compile(r"\\usepackage\{xr-hyper\}\n(?:%[^\n]*\n)?\\makeatletter\n\\let\\readcon@bibcite\\bibcite\n"
-                r"\\def\\bibcite#1#2\{\}%\n\\externaldocument\{rg_supp\}\n\\let\\bibcite\\readcon@bibcite\n"
-                r"\\makeatother\n")
-LOADS = re.compile(r"\\usepackage(?:\[[^\]]*\])?\{[^}]*\}|\\input\{figures/generated/[^}]*\}")
-MAIN_TAIL = re.compile(r"(\\DeclareUrlCommand\\path[^\n]*\n\\raggedright\n)" + re.escape(BIB) + r"\\end\{document\}\s*$")
+XR = re.compile(
+    r"\\usepackage\{xr-hyper\}\n(?:%[^\n]*\n)?\\makeatletter\n\\let\\readcon@bibcite\\bibcite\n"
+    r"\\def\\bibcite#1#2\{\}%\n\\externaldocument\{rg_supp\}\n\\let\\bibcite\\readcon@bibcite\n"
+    r"\\makeatother\n"
+)
+LOADS = re.compile(
+    r"\\usepackage(?:\[[^\]]*\])?\{[^}]*\}|\\input\{figures/generated/[^}]*\}"
+)
+MAIN_TAIL = re.compile(
+    r"(\\DeclareUrlCommand\\path[^\n]*\n\\raggedright\n)"
+    + re.escape(BIB)
+    + r"\\end\{document\}\s*$"
+)
 # The supplement restarts the counters its own document prints with an S; hyperref names its anchors
 # from \theH<counter>, so those get the S too and stay distinct from the main text's.
 SWITCH = r"""\clearpage
@@ -72,13 +80,22 @@ def with_supplement_preamble(main: str, supp: str) -> str:
     """MAIN with each package and generated macro file that only the preamble of SUPP loads, after the line it follows there."""
     lines = main.split("\n")
     end = lines.index("\\begin{document}")
-    supp_lines = supp[:supp.index("\\begin{document}")].split("\n")
+    supp_lines = supp[: supp.index("\\begin{document}")].split("\n")
     for i, line in enumerate(supp_lines):
         if line in lines[:end] or not LOADS.fullmatch(line):
             continue
-        anchor = next((prev for prev in reversed(supp_lines[:i]) if prev.strip() and prev in lines[:end]), None)
+        anchor = next(
+            (
+                prev
+                for prev in reversed(supp_lines[:i])
+                if prev.strip() and prev in lines[:end]
+            ),
+            None,
+        )
         if anchor is None:
-            raise arxiv.PackError(f"rg_supp.tex loads {line} after no line of the preamble of rg_main.tex")
+            raise arxiv.PackError(
+                f"rg_supp.tex loads {line} after no line of the preamble of rg_main.tex"
+            )
         at = lines.index(anchor, 0, end) + 1
         lines.insert(at, line)
         end += 1
@@ -92,16 +109,36 @@ def combine(main: str, supp: str) -> str:
     main = with_supplement_preamble(XR.sub("", main), supp)
     tail = MAIN_TAIL.search(main)
     if not tail:
-        raise arxiv.PackError("rg_main.tex does not end with the \\path, \\raggedright and bibliography lines")
+        raise arxiv.PackError(
+            "rg_main.tex does not end with the \\path, \\raggedright and bibliography lines"
+        )
     title = re.search(r"\\title\{([^}]*)\}", supp)
     abstract = re.search(r"\\begin\{abstract\}\n(.*?)\n\\end\{abstract\}", supp, re.S)
-    body = re.search(r"\\end\{frontmatter\}\n(.*?)\n(?:%[^\n]*\n)?\\DeclareUrlCommand\\path", supp, re.S)
+    body = re.search(
+        r"\\end\{frontmatter\}\n(.*?)\n(?:%[^\n]*\n)?\\DeclareUrlCommand\\path",
+        supp,
+        re.S,
+    )
     if not (title and abstract and body):
-        raise arxiv.PackError("rg_supp.tex: no title, abstract or body between the front matter and the reference list")
+        raise arxiv.PackError(
+            "rg_supp.tex: no title, abstract or body between the front matter and the reference list"
+        )
     if "\\begin{document}" in body.group(1) or "\\bibliography" in body.group(1):
-        raise arxiv.PackError("rg_supp.tex: the body holds a preamble or a reference list")
-    return (main[:tail.start()] + "\\begingroup\n" + tail.group(1) + BIB + "\\endgroup\n"
-            + SWITCH.replace("TITLE", title.group(1)) + abstract.group(1) + "\n\n" + body.group(1) + "\n\\end{document}\n")
+        raise arxiv.PackError(
+            "rg_supp.tex: the body holds a preamble or a reference list"
+        )
+    return (
+        main[: tail.start()]
+        + "\\begingroup\n"
+        + tail.group(1)
+        + BIB
+        + "\\endgroup\n"
+        + SWITCH.replace("TITLE", title.group(1))
+        + abstract.group(1)
+        + "\n\n"
+        + body.group(1)
+        + "\n\\end{document}\n"
+    )
 
 
 def clean(name: str, text: str, supported: set[str], report: dict) -> str:
@@ -114,12 +151,28 @@ def clean(name: str, text: str, supported: set[str], report: dict) -> str:
 def stage_sources(src: Path, work: Path, texbin: Path, report: dict) -> Path:
     """The flat tree: main.tex (with the bibliography commands still in it) and every file it reads."""
     snap = work / "src"
-    shutil.copytree(src, snap, ignore=shutil.ignore_patterns("*.aux", "*.bbl", "*.blg", "*.log", "*.out", "*.pdf",
-                                                             "*.synctex.gz", "*.fls", "*.fdb_latexmk", "*.toc"))
+    shutil.copytree(
+        src,
+        snap,
+        ignore=shutil.ignore_patterns(
+            "*.aux",
+            "*.bbl",
+            "*.blg",
+            "*.log",
+            "*.out",
+            "*.pdf",
+            "*.synctex.gz",
+            "*.fls",
+            "*.fdb_latexmk",
+            "*.toc",
+        ),
+    )
     for figure in (src / "figures" / "generated").glob("*.pdf"):
         shutil.copy2(figure, snap / "figures" / "generated" / figure.name)
-    combined = combine((src / f"{arxiv.MAIN}.tex").read_text(encoding="utf-8"),
-                       (src / f"{arxiv.SUPP}.tex").read_text(encoding="utf-8"))
+    combined = combine(
+        (src / f"{arxiv.MAIN}.tex").read_text(encoding="utf-8"),
+        (src / f"{arxiv.SUPP}.tex").read_text(encoding="utf-8"),
+    )
     (snap / f"{arxiv.MAIN}.tex").write_text(combined, encoding="utf-8")
     tex_files, other_files, bibs = arxiv.discover(snap)
     if bibs != ["rg_main"]:
@@ -131,10 +184,15 @@ def stage_sources(src: Path, work: Path, texbin: Path, report: dict) -> Path:
     for path in [*tex_files, *other_files]:
         dest = f"{NAME}.tex" if path == snap / f"{arxiv.MAIN}.tex" else path.name
         if dest in placed:
-            raise arxiv.PackError(f"flat name collision: {dest} from {placed[dest]} and {path}")
+            raise arxiv.PackError(
+                f"flat name collision: {dest} from {placed[dest]} and {path}"
+            )
         placed[dest] = path
         if path.suffix == ".tex":
-            (stage / dest).write_text(clean(dest, path.read_text(encoding="utf-8"), supported, report), encoding="utf-8")
+            (stage / dest).write_text(
+                clean(dest, path.read_text(encoding="utf-8"), supported, report),
+                encoding="utf-8",
+            )
         else:
             shutil.copy2(path, stage / dest)
     shutil.copy2(src / "rg_main.bib", work / "rg_main.bib")
@@ -144,8 +202,19 @@ def stage_sources(src: Path, work: Path, texbin: Path, report: dict) -> Path:
 def tex_run(workdir: Path, env: dict, texbin: Path, runs: int) -> tuple[str, list[int]]:
     codes = []
     for _ in range(runs):
-        r = subprocess.run([str(texbin / "pdflatex"), "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error",
-                            f"{NAME}.tex"], cwd=workdir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        r = subprocess.run(
+            [
+                str(texbin / "pdflatex"),
+                "-no-shell-escape",
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                f"{NAME}.tex",
+            ],
+            cwd=workdir,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         codes.append(r.returncode)
         if r.returncode:
             break
@@ -160,14 +229,30 @@ def write_bbl(stage: Path, work: Path, texbin: Path, env: dict, report: dict) ->
     shutil.copy2(work / "rg_main.bib", scratch)
     _, codes = tex_run(scratch, env, texbin, 1)
     bib_env = {k: v for k, v in env.items() if k != "max_print_line"}
-    r = subprocess.run([str(texbin / "bibtex"), NAME], cwd=scratch, env=bib_env, capture_output=True, text=True)
+    r = subprocess.run(
+        [str(texbin / "bibtex"), NAME],
+        cwd=scratch,
+        env=bib_env,
+        capture_output=True,
+        text=True,
+    )
     bbl = scratch / f"{NAME}.bbl"
     if codes != [0] or r.returncode not in (0, 1) or not bbl.exists():
-        raise arxiv.PackError(f"bibliography build failed: pdflatex {codes}, bibtex {r.returncode}: {r.stdout[-400:]}")
+        raise arxiv.PackError(
+            f"bibliography build failed: pdflatex {codes}, bibtex {r.returncode}: {r.stdout[-400:]}"
+        )
     aux = (scratch / f"{NAME}.aux").read_text(encoding="latin-1")
-    cited = {k.strip() for m in re.finditer(r"\\citation\{([^}]+)\}", aux) for k in m.group(1).split(",")}
-    text = arxiv.fix_unicode(f"{NAME}.bbl", bbl.read_text(encoding="utf-8"), arxiv.supported_unicode(texbin),
-                             report["unicode"])
+    cited = {
+        k.strip()
+        for m in re.finditer(r"\\citation\{([^}]+)\}", aux)
+        for k in m.group(1).split(",")
+    }
+    text = arxiv.fix_unicode(
+        f"{NAME}.bbl",
+        bbl.read_text(encoding="utf-8"),
+        arxiv.supported_unicode(texbin),
+        report["unicode"],
+    )
     items = set(re.findall(r"\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}", text))
     if cited - items:
         raise arxiv.PackError(f"main.bbl lacks cited keys: {sorted(cited - items)}")
@@ -176,7 +261,9 @@ def write_bbl(stage: Path, work: Path, texbin: Path, env: dict, report: dict) ->
     main = (stage / f"{NAME}.tex").read_text(encoding="utf-8")
     if main.count(BIB) != 1:
         raise arxiv.PackError("main.tex does not hold the bibliography commands once")
-    (stage / f"{NAME}.tex").write_text(main.replace(BIB, f"\\input{{{NAME}.bbl}}\n"), encoding="utf-8")
+    (stage / f"{NAME}.tex").write_text(
+        main.replace(BIB, f"\\input{{{NAME}.bbl}}\n"), encoding="utf-8"
+    )
 
 
 def check(tarball: Path, texbin: Path, work: Path, env: dict) -> tuple[dict, Path]:
@@ -184,28 +271,62 @@ def check(tarball: Path, texbin: Path, work: Path, env: dict) -> tuple[dict, Pat
     test = Path(tempfile.mkdtemp(prefix="arxiv-v2-test-", dir=work))
     with tarfile.open(tarball) as tar:
         tar.extractall(test, filter="data")
-    ver = subprocess.run([str(texbin / "pdflatex"), "--version"], capture_output=True, text=True).stdout.splitlines()[0]
+    ver = subprocess.run(
+        [str(texbin / "pdflatex"), "--version"], capture_output=True, text=True
+    ).stdout.splitlines()[0]
     log(f"pdflatex x{arxiv.PDFLATEX_RUNS} in {test} ({ver})")
     text, codes = tex_run(test, env, texbin, arxiv.PDFLATEX_RUNS)
     found, kinds, info = arxiv.analyse_log(text)
     errors = [e for e in found["error"]["examples"] if "First Aid" not in e]
-    failures = [f"pdflatex exit codes {codes}"] if any(codes) or len(codes) < arxiv.PDFLATEX_RUNS else []
-    failures += [f"{cat}: {v['count']}" for cat, v in found.items() if v["fatal"] and v["count"] and cat != "error"]
+    failures = (
+        [f"pdflatex exit codes {codes}"]
+        if any(codes) or len(codes) < arxiv.PDFLATEX_RUNS
+        else []
+    )
+    failures += [
+        f"{cat}: {v['count']}"
+        for cat, v in found.items()
+        if v["fatal"] and v["count"] and cat != "error"
+    ]
     if errors:
         failures.append(f"error: {len(errors)}")
-    result = {"pdflatex": ver, "exit_codes": codes, "pages": info["pages"], "bytes": info["bytes"],
-              "checks": {cat: v["count"] for cat, v in found.items()}, "warning_kinds": kinds, "failures": failures}
+    result = {
+        "pdflatex": ver,
+        "exit_codes": codes,
+        "pages": info["pages"],
+        "bytes": info["bytes"],
+        "checks": {cat: v["count"] for cat, v in found.items()},
+        "warning_kinds": kinds,
+        "failures": failures,
+    }
     (test / f"{NAME}.log").replace(test.parent / f"{test.name}.log")
     return result, test
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", required=True, type=Path, help="directory for the tarball, the PDF, the log and the report")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out",
+        required=True,
+        type=Path,
+        help="directory for the tarball, the PDF, the log and the report",
+    )
     ap.add_argument("--src", type=Path, default=arxiv.DEFAULT_SRC)
-    ap.add_argument("--texbin", type=Path, default=arxiv.DEFAULT_TEXBIN, help="TeX Live 2025 binary directory")
-    ap.add_argument("--also-texbin", type=Path, action="append", default=[],
-                    help="another TeX binary directory to compile the unpacked tarball with")
+    ap.add_argument(
+        "--texbin",
+        type=Path,
+        default=arxiv.DEFAULT_TEXBIN,
+        help="TeX Live 2025 binary directory",
+    )
+    ap.add_argument(
+        "--also-texbin",
+        type=Path,
+        action="append",
+        default=[],
+        help="another TeX binary directory to compile the unpacked tarball with",
+    )
     args = ap.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -217,26 +338,49 @@ def main() -> int:
         env = arxiv.tex_env(args.texbin, work / "texmf-home", epoch)
         stage = stage_sources(args.src.resolve(), work, args.texbin, report)
         write_bbl(stage, work, args.texbin, env, report)
-        readme = {"spec_version": 1, "process": {"compiler": "pdflatex"},
-                  "sources": [{"filename": f"{NAME}.tex", "usage": "toplevel"}], "texlive_version": 2025}
-        (stage / "00README.json").write_text(json.dumps(readme, indent=2) + "\n", encoding="utf-8")
+        readme = {
+            "spec_version": 1,
+            "process": {"compiler": "pdflatex"},
+            "sources": [{"filename": f"{NAME}.tex", "usage": "toplevel"}],
+            "texlive_version": 2025,
+        }
+        (stage / "00README.json").write_text(
+            json.dumps(readme, indent=2) + "\n", encoding="utf-8"
+        )
         report["files"] = arxiv.make_tarball(stage, out / TARBALL)
-        report["figures"] = sum(len(re.findall(r"\\begin\{figure\*?\}", p.read_text(encoding="utf-8")))
-                                for p in stage.glob("*.tex"))
-        report["tables"] = sum(len(re.findall(r"\\begin\{table\*?\}", p.read_text(encoding="utf-8")))
-                               for p in stage.glob("*.tex"))
+        report["figures"] = sum(
+            len(re.findall(r"\\begin\{figure\*?\}", p.read_text(encoding="utf-8")))
+            for p in stage.glob("*.tex")
+        )
+        report["tables"] = sum(
+            len(re.findall(r"\\begin\{table\*?\}", p.read_text(encoding="utf-8")))
+            for p in stage.glob("*.tex")
+        )
         report["builds"] = []
         for i, texbin in enumerate([args.texbin, *args.also_texbin]):
-            result, test = check(out / TARBALL, texbin, work, arxiv.tex_env(texbin, work / f"texmf-home-{i}", epoch))
+            result, test = check(
+                out / TARBALL,
+                texbin,
+                work,
+                arxiv.tex_env(texbin, work / f"texmf-home-{i}", epoch),
+            )
             report["builds"].append(result)
             if i == 0:
                 shutil.copy2(test / f"{NAME}.pdf", out / f"{NAME}.pdf")
-                shutil.copy2(test.parent / f"{test.name}.log", out / f"{NAME}-pdflatex.log")
-        (out / "arxiv-v2-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+                shutil.copy2(
+                    test.parent / f"{test.name}.log", out / f"{NAME}-pdflatex.log"
+                )
+        (out / "arxiv-v2-report.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
         for b in report["builds"]:
-            log(f"{b['pdflatex']}: exit {b['exit_codes']}, {b['pages']} pages, failures {b['failures'] or 'none'}")
-        log(f"{len(report['files'])} files, {report['figures']} figures, {report['tables']} tables,"
-            f" {report['references']} references")
+            log(
+                f"{b['pdflatex']}: exit {b['exit_codes']}, {b['pages']} pages, failures {b['failures'] or 'none'}"
+            )
+        log(
+            f"{len(report['files'])} files, {report['figures']} figures, {report['tables']} tables,"
+            f" {report['references']} references"
+        )
         return 1 if any(b["failures"] for b in report["builds"]) else 0
     finally:
         shutil.rmtree(work, ignore_errors=True)

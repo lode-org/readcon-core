@@ -61,8 +61,13 @@ def rounds() -> int:
 def summary(values: list[float], suffix: str = "_s") -> dict:
     """Median, quartiles and interquartile range of ``values``, each key ending in ``suffix``."""
     q1, _, q3 = statistics.quantiles(values, n=4, method="inclusive")
-    return {"n": len(values), f"median{suffix}": statistics.median(values), f"q1{suffix}": q1, f"q3{suffix}": q3,
-            f"iqr{suffix}": q3 - q1}
+    return {
+        "n": len(values),
+        f"median{suffix}": statistics.median(values),
+        f"q1{suffix}": q1,
+        f"q3{suffix}": q3,
+        f"iqr{suffix}": q3 - q1,
+    }
 
 
 def _busy(start: float, deadline: float, window: float) -> list[int]:
@@ -95,7 +100,10 @@ def settle(ms: float, window_ms: float | None = None) -> dict[int, list[int]]:
                 os.close(counts_read)
                 os.sched_setaffinity(0, {cpu})
                 (start,) = struct.unpack("d", os.read(go_read, 8))
-                os.write(counts_write, array.array("q", _busy(start, start + ms / 1e3, window)).tobytes())
+                os.write(
+                    counts_write,
+                    array.array("q", _busy(start, start + ms / 1e3, window)).tobytes(),
+                )
             finally:
                 os._exit(0)
         os.close(go_read)
@@ -111,11 +119,15 @@ def settle(ms: float, window_ms: float | None = None) -> dict[int, list[int]]:
             counts[cpu] = array.array("q", handle.read()).tolist()
         _, status = os.waitpid(pid, 0)
         if status != 0:
-            raise SystemExit(f"the settle child on CPU {cpu} exited with status {status}")
+            raise SystemExit(
+                f"the settle child on CPU {cpu} exited with status {status}"
+            )
     return counts
 
 
-def schedule(names: list[str], n_rounds: int, n_warmup: int, rng: random.Random) -> list[list[str]]:
+def schedule(
+    names: list[str], n_rounds: int, n_warmup: int, rng: random.Random
+) -> list[list[str]]:
     order = []
     for _ in range(n_warmup + n_rounds):
         names = list(names)
@@ -124,9 +136,17 @@ def schedule(names: list[str], n_rounds: int, n_warmup: int, rng: random.Random)
     return order
 
 
-def campaign(cells: dict[str, Callable[[], dict]], *, metric: str = "seconds", suffix: str = "_s",
-             warmup: int = WARMUP, n_rounds: int | None = None, seed_value: int | None = None,
-             varying: tuple[str, ...] = (), settle_ms: float = 0) -> dict:
+def campaign(
+    cells: dict[str, Callable[[], dict]],
+    *,
+    metric: str = "seconds",
+    suffix: str = "_s",
+    warmup: int = WARMUP,
+    n_rounds: int | None = None,
+    seed_value: int | None = None,
+    varying: tuple[str, ...] = (),
+    settle_ms: float = 0,
+) -> dict:
     """Run ``cells`` in interleaved rounds; return the protocol, hardware and per-cell summary of the record."""
     n_rounds = rounds() if n_rounds is None else n_rounds
     seed_value = seed() if seed_value is None else seed_value
@@ -143,28 +163,54 @@ def campaign(cells: dict[str, Callable[[], dict]], *, metric: str = "seconds", s
             out = cells[name]()
             if metric not in out:
                 raise SystemExit(f"{name}: the run printed no {metric}: {out}")
-            fixed = {key: value for key, value in out.items()
-                     if key != metric and key not in varying and not key.endswith("seconds")}
+            fixed = {
+                key: value
+                for key, value in out.items()
+                if key != metric and key not in varying and not key.endswith("seconds")
+            }
             if printed.setdefault(name, fixed) != fixed:
                 raise SystemExit(f"{name}: a run printed {fixed} after {printed[name]}")
             if timed:
                 runs[name].append(out)
-        label = f"round {index - warmup + 1} of {n_rounds}" if timed else f"warm-up round {index + 1}"
+        label = (
+            f"round {index - warmup + 1} of {n_rounds}"
+            if timed
+            else f"warm-up round {index + 1}"
+        )
         print(f"{label}: {time.perf_counter() - start:.0f} s", flush=True)
     result = {}
     for name in sorted(cells):
         values = [float(out[metric]) for out in runs[name]]
-        result[name] = {**summary(values, suffix), f"samples{suffix}": values, "printed": printed[name]}
-        for key in sorted({key for out in runs[name] for key in out if key != metric and key not in printed[name]}):
+        result[name] = {
+            **summary(values, suffix),
+            f"samples{suffix}": values,
+            "printed": printed[name],
+        }
+        for key in sorted(
+            {
+                key
+                for out in runs[name]
+                for key in out
+                if key != metric and key not in printed[name]
+            }
+        ):
             result[name][f"samples_{key}"] = [out.get(key) for out in runs[name]]
     return {
-        "protocol": {"schedule": "paper/cpc/bench/interleave.py", "seed": seed_value, "rounds": n_rounds,
-                     "warmup_rounds": warmup, "metric": metric, "quartiles": QUARTILES,
-                     "process": "a fresh process for every run of every cell",
-                     "order": order[warmup:], "warmup_order": order[:warmup],
-                     "load_average_before": list(load_start), "load_average_after": list(os.getloadavg()),
-                     "campaign_s": round(time.perf_counter() - start, 1),
-                     **({"settle_ms": settle_ms} if settle_ms else {})},
+        "protocol": {
+            "schedule": "paper/cpc/bench/interleave.py",
+            "seed": seed_value,
+            "rounds": n_rounds,
+            "warmup_rounds": warmup,
+            "metric": metric,
+            "quartiles": QUARTILES,
+            "process": "a fresh process for every run of every cell",
+            "order": order[warmup:],
+            "warmup_order": order[:warmup],
+            "load_average_before": list(load_start),
+            "load_average_after": list(os.getloadavg()),
+            "campaign_s": round(time.perf_counter() - start, 1),
+            **({"settle_ms": settle_ms} if settle_ms else {}),
+        },
         "hardware": provenance.hardware(),
         "cells": result,
     }

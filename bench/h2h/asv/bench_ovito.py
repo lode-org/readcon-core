@@ -23,6 +23,7 @@ class OvitoExtxyz:
 
     def setup(self):
         from ovito.io import import_file
+
         self.import_file = import_file
         self.path = str(support.WORK / "native" / "atoms.extxyz")
 

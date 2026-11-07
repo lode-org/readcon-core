@@ -39,19 +39,39 @@ SRC = ROOT / "src"
 GENERATED = SRC / "figures" / "generated"
 TEMPLATES = ("CPC-FORM.md.in",)
 BUILD = "run bash paper/cpc/scripts/build_tex.sh"
-BUILT = ("rg_main.pdf", "rg_supp.pdf", "rg_main.aux", "rg_main.bbl", "rg_supp.bbl", "rg_main.log", "rg_supp.log")
+BUILT = (
+    "rg_main.pdf",
+    "rg_supp.pdf",
+    "rg_main.aux",
+    "rg_main.bbl",
+    "rg_supp.bbl",
+    "rg_main.log",
+    "rg_supp.log",
+)
 ARXIV_CHARACTERS = 1920
 SUPERSCRIPT = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
-LONG_FIELDS = ("Nature of problem", "Solution method",
-               "Additional comments including restrictions and unusual features")
-TABULAR = re.compile(r"\\begin\{(?:tabular\*?|tabularx|longtable|xltabular)\}(?:\{[^{}]*\})?"
-                     r"\{((?:[^{}]|\{[^{}]*\})*)\}")
+LONG_FIELDS = (
+    "Nature of problem",
+    "Solution method",
+    "Additional comments including restrictions and unusual features",
+)
+TABULAR = re.compile(
+    r"\\begin\{(?:tabular\*?|tabularx|longtable|xltabular)\}(?:\{[^{}]*\})?"
+    r"\{((?:[^{}]|\{[^{}]*\})*)\}"
+)
 NEWCOMMAND = re.compile(r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
-RELEASE = {"readconversion": r"\d+\.\d+\.\d+", "readconcommit": r"[0-9a-f]{40}",
-           "readconcommitshort": r"[0-9a-f]{7,40}", "readconcommitrole": r"release (?:candidate )?commit",
-           "readcontagstate": r"[^\\{}$]+\.", "readcondigest": r"[0-9a-f]{12,64}",
-           "readconbase": r"[0-9a-f]{7,40}", "readconbasepr": r"\d+",
-           "readconpublished": r"\d+\.\d+\.\d+", "readconpublishedcommit": r"[0-9a-f]{7,40}"}
+RELEASE = {
+    "readconversion": r"\d+\.\d+\.\d+",
+    "readconcommit": r"[0-9a-f]{40}",
+    "readconcommitshort": r"[0-9a-f]{7,40}",
+    "readconcommitrole": r"release (?:candidate )?commit",
+    "readcontagstate": r"[^\\{}$]+\.",
+    "readcondigest": r"[0-9a-f]{12,64}",
+    "readconbase": r"[0-9a-f]{7,40}",
+    "readconbasepr": r"\d+",
+    "readconpublished": r"\d+\.\d+\.\d+",
+    "readconpublishedcommit": r"[0-9a-f]{7,40}",
+}
 DOI_URL = re.compile(r"https://doi\.org/(10\.\d{4,}/\S+)")
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -64,7 +84,12 @@ class Refused(Exception):
 
 
 def refuse(lines: list[str]) -> None:
-    raise Refused(cm.listed("the packet is not written, and an earlier CPC-FORM.md is left as it is", lines))
+    raise Refused(
+        cm.listed(
+            "the packet is not written, and an earlier CPC-FORM.md is left as it is",
+            lines,
+        )
+    )
 
 
 def label(labels: dict[str, str], key: str) -> str:
@@ -87,31 +112,63 @@ def plain(tex: str, values: dict[str, str], labels: dict[str, str]) -> str:
     text = re.sub(r"\\label\{[^}]*\}", "", text)
     text = re.sub(r"\\noindent\b", "", text)
     for _ in range(2):
-        text = re.sub(r"\\(\w+)\{\}", lambda m: values.get(m.group(1), m.group(0)), text)
+        text = re.sub(
+            r"\\(\w+)\{\}", lambda m: values.get(m.group(1), m.group(0)), text
+        )
         text = re.sub(r"\\(\w+)\b", lambda m: values.get(m.group(1), m.group(0)), text)
-    text = re.sub(r"\\sigfig\{(\d+)\}\{([-+]?\d+(?:\.\d+)?)\}", lambda m: figures(m.group(2), int(m.group(1))), text)
+    text = re.sub(
+        r"\\sigfig\{(\d+)\}\{([-+]?\d+(?:\.\d+)?)\}",
+        lambda m: figures(m.group(2), int(m.group(1))),
+        text,
+    )
     text = re.sub(r"\\ref\*?\{([^}]+)\}", lambda m: label(labels, m.group(1)), text)
     text = text.replace(r"\,\mu\mathrm{s}", " µs")
     text = re.sub(r"\\textmu(?:\{\}|\s*)", "µ", text)
     text = re.sub(r"\\,\\mathrm\{(\w+)\}", r" \1", text)
-    text = re.sub(r"\\times\s*10\^\{?(-?\d+)\}?", lambda m: "×10" + m.group(1).translate(SUPERSCRIPT), text)
+    text = re.sub(
+        r"\\times\s*10\^\{?(-?\d+)\}?",
+        lambda m: "×10" + m.group(1).translate(SUPERSCRIPT),
+        text,
+    )
     text = re.sub(r"\\\((.*?)\\\)", r"\1", text, flags=re.S)
-    text = re.sub(r"\{\\'([A-Za-z])\}|\\'\{?([A-Za-z])\}?",
-                  lambda m: unicodedata.normalize("NFC", (m.group(1) or m.group(2)) + "\u0301"), text)
-    text = re.sub(r"\\(?:url|path|nolinkurl|texttt|textit|emph)\{([^{}]*)\}", r"\1", text)
-    for tex_form, form in (("{,}", ","), ("~", " "), ("---", "\u2014"), ("--", "\u2013"), ("\\\\", " "),
-                           (r"\_", "_"), (r"\&", "&"), (r"\%", "%")):
+    text = re.sub(
+        r"\{\\'([A-Za-z])\}|\\'\{?([A-Za-z])\}?",
+        lambda m: unicodedata.normalize("NFC", (m.group(1) or m.group(2)) + "\u0301"),
+        text,
+    )
+    text = re.sub(
+        r"\\(?:url|path|nolinkurl|texttt|textit|emph)\{([^{}]*)\}", r"\1", text
+    )
+    for tex_form, form in (
+        ("{,}", ","),
+        ("~", " "),
+        ("---", "\u2014"),
+        ("--", "\u2013"),
+        ("\\\\", " "),
+        (r"\_", "_"),
+        (r"\&", "&"),
+        (r"\%", "%"),
+    ):
         text = text.replace(tex_form, form)
     text = " ".join(text.split())
     left = re.search(r"[\\{}$]", text)
     if left:
-        refuse([f"TeX left in the form text: ...{text[max(0, left.start() - 120):left.start() + 120]}..."])
+        refuse(
+            [
+                f"TeX left in the form text: ...{text[max(0, left.start() - 120) : left.start() + 120]}..."
+            ]
+        )
     return text
 
 
 def section(main: str, heading: str) -> str:
-    found = re.search(r"\\section\*\{" + re.escape(heading) + r"\}(.*?)(?=\\section|\\FloatBarrier|\\end\{document\})",
-                      main, re.S)
+    found = re.search(
+        r"\\section\*\{"
+        + re.escape(heading)
+        + r"\}(.*?)(?=\\section|\\FloatBarrier|\\end\{document\})",
+        main,
+        re.S,
+    )
     if not found:
         refuse([f"rg_main.tex has no section {heading!r}"])
     return found.group(1)
@@ -120,13 +177,19 @@ def section(main: str, heading: str) -> str:
 def summary_fields(main: str) -> dict[str, str]:
     heading = cm.SUMMARY_HEADING.search(main)
     end = cm.SUMMARY_END.search(main, heading.end())
-    parts = re.split(cm.FIELD + r"([^}:]+):\}", main[heading.end():end.start() if end else len(main)])
+    parts = re.split(
+        cm.FIELD + r"([^}:]+):\}",
+        main[heading.end() : end.start() if end else len(main)],
+    )
     return {name.strip(): body for name, body in zip(parts[1::2], parts[2::2])}
 
 
 def preamble_macros(main: str) -> dict[str, str]:
     """The ``\\newcommand`` values of the files that the preamble of rg_main.tex inputs, which pdfTeX typesets."""
-    preamble = "\n".join(re.sub(r"(?<!\\)%.*", "", line) for line in main.split(r"\begin{document}", 1)[0].splitlines())
+    preamble = "\n".join(
+        re.sub(r"(?<!\\)%.*", "", line)
+        for line in main.split(r"\begin{document}", 1)[0].splitlines()
+    )
     values: dict[str, str] = {}
     bad = []
     for name in re.findall(r"\\input\{([^}]+)\}", preamble):
@@ -150,30 +213,52 @@ def release() -> dict[str, str]:
     values: dict[str, str] = {}
     for name in ("commit.tex", "release.tex"):
         values.update(NEWCOMMAND.findall((SRC / name).read_text()))
-    bad = [f"commit.tex and release.tex give \\{name} as {values.get(name)!r}" for name, pattern in RELEASE.items()
-           if not re.fullmatch(pattern, values.get(name, ""))]
+    bad = [
+        f"commit.tex and release.tex give \\{name} as {values.get(name)!r}"
+        for name, pattern in RELEASE.items()
+        if not re.fullmatch(pattern, values.get(name, ""))
+    ]
     if not bad and not values["readconcommit"].startswith(values["readconcommitshort"]):
-        bad.append(f"release.tex gives \\readconcommitshort {values['readconcommitshort']}, which does not begin "
-                   f"\\readconcommit {values['readconcommit']} of commit.tex; run scripts/gen_release.py")
+        bad.append(
+            f"release.tex gives \\readconcommitshort {values['readconcommitshort']}, which does not begin "
+            f"\\readconcommit {values['readconcommit']} of commit.tex; run scripts/gen_release.py"
+        )
     if bad:
         refuse(bad)
     return values
 
 
-def data_availability(main: str, values: dict[str, str], labels: dict[str, str]) -> tuple[str, list[str]]:
+def data_availability(
+    main: str, values: dict[str, str], labels: dict[str, str]
+) -> tuple[str, list[str]]:
     """The concept DOI and the links of section Data availability, which names the version, the commit, the bundle
     and paper/cpc and links one DOI."""
     text = section(main, "Data availability")
-    links = [url for url in (plain(u, values, labels) for u in re.findall(r"\\url\{((?:[^{}]|\{[^{}]*\})*)\}", text))
-             if url.startswith(("https://", "http://"))]
+    links = [
+        url
+        for url in (
+            plain(u, values, labels)
+            for u in re.findall(r"\\url\{((?:[^{}]|\{[^{}]*\})*)\}", text)
+        )
+        if url.startswith(("https://", "http://"))
+    ]
     dois = [found.group(1) for found in map(DOI_URL.fullmatch, links) if found]
-    named = (("the version \\readconversion", r"\\readconversion\b"),
-             ("the commit \\readconcommit", r"\\readconcommit\b"),
-             ("readcon-core.bundle", r"readcon-core\.bundle"), ("paper/cpc", r"paper/cpc\b"))
-    bad = [f"section Data availability does not name {what}" for what, pattern in named if not re.search(pattern, text)]
+    named = (
+        ("the version \\readconversion", r"\\readconversion\b"),
+        ("the commit \\readconcommit", r"\\readconcommit\b"),
+        ("readcon-core.bundle", r"readcon-core\.bundle"),
+        ("paper/cpc", r"paper/cpc\b"),
+    )
+    bad = [
+        f"section Data availability does not name {what}"
+        for what, pattern in named
+        if not re.search(pattern, text)
+    ]
     if len(dois) != 1:
-        bad.append(f"section Data availability links {len(dois)} DOIs ({', '.join(dois) or 'none'}); the form names "
-                   "one concept DOI")
+        bad.append(
+            f"section Data availability links {len(dois)} DOIs ({', '.join(dois) or 'none'}); the form names "
+            "one concept DOI"
+        )
     if bad:
         refuse(bad)
     return dois[0], links
@@ -185,32 +270,64 @@ def stale() -> list[str]:
     if missing:
         return [f"{', '.join(missing)} missing; {BUILD}"]
     oldest = min(path.stat().st_mtime for path in built)
-    sources = [*SRC.glob("*.tex"), *SRC.glob("*.bib"),
-               *(p for p in (SRC / "figures").rglob("*") if p.is_file() and "work" not in p.parts)]
-    return [f"{path.relative_to(ROOT).as_posix()} is newer than the build; {BUILD}"
-            for path in sorted(sources) if path.stat().st_mtime > oldest]
+    sources = [
+        *SRC.glob("*.tex"),
+        *SRC.glob("*.bib"),
+        *(
+            p
+            for p in (SRC / "figures").rglob("*")
+            if p.is_file() and "work" not in p.parts
+        ),
+    ]
+    return [
+        f"{path.relative_to(ROOT).as_posix()} is newer than the build; {BUILD}"
+        for path in sorted(sources)
+        if path.stat().st_mtime > oldest
+    ]
 
 
 def counted(aux: str, kind: str, env: str) -> int:
-    return len(re.findall(r"\\@writefile\{" + kind + r"\}\{\\contentsline \{" + env + r"\}", aux))
+    return len(
+        re.findall(
+            r"\\@writefile\{" + kind + r"\}\{\\contentsline \{" + env + r"\}", aux
+        )
+    )
 
 
 def pages(pdf: Path) -> int:
-    info = subprocess.run([cm.tool("pdfinfo"), str(pdf)], capture_output=True, text=True, check=True).stdout
+    info = subprocess.run(
+        [cm.tool("pdfinfo"), str(pdf)], capture_output=True, text=True, check=True
+    ).stdout
     return int(re.search(r"^Pages:\s+(\d+)$", info, re.M).group(1))
 
 
 def author_block(values: dict[str, str]) -> dict[str, str]:
     text = (SRC / "authors.tex").read_text()
-    affiliation = dict(re.findall(r"(\w+)=\{((?:[^{}]|\{[^{}]*\})*)\}",
-                                  re.search(r"\\affiliation(?:\[[^\]]*\])?\{(.*)\}", text).group(1)))
-    address = plain(f"{affiliation['organization']}, {affiliation['addressline']}, {affiliation['postcode']} "
-                    f"{affiliation['city']}, {affiliation['country']}", values, {})
-    postal = re.search(r"\\newcommand\{\\rgPostalAddress\}\{((?:[^{}]|\{[^{}]*\})*)\}", text)
+    affiliation = dict(
+        re.findall(
+            r"(\w+)=\{((?:[^{}]|\{[^{}]*\})*)\}",
+            re.search(r"\\affiliation(?:\[[^\]]*\])?\{(.*)\}", text).group(1),
+        )
+    )
+    address = plain(
+        f"{affiliation['organization']}, {affiliation['addressline']}, {affiliation['postcode']} "
+        f"{affiliation['city']}, {affiliation['country']}",
+        values,
+        {},
+    )
+    postal = re.search(
+        r"\\newcommand\{\\rgPostalAddress\}\{((?:[^{}]|\{[^{}]*\})*)\}", text
+    )
     if postal and plain(postal.group(1), values, {}) != address:
-        refuse([f"\\rgPostalAddress in authors.tex differs from the affiliation the title page prints ({address})"])
+        refuse(
+            [
+                f"\\rgPostalAddress in authors.tex differs from the affiliation the title page prints ({address})"
+            ]
+        )
     return {
-        "author": re.search(r"\\author(?:\[[^\]]*\])?\{([^\\{}]+)", text).group(1).strip(),
+        "author": re.search(r"\\author(?:\[[^\]]*\])?\{([^\\{}]+)", text)
+        .group(1)
+        .strip(),
         "email": re.search(r"\\ead\{([^}]+)\}", text).group(1),
         "orcid": re.search(r"ORCID:\s*(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", text).group(1),
         "address": address,
@@ -233,15 +350,24 @@ def check_release(version: str, concept: str) -> list[str]:
     codemeta = json.loads((REPO / "codemeta.json").read_text())
     citation = (REPO / "CITATION.cff").read_text()
     cff_version = re.search(r"^version:\s*(\S+)", citation, re.M)
-    bad = [f"{name} is version {found}; release.tex names {version}"
-           for name, found in ((".zenodo.json", zenodo.get("version")), ("codemeta.json", codemeta.get("version")),
-                               ("CITATION.cff", cff_version and cff_version.group(1).strip("\"'")))
-           if found != version]
+    bad = [
+        f"{name} is version {found}; release.tex names {version}"
+        for name, found in (
+            (".zenodo.json", zenodo.get("version")),
+            ("codemeta.json", codemeta.get("version")),
+            ("CITATION.cff", cff_version and cff_version.group(1).strip("\"'")),
+        )
+        if found != version
+    ]
     dois = re.findall(r"-\s*type:\s*doi\s*\n\s*value:\s*(10\.\d{4,}/\S+)", citation)
     if concept not in dois:
-        bad.append(f"CITATION.cff names the DOIs {dois or 'none'}, not the concept DOI {concept} of Data availability")
+        bad.append(
+            f"CITATION.cff names the DOIs {dois or 'none'}, not the concept DOI {concept} of Data availability"
+        )
     if codemeta.get("identifier") != f"https://doi.org/{concept}":
-        bad.append(f"codemeta.json identifier {codemeta.get('identifier')} is not the concept DOI {concept}")
+        bad.append(
+            f"codemeta.json identifier {codemeta.get('identifier')} is not the concept DOI {concept}"
+        )
     return bad
 
 
@@ -260,26 +386,49 @@ def render() -> tuple[dict[str, str], str]:
     named = release()
     aux = (SRC / "rg_main.aux").read_text()
     labels = dict(re.findall(r"\\newlabel\{([^}]+)\}\{\{([^}]*)\}", aux))
-    logs = {name: (SRC / f"{name}.log").read_text(errors="replace") for name in ("rg_main", "rg_supp")}
-    undefined = [f"{name}.log: {line.strip()}" for name, text in logs.items()
-                 for line in text.splitlines() if re.search(r"\bundefined\b", line)]
+    logs = {
+        name: (SRC / f"{name}.log").read_text(errors="replace")
+        for name in ("rg_main", "rg_supp")
+    }
+    undefined = [
+        f"{name}.log: {line.strip()}"
+        for name, text in logs.items()
+        for line in text.splitlines()
+        if re.search(r"\bundefined\b", line)
+    ]
     if undefined:
         refuse(undefined)
-    tables = [f"{path.name}: {{{spec}}}" for path in (cm.MAIN, cm.SUPP, *sorted(GENERATED.glob("*.tex")))
-              for spec in TABULAR.findall(path.read_text()) if "|" in spec]
+    tables = [
+        f"{path.name}: {{{spec}}}"
+        for path in (cm.MAIN, cm.SUPP, *sorted(GENERATED.glob("*.tex")))
+        for spec in TABULAR.findall(path.read_text())
+        if "|" in spec
+    ]
     if tables:
         refuse([f"vertical rule in {item}" for item in tables])
 
-    abstract_tex = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main_tex, re.S).group(1)
+    abstract_tex = re.search(
+        r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main_tex, re.S
+    ).group(1)
     abstract = plain(abstract_tex, values, labels)
     if len(abstract) > ARXIV_CHARACTERS:
-        refuse([f"the plain abstract has {len(abstract)} characters; arXiv allows {ARXIV_CHARACTERS}"])
+        refuse(
+            [
+                f"the plain abstract has {len(abstract)} characters; arXiv allows {ARXIV_CHARACTERS}"
+            ]
+        )
     used = sorted(set(re.findall(r"\\(\w+)", abstract_tex)) & set(values))
     micro = re.findall(r"(\S+) µs", abstract)
     fields = summary_fields(main_tex)
-    highlights = [line.strip() for line in cm.HIGHLIGHTS.read_text().splitlines() if line.strip()]
-    keywords = [plain(k, values, labels) for k in
-                re.search(r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main_tex, re.S).group(1).split(r"\sep")]
+    highlights = [
+        line.strip() for line in cm.HIGHLIGHTS.read_text().splitlines() if line.strip()
+    ]
+    keywords = [
+        plain(k, values, labels)
+        for k in re.search(r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main_tex, re.S)
+        .group(1)
+        .split(r"\sep")
+    ]
     concept, links = data_availability(main_tex, values, labels)
     block = author_block(values)
     title = plain(re.search(r"\\title\{(.*?)\}", main_tex).group(1), values, labels)
@@ -289,9 +438,14 @@ def render() -> tuple[dict[str, str], str]:
         refuse(problems)
 
     main_pages, supp_pages = pages(SRC / "rg_main.pdf"), pages(SRC / "rg_supp.pdf")
-    n_fig, n_tab, n_lst = (counted(aux, kind, env) for kind, env in
-                           (("lof", "figure"), ("lot", "table"), ("lol", "lstlisting")))
-    n_refs, n_refs_supp = ((SRC / f"{name}.bbl").read_text().count(r"\bibitem") for name in ("rg_main", "rg_supp"))
+    n_fig, n_tab, n_lst = (
+        counted(aux, kind, env)
+        for kind, env in (("lof", "figure"), ("lot", "table"), ("lol", "lstlisting"))
+    )
+    n_refs, n_refs_supp = (
+        (SRC / f"{name}.bbl").read_text().count(r"\bibitem")
+        for name in ("rg_main", "rg_supp")
+    )
     summary_words = [cm.words(fields[name], values) for name in LONG_FIELDS]
     repository = plain(fields["Developer's repository link"], values, labels)
     fill = {
@@ -310,23 +464,44 @@ def render() -> tuple[dict[str, str], str]:
         "abstract_chars": len(abstract),
         "abstract_plain_words": len(abstract.split()),
         "abstract_words": cm.words(abstract_tex, values),
-        "macro_list": ", ".join(f"`\\{name}` = {plain(values[name], values, labels)}" for name in used),
-        "micro_note": (" It writes " + " and ".join(f'"{n} µs"' for n in micro) + "; where the form does not "
-                       "render µ, write " + " and ".join(f'"{n} microseconds"' for n in micro) + ".") if micro else "",
+        "macro_list": ", ".join(
+            f"`\\{name}` = {plain(values[name], values, labels)}" for name in used
+        ),
+        "micro_note": (
+            " It writes "
+            + " and ".join(f'"{n} µs"' for n in micro)
+            + "; where the form does not "
+            "render µ, write "
+            + " and ".join(f'"{n} microseconds"' for n in micro)
+            + "."
+        )
+        if micro
+        else "",
         "keywords": "; ".join(keywords),
         "keyword_count": len(keywords),
         "highlight_count": len(highlights),
         "highlight_lengths": ", ".join(str(len(h)) for h in highlights),
-        "summary_words": ", ".join(f"{name.split(' including')[0]} {n}" for name, n in zip(LONG_FIELDS, summary_words)),
+        "summary_words": ", ".join(
+            f"{name.split(' including')[0]} {n}"
+            for name, n in zip(LONG_FIELDS, summary_words)
+        ),
         "program_title": plain(fields["Program Title"], values, labels),
         "repository": repository,
         "licence": plain(fields["Licensing provisions"], values, labels),
         "language": plain(fields["Programming language"], values, labels),
-        "graphical_abstract": ("`rg_main.tex` has a graphical abstract; upload it in the graphical abstract slot."
-                               if r"\begin{graphicalabstract}" in main_tex else
-                               "`rg_main.tex` has none; leave the slot empty."),
-        "credit": plain(section(main_tex, "CRediT authorship contribution statement"), values, labels),
-        "competing": plain(section(main_tex, "Declaration of competing interest"), values, labels),
+        "graphical_abstract": (
+            "`rg_main.tex` has a graphical abstract; upload it in the graphical abstract slot."
+            if r"\begin{graphicalabstract}" in main_tex
+            else "`rg_main.tex` has none; leave the slot empty."
+        ),
+        "credit": plain(
+            section(main_tex, "CRediT authorship contribution statement"),
+            values,
+            labels,
+        ),
+        "competing": plain(
+            section(main_tex, "Declaration of competing interest"), values, labels
+        ),
         "ai_heading": cm.AI_DECLARATION,
         "ai": plain(section(main_tex, cm.AI_DECLARATION), values, labels),
         "links": ", ".join(links),
@@ -344,36 +519,61 @@ def render() -> tuple[dict[str, str], str]:
         try:
             body = string.Template((HERE / name).read_text()).substitute(fill)
         except (KeyError, ValueError) as exc:
-            refuse([f"{name} has the placeholder {exc}, which make_packet.py does not fill"])
-        texts[name.removesuffix(".in")] = (f"<!-- Written by paper/cpc/packet/make_packet.py from {name}; "
-                                           f"edit the template, not this file -->\n{body}")
-    marked = [f"{name}:{i}: {line.strip()}" for name, text in texts.items()
-              for i, line in enumerate(text.splitlines(), 1) if cm.MARKERS.search(line)]
+            refuse(
+                [
+                    f"{name} has the placeholder {exc}, which make_packet.py does not fill"
+                ]
+            )
+        texts[name.removesuffix(".in")] = (
+            f"<!-- Written by paper/cpc/packet/make_packet.py from {name}; "
+            f"edit the template, not this file -->\n{body}"
+        )
+    marked = [
+        f"{name}:{i}: {line.strip()}"
+        for name, text in texts.items()
+        for i, line in enumerate(text.splitlines(), 1)
+        if cm.MARKERS.search(line)
+    ]
     if marked:
         refuse(marked)
-    leaked = [f"{name}:{i}: absolute path {path}" for name, text in texts.items()
-              for i, line in enumerate(text.splitlines(), 1) for path in absolute_paths(line)]
+    leaked = [
+        f"{name}:{i}: absolute path {path}"
+        for name, text in texts.items()
+        for i, line in enumerate(text.splitlines(), 1)
+        for path in absolute_paths(line)
+    ]
     if leaked:
         refuse(leaked)
-    summary = (f"readcon-core {version}, {fill['commit_role']} {fill['commit'][:12]}; abstract {len(abstract)} characters, "
-               f"{len(abstract.split())} words (TeX count {fill['abstract_words']}); {main_pages}+{supp_pages} pages, "
-               f"{n_fig} figures, {n_tab} tables, {n_lst} listings, {n_refs}+{n_refs_supp} references; "
-               f"summary words {summary_words}; highlights {[len(h) for h in highlights]}")
+    summary = (
+        f"readcon-core {version}, {fill['commit_role']} {fill['commit'][:12]}; abstract {len(abstract)} characters, "
+        f"{len(abstract.split())} words (TeX count {fill['abstract_words']}); {main_pages}+{supp_pages} pages, "
+        f"{n_fig} figures, {n_tab} tables, {n_lst} listings, {n_refs}+{n_refs_supp} references; "
+        f"summary words {summary_words}; highlights {[len(h) for h in highlights]}"
+    )
     return texts, summary
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--check", action="store_true",
-                        help="write nothing; exit 1 unless CPC-FORM.md is what a run writes now")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="write nothing; exit 1 unless CPC-FORM.md is what a run writes now",
+    )
     args = parser.parse_args()
     texts, summary = render()
     if args.check:
-        differ = [name for name, text in texts.items()
-                  if not (HERE / name).is_file() or (HERE / name).read_text() != text]
+        differ = [
+            name
+            for name, text in texts.items()
+            if not (HERE / name).is_file() or (HERE / name).read_text() != text
+        ]
         if differ:
-            print(f"make_packet: {', '.join(differ)} differs from what the sources give; "
-                  "run python3 paper/cpc/packet/make_packet.py", file=sys.stderr)
+            print(
+                f"make_packet: {', '.join(differ)} differs from what the sources give; "
+                "run python3 paper/cpc/packet/make_packet.py",
+                file=sys.stderr,
+            )
             return 1
         print(f"{summary}; {', '.join(texts)} is current")
         return 0

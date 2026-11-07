@@ -5,7 +5,9 @@
 [workspace]
 name = "readcon-cpc-paper"
 channels = ["conda-forge"]
-platforms = [{ name = "linux-64-glibc-2-34", platform = "linux-64", glibc = "2.34" }]
+platforms = [
+  { name = "linux-64-glibc-2-34", platform = "linux-64", glibc = "2.34" },
+]
 
 [dependencies]
 python = "3.12.*"

@@ -55,7 +55,9 @@ def velocity_quiver(theme, png_dir: Path | None) -> None:
     colourbar = fig.colorbar(quiver, cax=cax)
     colourbar.solids.set_rasterized(False)
     cax.set_ylabel("|Δr| (Å)")
-    colourbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.2f}"))
+    colourbar.ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda value, _pos: f"{value:.2f}")
+    )
     colourbar.ax.yaxis.set_minor_formatter(NullFormatter())
     side.set_xlim(0, 1)
     side.set_ylim(0, 1)
@@ -67,7 +69,9 @@ def velocity_quiver(theme, png_dir: Path | None) -> None:
     )
     for y, label, value, color in lines:
         side.text(0.0, y, label, ha="left", va="center", fontsize=9, color=BLACK)
-        side.text(0.0, y - 0.12, value, ha="left", va="center", fontsize=12, color=color)
+        side.text(
+            0.0, y - 0.12, value, ha="left", va="center", fontsize=12, color=color
+        )
     pf._theme_axes([ax, side], theme)
     pf._save(fig, "velocity_mislabel", png_dir, width_cm=pf.DOUBLE_CM)
 

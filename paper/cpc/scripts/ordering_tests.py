@@ -33,8 +33,14 @@ R = ROOT / "bench" / "results" / "r0174"
 OUT = ROOT / "src" / "figures" / "generated"
 TABLE = OUT / "ordering_table.tex"
 MACROS = OUT / "ordering_macros.tex"
-SOURCES = ("reads.json", "h2h/python_coords.json", "h2h/python_vel.json", "h2h/cpp_coords.json", "h2h/cpp_vel.json",
-           "binary_formats/timings.json")
+SOURCES = (
+    "reads.json",
+    "h2h/python_coords.json",
+    "h2h/python_vel.json",
+    "h2h/cpp_coords.json",
+    "h2h/cpp_vel.json",
+    "binary_formats/timings.json",
+)
 ALPHA = 0.05
 
 
@@ -57,7 +63,7 @@ def mann_whitney(x: list[float], y: list[float]) -> float:
     u = sum(1 for a in x for b in y if a > b)
     counts = u_counts(len(x), len(y))
     total = sum(counts)
-    return min(1.0, 2 * min(sum(counts[:u + 1]), sum(counts[u:])) / total)
+    return min(1.0, 2 * min(sum(counts[: u + 1]), sum(counts[u:])) / total)
 
 
 def hodges_lehmann(x: list[float], y: list[float]) -> tuple[float, float, float, float]:
@@ -71,7 +77,12 @@ def hodges_lehmann(x: list[float], y: list[float]) -> tuple[float, float, float,
         c += 1
     if c == 0:
         raise SystemExit(f"{n} against {m} runs cannot reach coverage {1 - ALPHA}")
-    return math.exp(statistics.median(d)), math.exp(d[c - 1]), math.exp(d[n * m - c]), 1 - 2 * tail / total
+    return (
+        math.exp(statistics.median(d)),
+        math.exp(d[c - 1]),
+        math.exp(d[n * m - c]),
+        1 - 2 * tail / total,
+    )
 
 
 def holm(ps: list[float]) -> list[bool]:
@@ -96,58 +107,130 @@ def claims() -> list[dict]:
 
     reads = load("reads.json")["cells"]
     family = r"Python reads (Table~\ref{tab:perf}), one thread"
-    peers = (("readcon", "ase_extxyz", "ASE, extended XYZ"), ("readcon", "extxyz_c", r"\texttt{extxyz} (C)"),
-             ("readcon", "ovito", "OVITO, extended XYZ"), ("readcon", "ase_traj", "ASE trajectory"),
-             ("readcon", "h5py", "h5py, H5MD"), ("readcon", "mda_h5md", "MDAnalysis, H5MD"),
-             ("readcon_coords", "ase_eon", r"ASE \texttt{eon}"), ("readcon_coords", "chemfiles_py", "chemfiles, XYZ"),
-             ("readcon_coords", "ovito_xyz", "OVITO, XYZ"))
-    ours = {"readcon": "readcon-core", "readcon_coords": "readcon-core, no velocities",
-            "readcon_fields": "readcon-core, frames only"}
+    peers = (
+        ("readcon", "ase_extxyz", "ASE, extended XYZ"),
+        ("readcon", "extxyz_c", r"\texttt{extxyz} (C)"),
+        ("readcon", "ovito", "OVITO, extended XYZ"),
+        ("readcon", "ase_traj", "ASE trajectory"),
+        ("readcon", "h5py", "h5py, H5MD"),
+        ("readcon", "mda_h5md", "MDAnalysis, H5MD"),
+        ("readcon_coords", "ase_eon", r"ASE \texttt{eon}"),
+        ("readcon_coords", "chemfiles_py", "chemfiles, XYZ"),
+        ("readcon_coords", "ovito_xyz", "OVITO, XYZ"),
+    )
+    ours = {
+        "readcon": "readcon-core",
+        "readcon_coords": "readcon-core, no velocities",
+        "readcon_fields": "readcon-core, frames only",
+    }
     for a, b, label in peers:
-        add(family, f"{ours[a]} / {label}", reads[f"python:{a}:1"]["samples_s"], reads[f"python:{b}:1"]["samples_s"])
+        add(
+            family,
+            f"{ours[a]} / {label}",
+            reads[f"python:{a}:1"]["samples_s"],
+            reads[f"python:{b}:1"]["samples_s"],
+        )
     for a in ours:
-        add(family, f"{ours[a]}, one thread / eight", reads[f"python:{a}:1"]["samples_s"],
-            reads[f"python:{a}:8"]["samples_s"])
+        add(
+            family,
+            f"{ours[a]}, one thread / eight",
+            reads[f"python:{a}:1"]["samples_s"],
+            reads[f"python:{a}:8"]["samples_s"],
+        )
 
     family = r"C++ reads (Table~\ref{tab:cpp})"
     for a, b, label in (
-            ("readcon_cpp_moc_1", "chemfiles_cpp_moc_1", "readcon-core / chemfiles, extended XYZ"),
-            ("readcon_cpp_coords_1", "chemfiles_cpp_coords_1", "readcon-core, no velocities / chemfiles, XYZ"),
-            ("readcon_cpp_moc_1", "readcon_cpp_moc_8", "readcon-core, one thread / eight")):
-        add(family, label, reads[f"cpp:{a}"]["samples_s"], reads[f"cpp:{b}"]["samples_s"])
+        (
+            "readcon_cpp_moc_1",
+            "chemfiles_cpp_moc_1",
+            "readcon-core / chemfiles, extended XYZ",
+        ),
+        (
+            "readcon_cpp_coords_1",
+            "chemfiles_cpp_coords_1",
+            "readcon-core, no velocities / chemfiles, XYZ",
+        ),
+        ("readcon_cpp_moc_1", "readcon_cpp_moc_8", "readcon-core, one thread / eight"),
+    ):
+        add(
+            family,
+            label,
+            reads[f"cpp:{a}"]["samples_s"],
+            reads[f"cpp:{b}"]["samples_s"],
+        )
 
     family = r"Python head-to-head (Table~\ref{tab:h2h-python})"
-    calls = {"read_arrays": r"\texttt{read\_arrays}", "read_rcbin_owned": r"\texttt{read\_rcbin}",
-             "ase_extxyz": "ASE extended XYZ", "ase_traj": r"ASE \texttt{.traj}", "h5py_positions": "h5py"}
+    calls = {
+        "read_arrays": r"\texttt{read\_arrays}",
+        "read_rcbin_owned": r"\texttt{read\_rcbin}",
+        "ase_extxyz": "ASE extended XYZ",
+        "ase_traj": r"ASE \texttt{.traj}",
+        "h5py_positions": "h5py",
+    }
     for campaign, title in (("coords", "coordinates"), ("vel", "velocities")):
         t = load(f"h2h/python_{campaign}.json")["timings"]
-        for a, b in (("read_arrays", "ase_extxyz"), ("read_arrays", "ase_traj"), ("read_arrays", "h5py_positions"),
-                     ("read_rcbin_owned", "h5py_positions")):
-            add(family, f"{title}: {calls[a]} / {calls[b]}", t[a]["samples_s"], t[b]["samples_s"])
+        for a, b in (
+            ("read_arrays", "ase_extxyz"),
+            ("read_arrays", "ase_traj"),
+            ("read_arrays", "h5py_positions"),
+            ("read_rcbin_owned", "h5py_positions"),
+        ):
+            add(
+                family,
+                f"{title}: {calls[a]} / {calls[b]}",
+                t[a]["samples_s"],
+                t[b]["samples_s"],
+            )
 
     family = r"C++ head-to-head at one thread (Table~\ref{tab:h2h-cpp})"
-    pairs = (("readcon_coordinates", "chemfiles_xyz", "columns / XYZ"),
-             ("readcon_frames", "chemfiles_xyz", "by frame / XYZ"),
-             ("readcon_with_velocities", "chemfiles_gro", "columns / GRO"),
-             ("readcon_frames_with_velocities", "chemfiles_gro", "by frame / GRO"))
+    pairs = (
+        ("readcon_coordinates", "chemfiles_xyz", "columns / XYZ"),
+        ("readcon_frames", "chemfiles_xyz", "by frame / XYZ"),
+        ("readcon_with_velocities", "chemfiles_gro", "columns / GRO"),
+        ("readcon_frames_with_velocities", "chemfiles_gro", "by frame / GRO"),
+    )
     for campaign, title in (("coords", "coordinates"), ("vel", "velocities")):
         for cell in load(f"h2h/cpp_{campaign}.json")["cells"]:
             tag = f"{cell['cxx']} {cell['chemfiles_cmake_cxx_flags_release']}"
             for a, b, label in pairs:
                 if a in cell and b in cell:
-                    add(family, f"{title}, {tag}: {label}", cell[a]["samples_s"], cell[b]["samples_s"])
+                    add(
+                        family,
+                        f"{title}, {tag}: {label}",
+                        cell[a]["samples_s"],
+                        cell[b]["samples_s"],
+                    )
 
     family = r"Native readers at one thread (Table~\ref{tab:binary-ratios})"
     bf = load("binary_formats/timings.json")["cells"]
-    natives = {"xdrfile-xtc": "xdrfile XTC", "xdrfile-trr": "xdrfile TRR", "molfile-dcd": "molfile DCD", "tng": "TNG"}
-    mine = {"frames": (("readcon-frames", "CON"), ("readcon-frames-six", "CON six"), ("readcon-frames-two", "CON two")),
-            "all": (("readcon-all", "CON"), ("readcon-all-six", "CON six"), ("readcon-all-two", "CON two"),
-                    ("readcon-image", r"\texttt{.rcbin}"))}
+    natives = {
+        "xdrfile-xtc": "xdrfile XTC",
+        "xdrfile-trr": "xdrfile TRR",
+        "molfile-dcd": "molfile DCD",
+        "tng": "TNG",
+    }
+    mine = {
+        "frames": (
+            ("readcon-frames", "CON"),
+            ("readcon-frames-six", "CON six"),
+            ("readcon-frames-two", "CON two"),
+        ),
+        "all": (
+            ("readcon-all", "CON"),
+            ("readcon-all-six", "CON six"),
+            ("readcon-all-two", "CON two"),
+            ("readcon-image", r"\texttt{.rcbin}"),
+        ),
+    }
     for native, label in natives.items():
         for mode, row in mine.items():
             for o, name in row:
-                add(family, f"{'by frame' if mode == 'frames' else 'all frames'}, {name} / {label}",
-                    bf[o]["samples_s"], bf[f"{native}-{mode}"]["samples_s"])
+                add(
+                    family,
+                    f"{'by frame' if mode == 'frames' else 'all frames'}, {name} / {label}",
+                    bf[o]["samples_s"],
+                    bf[f"{native}-{mode}"]["samples_s"],
+                )
     return out
 
 
@@ -172,30 +255,45 @@ def main() -> None:
     coverage = min(r["coverage"] for r in rows)
     runs = {r["n"] for r in rows} | {r["m"] for r in rows}
     if len(runs) != 1:
-        raise SystemExit(f"the claims compare cells of {sorted(runs)} runs; every record runs one count")
+        raise SystemExit(
+            f"the claims compare cells of {sorted(runs)} runs; every record runs one count"
+        )
 
-    head = [r"\toprule",
-            r"Claim, readcon-core / peer & Ratio & HL ratio [interval] & \(p\) & Holm\\",
-            r"\midrule"]
-    lines = [rf"% Written by paper/cpc/scripts/ordering_tests.py from bench/results/r0174 ({', '.join(SOURCES)}).",
-             r"\begingroup", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
-             r"\begin{longtable}{@{}p{0.42\linewidth}rlll@{}}",
-             r"\caption{The exact two-sided Mann--Whitney test of every timing ratio of Section~\ref{sec:performance}, "
-             r"readcon-core time over peer time, on the \ordRuns{} runs of each cell, each run a fresh process. "
-             r"The ratio is of the medians, as in the table of each heading. "
-             r"The HL ratio is the Hodges--Lehmann estimate with its distribution-free interval, of coverage at least "
-             r"\ordCoverageMin. "
-             r"Holm rejects a claim at the family-wise level \ordAlpha{} over all \ordClaims{} claims.}"
-             r"\label{tab:ordering}\\",
-             *head, r"\endfirsthead", *head, r"\endhead", r"\bottomrule", r"\endfoot"]
+    head = [
+        r"\toprule",
+        r"Claim, readcon-core / peer & Ratio & HL ratio [interval] & \(p\) & Holm\\",
+        r"\midrule",
+    ]
+    lines = [
+        rf"% Written by paper/cpc/scripts/ordering_tests.py from bench/results/r0174 ({', '.join(SOURCES)}).",
+        r"\begingroup",
+        r"\scriptsize",
+        r"\setlength{\tabcolsep}{3pt}",
+        r"\begin{longtable}{@{}p{0.42\linewidth}rlll@{}}",
+        r"\caption{The exact two-sided Mann--Whitney test of every timing ratio of Section~\ref{sec:performance}, "
+        r"readcon-core time over peer time, on the \ordRuns{} runs of each cell, each run a fresh process. "
+        r"The ratio is of the medians, as in the table of each heading. "
+        r"The HL ratio is the Hodges--Lehmann estimate with its distribution-free interval, of coverage at least "
+        r"\ordCoverageMin. "
+        r"Holm rejects a claim at the family-wise level \ordAlpha{} over all \ordClaims{} claims.}"
+        r"\label{tab:ordering}\\",
+        *head,
+        r"\endfirsthead",
+        *head,
+        r"\endhead",
+        r"\bottomrule",
+        r"\endfoot",
+    ]
     family = None
     for r in rows:
         if r["family"] != family:
             family = r["family"]
             lines.append(rf"\multicolumn{{5}}{{@{{}}l@{{}}}}{{\textit{{{family}}}}}\\")
-        lines.append(rf"\raggedright {r['name']} & {sig(r['ratio'], 3)} & "
-                     rf"{sig(r['hl'], 3)} [{sig(r['lo'], 3)}, {sig(r['hi'], 3)}] & {num(sig(r['p']))} & "
-                     rf"{'reject' if r['rejected'] else 'keep'}\\")
+        lines.append(
+            rf"\raggedright {r['name']} & {sig(r['ratio'], 3)} & "
+            rf"{sig(r['hl'], 3)} [{sig(r['lo'], 3)}, {sig(r['hi'], 3)}] & {num(sig(r['p']))} & "
+            rf"{'reject' if r['rejected'] else 'keep'}\\"
+        )
     lines += [r"\end{longtable}", r"\endgroup", ""]
     TABLE.write_text("\n".join(lines))
 
@@ -208,10 +306,14 @@ def main() -> None:
         "ordCoverageMin": f"{math.floor(coverage * 1000) / 1000:.3f}",
         "ordPMin": num(sig(2 / math.comb(rows[0]["n"] + rows[0]["m"], rows[0]["n"]))),
     }
-    MACROS.write_text("% Written by paper/cpc/scripts/ordering_tests.py from bench/results/r0174.\n"
-                      + "".join(rf"\newcommand{{\{k}}}{{{v}}}" + "\n" for k, v in macros.items()))
+    MACROS.write_text(
+        "% Written by paper/cpc/scripts/ordering_tests.py from bench/results/r0174.\n"
+        + "".join(rf"\newcommand{{\{k}}}{{{v}}}" + "\n" for k, v in macros.items())
+    )
     for r in rows:
-        print(f"{r['p']:.3g}\t{'reject' if r['rejected'] else 'keep'}\t{r['family'][:20]}\t{r['name']}")
+        print(
+            f"{r['p']:.3g}\t{'reject' if r['rejected'] else 'keep'}\t{r['family'][:20]}\t{r['name']}"
+        )
 
 
 if __name__ == "__main__":

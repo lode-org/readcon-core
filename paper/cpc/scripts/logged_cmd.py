@@ -48,8 +48,12 @@ def main() -> int:
     if not log_path.is_absolute():
         log_path = ROOT / log_path
     command = sys.argv[2:]
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True
+    ).strip()
     shown = " ".join(command)
     proc = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
     lines = [
@@ -60,7 +64,10 @@ def main() -> int:
     for stream in (proc.stdout, proc.stderr):
         for line in stream.splitlines():
             line = redact(line)
-            if any(token in line for token in ("/agent", "/tmp", "/home", "/cursor", "~/", "_home_")):
+            if any(
+                token in line
+                for token in ("/agent", "/tmp", "/home", "/cursor", "~/", "_home_")
+            ):
                 continue
             lines.append(line)
     lines.append(f"exit_code {proc.returncode}")

@@ -10,10 +10,12 @@ RMSD coordinates are taken against the uninterrupted reactant and product.
 Every band keeps the same atom order, so plain RMSD equals the matched RMSD,
 and no permutation search is needed.
 """
+
 from __future__ import annotations
 from pathlib import Path
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from ase import Atoms
@@ -30,7 +32,9 @@ def load(slug):
     z = np.load(BANDS / f"{slug}.npz")
     imgs = []
     for p, f in zip(z["pos"], z["forces"]):
-        a = Atoms(numbers=z["numbers"], positions=p, cell=z["cell"], pbc=[True, True, False])
+        a = Atoms(
+            numbers=z["numbers"], positions=p, cell=z["cell"], pbc=[True, True, False]
+        )
         a.arrays["forces"] = f
         imgs.append(a)
     return imgs, z["energies"] - z["energies"][0]
@@ -56,14 +60,34 @@ def main():
     ref, prod = ref_imgs[0].positions, ref_imgs[-1].positions
     b = band("uninterrupted", ref, prod)
     resume = band("CON_3_1__shortest_round_trip", ref, prod)
-    fig, ax = plt.subplots(figsize=(pf.SINGLE_CM / 2.54, 7.8 / 2.54), layout="constrained")
+    fig, ax = plt.subplots(
+        figsize=(pf.SINGLE_CM / 2.54, 7.8 / 2.54), layout="constrained"
+    )
     basis = compute_projection_basis(b["r"], b["p"])
     cap = pf._draw_surface(ax, b, basis, pf.SEQUENTIAL)
     s, d = project_to_sd(b["r"], b["p"], basis)
     ax.plot(s, d, color=pf.TEAL, lw=1.0, zorder=44)
-    ax.scatter(s, d, marker="o", s=22, facecolors="none", edgecolors=pf.TEAL, linewidths=1.0, zorder=46)
+    ax.scatter(
+        s,
+        d,
+        marker="o",
+        s=22,
+        facecolors="none",
+        edgecolors=pf.TEAL,
+        linewidths=1.0,
+        zorder=46,
+    )
     s2, d2 = project_to_sd(resume["r"], resume["p"], basis)
-    ax.scatter(s2, d2, marker="x", s=18, color=pf.BLACK, linewidths=0.8, zorder=47, label="CON 3.1 resume")
+    ax.scatter(
+        s2,
+        d2,
+        marker="x",
+        s=18,
+        color=pf.BLACK,
+        linewidths=0.8,
+        zorder=47,
+        label="CON 3.1 resume",
+    )
     pf._mark_ends(ax, s, d, b["z"])
     pf._landscape_labels(ax, True)
     ax.set_aspect("auto")

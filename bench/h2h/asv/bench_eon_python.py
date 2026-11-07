@@ -23,8 +23,10 @@ class EonPython:
 
     def setup(self):
         import sys
+
         sys.path.insert(0, str(support.WORK / "eon-src"))
         from eon.fileio import loadcons
+
         self.loadcons = loadcons
         self.path = support.rel(support.case_path("atoms-1000000"))
 

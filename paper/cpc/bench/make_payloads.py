@@ -76,6 +76,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "scripts"))
 import provenance  # noqa: E402
+
 WORK = Path(os.environ.get("BENCH_WORK", HERE / "work" / "r0174"))
 RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174"))
 N_FRAMES = int(os.environ.get("BENCH_N_FRAMES", "10000"))
@@ -85,7 +86,11 @@ TEMPERATURE_K = 300.0
 TIMESTEP_FS = 1.0
 FRICTION_PER_FS = 0.01
 HELD_BELOW_Z = -3.0
-SIZES = tuple(int(float(n)) for n in os.environ.get("BENCH_SIZES", "1e3,1e4,1e5,1e6").split(",") if n)
+SIZES = tuple(
+    int(float(n))
+    for n in os.environ.get("BENCH_SIZES", "1e3,1e4,1e5,1e6").split(",")
+    if n
+)
 SIZE_ROWS = int(float(os.environ.get("BENCH_SIZE_ROWS", "1e6")))
 SIZE_SEED = 20261101
 LIQUID_CU_G_PER_CM3 = 7.99
@@ -167,11 +172,15 @@ def size_system(n: int) -> dict[str, np.ndarray]:
     if frames < 1:
         raise SystemExit(f"BENCH_SIZE_ROWS={SIZE_ROWS} holds no frame of {n} atoms")
     rng = np.random.default_rng([SIZE_SEED, n])
-    density = LIQUID_CU_G_PER_CM3 / atomic_masses[atomic_numbers["Cu"]] * units.mol / 1e24
+    density = (
+        LIQUID_CU_G_PER_CM3 / atomic_masses[atomic_numbers["Cu"]] * units.mol / 1e24
+    )
     length = (n / density) ** (1 / 3)
     n_h = round(H_FRACTION * n)
     symbols = np.array(["Cu"] * (n - n_h) + ["H"] * n_h)
-    masses = np.array([atomic_masses[atomic_numbers[s]] for s in ("Cu", "H")])[(symbols == "H").astype(int)]
+    masses = np.array([atomic_masses[atomic_numbers[s]] for s in ("Cu", "H")])[
+        (symbols == "H").astype(int)
+    ]
     p = rng.uniform(0.0, length, size=(n, 3))
     held = np.zeros(n, dtype=bool)
     held[np.argsort(p[:, 2], kind="stable")[: round(HELD_FRACTION * n)]] = True
@@ -237,7 +246,9 @@ def write_con(path: Path, traj, sl: slice, velocities: bool) -> None:
 
 def write_extxyz(path: Path, traj, sl: slice, velocities: bool = True) -> None:
     lattice = " ".join(repr(float(x)) for x in traj["cell"].reshape(-1))
-    properties = EXTXYZ_PROPERTIES if velocities else EXTXYZ_PROPERTIES.replace(":velo:R:3", "")
+    properties = (
+        EXTXYZ_PROPERTIES if velocities else EXTXYZ_PROPERTIES.replace(":velo:R:3", "")
+    )
     head = f'Lattice="{lattice}" Properties={properties} pbc="T T T"'
     movable = np.where(traj["held"], "F", "T")
     symbols, ids = traj["symbols"], traj["ids"].tolist()
@@ -254,8 +265,10 @@ def write_extxyz(path: Path, traj, sl: slice, velocities: bool = True) -> None:
                     for a in range(n)
                 )
             else:
-                out.writelines(f"{symbols[a]} {p[a][0]!r} {p[a][1]!r} {p[a][2]!r} {movable[a]} {ids[a]}\n"
-                               for a in range(n))
+                out.writelines(
+                    f"{symbols[a]} {p[a][0]!r} {p[a][1]!r} {p[a][2]!r} {movable[a]} {ids[a]}\n"
+                    for a in range(n)
+                )
 
 
 def write_xyz(path: Path, traj, sl: slice) -> None:
@@ -288,7 +301,9 @@ def write_traj(path: Path, traj, sl: slice, velocities: bool = True) -> None:
             out.write(atoms)
 
 
-def _time_dependent(group, name: str, value: np.ndarray, steps: np.ndarray, unit: str | None, clock=None):
+def _time_dependent(
+    group, name: str, value: np.ndarray, steps: np.ndarray, unit: str | None, clock=None
+):
     element = group.create_group(name)
     element.create_dataset("value", data=value, dtype="f8")
     if unit:
@@ -316,22 +331,38 @@ def write_h5md(path: Path, traj, sl: slice, velocities: bool = True) -> None:
         creator.attrs["name"] = "make_payloads.py"
         creator.attrs["version"] = f"h5py {h5py.__version__}"
         g = f.create_group("particles/all")
-        position = _time_dependent(g, "position", traj["positions"][idx], idx, "angstrom")
+        position = _time_dependent(
+            g, "position", traj["positions"][idx], idx, "angstrom"
+        )
         if velocities:
-            _time_dependent(g, "velocity", traj["velocities"][idx], idx, None, clock=position)
+            _time_dependent(
+                g, "velocity", traj["velocities"][idx], idx, None, clock=position
+            )
         box = g.create_group("box")
         box.attrs["dimension"] = np.int32(3)
         box.attrs["boundary"] = np.array([b"periodic"] * 3)
-        _time_dependent(box, "edges", np.repeat(traj["cell"][None], len(idx), axis=0), idx, "angstrom",
-                        clock=position)
+        _time_dependent(
+            box,
+            "edges",
+            np.repeat(traj["cell"][None], len(idx), axis=0),
+            idx,
+            "angstrom",
+            clock=position,
+        )
         g.create_dataset("species", data=atomic_numbers_of(traj["symbols"]), dtype="i4")
         g.create_dataset("id", data=traj["ids"], dtype="i8")
-        g.create_dataset("fixed", data=np.repeat(traj["held"][:, None], 3, axis=1), dtype="u1")
+        g.create_dataset(
+            "fixed", data=np.repeat(traj["held"][:, None], 3, axis=1), dtype="u1"
+        )
 
 
 WRITERS = {
     "con": ("{stem}.con", "moc", lambda p, t, s: write_con(p, t, s, True)),
-    "con_coords": ("{stem}_coords.con", "coords", lambda p, t, s: write_con(p, t, s, False)),
+    "con_coords": (
+        "{stem}_coords.con",
+        "coords",
+        lambda p, t, s: write_con(p, t, s, False),
+    ),
     "extxyz": ("{stem}.extxyz", "moc", write_extxyz),
     "xyz": ("{stem}.xyz", "coords", write_xyz),
     "traj": ("{stem}.traj", "moc", write_traj),
@@ -363,7 +394,10 @@ def con_version(path: Path) -> str:
 
 
 def frame_digests(positions: np.ndarray) -> list[str]:
-    return [hashlib.sha256(np.ascontiguousarray(p, dtype="<f8").tobytes()).hexdigest() for p in positions]
+    return [
+        hashlib.sha256(np.ascontiguousarray(p, dtype="<f8").tobytes()).hexdigest()
+        for p in positions
+    ]
 
 
 def _fsum(a: np.ndarray) -> float:
@@ -393,7 +427,10 @@ def reference(traj, sl: slice) -> dict:
         "sum_cell": _fsum(np.broadcast_to(traj["cell"], (n_frames, 3, 3))),
         "n_pbc": 3 * n_frames,
         "first_atom_sum": first_atom_sum,
-        "binary32": {"sum_positions": _fsum(pos.astype(np.float32)), "sum_velocities": _fsum(vel.astype(np.float32))},
+        "binary32": {
+            "sum_positions": _fsum(pos.astype(np.float32)),
+            "sum_velocities": _fsum(vel.astype(np.float32)),
+        },
     }
 
 
@@ -423,7 +460,10 @@ def write_set(manifest: dict, traj, stem: str, sl: slice, formats) -> None:
         if fmt.startswith("con"):
             entry["con_version"] = con_version(path)
         manifest["files"][path.name] = entry
-        print(f"{path.name}: {nbytes} bytes in {time.perf_counter() - t0:.1f} s", flush=True)
+        print(
+            f"{path.name}: {nbytes} bytes in {time.perf_counter() - t0:.1f} s",
+            flush=True,
+        )
 
 
 def distinct(traj, what: str) -> tuple[list[str], int]:
@@ -432,7 +472,9 @@ def distinct(traj, what: str) -> tuple[list[str], int]:
     count = len(set(digests))
     prefixes = [d[:DIGEST_PREFIX] for d in digests]
     if count != len(digests) or len(set(prefixes)) != len(digests):
-        raise SystemExit(f"{what}: {len(digests) - count} frames repeat the positions of an earlier frame")
+        raise SystemExit(
+            f"{what}: {len(digests) - count} frames repeat the positions of an earlier frame"
+        )
     return prefixes, count
 
 
@@ -444,7 +486,9 @@ def build(resimulate: bool) -> dict:
     if npz.exists() and not resimulate:
         traj = dict(np.load(npz))
         if len(traj["positions"]) != N_FRAMES:
-            raise SystemExit(f"{npz} holds {len(traj['positions'])} frames, not {N_FRAMES}; pass --resimulate")
+            raise SystemExit(
+                f"{npz} holds {len(traj['positions'])} frames, not {N_FRAMES}; pass --resimulate"
+            )
     else:
         traj = simulate(src)
         np.savez(npz, **traj)
@@ -463,9 +507,11 @@ def build(resimulate: bool) -> dict:
             "calculator": "ase.calculators.emt.EMT",
             "thermostat": "ase.md.langevin.Langevin",
             "source_frame": "resources/test/cuh2.con",
-            "positions_sha256": hashlib.sha256(np.ascontiguousarray(traj["positions"]).tobytes()).hexdigest(),
+            "positions_sha256": hashlib.sha256(
+                np.ascontiguousarray(traj["positions"]).tobytes()
+            ).hexdigest(),
             "frame_digest": "SHA-256 of the little-endian binary64 positions of one frame, (atoms, 3) row-major; "
-                            f"the list holds the leading {DIGEST_PREFIX} hex digits of each frame's digest",
+            f"the list holds the leading {DIGEST_PREFIX} hex digits of each frame's digest",
             "frame_positions_sha256": digests,
             "distinct_frames": n_distinct,
             "checksum_positions": _fsum(traj["positions"]),
@@ -476,7 +522,11 @@ def build(resimulate: bool) -> dict:
         "files": {},
         "sizes": {},
     }
-    for stem, sl in (("traj", slice(0, N_FRAMES)), ("one", slice(0, 1)), ("warm", slice(0, N_WARM))):
+    for stem, sl in (
+        ("traj", slice(0, N_FRAMES)),
+        ("one", slice(0, 1)),
+        ("warm", slice(0, N_WARM)),
+    ):
         write_set(manifest, traj, stem, sl, WRITERS)
     for n in SIZES:
         t0 = time.perf_counter()
@@ -496,8 +546,10 @@ def build(resimulate: bool) -> dict:
             "timestep_fs": TIMESTEP_FS,
             "distinct_frames": count,
         }
-        print(f"size {label}: {n} atoms x {len(system['positions'])} frames in {time.perf_counter() - t0:.1f} s",
-              flush=True)
+        print(
+            f"size {label}: {n} atoms x {len(system['positions'])} frames in {time.perf_counter() - t0:.1f} s",
+            flush=True,
+        )
         write_set(manifest, system, f"size_{label}", slice(None), SIZE_FORMATS)
     return manifest
 
@@ -506,9 +558,15 @@ def round3_files(path: Path) -> dict:
     """The files of the round-3 payloads.json, with the SHA-256 of that record."""
     data = path.read_bytes()
     files = json.loads(data)["files"]
-    return {"package": "paper-cpc.tar.gz of the round-3 package", "record": ROUND3_RECORD,
-            "record_sha256": hashlib.sha256(data).hexdigest(),
-            "files": {name: {key: files[name].get(key) for key in CHANGE_KEYS} for name in sorted(files)}}
+    return {
+        "package": "paper-cpc.tar.gz of the round-3 package",
+        "record": ROUND3_RECORD,
+        "record_sha256": hashlib.sha256(data).hexdigest(),
+        "files": {
+            name: {key: files[name].get(key) for key in CHANGE_KEYS}
+            for name in sorted(files)
+        },
+    }
 
 
 def changes(manifest: dict, round3: dict) -> dict:
@@ -520,8 +578,14 @@ def changes(manifest: dict, round3: dict) -> dict:
         "compared": "SHA-256 of each payload file against the payloads.json of the round-3 paper",
         "round3": round3,
         "same": [name for name in both if old[name]["sha256"] == new[name]["sha256"]],
-        "changed": {name: {"round3": old[name], "now": {key: new[name].get(key) for key in CHANGE_KEYS}}
-                    for name in both if old[name]["sha256"] != new[name]["sha256"]},
+        "changed": {
+            name: {
+                "round3": old[name],
+                "now": {key: new[name].get(key) for key in CHANGE_KEYS},
+            }
+            for name in both
+            if old[name]["sha256"] != new[name]["sha256"]
+        },
         "new": sorted(new.keys() - old.keys()),
         "gone": sorted(old.keys() - new.keys()),
     }
@@ -529,20 +593,33 @@ def changes(manifest: dict, round3: dict) -> dict:
 
 def comparable(manifest: dict) -> dict:
     out = {key: value for key, value in manifest.items() if key != "provenance"}
-    out["build"] = {key: manifest["provenance"]["build"].get(key) for key in ("readcon_version", "library_digest")}
+    out["build"] = {
+        key: manifest["provenance"]["build"].get(key)
+        for key in ("readcon_version", "library_digest")
+    }
     return out
 
 
 def main() -> int:
     global WORK
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--resimulate", action="store_true",
-                        help="rerun the trajectory even when WORK holds trajectory.npz")
-    parser.add_argument("--check", action="store_true",
-                        help="rerun the trajectory and write every payload into a temporary directory, then "
-                             "compare with payloads.json and payload_changes.json; writes no record")
-    parser.add_argument("--round3", type=Path, metavar="PAYLOADS_JSON",
-                        help="the payloads.json of the round-3 paper; by default payload_changes.json keeps its files")
+    parser.add_argument(
+        "--resimulate",
+        action="store_true",
+        help="rerun the trajectory even when WORK holds trajectory.npz",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="rerun the trajectory and write every payload into a temporary directory, then "
+        "compare with payloads.json and payload_changes.json; writes no record",
+    )
+    parser.add_argument(
+        "--round3",
+        type=Path,
+        metavar="PAYLOADS_JSON",
+        help="the payloads.json of the round-3 paper; by default payload_changes.json keeps its files",
+    )
     args = parser.parse_args()
     record, changed = RESULTS / "payloads.json", RESULTS / "payload_changes.json"
     if args.round3:
@@ -550,25 +627,44 @@ def main() -> int:
     elif changed.is_file():
         round3 = json.loads(changed.read_text())["round3"]
     else:
-        raise SystemExit("pass --round3 with the bench/results/r0173/payloads.json of the round-3 paper")
+        raise SystemExit(
+            "pass --round3 with the bench/results/r0173/payloads.json of the round-3 paper"
+        )
     if args.check:
         with tempfile.TemporaryDirectory(prefix="payloads-") as tmp:
             WORK = Path(tmp)
             manifest = build(resimulate=True)
         stored = json.loads(record.read_text())
-        bad = [f"{name}: SHA-256 {entry['sha256'][:12]}, payloads.json {stored['files'][name]['sha256'][:12]}"
-               for name, entry in manifest["files"].items()
-               if name in stored["files"] and entry["sha256"] != stored["files"][name]["sha256"]]
-        bad += [f"{name} is not in payloads.json" for name in manifest["files"].keys() - stored["files"].keys()]
-        bad += [f"payloads.json lists {name}, which this run does not write"
-                for name in stored["files"].keys() - manifest["files"].keys()]
+        bad = [
+            f"{name}: SHA-256 {entry['sha256'][:12]}, payloads.json {stored['files'][name]['sha256'][:12]}"
+            for name, entry in manifest["files"].items()
+            if name in stored["files"]
+            and entry["sha256"] != stored["files"][name]["sha256"]
+        ]
+        bad += [
+            f"{name} is not in payloads.json"
+            for name in manifest["files"].keys() - stored["files"].keys()
+        ]
+        bad += [
+            f"payloads.json lists {name}, which this run does not write"
+            for name in stored["files"].keys() - manifest["files"].keys()
+        ]
         if not bad and comparable(manifest) != comparable(stored):
-            bad.append("the trajectory, references, sizes or library of this run differ from payloads.json")
-        if not changed.is_file() or json.loads(changed.read_text()) != changes(manifest, round3):
+            bad.append(
+                "the trajectory, references, sizes or library of this run differ from payloads.json"
+            )
+        if not changed.is_file() or json.loads(changed.read_text()) != changes(
+            manifest, round3
+        ):
             bad.append("payload_changes.json differs from this run")
-        print(f"{len(manifest['files'])} payloads rebuilt from a new trajectory: "
-              + (f"{len(bad)} differ from payloads.json" if bad else
-                 "each SHA-256 is the one payloads.json records"))
+        print(
+            f"{len(manifest['files'])} payloads rebuilt from a new trajectory: "
+            + (
+                f"{len(bad)} differ from payloads.json"
+                if bad
+                else "each SHA-256 is the one payloads.json records"
+            )
+        )
         for line in bad:
             print(f"  {line}")
         return 1 if bad else 0
@@ -578,8 +674,10 @@ def main() -> int:
     diff = changes(manifest, round3)
     changed.write_text(json.dumps(diff, indent=2) + "\n")
     print("wrote", record, "and", changed)
-    print(f"against round 3: {len(diff['same'])} payloads the same, {len(diff['changed'])} changed "
-          f"({', '.join(diff['changed']) or 'none'}), {len(diff['new'])} new, {len(diff['gone'])} gone")
+    print(
+        f"against round 3: {len(diff['same'])} payloads the same, {len(diff['changed'])} changed "
+        f"({', '.join(diff['changed']) or 'none'}), {len(diff['new'])} new, {len(diff['gone'])} gone"
+    )
     return 0
 
 

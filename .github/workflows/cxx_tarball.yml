@@ -34,6 +34,11 @@ jobs:
           bash scripts/package-cxx.sh dist-cxx --vendor
           ls -lh dist-cxx
 
+      - name: Require tarball names to match the tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: python3 scripts/check_release_artifacts.py --tag "$RELEASE_TAG" --dist dist-cxx
+
       - name: Upload tarballs to GitHub Release
         uses: softprops/action-gh-release@v3
         with:

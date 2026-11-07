@@ -23,6 +23,7 @@ class NumpyNpy:
 
     def setup(self):
         import numpy as np
+
         self.np = np
         self.path = support.WORK / "native" / "coords.npy"
 

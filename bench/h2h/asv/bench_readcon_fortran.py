@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import measure
 import support
 
+
 class ReadconFortran:
     timeout = 600
     number = 1
@@ -22,7 +23,11 @@ class ReadconFortran:
     warmup_time = 0
 
     def time_read_atoms_1000000(self):
-        measure._fortran("read", support.case_path("atoms-1000000"), support.WORK / "outs" / "asv-fortran.con")
+        measure._fortran(
+            "read",
+            support.case_path("atoms-1000000"),
+            support.WORK / "outs" / "asv-fortran.con",
+        )
 
     def track_correct_atoms_1000000(self):
         _samples, fields, _stdout = measure._fortran(

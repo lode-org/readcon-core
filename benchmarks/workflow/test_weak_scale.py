@@ -112,7 +112,9 @@ class Report(unittest.TestCase):
     def test_summary_rejects_oversubscribe_and_a_changed_share(self) -> None:
         raw = _flat_curve(8)
         summary = weak.summarise(raw)
-        self.assertEqual([point["workers"] for point in summary["points"]], [1, 2, 4, 8])
+        self.assertEqual(
+            [point["workers"] for point in summary["points"]], [1, 2, 4, 8]
+        )
         raw = _flat_curve(32)
         raw["physical_cores"] = 8
         with self.assertRaises(ValueError):
@@ -196,7 +198,9 @@ class HostAndLaunch(unittest.TestCase):
         weak.assert_no_machine_name(text)
         self.assertNotIn("cursor", text)
         self.assertGreaterEqual(host["ncpus"], 1)
-        self.assertEqual(host["physical_cores"], host["cores_per_socket"] * host["sockets"])
+        self.assertEqual(
+            host["physical_cores"], host["cores_per_socket"] * host["sockets"]
+        )
         self.assertLessEqual(host["physical_cores"], host["ncpus"])
         self.assertEqual(
             host["physical_cores"] * host["threads_per_core"],
@@ -204,8 +208,12 @@ class HostAndLaunch(unittest.TestCase):
         )
         plan = weak.make_plan(host)
         self.assertTrue(plan["ladder_fits"])
-        self.assertEqual(plan["ladder"], list(weak.ladder_for_cores(host["physical_cores"])))
-        self.assertTrue(all(worker <= host["physical_cores"] for worker in plan["ladder"]))
+        self.assertEqual(
+            plan["ladder"], list(weak.ladder_for_cores(host["physical_cores"]))
+        )
+        self.assertTrue(
+            all(worker <= host["physical_cores"] for worker in plan["ladder"])
+        )
         self.assertTrue(plan["threads_asv"]["run"])
         self.assertFalse(plan["gpu"]["run"])
         self.assertIn("DLPack", plan["gpu"]["reason"])
@@ -363,10 +371,14 @@ class HostAndLaunch(unittest.TestCase):
             self.assertNotIn("gethostname", text)
             self.assertNotIn('Command::new("hostname")', text)
             self.assertIn("n_frames = frames_per_worker * workers", text)
-        snakefile = (ROOT / "benchmarks" / "workflow" / "weak" / "Snakefile").read_text(encoding="utf-8")
+        snakefile = (ROOT / "benchmarks" / "workflow" / "weak" / "Snakefile").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("run-threads", snakefile)
         self.assertIn("run-ranks", snakefile)
-        for template in (ROOT / "benchmarks" / "workflow" / "weak" / "templates").glob("*.tpl"):
+        for template in (ROOT / "benchmarks" / "workflow" / "weak" / "templates").glob(
+            "*.tpl"
+        ):
             lines = template.read_text(encoding="utf-8").splitlines()
             self.assertEqual(lines[0], "HEAD {{GIT_HEAD}}")
             self.assertTrue(lines[2].startswith("$ "))

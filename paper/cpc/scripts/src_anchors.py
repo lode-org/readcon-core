@@ -68,8 +68,9 @@ def code_mask(text: str) -> str:
                     j += 1
             blank(i, j)
             i = j
-        elif (raw := re.match(r'b?r(#*)"', text[i:i + 260])) and (i == 0 or not (text[i - 1].isalnum()
-                                                                            or text[i - 1] == "_")):
+        elif (raw := re.match(r'b?r(#*)"', text[i : i + 260])) and (
+            i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")
+        ):
             close = '"' + raw.group(1)
             j = text.find(close, i + raw.end())
             j = n if j < 0 else j + len(close)
@@ -81,8 +82,12 @@ def code_mask(text: str) -> str:
                 j += 2 if text[j] == "\\" else 1
             blank(i, j + 1)
             i = j + 1
-        elif text[i] == "'" and (char := re.match(r"'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|.)|[^\\'])'",
-                                                  text[i:i + 12])):
+        elif text[i] == "'" and (
+            char := re.match(
+                r"'(?:\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|.)|[^\\'])'",
+                text[i : i + 12],
+            )
+        ):
             blank(i, i + char.end())
             i += char.end()
         else:
@@ -132,31 +137,46 @@ class Source:
         if function is None:
             return 1, len(self.lines)
         pattern = re.compile(FN.format(re.escape(function)))
-        found = [i for i, line in enumerate(self.lines, 1) if pattern.match(self.code_line(i)) or
-                 pattern.match(line)]
+        found = [
+            i
+            for i, line in enumerate(self.lines, 1)
+            if pattern.match(self.code_line(i)) or pattern.match(line)
+        ]
         found = sorted(set(found))
         if len(found) != 1:
-            where = "is missing" if not found else "matches lines " + ", ".join(map(str, found))
+            where = (
+                "is missing"
+                if not found
+                else "matches lines " + ", ".join(map(str, found))
+            )
             raise AnchorError(f"fn {function} in {self.rel} {where}")
         return found[0], self.block_end(found[0])
 
     def code_line(self, line: int) -> str:
-        return self.code[self.starts[line - 1]:self.starts[line] - 1]
+        return self.code[self.starts[line - 1] : self.starts[line] - 1]
 
     def match_one(self, regex: str, lo: int, hi: int, what: str) -> int:
         pattern = re.compile(regex)
         found = [i for i in range(lo, hi + 1) if pattern.search(self.lines[i - 1])]
         if len(found) != 1:
-            where = "is missing" if not found else "matches lines " + ", ".join(map(str, found))
+            where = (
+                "is missing"
+                if not found
+                else "matches lines " + ", ".join(map(str, found))
+            )
             raise AnchorError(f"{what} /{regex}/ in {self.rel} lines {lo}-{hi} {where}")
         return found[0]
 
 
-def resolve(name: str, spec: dict, sources: dict[str, Source]) -> tuple[str, list[tuple[int, int]]]:
+def resolve(
+    name: str, spec: dict, sources: dict[str, Source]
+) -> tuple[str, list[tuple[int, int]]]:
     rel = spec["file"]
     source = sources.setdefault(rel, Source(rel))
     lo, hi = source.scope(spec.get("fn"))
-    parts = spec.get("parts") or [{"start": spec["start"], **({"end": spec["end"]} if "end" in spec else {})}]
+    parts = spec.get("parts") or [
+        {"start": spec["start"], **({"end": spec["end"]} if "end" in spec else {})}
+    ]
     ranges = []
     for part in parts:
         first = source.match_one(part["start"], lo, hi, f"{name} start")
@@ -168,14 +188,18 @@ def resolve(name: str, spec: dict, sources: dict[str, Source]) -> tuple[str, lis
         else:
             last = source.match_one(end, first, hi, f"{name} end")
         if last > len(source.lines):
-            raise AnchorError(f"{name}: {rel}:{first}-{last} runs past line {len(source.lines)}")
+            raise AnchorError(
+                f"{name}: {rel}:{first}-{last} runs past line {len(source.lines)}"
+            )
         ranges.append((first, last))
     return rel, ranges
 
 
 def macro_name(key: str) -> str:
     if not re.fullmatch(r"[a-z]+(?:_[a-z]+)*", key):
-        raise AnchorError(f"anchor {key!r}: names are lowercase words joined by _ (a TeX macro has no digits)")
+        raise AnchorError(
+            f"anchor {key!r}: names are lowercase words joined by _ (a TeX macro has no digits)"
+        )
     return "src" + "".join(word.capitalize() for word in key.split("_"))
 
 
@@ -191,20 +215,29 @@ def render() -> tuple[str, dict[str, str]]:
     for key, spec in anchors.items():
         rel, ranges = resolve(key, spec, sources)
         values[macro_name(key)] = printed(rel, ranges)
-    head = (f"% Written by paper/cpc/scripts/src_anchors.py from {CONFIG.relative_to(REPO)} and the src/ "
-            f"files it names.\n")
-    return head + "".join(f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()), values
+    head = (
+        f"% Written by paper/cpc/scripts/src_anchors.py from {CONFIG.relative_to(REPO)} and the src/ "
+        f"files it names.\n"
+    )
+    return head + "".join(
+        f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+    ), values
 
 
 def problems(text: str, values: dict[str, str]) -> list[str]:
     bad = []
     if not OUT.is_file() or OUT.read_text() != text:
-        bad.append(f"{OUT.relative_to(REPO)} differs from the anchors; run scripts/src_anchors.py")
+        bad.append(
+            f"{OUT.relative_to(REPO)} differs from the anchors; run scripts/src_anchors.py"
+        )
     used: set[str] = set()
     for document in DOCUMENTS:
         for i, line in enumerate(document.read_text().splitlines(), 1):
             body = re.sub(r"(?<!\\)%.*", "", line)
-            bad += [f"{document.name}:{i} cites {m.group(0)}... by hand" for m in HAND_CITATION.finditer(body)]
+            bad += [
+                f"{document.name}:{i} cites {m.group(0)}... by hand"
+                for m in HAND_CITATION.finditer(body)
+            ]
             used |= set(MACRO_USE.findall(body))
     bad += [f"\\{name} is defined and not cited" for name in sorted(set(values) - used)]
     bad += [f"\\{name} is cited and not defined" for name in sorted(used - set(values))]
@@ -214,7 +247,11 @@ def problems(text: str, values: dict[str, str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--check", action="store_true", help="exit 1 on a missing, ambiguous or stale anchor")
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 on a missing, ambiguous or stale anchor",
+    )
     mode.add_argument("--list", action="store_true", help="print every anchor's lines")
     args = parser.parse_args()
     try:
@@ -233,7 +270,9 @@ def main() -> int:
             for line in bad:
                 print(f"  {line}")
             return 1
-        print(f"{len(values)} source citations resolve in this tree and the documents cite no line by hand")
+        print(
+            f"{len(values)} source citations resolve in this tree and the documents cite no line by hand"
+        )
         return 0
     OUT.write_text(text)
     print(f"wrote {OUT.relative_to(REPO)}: {len(values)} anchors")

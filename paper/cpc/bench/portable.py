@@ -18,8 +18,17 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 ENV = Path(sys.prefix).resolve()
 BENCH = Path(__file__).resolve().parent
-VARIABLES = ("READCON_SRC", "CHEMFILES_PREFIX", "OPENBABEL_INCLUDE", "BENCH_NATIVE_OUT", "BENCH_WORK",
-             "BENCH_RESULTS", "RC_PAYLOADS", "CHEMFILES_BUILDS", "CARGO_TARGET_DIR")
+VARIABLES = (
+    "READCON_SRC",
+    "CHEMFILES_PREFIX",
+    "OPENBABEL_INCLUDE",
+    "BENCH_NATIVE_OUT",
+    "BENCH_WORK",
+    "BENCH_RESULTS",
+    "RC_PAYLOADS",
+    "CHEMFILES_BUILDS",
+    "CARGO_TARGET_DIR",
+)
 DEFAULTS = {
     "READCON_SRC": str(REPO),
     "CHEMFILES_BUILDS": str(BENCH / "work" / "chemfiles"),
@@ -56,7 +65,9 @@ def portable_text(text: str) -> str:
 def portable(value, pairs: list[tuple[str, str]] | None = None):
     pairs = prefixes() if pairs is None else pairs
     if isinstance(value, dict):
-        return {key: portable(item, pairs) for key, item in value.items() if key != "node"}
+        return {
+            key: portable(item, pairs) for key, item in value.items() if key != "node"
+        }
     if isinstance(value, list):
         return [portable(item, pairs) for item in value]
     if isinstance(value, str):

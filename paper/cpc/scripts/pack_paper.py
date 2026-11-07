@@ -35,8 +35,16 @@ IGNORED_RECORDS = ("bench/results/r0174/cachegrind", "evidence/work/e1")
 
 
 def kept() -> list[str]:
-    listed = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT,
-                            check=True, capture_output=True).stdout.decode().split("\0")
+    listed = (
+        subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode()
+        .split("\0")
+    )
     return [name for name in listed if name and (ROOT / name).is_file()]
 
 
@@ -46,17 +54,27 @@ def records() -> list[str]:
         path = ROOT / name
         if not path.exists():
             raise SystemExit(f"{name} is missing")
-        out += [p.relative_to(ROOT).as_posix() for p in ([path] if path.is_file() else sorted(path.rglob("*")))
-                if p.is_file()]
+        out += [
+            p.relative_to(ROOT).as_posix()
+            for p in ([path] if path.is_file() else sorted(path.rglob("*")))
+            if p.is_file()
+        ]
     return out
 
 
 def members() -> list[str]:
     names = sorted(set(kept()) - BUILT | set(records()))
-    stray = [n for n in names if {"__pycache__", "target"} & set(n.split("/")[:-1]) or n.endswith(".pyc")
-             or n.startswith("bench/work/")]
+    stray = [
+        n
+        for n in names
+        if {"__pycache__", "target"} & set(n.split("/")[:-1])
+        or n.endswith(".pyc")
+        or n.startswith("bench/work/")
+    ]
     if stray:
-        raise SystemExit(f"{len(stray)} build products would ship, among them {stray[0]}")
+        raise SystemExit(
+            f"{len(stray)} build products would ship, among them {stray[0]}"
+        )
     return names
 
 
@@ -75,7 +93,10 @@ def pack(out: Path) -> int:
             info.uname = info.gname = ""
             with path.open("rb") as handle:
                 tar.addfile(info, handle)
-    with out.open("wb") as handle, gzip.GzipFile(filename="", mode="wb", fileobj=handle, mtime=0) as gz:
+    with (
+        out.open("wb") as handle,
+        gzip.GzipFile(filename="", mode="wb", fileobj=handle, mtime=0) as gz,
+    ):
         gz.write(raw.getvalue())
     return len(names)
 

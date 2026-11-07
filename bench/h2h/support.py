@@ -83,7 +83,12 @@ def ensure_pinned() -> None:
 
 def thread_env() -> dict[str, str]:
     env = os.environ.copy()
-    for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    for key in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
         env[key] = "1"
     return env
 
@@ -148,7 +153,9 @@ def write_con(path: Path, n_atoms: int, n_frames: int) -> None:
                     for x in range(side):
                         if written >= n_atoms:
                             break
-                        handle.write(f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}\n")
+                        handle.write(
+                            f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}\n"
+                        )
                         written += 1
                     else:
                         continue
@@ -202,7 +209,9 @@ def log_text(command: list[str], body: str, code: int) -> str:
 
 def write_log(name: str, command: list[str], body: str, code: int) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    (LOG_DIR / f"{name}.stdout").write_text(log_text(command, body, code), encoding="utf-8")
+    (LOG_DIR / f"{name}.stdout").write_text(
+        log_text(command, body, code), encoding="utf-8"
+    )
 
 
 def stats_block(samples: list[float]) -> dict:
@@ -269,7 +278,14 @@ def use_reference(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return coords, cell
 
 
-def judge(n_atoms: int, n_frames: int, cell: np.ndarray | None, coords: np.ndarray | None, expect_atoms: int, expect_frames: int) -> dict:
+def judge(
+    n_atoms: int,
+    n_frames: int,
+    cell: np.ndarray | None,
+    coords: np.ndarray | None,
+    expect_atoms: int,
+    expect_frames: int,
+) -> dict:
     reasons = []
     atoms_ok = n_atoms == expect_atoms
     frames_ok = n_frames == expect_frames
@@ -277,7 +293,9 @@ def judge(n_atoms: int, n_frames: int, cell: np.ndarray | None, coords: np.ndarr
         reasons.append(f"atom count {n_atoms} does not match {expect_atoms}")
     if not frames_ok:
         reasons.append(f"frame count {n_frames} does not match {expect_frames}")
-    expect = _REF["cell"] if _REF.get("cell") is not None else expected_cell(expect_atoms)
+    expect = (
+        _REF["cell"] if _REF.get("cell") is not None else expected_cell(expect_atoms)
+    )
     if cell is None:
         cell_ok = False
         reasons.append("cell is missing")
@@ -306,9 +324,15 @@ def judge(n_atoms: int, n_frames: int, cell: np.ndarray | None, coords: np.ndarr
         if got.ndim == 2:
             got = got.reshape(1, got.shape[0], 3)
         max_abs = 0.0
-        coords_ok = got.shape[0] == expect_frames and got.shape[1] == expect_atoms and got.shape[2] == 3
+        coords_ok = (
+            got.shape[0] == expect_frames
+            and got.shape[1] == expect_atoms
+            and got.shape[2] == 3
+        )
         if not coords_ok:
-            reasons.append(f"coordinate shape {tuple(got.shape)} does not match {(expect_frames, expect_atoms, 3)}")
+            reasons.append(
+                f"coordinate shape {tuple(got.shape)} does not match {(expect_frames, expect_atoms, 3)}"
+            )
             max_abs = None
         else:
             reference = _REF.get("coords")
@@ -376,7 +400,11 @@ def compile_tools() -> None:
     so = ROOT / "target" / "release" / "libreadcon_core.so"
     archive = ROOT / "target" / "release" / "libreadcon_core.a"
     if not so.is_file() or not archive.is_file():
-        subprocess.run(["cargo", "build", "--release", "--features", "parallel"], cwd=ROOT, check=True)
+        subprocess.run(
+            ["cargo", "build", "--release", "--features", "parallel"],
+            cwd=ROOT,
+            check=True,
+        )
     binary = WORK / "time_f"
     source = BENCH / "time_f.f90"
     if (not binary.is_file()) or source.stat().st_mtime > binary.stat().st_mtime:
@@ -460,10 +488,19 @@ def prepare() -> None:
 
 def _lib():
     library = ctypes.CDLL(str(ROOT / "target" / "release" / "libreadcon_core.so"))
-    library.rkr_read_all_frames.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_size_t)]
+    library.rkr_read_all_frames.argtypes = [
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
     library.rkr_read_all_frames.restype = ctypes.POINTER(ctypes.c_void_p)
-    library.free_rkr_frame_array.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t]
-    library.rkr_frame_xyz_f64.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+    library.free_rkr_frame_array.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_size_t,
+    ]
+    library.rkr_frame_xyz_f64.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
     library.rkr_frame_xyz_f64.restype = ctypes.POINTER(ctypes.c_double)
     library.rkr_frame_atom_count.argtypes = [ctypes.c_void_p]
     library.rkr_frame_atom_count.restype = ctypes.c_size_t
@@ -515,13 +552,18 @@ def c_inspect(path: Path) -> dict:
             if not ptr:
                 coords.append(None)
             else:
-                coords.append(np.ctypeslib.as_array(ptr, shape=(int(nat.value), 3)).copy())
+                coords.append(
+                    np.ctypeslib.as_array(ptr, shape=(int(nat.value), 3)).copy()
+                )
             if index == 0:
                 view = lib.rkr_frame_to_c_frame(handle)
                 if not view:
                     cell = None
                 else:
-                    cell = np.array(list(view.contents.cell) + list(view.contents.angles), dtype=np.float64)
+                    cell = np.array(
+                        list(view.contents.cell) + list(view.contents.angles),
+                        dtype=np.float64,
+                    )
                     lib.free_c_frame(view)
     finally:
         lib.free_rkr_frame_array(frames, count)
@@ -553,7 +595,9 @@ def c_read_samples(path: Path, repeats: int = REPEATS) -> list[float]:
 
 def run_binary(binary: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     command = ["taskset", "-c", "0", str(binary), *args]
-    return subprocess.run(command, cwd=ROOT, env=thread_env(), capture_output=True, text=True, check=False)
+    return subprocess.run(
+        command, cwd=ROOT, env=thread_env(), capture_output=True, text=True, check=False
+    )
 
 
 def parse_kv_samples(stdout: str, key: str) -> list[float]:

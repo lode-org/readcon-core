@@ -24,8 +24,14 @@ RULES: list[Rule] = [
         "spec.clauses: the clauses of the released specification text",
         where=(f"{CROSSCHECK_TABLE}~clauses\\)",),
     ),
-    *[Rule(printed, jget(CROSSCHECK, f"groups.corpus31.basis.{basis}"), CROSSCHECK,
-           f"groups.corpus31.basis.{basis}: {basis} entries of the CON 3.1 corpus manifest",
-           where=(f"{CROSSCHECK_TABLE}~The corpus has",))
-      for printed, basis in (("95", "explicit"), ("21", "class-open"), ("23", "open"))],
+    *[
+        Rule(
+            printed,
+            jget(CROSSCHECK, f"groups.corpus31.basis.{basis}"),
+            CROSSCHECK,
+            f"groups.corpus31.basis.{basis}: {basis} entries of the CON 3.1 corpus manifest",
+            where=(f"{CROSSCHECK_TABLE}~The corpus has",),
+        )
+        for printed, basis in (("95", "explicit"), ("21", "class-open"), ("23", "open"))
+    ],
 ]

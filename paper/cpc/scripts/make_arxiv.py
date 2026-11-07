@@ -36,7 +36,9 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SRC = SCRIPT_DIR.parent / "src"
-DEFAULT_TEXBIN = Path(os.environ["TEXBIN"]) if os.environ.get("TEXBIN") else Path("texbin")
+DEFAULT_TEXBIN = (
+    Path(os.environ["TEXBIN"]) if os.environ.get("TEXBIN") else Path("texbin")
+)
 ENV_BIN = Path(sys.prefix) / "bin"
 SPEC_ORG = SCRIPT_DIR.parents[2] / "docs" / "orgmode" / "spec.org"
 MAIN = "rg_main"
@@ -44,7 +46,15 @@ SUPP = "rg_supp"
 TARBALL = "readcon-cpc-arxiv.tar.gz"
 PDFLATEX_RUNS = 3
 
-RAW_ENVS = ("verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "alltt", "comment")
+RAW_ENVS = (
+    "verbatim",
+    "verbatim*",
+    "Verbatim",
+    "lstlisting",
+    "minted",
+    "alltt",
+    "comment",
+)
 INLINE_VERB = re.compile(r"\\(verb|lstinline|url|path|href|nolinkurl)\b")
 GRAPHIC_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".mps", ".jbig2", ".jb2")
 REF_CMDS = ("ref", "pageref", "nameref", "autoref")
@@ -92,7 +102,11 @@ UNICODE_FALLBACK = {
 # Text-mode commands used inside math.  pdflatex takes the glyph from the OT1
 # math font, which lacks it, and logs "Command \r invalid in math mode".
 MATH_TEXT_FIXES = (
-    (re.compile(r"(\\mathrm\{[^{}]*?)\\AA\b(?:\{\})?([^{}]*\})"), r"\1\\text{\\AA}\2", r"\mathrm{..\AA..} -> \mathrm{..\text{\AA}..}"),
+    (
+        re.compile(r"(\\mathrm\{[^{}]*?)\\AA\b(?:\{\})?([^{}]*\})"),
+        r"\1\\text{\\AA}\2",
+        r"\mathrm{..\AA..} -> \mathrm{..\text{\AA}..}",
+    ),
 )
 
 
@@ -132,10 +146,12 @@ def strip_comments(text: str) -> tuple[str, dict]:
     out = []
     stats = collections.Counter()
     raw_env = None
-    begin_re = re.compile(r"\\begin\{(" + "|".join(re.escape(e) for e in RAW_ENVS) + r")\}")
+    begin_re = re.compile(
+        r"\\begin\{(" + "|".join(re.escape(e) for e in RAW_ENVS) + r")\}"
+    )
     for line in text.splitlines(keepends=True):
         body = line.rstrip("\r\n")
-        eol = line[len(body):]
+        eol = line[len(body) :]
         if raw_env is not None:
             out.append(line)
             if f"\\end{{{raw_env}}}" in body:
@@ -145,7 +161,7 @@ def strip_comments(text: str) -> tuple[str, dict]:
         if m:
             pct = unescaped_percent(body)
             if pct == -1 or pct > m.start():
-                if f"\\end{{{m.group(1)}}}" not in body[m.end():]:
+                if f"\\end{{{m.group(1)}}}" not in body[m.end() :]:
                     raw_env = m.group(1)
                 out.append(line)
                 continue
@@ -161,7 +177,7 @@ def strip_comments(text: str) -> tuple[str, dict]:
         if before.strip() == "":
             stats["full_line"] += 1
             continue
-        if body[pct + 1:].strip():
+        if body[pct + 1 :].strip():
             stats["trailing"] += 1
         out.append(before + "%" + eol)
     return "".join(out), dict(stats)
@@ -170,7 +186,7 @@ def strip_comments(text: str) -> tuple[str, dict]:
 def balanced_group(s: str, i: int) -> tuple[str, int]:
     """Return the contents of the brace group starting at s[i] == '{'."""
     if i >= len(s) or s[i] != "{":
-        raise PackError(f"expected '{{' at offset {i}: {s[i:i + 40]!r}")
+        raise PackError(f"expected '{{' at offset {i}: {s[i : i + 40]!r}")
     depth = 0
     j = i
     while j < len(s):
@@ -183,7 +199,7 @@ def balanced_group(s: str, i: int) -> tuple[str, int]:
         elif c == "}":
             depth -= 1
             if depth == 0:
-                return s[i + 1:j], j + 1
+                return s[i + 1 : j], j + 1
         j += 1
     raise PackError(f"unbalanced group at offset {i}")
 
@@ -232,7 +248,13 @@ def pdftex_build(build_dir: Path) -> None:
     log(f"running the pdfTeX build in {build_dir} with {pdflatex}")
 
     def run(*cmd: str) -> None:
-        subprocess.run(cmd, cwd=build_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        subprocess.run(
+            cmd,
+            cwd=build_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
 
     def typeset(doc: str) -> None:
         run(pdflatex, "-interaction=nonstopmode", "-halt-on-error", f"{doc}.tex")
@@ -249,25 +271,50 @@ def pdftex_build(build_dir: Path) -> None:
             raise PackError(f"pdfTeX build did not produce {f}; see {build_dir}")
 
 
-def snapshot_sources(src: Path, work: Path, build_in_src: bool, rebuild: bool) -> tuple[Path, list[str]]:
+def snapshot_sources(
+    src: Path, work: Path, build_in_src: bool, rebuild: bool
+) -> tuple[Path, list[str]]:
     notes = []
     needed = [src / f"{MAIN}.aux", src / f"{SUPP}.aux", src / f"{MAIN}.bbl"]
     missing = [p.name for p in needed if not p.exists()]
     snap = work / "src"
     if (missing or rebuild) and build_in_src:
-        notes.append(f"built in {src} (missing: {', '.join(missing) or 'none, --rebuild'})")
+        notes.append(
+            f"built in {src} (missing: {', '.join(missing) or 'none, --rebuild'})"
+        )
         pdftex_build(src)
         missing = []
-    shutil.copytree(src, snap, ignore=shutil.ignore_patterns("*.log", "*.synctex.gz", "*.fls", "*.fdb_latexmk"))
+    shutil.copytree(
+        src,
+        snap,
+        ignore=shutil.ignore_patterns(
+            "*.log", "*.synctex.gz", "*.fls", "*.fdb_latexmk"
+        ),
+    )
     if missing or rebuild:
-        notes.append(f"pdfTeX build run in a temporary copy of src (missing in src: {', '.join(missing) or 'none, --rebuild'})")
+        notes.append(
+            f"pdfTeX build run in a temporary copy of src (missing in src: {', '.join(missing) or 'none, --rebuild'})"
+        )
         pdftex_build(snap)
     else:
         notes.append("reused rg_main.aux, rg_supp.aux and rg_main.bbl from src")
         for p in needed:
-            newest = max((q.stat().st_mtime for q in [src / f"{MAIN}.tex", src / f"{SUPP}.tex", src / f"{MAIN}.bib"] if q.exists()), default=0)
+            newest = max(
+                (
+                    q.stat().st_mtime
+                    for q in [
+                        src / f"{MAIN}.tex",
+                        src / f"{SUPP}.tex",
+                        src / f"{MAIN}.bib",
+                    ]
+                    if q.exists()
+                ),
+                default=0,
+            )
             if p.stat().st_mtime < newest:
-                notes.append(f"WARNING: {p.name} is older than the sources; run the build or pass --rebuild")
+                notes.append(
+                    f"WARNING: {p.name} is older than the sources; run the build or pass --rebuild"
+                )
                 break
     return snap, notes
 
@@ -309,20 +356,35 @@ def discover(snap: Path) -> tuple[list[Path], list[Path], list[str]]:
         tex_files.append(path)
         text, _ = strip_comments(path.read_text(encoding="utf-8"))
         if "\\graphicspath" in text:
-            raise PackError(f"{path.name}: \\graphicspath is not supported by this packager")
+            raise PackError(
+                f"{path.name}: \\graphicspath is not supported by this packager"
+            )
         for m in re.finditer(r"\\(input|include)\s*\{([^}]+)\}", text):
             name = m.group(2).strip()
             if "\\" in name or "#" in name:
-                raise PackError(f"{path.name}:{line_of(text, m.start())}: computed \\{m.group(1)}{{{name}}}")
+                raise PackError(
+                    f"{path.name}:{line_of(text, m.start())}: computed \\{m.group(1)}{{{name}}}"
+                )
             visit(resolve_input(snap, name))
-        for m in re.finditer(r"\\(includegraphics|lstinputlisting)\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}", text):
+        for m in re.finditer(
+            r"\\(includegraphics|lstinputlisting)\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}",
+            text,
+        ):
             name = m.group(2).strip()
             if "\\" in name or "#" in name:
-                raise PackError(f"{path.name}:{line_of(text, m.start())}: computed \\{m.group(1)}{{{name}}}")
-            p = resolve_graphic(snap, name) if m.group(1) == "includegraphics" else resolve_input(snap, name)
+                raise PackError(
+                    f"{path.name}:{line_of(text, m.start())}: computed \\{m.group(1)}{{{name}}}"
+                )
+            p = (
+                resolve_graphic(snap, name)
+                if m.group(1) == "includegraphics"
+                else resolve_input(snap, name)
+            )
             if p not in other:
                 other.append(p)
-        for m in re.finditer(r"\\(usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}", text):
+        for m in re.finditer(
+            r"\\(usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}", text
+        ):
             for pkg in m.group(2).split(","):
                 p = snap / (pkg.strip() + ".sty")
                 if p.is_file() and p not in other:
@@ -349,7 +411,10 @@ def supported_unicode(texbin: Path) -> set[str]:
         path = r.stdout.strip()
         if not path:
             continue
-        for m in re.finditer(r"\\DeclareUnicodeCharacter\{([0-9A-Fa-f]+)\}", Path(path).read_text(encoding="latin-1")):
+        for m in re.finditer(
+            r"\\DeclareUnicodeCharacter\{([0-9A-Fa-f]+)\}",
+            Path(path).read_text(encoding="latin-1"),
+        ):
             chars.add(chr(int(m.group(1), 16)))
     if not chars:
         raise PackError("could not read the inputenc .dfu tables from TeX Live 2025")
@@ -361,8 +426,12 @@ def fix_unicode(name: str, text: str, supported: set[str], report: list[str]) ->
     for lineno, line in enumerate(text.splitlines(keepends=True), 1):
         for ch in sorted(set(c for c in line if ord(c) > 127 and c not in supported)):
             if ch not in UNICODE_FALLBACK:
-                raise PackError(f"{name}:{lineno}: U+{ord(ch):04X} {ch!r} is not typeset by pdflatex and has no fallback")
-            report.append(f"{name}:{lineno}: U+{ord(ch):04X} {ch} -> {UNICODE_FALLBACK[ch]}")
+                raise PackError(
+                    f"{name}:{lineno}: U+{ord(ch):04X} {ch!r} is not typeset by pdflatex and has no fallback"
+                )
+            report.append(
+                f"{name}:{lineno}: U+{ord(ch):04X} {ch} -> {UNICODE_FALLBACK[ch]}"
+            )
             line = line.replace(ch, UNICODE_FALLBACK[ch])
         out.append(line)
     return "".join(out)
@@ -384,18 +453,28 @@ def rewrite_xr(text: str, report: list[str]) -> tuple[str, list[tuple[str, str]]
         prefix = m.group(1) or ""
         doc = m.group(2).strip()
         docs.append((prefix, doc))
-        report.append(f"rg_main.tex:{line_of(text, m.start())}: \\externaldocument{{{doc}}} -> \\input{{{doc}_labels}}")
+        report.append(
+            f"rg_main.tex:{line_of(text, m.start())}: \\externaldocument{{{doc}}} -> \\input{{{doc}_labels}}"
+        )
         return f"\\input{{{doc}_labels}}"
 
     new = re.sub(r"\\externaldocument\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}", ext, text)
 
     def drop_pkg(m: re.Match) -> str:
-        report.append(f"rg_main.tex:{line_of(new, m.start())}: dropped \\usepackage{{{m.group(1)}}}")
+        report.append(
+            f"rg_main.tex:{line_of(new, m.start())}: dropped \\usepackage{{{m.group(1)}}}"
+        )
         return ""
 
-    new = re.sub(r"(?m)^[ \t]*\\usepackage\s*(?:\[[^\]]*\])?\s*\{(xr|xr-hyper)\}[ \t]*\n", drop_pkg, new)
+    new = re.sub(
+        r"(?m)^[ \t]*\\usepackage\s*(?:\[[^\]]*\])?\s*\{(xr|xr-hyper)\}[ \t]*\n",
+        drop_pkg,
+        new,
+    )
     if re.search(r"\\usepackage\s*(?:\[[^\]]*\])?\s*\{[^}]*\bxr(-hyper)?\b", new):
-        raise PackError("xr/xr-hyper is loaded together with other packages; split the \\usepackage line")
+        raise PackError(
+            "xr/xr-hyper is loaded together with other packages; split the \\usepackage line"
+        )
     return new, docs
 
 
@@ -416,33 +495,46 @@ def guard_prelim_page_anchor(text: str, report: list[str]) -> str:
     e_end = e + len("\\end{frontmatter}")
     off = re.search(r"\\hypersetup\{\s*pageanchor\s*=\s*false\s*\}\s*$", text[:b])
     on = re.match(r"\s*\\hypersetup\{\s*pageanchor\s*=\s*true\s*\}", text[e_end:])
-    if off and re.search(r"(?<!\\)%", text[text.rfind("\n", 0, off.start()) + 1:off.start()]):
+    if off and re.search(
+        r"(?<!\\)%", text[text.rfind("\n", 0, off.start()) + 1 : off.start()]
+    ):
         off = None
     before = "" if off else "\\hypersetup{pageanchor=false}"
     after = "" if on else "\\hypersetup{pageanchor=true}"
     if before:
-        report.append(f"rg_main.tex:{line_of(text, b)}: \\hypersetup{{pageanchor=false}} before \\begin{{frontmatter}}")
+        report.append(
+            f"rg_main.tex:{line_of(text, b)}: \\hypersetup{{pageanchor=false}} before \\begin{{frontmatter}}"
+        )
     if after:
-        report.append(f"rg_main.tex:{line_of(text, e)}: \\hypersetup{{pageanchor=true}} after \\end{{frontmatter}}")
+        report.append(
+            f"rg_main.tex:{line_of(text, e)}: \\hypersetup{{pageanchor=true}} after \\end{{frontmatter}}"
+        )
     return text[:b] + before + text[b:e_end] + after + text[e_end:]
 
 
 def star_refs(name: str, text: str, keys: set[str], report: list[str]) -> str:
     """Turn refs to supplement labels into hyperref's link-free starred form."""
+
     def repl(m: re.Match) -> str:
         cmd, star, key = m.group(1), m.group(2), m.group(3)
         if key.strip() not in keys:
             return m.group(0)
         if cmd not in REF_CMDS:
-            raise PackError(f"{name}:{line_of(text, m.start())}: \\{cmd}{{{key}}} points into the supplement; only {REF_CMDS} are supported")
+            raise PackError(
+                f"{name}:{line_of(text, m.start())}: \\{cmd}{{{key}}} points into the supplement; only {REF_CMDS} are supported"
+            )
         if not star:
-            report.append(f"{name}:{line_of(text, m.start())}: \\{cmd}{{{key}}} -> \\{cmd}*{{{key}}}")
+            report.append(
+                f"{name}:{line_of(text, m.start())}: \\{cmd}{{{key}}} -> \\{cmd}*{{{key}}}"
+            )
         return f"\\{cmd}*{{{key}}}"
 
     return XREF_RE.sub(repl, text)
 
 
-XREF_RE = re.compile(r"\\(ref|pageref|nameref|autoref|eqref|cref|Cref|cpageref|Cpageref|vref|Vref|labelcref)(\*?)\{([^}]+)\}")
+XREF_RE = re.compile(
+    r"\\(ref|pageref|nameref|autoref|eqref|cref|Cref|cpageref|Cpageref|vref|Vref|labelcref)(\*?)\{([^}]+)\}"
+)
 
 
 def referenced_keys(texts: list[str]) -> set[str]:
@@ -461,11 +553,13 @@ def defined_keys(texts: list[str]) -> set[str]:
     return keys
 
 
-def write_label_file(path: Path, doc: str, prefix: str, labels: dict[str, list[str]], keys: list[str]) -> list[str]:
+def write_label_file(
+    path: Path, doc: str, prefix: str, labels: dict[str, list[str]], keys: list[str]
+) -> list[str]:
     lines = []
     missing = []
     for key in keys:
-        src_key = key[len(prefix):] if prefix and key.startswith(prefix) else key
+        src_key = key[len(prefix) :] if prefix and key.startswith(prefix) else key
         fields = labels.get(src_key)
         if not fields:
             missing.append(key)
@@ -473,11 +567,13 @@ def write_label_file(path: Path, doc: str, prefix: str, labels: dict[str, list[s
         number = fields[0]
         page = fields[1] if len(fields) > 1 else ""
         title = fields[2] if len(fields) > 2 else ""
-        lines.append(f"\\newlabel{{{key}}}{{{{{number}}}{{{page}}}{{{title}}}{{}}{{}}}}\n")
+        lines.append(
+            f"\\newlabel{{{key}}}{{{{{number}}}{{{page}}}{{{title}}}{{}}{{}}}}\n"
+        )
     if missing:
         raise PackError(f"labels not found in {doc}.aux: {', '.join(missing)}")
     path.write_text("".join(lines), encoding="utf-8")
-    return [f"{k} = {labels[k[len(prefix):] if prefix else k][0]}" for k in keys]
+    return [f"{k} = {labels[k[len(prefix) :] if prefix else k][0]}" for k in keys]
 
 
 # --------------------------------------------------------------------------
@@ -497,7 +593,10 @@ def make_tarball(stage: Path, out: Path) -> list[str]:
             ti.uid = ti.gid = 0
             ti.uname = ti.gname = ""
             tar.addfile(ti, io.BytesIO(data))
-    with open(out, "wb") as fh, gzip.GzipFile(filename="", mode="wb", fileobj=fh, mtime=0) as gz:
+    with (
+        open(out, "wb") as fh,
+        gzip.GzipFile(filename="", mode="wb", fileobj=fh, mtime=0) as gz,
+    ):
         gz.write(buf.getvalue())
     return names
 
@@ -507,8 +606,13 @@ def make_tarball(stage: Path, out: Path) -> list[str]:
 
 
 def tex_env(texbin: Path, home: Path, epoch: int) -> dict:
-    env = {k: v for k, v in os.environ.items()
-           if not k.startswith(("TEXINPUTS", "BIBINPUTS", "BSTINPUTS", "TEXMF", "TEXFONTS", "TFMFONTS"))}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(
+            ("TEXINPUTS", "BIBINPUTS", "BSTINPUTS", "TEXMF", "TEXFONTS", "TFMFONTS")
+        )
+    }
     env["PATH"] = f"{texbin}:{env.get('PATH', '')}"
     env["TEXMFHOME"] = str(home)
     env["max_print_line"] = "10000"
@@ -520,8 +624,18 @@ def tex_env(texbin: Path, home: Path, epoch: int) -> dict:
 def pdflatex(workdir: Path, env: dict, texbin: Path) -> tuple[str, list[int]]:
     codes = []
     for _ in range(PDFLATEX_RUNS):
-        r = subprocess.run([str(texbin / "pdflatex"), "-interaction=nonstopmode", "-halt-on-error", f"{MAIN}.tex"],
-                           cwd=workdir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        r = subprocess.run(
+            [
+                str(texbin / "pdflatex"),
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                f"{MAIN}.tex",
+            ],
+            cwd=workdir,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         codes.append(r.returncode)
         if r.returncode != 0:
             break
@@ -532,22 +646,75 @@ def pdflatex(workdir: Path, env: dict, texbin: Path) -> tuple[str, list[int]]:
 CHECKS = [
     # (category, regex, fatal)
     ("error", re.compile(r"^! .*", re.M), True),
-    ("undefined reference", re.compile(r"Reference `[^']*' on page \S+ undefined|There were undefined references", re.M), True),
-    ("undefined citation", re.compile(r"Citation `[^']*' on page \S+ undefined|There were undefined citations", re.M), True),
-    ("labels changed", re.compile(r"Label\(s\) may have changed|Rerun to get", re.M), True),
-    ("multiply defined label", re.compile(r"Label `[^']*' multiply defined|There were multiply-defined labels", re.M), True),
+    (
+        "undefined reference",
+        re.compile(
+            r"Reference `[^']*' on page \S+ undefined|There were undefined references",
+            re.M,
+        ),
+        True,
+    ),
+    (
+        "undefined citation",
+        re.compile(
+            r"Citation `[^']*' on page \S+ undefined|There were undefined citations",
+            re.M,
+        ),
+        True,
+    ),
+    (
+        "labels changed",
+        re.compile(r"Label\(s\) may have changed|Rerun to get", re.M),
+        True,
+    ),
+    (
+        "multiply defined label",
+        re.compile(
+            r"Label `[^']*' multiply defined|There were multiply-defined labels", re.M
+        ),
+        True,
+    ),
     ("overfull hbox", re.compile(r"^Overfull \\hbox.*", re.M), True),
     ("missing character", re.compile(r"^Missing character: .*", re.M), True),
-    ("broken link", re.compile(r"Suppressing link with empty target|Suppressing empty link|pdfTeX warning \(dest\): .*", re.M), True),
-    ("unicode not set up", re.compile(r"Unicode character .* not set up for use with LaTeX", re.M), True),
-    ("duplicate destination", re.compile(r"destination with the same identifier .*", re.M), True),
-    ("font substitution", re.compile(r"^LaTeX Font Warning: Font shape .*|Some font shapes were not available", re.M), False),
+    (
+        "broken link",
+        re.compile(
+            r"Suppressing link with empty target|Suppressing empty link|pdfTeX warning \(dest\): .*",
+            re.M,
+        ),
+        True,
+    ),
+    (
+        "unicode not set up",
+        re.compile(r"Unicode character .* not set up for use with LaTeX", re.M),
+        True,
+    ),
+    (
+        "duplicate destination",
+        re.compile(r"destination with the same identifier .*", re.M),
+        True,
+    ),
+    (
+        "font substitution",
+        re.compile(
+            r"^LaTeX Font Warning: Font shape .*|Some font shapes were not available",
+            re.M,
+        ),
+        False,
+    ),
     ("overfull vbox", re.compile(r"^Overfull \\vbox.*", re.M), False),
     ("underfull hbox", re.compile(r"^Underfull \\hbox.*", re.M), False),
     ("underfull vbox", re.compile(r"^Underfull \\vbox.*", re.M), False),
-    ("text command in math", re.compile(r"Command \\\S+ invalid in math mode", re.M), False),
+    (
+        "text command in math",
+        re.compile(r"Command \\\S+ invalid in math mode", re.M),
+        False,
+    ),
 ]
-WARNING_KINDS = re.compile(r"^(LaTeX Warning|LaTeX Font Warning|Package \S+ Warning|Class \S+ Warning|pdfTeX warning[^:]*)", re.M)
+WARNING_KINDS = re.compile(
+    r"^(LaTeX Warning|LaTeX Font Warning|Package \S+ Warning|Class \S+ Warning|pdfTeX warning[^:]*)",
+    re.M,
+)
 
 
 def analyse_log(text: str) -> tuple[dict, dict, dict]:
@@ -557,7 +724,10 @@ def analyse_log(text: str) -> tuple[dict, dict, dict]:
         found[cat] = {"count": len(hits), "fatal": fatal, "examples": hits[:8]}
     kinds = collections.Counter(m.group(1) for m in WARNING_KINDS.finditer(text))
     m = re.search(r"Output written on \S+ \((\d+) pages?, (\d+) bytes\)", text)
-    info = {"pages": int(m.group(1)) if m else None, "bytes": int(m.group(2)) if m else None}
+    info = {
+        "pages": int(m.group(1)) if m else None,
+        "bytes": int(m.group(2)) if m else None,
+    }
     return found, dict(kinds), info
 
 
@@ -565,19 +735,25 @@ def env_tool(name: str) -> str:
     """A program of the environment of this python (poppler), never one found elsewhere on PATH."""
     path = ENV_BIN / name
     if not os.access(path, os.X_OK):
-        raise PackError(f"{name} is not in {ENV_BIN}; run this script with the python of the default "
-                        "environment of pixi.toml")
+        raise PackError(
+            f"{name} is not in {ENV_BIN}; run this script with the python of the default "
+            "environment of pixi.toml"
+        )
     return str(path)
 
 
 def pdf_text(pdf: Path) -> str | None:
     if not pdf.exists():
         return None
-    r = subprocess.run([env_tool("pdftotext"), "-enc", "UTF-8", str(pdf), "-"], capture_output=True)
+    r = subprocess.run(
+        [env_tool("pdftotext"), "-enc", "UTF-8", str(pdf), "-"], capture_output=True
+    )
     return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
 
 
-def bibtex_crosscheck(test_dir: Path, snap: Path, bibs: list[str], texbin: Path, env: dict, shipped: Path) -> str:
+def bibtex_crosscheck(
+    test_dir: Path, snap: Path, bibs: list[str], texbin: Path, env: dict, shipped: Path
+) -> str:
     scratch = test_dir.parent / "bibtex-check"
     scratch.mkdir()
     shutil.copy2(test_dir / f"{MAIN}.aux", scratch)
@@ -588,13 +764,22 @@ def bibtex_crosscheck(test_dir: Path, snap: Path, bibs: list[str], texbin: Path,
         shutil.copy2(p, scratch)
     # bibtex wraps .bbl lines at max_print_line, so use the TeX Live default.
     env = {k: v for k, v in env.items() if k != "max_print_line"}
-    r = subprocess.run([str(texbin / "bibtex"), MAIN], cwd=scratch, env=env, capture_output=True, text=True)
+    r = subprocess.run(
+        [str(texbin / "bibtex"), MAIN],
+        cwd=scratch,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
     fresh = scratch / f"{MAIN}.bbl"
     if r.returncode not in (0, 1) or not fresh.exists():
         return f"TL2025 bibtex failed (exit {r.returncode}): {r.stdout[-400:]}"
     if fresh.read_bytes() == shipped.read_bytes():
         return "identical to TL2025 bibtex output"
-    if fresh.read_text(encoding="utf-8").split() == shipped.read_text(encoding="utf-8").split():
+    if (
+        fresh.read_text(encoding="utf-8").split()
+        == shipped.read_text(encoding="utf-8").split()
+    ):
         return "same as TL2025 bibtex output up to line wrapping"
     return "DIFFERS from TL2025 bibtex output"
 
@@ -603,15 +788,42 @@ def bibtex_crosscheck(test_dir: Path, snap: Path, bibs: list[str], texbin: Path,
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", required=True, type=Path, help="output directory for the tarball, PDF and log")
-    ap.add_argument("--src", type=Path, default=DEFAULT_SRC, help="manuscript source directory")
-    ap.add_argument("--texbin", type=Path, default=DEFAULT_TEXBIN, help="TeX Live 2025 binary directory")
-    ap.add_argument("--rebuild", action="store_true", help="run the pdfTeX build even if aux/bbl exist")
-    ap.add_argument("--build-in-src", action="store_true", help="run a needed pdfTeX build in --src instead of a temporary copy")
-    ap.add_argument("--keep-work", action="store_true", help="keep the temporary work directory")
-    ap.add_argument("--keep-math-text", action="store_true",
-                    help=r"do not rewrite \mathrm{..\AA..} to \mathrm{..\text{\AA}..} in the arXiv copy")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out",
+        required=True,
+        type=Path,
+        help="output directory for the tarball, PDF and log",
+    )
+    ap.add_argument(
+        "--src", type=Path, default=DEFAULT_SRC, help="manuscript source directory"
+    )
+    ap.add_argument(
+        "--texbin",
+        type=Path,
+        default=DEFAULT_TEXBIN,
+        help="TeX Live 2025 binary directory",
+    )
+    ap.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="run the pdfTeX build even if aux/bbl exist",
+    )
+    ap.add_argument(
+        "--build-in-src",
+        action="store_true",
+        help="run a needed pdfTeX build in --src instead of a temporary copy",
+    )
+    ap.add_argument(
+        "--keep-work", action="store_true", help="keep the temporary work directory"
+    )
+    ap.add_argument(
+        "--keep-math-text",
+        action="store_true",
+        help=r"do not rewrite \mathrm{..\AA..} to \mathrm{..\text{\AA}..} in the arXiv copy",
+    )
     args = ap.parse_args()
 
     src = args.src.resolve()
@@ -619,7 +831,9 @@ def main() -> int:
     texbin = args.texbin
     if not (texbin / "pdflatex").exists():
         raise PackError(f"no pdflatex in {texbin}")
-    ver = subprocess.run([str(texbin / "pdflatex"), "--version"], capture_output=True, text=True).stdout.splitlines()[0]
+    ver = subprocess.run(
+        [str(texbin / "pdflatex"), "--version"], capture_output=True, text=True
+    ).stdout.splitlines()[0]
     if "TeX Live 2025" not in ver:
         raise PackError(f"{texbin}/pdflatex is not TeX Live 2025: {ver}")
     env_tool("pdftotext")
@@ -646,14 +860,23 @@ def main() -> int:
         supported = supported_unicode(texbin)
         stage = work / "stage"
         stage_raw = work / "stage-unstripped"
-        label_docs = [(m.group(1) or "", m.group(2).strip()) for m in
-                      re.finditer(r"\\externaldocument\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}", stripped_sources[0])]
+        label_docs = [
+            (m.group(1) or "", m.group(2).strip())
+            for m in re.finditer(
+                r"\\externaldocument\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}",
+                stripped_sources[0],
+            )
+        ]
         for prefix, doc in label_docs:
             if doc != SUPP or len(label_docs) > 1:
-                raise PackError(f"\\externaldocument{{{doc}}}: only a single {SUPP} is supported")
+                raise PackError(
+                    f"\\externaldocument{{{doc}}}: only a single {SUPP} is supported"
+                )
         supp_keys = (refs - main_defined) if label_docs else set()
         if supp_keys and not label_docs:
-            raise PackError(f"undefined labels and no \\externaldocument: {sorted(supp_keys)}")
+            raise PackError(
+                f"undefined labels and no \\externaldocument: {sorted(supp_keys)}"
+            )
         strip_stats = collections.Counter()
         for p, text in sources.items():
             name = str(p.relative_to(snap))
@@ -675,7 +898,9 @@ def main() -> int:
         if label_docs:
             prefix, doc = label_docs[0]
             keys = sorted(supp_keys)
-            listed = write_label_file(stage / f"{doc}_labels.tex", doc, prefix, supp_labels, keys)
+            listed = write_label_file(
+                stage / f"{doc}_labels.tex", doc, prefix, supp_labels, keys
+            )
             shutil.copy2(stage / f"{doc}_labels.tex", stage_raw / f"{doc}_labels.tex")
             report["supplement_labels"] = listed
             log(f"{doc}_labels.tex: {len(keys)} labels ({', '.join(listed)})")
@@ -687,7 +912,9 @@ def main() -> int:
                 shutil.copy2(p, d / rel)
 
         bbl = snap / f"{MAIN}.bbl"
-        bbl_text = fix_unicode(f"{MAIN}.bbl", bbl.read_text(encoding="utf-8"), supported, report["unicode"])
+        bbl_text = fix_unicode(
+            f"{MAIN}.bbl", bbl.read_text(encoding="utf-8"), supported, report["unicode"]
+        )
         if "\\begin{thebibliography}" not in bbl_text:
             raise PackError(f"{MAIN}.bbl has no thebibliography environment")
         cited = set()
@@ -705,32 +932,52 @@ def main() -> int:
             "sources": [{"filename": f"{MAIN}.tex", "usage": "toplevel"}],
             "texlive_version": 2025,
         }
-        (stage / "00README.json").write_text(json.dumps(readme, indent=2) + "\n", encoding="utf-8")
+        (stage / "00README.json").write_text(
+            json.dumps(readme, indent=2) + "\n", encoding="utf-8"
+        )
 
         supp_pdf = snap / f"{SUPP}.pdf"
         if supp_pdf.exists():
             (stage / "anc").mkdir()
             shutil.copy2(supp_pdf, stage / "anc" / f"{SUPP}.pdf")
             built = (snap / f"{SUPP}.log").exists()
-            report["notes"].append(f"anc/{SUPP}.pdf taken from " + ("the pdfTeX build of this run" if built else f"{src}/{SUPP}.pdf"))
+            report["notes"].append(
+                f"anc/{SUPP}.pdf taken from "
+                + ("the pdfTeX build of this run" if built else f"{src}/{SUPP}.pdf")
+            )
             src_pdf, src_tex = src / f"{SUPP}.pdf", src / f"{SUPP}.tex"
             if src_pdf.exists() and src_pdf.stat().st_mtime < src_tex.stat().st_mtime:
-                report["notes"].append(f"WARNING: {src_pdf} is older than {src_tex.name}" + ("" if built else "; it was shipped as is"))
+                report["notes"].append(
+                    f"WARNING: {src_pdf} is older than {src_tex.name}"
+                    + ("" if built else "; it was shipped as is")
+                )
         else:
-            report["notes"].append(f"{SUPP}.pdf not found; anc/ carries the specification only")
+            report["notes"].append(
+                f"{SUPP}.pdf not found; anc/ carries the specification only"
+            )
 
         # The manuscript names docs/orgmode/spec.org as the normative format document.
         if not SPEC_ORG.exists():
             raise PackError(f"{SPEC_ORG} is missing; the Program Summary ships it")
         (stage / "anc").mkdir(exist_ok=True)
         shutil.copy2(SPEC_ORG, stage / "anc" / SPEC_ORG.name)
-        report["notes"].append(f"anc/{SPEC_ORG.name} taken from docs/orgmode/{SPEC_ORG.name}")
+        report["notes"].append(
+            f"anc/{SPEC_ORG.name} taken from docs/orgmode/{SPEC_ORG.name}"
+        )
 
         for d in (stage,):
-            extra_docclass = [str(q.relative_to(d)) for q in d.rglob("*.tex")
-                              if q.name != f"{MAIN}.tex" and re.search(r"^[^%]*\\documentclass", q.read_text(encoding="utf-8"), re.M)]
+            extra_docclass = [
+                str(q.relative_to(d))
+                for q in d.rglob("*.tex")
+                if q.name != f"{MAIN}.tex"
+                and re.search(
+                    r"^[^%]*\\documentclass", q.read_text(encoding="utf-8"), re.M
+                )
+            ]
             if extra_docclass:
-                raise PackError(f"other .tex files with \\documentclass in the tarball: {extra_docclass}")
+                raise PackError(
+                    f"other .tex files with \\documentclass in the tarball: {extra_docclass}"
+                )
 
         tarball = out / TARBALL
         names = make_tarball(stage, tarball)
@@ -752,7 +999,9 @@ def main() -> int:
                 tar.extractall(test_dir)
         log(f"pdflatex x{PDFLATEX_RUNS} in {test_dir}")
         log_text, codes = pdflatex(test_dir, env, texbin)
-        shutil.copy2(test_dir / f"{MAIN}.log", out / f"{MAIN}-arxiv-pdflatex.log") if (test_dir / f"{MAIN}.log").exists() else None
+        shutil.copy2(test_dir / f"{MAIN}.log", out / f"{MAIN}-arxiv-pdflatex.log") if (
+            test_dir / f"{MAIN}.log"
+        ).exists() else None
         if (test_dir / f"{MAIN}.pdf").exists():
             shutil.copy2(test_dir / f"{MAIN}.pdf", out / f"{MAIN}-arxiv-pdflatex.pdf")
         found, kinds, info = analyse_log(log_text)
@@ -761,8 +1010,16 @@ def main() -> int:
         report["warning_kinds"] = kinds
         report["output"] = info
 
-        failures = [f"pdflatex exit codes {codes}"] if any(codes) or len(codes) < PDFLATEX_RUNS else []
-        failures += [f"{cat}: {v['count']}" for cat, v in found.items() if v["fatal"] and v["count"]]
+        failures = (
+            [f"pdflatex exit codes {codes}"]
+            if any(codes) or len(codes) < PDFLATEX_RUNS
+            else []
+        )
+        failures += [
+            f"{cat}: {v['count']}"
+            for cat, v in found.items()
+            if v["fatal"] and v["count"]
+        ]
 
         text_arxiv = pdf_text(test_dir / f"{MAIN}.pdf")
         if text_arxiv is not None and "??" in text_arxiv:
@@ -781,22 +1038,34 @@ def main() -> int:
             same = False
             report["strip_check"] = "no PDF to compare"
         if a.exists() and b.exists():
-            report["strip_check"] += "; PDF bytes " + ("identical" if a.read_bytes() == b.read_bytes() else "differ")
+            report["strip_check"] += "; PDF bytes " + (
+                "identical" if a.read_bytes() == b.read_bytes() else "differ"
+            )
         if not same:
-            failures.append(f"comment stripping changed the output ({report['strip_check']})")
+            failures.append(
+                f"comment stripping changed the output ({report['strip_check']})"
+            )
 
         if (test_dir / f"{MAIN}.aux").exists():
-            report["bbl_check"] = bibtex_crosscheck(test_dir, snap, bibs, texbin, env, test_dir / f"{MAIN}.bbl")
+            report["bbl_check"] = bibtex_crosscheck(
+                test_dir, snap, bibs, texbin, env, test_dir / f"{MAIN}.bbl"
+            )
             if report["bbl_check"].startswith("DIFFERS"):
-                report["notes"].append("shipped rg_main.bbl differs from TL2025 bibtex on the same aux and .bib; rebuild the bibliography")
+                report["notes"].append(
+                    "shipped rg_main.bbl differs from TL2025 bibtex on the same aux and .bib; rebuild the bibliography"
+                )
                 failures.append("bbl differs from TL2025 bibtex output")
 
         report["failures"] = failures
-        (out / "arxiv-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (out / "arxiv-report.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
 
         print()
         print(f"tarball : {tarball}")
-        print(f"pdf     : {out / (MAIN + '-arxiv-pdflatex.pdf')} ({info['pages']} pages)")
+        print(
+            f"pdf     : {out / (MAIN + '-arxiv-pdflatex.pdf')} ({info['pages']} pages)"
+        )
         print(f"log     : {out / (MAIN + '-arxiv-pdflatex.log')}")
         print(f"report  : {out / 'arxiv-report.json'}")
         print(f"files   : {len(names)}")
@@ -807,7 +1076,9 @@ def main() -> int:
             print(f"  {r}")
         for r in report["unicode"]:
             print(f"  {r}")
-        print(f"comment stripping: {report['comment_stripping']}; {report['strip_check']}")
+        print(
+            f"comment stripping: {report['comment_stripping']}; {report['strip_check']}"
+        )
         print(f"bbl: {report.get('bbl_check')}")
         print("log checks:")
         for cat, v in found.items():
@@ -816,7 +1087,10 @@ def main() -> int:
             if v["count"] and (v["fatal"] or cat == "font substitution"):
                 for e in v["examples"]:
                     print(f"         {e[:160]}")
-        print("warnings by kind: " + (", ".join(f"{k}={n}" for k, n in sorted(kinds.items())) or "none"))
+        print(
+            "warnings by kind: "
+            + (", ".join(f"{k}={n}" for k, n in sorted(kinds.items())) or "none")
+        )
         for n in report["notes"]:
             print(f"note: {n}")
         if failures:

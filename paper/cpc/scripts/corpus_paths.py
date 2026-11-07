@@ -41,6 +41,7 @@ feature; that rejection is counted as the build's outcome for that file.
 Build the module and both libraries first: pixi run cpc-readcon, cpc-clib and
 cpc-clib-parallel.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,9 +68,15 @@ C31 = ROOT / "data" / "corpus31"
 OUT = ROOT / "data" / "corpus_paths.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "corpus_paths_macros.tex"
 TABLE = ROOT / "src" / "figures" / "generated" / "corpus_paths_table.tex"
-CLIB = Path(os.environ.get("READCON_LIB") or REPO / "target" / "release" / "libreadcon_core.so")
-CLIB_PARALLEL = Path(os.environ.get("READCON_LIB_PARALLEL")
-                     or REPO / "target" / "clib-parallel" / "release" / "libreadcon_core.so")
+CLIB = Path(
+    os.environ.get("READCON_LIB") or REPO / "target" / "release" / "libreadcon_core.so"
+)
+CLIB_PARALLEL = Path(
+    os.environ.get("READCON_LIB_PARALLEL")
+    or REPO / "target" / "clib-parallel" / "release" / "libreadcon_core.so"
+)
+
+
 def map_bytes() -> int:
     """MMAP_THRESHOLD of src/compression.rs at the commit of src/commit.tex, the wkMmapBytes of the manuscript."""
     from worked_example import commit, release_thresholds
@@ -94,25 +101,54 @@ BUILDS = {
 }
 # Each entry point of a build: the copy it reads and whether it takes a thread setting.
 ENTRIES = {
-    "wheel": (("string", "text", True, r"\texttt{read\_con\_string}"),
-              ("file", "plain", True, r"\texttt{read\_con}, plain file"),
-              ("mapped", "mapped", True, r"\texttt{read\_con}, mapped file"),
-              ("gzip", "gzip", True, r"\texttt{read\_con}, gzip file"),
-              ("iter", "plain", False, r"\texttt{iter\_con}, plain file"),
-              ("iter_mmap", "mapped", False, r"\texttt{iter\_con(mmap=True)}, mapped file"),
-              ("iter_stream", "plain", False, r"\texttt{iter\_con(stream=True)}, plain file"),
-              ("iter_stream_gzip", "gzip", False, r"\texttt{iter\_con(stream=True)}, gzip file"),
-              ("count", "plain", False, r"\texttt{count\_frames}, plain file"),
-              ("count_mapped", "mapped", False, r"\texttt{count\_frames}, mapped file"),
-              ("count_gzip", "gzip", False, r"\texttt{count\_frames}, gzip file")),
-    "clib": (("buffer", "text", False, r"\texttt{read\_con\_buffer\_iterator}"),
-             ("file", "plain", True, r"\texttt{rkr\_read\_all\_frames\_n\_threads}, plain file"),
-             ("mapped", "mapped", True, r"\texttt{rkr\_read\_all\_frames\_n\_threads}, mapped file"),
-             ("gzip", "gzip", True, r"\texttt{rkr\_read\_all\_frames\_n\_threads}, gzip file"),
-             ("file_iter", "plain", False, r"\texttt{read\_con\_file\_iterator}, plain file"),
-             ("count", "plain", False, r"\texttt{rkr\_count\_frames}, plain file"),
-             ("count_mapped", "mapped", False, r"\texttt{rkr\_count\_frames}, mapped file"),
-             ("count_gzip", "gzip", False, r"\texttt{rkr\_count\_frames}, gzip file")),
+    "wheel": (
+        ("string", "text", True, r"\texttt{read\_con\_string}"),
+        ("file", "plain", True, r"\texttt{read\_con}, plain file"),
+        ("mapped", "mapped", True, r"\texttt{read\_con}, mapped file"),
+        ("gzip", "gzip", True, r"\texttt{read\_con}, gzip file"),
+        ("iter", "plain", False, r"\texttt{iter\_con}, plain file"),
+        ("iter_mmap", "mapped", False, r"\texttt{iter\_con(mmap=True)}, mapped file"),
+        ("iter_stream", "plain", False, r"\texttt{iter\_con(stream=True)}, plain file"),
+        (
+            "iter_stream_gzip",
+            "gzip",
+            False,
+            r"\texttt{iter\_con(stream=True)}, gzip file",
+        ),
+        ("count", "plain", False, r"\texttt{count\_frames}, plain file"),
+        ("count_mapped", "mapped", False, r"\texttt{count\_frames}, mapped file"),
+        ("count_gzip", "gzip", False, r"\texttt{count\_frames}, gzip file"),
+    ),
+    "clib": (
+        ("buffer", "text", False, r"\texttt{read\_con\_buffer\_iterator}"),
+        (
+            "file",
+            "plain",
+            True,
+            r"\texttt{rkr\_read\_all\_frames\_n\_threads}, plain file",
+        ),
+        (
+            "mapped",
+            "mapped",
+            True,
+            r"\texttt{rkr\_read\_all\_frames\_n\_threads}, mapped file",
+        ),
+        (
+            "gzip",
+            "gzip",
+            True,
+            r"\texttt{rkr\_read\_all\_frames\_n\_threads}, gzip file",
+        ),
+        (
+            "file_iter",
+            "plain",
+            False,
+            r"\texttt{read\_con\_file\_iterator}, plain file",
+        ),
+        ("count", "plain", False, r"\texttt{rkr\_count\_frames}, plain file"),
+        ("count_mapped", "mapped", False, r"\texttt{rkr\_count\_frames}, mapped file"),
+        ("count_gzip", "gzip", False, r"\texttt{rkr\_count\_frames}, gzip file"),
+    ),
 }
 ENTRIES["clib_parallel"] = ENTRIES["clib"]
 
@@ -126,7 +162,11 @@ def copy_of(key: str) -> str:
 def read_keys(build: str) -> list[str]:
     keys = []
     for entry, _, threaded, _ in ENTRIES[build]:
-        keys += [f"{build}/{entry}/{label}" for label, _ in THREADS] if threaded else [f"{build}/{entry}/serial"]
+        keys += (
+            [f"{build}/{entry}/{label}" for label, _ in THREADS]
+            if threaded
+            else [f"{build}/{entry}/serial"]
+        )
     return keys
 
 
@@ -137,11 +177,27 @@ def corpus() -> list[dict]:
     manifest = tomllib.loads((CONF / "manifest.toml").read_text())
     for kind, expected in (("valid", "accept"), ("invalid", "reject")):
         for entry in manifest[kind]:
-            files.append({"corpus": "conformance", "path": CONF / entry["path"], "expected": expected,
-                          "frames": None, "error": entry.get("error"), "line": None})
+            files.append(
+                {
+                    "corpus": "conformance",
+                    "path": CONF / entry["path"],
+                    "expected": expected,
+                    "frames": None,
+                    "error": entry.get("error"),
+                    "line": None,
+                }
+            )
     for entry in tomllib.loads((C31 / "manifest.toml").read_text())["file"]:
-        files.append({"corpus": "corpus31", "path": C31 / entry["file"], "expected": entry["expected"],
-                      "frames": entry.get("frames"), "error": entry.get("error"), "line": entry.get("line")})
+        files.append(
+            {
+                "corpus": "corpus31",
+                "path": C31 / entry["file"],
+                "expected": entry["expected"],
+                "frames": entry.get("frames"),
+                "error": entry.get("error"),
+                "line": entry.get("line"),
+            }
+        )
     return files
 
 
@@ -159,7 +215,11 @@ def decoded(raw: bytes, kind: str | None) -> bytes:
     if kind == "zstd":
         import zstandard
 
-        return zstandard.ZstdDecompressor().stream_reader(io.BytesIO(raw), read_across_frames=True).read()
+        return (
+            zstandard.ZstdDecompressor()
+            .stream_reader(io.BytesIO(raw), read_across_frames=True)
+            .read()
+        )
     return raw
 
 
@@ -171,7 +231,9 @@ def padding(text: bytes, entry: dict) -> tuple[str, bytes, int]:
     copies = map_bytes() // len(pad) + 1
     if entry["expected"] == "reject" and entry["line"] == 1:
         if not text.endswith(b"\n"):
-            raise SystemExit(f"{entry['path']}: a file rejected at line 1 must end with a newline")
+            raise SystemExit(
+                f"{entry['path']}: a file rejected at line 1 must end with a newline"
+            )
         return "end", text + pad * copies, copies
     return "front", pad * copies + text, copies
 
@@ -192,9 +254,19 @@ def prepare(files: list[dict], work: Path) -> list[dict]:
             utf8 = True
         except UnicodeDecodeError:
             utf8 = False
-        jobs.append({"id": str(i), "plain": str(entry["path"]), "text": str(work / f"{i}.txt"),
-                     "mapped": str(work / f"{i}.mapped.con"), "gzip": str(work / f"{i}.con.gz"),
-                     "compressed": kind, "utf8": utf8, "padding": where, "added": added})
+        jobs.append(
+            {
+                "id": str(i),
+                "plain": str(entry["path"]),
+                "text": str(work / f"{i}.txt"),
+                "mapped": str(work / f"{i}.mapped.con"),
+                "gzip": str(work / f"{i}.con.gz"),
+                "compressed": kind,
+                "utf8": utf8,
+                "padding": where,
+                "added": added,
+            }
+        )
     return jobs
 
 
@@ -223,19 +295,31 @@ def wheel_child(jobs: list[dict]) -> dict:
         for label, n in THREADS:
             if job["utf8"]:
                 text = raw.decode("utf-8")
-                got[f"wheel/string/{label}"] = verdict(lambda: readcon.read_con_string(text, n_threads=n))
+                got[f"wheel/string/{label}"] = verdict(
+                    lambda: readcon.read_con_string(text, n_threads=n)
+                )
             else:
                 got[f"wheel/string/{label}"] = "skip"
             for entry in ("plain", "mapped", "gzip"):
                 key = {"plain": "file"}.get(entry, entry)
-                got[f"wheel/{key}/{label}"] = verdict(lambda: readcon.read_con(job[entry], n_threads=n))
+                got[f"wheel/{key}/{label}"] = verdict(
+                    lambda: readcon.read_con(job[entry], n_threads=n)
+                )
         got["wheel/iter/serial"] = verdict(lambda: list(readcon.iter_con(job["plain"])))
-        got["wheel/iter_mmap/serial"] = verdict(lambda: list(readcon.iter_con(job["mapped"], mmap=True)))
-        got["wheel/iter_stream/serial"] = verdict(lambda: list(readcon.iter_con(job["plain"], stream=True)))
-        got["wheel/iter_stream_gzip/serial"] = verdict(lambda: list(readcon.iter_con(job["gzip"], stream=True)))
+        got["wheel/iter_mmap/serial"] = verdict(
+            lambda: list(readcon.iter_con(job["mapped"], mmap=True))
+        )
+        got["wheel/iter_stream/serial"] = verdict(
+            lambda: list(readcon.iter_con(job["plain"], stream=True))
+        )
+        got["wheel/iter_stream_gzip/serial"] = verdict(
+            lambda: list(readcon.iter_con(job["gzip"], stream=True))
+        )
         for entry in ("plain", "mapped", "gzip"):
             key = {"plain": "count"}.get(entry, f"count_{entry}")
-            got[f"wheel/{key}/serial"] = verdict(lambda: readcon.count_frames(job[entry]), size=int)
+            got[f"wheel/{key}/serial"] = verdict(
+                lambda: readcon.count_frames(job[entry]), size=int
+            )
         out[job["id"]] = got
     return out
 
@@ -250,7 +334,11 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
         ("con_frame_iterator_error_message", [vp], cp),
         ("free_con_frame_iterator", [vp], None),
         ("free_rkr_frame", [vp], None),
-        ("rkr_read_all_frames_n_threads", [cp, ctypes.POINTER(size), size], ctypes.POINTER(vp)),
+        (
+            "rkr_read_all_frames_n_threads",
+            [cp, ctypes.POINTER(size), size],
+            ctypes.POINTER(vp),
+        ),
         ("free_rkr_frame_array", [ctypes.POINTER(vp), size], None),
         ("rkr_last_error_message", [], cp),
         ("rkr_count_frames", [cp], size),
@@ -277,7 +365,9 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
 
     def read_all(path: str, n: int | None) -> str:
         count = size(0)
-        frames = lib.rkr_read_all_frames_n_threads(path.encode(), ctypes.byref(count), n or 0)
+        frames = lib.rkr_read_all_frames_n_threads(
+            path.encode(), ctypes.byref(count), n or 0
+        )
         if not frames:
             return rejected(lib.rkr_last_error_message())
         lib.free_rkr_frame_array(frames, count.value)
@@ -294,12 +384,16 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
         got = {}
         raw = Path(job["text"]).read_bytes()
         buffer = ctypes.create_string_buffer(raw, len(raw))
-        got[f"{build}/buffer/serial"] = iterate(lib.read_con_buffer_iterator(buffer, len(raw)))
+        got[f"{build}/buffer/serial"] = iterate(
+            lib.read_con_buffer_iterator(buffer, len(raw))
+        )
         for label, n in THREADS:
             for entry in ("plain", "mapped", "gzip"):
                 key = {"plain": "file"}.get(entry, entry)
                 got[f"{build}/{key}/{label}"] = read_all(job[entry], n)
-        got[f"{build}/file_iter/serial"] = iterate(lib.read_con_file_iterator(job["plain"].encode()))
+        got[f"{build}/file_iter/serial"] = iterate(
+            lib.read_con_file_iterator(job["plain"].encode())
+        )
         for entry in ("plain", "mapped", "gzip"):
             key = {"plain": "count"}.get(entry, f"count_{entry}")
             got[f"{build}/{key}/serial"] = count(job[entry])
@@ -308,11 +402,19 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
 
 
 def run_child(build: str, jobs_path: Path) -> dict:
-    argv = [sys.executable, str(Path(__file__).resolve()), "--child", build, str(jobs_path)]
+    argv = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--child",
+        build,
+        str(jobs_path),
+    ]
     proc = subprocess.run(argv, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         tail = "\n".join(proc.stderr.strip().splitlines()[-5:])
-        raise SystemExit(f"the {build} reads ended with exit status {proc.returncode}:\n{tail}")
+        raise SystemExit(
+            f"the {build} reads ended with exit status {proc.returncode}:\n{tail}"
+        )
     return json.loads(proc.stdout)
 
 
@@ -322,7 +424,11 @@ def wanted(entry: dict, job: dict, key: str) -> str | None:
     copy = copy_of(key)
     if copy == "text" and build == "wheel" and not job["utf8"]:
         return "skip"
-    if copy == "plain" and job["compressed"] == "zstd" and "zstd" not in BUILDS[build][1]:
+    if (
+        copy == "plain"
+        and job["compressed"] == "zstd"
+        and "zstd" not in BUILDS[build][1]
+    ):
         return "reject Compression"
     if entry["expected"] == "reject":
         return f"reject {normal(entry['error'])}"
@@ -362,50 +468,84 @@ def results(jobs: list[dict], files: list[dict], got: dict) -> dict:
             differ |= {k for k in keys if wanted(entry, job, k) == "accept"}
         for key in differ:
             summary[key]["differ"].append(name)
-        rows.append({"corpus": entry["corpus"], "file": name, "expected": entry["expected"],
-                     "frames": entry["frames"], "class": normal(entry["error"]) if entry["error"] else None,
-                     "compressed": job["compressed"], "utf8": job["utf8"],
-                     "mapped": {"padding": job["padding"], "frames": job["added"]}, "differ": sorted(differ),
-                     "got": row_got})
+        rows.append(
+            {
+                "corpus": entry["corpus"],
+                "file": name,
+                "expected": entry["expected"],
+                "frames": entry["frames"],
+                "class": normal(entry["error"]) if entry["error"] else None,
+                "compressed": job["compressed"],
+                "utf8": job["utf8"],
+                "mapped": {"padding": job["padding"], "frames": job["added"]},
+                "differ": sorted(differ),
+                "got": row_got,
+            }
+        )
     for s in summary.values():
         s["match"] = s["reads"] - len(s["differ"])
-    totals = {"files": len(rows), "conformance": sum(r["corpus"] == "conformance" for r in rows),
-              "corpus31": sum(r["corpus"] == "corpus31" for r in rows), "read_kinds": len(keys),
-              "reads": sum(s["reads"] for s in summary.values()), "match": sum(s["match"] for s in summary.values()),
-              "skipped": sum(s["skipped"] for s in summary.values()),
-              "not_text": sum(not r["utf8"] for r in rows),
-              "no_zstd_files": sum(r["compressed"] == "zstd" for r in rows),
-              "padded_front": sum(r["mapped"]["padding"] == "front" for r in rows),
-              "padded_end": sum(r["mapped"]["padding"] == "end" for r in rows),
-              "mapped_as_is": sum(r["mapped"]["padding"] == "none" for r in rows),
-              "map_bytes": map_bytes(), "pad_lines": PAD.count("\n"),
-              "files_differ": sorted(r["file"] for r in rows if r["differ"])}
+    totals = {
+        "files": len(rows),
+        "conformance": sum(r["corpus"] == "conformance" for r in rows),
+        "corpus31": sum(r["corpus"] == "corpus31" for r in rows),
+        "read_kinds": len(keys),
+        "reads": sum(s["reads"] for s in summary.values()),
+        "match": sum(s["match"] for s in summary.values()),
+        "skipped": sum(s["skipped"] for s in summary.values()),
+        "not_text": sum(not r["utf8"] for r in rows),
+        "no_zstd_files": sum(r["compressed"] == "zstd" for r in rows),
+        "padded_front": sum(r["mapped"]["padding"] == "front" for r in rows),
+        "padded_end": sum(r["mapped"]["padding"] == "end" for r in rows),
+        "mapped_as_is": sum(r["mapped"]["padding"] == "none" for r in rows),
+        "map_bytes": map_bytes(),
+        "pad_lines": PAD.count("\n"),
+        "files_differ": sorted(r["file"] for r in rows if r["differ"]),
+    }
     totals["differ"] = totals["reads"] - totals["match"]
-    by_build = {b: {"reads": sum(summary[k]["reads"] for k in read_keys(b)),
-                    "match": sum(summary[k]["match"] for k in read_keys(b))} for b in BUILDS}
+    by_build = {
+        b: {
+            "reads": sum(summary[k]["reads"] for k in read_keys(b)),
+            "match": sum(summary[k]["match"] for k in read_keys(b)),
+        }
+        for b in BUILDS
+    }
     return {"totals": totals, "by_build": by_build, "reads": summary, "files": rows}
 
 
 def macros(record: dict) -> str:
     t, b = record["totals"], record["by_build"]
     values = {
-        "cpathsFiles": t["files"], "cpathsConformance": t["conformance"], "cpathsCorpusThreeOne": t["corpus31"],
-        "cpathsReadKinds": t["read_kinds"], "cpathsReads": f"{t['reads']:,}", "cpathsMatch": f"{t['match']:,}",
-        "cpathsDiffer": t["differ"], "cpathsNotText": t["not_text"], "cpathsZstdFiles": t["no_zstd_files"],
-        "cpathsPaddedFront": t["padded_front"], "cpathsPaddedEnd": t["padded_end"],
+        "cpathsFiles": t["files"],
+        "cpathsConformance": t["conformance"],
+        "cpathsCorpusThreeOne": t["corpus31"],
+        "cpathsReadKinds": t["read_kinds"],
+        "cpathsReads": f"{t['reads']:,}",
+        "cpathsMatch": f"{t['match']:,}",
+        "cpathsDiffer": t["differ"],
+        "cpathsNotText": t["not_text"],
+        "cpathsZstdFiles": t["no_zstd_files"],
+        "cpathsPaddedFront": t["padded_front"],
+        "cpathsPaddedEnd": t["padded_end"],
         "cpathsMappedAsIs": t["mapped_as_is"],
-        "cpathsWheelReads": f"{b['wheel']['reads']:,}", "cpathsClibReads": f"{b['clib']['reads']:,}",
+        "cpathsWheelReads": f"{b['wheel']['reads']:,}",
+        "cpathsClibReads": f"{b['clib']['reads']:,}",
         "cpathsClibParallelReads": f"{b['clib_parallel']['reads']:,}",
         "cpathsPadLines": t["pad_lines"],
     }
-    return ("% Written by paper/cpc/scripts/corpus_paths.py from data/corpus_paths.json.\n"
-            + "".join(f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()))
+    return (
+        "% Written by paper/cpc/scripts/corpus_paths.py from data/corpus_paths.json.\n"
+        + "".join(
+            f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+        )
+    )
 
 
 def table(record: dict) -> str:
     lines = [
         "% Written by paper/cpc/scripts/corpus_paths.py from data/corpus_paths.json.",
-        r"\begin{table}[tbp]", r"\centering", r"\small",
+        r"\begin{table}[tbp]",
+        r"\centering",
+        r"\small",
         r"\caption{Both corpora on the frame readers and the frame count of the Python module and the C library.",
         r"A cell gives the reads that return the outcome of the manifest, of all reads at that thread setting.",
         r"The \cpathsFiles{} files are the \cpathsConformance{} of the conformance corpus and the "
@@ -424,8 +564,10 @@ def table(record: dict) -> str:
         r"contain the parallel build.}",
         r"\label{tab:corpus-paths}",
         r"\resizebox{\textwidth}{!}{%",
-        r"\begin{tabular}{@{}llrrrrr@{}}", r"\toprule",
-        r"Build & Entry point & 1 thread & 2 threads & 8 threads & Default & Serial \\", r"\midrule",
+        r"\begin{tabular}{@{}llrrrrr@{}}",
+        r"\toprule",
+        r"Build & Entry point & 1 thread & 2 threads & 8 threads & Default & Serial \\",
+        r"\midrule",
     ]
     for build, (label, _) in BUILDS.items():
         first = True
@@ -446,7 +588,10 @@ def table(record: dict) -> str:
 def comparable(record: dict) -> dict:
     prov = record["provenance"]
     builds = [prov["build"], *prov["c_libraries"].values()]
-    return {"results": record["results"], "digests": sorted({b["library_digest"] for b in builds})}
+    return {
+        "results": record["results"],
+        "digests": sorted({b["library_digest"] for b in builds}),
+    }
 
 
 def measure() -> dict:
@@ -455,12 +600,21 @@ def measure() -> dict:
             sys.exit(f"{library} is missing; build it with pixi run {task}")
         stale = provenance.newer_sources(library)
         if stale:
-            sys.exit(f"{library} is older than {', '.join(stale[:3])}; rebuild it with pixi run {task}")
-    builds = {"wheel": {**provenance.readcon_build(), "features": BUILDS["wheel"][1]},
-              "clib": {**provenance.binary_build(CLIB), "features": BUILDS["clib"][1]},
-              "clib_parallel": {**provenance.binary_build(CLIB_PARALLEL), "features": BUILDS["clib_parallel"][1]}}
+            sys.exit(
+                f"{library} is older than {', '.join(stale[:3])}; rebuild it with pixi run {task}"
+            )
+    builds = {
+        "wheel": {**provenance.readcon_build(), "features": BUILDS["wheel"][1]},
+        "clib": {**provenance.binary_build(CLIB), "features": BUILDS["clib"][1]},
+        "clib_parallel": {
+            **provenance.binary_build(CLIB_PARALLEL),
+            "features": BUILDS["clib_parallel"][1],
+        },
+    }
     if builds["wheel"]["newer_sources"]:
-        sys.exit(f"the readcon module is older than {builds['wheel']['newer_sources'][0]}; pixi run cpc-readcon")
+        sys.exit(
+            f"the readcon module is older than {builds['wheel']['newer_sources'][0]}; pixi run cpc-readcon"
+        )
     files = corpus()
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -469,26 +623,50 @@ def measure() -> dict:
         jobs_path.write_text(json.dumps(jobs))
         got = {build: run_child(build, jobs_path) for build in BUILDS}
     return {
-        "manifests": [provenance.portable(CONF / "manifest.toml"), provenance.portable(C31 / "manifest.toml")],
+        "manifests": [
+            provenance.portable(CONF / "manifest.toml"),
+            provenance.portable(C31 / "manifest.toml"),
+        ],
         "threads": [label for label, _ in THREADS],
         "results": results(jobs, files, got),
-        "provenance": {"build": builds["wheel"],
-                       "c_libraries": {name: builds[name] for name in ("clib", "clib_parallel")},
-                       "host": provenance.host(), "peers": {"python": platform.python_version()}},
+        "provenance": {
+            "build": builds["wheel"],
+            "c_libraries": {name: builds[name] for name in ("clib", "clib_parallel")},
+            "host": provenance.host(),
+            "peers": {"python": platform.python_version()},
+        },
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=OUT, help="record (default: %(default)s)")
-    parser.add_argument("--check", action="store_true", help="compare a rerun with --out instead of writing it")
-    parser.add_argument("--tables", action="store_true", help="rewrite the TeX from --out only; read nothing")
-    parser.add_argument("--child", nargs=2, metavar=("BUILD", "JOBS"), help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--out", type=Path, default=OUT, help="record (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="compare a rerun with --out instead of writing it",
+    )
+    parser.add_argument(
+        "--tables",
+        action="store_true",
+        help="rewrite the TeX from --out only; read nothing",
+    )
+    parser.add_argument(
+        "--child", nargs=2, metavar=("BUILD", "JOBS"), help=argparse.SUPPRESS
+    )
     args = parser.parse_args()
     if args.child:
         build, jobs = args.child[0], json.loads(Path(args.child[1]).read_text())
         library = {"clib": CLIB, "clib_parallel": CLIB_PARALLEL}.get(build)
-        print(json.dumps(wheel_child(jobs) if build == "wheel" else clib_child(build, library, jobs)))
+        print(
+            json.dumps(
+                wheel_child(jobs)
+                if build == "wheel"
+                else clib_child(build, library, jobs)
+            )
+        )
         return 0
     if args.tables:
         stored = json.loads(args.out.read_text())["results"]
@@ -499,8 +677,10 @@ def main() -> int:
     record = measure()
     r = record["results"]
     t = r["totals"]
-    print(f"corpus paths: {t['files']} files, {t['match']} of {t['reads']} reads match the manifest over "
-          f"{t['read_kinds']} entry points and thread settings, {t['differ']} differ")
+    print(
+        f"corpus paths: {t['files']} files, {t['match']} of {t['reads']} reads match the manifest over "
+        f"{t['read_kinds']} entry points and thread settings, {t['differ']} differ"
+    )
     for build, counts in r["by_build"].items():
         print(f"  {build}: {counts['match']} of {counts['reads']}")
     if args.check:
@@ -508,7 +688,10 @@ def main() -> int:
         if comparable(stored) != comparable(record):
             print(f"{args.out} differs from this run", file=sys.stderr)
             return 1
-        for path, text in ((MACROS, macros(stored["results"])), (TABLE, table(stored["results"]))):
+        for path, text in (
+            (MACROS, macros(stored["results"])),
+            (TABLE, table(stored["results"])),
+        ):
             if not path.is_file() or path.read_text() != text:
                 print(f"{path} differs from {args.out}", file=sys.stderr)
                 return 1

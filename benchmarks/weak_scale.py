@@ -101,7 +101,11 @@ def work_per_worker(n_frames: int, workers: int) -> int:
 
 def gate_frames(frame_bytes: int, threshold: int) -> int:
     """Smallest frame count whose concatenated file is at least ``threshold`` bytes."""
-    if not isinstance(frame_bytes, int) or isinstance(frame_bytes, bool) or frame_bytes < 1:
+    if (
+        not isinstance(frame_bytes, int)
+        or isinstance(frame_bytes, bool)
+        or frame_bytes < 1
+    ):
         raise ValueError("frame_bytes must be a positive integer")
     if threshold < 1:
         raise ValueError("threshold must be positive")
@@ -228,7 +232,11 @@ def read_topology(mapping: dict[str, str] | None = None) -> dict:
     threads_per_core = _first_int(fields.get("thread(s) per core", "1"))
     if threads_per_core < 1:
         raise RuntimeError("lscpu reported no threads per core")
-    logical = _first_int(fields["cpu(s)"]) if "cpu(s)" in fields else cores_per_socket * sockets * threads_per_core
+    logical = (
+        _first_int(fields["cpu(s)"])
+        if "cpu(s)" in fields
+        else cores_per_socket * sockets * threads_per_core
+    )
     physical = cores_per_socket * sockets
     model_raw = fields.get("model name", "")
     hypervisor = fields.get("hypervisor vendor", "") or "none"
@@ -299,7 +307,10 @@ def ladder_fits(ladder: list[int] | tuple[int, ...], physical: int) -> bool:
         return False
     if tuple(ladder) != expected:
         return False
-    return all(isinstance(worker, int) and not isinstance(worker, bool) and worker <= physical for worker in ladder)
+    return all(
+        isinstance(worker, int) and not isinstance(worker, bool) and worker <= physical
+        for worker in ladder
+    )
 
 
 DEFAULT_LADDER = ladder_for_cores(physical_cores())
@@ -367,7 +378,9 @@ def _first_line(argv: list[str]) -> str | None:
     if shutil.which(argv[0]) is None:
         return None
     try:
-        proc = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(
+            argv, check=False, capture_output=True, text=True, timeout=30
+        )
     except (OSError, subprocess.TimeoutExpired):
         return None
     text = (proc.stdout or proc.stderr or "").strip()
@@ -465,7 +478,9 @@ def bind_args(mpi: str) -> list[str]:
     return []
 
 
-def mpirun_argv(mpi: str, ranks: int, binary: str, path: str, out: str, repeats: int) -> list[str]:
+def mpirun_argv(
+    mpi: str, ranks: int, binary: str, path: str, out: str, repeats: int
+) -> list[str]:
     if not bind_args(mpi) and mpi != "absent":
         raise ValueError("MPI implementation has no known core-binding flag")
     return [
@@ -480,7 +495,9 @@ def mpirun_argv(mpi: str, ranks: int, binary: str, path: str, out: str, repeats:
     ]
 
 
-def asv_thread_argv(config: str, machine: str, repeats: int, commit: str = "HEAD") -> list[str]:
+def asv_thread_argv(
+    config: str, machine: str, repeats: int, commit: str = "HEAD"
+) -> list[str]:
     return [
         "asv",
         "run",
@@ -514,7 +531,10 @@ def make_plan(host: dict, ladder: list[int] | tuple[int, ...] | None = None) -> 
     reason = ""
     if not fits:
         if physical and any(
-            isinstance(worker, int) and not isinstance(worker, bool) and worker > physical for worker in ladder
+            isinstance(worker, int)
+            and not isinstance(worker, bool)
+            and worker > physical
+            for worker in ladder
         ):
             reason = f"ladder {list(ladder)} exceeds {physical} physical cores"
         else:
@@ -881,7 +901,9 @@ def _asv_record(payload: dict, chosen) -> dict:
     raise ValueError("asv payload has no time_weak_threads result")
 
 
-def from_asv(payload: dict, host: dict, frames_per_worker: int, fixture: str, fixture_bytes: int) -> dict:
+def from_asv(
+    payload: dict, host: dict, frames_per_worker: int, fixture: str, fixture_bytes: int
+) -> dict:
     """Build a campaign record from an asv result. Medians are not taken from asv."""
     results = payload.get("results")
     if not isinstance(results, dict):
@@ -1040,7 +1062,9 @@ def command_report(args: argparse.Namespace) -> int:
         pdf = out / f"weak_{summary['kind']}_{hardware_slug(summary['host'])}.pdf"
         write_plot(pdf, summary)
         pdf_name = pdf.name
-    write_curve(out / curve_filename(summary["kind"], summary["host"]), summary, pdf_name)
+    write_curve(
+        out / curve_filename(summary["kind"], summary["host"]), summary, pdf_name
+    )
     return 0
 
 
@@ -1170,7 +1194,9 @@ def command_run_ranks(args: argparse.Namespace) -> int:
         con = work / f"frames-{n_frames}.con"
         con.write_text(fixture_text * n_frames, encoding="utf-8")
         out = work / f"ranks-{ranks}.json"
-        argv = mpirun_argv(str(host["mpi"]), int(ranks), str(binary), str(con), str(out), REPEATS)
+        argv = mpirun_argv(
+            str(host["mpi"]), int(ranks), str(binary), str(con), str(out), REPEATS
+        )
         proc = subprocess.run(argv, cwd=ROOT, env=env, capture_output=True, text=True)
         chunks.append("$ " + " ".join(argv) + "\n" + proc.stdout + proc.stderr)
         if proc.returncode != 0:
@@ -1185,7 +1211,9 @@ def command_run_ranks(args: argparse.Namespace) -> int:
     return code
 
 
-def _merge_rank_points(points: list[dict], host: dict, frames_per_worker: int, fixture: str) -> dict:
+def _merge_rank_points(
+    points: list[dict], host: dict, frames_per_worker: int, fixture: str
+) -> dict:
     merged = []
     for point in points:
         if point.get("measured") is False:
@@ -1221,7 +1249,9 @@ def _merge_rank_points(points: list[dict], host: dict, frames_per_worker: int, f
 
 
 def _utc_minute() -> str:
-    proc = subprocess.run(["date", "-u", "+%Y-%m-%dT%H:%MZ"], check=False, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["date", "-u", "+%Y-%m-%dT%H:%MZ"], check=False, capture_output=True, text=True
+    )
     return (proc.stdout or "").strip()
 
 
@@ -1229,12 +1259,16 @@ def command_run_gpu(args: argparse.Namespace) -> int:
     host = capture_host() if args.host is None else _load_json(Path(args.host))
     reason = make_plan(host)["gpu"]["reason"]
     write_stubs(Path(args.out))
-    write_headed_log(Path(args.log), "python3 benchmarks/weak_scale.py run-gpu", reason + "\n", 2)
+    write_headed_log(
+        Path(args.log), "python3 benchmarks/weak_scale.py run-gpu", reason + "\n", 2
+    )
     return 2
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Weak-scaling plan, report, and campaign launchers")
+    parser = argparse.ArgumentParser(
+        description="Weak-scaling plan, report, and campaign launchers"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     host = sub.add_parser("host")
@@ -1284,7 +1318,9 @@ def _parser() -> argparse.ArgumentParser:
     threads.add_argument("--json", required=True)
     threads.add_argument("--log", required=True)
     threads.add_argument("--config", default="asv.weak.conf.json")
-    threads.add_argument("--frames-per-worker", type=int, default=CAMPAIGN_FRAMES_PER_WORKER)
+    threads.add_argument(
+        "--frames-per-worker", type=int, default=CAMPAIGN_FRAMES_PER_WORKER
+    )
     threads.add_argument("--fixture", default="resources/test/cuh2.con")
     threads.set_defaults(func=command_run_threads)
 
@@ -1295,7 +1331,9 @@ def _parser() -> argparse.ArgumentParser:
     ranks.add_argument("--log", required=True)
     ranks.add_argument("--binary", required=True)
     ranks.add_argument("--work", required=True)
-    ranks.add_argument("--frames-per-worker", type=int, default=CAMPAIGN_FRAMES_PER_WORKER)
+    ranks.add_argument(
+        "--frames-per-worker", type=int, default=CAMPAIGN_FRAMES_PER_WORKER
+    )
     ranks.add_argument("--fixture", default="resources/test/cuh2.con")
     ranks.set_defaults(func=command_run_ranks)
 

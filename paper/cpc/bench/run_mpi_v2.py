@@ -54,8 +54,12 @@ def main() -> None:
             break
     cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").split())
     cpu = "Intel Xeon Processor" if "Xeon" in cleaned else cleaned
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True
+    ).strip()
     lines = [
         f"rev_parse {head}",
         f"tree {tree}",
@@ -74,13 +78,26 @@ def main() -> None:
         for ranks in RANKS:
             for repeat in range(REPEATS):
                 proc = subprocess.run(
-                    ["mpirun", "-n", str(ranks), str(BIN.relative_to(ROOT)), str(path.relative_to(ROOT)), mode],
+                    [
+                        "mpirun",
+                        "-n",
+                        str(ranks),
+                        str(BIN.relative_to(ROOT)),
+                        str(path.relative_to(ROOT)),
+                        mode,
+                    ],
                     cwd=ROOT,
                     text=True,
                     capture_output=True,
                 )
-                text = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-300:]
-                lines.append(f"repeat {repeat} mode {mode} launch {text} exit {proc.returncode}")
+                text = (
+                    proc.stdout.strip().splitlines()[-1]
+                    if proc.stdout.strip()
+                    else proc.stderr[-300:]
+                )
+                lines.append(
+                    f"repeat {repeat} mode {mode} launch {text} exit {proc.returncode}"
+                )
     lines.append("exit_code 0")
     text = "\n".join(lines) + "\n"
     (OUT / "mpi.log").write_text(text)

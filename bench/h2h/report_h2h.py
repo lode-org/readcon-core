@@ -20,7 +20,9 @@ def quantile_type7(values: list[float], probability: float) -> float:
     upper = math.ceil(position)
     if lower == upper:
         return ordered[lower - 1]
-    return ordered[lower - 1] + (position - lower) * (ordered[upper - 1] - ordered[lower - 1])
+    return ordered[lower - 1] + (position - lower) * (
+        ordered[upper - 1] - ordered[lower - 1]
+    )
 
 
 def fmt_ms(seconds: float) -> str:
@@ -31,13 +33,24 @@ def load(log_dir: Path) -> dict[tuple, list[dict]]:
     groups: dict[tuple, list[dict]] = {}
     for path in sorted(log_dir.glob("run-*.json")):
         record = json.loads(path.read_text(encoding="utf-8"))
-        key = (record["table"], record["code"], record["mode"], record["format"], record["cache"], record["workload"])
+        key = (
+            record["table"],
+            record["code"],
+            record["mode"],
+            record["format"],
+            record["cache"],
+            record["workload"],
+        )
         groups.setdefault(key, []).append(record)
     return groups
 
 
 def summarize(records: list[dict]) -> dict:
-    walls = [float(item["wall_s"]) for item in records if item.get("wall_s") is not None and item.get("match")]
+    walls = [
+        float(item["wall_s"])
+        for item in records
+        if item.get("wall_s") is not None and item.get("match")
+    ]
     matched = sum(1 for item in records if item.get("match"))
     summary = {
         "format": records[0].get("format"),
@@ -75,7 +88,11 @@ def write_table(path: Path, groups: dict, table: str, cache: str) -> None:
         else:
             median = fmt_ms(summary["median_wall_s"])
             iqr = fmt_ms(summary["iqr_wall_s"])
-        label = code if mode in ("default", "native", "eon", "client", "chemfiles") else f"{code} {mode}"
+        label = (
+            code
+            if mode in ("default", "native", "eon", "client", "chemfiles")
+            else f"{code} {mode}"
+        )
         if mode == "eon":
             label = "ase eon"
         if mode == "client":
@@ -96,7 +113,9 @@ def main() -> None:
     parser.add_argument("log_dir")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    groups = {key: summarize(records) for key, records in load(Path(args.log_dir)).items()}
+    groups = {
+        key: summarize(records) for key, records in load(Path(args.log_dir)).items()
+    }
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     for table in ("con", "other"):
@@ -123,7 +142,9 @@ def main() -> None:
             )
         )
         if median is not None and summary["success_rate"] == 1.0:
-            print(f"row {table} {cache} {workload} {code} {mode} {fmt} {fmt_ms(median)} success 1.000")
+            print(
+                f"row {table} {cache} {workload} {code} {mode} {fmt} {fmt_ms(median)} success 1.000"
+            )
     (out / "published.stdout").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 

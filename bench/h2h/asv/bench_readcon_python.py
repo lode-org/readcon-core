@@ -25,6 +25,7 @@ class ReadconPython:
     def setup(self):
         import os
         import readcon
+
         self.os = os
         self.readcon = readcon
 
@@ -42,7 +43,13 @@ class ReadconPython:
         _elapsed, got = measure.python_read_once(path)
         out = support.WORK / "outs" / "asv-python-rewrite.con"
         out.parent.mkdir(parents=True, exist_ok=True)
-        self.readcon.write_coords(self.os.fspath(out), got["positions"], got["masses"], got["cell"], symbol="Cu")
+        self.readcon.write_coords(
+            self.os.fspath(out),
+            got["positions"],
+            got["masses"],
+            got["cell"],
+            symbol="Cu",
+        )
 
     def track_copy_s(self):
         _elapsed, got = measure.python_read_once(support.case_path("atoms-1000000"))

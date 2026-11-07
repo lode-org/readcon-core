@@ -40,10 +40,14 @@ def calls(con: str, rc: str, peers: Path, n: int):
         return len(readcon.read_con(con, 1))
 
     def read_arrays():
-        return readcon.read_arrays(con, 1, positions_only=True, low_memory=False).positions.shape[0]
+        return readcon.read_arrays(
+            con, 1, positions_only=True, low_memory=False
+        ).positions.shape[0]
 
     def read_arrays_low_memory():
-        return readcon.read_arrays(con, 1, positions_only=True, low_memory=True).positions.shape[0]
+        return readcon.read_arrays(
+            con, 1, positions_only=True, low_memory=True
+        ).positions.shape[0]
 
     def read_rcbin_owned():
         a = readcon.read_rcbin(rc)
@@ -64,15 +68,32 @@ def calls(con: str, rc: str, peers: Path, n: int):
     def ase_extxyz():
         return len(ase_read(str(peers / "traj.extxyz"), index=":", format="extxyz"))
 
-    return {fn.__name__: fn for fn in (read_con, read_arrays, read_arrays_low_memory, read_rcbin_owned,
-                                       read_rcbin_caller, h5py_positions, ase_traj, ase_extxyz)}
+    return {
+        fn.__name__: fn
+        for fn in (
+            read_con,
+            read_arrays,
+            read_arrays_low_memory,
+            read_rcbin_owned,
+            read_rcbin_caller,
+            h5py_positions,
+            ase_traj,
+            ase_extxyz,
+        )
+    }
 
 
 def main() -> int:
     if len(sys.argv) != 6:
         print(__doc__, file=sys.stderr)
         return 2
-    name, con, rc, peers, n = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4]), int(sys.argv[5])
+    name, con, rc, peers, n = (
+        sys.argv[1],
+        sys.argv[2],
+        sys.argv[3],
+        Path(sys.argv[4]),
+        int(sys.argv[5]),
+    )
     fn = calls(con, rc, peers, n)[name]
     if fn() != n:
         raise SystemExit(f"{name}: the untimed call read another frame count than {n}")

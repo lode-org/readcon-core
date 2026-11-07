@@ -35,8 +35,10 @@ RECORD = ROOT / "data" / "survey_frame.json"
 
 
 def write_listing(record: dict) -> None:
-    caption = ("A Pt(100) slab of two layers of four atoms with one adatom, as one CON 3.1 frame with velocities "
-               f"written by readcon-core {record['readcon']}. Section~\\ref{{sec:worked}} reads it line by line.")
+    caption = (
+        "A Pt(100) slab of two layers of four atoms with one adatom, as one CON 3.1 frame with velocities "
+        f"written by readcon-core {record['readcon']}. Section~\\ref{{sec:worked}} reads it line by line."
+    )
     (GENERATED / "survey_listing.tex").write_text(
         "% Written by paper/cpc/scripts/survey_listing.py.\n"
         f"\\lstinputlisting[numbers=left,numberstyle=\\tiny,caption={{{caption}}},label={{lst:frame}}]"
@@ -54,25 +56,42 @@ def measure() -> dict:
     ids = [int(atom.atom_id) for atom in back.atoms]
     pos = np.array([[atom.x, atom.y, atom.z] for atom in back.atoms])
     fixed = np.array([list(atom.fixed) for atom in back.atoms])
-    if ids != [int(i) for i in fx["ids"]] or not (pos == fx["pos"]).all() or not (fixed == fx["mask"]).all():
+    if (
+        ids != [int(i) for i in fx["ids"]]
+        or not (pos == fx["pos"]).all()
+        or not (fixed == fx["mask"]).all()
+    ):
         raise SystemExit("the survey frame does not read back to the fixture")
     data = FRAME.read_bytes()
-    record = {"readcon": readcon.__version__, "bytes": len(data), "lines": data.count(b"\n"),
-              "sha256": hashlib.sha256(data).hexdigest(), "ids": ids,
-              "source": "scripts/failure_matrix.py fixture() written by w_readcon",
-              "provenance": provenance.record()}
+    record = {
+        "readcon": readcon.__version__,
+        "bytes": len(data),
+        "lines": data.count(b"\n"),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "ids": ids,
+        "source": "scripts/failure_matrix.py fixture() written by w_readcon",
+        "provenance": provenance.record(),
+    }
     RECORD.write_text(json.dumps(record, indent=2) + "\n")
     return record
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--tables", action="store_true", help="write the listing from the committed record only")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--tables",
+        action="store_true",
+        help="write the listing from the committed record only",
+    )
     args = parser.parse_args()
     if args.tables:
         record = json.loads(RECORD.read_text())
         if hashlib.sha256(FRAME.read_bytes()).hexdigest() != record["sha256"]:
-            raise SystemExit(f"{FRAME.name} differs from the SHA-256 in {RECORD.name}; rerun survey_listing.py")
+            raise SystemExit(
+                f"{FRAME.name} differs from the SHA-256 in {RECORD.name}; rerun survey_listing.py"
+            )
     else:
         record = measure()
     write_listing(record)

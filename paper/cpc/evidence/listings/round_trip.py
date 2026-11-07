@@ -16,7 +16,11 @@ def main() -> None:
     frame = frames[0]
     print("frames", len(frames))
     print("atoms", len(frame.atoms))
-    print("spec", frame.metadata.get("con_spec_version"), frame.metadata.get("con_spec_minor"))
+    print(
+        "spec",
+        frame.metadata.get("con_spec_version"),
+        frame.metadata.get("con_spec_minor"),
+    )
     print("time", frame.metadata.get("units", {}).get("time"))
     atom = frame.atoms[-1]
     print("adsorbate", atom.symbol, atom.atom_id, atom.fixed, atom.vx, atom.vy, atom.vz)
@@ -24,8 +28,7 @@ def main() -> None:
     readcon.write_con("fixed6.con", frames, precision=6)
     again = readcon.read_con("round_trip.con")
     same = all(
-        (a.x, a.y, a.z) == (b.x, b.y, b.z)
-        for a, b in zip(frame.atoms, again[0].atoms)
+        (a.x, a.y, a.z) == (b.x, b.y, b.z) for a, b in zip(frame.atoms, again[0].atoms)
     )
     print("round_trip_positions", same)
 

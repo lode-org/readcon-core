@@ -27,7 +27,14 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-LIBRARY_PATHS = ("src", "include", "build.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml")
+LIBRARY_PATHS = (
+    "src",
+    "include",
+    "build.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "pyproject.toml",
+)
 
 
 def _git(*args: str) -> str | None:
@@ -51,7 +58,9 @@ def library_files(root: Path = REPO) -> list[str]:
         if path.is_file():
             files.append(entry)
         elif path.is_dir():
-            files.extend(p.relative_to(root).as_posix() for p in path.rglob("*") if p.is_file())
+            files.extend(
+                p.relative_to(root).as_posix() for p in path.rglob("*") if p.is_file()
+            )
     return sorted(files)
 
 
@@ -66,7 +75,9 @@ def library_digest_at(commit: str) -> str | None:
     listing = _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS)
     if not listing:
         return None
-    entries = sorted((line.split("\t", 1)[1], line.split()[2]) for line in listing.splitlines())
+    entries = sorted(
+        (line.split("\t", 1)[1], line.split()[2]) for line in listing.splitlines()
+    )
     out = subprocess.run(
         ["git", "-C", str(REPO), "cat-file", "--batch"],
         input="".join(f"{blob}\n" for _, blob in entries).encode(),
@@ -77,14 +88,16 @@ def library_digest_at(commit: str) -> str | None:
     for rel, _ in entries:
         header_end = out.index(b"\n", at)
         size = int(out[at:header_end].split()[2])
-        content = out[header_end + 1:header_end + 1 + size]
+        content = out[header_end + 1 : header_end + 1 + size]
         at = header_end + 1 + size + 1
         lines.append(f"{hashlib.sha256(content).hexdigest()}  {rel}\n")
     return hashlib.sha256("".join(lines).encode()).hexdigest()
 
 
 def library_version(root: Path = REPO) -> str:
-    return re.search(r'^version = "([^"]+)"', (root / "Cargo.toml").read_text(), re.M).group(1)
+    return re.search(
+        r'^version = "([^"]+)"', (root / "Cargo.toml").read_text(), re.M
+    ).group(1)
 
 
 def newer_sources(built: Path, root: Path = REPO) -> list[str]:
@@ -103,23 +116,34 @@ def source_identity() -> dict:
     them, tag and commit are None and the digest alone names the sources.
     """
     files = library_files()
-    identity = {"library_digest": library_digest(), "source_files": len(files),
-                "source_tag": None, "source_commit": None}
+    identity = {
+        "library_digest": library_digest(),
+        "source_files": len(files),
+        "source_tag": None,
+        "source_commit": None,
+    }
     hashed = None
     tag = f"v{library_version()}"
     for ref, name in ((f"{tag}^{{commit}}", tag), ("HEAD^{commit}", None)):
         commit = _git("rev-parse", "--verify", "-q", ref)
-        listing = _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS) if commit else None
+        listing = (
+            _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS) if commit else None
+        )
         if not listing:
             continue
         if hashed is None:
-            hashed = dict(zip(files, subprocess.run(
-                ["git", "-C", str(REPO), "hash-object", "--stdin-paths"],
-                input="\n".join(files) + "\n",
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout.split()))
+            hashed = dict(
+                zip(
+                    files,
+                    subprocess.run(
+                        ["git", "-C", str(REPO), "hash-object", "--stdin-paths"],
+                        input="\n".join(files) + "\n",
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    ).stdout.split(),
+                )
+            )
         held = {}
         for line in listing.splitlines():
             meta, path = line.split("\t", 1)
@@ -136,7 +160,7 @@ def portable(path: Path) -> str:
     if path.is_relative_to(REPO):
         return str(path.relative_to(REPO))
     if "site-packages" in path.parts:
-        return str(Path(*path.parts[path.parts.index("site-packages"):]))
+        return str(Path(*path.parts[path.parts.index("site-packages") :]))
     return path.name
 
 
@@ -206,9 +230,13 @@ def binary_build(binary: Path) -> dict:
 
 def _command(*cmd: str) -> str | None:
     # nproc prints OMP_NUM_THREADS or OMP_THREAD_LIMIT when either is set, not the processing units.
-    env = {key: value for key, value in os.environ.items() if not key.startswith("OMP_")}
+    env = {
+        key: value for key, value in os.environ.items() if not key.startswith("OMP_")
+    }
     try:
-        return subprocess.run(cmd, check=True, capture_output=True, text=True, env=env).stdout.strip()
+        return subprocess.run(
+            cmd, check=True, capture_output=True, text=True, env=env
+        ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -216,13 +244,17 @@ def _command(*cmd: str) -> str | None:
 def hardware() -> dict:
     """The hardware line of a timing record: ``uname -m``, ``nproc`` and the CPU model as the host prints them."""
     nproc = _command("nproc")
-    return {"uname_m": _command("uname", "-m"), "nproc": int(nproc) if nproc else None,
-            "cpu_model": host().get("cpu_model")}
+    return {
+        "uname_m": _command("uname", "-m"),
+        "nproc": int(nproc) if nproc else None,
+        "cpu_model": host().get("cpu_model"),
+    }
 
 
 def hardware_tex(line: dict) -> str:
     """The hardware line in TeX: the CPU model as the host prints it, in typewriter type, then what ``uname -m``
     and ``nproc`` print."""
+
     def tex(text: str) -> str:
         return re.sub(r"([&%$#_{}])", r"\\\1", text)
 
@@ -234,14 +266,20 @@ def normalize_cpu(raw: str) -> str:
 
     A Xeon model becomes ``Intel Xeon Processor``.
     """
-    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split())
+    cleaned = " ".join(
+        raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split()
+    )
     if "Xeon" in cleaned:
         return "Intel Xeon Processor"
     return cleaned or "unknown"
 
 
 def host() -> dict:
-    info: dict = {"kernel": platform.release(), "uname_m": platform.machine(), "nproc": os.cpu_count()}
+    info: dict = {
+        "kernel": platform.release(),
+        "uname_m": platform.machine(),
+        "nproc": os.cpu_count(),
+    }
     try:
         text = Path("/proc/cpuinfo").read_text()
     except OSError:
@@ -268,12 +306,23 @@ def host() -> dict:
 
 def peers() -> dict:
     versions: dict = {}
-    for name in ("ase", "chemfiles", "MDAnalysis", "h5py", "numpy", "scipy", "ovito", "openbabel"):
+    for name in (
+        "ase",
+        "chemfiles",
+        "MDAnalysis",
+        "h5py",
+        "numpy",
+        "scipy",
+        "ovito",
+        "openbabel",
+    ):
         try:
             module = __import__(name)
         except Exception:  # noqa: BLE001
             continue
-        version = getattr(module, "__version__", None) or getattr(module, "version_string", None)
+        version = getattr(module, "__version__", None) or getattr(
+            module, "version_string", None
+        )
         versions[name] = str(version)
     versions["python"] = platform.python_version()
     return versions
@@ -285,8 +334,13 @@ def record() -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--digest", nargs="?", const=str(REPO), metavar="ROOT",
-                        help="print the library digest of ROOT (default: this tree) and exit")
+    parser.add_argument(
+        "--digest",
+        nargs="?",
+        const=str(REPO),
+        metavar="ROOT",
+        help="print the library digest of ROOT (default: this tree) and exit",
+    )
     args = parser.parse_args()
     if args.digest:
         print(library_digest(Path(args.digest).resolve()))

@@ -35,7 +35,9 @@ import portable  # noqa: E402
 import provenance  # noqa: E402
 
 SRC = Path(os.environ.get("READCON_SRC", "").strip() or provenance.REPO).resolve()
-RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174")) / "cachegrind"
+RESULTS = (
+    Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174")) / "cachegrind"
+)
 FEATURES = "chemfiles-from-sources"
 TARGET = SRC / "target" / "cachegrind"
 BIN = TARGET / "release" / "examples" / "cachegrind_harness"
@@ -44,40 +46,91 @@ IREFS = re.compile(r"I\s+refs:\s*([\d,]+)")
 
 def scenario(name: str, tmp: Path):
     def run() -> dict:
-        proc = subprocess.run(["valgrind", "--tool=cachegrind", f"--cachegrind-out-file={tmp / (name + '.out')}",
-                               "--branch-sim=no", "--error-exitcode=0", str(BIN), name], capture_output=True,
-                              text=True, check=False)
+        proc = subprocess.run(
+            [
+                "valgrind",
+                "--tool=cachegrind",
+                f"--cachegrind-out-file={tmp / (name + '.out')}",
+                "--branch-sim=no",
+                "--error-exitcode=0",
+                str(BIN),
+                name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         found = IREFS.findall(proc.stdout + proc.stderr)
         if proc.returncode != 0 or not found:
-            raise SystemExit(f"cachegrind {name} exited {proc.returncode}: {(proc.stdout + proc.stderr)[-2000:]}")
+            raise SystemExit(
+                f"cachegrind {name} exited {proc.returncode}: {(proc.stdout + proc.stderr)[-2000:]}"
+            )
         return {"irefs": int(found[-1].replace(",", ""))}
+
     return run
 
 
 def main() -> None:
     env = {**os.environ, "CARGO_TARGET_DIR": str(TARGET)}
-    subprocess.run(["cargo", "build", "--release", "--example", "cachegrind_harness", "--features", FEATURES],
-                   cwd=SRC, env=env, check=True)
-    listed = subprocess.run([str(BIN), "list"], capture_output=True, text=True, check=True).stdout
-    names = [line.strip() for line in listed.splitlines() if line.strip() and not line.startswith("#")]
+    subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--example",
+            "cachegrind_harness",
+            "--features",
+            FEATURES,
+        ],
+        cwd=SRC,
+        env=env,
+        check=True,
+    )
+    listed = subprocess.run(
+        [str(BIN), "list"], capture_output=True, text=True, check=True
+    ).stdout
+    names = [
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
     with tempfile.TemporaryDirectory(prefix="cachegrind-") as tmp:
-        record = interleave.campaign({name: scenario(name, Path(tmp)) for name in names}, metric="irefs",
-                                     suffix="_irefs")
-    sha = subprocess.run(["git", "-C", str(SRC), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
-                         check=True).stdout.strip()
+        record = interleave.campaign(
+            {name: scenario(name, Path(tmp)) for name in names},
+            metric="irefs",
+            suffix="_irefs",
+        )
+    sha = subprocess.run(
+        ["git", "-C", str(SRC), "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     medians = {name: record["cells"][name]["median_irefs"] for name in names}
     if any(value != int(value) for value in medians.values()):
-        raise SystemExit("a median count falls between two runs; run an odd number of rounds")
-    out = {"git_sha": sha, "features": FEATURES, "tool": "cachegrind", "metric": "I_refs",
-           "valgrind": subprocess.run(["valgrind", "--version"], capture_output=True, text=True,
-                                      check=True).stdout.strip(),
-           "scenarios": {name: int(value) for name, value in medians.items()},
-           "protocol": record["protocol"], "hardware": record["hardware"], "cells": record["cells"],
-           "provenance": provenance.binary_build(BIN)}
+        raise SystemExit(
+            "a median count falls between two runs; run an odd number of rounds"
+        )
+    out = {
+        "git_sha": sha,
+        "features": FEATURES,
+        "tool": "cachegrind",
+        "metric": "I_refs",
+        "valgrind": subprocess.run(
+            ["valgrind", "--version"], capture_output=True, text=True, check=True
+        ).stdout.strip(),
+        "scenarios": {name: int(value) for name, value in medians.items()},
+        "protocol": record["protocol"],
+        "hardware": record["hardware"],
+        "cells": record["cells"],
+        "provenance": provenance.binary_build(BIN),
+    }
     if RESULTS.exists():
         shutil.rmtree(RESULTS)
     RESULTS.mkdir(parents=True)
-    (RESULTS / "cachegrind_results.json").write_text(json.dumps(portable.portable(out), indent=2) + "\n")
+    (RESULTS / "cachegrind_results.json").write_text(
+        json.dumps(portable.portable(out), indent=2) + "\n"
+    )
     print(f"wrote {RESULTS}: {len(names)} scenarios")
 
 

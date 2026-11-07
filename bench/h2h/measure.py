@@ -20,7 +20,13 @@ import support
 REPEATS = support.REPEATS
 
 
-def _emit(name: str, command: list[str], row: dict, extra: dict | None = None, code: int | None = None) -> dict:
+def _emit(
+    name: str,
+    command: list[str],
+    row: dict,
+    extra: dict | None = None,
+    code: int | None = None,
+) -> dict:
     body = support.format_result(row, extra)
     status = 0 if row.get("correct") else 1
     if code is not None:
@@ -52,7 +58,9 @@ def python_read_once(path: Path) -> tuple[float, dict]:
 def python_check(path: Path, got: dict, atoms: int, frames: int) -> dict:
     coords = np.asarray(got["positions"], dtype=np.float64)
     cell = np.asarray(got["cell"], dtype=np.float64)[0]
-    return support.judge(int(got["n_atoms"]), int(got["n_frames"]), cell, coords, atoms, frames)
+    return support.judge(
+        int(got["n_atoms"]), int(got["n_frames"]), cell, coords, atoms, frames
+    )
 
 
 def run_readcon_python() -> None:
@@ -76,7 +84,12 @@ def run_readcon_python() -> None:
             hwm_mib=support.hwm_mib(),
             process="in-process",
         )
-        _emit(f"python-read-{name}", _command(["readcon_python"]), row, {"file": support.rel(path), "format": "con"})
+        _emit(
+            f"python-read-{name}",
+            _command(["readcon_python"]),
+            row,
+            {"file": support.rel(path), "format": "con"},
+        )
         if name == "atoms-1000000":
             out = support.WORK / "outs" / "python-rewrite.con"
             out.parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +98,11 @@ def run_readcon_python() -> None:
             for _ in range(REPEATS):
                 started = time.perf_counter()
                 last_write = readcon.write_coords(
-                    os.fspath(out), last["positions"], last["masses"], last["cell"], symbol="Cu"
+                    os.fspath(out),
+                    last["positions"],
+                    last["masses"],
+                    last["cell"],
+                    symbol="Cu",
                 )
                 write_samples.append(time.perf_counter() - started)
             reread_t, reread = python_read_once(out)
@@ -108,9 +125,21 @@ def run_readcon_python() -> None:
             fresh = fresh_python(path, atoms, frames)
             _emit(
                 "python-read-atoms-1000000-fresh",
-                ["taskset", "-c", "0", "python", "bench/h2h/asv/drive.py", "fresh-once", support.rel(path)],
+                [
+                    "taskset",
+                    "-c",
+                    "0",
+                    "python",
+                    "bench/h2h/asv/drive.py",
+                    "fresh-once",
+                    support.rel(path),
+                ],
                 fresh,
-                {"file": support.rel(path), "format": "con", "process": "fresh-process"},
+                {
+                    "file": support.rel(path),
+                    "format": "con",
+                    "process": "fresh-process",
+                },
             )
 
 
@@ -125,7 +154,11 @@ def fresh_python(path: Path, atoms: int, frames: int) -> dict:
         )
         # run_binary prefixes taskset. sys.executable is absolute; the logged command is not.
         if completed.returncode != 0:
-            raise RuntimeError(support.sanitize(completed.stderr or completed.stdout or "fresh read failed"))
+            raise RuntimeError(
+                support.sanitize(
+                    completed.stderr or completed.stdout or "fresh read failed"
+                )
+            )
         payload = json.loads(completed.stdout.strip().splitlines()[-1])
         samples.append(float(payload["wall_s"]))
         hwms.append(float(payload["hwm_mib"]))
@@ -134,10 +167,16 @@ def fresh_python(path: Path, atoms: int, frames: int) -> dict:
     support.use_reference(path)
     # The child reports max_abs against the file. Reuse that instead of
     # shipping the coordinate block back through the pipe.
-    stand_in = support._REF["coords"] if float(last["max_abs"]) <= support.COORD_TOL else None
-    check = support.judge(int(last["n_atoms"]), int(last["n_frames"]), cell, stand_in, atoms, frames)
+    stand_in = (
+        support._REF["coords"] if float(last["max_abs"]) <= support.COORD_TOL else None
+    )
+    check = support.judge(
+        int(last["n_atoms"]), int(last["n_frames"]), cell, stand_in, atoms, frames
+    )
     check["max_abs"] = float(last["max_abs"])
-    row = _merge(samples, check, hwm_mib=float(np.median(hwms)), process="fresh-process")
+    row = _merge(
+        samples, check, hwm_mib=float(np.median(hwms)), process="fresh-process"
+    )
     row["parse_s"] = float(last["parse_s"])
     row["convert_s"] = float(last["convert_s"])
     row["copy_s"] = float(last["copy_s"])
@@ -174,7 +213,14 @@ def run_readcon_c() -> None:
         support.use_reference(path)
         samples = support.c_read_samples(path, REPEATS)
         seen = support.c_inspect(path)
-        check = support.judge(seen["n_atoms"], seen["n_frames"], seen["cell"], seen["coords"], atoms, frames)
+        check = support.judge(
+            seen["n_atoms"],
+            seen["n_frames"],
+            seen["cell"],
+            seen["coords"],
+            atoms,
+            frames,
+        )
         row = _merge(samples, check)
         extra = {"file": support.rel(path), "format": "con"}
         if name == "atoms-1000000":
@@ -195,12 +241,39 @@ def run_readcon_c() -> None:
                 ["write", support.rel(path), support.rel(out), str(REPEATS)],
             )
             if completed.returncode != 0:
-                raise RuntimeError(support.sanitize(completed.stderr or "C write failed"))
+                raise RuntimeError(
+                    support.sanitize(completed.stderr or "C write failed")
+                )
             samples_w = support.parse_kv_samples(completed.stdout, "write")
             seen_w = support.c_inspect(out)
-            check_w = support.judge(seen_w["n_atoms"], seen_w["n_frames"], seen_w["cell"], seen_w["coords"], atoms, frames)
-            row_w = _merge(samples_w, check_w, hwm_kib=support.parse_kv_samples(completed.stdout, "hwm_kib")[:1])
-            _emit("c-write-atoms-1000000", ["taskset", "-c", "0", "bench/h2h/work/time_c", "write", support.rel(path), support.rel(out), str(REPEATS)], row_w, {"file": support.rel(path), "format": "con"})
+            check_w = support.judge(
+                seen_w["n_atoms"],
+                seen_w["n_frames"],
+                seen_w["cell"],
+                seen_w["coords"],
+                atoms,
+                frames,
+            )
+            row_w = _merge(
+                samples_w,
+                check_w,
+                hwm_kib=support.parse_kv_samples(completed.stdout, "hwm_kib")[:1],
+            )
+            _emit(
+                "c-write-atoms-1000000",
+                [
+                    "taskset",
+                    "-c",
+                    "0",
+                    "bench/h2h/work/time_c",
+                    "write",
+                    support.rel(path),
+                    support.rel(out),
+                    str(REPEATS),
+                ],
+                row_w,
+                {"file": support.rel(path), "format": "con"},
+            )
 
 
 def _fortran(op: str, path: Path, out: Path) -> tuple[list[float], dict]:
@@ -209,12 +282,19 @@ def _fortran(op: str, path: Path, out: Path) -> tuple[list[float], dict]:
         [op, support.rel(path), support.rel(out), str(REPEATS)],
     )
     if completed.returncode != 0:
-        raise RuntimeError(support.sanitize(completed.stderr or completed.stdout or "Fortran failed"))
+        raise RuntimeError(
+            support.sanitize(completed.stderr or completed.stdout or "Fortran failed")
+        )
     samples = support.parse_kv_samples(completed.stdout, op)
     fields = {}
     for line in completed.stdout.splitlines():
         parts = line.split()
-        if parts and parts[0] in {"n_frames", "n_atoms", "atom_count_mismatch", "max_abs"}:
+        if parts and parts[0] in {
+            "n_frames",
+            "n_atoms",
+            "atom_count_mismatch",
+            "max_abs",
+        }:
             fields[parts[0]] = parts[1]
         elif parts and parts[0] == "cell":
             fields["cell"] = [float(v) for v in parts[1:7]]
@@ -228,7 +308,11 @@ def run_readcon_fortran() -> None:
         out = support.WORK / "outs" / "fortran-unused.con"
         out.parent.mkdir(parents=True, exist_ok=True)
         samples, fields, _stdout = _fortran("read", path, out)
-        cell = np.asarray(fields.get("cell"), dtype=np.float64) if "cell" in fields else None
+        cell = (
+            np.asarray(fields.get("cell"), dtype=np.float64)
+            if "cell" in fields
+            else None
+        )
         # Coordinate check uses the printed max_abs from the Fortran reader.
         max_abs = float(fields["max_abs"]) if "max_abs" in fields else None
         n_atoms = int(fields.get("n_atoms", -1))
@@ -237,7 +321,9 @@ def run_readcon_fortran() -> None:
         reasons = []
         atoms_ok = n_atoms == atoms and n_frames == frames and mismatch == 0
         if not atoms_ok:
-            reasons.append(f"atom count {n_atoms} frames {n_frames} mismatch {mismatch}")
+            reasons.append(
+                f"atom count {n_atoms} frames {n_frames} mismatch {mismatch}"
+            )
         if cell is None or cell.size < 6:
             cell_ok = False
             reasons.append("cell is missing")
@@ -266,19 +352,35 @@ def run_readcon_fortran() -> None:
         row = _merge(samples, check)
         _emit(
             f"fortran-read-{name}",
-            ["taskset", "-c", "0", "bench/h2h/work/time_f", "read", support.rel(path), support.rel(out), str(REPEATS)],
+            [
+                "taskset",
+                "-c",
+                "0",
+                "bench/h2h/work/time_f",
+                "read",
+                support.rel(path),
+                support.rel(out),
+                str(REPEATS),
+            ],
             row,
             {"file": support.rel(path), "format": "con"},
         )
         if name == "atoms-1000000":
             written = support.WORK / "outs" / "fortran-rewrite.con"
             samples_w, fields_w, _stdout_w = _fortran("write", path, written)
-            cell_w = np.asarray(fields_w.get("cell"), dtype=np.float64) if "cell" in fields_w else None
+            cell_w = (
+                np.asarray(fields_w.get("cell"), dtype=np.float64)
+                if "cell" in fields_w
+                else None
+            )
             max_w = float(fields_w["max_abs"]) if "max_abs" in fields_w else None
             n_atoms_w = int(fields_w.get("n_atoms", -1))
             n_frames_w = int(fields_w.get("n_frames", -1))
             atoms_ok_w = n_atoms_w == atoms and n_frames_w == frames
-            cell_ok_w = cell_w is not None and float(np.max(np.abs(cell_w[:6] - expect))) <= support.CELL_TOL
+            cell_ok_w = (
+                cell_w is not None
+                and float(np.max(np.abs(cell_w[:6] - expect))) <= support.CELL_TOL
+            )
             coords_ok_w = max_w is not None and max_w <= support.COORD_TOL
             reasons_w = []
             if not atoms_ok_w:
@@ -301,7 +403,16 @@ def run_readcon_fortran() -> None:
             row_w = _merge(samples_w, check_w)
             _emit(
                 "fortran-write-atoms-1000000",
-                ["taskset", "-c", "0", "bench/h2h/work/time_f", "write", support.rel(path), support.rel(written), str(REPEATS)],
+                [
+                    "taskset",
+                    "-c",
+                    "0",
+                    "bench/h2h/work/time_f",
+                    "write",
+                    support.rel(path),
+                    support.rel(written),
+                    str(REPEATS),
+                ],
                 row_w,
                 {"file": support.rel(path), "format": "con"},
             )
@@ -332,7 +443,9 @@ def load_eon_dump(path: Path):
 
 
 def eon_commit() -> str:
-    completed = support.run_binary(Path("git"), ["-C", "bench/h2h/work/eon-src", "rev-parse", "HEAD"])
+    completed = support.run_binary(
+        Path("git"), ["-C", "bench/h2h/work/eon-src", "rev-parse", "HEAD"]
+    )
     # run_binary adds taskset. git may not like that but it still runs.
     text = (completed.stdout or "").strip()
     return text.splitlines()[-1] if text else "missing"
@@ -343,7 +456,10 @@ def run_eon_cpp() -> None:
     if not binary.is_file():
         raise RuntimeError("eon client timer is missing")
     commit = subprocess_git_eon()
-    for name, (atoms, frames) in (("tiny10", support.CASES["tiny10"]), ("atoms-1000000", support.CASES["atoms-1000000"])):
+    for name, (atoms, frames) in (
+        ("tiny10", support.CASES["tiny10"]),
+        ("atoms-1000000", support.CASES["atoms-1000000"]),
+    ):
         path = support.case_path(name)
         support.use_reference(path)
         samples = []
@@ -351,14 +467,22 @@ def run_eon_cpp() -> None:
         dump = support.WORK / "outs" / f"eon-{name}.dump"
         dump.parent.mkdir(parents=True, exist_ok=True)
         for _ in range(REPEATS):
-            completed = support.run_binary(binary, ["warm", support.rel(path), support.rel(dump)])
+            completed = support.run_binary(
+                binary, ["warm", support.rel(path), support.rel(dump)]
+            )
             if completed.returncode != 0:
-                raise RuntimeError(support.sanitize(completed.stdout or completed.stderr or "eon timer failed"))
+                raise RuntimeError(
+                    support.sanitize(
+                        completed.stdout or completed.stderr or "eon timer failed"
+                    )
+                )
             payload = json.loads(completed.stdout.strip().splitlines()[-1])
             samples.append(float(payload["wall_s"]))
             last = payload
         pos, _mass, cell = load_eon_dump(dump)
-        check = support.judge(int(pos.shape[1]), int(pos.shape[0]), cell[0], pos, atoms, frames)
+        check = support.judge(
+            int(pos.shape[1]), int(pos.shape[0]), cell[0], pos, atoms, frames
+        )
         if last and int(last.get("n_atoms", -1)) != atoms:
             check["n_atoms_ok"] = False
             check["correct"] = False
@@ -367,7 +491,15 @@ def run_eon_cpp() -> None:
         row = _merge(samples, check, eon_commit=commit)
         _emit(
             f"eon-cpp-read-{name}",
-            ["taskset", "-c", "0", "bench/h2h/work/eon_time", "warm", support.rel(path), support.rel(dump)],
+            [
+                "taskset",
+                "-c",
+                "0",
+                "bench/h2h/work/eon_time",
+                "warm",
+                support.rel(path),
+                support.rel(dump),
+            ],
             row,
             {"file": support.rel(path), "format": "con", "eon_commit": commit},
         )
@@ -380,8 +512,18 @@ def write_report() -> None:
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.startswith("{") and line.endswith("}"):
                 payload = json.loads(line)
-        exit_line = [line for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("exit ")]
-        rows.append({"log": path.name, "exit": exit_line[-1] if exit_line else "", "row": payload})
+        exit_line = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("exit ")
+        ]
+        rows.append(
+            {
+                "log": path.name,
+                "exit": exit_line[-1] if exit_line else "",
+                "row": payload,
+            }
+        )
     destination = support.BENCH / "results.json"
     destination.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
 
@@ -416,7 +558,11 @@ def run_eon_python() -> None:
     box = np.asarray(last[0].box, dtype=np.float64)
     lengths = np.linalg.norm(box, axis=1)
     # Orthogonal grid: angles are 90 degrees when off-diagonal entries vanish.
-    angles = np.array([90.0, 90.0, 90.0]) if np.max(np.abs(box - np.diag(np.diag(box)))) <= 1e-8 else np.array([0.0, 0.0, 0.0])
+    angles = (
+        np.array([90.0, 90.0, 90.0])
+        if np.max(np.abs(box - np.diag(np.diag(box)))) <= 1e-8
+        else np.array([0.0, 0.0, 0.0])
+    )
     cell = np.concatenate([lengths, angles])
     check = support.judge(coords.shape[1], coords.shape[0], cell, coords, atoms, frames)
     row = _merge(samples, check, eon_commit=subprocess_git_eon())
@@ -443,7 +589,12 @@ def run_ase() -> None:
         last = ase_read(support.rel(path), index=":", format="eon")
         samples.append(time.perf_counter() - started)
     coords = np.stack([image.positions for image in last])
-    cell = np.concatenate([np.asarray(last[0].cell.lengths(), dtype=np.float64), np.asarray(last[0].cell.angles(), dtype=np.float64)])
+    cell = np.concatenate(
+        [
+            np.asarray(last[0].cell.lengths(), dtype=np.float64),
+            np.asarray(last[0].cell.angles(), dtype=np.float64),
+        ]
+    )
     check = support.judge(coords.shape[1], coords.shape[0], cell, coords, atoms, frames)
     row = _merge(samples, check)
     _emit(
@@ -454,7 +605,18 @@ def run_ase() -> None:
     )
 
 
-def _native_row(code: str, fmt: str, samples: list[float], n_atoms: int, n_frames: int, cell, coords, expect_atoms: int, expect_frames: int, note: str) -> dict:
+def _native_row(
+    code: str,
+    fmt: str,
+    samples: list[float],
+    n_atoms: int,
+    n_frames: int,
+    cell,
+    coords,
+    expect_atoms: int,
+    expect_frames: int,
+    note: str,
+) -> dict:
     check = support.judge(n_atoms, n_frames, cell, coords, expect_atoms, expect_frames)
     row = _merge(samples, check)
     row["panel"] = "nearest-native"
@@ -533,7 +695,12 @@ def run_native(kind: str) -> None:
             1,
             "NumPy npy stores the coordinate array and has no cell. It is a different file, not the con file.",
         )
-        _emit("numpy-npy-read-atoms-1000000", _command(["numpy"]), row, {"file": support.rel(npy), "format": "npy", "panel": "nearest-native"})
+        _emit(
+            "numpy-npy-read-atoms-1000000",
+            _command(["numpy"]),
+            row,
+            {"file": support.rel(npy), "format": "npy", "panel": "nearest-native"},
+        )
     elif kind == "chemfiles":
         ext = _ensure_extxyz(folder, ensure_images)
         import chemfiles
@@ -545,7 +712,9 @@ def run_native(kind: str) -> None:
             traj = chemfiles.Trajectory(os.fspath(ext), "r", "XYZ")
             chem_frames = [traj.read() for _step in range(traj.nsteps)]
             samples.append(time.perf_counter() - started)
-        coords = np.stack([np.array(frame.positions, dtype=np.float64) for frame in chem_frames])
+        coords = np.stack(
+            [np.array(frame.positions, dtype=np.float64) for frame in chem_frames]
+        )
         lengths = np.asarray(list(chem_frames[0].cell.lengths), dtype=np.float64)
         angles = np.asarray(list(chem_frames[0].cell.angles), dtype=np.float64)
         cell = np.concatenate([lengths.reshape(-1)[:3], angles.reshape(-1)[:3]])
@@ -579,7 +748,9 @@ def run_native(kind: str) -> None:
             universe = mda.Universe(os.fspath(pdb))
             blocks = []
             for _ts in universe.trajectory:
-                blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
+                blocks.append(
+                    np.array(universe.atoms.positions, dtype=np.float64).copy()
+                )
             samples.append(time.perf_counter() - started)
             coords = np.stack(blocks)
             dims = universe.dimensions
@@ -639,7 +810,12 @@ def run_native(kind: str) -> None:
             frames,
             "OVITO extended xyz is a different file, not the con file.",
         )
-        _emit("ovito-extxyz-read-atoms-1000000", _command(["ovito"]), row, {"file": support.rel(ext), "format": "extxyz", "panel": "nearest-native"})
+        _emit(
+            "ovito-extxyz-read-atoms-1000000",
+            _command(["ovito"]),
+            row,
+            {"file": support.rel(ext), "format": "extxyz", "panel": "nearest-native"},
+        )
     elif kind == "pymatgen":
         poscar = _ensure_poscar(folder, ensure_images)
         from pymatgen.io.vasp import Poscar
@@ -653,7 +829,10 @@ def run_native(kind: str) -> None:
         coords = np.asarray(structure.cart_coords, dtype=np.float64)
         lattice = structure.lattice
         cell = np.concatenate(
-            [np.asarray(lattice.abc, dtype=np.float64), np.asarray(lattice.angles, dtype=np.float64)]
+            [
+                np.asarray(lattice.abc, dtype=np.float64),
+                np.asarray(lattice.angles, dtype=np.float64),
+            ]
         )
         row = _native_row(
             "pymatgen",
@@ -671,7 +850,11 @@ def run_native(kind: str) -> None:
             "pymatgen-poscar-read-atoms-1000000",
             _command(["pymatgen"]),
             row,
-            {"file": support.rel(poscar), "format": "poscar", "panel": "nearest-native"},
+            {
+                "file": support.rel(poscar),
+                "format": "poscar",
+                "panel": "nearest-native",
+            },
         )
     else:
         raise SystemExit(f"unknown native arm {kind}")
@@ -679,7 +862,10 @@ def run_native(kind: str) -> None:
 
 def _cell_from_ase(image) -> np.ndarray:
     return np.concatenate(
-        [np.asarray(image.cell.lengths(), dtype=np.float64), np.asarray(image.cell.angles(), dtype=np.float64)]
+        [
+            np.asarray(image.cell.lengths(), dtype=np.float64),
+            np.asarray(image.cell.angles(), dtype=np.float64),
+        ]
     )
 
 

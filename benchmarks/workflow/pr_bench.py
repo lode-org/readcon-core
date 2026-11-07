@@ -451,9 +451,7 @@ def split_sides(samples: list[float], kind: str) -> tuple[list[float], list[floa
             raise ValueError("MEM_AA_ROUNDS must be even")
         per = MEM_AA_ROUNDS // 2
         if len(samples) != MEM_AA_ROUNDS:
-            raise ValueError(
-                f"memory sample count {len(samples)} != {MEM_AA_ROUNDS}"
-            )
+            raise ValueError(f"memory sample count {len(samples)} != {MEM_AA_ROUNDS}")
         earlier = samples[0::2]
         later = samples[1::2]
         if len(earlier) != per or len(later) != per:
@@ -658,7 +656,9 @@ def time_samples_by_label(path: Path) -> dict[str, list[float]]:
     return found
 
 
-def _ratio_row(label: str, kind: str, earlier: list[float], later: list[float]) -> float:
+def _ratio_row(
+    label: str, kind: str, earlier: list[float], later: list[float]
+) -> float:
     expected = samples_per_side(kind)
     if len(earlier) != expected or len(later) != expected:
         raise SystemExit(
@@ -685,7 +685,9 @@ def collect_noise(aa_dir: Path, *, time_only: bool = False) -> dict:
             rep, rnd = parts[1], int(parts[2])
             mem_groups.setdefault(rep, []).append((rnd, path))
         if len(mem_groups) < 10 or len(mem_groups) > 20:
-            raise SystemExit(f"expected 10-20 memory repetitions, got {len(mem_groups)}")
+            raise SystemExit(
+                f"expected 10-20 memory repetitions, got {len(mem_groups)}"
+            )
         if len(mem_groups) != len(time_paths):
             raise SystemExit(
                 f"time repetitions {len(time_paths)} != memory repetitions {len(mem_groups)}"
@@ -731,7 +733,9 @@ def _collect_memory(
     for rep, items in sorted(mem_groups.items()):
         rounds = [rnd for rnd, _path in items]
         if rounds != list(range(1, MEM_AA_ROUNDS + 1)):
-            raise SystemExit(f"memory repetition {rep} rounds {rounds} != 1..{MEM_AA_ROUNDS}")
+            raise SystemExit(
+                f"memory repetition {rep} rounds {rounds} != 1..{MEM_AA_ROUNDS}"
+            )
     mem_reps = []
     for rep, items in sorted(mem_groups.items()):
         ordered = [peaks_by_label(path, "memory") for _rnd, path in sorted(items)]
@@ -890,7 +894,14 @@ def memory_series(cmp_dir: Path, commit: str) -> dict[str, list[float]]:
     return series
 
 
-def _presence_row(label: str, kind: str, mark: str, call: str, base_samples: list[float], head_samples: list[float]) -> dict:
+def _presence_row(
+    label: str,
+    kind: str,
+    mark: str,
+    call: str,
+    base_samples: list[float],
+    head_samples: list[float],
+) -> dict:
     def side(samples: list[float]) -> str:
         if not samples:
             return "n/a"
@@ -916,16 +927,22 @@ def _presence_row(label: str, kind: str, mark: str, call: str, base_samples: lis
     }
 
 
-def _judge(label: str, kind: str, base_samples: list[float], head_samples: list[float], band) -> dict:
+def _judge(
+    label: str, kind: str, base_samples: list[float], head_samples: list[float], band
+) -> dict:
     expected = samples_per_side(kind)
     base_ok = len(base_samples) == expected
     head_ok = len(head_samples) == expected
     # A benchmark only the head can run is new. One only the base can run
     # was removed. Neither fails the job.
     if head_ok and not base_ok:
-        return _presence_row(label, kind, "new", "new benchmark", base_samples, head_samples)
+        return _presence_row(
+            label, kind, "new", "new benchmark", base_samples, head_samples
+        )
     if base_ok and not head_ok:
-        return _presence_row(label, kind, "removed", "removed benchmark", base_samples, head_samples)
+        return _presence_row(
+            label, kind, "removed", "removed benchmark", base_samples, head_samples
+        )
     if not base_ok or not head_ok or band is None:
         return {
             "mark": "!",
@@ -1188,7 +1205,9 @@ def perch_rows(table: str) -> list[dict]:
         if len(cells) < 7:
             continue
         second = cells[1]
-        if second in {"Change", "Before"} or (len(second) >= 2 and set(second) <= {"-"}):
+        if second in {"Change", "Before"} or (
+            len(second) >= 2 and set(second) <= {"-"}
+        ):
             continue
         if not cells[5]:
             continue
@@ -1348,9 +1367,7 @@ def cmd_report(args: argparse.Namespace) -> None:
     assert_distinct_commits(base, head)
     base_path = find_commit_result(Path(args.results_dir), base)
     head_path = find_commit_result(Path(args.results_dir), head)
-    rows = comparison_rows(
-        base_path, head_path, Path(args.mem_dir), base, head, noise
-    )
+    rows = comparison_rows(base_path, head_path, Path(args.mem_dir), base, head, noise)
     table = render_table(rows)
     parsed = perch_rows(table)
     if len(parsed) != len(rows):

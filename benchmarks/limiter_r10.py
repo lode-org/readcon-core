@@ -28,7 +28,15 @@ import numpy as np
 REPEATS = 6
 LADDER = (1, 2, 4, 8)
 FRAMES_PER_WORKER = 16384
-RANK_PHASES = ("open_s", "map_s", "fault_s", "parse_s", "release_s", "unmap_s", "barrier_s")
+RANK_PHASES = (
+    "open_s",
+    "map_s",
+    "fault_s",
+    "parse_s",
+    "release_s",
+    "unmap_s",
+    "barrier_s",
+)
 PHASE_KEYS = (
     "open_mmap_s",
     "pool_s",
@@ -105,7 +113,9 @@ def phase_coverage(phase: dict) -> float:
     return covered / wall
 
 
-def call_read(path: Path, workers: int, build: str, digest: int | None) -> tuple[float, dict]:
+def call_read(
+    path: Path, workers: int, build: str, digest: int | None
+) -> tuple[float, dict]:
     import readcon
 
     gc.disable()
@@ -142,7 +152,9 @@ def serial_digest(path: Path) -> int:
     return int(digest)
 
 
-def round_robin(paths: dict[int, Path], build: str, digests: dict[int, int], repeats: int) -> dict:
+def round_robin(
+    paths: dict[int, Path], build: str, digests: dict[int, int], repeats: int
+) -> dict:
     import readcon
 
     for workers, path in paths.items():
@@ -284,20 +296,25 @@ def mann_whitney(left: list[float], right: list[float]) -> dict:
     return {"u": observed, "combinations": total, "p": extreme / total}
 
 
-def bootstrap_median_diff(later: list[float], earlier: list[float], draws: int = 10000) -> dict:
+def bootstrap_median_diff(
+    later: list[float], earlier: list[float], draws: int = 10000
+) -> dict:
     rng = np.random.default_rng(0)
     diffs = np.empty(draws, dtype=float)
     later_a = np.asarray(later, dtype=float)
     earlier_a = np.asarray(earlier, dtype=float)
     for i in range(draws):
-        diffs[i] = median(rng.choice(later_a, size=later_a.size, replace=True).tolist()) - median(
-            rng.choice(earlier_a, size=earlier_a.size, replace=True).tolist()
-        )
+        diffs[i] = median(
+            rng.choice(later_a, size=later_a.size, replace=True).tolist()
+        ) - median(rng.choice(earlier_a, size=earlier_a.size, replace=True).tolist())
     return {
         "draws": draws,
         "seed": 0,
         "median_diff_later_minus_earlier": float(np.median(diffs)),
-        "interval_95": [percentile_type7(diffs.tolist(), 2.5), percentile_type7(diffs.tolist(), 97.5)],
+        "interval_95": [
+            percentile_type7(diffs.tolist(), 2.5),
+            percentile_type7(diffs.tolist(), 97.5),
+        ],
     }
 
 
@@ -308,7 +325,9 @@ def rank_phase_coverage(payload: dict, index: int) -> float:
     if "phase_sum_s" in payload:
         covered = float(payload["phase_sum_s"][index])
     else:
-        covered = sum(float(payload[key][index]) for key in RANK_PHASES if key != "barrier_s")
+        covered = sum(
+            float(payload[key][index]) for key in RANK_PHASES if key != "barrier_s"
+        )
     return covered / wall
 
 
@@ -317,7 +336,9 @@ def steal_ticks() -> int:
     return int(fields[8])
 
 
-def run_mpi(binary: str, ranks: int, path: Path, out: Path, repeats: int, warmup: int) -> dict:
+def run_mpi(
+    binary: str, ranks: int, path: Path, out: Path, repeats: int, warmup: int
+) -> dict:
     out.parent.mkdir(parents=True, exist_ok=True)
     mhz = cpu_mhz()
     env = os.environ.copy()
@@ -338,7 +359,9 @@ def run_mpi(binary: str, ranks: int, path: Path, out: Path, repeats: int, warmup
     proc = subprocess.run(cmd, env=env, text=True, capture_output=True)
     steal1 = steal_ticks()
     if proc.returncode != 0:
-        raise SystemExit(f"mpirun failed ranks={ranks} code={proc.returncode} {proc.stderr[-400:]}")
+        raise SystemExit(
+            f"mpirun failed ranks={ranks} code={proc.returncode} {proc.stderr[-400:]}"
+        )
     payload = json.loads(out.read_text(encoding="utf-8"))
     payload["mhz"] = mhz
     payload["binary_path"] = binary
@@ -386,8 +409,12 @@ def rank_curve(binary: str, paths: dict[int, Path], out_dir: Path) -> list[dict]
             {
                 "ranks": ranks,
                 "samples_s": samples,
-                "samples_majflt": [item.get("samples_majflt", [0])[0] for item in payloads],
-                "samples_minflt": [item.get("samples_minflt", [0])[0] for item in payloads],
+                "samples_majflt": [
+                    item.get("samples_majflt", [0])[0] for item in payloads
+                ],
+                "samples_minflt": [
+                    item.get("samples_minflt", [0])[0] for item in payloads
+                ],
                 "phases": phases,
                 "coverage_samples": cover,
                 "coverage_median": median(cover),
@@ -426,9 +453,14 @@ def rank_curve(binary: str, paths: dict[int, Path], out_dir: Path) -> list[dict]
     return rows
 
 
-def rank_compare(earlier: str, later: str, path1: Path, path8: Path, out_dir: Path) -> dict:
+def rank_compare(
+    earlier: str, later: str, path1: Path, path8: Path, out_dir: Path
+) -> dict:
     batches = []
-    bag: dict[int, dict[str, list[float]]] = {1: {"earlier": [], "later": []}, 8: {"earlier": [], "later": []}}
+    bag: dict[int, dict[str, list[float]]] = {
+        1: {"earlier": [], "later": []},
+        8: {"earlier": [], "later": []},
+    }
     for batch in range(REPEATS):
         for ranks, path in ((1, path1), (8, path8)):
             for label, binary in (("earlier", earlier), ("later", later)):
@@ -455,7 +487,10 @@ def rank_compare(earlier: str, later: str, path1: Path, path8: Path, out_dir: Pa
                         "mhz": payload["mhz"],
                     }
                 )
-                print(f"mw batch={batch} ranks={ranks} {label} median_s={med:.6f}", flush=True)
+                print(
+                    f"mw batch={batch} ranks={ranks} {label} median_s={med:.6f}",
+                    flush=True,
+                )
     by_ranks = {}
     for ranks in (1, 8):
         left = bag[ranks]["earlier"]
@@ -507,7 +542,9 @@ def alternate_frames(text: str, n_frames: int, path: Path) -> None:
         # Rebuild when the byte length would not match this pair.
         expect = 0
         for index in range(n_frames):
-            expect += len(text.encode("utf-8") if index % 2 == 0 else other.encode("utf-8"))
+            expect += len(
+                text.encode("utf-8") if index % 2 == 0 else other.encode("utf-8")
+            )
         if path.stat().st_size == expect:
             return
     with path.open("w", encoding="utf-8") as handle:
@@ -534,7 +571,9 @@ def scan_crossover(text: str, work: Path) -> dict:
             for threads in LADDER:
                 modes = (False, True) if threads > 1 else (False,)
                 for chunked in modes:
-                    count, seconds, matched = readcon.scan_probe(str(path), threads, chunked)
+                    count, seconds, matched = readcon.scan_probe(
+                        str(path), threads, chunked
+                    )
                     if not matched or count < 2:
                         raise SystemExit(f"scan mismatch size={size} threads={threads}")
                     bag[(size, threads, chunked)].append(float(seconds))
@@ -629,7 +668,9 @@ def unequal_scan(text: str, work: Path) -> dict:
     }
 
 
-def serial_ab(base_bin: str, tip_bin: str, files: list[tuple[str, Path]], out_dir: Path) -> dict:
+def serial_ab(
+    base_bin: str, tip_bin: str, files: list[tuple[str, Path]], out_dir: Path
+) -> dict:
     """Interleave the land binary and the tip binary on the same files."""
     out_dir.mkdir(parents=True, exist_ok=True)
     modes = ("default", "one")
@@ -809,7 +850,9 @@ def main() -> None:
         if args.mpi_later is None:
             raise SystemExit("rank curve needs the mpi binary")
         print("rank ladder", flush=True)
-        payload["ranks"] = rank_curve(str(args.mpi_later), paths, args.out / "rank-runs")
+        payload["ranks"] = rank_curve(
+            str(args.mpi_later), paths, args.out / "rank-runs"
+        )
         out_json.write_text(json.dumps(payload), encoding="utf-8")
     if args.serial_base is not None and args.serial_tip is not None:
         small = args.work / "small-one.con"

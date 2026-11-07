@@ -52,8 +52,17 @@ CXXFLAGS = ["-O3", "-std=c++17", "-DNDEBUG"]
 FEATURES = ["parallel"]
 REL_TOL = 1e-12
 CHECKED = {
-    "moc": ("frames", "atoms", "sum_positions", "sum_velocities", "n_fixed", "sum_ids", "sum_numbers", "sum_cell",
-            "n_pbc"),
+    "moc": (
+        "frames",
+        "atoms",
+        "sum_positions",
+        "sum_velocities",
+        "n_fixed",
+        "sum_ids",
+        "sum_numbers",
+        "sum_cell",
+        "n_pbc",
+    ),
     "coords": ("frames", "atoms", "sum_positions", "sum_numbers"),
 }
 # name, program, contract, payload, warm-up file, threads
@@ -61,10 +70,20 @@ CELLS = (
     ("readcon_cpp_moc_1", "readcon_read", "moc", "traj.con", "warm.con", 1),
     ("readcon_cpp_moc_8", "readcon_read", "moc", "traj.con", "warm.con", 8),
     ("chemfiles_cpp_moc_1", "chemfiles_read", "moc", "traj.extxyz", "warm.extxyz", 1),
-    ("readcon_cpp_coords_1", "readcon_read", "coords", "traj_coords.con", "warm_coords.con", 1),
+    (
+        "readcon_cpp_coords_1",
+        "readcon_read",
+        "coords",
+        "traj_coords.con",
+        "warm_coords.con",
+        1,
+    ),
     ("chemfiles_cpp_coords_1", "chemfiles_read", "coords", "traj.xyz", "warm.xyz", 1),
 )
-PROGRAMS = {"readcon_read": OUT / "readcon_read", "chemfiles_read": OUT / "chemfiles_read"}
+PROGRAMS = {
+    "readcon_read": OUT / "readcon_read",
+    "chemfiles_read": OUT / "chemfiles_read",
+}
 
 
 def sha256(path: Path) -> str:
@@ -81,22 +100,39 @@ def run(cmd: list[str], log: list[list[str]], **kw) -> str:
 
 
 def environment(threads: int) -> dict:
-    knobs = ("RAYON_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
+    knobs = (
+        "RAYON_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+    )
     return {**os.environ, **{knob: str(threads) for knob in knobs}}
 
 
 def argv(cell: tuple) -> list[str]:
     _, program, contract, payload, warm, threads = cell
     cores = "0" if threads == 1 else f"0-{threads - 1}"
-    return ["taskset", "-c", cores, str(PROGRAMS[program]), contract, str(PAYLOADS / payload), str(PAYLOADS / warm),
-            str(threads)]
+    return [
+        "taskset",
+        "-c",
+        cores,
+        str(PROGRAMS[program]),
+        contract,
+        str(PAYLOADS / payload),
+        str(PAYLOADS / warm),
+        str(threads),
+    ]
 
 
 def disagreements(contract: str, got: dict, want: dict) -> list[str]:
     bad = []
     for key in CHECKED[contract]:
         value = want[key]
-        ok = got.get(key) == value if isinstance(value, int) else abs(got.get(key, float("nan")) - value) <= REL_TOL * abs(value)
+        ok = (
+            got.get(key) == value
+            if isinstance(value, int)
+            else abs(got.get(key, float("nan")) - value) <= REL_TOL * abs(value)
+        )
         if not ok:
             bad.append(f"{key} {got.get(key)!r} != {value!r}")
     return bad
@@ -104,13 +140,26 @@ def disagreements(contract: str, got: dict, want: dict) -> list[str]:
 
 def check(cell: tuple, references: dict, files: dict) -> dict:
     name, _, contract, payload, _, threads = cell
-    proc = subprocess.run(argv(cell), input="\n", capture_output=True, text=True, check=True,
-                          env=environment(threads))
+    proc = subprocess.run(
+        argv(cell),
+        input="\n",
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environment(threads),
+    )
     lines = proc.stdout.splitlines()
     got = json.loads(lines[-1])
-    want = {key: references[files[payload]["payload"]][key] for key in CHECKED[contract]}
-    return {"cell": name, "ready": lines[0], "printed": got, "reference": want,
-            "disagreements": disagreements(contract, got, want)}
+    want = {
+        key: references[files[payload]["payload"]][key] for key in CHECKED[contract]
+    }
+    return {
+        "cell": name,
+        "ready": lines[0],
+        "printed": got,
+        "reference": want,
+        "disagreements": disagreements(contract, got, want),
+    }
 
 
 def main() -> None:
@@ -119,17 +168,62 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     RESULTS.mkdir(parents=True, exist_ok=True)
     log: list[list[str]] = []
-    env = {**os.environ, "PATH": f"{ENV / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"}
+    env = {
+        **os.environ,
+        "PATH": f"{ENV / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
     target = OUT / "target-capi"
-    run([str(ENV / "bin" / "cargo"), "build", "--release", "--lib", "--features", ",".join(FEATURES),
-         "--manifest-path", str(src / "Cargo.toml")], log, env={**env, "CARGO_TARGET_DIR": str(target)})
+    run(
+        [
+            str(ENV / "bin" / "cargo"),
+            "build",
+            "--release",
+            "--lib",
+            "--features",
+            ",".join(FEATURES),
+            "--manifest-path",
+            str(src / "Cargo.toml"),
+        ],
+        log,
+        env={**env, "CARGO_TARGET_DIR": str(target)},
+    )
     static = target / "release" / "libreadcon_core.a"
     rpath = f"-Wl,-rpath,{ENV / 'lib'}"
-    run([CXX, *CXXFLAGS, f"-I{NATIVE}", f"-I{src / 'include'}", str(NATIVE / "readcon_read.cpp"), str(static),
-         "-lpthread", "-ldl", "-lm", rpath, "-o", str(PROGRAMS["readcon_read"])], log, env=env)
-    run([CXX, *CXXFLAGS, f"-I{NATIVE}", f"-I{prefix / 'include'}", str(NATIVE / "chemfiles_read.cpp"),
-         f"-L{prefix / 'lib'}", "-lchemfiles", f"-Wl,-rpath,{prefix / 'lib'}", rpath, "-o",
-         str(PROGRAMS["chemfiles_read"])], log, env=env)
+    run(
+        [
+            CXX,
+            *CXXFLAGS,
+            f"-I{NATIVE}",
+            f"-I{src / 'include'}",
+            str(NATIVE / "readcon_read.cpp"),
+            str(static),
+            "-lpthread",
+            "-ldl",
+            "-lm",
+            rpath,
+            "-o",
+            str(PROGRAMS["readcon_read"]),
+        ],
+        log,
+        env=env,
+    )
+    run(
+        [
+            CXX,
+            *CXXFLAGS,
+            f"-I{NATIVE}",
+            f"-I{prefix / 'include'}",
+            str(NATIVE / "chemfiles_read.cpp"),
+            f"-L{prefix / 'lib'}",
+            "-lchemfiles",
+            f"-Wl,-rpath,{prefix / 'lib'}",
+            rpath,
+            "-o",
+            str(PROGRAMS["chemfiles_read"]),
+        ],
+        log,
+        env=env,
+    )
 
     manifest = json.loads((RESULTS.parent / "payloads.json").read_text())
     checks = [check(cell, manifest["references"], manifest["files"]) for cell in CELLS]
@@ -139,26 +233,51 @@ def main() -> None:
         raise SystemExit(f"checksums disagree: {json.dumps(failed, indent=2)}")
 
     chemfiles_version = ""
-    for line in (prefix / "include" / "chemfiles" / "config.h").read_text().splitlines():
+    for line in (
+        (prefix / "include" / "chemfiles" / "config.h").read_text().splitlines()
+    ):
         if "CHEMFILES_VERSION " in line:
             chemfiles_version = line.split()[-1].strip('"')
     record = {
         "readcon_src": str(src),
         "library_digest": library_digest(src),
         "cargo_features": FEATURES,
-        "rustc": subprocess.run([str(ENV / "bin" / "rustc"), "--version"], capture_output=True, text=True,
-                                check=True).stdout.strip(),
-        "cxx": subprocess.run([CXX, "--version"], capture_output=True, text=True, check=True).stdout.splitlines()[0],
+        "rustc": subprocess.run(
+            [str(ENV / "bin" / "rustc"), "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip(),
+        "cxx": subprocess.run(
+            [CXX, "--version"], capture_output=True, text=True, check=True
+        ).stdout.splitlines()[0],
         "cxxflags": CXXFLAGS,
         "chemfiles_version": chemfiles_version,
-        "cells": [dict(zip(("name", "program", "contract", "payload", "warm", "threads"), c, strict=True))
-                  for c in CELLS],
+        "cells": [
+            dict(
+                zip(
+                    ("name", "program", "contract", "payload", "warm", "threads"),
+                    c,
+                    strict=True,
+                )
+            )
+            for c in CELLS
+        ],
         "commands": log,
-        "sources": {p.name: sha256(p) for p in (NATIVE / "protocol.hpp", NATIVE / "readcon_read.cpp",
-                                                 NATIVE / "chemfiles_read.cpp", Path(__file__))},
+        "sources": {
+            p.name: sha256(p)
+            for p in (
+                NATIVE / "protocol.hpp",
+                NATIVE / "readcon_read.cpp",
+                NATIVE / "chemfiles_read.cpp",
+                Path(__file__),
+            )
+        },
         "artifacts": {p.name: sha256(p) for p in (*PROGRAMS.values(), static)},
     }
-    (RESULTS / "build.json").write_text(json.dumps(portable.portable(record), indent=2) + "\n")
+    (RESULTS / "build.json").write_text(
+        json.dumps(portable.portable(record), indent=2) + "\n"
+    )
     print("wrote", RESULTS)
 
 

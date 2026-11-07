@@ -28,7 +28,10 @@ BLACK = "#000000"
 WASH = "#F1DB4B"
 
 FONT_CANDIDATES = (
-    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
+    Path(__file__).resolve().parents[1]
+    / "fonts"
+    / "latin-modern"
+    / "lmroman10-regular.otf",
 )
 
 

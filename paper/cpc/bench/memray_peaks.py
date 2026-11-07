@@ -44,15 +44,35 @@ def child(reader: str, threads: int, out: str) -> None:
         kept = read(str(readers.PAYLOADS / payload), threads)
     sums = bench_child.checksums(contract, kept)
     meta = memray.FileReader(out).metadata
-    print(json.dumps({"peak_bytes": meta.peak_memory, "allocations": meta.total_allocations, **sums}))
+    print(
+        json.dumps(
+            {
+                "peak_bytes": meta.peak_memory,
+                "allocations": meta.total_allocations,
+                **sums,
+            }
+        )
+    )
 
 
 def capture(reader: str, threads: int):
     def run() -> dict:
         with tempfile.TemporaryDirectory() as tmp:
-            proc = subprocess.run([sys.executable, __file__, "--child", reader, str(threads),
-                                   str(Path(tmp) / "read.bin")], capture_output=True, text=True, check=True)
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    __file__,
+                    "--child",
+                    reader,
+                    str(threads),
+                    str(Path(tmp) / "read.bin"),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
         return json.loads(proc.stdout.strip().splitlines()[-1])
+
     return run
 
 
@@ -71,21 +91,49 @@ def main() -> None:
     from portable import portable
 
     references = json.loads(args.payloads_json.read_text())["references"]["traj"]
-    cells = {f"{reader}:{threads}": capture(reader, threads) for reader, threads in readers.cells()}
-    record = interleave.campaign(cells, metric="peak_bytes", suffix="_bytes", varying=("allocations",))
+    cells = {
+        f"{reader}:{threads}": capture(reader, threads)
+        for reader, threads in readers.cells()
+    }
+    record = interleave.campaign(
+        cells, metric="peak_bytes", suffix="_bytes", varying=("allocations",)
+    )
     out = []
     for reader, threads in readers.cells():
         cell = record["cells"][f"{reader}:{threads}"]
         contract, _, payload, _ = readers.READERS[reader]
-        out.append({"reader": reader, "threads": threads, "payload": payload, "contract": contract,
-                    "peak_bytes": cell["median_bytes"], **cell, "mismatches": readers.mismatches(cell["printed"],
-                                                                                                references)})
-        print(f"{reader} {threads}: {cell['median_bytes'] / 2**20:.1f} MiB, IQR {cell['iqr_bytes'] / 2**20:.2f} MiB, "
-              f"mismatches {out[-1]['mismatches']}", flush=True)
+        out.append(
+            {
+                "reader": reader,
+                "threads": threads,
+                "payload": payload,
+                "contract": contract,
+                "peak_bytes": cell["median_bytes"],
+                **cell,
+                "mismatches": readers.mismatches(cell["printed"], references),
+            }
+        )
+        print(
+            f"{reader} {threads}: {cell['median_bytes'] / 2**20:.1f} MiB, IQR {cell['iqr_bytes'] / 2**20:.2f} MiB, "
+            f"mismatches {out[-1]['mismatches']}",
+            flush=True,
+        )
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(portable({"provenance": r0174.record(), "payloads": os.environ.get("RC_PAYLOADS"),
-                                             "protocol": record["protocol"], "hardware": record["hardware"],
-                                             "cells": out}), indent=2) + "\n")
+    args.out.write_text(
+        json.dumps(
+            portable(
+                {
+                    "provenance": r0174.record(),
+                    "payloads": os.environ.get("RC_PAYLOADS"),
+                    "protocol": record["protocol"],
+                    "hardware": record["hardware"],
+                    "cells": out,
+                }
+            ),
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 if __name__ == "__main__":

@@ -37,7 +37,11 @@ def stamp_json(node):
     if isinstance(node, dict):
         for key, value in list(node.items()):
             if isinstance(value, str) and "(R)" in value and "Xeon" in value:
-                node[key] = normalize_cpu(value) if value.strip().startswith("Intel") else stamp_text(value)
+                node[key] = (
+                    normalize_cpu(value)
+                    if value.strip().startswith("Intel")
+                    else stamp_text(value)
+                )
             else:
                 stamp_json(value)
     elif isinstance(node, list):
@@ -51,7 +55,9 @@ def one(path: Path) -> None:
         stamp_json(data)
         path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         return
-    path.write_text(stamp_text(path.read_text(encoding="utf-8", errors="replace")), encoding="utf-8")
+    path.write_text(
+        stamp_text(path.read_text(encoding="utf-8", errors="replace")), encoding="utf-8"
+    )
 
 
 def main() -> int:
@@ -64,7 +70,14 @@ def main() -> int:
         if not root.exists():
             continue
         for path in root.rglob("*"):
-            if path.is_file() and path.suffix in {".json", ".csv", ".log", ".txt", ".tsv", ".tex"}:
+            if path.is_file() and path.suffix in {
+                ".json",
+                ".csv",
+                ".log",
+                ".txt",
+                ".tsv",
+                ".tex",
+            }:
                 blob = path.read_bytes()
                 mark = b"Intel" + b"(R)"
                 if mark in blob or (RAW and RAW.encode() in blob):

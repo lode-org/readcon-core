@@ -37,6 +37,7 @@ reruns the uninterrupted band and every route on the kernel set NAME of
 numeric_pins and writes only data/failure/restart_kernels/NAME.json, the steps
 and the residues of every route at full precision.
 """
+
 from __future__ import annotations
 import csv
 import io
@@ -48,12 +49,17 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
+
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-KERNELS = sys.argv[sys.argv.index("--kernels") + 1] if "--kernels" in sys.argv[1:-1] else None
+KERNELS = (
+    sys.argv[sys.argv.index("--kernels") + 1] if "--kernels" in sys.argv[1:-1] else None
+)
 if KERNELS is not None:
     os.environ["RC_KERNELS"] = KERNELS
 import numeric_pins  # noqa: E402
-import numpy as np
+
 warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "failure"
@@ -87,6 +93,7 @@ def roundoff_host():
     """CPU, kernel and numerical stack of this process: the residues at roundoff scale depend on them."""
     import platform
     import threadpoolctl
+
     np.linalg.eigh(np.eye(2))  # threadpoolctl lists a BLAS only once it is loaded
     cpu = {}
     for line in Path("/proc/cpuinfo").read_text().splitlines():
@@ -99,12 +106,21 @@ def roundoff_host():
             conda[pkg["name"]] = f"{pkg['version']} {pkg['build']}"
     blas = np.show_config(mode="dicts")["Build Dependencies"]["blas"]
     return {
-        "cpu_model": __import__("provenance").normalize_cpu(cpu.get("model name") or ""),
-        "family": cpu.get("cpu family"), "model": cpu.get("model"),
-        "kernel": platform.release(), "machine": platform.machine(),
-        "numpy": np.__version__, "numpy_blas_build": f"{blas['name']} {blas['version']}", "conda_packages": conda,
-        "blas_runtime": [f"{i['internal_api']} {i['version']}, {i.get('threading_layer')}, {i.get('architecture')} kernels"
-                         for i in threadpoolctl.threadpool_info() if i["user_api"] == "blas"],
+        "cpu_model": __import__("provenance").normalize_cpu(
+            cpu.get("model name") or ""
+        ),
+        "family": cpu.get("cpu family"),
+        "model": cpu.get("model"),
+        "kernel": platform.release(),
+        "machine": platform.machine(),
+        "numpy": np.__version__,
+        "numpy_blas_build": f"{blas['name']} {blas['version']}",
+        "conda_packages": conda,
+        "blas_runtime": [
+            f"{i['internal_api']} {i['version']}, {i.get('threading_layer')}, {i.get('architecture')} kernels"
+            for i in threadpoolctl.threadpool_info()
+            if i["user_api"] == "blas"
+        ],
         "numeric_pins": numeric_pins.in_effect(),
     }
 
@@ -119,9 +135,12 @@ def host_label(cpu_model, family, model):
 def slab(site=(0, 0), height=HEIGHT, hold=True):
     from ase.build import fcc100, add_adsorbate
     from ase.constraints import FixAtoms, FixCartesian
+
     s = fcc100("Pt", (3, 3, 3), vacuum=VACUUM)
     a0 = s.cell[0, 0] / 3
-    add_adsorbate(s, "Pt", height, position=((0.5 + site[0]) * a0, (0.5 + site[1]) * a0))
+    add_adsorbate(
+        s, "Pt", height, position=((0.5 + site[0]) * a0, (0.5 + site[1]) * a0)
+    )
     n = len(s)
     bottom = [i for i, t in enumerate(s.get_tags()) if t == 3]
     held = [FixCartesian(n - 1, mask=(False, False, True))] if hold else []
@@ -132,6 +151,7 @@ def slab(site=(0, 0), height=HEIGHT, hold=True):
 def endpoints(height=HEIGHT, hold=True):
     from ase.calculators.emt import EMT
     from ase.optimize import BFGS
+
     eps = []
     for site in SITES:
         s = slab(site, height, hold)
@@ -144,6 +164,7 @@ def endpoints(height=HEIGHT, hold=True):
 def make_band(eps, nimg=5):
     from ase.mep import NEB
     from ase.calculators.emt import EMT
+
     imgs = [eps[0].copy()] + [eps[0].copy() for _ in range(nimg)] + [eps[1].copy()]
     for im in imgs:
         im.calc = EMT()
@@ -155,6 +176,7 @@ def make_band(eps, nimg=5):
 def run(imgs, start=0, stop=None):
     from ase.mep import NEB
     from ase.calculators.emt import EMT
+
     neb = NEB(imgs, k=SPRING, climb=CLIMB, method=METHOD)
     step, calls = start, 0
     while True:
@@ -163,30 +185,45 @@ def run(imgs, start=0, stop=None):
             im.calc = EMT()
         f = neb.get_forces()
         calls += 1
-        fmax = float(np.sqrt((f ** 2).sum(axis=1)).max())
+        fmax = float(np.sqrt((f**2).sum(axis=1)).max())
         if fmax < FMAX or step >= NMAX or (stop is not None and step >= stop):
             break
         neb.set_positions(neb.get_positions() + ALPHA * f)
         step += 1
     e = np.array([im.get_potential_energy() for im in imgs])
     frc = [im.get_forces(apply_constraint=False).copy() for im in imgs]
-    return dict(step=step, calls=calls, fmax=fmax, barrier=float(e.max() - e[0]), converged=bool(fmax < FMAX),
-                pos=[im.get_positions().copy() for im in imgs], energies=e.tolist(), forces=frc,
-                fixed=np.array([fixed_mask(im) for im in imgs]), numbers=imgs[0].numbers.copy(),
-                cell=imgs[0].cell.array.copy(), pbc=imgs[0].pbc.copy())
+    return dict(
+        step=step,
+        calls=calls,
+        fmax=fmax,
+        barrier=float(e.max() - e[0]),
+        converged=bool(fmax < FMAX),
+        pos=[im.get_positions().copy() for im in imgs],
+        energies=e.tolist(),
+        forces=frc,
+        fixed=np.array([fixed_mask(im) for im in imgs]),
+        numbers=imgs[0].numbers.copy(),
+        cell=imgs[0].cell.array.copy(),
+        pbc=imgs[0].pbc.copy(),
+    )
 
 
 def fixed_mask(atoms):
     """Per-atom, per-axis True where the constraints hold the coordinate."""
     from ase.constraints import FixAtoms, FixCartesian, FixScaled
+
     m = np.zeros((len(atoms), 3), bool)
     for c in atoms.constraints:
-        if isinstance(c, FixAtoms): m[c.index] = True
-        elif isinstance(c, FixCartesian): m[c.index] |= np.asarray(c.mask, bool)
+        if isinstance(c, FixAtoms):
+            m[c.index] = True
+        elif isinstance(c, FixCartesian):
+            m[c.index] |= np.asarray(c.mask, bool)
         elif isinstance(c, FixScaled):
             cell = atoms.cell.array
             if np.count_nonzero(cell - np.diag(np.diag(cell))):
-                raise ValueError("FixScaled axes are not the Cartesian axes in this cell")
+                raise ValueError(
+                    "FixScaled axes are not the Cartesian axes in this cell"
+                )
             m[c.index] |= np.asarray(c.mask, bool)
         else:
             raise ValueError(f"unhandled constraint {c!r}")
@@ -221,7 +258,8 @@ def with_ids(imgs):
 
 def con_atoms(im):
     """A copy readcon's from_ase gives the id array as column 5 (row order without one)."""
-    a = im.copy(); a.set_tags(0)  # slab tags are layer numbers
+    a = im.copy()
+    a.set_tags(0)  # slab tags are layer numbers
     if "id" in a.arrays:
         a.set_array("atom_id", a.arrays["id"].astype(np.uint64))
     return a
@@ -238,39 +276,51 @@ def _frame(readcon, im, i):
     f = con_frame(readcon, im)
     # A non-empty first line: readcon-core 0.17.0 cannot re-read a multi-frame
     # file whose frames start with an empty line (reported separately).
-    return readcon.ConFrame(f.cell, f.angles, f.atoms, prebox_header=[f"NEB image {i}", ""],
-                            metadata=dict(f.metadata))
+    return readcon.ConFrame(
+        f.cell,
+        f.angles,
+        f.atoms,
+        prebox_header=[f"NEB image {i}", ""],
+        metadata=dict(f.metadata),
+    )
 
 
 # writer/reader pairs; each returns a list of ASE Atoms
 def via_readcon(imgs, d):
     import readcon
+
     frames = [_frame(readcon, im, i) for i, im in enumerate(imgs)]
-    p = d / "band.con"; readcon.write_con(str(p), frames)
+    p = d / "band.con"
+    readcon.write_con(str(p), frames)
     return [f.to_ase() for f in readcon.read_con(str(p))]
 
 
 def via_readcon_6dp(imgs, d):
     import readcon
+
     frames = [_frame(readcon, im, i) for i, im in enumerate(imgs)]
-    p = d / "band6.con"; readcon.write_con(str(p), frames, precision=6)
+    p = d / "band6.con"
+    readcon.write_con(str(p), frames, precision=6)
     return [f.to_ase() for f in readcon.read_con(str(p))]
 
 
 def via_ase(fmt, ext):
     def go(imgs, d):
         import ase.io
+
         out = []
         for i, im in enumerate(imgs):
             p = d / f"img{i}.{ext}"
             ase.io.write(str(p), im, format=fmt)
             out.append(ase.io.read(str(p), format=fmt))
         return out
+
     return go
 
 
 def with_tag_ids(im):
-    a = im.copy(); a.set_tags(atom_ids(len(a)))
+    a = im.copy()
+    a.set_tags(atom_ids(len(a)))
     return a
 
 
@@ -280,8 +330,14 @@ def via_traj_tags(imgs, d):
 
 def fix_scaled(im):
     from ase.constraints import FixCartesian, FixScaled
+
     a = im.copy()
-    a.set_constraint([FixScaled(c.index, c.mask) if isinstance(c, FixCartesian) else c for c in a.constraints])
+    a.set_constraint(
+        [
+            FixScaled(c.index, c.mask) if isinstance(c, FixCartesian) else c
+            for c in a.constraints
+        ]
+    )
     return a
 
 
@@ -296,20 +352,28 @@ def via_h5md_private_mask(imgs, d):
     def write(fx, path):
         run_05.w_h5py(fx, path)
         shutil.copy(path, d / path.name)  # the round trip runs in its own directory
+
     return run_05.h5_roundtrip(write, run_05.r_h5py, imgs)
 
 
 def poscar_flags(convert):
     """Selective-dynamics flags the ASE writer emits for the adatom (the last row)."""
+
     def go(imgs, back, d):
         import ase.io
-        buf = io.StringIO(); ase.io.write(buf, convert(imgs[0]), format="vasp")
-        return "adatom written " + " ".join(buf.getvalue().splitlines()[-1].split()[3:6])
+
+        buf = io.StringIO()
+        ase.io.write(buf, convert(imgs[0]), format="vasp")
+        return "adatom written " + " ".join(
+            buf.getvalue().splitlines()[-1].split()[3:6]
+        )
+
     return go
 
 
 def h5md_private(imgs, back, d):
     import failure_matrix as fm
+
     private = sorted({k for p in d.glob("*.h5md") for k in fm.h5md_layout(p)[1]})
     return f"{', '.join(private)} is not an H5MD element, so only a reader that knows this layout gets the mask back"
 
@@ -317,17 +381,34 @@ def h5md_private(imgs, back, d):
 def file_version(d):
     """The version the first file of the route carries, read back from the file ("none" without one)."""
     import failure_matrix as fm
+
     path = min(d.iterdir())
-    return fm.version_carried({".con": "CON", ".traj": "ASE trajectory", ".h5md": "H5MD"}.get(path.suffix, ""), path)
+    return fm.version_carried(
+        {".con": "CON", ".traj": "ASE trajectory", ".h5md": "H5MD"}.get(
+            path.suffix, ""
+        ),
+        path,
+    )
 
 
 def kept(imgs, back):
     """Which of the per-axis mask, the persistent ids and the periodic flags the read returns for every image."""
     ids = atom_ids(len(imgs[0]))
-    carriers = lambda b: (b.arrays.get("atom_id"), b.arrays.get("id"), b.get_tags())
+
+    def carriers(b):
+        return (b.arrays.get("atom_id"), b.arrays.get("id"), b.get_tags())
+
     got = {
-        "mask": all(np.array_equal(fixed_mask(a), fixed_mask(b)) for a, b in zip(imgs, back)),
-        "ids": all(any(c is not None and np.array_equal(np.asarray(c), ids) for c in carriers(b)) for b in back),
+        "mask": all(
+            np.array_equal(fixed_mask(a), fixed_mask(b)) for a, b in zip(imgs, back)
+        ),
+        "ids": all(
+            any(
+                c is not None and np.array_equal(np.asarray(c), ids)
+                for c in carriers(b)
+            )
+            for b in back
+        ),
         "pbc": all(np.array_equal(a.pbc, b.pbc) for a, b in zip(imgs, back)),
     }
     return " ".join(k for k, v in got.items() if v)
@@ -336,9 +417,12 @@ def kept(imgs, back):
 def h5md_named(name, d):
     """Raise unless the route says H5MD exactly when it wrote H5MD files, and private exactly when they add an element."""
     import failure_matrix as fm
+
     files = sorted(d.glob("*.h5md"))
     if ("H5MD" in name) != bool(files):
-        raise ValueError(f"{name}: the name says H5MD but the route wrote {len(files)} .h5md files")
+        raise ValueError(
+            f"{name}: the name says H5MD but the route wrote {len(files)} .h5md files"
+        )
     for p in files:
         version, private = fm.h5md_layout(p)
         if version is None:
@@ -360,9 +444,26 @@ NOTES = {
     "POSCAR (ASE), FixScaled z": poscar_flags(fix_scaled),
     "H5MD (h5py), private mask dataset": h5md_private,
 }
-FIELDS = ["route", "steps", "converged", "barrier_eV", "d_barrier_eV", "d_barrier_ulp", "max_disp_A",
-          "max_disp_coord_A", "max_disp_ulp", "file_dpos_A", "file_dpos_coord_A", "file_dpos_ulp",
-          "free_modes_mid", "force_calls", "kept", "file_version", "error", "notes"]
+FIELDS = [
+    "route",
+    "steps",
+    "converged",
+    "barrier_eV",
+    "d_barrier_eV",
+    "d_barrier_ulp",
+    "max_disp_A",
+    "max_disp_coord_A",
+    "max_disp_ulp",
+    "file_dpos_A",
+    "file_dpos_coord_A",
+    "file_dpos_ulp",
+    "free_modes_mid",
+    "force_calls",
+    "kept",
+    "file_version",
+    "error",
+    "notes",
+]
 COLUMNS = {
     "barrier_eV": "highest image energy minus the first image energy of the final band",
     "d_barrier_eV": "barrier_eV minus the uninterrupted barrier_eV",
@@ -376,7 +477,7 @@ COLUMNS = {
     "free_modes_mid": "free Cartesian degrees of freedom of the middle image after the read",
     "force_calls": "NEB get_forces evaluations of the resumed leg (of the whole band when uninterrupted)",
     "kept": "of mask (per-axis constraints), ids (atom_ids, through the route's carrier) and pbc, those the read "
-            "returns equal on every image",
+    "returns equal on every image",
     "file_version": "the version the route's first written file carries, read back from the file",
 }
 
@@ -391,18 +492,35 @@ def resume(name, fn, eps, ref):
         h5md_named(name, d)
         version = file_version(d)
         note = NOTES.get(name, lambda i, b, d: "")(imgs, back, d)
-    dpos, coord, ulp = largest_shift([im.get_positions() for im in imgs], [im.get_positions() for im in back])
+    dpos, coord, ulp = largest_shift(
+        [im.get_positions() for im in imgs], [im.get_positions() for im in back]
+    )
     fm = free_modes(back[3])
     keeps = kept(imgs, back)
     res = run(back, start=part["step"])
     disp, dcoord, dulp = largest_shift(ref["pos"], res["pos"])
     de = res["barrier"] - ref["barrier"]
     res["full"] = {"file_dpos_A": dpos, "d_barrier_eV": float(de), "max_disp_A": disp}
-    row = dict(route=name, steps=res["step"], converged=res["converged"], barrier_eV=f"{res['barrier']:.9f}",
-               d_barrier_eV=f"{de:.2e}", d_barrier_ulp=f"{de / np.spacing(max(ref['energies'])):.3g}",
-               max_disp_A=f"{disp:.2e}", max_disp_coord_A=dcoord, max_disp_ulp=dulp,
-               file_dpos_A=f"{dpos:.2e}", file_dpos_coord_A=coord, file_dpos_ulp=ulp,
-               free_modes_mid=fm, force_calls=res["calls"], kept=keeps, file_version=version, error="", notes=note)
+    row = dict(
+        route=name,
+        steps=res["step"],
+        converged=res["converged"],
+        barrier_eV=f"{res['barrier']:.9f}",
+        d_barrier_eV=f"{de:.2e}",
+        d_barrier_ulp=f"{de / np.spacing(max(ref['energies'])):.3g}",
+        max_disp_A=f"{disp:.2e}",
+        max_disp_coord_A=dcoord,
+        max_disp_ulp=dulp,
+        file_dpos_A=f"{dpos:.2e}",
+        file_dpos_coord_A=coord,
+        file_dpos_ulp=ulp,
+        free_modes_mid=fm,
+        force_calls=res["calls"],
+        kept=keeps,
+        file_version=version,
+        error="",
+        notes=note,
+    )
     return row, res
 
 
@@ -414,13 +532,26 @@ def unexpected(rows):
 def main():
     sys.path.insert(0, str(ROOT / "scripts"))
     import provenance
+
     OUT.mkdir(parents=True, exist_ok=True)
     eps = endpoints()
     ref = run(make_band(eps))
-    print(f"uninterrupted: steps={ref['step']} barrier={ref['barrier']:.9f} fmax={ref['fmax']:.4f}")
-    rows = [{**{k: "" for k in FIELDS}, "route": "uninterrupted", "steps": ref["step"], "converged": ref["converged"],
-             "barrier_eV": f"{ref['barrier']:.9f}", "d_barrier_eV": "0", "max_disp_A": "0",
-             "free_modes_mid": free_modes(make_band(eps)[3]), "force_calls": ref["calls"]}]
+    print(
+        f"uninterrupted: steps={ref['step']} barrier={ref['barrier']:.9f} fmax={ref['fmax']:.4f}"
+    )
+    rows = [
+        {
+            **{k: "" for k in FIELDS},
+            "route": "uninterrupted",
+            "steps": ref["step"],
+            "converged": ref["converged"],
+            "barrier_eV": f"{ref['barrier']:.9f}",
+            "d_barrier_eV": "0",
+            "max_disp_A": "0",
+            "free_modes_mid": free_modes(make_band(eps)[3]),
+            "force_calls": ref["calls"],
+        }
+    ]
     results = {"uninterrupted": ref}
     for name, fn in ROUTES:
         try:
@@ -428,52 +559,111 @@ def main():
             rows.append(row)
             results[name] = res
         except BaseException as e:
-            rows.append({**{k: "" for k in FIELDS}, "route": name, "error": f"{type(e).__name__}: {e}"[:120]})
+            rows.append(
+                {
+                    **{k: "" for k in FIELDS},
+                    "route": name,
+                    "error": f"{type(e).__name__}: {e}"[:120],
+                }
+            )
         print(rows[-1])
     bad = unexpected(rows)
     if bad:
-        print("routes ended with an error; no output written:", *bad, sep="\n  ", file=sys.stderr)
+        print(
+            "routes ended with an error; no output written:",
+            *bad,
+            sep="\n  ",
+            file=sys.stderr,
+        )
         raise SystemExit(1)
     if KERNELS is not None:
         (OUT / "restart_kernels").mkdir(exist_ok=True)
-        (OUT / "restart_kernels" / f"{KERNELS}.json").write_text(json.dumps({
-            "script": "paper/cpc/scripts/restart_formats.py",
-            "kernel_set": KERNELS,
-            "uninterrupted": {"steps": ref["step"], "converged": ref["converged"], "barrier_eV": ref["barrier"]},
-            "routes": {name: {"steps": results[name]["step"], "converged": results[name]["converged"],
-                              "barrier_eV": results[name]["barrier"], **results[name]["full"]}
-                       for name, _ in ROUTES},
-            "roundoff_host": roundoff_host(),
-            "provenance": provenance.record(),
-        }, indent=1))
+        (OUT / "restart_kernels" / f"{KERNELS}.json").write_text(
+            json.dumps(
+                {
+                    "script": "paper/cpc/scripts/restart_formats.py",
+                    "kernel_set": KERNELS,
+                    "uninterrupted": {
+                        "steps": ref["step"],
+                        "converged": ref["converged"],
+                        "barrier_eV": ref["barrier"],
+                    },
+                    "routes": {
+                        name: {
+                            "steps": results[name]["step"],
+                            "converged": results[name]["converged"],
+                            "barrier_eV": results[name]["barrier"],
+                            **results[name]["full"],
+                        }
+                        for name, _ in ROUTES
+                    },
+                    "roundoff_host": roundoff_host(),
+                    "provenance": provenance.record(),
+                },
+                indent=1,
+            )
+        )
         return
-    BANDS = OUT / "bands"; BANDS.mkdir(exist_ok=True)
+    BANDS = OUT / "bands"
+    BANDS.mkdir(exist_ok=True)
     for old in BANDS.glob("*.npz"):
         old.unlink()
     for name, res in results.items():
-        np.savez(BANDS / f"{''.join(c if c.isalnum() else '_' for c in name).strip('_')}.npz",
-                 pos=np.array(res["pos"]), energies=np.array(res["energies"]), forces=np.array(res["forces"]),
-                 numbers=eps[0].numbers, cell=eps[0].cell.array)
+        np.savez(
+            BANDS
+            / f"{''.join(c if c.isalnum() else '_' for c in name).strip('_')}.npz",
+            pos=np.array(res["pos"]),
+            energies=np.array(res["energies"]),
+            forces=np.array(res["forces"]),
+            numbers=eps[0].numbers,
+            cell=eps[0].cell.array,
+        )
     bands = {name: res["energies"] for name, res in results.items()}
     tmp = OUT / "restart_formats.csv.tmp"
     with open(tmp, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS); w.writeheader(); w.writerows(rows)
+        w = csv.DictWriter(fh, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
     os.replace(tmp, OUT / "restart_formats.csv")
     record = provenance.record()
     host = roundoff_host()
-    (OUT / "restart_bands.json").write_text(json.dumps({"energies_eV": bands, "roundoff_host": host,
-                                                        "provenance": record}, indent=1))
-    (OUT / "restart_formats.json").write_text(json.dumps({
-        "script": "paper/cpc/scripts/restart_formats.py",
-        "outputs": ["data/failure/restart_formats.csv", "data/failure/restart_bands.json", "data/failure/bands"],
-        "parameters": dict(fmax_eV_A=FMAX, alpha_A2_eV=ALPHA, interrupt_step=K, step_cap=NMAX,
-                           vacuum_A=VACUUM, held_height_A=HEIGHT, endpoint_fmax_eV_A=ENDPOINT_FMAX, movable_images=N_IMG,
-                           spring_eV_A2=SPRING, sites=SITES, neb_method=METHOD, climbing_image=CLIMB),
-        "atom_ids": atom_ids(len(eps[0])).tolist(),
-        "columns": COLUMNS,
-        "roundoff_host": host,
-        "provenance": record,
-    }, indent=1))
+    (OUT / "restart_bands.json").write_text(
+        json.dumps(
+            {"energies_eV": bands, "roundoff_host": host, "provenance": record},
+            indent=1,
+        )
+    )
+    (OUT / "restart_formats.json").write_text(
+        json.dumps(
+            {
+                "script": "paper/cpc/scripts/restart_formats.py",
+                "outputs": [
+                    "data/failure/restart_formats.csv",
+                    "data/failure/restart_bands.json",
+                    "data/failure/bands",
+                ],
+                "parameters": dict(
+                    fmax_eV_A=FMAX,
+                    alpha_A2_eV=ALPHA,
+                    interrupt_step=K,
+                    step_cap=NMAX,
+                    vacuum_A=VACUUM,
+                    held_height_A=HEIGHT,
+                    endpoint_fmax_eV_A=ENDPOINT_FMAX,
+                    movable_images=N_IMG,
+                    spring_eV_A2=SPRING,
+                    sites=SITES,
+                    neb_method=METHOD,
+                    climbing_image=CLIMB,
+                ),
+                "atom_ids": atom_ids(len(eps[0])).tolist(),
+                "columns": COLUMNS,
+                "roundoff_host": host,
+                "provenance": record,
+            },
+            indent=1,
+        )
+    )
 
 
 if __name__ == "__main__":

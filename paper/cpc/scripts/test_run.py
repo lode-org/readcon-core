@@ -49,11 +49,15 @@ AT_LINE = re.compile(r"AtLine \{ line: (\d+),")
 
 
 def commit() -> str:
-    return re.search(r"\\newcommand\{\\readconcommit\}\{([0-9a-f]{40})\}", COMMIT.read_text()).group(1)
+    return re.search(
+        r"\\newcommand\{\\readconcommit\}\{([0-9a-f]{40})\}", COMMIT.read_text()
+    ).group(1)
 
 
 def version() -> str:
-    return re.search(r"\\newcommand\{\\readconversion\}\{([0-9.]+)\}", RELEASE.read_text()).group(1)
+    return re.search(
+        r"\\newcommand\{\\readconversion\}\{([0-9.]+)\}", RELEASE.read_text()
+    ).group(1)
 
 
 def frame_sha() -> str:
@@ -88,7 +92,9 @@ def cell_runs(checkout: Path, example: list[str]) -> dict:
         for validate in (False, True):
             rel = f"{CELL_DIR}/{name}{'_validate' if validate else ''}.con"
             (checkout / rel).write_text(cell_text(worked[name]["angles"], validate))
-            done = subprocess.run([*example, rel], cwd=checkout, capture_output=True, text=True)
+            done = subprocess.run(
+                [*example, rel], cwd=checkout, capture_output=True, text=True
+            )
             failed = FAILED.search(done.stderr)
             at = AT_LINE.search(failed.group(1)) if failed else None
             runs[f"{name}{'_validate' if validate else ''}"] = {
@@ -105,20 +111,43 @@ def cell_runs(checkout: Path, example: list[str]) -> dict:
 
 def run(checkout: Path, toolchain: str) -> dict:
     sha = commit()
-    head = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"], capture_output=True, text=True,
-                          check=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     if head != sha:
         raise SystemExit(f"checkout is at {head}, not at the commit of src/commit.tex")
-    cargo_version = re.search(r'^version = "([^"]+)"', (checkout / "Cargo.toml").read_text(), re.M).group(1)
+    cargo_version = re.search(
+        r'^version = "([^"]+)"', (checkout / "Cargo.toml").read_text(), re.M
+    ).group(1)
     if cargo_version != version():
-        raise SystemExit(f"Cargo.toml says {cargo_version}, src/release.tex says {version()}")
+        raise SystemExit(
+            f"Cargo.toml says {cargo_version}, src/release.tex says {version()}"
+        )
     if (checkout / INPUT).read_bytes() != FRAME.read_bytes():
         raise SystemExit(f"{INPUT} in the checkout is not the frame of this paper")
     plus = [f"+{toolchain}"] if toolchain else []
-    tool = lambda *args: subprocess.run(list(args), cwd=checkout, capture_output=True, text=True,
-                                        check=True).stdout.strip()
-    example = ["cargo", *plus, "run", "--release", "--locked", "--example", EXAMPLE, "--"]
-    done = subprocess.run([*example, INPUT], cwd=checkout, capture_output=True, text=True, check=True)
+
+    def tool(*args):
+        return subprocess.run(
+            list(args), cwd=checkout, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    example = [
+        "cargo",
+        *plus,
+        "run",
+        "--release",
+        "--locked",
+        "--example",
+        EXAMPLE,
+        "--",
+    ]
+    done = subprocess.run(
+        [*example, INPUT], cwd=checkout, capture_output=True, text=True, check=True
+    )
     return {
         "tree_commit": sha,
         "readcon_version": cargo_version,
@@ -133,13 +162,22 @@ def run(checkout: Path, toolchain: str) -> dict:
 
 
 def listing(record: dict) -> str:
-    body = ["$ " + line for line in record["commands"]] + record["stdout"].rstrip("\n").split("\n")
-    caption = (f"Test run. The example program of readcon-core {record['readcon_version']}, built with "
-               f"{record['rustc'].split(' (')[0]}, reads Listing~\\ref{{lst:frame}} and prints its cell, "
-               "its counts and its first five atoms with their fixed flags, identifiers and velocities.")
-    return ("% Written by paper/cpc/scripts/test_run.py from data/test_run.json.\n"
-            "\\begin{lstlisting}[caption={" + caption + "},label={lst:testrun}]\n"
-            + "\n".join(body) + "\n\\end{lstlisting}\n")
+    body = ["$ " + line for line in record["commands"]] + record["stdout"].rstrip(
+        "\n"
+    ).split("\n")
+    caption = (
+        f"Test run. The example program of readcon-core {record['readcon_version']}, built with "
+        f"{record['rustc'].split(' (')[0]}, reads Listing~\\ref{{lst:frame}} and prints its cell, "
+        "its counts and its first five atoms with their fixed flags, identifiers and velocities."
+    )
+    return (
+        "% Written by paper/cpc/scripts/test_run.py from data/test_run.json.\n"
+        "\\begin{lstlisting}[caption={"
+        + caption
+        + "},label={lst:testrun}]\n"
+        + "\n".join(body)
+        + "\n\\end{lstlisting}\n"
+    )
 
 
 def macros(record: dict) -> str:
@@ -148,21 +186,39 @@ def macros(record: dict) -> str:
     for name in ("flat", "none"):
         for key in (name, f"{name}_validate"):
             if cells[key]["angles"] != worked[name]["angles"]:
-                raise SystemExit(f"data/test_run.json reads other {name} angles than data/worked_example.json")
+                raise SystemExit(
+                    f"data/test_run.json reads other {name} angles than data/worked_example.json"
+                )
             if (cells[key]["exit"] == 0) != worked[name]["accepted"]:
-                raise SystemExit(f"the release and data/worked_example.json disagree on the {name} cell")
+                raise SystemExit(
+                    f"the release and data/worked_example.json disagree on the {name} cell"
+                )
     lines = {cells[key]["line"] for key in ("none", "none_validate")}
     if len(lines) != 1 or None in lines:
-        raise SystemExit("the impossible cell is not rejected at one line in both modes")
-    return ("% Written by paper/cpc/scripts/test_run.py from data/test_run.json.\n"
-            f"\\newcommand{{\\trCellLine}}{{{lines.pop()}}}\n")
+        raise SystemExit(
+            "the impossible cell is not rejected at one line in both modes"
+        )
+    return (
+        "% Written by paper/cpc/scripts/test_run.py from data/test_run.json.\n"
+        f"\\newcommand{{\\trCellLine}}{{{lines.pop()}}}\n"
+    )
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--checkout", type=Path, help="clone of the release commit with this paper/cpc in it")
-    ap.add_argument("--toolchain", default="", help="rustup toolchain, for example 1.88.0")
-    ap.add_argument("--tables", action="store_true", help="write the listing from the committed record")
+    ap.add_argument(
+        "--checkout",
+        type=Path,
+        help="clone of the release commit with this paper/cpc in it",
+    )
+    ap.add_argument(
+        "--toolchain", default="", help="rustup toolchain, for example 1.88.0"
+    )
+    ap.add_argument(
+        "--tables",
+        action="store_true",
+        help="write the listing from the committed record",
+    )
     args = ap.parse_args()
     if args.tables:
         record = json.loads(RECORD.read_text())

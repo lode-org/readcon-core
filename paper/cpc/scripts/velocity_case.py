@@ -29,7 +29,7 @@ OUT = CPC / "src" / "figures" / "generated"
 FIXTURE = CPC / "evidence" / "work" / "e1" / "velocity" / "natural.con"
 sys.path.insert(0, str(SCRIPTS))
 
-import provenance
+import provenance  # noqa: E402
 
 CODATA = "2018"
 # CODATA 2018 atomic mass constant and its standard uncertainty in kg. The
@@ -52,7 +52,9 @@ def natural_fs() -> dict:
     import hcn_case
 
     binary = hcn_case.binary()
-    proc = subprocess.run([str(binary), "units"], text=True, capture_output=True, check=True)
+    proc = subprocess.run(
+        [str(binary), "units"], text=True, capture_output=True, check=True
+    )
     readcon_units = json.loads(proc.stdout)
     units = ase.units.create_units(CODATA)
     ase_fs = 1.0 / units["fs"]
@@ -61,7 +63,9 @@ def natural_fs() -> dict:
     if units["_amu"] != AMU_KG:
         raise SystemExit(f"ASE CODATA {CODATA} m_u is {units['_amu']}, not {AMU_KG}")
     if factor != ase_fs or abs(si_fs - factor) > 4 * np.spacing(factor):
-        raise SystemExit(f"natural unit disagrees: readcon {factor} ASE {ase_fs} SI {si_fs}")
+        raise SystemExit(
+            f"natural unit disagrees: readcon {factor} ASE {ase_fs} SI {si_fs}"
+        )
     return {
         "codata": CODATA,
         "spelling": readcon_units["spelling"],
@@ -194,7 +198,10 @@ def at_uncertainty(value: float, uncertainty: float) -> str:
 
 def macros(unit: dict, big: dict, small: dict) -> str:
     rows = (
-        ("velNaturalFs", at_uncertainty(unit["readcon_fs"], unit["readcon_fs_standard_uncertainty"])),
+        (
+            "velNaturalFs",
+            at_uncertainty(unit["readcon_fs"], unit["readcon_fs_standard_uncertainty"]),
+        ),
         ("velNaturalFsUnc", tex_sci(unit["readcon_fs_standard_uncertainty"], 2)),
         ("velNaturalFsBinary", tex_repr(unit["readcon_fs"])),
         ("velEonFs", tex_repr(unit["eon_fs"])),
@@ -217,11 +224,17 @@ def macros(unit: dict, big: dict, small: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tables", action="store_true", help="rewrite the macros from the committed record only")
+    parser.add_argument(
+        "--tables",
+        action="store_true",
+        help="rewrite the macros from the committed record only",
+    )
     if parser.parse_args().tables:
         record = json.loads((RESULTS / "velocity_case.json").read_text())
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / "velocity_case.tex").write_text(macros(record["natural_unit"], record["slab_10001"], record["slab_28"]))
+        (OUT / "velocity_case.tex").write_text(
+            macros(record["natural_unit"], record["slab_10001"], record["slab_28"])
+        )
         return
     unit = natural_fs()
     factor, kB = unit["readcon_fs"], unit["kB_eV_per_K"]

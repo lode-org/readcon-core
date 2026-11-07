@@ -28,6 +28,8 @@ WORK = PAPER / "logs" / "reader-work" / "large"
 BASE_COMMIT = "ac4f437989dea5aad9f75ff045af09ccf7127eba"
 BASE_DIR = PAPER / "build" / "baseline-readcon"
 RELEASE_COMMIT = "12ca800bc2212c565941e04094cba6b4d99a62e0"
+
+
 def _cargo_version() -> str:
     text = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
     for line in text.splitlines():
@@ -39,7 +41,16 @@ def _cargo_version() -> str:
 RELEASE_DIR = PAPER / "build" / f"readcon-{_cargo_version()}"
 EON_PY = PAPER / "bench" / "work" / "peers" / "eon" / "client" / "python"
 EON_PKG = PAPER / "bench" / "work" / "peers" / "eon"
-EON_LIB = PAPER / "bench" / "work" / "peers" / "eon" / "build-h2h" / "subprojects" / "readcon-core"
+EON_LIB = (
+    PAPER
+    / "bench"
+    / "work"
+    / "peers"
+    / "eon"
+    / "build-h2h"
+    / "subprojects"
+    / "readcon-core"
+)
 EON_BIN = PAPER / "bench" / "work" / "eon_allframes"
 EON_COMMIT = "579738a9387e8d0ea55496f45dd057812cfab892"
 EON_VERSION = "3.6.0"
@@ -109,6 +120,7 @@ def write_files(frames: np.ndarray) -> None:
     universe = mda.Universe(str(xyz))
     conbin = WORK / "frames.conbin"
     import readcon
+
     readcon.write_conbin(str(con), str(conbin))
     h5md = WORK / "frames.h5md"
     with mda.Writer(str(h5md), n_atoms=n_atoms) as writer:
@@ -282,7 +294,9 @@ def one(arm: str, path: Path) -> dict:
     env.pop("TMPDIR", None)
     if arm == "eon":
         env["PYTHONPATH"] = str(EON_PY) + os.pathsep + env.get("PYTHONPATH", "")
-        env["LD_LIBRARY_PATH"] = str(EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = (
+            str(EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+        )
     if arm == "eon_py":
         env["EON_PKG"] = str(EON_PKG)
         env["PYTHONPATH"] = str(EON_PKG) + os.pathsep + env.get("PYTHONPATH", "")
@@ -295,10 +309,22 @@ def one(arm: str, path: Path) -> dict:
         capture_output=True,
         env=env,
     )
-    lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("{") or ln.startswith("READY")]
+    lines = [
+        ln
+        for ln in proc.stdout.splitlines()
+        if ln.startswith("{") or ln.startswith("READY")
+    ]
     if proc.returncode != 0 or not lines or not lines[-1].startswith("{"):
         err = (proc.stderr or proc.stdout)[-300:].replace("\n", " ")
-        return {"error": err, "seconds": None, "matched": 0, "got": 0, "requested": N_FRAMES, "mib": None, "exit": proc.returncode}
+        return {
+            "error": err,
+            "seconds": None,
+            "matched": 0,
+            "got": 0,
+            "requested": N_FRAMES,
+            "mib": None,
+            "exit": proc.returncode,
+        }
     doc = json.loads(lines[-1])
     doc["mib"] = max(0, int(doc["hwm_after"]) - int(doc["hwm_before"])) / 1024.0
     doc["exit"] = proc.returncode
@@ -314,9 +340,15 @@ def type7(values: list[float]) -> tuple[float, float]:
 
 
 def main() -> int:
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
-    status = subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True
+    ).strip()
+    status = subprocess.check_output(
+        ["git", "status", "--short"], cwd=ROOT, text=True
+    ).strip()
     lines = [
         f"rev_parse {head}",
         f"tree {tree}",
@@ -386,9 +418,15 @@ def main() -> int:
                 f"requested={doc.get('requested')} exit={doc.get('exit')} error={doc.get('error', '')}"
             )
     for name, _path in arms:
-        got = [row for row in samples[name] if row.get("seconds") is not None and not row.get("error")]
+        got = [
+            row
+            for row in samples[name]
+            if row.get("seconds") is not None and not row.get("error")
+        ]
         if len(got) < REPEATS:
-            err = next((row.get("error") for row in samples[name] if row.get("error")), "short")
+            err = next(
+                (row.get("error") for row in samples[name] if row.get("error")), "short"
+            )
             lines.append(f"summary arm={name} error={err} exit=1")
             continue
         med, iqr = type7([row["seconds"] for row in got])
@@ -406,7 +444,11 @@ def main() -> int:
     lines.append("exit_code 0")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\n".join(ln for ln in lines if ln.startswith("summary") or ln.startswith("exit")))
+    print(
+        "\n".join(
+            ln for ln in lines if ln.startswith("summary") or ln.startswith("exit")
+        )
+    )
     return 0
 
 

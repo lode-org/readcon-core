@@ -74,16 +74,23 @@ def main() -> None:
     runs = kernel_runs(list(rf.values()))
     record = json.loads((ROOT / "data/failure/restart_formats.json").read_text())
     host = record["roundoff_host"]
-    m["rfHost"] = restart_formats.host_label(host["cpu_model"], host["family"], host["model"])
+    m["rfHost"] = restart_formats.host_label(
+        host["cpu_model"], host["family"], host["model"]
+    )
     m["rfStepCap"] = thousands(record["parameters"]["step_cap"])
     unint = rf["uninterrupted"]
     m["rfStepsUnint"] = unint["steps"]
     m["rfCallsUnint"] = unint["force_calls"]
     m["rfModesUnint"] = unint["free_modes_mid"]
     m["rfBarrierUnint"] = fixed(float(unint["barrier_eV"]), 4)
-    for key, route in (("Con", "CON 3.1, shortest round trip"), ("Six", "CON 3.1, six decimals"),
-                       ("Xyz", "extended XYZ (ASE)"), ("Traj", "ASE trajectory, ids in tags"),
-                       ("Scaled", "POSCAR (ASE), FixScaled z"), ("Hfive", "H5MD (h5py), private mask dataset")):
+    for key, route in (
+        ("Con", "CON 3.1, shortest round trip"),
+        ("Six", "CON 3.1, six decimals"),
+        ("Xyz", "extended XYZ (ASE)"),
+        ("Traj", "ASE trajectory, ids in tags"),
+        ("Scaled", "POSCAR (ASE), FixScaled z"),
+        ("Hfive", "H5MD (h5py), private mask dataset"),
+    ):
         row = rf[route]
         m[f"rfModes{key}"] = row["free_modes_mid"]
         if row["converged"] != "True":
@@ -102,25 +109,52 @@ def main() -> None:
             m[f"rfDeUlp{key}"] = ulp(row["d_barrier_ulp"])
             m[f"rfDispUlp{key}"] = ulp(row["max_disp_ulp"])
     m["rfFileUlpScaled"] = ulp(rf["POSCAR (ASE), FixScaled z"]["file_dpos_ulp"])
-    for route in ("CON 3.1, shortest round trip", "ASE trajectory, ids in tags", "H5MD (h5py), private mask dataset"):
+    for route in (
+        "CON 3.1, shortest round trip",
+        "ASE trajectory, ids in tags",
+        "H5MD (h5py), private mask dataset",
+    ):
         row = rf[route]
-        if float(row["d_barrier_eV"]) or float(row["max_disp_A"]) or row["steps"] != unint["steps"]:
-            raise SystemExit(f"{route} does not resume to the uninterrupted band bit for bit: {row}")
+        if (
+            float(row["d_barrier_eV"])
+            or float(row["max_disp_A"])
+            or row["steps"] != unint["steps"]
+        ):
+            raise SystemExit(
+                f"{route} does not resume to the uninterrupted band bit for bit: {row}"
+            )
 
     walls = json.loads((ROOT / WALLS).read_text())
     m["rfWallsTaskMin"] = str(round(walls["task_s"] / 60))
     m["rfWallHost"] = provenance.hardware_tex(walls["hardware"])
 
     sd = json.loads((ROOT / "evidence/results/e1_restart.json").read_text())
-    lb = json.loads((ROOT / "evidence/results/e1_restart_lbfgs_control.json").read_text())
+    lb = json.loads(
+        (ROOT / "evidence/results/e1_restart_lbfgs_control.json").read_text()
+    )
     neb, lneb = sd["neb"], lb["neb"]
     for name in ("resume_eon", "resume_roundtrip", "resume_fixed6"):
-        assert neb[name]["termination"] == "GOOD" and lneb[name]["termination"] == "GOOD"
-    assert neb["full"]["termination"] == "GOOD" and lneb["full"]["termination"] == "GOOD"
+        assert (
+            neb[name]["termination"] == "GOOD" and lneb[name]["termination"] == "GOOD"
+        )
+    assert (
+        neb["full"]["termination"] == "GOOD" and lneb["full"]["termination"] == "GOOD"
+    )
     for band, optimizer in ((neb, "sd"), (lneb, "lbfgs")):
-        assert band["optimizer"] == optimizer and band["optimizer_backend_every_run"] == [optimizer]
-        for name in ("full", "short", "resume_eon", "resume_roundtrip", "resume_fixed6"):
-            assert band[name]["optimizers_constructed"] == [optimizer], (optimizer, name)
+        assert band["optimizer"] == optimizer and band[
+            "optimizer_backend_every_run"
+        ] == [optimizer]
+        for name in (
+            "full",
+            "short",
+            "resume_eon",
+            "resume_roundtrip",
+            "resume_fixed6",
+        ):
+            assert band[name]["optimizers_constructed"] == [optimizer], (
+                optimizer,
+                name,
+            )
         assert band["short"]["first_iteration_step_A"] == 0.0
         assert band["interrupt_iterations"] == band["interrupt_max_iterations"]
         assert band["interrupt_optimizer_steps"] == band["interrupt_max_iterations"] - 1
@@ -146,14 +180,38 @@ def main() -> None:
     m["eOneLbfgsStepsTotal"] = str(lneb["resume_roundtrip"]["total_optimizer_steps"])
     m["eOneLbfgsMic"] = sci(lneb["resume_roundtrip"]["mic_max_abs_A"])
     m["eOneSpread"] = sci(abs(sd["converged_barrier_spread"]["sd_minus_lbfgs_eV"]))
-    m["eOneResidual"] = sci(sd["minimize_reactant"]["residual"]["max_atom_force_eV_A"], 2)
-    assert m["eOneResidual"] == sci(sd["minimize_product"]["residual"]["max_atom_force_eV_A"], 2)
+    m["eOneResidual"] = sci(
+        sd["minimize_reactant"]["residual"]["max_atom_force_eV_A"], 2
+    )
+    assert m["eOneResidual"] == sci(
+        sd["minimize_product"]["residual"]["max_atom_force_eV_A"], 2
+    )
     for name in ("barrier_eV", "optimizer_steps"):
-        assert len({lneb[r][name] for r in ("resume_eon", "resume_roundtrip", "resume_fixed6")}) == 1
-    assert neb["resume_eon"]["barrier_eV"] == neb["resume_roundtrip"]["barrier_eV"] == neb["full"]["barrier_eV"]
-    assert neb["resume_roundtrip"]["total_optimizer_steps"] == neb["full"]["optimizer_steps"]
-    assert lneb["resume_roundtrip"]["total_optimizer_steps"] == lneb["full"]["optimizer_steps"]
-    assert abs(lneb["resume_roundtrip"]["barrier_delta_eV"]) < abs(sd["converged_barrier_spread"]["sd_minus_lbfgs_eV"])
+        assert (
+            len(
+                {
+                    lneb[r][name]
+                    for r in ("resume_eon", "resume_roundtrip", "resume_fixed6")
+                }
+            )
+            == 1
+        )
+    assert (
+        neb["resume_eon"]["barrier_eV"]
+        == neb["resume_roundtrip"]["barrier_eV"]
+        == neb["full"]["barrier_eV"]
+    )
+    assert (
+        neb["resume_roundtrip"]["total_optimizer_steps"]
+        == neb["full"]["optimizer_steps"]
+    )
+    assert (
+        lneb["resume_roundtrip"]["total_optimizer_steps"]
+        == lneb["full"]["optimizer_steps"]
+    )
+    assert abs(lneb["resume_roundtrip"]["barrier_delta_eV"]) < abs(
+        sd["converged_barrier_spread"]["sd_minus_lbfgs_eV"]
+    )
     assert sd["adatom_mask"] == 4 and sd["slab"].startswith("restart_formats.slab")
     m["eOneEonVersion"] = sd["eon_build"]["conda_package"]["version"]
     m["eOneEonPrints"] = sd["eon_build"]["version_output"]
@@ -162,31 +220,47 @@ def main() -> None:
     m["eOneEonSpec"] = str(sd["eon_engine"]["compatibility_readcon_spec_version"])
     package = sd["eon_build"]["package"]
     printed = sd["eon_build"]["version_output"].split("(")[1].rstrip(")")
-    assert package["feedstock_commit"].startswith(printed), (printed, package["feedstock_commit"])
+    assert package["feedstock_commit"].startswith(printed), (
+        printed,
+        package["feedstock_commit"],
+    )
     m["eOneEonFeedstockCommit"] = package["feedstock_commit"][:7]
     m["eOneEonTag"] = package["source_tag"]["tag"]
     m["eOneEonTagCommit"] = package["source_tag"]["commit"][:7]
     readcon_source = [s for s in package["sources"] if "readcon-core" in s["url"]]
-    assert len(readcon_source) == 1 and readcon_source[0]["url"].endswith(f"v{m['eOneEonReadcon']}.tar.gz")
+    assert len(readcon_source) == 1 and readcon_source[0]["url"].endswith(
+        f"v{m['eOneEonReadcon']}.tar.gz"
+    )
 
     matrix = json.loads((ROOT / "data/failure/matrix.json").read_text())
     summary = matrix["summary"]
     rows = {(r["format"], r["writer"], r["reader"]): r for r in matrix["rows"]}
-    assert summary["routes"] == len(matrix["rows"]) == summary["same_library_routes"] + summary["cross_library_routes"]
+    assert (
+        summary["routes"]
+        == len(matrix["rows"])
+        == summary["same_library_routes"] + summary["cross_library_routes"]
+    )
     m["surveyRoutes"] = str(len(matrix["rows"]))
     m["surveySameRows"] = str(summary["same_library_routes"])
     m["surveyCrossRows"] = str(summary["cross_library_routes"])
     m["surveyCrossRoutes"] = str(summary["completed_cross_library_routes"])
     m["surveyCrossIds"] = str(summary["completed_cross_library_routes_returning_ids"])
     lost = summary["cross_library_routes_losing_ids"]
-    assert summary["completed_cross_library_routes_returning_ids"] + len(lost) == summary["completed_cross_library_routes"]
+    assert (
+        summary["completed_cross_library_routes_returning_ids"] + len(lost)
+        == summary["completed_cross_library_routes"]
+    )
     m["surveyCrossIdsLost"] = str(len(lost))
     m["surveyShiftMin"] = sci(summary["smallest_nonzero_shift"]["dpos"], 2)
     m["surveyShiftMinUlp"] = str(int(summary["smallest_nonzero_shift"]["dpos_ulp"]))
     m["surveyShiftMax"] = sci(summary["largest_shift"]["dpos"], 2)
     m["surveyAseXyzShift"] = sci(rows[("extended XYZ", "ASE", "ASE")]["dpos"], 2)
-    m["surveyChemXyzShift"] = sci(rows[("extended XYZ", "chemfiles", "chemfiles")]["dpos"], 2)
-    m["surveyChemXyzCell"] = sci(rows[("extended XYZ", "chemfiles", "chemfiles")]["dcell"], 2)
+    m["surveyChemXyzShift"] = sci(
+        rows[("extended XYZ", "chemfiles", "chemfiles")]["dpos"], 2
+    )
+    m["surveyChemXyzCell"] = sci(
+        rows[("extended XYZ", "chemfiles", "chemfiles")]["dcell"], 2
+    )
     m["surveyMdaShift"] = sci(rows[("H5MD", "MDAnalysis", "MDAnalysis")]["dpos"], 2)
     m["surveyCifShift"] = sci(rows[("CIF", "Open Babel", "Open Babel")]["dpos"], 2)
 
@@ -203,11 +277,19 @@ def main() -> None:
     axes_of: dict[int, list[str]] = {}
     for c in chem:
         axes_of.setdefault(c["atom"], []).append(rf"\({c['axis']}\)")
-    m["driftChemCoords"] = spoken([f"the {spoken(axes)} of row {atom + 1}" for atom, axes in axes_of.items()])
+    m["driftChemCoords"] = spoken(
+        [f"the {spoken(axes)} of row {atom + 1}" for atom, axes in axes_of.items()]
+    )
     x_one = [c for c in chem if (c["atom"], c["axis"]) == (1, "x")]
-    assert len(x_one) == 1, "chemfiles returns the x coordinate of atom 1 correctly rounded"
+    assert len(x_one) == 1, (
+        "chemfiles returns the x coordinate of atom 1 correctly rounded"
+    )
     with (ROOT / "data/failure/drift_extxyz.csv").open(newline="") as handle:
-        chem_row = next(r for r in csv.DictReader(handle) if (r["case"], r["reader"]) == ("plain", "chemfiles"))
+        chem_row = next(
+            r
+            for r in csv.DictReader(handle)
+            if (r["case"], r["reader"]) == ("plain", "chemfiles")
+        )
     m["driftXOne"] = x_one[0]["decimal"]
     m["driftXOneBits"] = bits(x_one[0]["decimal"])
     m["driftXOneChemBits"] = bits(chem_row["x1"])
@@ -216,17 +298,34 @@ def main() -> None:
         if name in ("rfWallsTaskMin", "rfWallHost"):
             return WALLS
         if re.match(r"rf(De|Disp|File)[A-Z]", name):
-            return ", ".join(["data/failure/restart_formats.csv",
-                              *(f"data/failure/restart_kernels/{kernels}.json" for kernels in sorted(runs))])
-        for prefix, records in (("rf", "data/failure/restart_formats.csv, data/failure/restart_formats.json"),
-                                ("eOne", "evidence/results/e1_restart.json, evidence/results/e1_restart_lbfgs_control.json"),
-                                ("survey", "data/failure/matrix.json"),
-                                ("drift", "data/failure/drift_extxyz.json, data/failure/drift_extxyz.csv")):
+            return ", ".join(
+                [
+                    "data/failure/restart_formats.csv",
+                    *(
+                        f"data/failure/restart_kernels/{kernels}.json"
+                        for kernels in sorted(runs)
+                    ),
+                ]
+            )
+        for prefix, records in (
+            (
+                "rf",
+                "data/failure/restart_formats.csv, data/failure/restart_formats.json",
+            ),
+            (
+                "eOne",
+                "evidence/results/e1_restart.json, evidence/results/e1_restart_lbfgs_control.json",
+            ),
+            ("survey", "data/failure/matrix.json"),
+            ("drift", "data/failure/drift_extxyz.json, data/failure/drift_extxyz.csv"),
+        ):
             if name.startswith(prefix):
                 return records
         raise KeyError(name)
 
-    lines = ["% Written by paper/cpc/scripts/gen_case_macros.py from the records named in its docstring."]
+    lines = [
+        "% Written by paper/cpc/scripts/gen_case_macros.py from the records named in its docstring."
+    ]
     current = None
     for k, v in m.items():
         if records_of(k) != current:

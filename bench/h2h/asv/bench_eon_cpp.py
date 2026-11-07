@@ -23,6 +23,7 @@ class EonCpp:
 
     def setup(self):
         import json
+
         self.json = json
         self.path = support.case_path("atoms-1000000")
         self.dump = support.WORK / "outs" / "asv-eon.dump"

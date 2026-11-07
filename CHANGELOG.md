@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.18.1 - 2026-11-07
+
+### Bugfixes
+
+- A tag publishes wheels, sdists, and the cxx archive only when VERSION and
+  each filename version are that tag.
+  An archive named for another version is refused.
+
+
 ## v0.18.0 - 2026-11-07
 
 ### Features
@@ -1261,6 +1270,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.18.1]: https://github.com/lode-org/readcon-core/compare/v0.18.0...v0.18.1
 [v0.18.0]: https://github.com/lode-org/readcon-core/compare/v0.17.3...v0.18.0
 [v0.17.3]: https://github.com/lode-org/readcon-core/compare/v0.17.2...v0.17.3
 [v0.17.2]: https://github.com/lode-org/readcon-core/compare/v0.17.1...v0.17.2

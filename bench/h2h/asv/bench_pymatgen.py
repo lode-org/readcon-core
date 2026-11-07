@@ -23,6 +23,7 @@ class PymatgenPoscar:
 
     def setup(self):
         from pymatgen.io.vasp import Poscar
+
         self.Poscar = Poscar
         self.path = str(support.WORK / "native" / "grid.poscar")
 

@@ -67,7 +67,9 @@ def num(value: str, digits: int) -> str:
     return f"{float(value):.{digits}g}"
 
 
-def table(found: dict[str, dict[str, str]], order: tuple[str, ...], caption: str, label: str) -> str:
+def table(
+    found: dict[str, dict[str, str]], order: tuple[str, ...], caption: str, label: str
+) -> str:
     lines = [
         "\\begin{table}[tbp]",
         "\\centering",

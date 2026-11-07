@@ -23,6 +23,7 @@ class ChemfilesExtxyz:
 
     def setup(self):
         import chemfiles
+
         self.chemfiles = chemfiles
         self.path = str(support.WORK / "native" / "grid.extxyz")
 

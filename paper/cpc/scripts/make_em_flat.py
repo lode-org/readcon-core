@@ -63,7 +63,11 @@ def rewrite_paths_flat(text: str) -> str:
         text,
     )
     # \lstinputlisting and any other command that reads a generated file; a path the text prints stays as it is.
-    text = re.sub(r"(?<!\\nolinkurl)(?<!\\path)(?<!\\url)(?<!\\texttt)\{figures/generated/([^{}/]+)\}", r"{\1}", text)
+    text = re.sub(
+        r"(?<!\\nolinkurl)(?<!\\path)(?<!\\url)(?<!\\texttt)\{figures/generated/([^{}/]+)\}",
+        r"{\1}",
+        text,
+    )
     return text
 
 
@@ -112,7 +116,9 @@ def write_flat(stage: Path, flat: Path, snap: Path, report: dict) -> list[str]:
             (flat / dest).write_text(text, encoding="utf-8")
             names.append(dest)
             used[dest] = path
-            report["rewrites"].append(f"{dest}: flattened paths; \\input{{rg_main.bbl}}")
+            report["rewrites"].append(
+                f"{dest}: flattened paths; \\input{{rg_main.bbl}}"
+            )
         elif path.suffix == ".tex":
             text = rewrite_paths_flat(path.read_text(encoding="utf-8"))
             (flat / dest).write_text(text, encoding="utf-8")
@@ -123,7 +129,9 @@ def write_flat(stage: Path, flat: Path, snap: Path, report: dict) -> list[str]:
 
     # The manuscript names docs/orgmode/spec.org as the normative format document.
     if not arxiv.SPEC_ORG.exists():
-        raise arxiv.PackError(f"{arxiv.SPEC_ORG} is missing; the Program Summary ships it")
+        raise arxiv.PackError(
+            f"{arxiv.SPEC_ORG} is missing; the Program Summary ships it"
+        )
     place(arxiv.SPEC_ORG, arxiv.SPEC_ORG.name)
 
     # Ensure the .bbl is present under its flat name.
@@ -151,12 +159,23 @@ def compile_flat(flat: Path, texbin: Path, env: dict) -> tuple[str, list[int], d
     pdf = work / f"{MAIN}.pdf"
     if pdf.exists():
         shutil.copy2(pdf, flat.parent / "em-flat-pdflatex.pdf")
-    return log_text, codes, {"found": found, "kinds": kinds, "info": info, "work": str(work)}
+    return (
+        log_text,
+        codes,
+        {"found": found, "kinds": kinds, "info": info, "work": str(work)},
+    )
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", required=True, type=Path, help="output directory (em-flat/ written here)")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out",
+        required=True,
+        type=Path,
+        help="output directory (em-flat/ written here)",
+    )
     ap.add_argument("--src", type=Path, default=DEFAULT_SRC)
     ap.add_argument("--texbin", type=Path, default=DEFAULT_TEXBIN)
     ap.add_argument("--rebuild", action="store_true")
@@ -169,14 +188,22 @@ def main() -> int:
     texbin = args.texbin
     if not (texbin / "pdflatex").exists():
         raise arxiv.PackError(f"no pdflatex in {texbin}")
-    ver = subprocess.run([str(texbin / "pdflatex"), "--version"], capture_output=True, text=True).stdout.splitlines()[0]
+    ver = subprocess.run(
+        [str(texbin / "pdflatex"), "--version"], capture_output=True, text=True
+    ).stdout.splitlines()[0]
     if "TeX Live 2025" not in ver:
         raise arxiv.PackError(f"{texbin}/pdflatex is not TeX Live 2025: {ver}")
 
     out.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="cpc-em-flat-"))
     log(f"work directory {work}")
-    report: dict = {"pdflatex": ver, "notes": [], "rewrites": [], "unicode": [], "failures": []}
+    report: dict = {
+        "pdflatex": ver,
+        "notes": [],
+        "rewrites": [],
+        "unicode": [],
+        "failures": [],
+    }
     try:
         snap, notes = arxiv.snapshot_sources(src, work, args.build_in_src, args.rebuild)
         report["notes"].extend(notes)
@@ -186,7 +213,9 @@ def main() -> int:
         supp_labels = arxiv.parse_newlabels(arxiv.read_aux_tree(snap / f"{SUPP}.aux"))
         sources = {p: p.read_text(encoding="utf-8") for p in tex_files}
         stripped_sources = [arxiv.strip_comments(t)[0] for t in sources.values()]
-        main_defined = set(arxiv.parse_newlabels(main_aux)) | arxiv.defined_keys(stripped_sources)
+        main_defined = set(arxiv.parse_newlabels(main_aux)) | arxiv.defined_keys(
+            stripped_sources
+        )
         refs = arxiv.referenced_keys(stripped_sources)
 
         supported = arxiv.supported_unicode(texbin)
@@ -200,7 +229,9 @@ def main() -> int:
         ]
         for prefix, doc in label_docs:
             if doc != SUPP or len(label_docs) > 1:
-                raise arxiv.PackError(f"\\externaldocument{{{doc}}}: only a single {SUPP} is supported")
+                raise arxiv.PackError(
+                    f"\\externaldocument{{{doc}}}: only a single {SUPP} is supported"
+                )
         supp_keys = (refs - main_defined) if label_docs else set()
 
         for p, text in sources.items():
@@ -255,7 +286,11 @@ def main() -> int:
         for cat, v in comp["found"].items():
             if v["fatal"] and v["count"]:
                 # "labels changed" / "Rerun" after 3 passes is fatal for arxiv; same here.
-                if cat == "labels changed" and v["count"] and all(c == 0 for c in codes):
+                if (
+                    cat == "labels changed"
+                    and v["count"]
+                    and all(c == 0 for c in codes)
+                ):
                     # Allow the listings First-Aid bang only; labels-changed must be zero after 3.
                     failures.append(f"{cat}: {v['count']}")
                 elif cat != "labels changed" or v["count"]:
@@ -267,7 +302,9 @@ def main() -> int:
             failures.append(f"error: {len(real_errors)}")
         elif comp["found"].get("error", {}).get("count") and not real_errors:
             # Only First Aid bangs; clear the fatal flag for the report.
-            report["notes"].append("log '!' hits are listings.sty First Aid notices only")
+            report["notes"].append(
+                "log '!' hits are listings.sty First Aid notices only"
+            )
             failures = [f for f in failures if not f.startswith("error:")]
 
         # Require zero undefined refs/citations explicitly.
@@ -277,19 +314,27 @@ def main() -> int:
                     failures.append(f"{cat}: {comp['found'][cat]['count']}")
 
         report["failures"] = failures
-        (out / "em-flat-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (out / "em-flat-report.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
 
         print()
         print(f"em-flat : {flat} ({len(names)} files)")
-        print(f"pdf     : {out / 'em-flat-pdflatex.pdf'} ({comp['info'].get('pages')} pages)")
+        print(
+            f"pdf     : {out / 'em-flat-pdflatex.pdf'} ({comp['info'].get('pages')} pages)"
+        )
         print(f"log     : {out / 'em-flat-pdflatex.log'}")
         print(f"report  : {out / 'em-flat-report.json'}")
         for n in names:
             print(f"  {n}")
         for cat, v in comp["found"].items():
-            flag = "FAIL" if v["fatal"] and v["count"] and not (
-                cat == "error" and v["count"] and not real_errors
-            ) else "    "
+            flag = (
+                "FAIL"
+                if v["fatal"]
+                and v["count"]
+                and not (cat == "error" and v["count"] and not real_errors)
+                else "    "
+            )
             print(f"  {flag} {cat:24s} {v['count']}")
         if failures:
             print("FAILED: " + "; ".join(failures))

@@ -188,7 +188,12 @@ def run_one(reader: str, path: Path, eon_bin: str) -> dict:
 def summary(values: list[float]) -> dict:
     arr = np.asarray(values, dtype=float)
     q1, q3 = np.percentile(arr, [25, 75], method="linear")
-    return {"n": int(arr.size), "median": float(np.median(arr)), "iqr": float(q3 - q1), "samples": [float(v) for v in arr]}
+    return {
+        "n": int(arr.size),
+        "median": float(np.median(arr)),
+        "iqr": float(q3 - q1),
+        "samples": [float(v) for v in arr],
+    }
 
 
 def main() -> None:
@@ -222,9 +227,20 @@ def main() -> None:
         else:
             (OUT / f"{name}.log").write_text(probe["error"] + "\n")
     floor = baseline_rss()
-    cpu = next((ln.split(":", 1)[1].strip() for ln in Path("/proc/cpuinfo").read_text().splitlines() if ln.startswith("model name")), "")
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    status = subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).strip()
+    cpu = next(
+        (
+            ln.split(":", 1)[1].strip()
+            for ln in Path("/proc/cpuinfo").read_text().splitlines()
+            if ln.startswith("model name")
+        ),
+        "",
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    status = subprocess.check_output(
+        ["git", "status", "--short"], cwd=ROOT, text=True
+    ).strip()
     rows = []
     for repeat in range(REPEATS):
         order = readers if repeat % 2 == 0 else list(reversed(readers))
@@ -252,13 +268,14 @@ def main() -> None:
             f"baseline_rss_bytes={floor}",
         ]
         if not got:
-            err = next((row.get("error", "") for row in rows if row["reader"] == reader), "")
+            err = next(
+                (row.get("error", "") for row in rows if row["reader"] == reader), ""
+            )
             log_lines.append(f"error={err}")
             log_lines.append("exit=1")
             (OUT / f"{reader}.log").write_text("\n".join(log_lines) + "\n")
             by[reader] = {"error": err}
             continue
-        ref = frames if reader != "python-con" else frames
         # equality checked in a second pass from stored coords is not available.
         # The child returns only the count. Re-parse once outside the timer.
         seconds = [row["seconds"] for row in got]
@@ -281,12 +298,32 @@ def main() -> None:
     ref_sum = float(frames.sum())
     equal = {}
     for reader, _src in readers:
-        got = [row for row in rows if row["reader"] == reader and row.get("sum") is not None]
+        got = [
+            row
+            for row in rows
+            if row["reader"] == reader and row.get("sum") is not None
+        ]
         if not got:
             continue
-        equal[reader] = all(abs(row["sum"] - ref_sum) < 1e-2 for row in got) and got[0]["n"] == N_FRAMES
-    (OUT / "summary.json").write_text(json.dumps({"readers": by, "equal_count": equal, "head": head}, indent=2) + "\n")
-    print(json.dumps({"head": head, "equal": equal, "median_s": {k: v.get("wall_s", {}).get("median") for k, v in by.items()}}, indent=2))
+        equal[reader] = (
+            all(abs(row["sum"] - ref_sum) < 1e-2 for row in got)
+            and got[0]["n"] == N_FRAMES
+        )
+    (OUT / "summary.json").write_text(
+        json.dumps({"readers": by, "equal_count": equal, "head": head}, indent=2) + "\n"
+    )
+    print(
+        json.dumps(
+            {
+                "head": head,
+                "equal": equal,
+                "median_s": {
+                    k: v.get("wall_s", {}).get("median") for k, v in by.items()
+                },
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

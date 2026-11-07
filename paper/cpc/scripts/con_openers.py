@@ -46,6 +46,7 @@ def attempt(fn, path: Path) -> dict:
 
 def chemfiles_by_name(path: Path) -> int:
     import chemfiles as cf
+
     cf.set_warnings_callback(lambda message: None)
     with cf.Trajectory(str(path), "r", "CON") as t:
         return len(t.read().atoms)
@@ -53,6 +54,7 @@ def chemfiles_by_name(path: Path) -> int:
 
 def chemfiles_by_extension(path: Path) -> int:
     import chemfiles as cf
+
     cf.set_warnings_callback(lambda message: None)
     with cf.Trajectory(str(path), "r") as t:
         return len(t.read().atoms)
@@ -60,21 +62,25 @@ def chemfiles_by_extension(path: Path) -> int:
 
 def mdanalysis_by_name(path: Path) -> int:
     import MDAnalysis as mda
+
     return len(mda.Universe(str(path), format="CON", topology_format="CON").atoms)
 
 
 def mdanalysis_by_extension(path: Path) -> int:
     import MDAnalysis as mda
+
     return len(mda.Universe(str(path)).atoms)
 
 
 def ovito_detected(path: Path) -> int:
     from ovito.io import import_file
+
     return import_file(str(path)).compute().particles.count
 
 
 def openbabel_by_name(path: Path) -> int:
     from openbabel import pybel
+
     if "con" not in pybel.informats:
         raise ValueError("con is not an Open Babel input format")
     return len(next(pybel.readfile("con", str(path))).atoms)
@@ -82,6 +88,7 @@ def openbabel_by_name(path: Path) -> int:
 
 def ase_eon(path: Path) -> int:
     import ase.io
+
     return len(ase.io.read(str(path), format="eon"))
 
 
@@ -97,7 +104,10 @@ READERS = {
 
 
 def main() -> None:
-    results = {name: {key: attempt(fn, path) for key, path in FILES.items()} for name, fn in READERS.items()}
+    results = {
+        name: {key: attempt(fn, path) for key, path in FILES.items()}
+        for name, fn in READERS.items()
+    }
     record = {
         "files": {key: provenance.portable(path) for key, path in FILES.items()},
         "readers": results,
@@ -105,7 +115,13 @@ def main() -> None:
     }
     OUT.write_text(json.dumps(record, indent=2) + "\n")
     for name, by_file in results.items():
-        print(f"{name}: " + "; ".join(f"{k} {'opens' if v['opens'] else v['error']}" for k, v in by_file.items()))
+        print(
+            f"{name}: "
+            + "; ".join(
+                f"{k} {'opens' if v['opens'] else v['error']}"
+                for k, v in by_file.items()
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -34,7 +34,12 @@ PANEL = (
 OTHER_SUFFIXES = (".extxyz", ".xyz", ".pdb")
 READCON_MODES = ("default", "copy", "mmap")
 OTHER_CODES = ("ase", "chemfiles", "ovito", "mdanalysis", "pymatgen", "gemmi")
-THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+THREAD_ENV = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
 
 
 def hardware_line() -> str:
@@ -86,11 +91,17 @@ def pages_resident(path: Path) -> tuple[int, int]:
         os.close(fd)
     try:
         api = ctypes.pythonapi
-        api.PyObject_AsCharBuffer.argtypes = [c_void_p, ctypes.POINTER(c_void_p), ctypes.POINTER(c_ssize_t)]
+        api.PyObject_AsCharBuffer.argtypes = [
+            c_void_p,
+            ctypes.POINTER(c_void_p),
+            ctypes.POINTER(c_ssize_t),
+        ]
         api.PyObject_AsCharBuffer.restype = c_int
         ptr = c_void_p()
         length = c_ssize_t()
-        if api.PyObject_AsCharBuffer(c_void_p(id(mapped)), ctypes.byref(ptr), ctypes.byref(length)):
+        if api.PyObject_AsCharBuffer(
+            c_void_p(id(mapped)), ctypes.byref(ptr), ctypes.byref(length)
+        ):
             raise RuntimeError("buffer address")
         vec = (c_ubyte * npages)()
         libc = ctypes.CDLL(None)
@@ -169,12 +180,18 @@ def write_inputs() -> dict[str, Path]:
 def stack_readcon(frames) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     pos = np.stack([np.asarray(frame.xyz, dtype=np.float64) for frame in frames])
     mass = np.stack(
-        [np.asarray([atom.mass for atom in frame.atoms], dtype=np.float64) for frame in frames]
+        [
+            np.asarray([atom.mass for atom in frame.atoms], dtype=np.float64)
+            for frame in frames
+        ]
     )
     cell = np.stack(
         [
             np.concatenate(
-                [np.asarray(frame.cell, dtype=np.float64), np.asarray(frame.angles, dtype=np.float64)]
+                [
+                    np.asarray(frame.cell, dtype=np.float64),
+                    np.asarray(frame.angles, dtype=np.float64),
+                ]
             )
             for frame in frames
         ]
@@ -196,7 +213,9 @@ def write_other_files(spec_id: str, packed) -> dict[str, Path]:
     for index in range(pos.shape[0]):
         symbols = ["Cu"] * pos.shape[1]
         # cuh2 is H and Cu; the grid is Cu. Masses below 10 are hydrogen.
-        symbols = ["H" if mass[index, atom] < 10.0 else "Cu" for atom in range(pos.shape[1])]
+        symbols = [
+            "H" if mass[index, atom] < 10.0 else "Cu" for atom in range(pos.shape[1])
+        ]
         images.append(
             Atoms(
                 symbols=symbols,
@@ -209,7 +228,11 @@ def write_other_files(spec_id: str, packed) -> dict[str, Path]:
     folder = WORK / "native"
     folder.mkdir(parents=True, exist_ok=True)
     written = {}
-    for suffix, fmt in ((".extxyz", None), (".xyz", "xyz"), (".pdb", "proteindatabank")):
+    for suffix, fmt in (
+        (".extxyz", None),
+        (".xyz", "xyz"),
+        (".pdb", "proteindatabank"),
+    ):
         path = folder / f"{spec_id}{suffix}"
         write(os.fspath(path), images, format=fmt)
         written[suffix] = path
@@ -284,14 +307,23 @@ def extract_loaded(code: str, loaded):
     if code == "ase":
         pos = np.stack([image.positions for image in loaded])
         mass = np.stack([image.get_masses() for image in loaded])
-        cell = np.stack([np.concatenate([image.cell.lengths(), image.cell.angles()]) for image in loaded])
+        cell = np.stack(
+            [
+                np.concatenate([image.cell.lengths(), image.cell.angles()])
+                for image in loaded
+            ]
+        )
         return pos, mass, cell
     if code == "chemfiles":
         pos, mass, cell = [], [], []
         for frame in loaded:
             pos.append(np.array(frame.positions, dtype=np.float64))
             mass.append([float(atom.mass) for atom in frame.atoms])
-            cell.append(np.concatenate([np.array(frame.cell.lengths), np.array(frame.cell.angles)]))
+            cell.append(
+                np.concatenate(
+                    [np.array(frame.cell.lengths), np.array(frame.cell.angles)]
+                )
+            )
         return np.stack(pos), np.asarray(mass, dtype=np.float64), np.stack(cell)
     if code == "ovito":
         pos, mass, cell = [], [], []
@@ -307,11 +339,16 @@ def extract_loaded(code: str, loaded):
     if code == "mdanalysis":
         universe, frames = loaded
         pos = np.stack(frames)
-        mass = np.tile(np.array(universe.atoms.masses, dtype=np.float64), (len(frames), 1))
+        mass = np.tile(
+            np.array(universe.atoms.masses, dtype=np.float64), (len(frames), 1)
+        )
         return pos, mass, None
     if code == "pymatgen":
         pos = [np.array(mol.cart_coords, dtype=np.float64) for mol in loaded]
-        mass = [np.array([float(site.specie.atomic_mass) for site in mol], dtype=np.float64) for mol in loaded]
+        mass = [
+            np.array([float(site.specie.atomic_mass) for site in mol], dtype=np.float64)
+            for mol in loaded
+        ]
         return np.stack(pos), np.stack(mass), None
     if code == "gemmi":
         pos, mass = [], []
@@ -327,10 +364,18 @@ def extract_loaded(code: str, loaded):
                 mass.append(masses)
         if not pos:
             raise RuntimeError("no atoms")
-        lengths = np.array([loaded.cell.a, loaded.cell.b, loaded.cell.c], dtype=np.float64)
-        angles = np.array([loaded.cell.alpha, loaded.cell.beta, loaded.cell.gamma], dtype=np.float64)
+        lengths = np.array(
+            [loaded.cell.a, loaded.cell.b, loaded.cell.c], dtype=np.float64
+        )
+        angles = np.array(
+            [loaded.cell.alpha, loaded.cell.beta, loaded.cell.gamma], dtype=np.float64
+        )
         cell = np.tile(np.concatenate([lengths, angles]), (len(pos), 1))
-        return np.asarray(pos, dtype=np.float64), np.asarray(mass, dtype=np.float64), cell
+        return (
+            np.asarray(pos, dtype=np.float64),
+            np.asarray(mass, dtype=np.float64),
+            cell,
+        )
     raise ValueError(code)
 
 
@@ -349,9 +394,23 @@ def within_tolerance(pos, mass, cell, reference: Path) -> dict:
         exp_mass = np.asarray(exp["masses"], dtype=np.float64)
         exp_cell = np.asarray(exp["cell"], dtype=np.float64)
     max_pos = frame_max(np.asarray(pos, dtype=np.float64), exp_pos)
-    max_mass = None if mass is None else frame_max(np.asarray(mass, dtype=np.float64), exp_mass)
-    max_cell = None if cell is None else frame_max(np.asarray(cell, dtype=np.float64), exp_cell)
-    ok = max_pos <= ABS_TOL and max_mass is not None and max_mass <= ABS_TOL and max_cell is not None and max_cell <= ABS_TOL
+    max_mass = (
+        None
+        if mass is None
+        else frame_max(np.asarray(mass, dtype=np.float64), exp_mass)
+    )
+    max_cell = (
+        None
+        if cell is None
+        else frame_max(np.asarray(cell, dtype=np.float64), exp_cell)
+    )
+    ok = (
+        max_pos <= ABS_TOL
+        and max_mass is not None
+        and max_mass <= ABS_TOL
+        and max_cell is not None
+        and max_cell <= ABS_TOL
+    )
     return {
         "match": bool(ok),
         "max_abs_coordinates": None if max_pos == float("inf") else max_pos,
@@ -391,21 +450,42 @@ def worker(args) -> int:
     path = Path(args.input)
     resident, total = prepare_cache(path, args.cache)
     if args.cache == "cold" and resident != 0:
-        emit({"error": "cold resident", "pages_resident": resident, "status": "cache_fault", "wall_s": None})
+        emit(
+            {
+                "error": "cold resident",
+                "pages_resident": resident,
+                "status": "cache_fault",
+                "wall_s": None,
+            }
+        )
         return 1
     baseline = mem_bytes("VmRSS")
     t0 = time.perf_counter()
     try:
         loaded = timed_load(libs, args.code, path, args.mode)
     except BaseException as exc:
-        emit({"error": type(exc).__name__, "status": "error", "wall_s": None, "pages_resident": resident})
+        emit(
+            {
+                "error": type(exc).__name__,
+                "status": "error",
+                "wall_s": None,
+                "pages_resident": resident,
+            }
+        )
         return 1
     wall = time.perf_counter() - t0
     after = mem_bytes("VmRSS")
     try:
         pos, mass, cell = extract_loaded(args.code, loaded)
     except BaseException as exc:
-        emit({"error": type(exc).__name__, "status": "error", "wall_s": wall, "pages_resident": resident})
+        emit(
+            {
+                "error": type(exc).__name__,
+                "status": "error",
+                "wall_s": wall,
+                "pages_resident": resident,
+            }
+        )
         return 1
     verdict = within_tolerance(pos, mass, cell, Path(args.reference))
     payload = {
@@ -450,8 +530,12 @@ def load_eon_dump(path: Path):
 
 
 def log_header(source: Path) -> str:
-    rev = subprocess.check_output(["git", "-C", os.fspath(source), "rev-parse", "HEAD"], text=True).strip()
-    tree = subprocess.check_output(["git", "-C", os.fspath(source), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    rev = subprocess.check_output(
+        ["git", "-C", os.fspath(source), "rev-parse", "HEAD"], text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "-C", os.fspath(source), "rev-parse", "HEAD^{tree}"], text=True
+    ).strip()
     start = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
     return (
         "git rev-parse HEAD\n"
@@ -483,7 +567,14 @@ def can_read(libs, code: str, path: Path, mode: str, n_frames: int) -> bool:
     return pos.ndim == 3 and pos.shape[0] == n_frames and pos.shape[1] > 0
 
 
-def run_job(job: dict, source: Path, log_dir: Path, tiny_con: Path, tiny_xyz: Path, tiny_pdb: Path) -> dict:
+def run_job(
+    job: dict,
+    source: Path,
+    log_dir: Path,
+    tiny_con: Path,
+    tiny_xyz: Path,
+    tiny_pdb: Path,
+) -> dict:
     log_dir.mkdir(parents=True, exist_ok=True)
     suffix = job["format"].lstrip(".")
     name = (
@@ -496,7 +587,15 @@ def run_job(job: dict, source: Path, log_dir: Path, tiny_con: Path, tiny_xyz: Pa
     if job["code"] == "eon":
         dump = WORK / "parsed" / f"{name}.dump"
         dump.parent.mkdir(parents=True, exist_ok=True)
-        command = ["taskset", "-c", "0", os.fspath(eon_binary()), job["cache"], job["path"], os.fspath(dump)]
+        command = [
+            "taskset",
+            "-c",
+            "0",
+            os.fspath(eon_binary()),
+            job["cache"],
+            job["path"],
+            os.fspath(dump),
+        ]
     else:
         command = [
             "taskset",
@@ -522,7 +621,9 @@ def run_job(job: dict, source: Path, log_dir: Path, tiny_con: Path, tiny_xyz: Pa
             "--warmup-pdb",
             os.fspath(tiny_pdb),
         ]
-    completed = subprocess.run(command, cwd=os.fspath(ROOT), env=env, capture_output=True, text=True)
+    completed = subprocess.run(
+        command, cwd=os.fspath(ROOT), env=env, capture_output=True, text=True
+    )
     stdout = completed.stdout or ""
     payload = None
     for line in stdout.splitlines():
@@ -555,8 +656,12 @@ def run_job(job: dict, source: Path, log_dir: Path, tiny_con: Path, tiny_xyz: Pa
     )
     header = log_header(source)
     exit_line = f"exit {completed_code}\n"
-    (log_dir / f"{name}.stdout").write_text(header + stdout + exit_line, encoding="utf-8")
-    (log_dir / f"{name}.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (log_dir / f"{name}.stdout").write_text(
+        header + stdout + exit_line, encoding="utf-8"
+    )
+    (log_dir / f"{name}.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     payload["exit_code"] = completed_code
     return payload
 
@@ -590,12 +695,22 @@ def execute(repeats: int, source: Path, log_dir: Path) -> None:
     for code in OTHER_CODES:
         sample = inputs["con-218x100"]
         reads = can_read(libs, code, sample, "eon" if code == "ase" else "native", 100)
-        con_extra.append({"code": code, "con": "reads con" if reads else "format does not apply"})
-        print(f"con {code} {'reads con' if reads else 'format does not apply'}", flush=True)
+        con_extra.append(
+            {"code": code, "con": "reads con" if reads else "format does not apply"}
+        )
+        print(
+            f"con {code} {'reads con' if reads else 'format does not apply'}",
+            flush=True,
+        )
     (log_dir).mkdir(parents=True, exist_ok=True)
     (log_dir / "con-readers.json").write_text(
         json.dumps(
-            [{"code": "readcon", "con": "reads con"}, {"code": "ase", "con": "reads con"}, *con_extra, {"code": "eon", "con": "reads con"}],
+            [
+                {"code": "readcon", "con": "reads con"},
+                {"code": "ase", "con": "reads con"},
+                *con_extra,
+                {"code": "eon", "con": "reads con"},
+            ],
             indent=2,
         )
         + "\n",

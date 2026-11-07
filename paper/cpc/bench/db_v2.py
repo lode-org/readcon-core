@@ -31,8 +31,12 @@ def cpu_name() -> str:
 
 
 def header() -> list[str]:
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True
+    ).strip()
     return [
         f"rev_parse {head}",
         f"tree {tree}",
@@ -124,10 +128,16 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
     write_con(WORK / "db.con")
-    floor = int(subprocess.check_output(
-        [sys.executable, "-c", "import numpy, resource; print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)"],
-        text=True,
-    ).strip())
+    floor = int(
+        subprocess.check_output(
+            [
+                sys.executable,
+                "-c",
+                "import numpy, resource; print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)",
+            ],
+            text=True,
+        ).strip()
+    )
     lines = header()
     lines.append(f"baseline_rss_bytes={floor}")
     rows = []
@@ -158,13 +168,25 @@ def main() -> None:
     def summary(values):
         arr = np.asarray(values, dtype=float)
         q1, q3 = np.percentile(arr, [25, 75], method="linear")
-        return {"n": int(arr.size), "median": float(np.median(arr)), "iqr": float(q3 - q1)}
+        return {
+            "n": int(arr.size),
+            "median": float(np.median(arr)),
+            "iqr": float(q3 - q1),
+        }
 
     out = {}
     for kind in kinds:
-        got = [row for row in rows if row["kind"] == kind and row.get("seconds") is not None and "error" not in row]
+        got = [
+            row
+            for row in rows
+            if row["kind"] == kind
+            and row.get("seconds") is not None
+            and "error" not in row
+        ]
         if not got:
-            out[kind] = {"error": next(row.get("error") for row in rows if row["kind"] == kind)}
+            out[kind] = {
+                "error": next(row.get("error") for row in rows if row["kind"] == kind)
+            }
             continue
         out[kind] = {
             "wall_s": summary([row["seconds"] for row in got]),

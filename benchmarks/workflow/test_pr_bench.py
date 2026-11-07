@@ -220,9 +220,15 @@ class BetweenRunTiming(unittest.TestCase):
 
     def test_student_t_quantiles(self) -> None:
         self.assertAlmostEqual(pr_bench._norm_ppf(0.975), 1.959963984540054, places=8)
-        self.assertAlmostEqual(pr_bench.student_t_ppf(0.975, 14), 2.144786687917804, places=8)
-        self.assertAlmostEqual(pr_bench.student_t_ppf(0.995, 14), 2.9768427343708344, places=8)
-        self.assertAlmostEqual(pr_bench.student_t_ppf(0.999, 14), 3.7873902375233457, places=6)
+        self.assertAlmostEqual(
+            pr_bench.student_t_ppf(0.975, 14), 2.144786687917804, places=8
+        )
+        self.assertAlmostEqual(
+            pr_bench.student_t_ppf(0.995, 14), 2.9768427343708344, places=8
+        )
+        self.assertAlmostEqual(
+            pr_bench.student_t_ppf(0.999, 14), 3.7873902375233457, places=6
+        )
         self.assertAlmostEqual(
             pr_bench.student_t_ppf(1.0 - 0.01 / 13, 14),
             pr_bench.student_t_ppf(1.0 - pr_bench.prediction_alpha(13), 14),
@@ -299,14 +305,24 @@ class CommentShowsRowBound(unittest.TestCase):
             "time",
             [1.0] * n,
             [1.0] * n,
-            {"lower": 0.98, "upper": 1.0192061275646016, "within_upper": 1.0094152557969125, "between_upper": 1.0192061275646016},
+            {
+                "lower": 0.98,
+                "upper": 1.0192061275646016,
+                "within_upper": 1.0094152557969125,
+                "between_upper": 1.0192061275646016,
+            },
         )
         wide = pr_bench._judge(
             "bench.time_wide",
             "time",
             [1.0] * n,
             [1.0609785924146939] * n,
-            {"lower": 0.74, "upper": 1.3521498689127784, "within_upper": 1.0660939134246985, "between_upper": 1.3521498689127784},
+            {
+                "lower": 0.74,
+                "upper": 1.3521498689127784,
+                "within_upper": 1.0660939134246985,
+                "between_upper": 1.3521498689127784,
+            },
         )
         self.assertEqual(quiet["mark"], " ")
         self.assertEqual(wide["mark"], " ")
@@ -326,18 +342,32 @@ class CommentShowsRowBound(unittest.TestCase):
             other = quiet if row is wide else wide
             self.assertNotIn(pr_bench.format_lossless(other["upper"]), line)
         bounds = pr_bench.render_row_bounds([quiet, wide])
-        self.assertTrue(bounds.startswith("benchmark\twithin_upper\tbetween_upper\tupper\n"))
-        self.assertIn("bench.time_wide\t1.0660939134246985\t1.3521498689127784\t1.3521498689127784\n", bounds)
+        self.assertTrue(
+            bounds.startswith("benchmark\twithin_upper\tbetween_upper\tupper\n")
+        )
+        self.assertIn(
+            "bench.time_wide\t1.0660939134246985\t1.3521498689127784\t1.3521498689127784\n",
+            bounds,
+        )
         slowed = pr_bench._judge(
             "bench.time_sleep",
             "time",
             [1.0] * n,
             [50.0] * n,
-            {"lower": 0.74, "upper": 1.3521498689127784, "within_upper": 1.06, "between_upper": 1.3521498689127784},
+            {
+                "lower": 0.74,
+                "upper": 1.3521498689127784,
+                "within_upper": 1.06,
+                "between_upper": 1.3521498689127784,
+            },
         )
         self.assertEqual(slowed["mark"], "+")
         self.assertGreater(slowed["ratio_num"], slowed["upper"])
-        sleep_line = next(item for item in pr_bench.render_table([slowed]).splitlines() if "time_sleep" in item)
+        sleep_line = next(
+            item
+            for item in pr_bench.render_table([slowed]).splitlines()
+            if "time_sleep" in item
+        )
         self.assertIn("| + |", sleep_line)
         self.assertIn(pr_bench.format_lossless(slowed["upper"]), sleep_line)
 

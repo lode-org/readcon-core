@@ -57,12 +57,14 @@ PROBES = {
     "one frame, empty lines 1 and 2": frame(line1="", line2=""),
     "two frames, filled headers": frame() + frame(),
     "legacy velocity block": frame() + VELOCITY,
-    "legacy velocity block, label in capitals": frame() + VELOCITY.replace("Velocities of Component",
-                                                                           "VELOCITIES OF COMPONENT"),
-    "legacy velocity block, label words separated by tabs": frame() + VELOCITY.replace("Velocities of Component",
-                                                                                       "Velocities\tof\tComponent"),
-    "legacy velocity block, blank symbol line": frame() + VELOCITY.replace("\nH\n", "\n  \n"),
-    "legacy velocity block, symbol line starting with {": frame() + VELOCITY.replace("\nH\n", "\n{H\n"),
+    "legacy velocity block, label in capitals": frame()
+    + VELOCITY.replace("Velocities of Component", "VELOCITIES OF COMPONENT"),
+    "legacy velocity block, label words separated by tabs": frame()
+    + VELOCITY.replace("Velocities of Component", "Velocities\tof\tComponent"),
+    "legacy velocity block, blank symbol line": frame()
+    + VELOCITY.replace("\nH\n", "\n  \n"),
+    "legacy velocity block, symbol line starting with {": frame()
+    + VELOCITY.replace("\nH\n", "\n{H\n"),
 }
 
 CHILD = r"""
@@ -101,13 +103,23 @@ def ask(libdir: Path, probes: dict[str, str]) -> dict:
 
 
 def outcome(entry: dict) -> str:
-    return f"accept {entry['frames']}" if entry["verdict"] == "accept" else f"reject {entry['class']}"
+    return (
+        f"accept {entry['frames']}"
+        if entry["verdict"] == "accept"
+        else f"reject {entry['class']}"
+    )
 
 
 def landed(results: dict, labels: list[str], name: str) -> list[dict]:
-    return [{"release": cur, "from": outcome(results[prev][name]), "to": outcome(results[cur][name])}
-            for prev, cur in zip(labels, labels[1:])
-            if outcome(results[prev][name]) != outcome(results[cur][name])]
+    return [
+        {
+            "release": cur,
+            "from": outcome(results[prev][name]),
+            "to": outcome(results[cur][name]),
+        }
+        for prev, cur in zip(labels, labels[1:])
+        if outcome(results[prev][name]) != outcome(results[cur][name])
+    ]
 
 
 def main() -> int:
@@ -119,7 +131,9 @@ def main() -> int:
         metavar="LABEL=PATH",
         help="a readcon wheel, or a directory that holds one unpacked, in release order",
     )
-    ap.add_argument("--out", type=Path, default=OUT, help="record directory (default: %(default)s)")
+    ap.add_argument(
+        "--out", type=Path, default=OUT, help="record directory (default: %(default)s)"
+    )
     args = ap.parse_args()
 
     with tempfile.TemporaryDirectory(prefix="version-drift-") as tmp:
@@ -133,7 +147,9 @@ def main() -> int:
                     wheel.extractall(Path(tmp) / label)
                 path = Path(tmp) / label
             module = sorted((path / "readcon").glob("readcon*.so"))
-            sources.setdefault(label, {})["module_sha256"] = sha256(module[0]) if module else None
+            sources.setdefault(label, {})["module_sha256"] = (
+                sha256(module[0]) if module else None
+            )
             readers.append((label, path))
 
         results = {label: ask(path, PROBES) for label, path in readers}
@@ -143,18 +159,37 @@ def main() -> int:
     for name in PROBES:
         changes = landed(results, labels, name)
         if changes:
-            split.append({"probe": name, "verdicts": {label: results[label][name]["verdict"] for label in labels},
-                          "outcomes": {label: outcome(results[label][name]) for label in labels},
-                          "landed": changes})
-    by_release = {label: [item["probe"] for item in split if any(c["release"] == label for c in item["landed"])]
-                  for label in labels[1:]}
+            split.append(
+                {
+                    "probe": name,
+                    "verdicts": {
+                        label: results[label][name]["verdict"] for label in labels
+                    },
+                    "outcomes": {
+                        label: outcome(results[label][name]) for label in labels
+                    },
+                    "landed": changes,
+                }
+            )
+    by_release = {
+        label: [
+            item["probe"]
+            for item in split
+            if any(c["release"] == label for c in item["landed"])
+        ]
+        for label in labels[1:]
+    }
 
     import provenance
 
     payload = {
         "readers": labels,
         "reported_versions": {label: results[label]["__version__"] for label in labels},
-        "measures_release": [results[label]["__version__"] for label in labels if "wheel" in sources[label]],
+        "measures_release": [
+            results[label]["__version__"]
+            for label in labels
+            if "wheel" in sources[label]
+        ],
         "sources": sources,
         "probes": {
             name: {label: results[label][name] for label in labels} for name in PROBES
@@ -178,8 +213,11 @@ def main() -> int:
         for label in labels:
             entry = results[label][name]
             cells.append(
-                (f"{entry['frames']} frames" if entry["verdict"] == "accept" else "reject")
-                .rjust(9)
+                (
+                    f"{entry['frames']} frames"
+                    if entry["verdict"] == "accept"
+                    else "reject"
+                ).rjust(9)
             )
         print(name.ljust(width), *cells)
     print()

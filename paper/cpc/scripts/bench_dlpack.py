@@ -267,7 +267,9 @@ def plot(exchange: dict, copies: list) -> None:
     }
     markers = {"numpy": "o", "torch": "D", "jax": "^", "cupy": "v"}
     for name, rows in exchange.items():
-        series.append((name, rows, colors.get(name, RUHI_COLORS["teal"]), markers.get(name, "o")))
+        series.append(
+            (name, rows, colors.get(name, RUHI_COLORS["teal"]), markers.get(name, "o"))
+        )
     for name, rows, color, marker in series:
         med = [row[1] for row in rows]
         ax.plot(ns, med, marker=marker, color=color, label=name)
@@ -281,7 +283,9 @@ def plot(exchange: dict, copies: list) -> None:
     plt.close(fig)
 
 
-def write_tex(exchange: dict, copies: list, lead_view: list, lead_copy: list, head: str) -> None:
+def write_tex(
+    exchange: dict, copies: list, lead_view: list, lead_copy: list, head: str
+) -> None:
     def sci(value: float) -> str:
         mantissa, exp = f"{value:.3e}".split("e")
         return f"{mantissa} \\times 10^{{{int(exp)}}}"

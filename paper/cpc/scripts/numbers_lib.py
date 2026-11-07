@@ -16,7 +16,9 @@ REPO = ROOT.parents[1]
 
 def normal(printed: str) -> str:
     """The scanner's form of a printed number: no thousands separators, ``e`` for a power of ten."""
-    text = printed.replace("{,}", "").replace(",", "").replace("\\,", "").replace(" ", "")
+    text = (
+        printed.replace("{,}", "").replace(",", "").replace("\\,", "").replace(" ", "")
+    )
     text = text.replace("\\(", "").replace("\\)", "").replace("$", "")
     sci = re.fullmatch(r"([-+]?[\d.]+)\\times10\^\{?([-+]?\d+)\}?", text)
     if sci:
@@ -128,7 +130,11 @@ def grep(rel: str, pattern: str, group: int = 1) -> str:
 
 def const(rel: str, name: str) -> float:
     """A module-level ``NAME = number`` constant in a driver script."""
-    return float(grep(rel, rf"^{re.escape(name)}\s*(?::[^=]+)?=\s*([-+0-9.eE_]+)").replace("_", ""))
+    return float(
+        grep(rel, rf"^{re.escape(name)}\s*(?::[^=]+)?=\s*([-+0-9.eE_]+)").replace(
+            "_", ""
+        )
+    )
 
 
 def h5md_version(rel: str) -> float:

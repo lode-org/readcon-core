@@ -43,6 +43,7 @@ base64-encoded for the same reason as the digests.
 
 Exit 1 when anything matches. Matches are printed masked unless --show.
 """
+
 import argparse
 import base64
 import hashlib
@@ -140,9 +141,7 @@ COMMON = {
     "fc5a1047f5919892fcdf8aa79ea5d6bb6531b5c176939ef0110906cb225941c1",
 }
 
-ALLOW = [base64.b64decode(s).decode() for s in (
-    "SmVhbi1DbGF1ZGU=",
-)]
+ALLOW = [base64.b64decode(s).decode() for s in ("SmVhbi1DbGF1ZGU=",)]
 
 CI_IDENTITY = base64.b64decode("Z2l0aHViXC1hY3Rpb25zXFtib3RcXQ==").decode()
 CI_RE = re.compile(CI_IDENTITY + r"(@users\.noreply\.github\.com)?")
@@ -152,38 +151,102 @@ RUN = re.compile(r"[A-Za-z]+")
 CAMEL = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])")
 
 CREDIT_VERBS = {
-    "generated", "written", "wrote", "created", "authored", "coauthored",
-    "drafted", "produced", "prepared", "developed", "assisted", "reviewed",
-    "refereed", "edited", "coded", "implemented", "contributed", "designed",
-    "built", "made", "fixed", "found", "proposed", "suggested", "done",
-    "performed", "conducted", "carried", "helped", "supported", "funded",
-    "sponsored", "powered", "provided", "aided", "co",
+    "generated",
+    "written",
+    "wrote",
+    "created",
+    "authored",
+    "coauthored",
+    "drafted",
+    "produced",
+    "prepared",
+    "developed",
+    "assisted",
+    "reviewed",
+    "refereed",
+    "edited",
+    "coded",
+    "implemented",
+    "contributed",
+    "designed",
+    "built",
+    "made",
+    "fixed",
+    "found",
+    "proposed",
+    "suggested",
+    "done",
+    "performed",
+    "conducted",
+    "carried",
+    "helped",
+    "supported",
+    "funded",
+    "sponsored",
+    "powered",
+    "provided",
+    "aided",
+    "co",
 }
 CREDIT_PREPS = {"by", "with", "using", "via", "through", "from", "of", "out"}
 TIE_WORDS = {
-    "thanks", "thank", "thanked", "acknowledge", "acknowledged",
-    "acknowledgement", "acknowledgements", "acknowledgment",
-    "acknowledgments", "courtesy", "credit", "credits", "credited",
-    "affiliation", "affiliations", "affiliated", "employer", "employers",
-    "employed", "employee", "employees", "behalf", "collaboration",
-    "partnership", "referee", "referees", "reviewer", "reviewers",
-    "coauthor", "coauthors", "contributor", "contributors", "maintainer",
-    "maintainers", "help", "assistance",
-} | {base64.b64decode(s).decode() for s in ("YXNzaXN0YW50", "YXNzaXN0YW50cw==", "YWdlbnQ=", "YWdlbnRz")}
+    "thanks",
+    "thank",
+    "thanked",
+    "acknowledge",
+    "acknowledged",
+    "acknowledgement",
+    "acknowledgements",
+    "acknowledgment",
+    "acknowledgments",
+    "courtesy",
+    "credit",
+    "credits",
+    "credited",
+    "affiliation",
+    "affiliations",
+    "affiliated",
+    "employer",
+    "employers",
+    "employed",
+    "employee",
+    "employees",
+    "behalf",
+    "collaboration",
+    "partnership",
+    "referee",
+    "referees",
+    "reviewer",
+    "reviewers",
+    "coauthor",
+    "coauthors",
+    "contributor",
+    "contributors",
+    "maintainer",
+    "maintainers",
+    "help",
+    "assistance",
+} | {
+    base64.b64decode(s).decode()
+    for s in ("YXNzaXN0YW50", "YXNzaXN0YW50cw==", "YWdlbnQ=", "YWdlbnRz")
+}
 TRAILER = re.compile(r"^\s*[A-Za-z][A-Za-z-]*-[Bb]y:\s")
 CHANGELOG_TAIL = re.compile(r"\s-\s\([0-9a-f]{7,40}\)\s-\s(.*)$")
 FIELD = re.compile(
     r"""^\s*(?:[-*]\s*)?(?:\\(?:author|affiliation|affil|address|institute|thanks)\b"""
     r"""|["']?(?:authors?|affiliations?|maintainers?|contributors?|creators?|"""
     r"""given-names|family-names|copyright-holders?)["']?\s*[:=])""",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 IDENTITY = re.compile(r"^(?:From|Author|Committer):\s")
 MODEL_LABEL = re.compile(r"-\d")
 SPACED_LABEL = re.compile(r"\s\d+\.\d")
 # The base85 lines of a binary hunk encode the bytes of a binary file, which is skipped like the file
 # itself; their letter runs spell words at random.
 BINARY_HUNK = "GIT binary patch"
-BINARY_DATA = re.compile(r"(?:literal|delta) \d+|[A-Za-z][0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]*|")
+BINARY_DATA = re.compile(
+    r"(?:literal|delta) \d+|[A-Za-z][0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]*|"
+)
 
 
 def digest(word):
@@ -225,15 +288,15 @@ def names_in(line):
 
 
 def credit_phrase(toks, k):
-    before = [t[1] for t in toks[max(0, k - 5):k]]
+    before = [t[1] for t in toks[max(0, k - 5) : k]]
     for i, w in enumerate(before):
-        if w in CREDIT_VERBS and any(p in CREDIT_PREPS for p in before[i + 1:]):
+        if w in CREDIT_VERBS and any(p in CREDIT_PREPS for p in before[i + 1 :]):
             return True
     return False
 
 
 def tie_word(toks, k):
-    near = [t[1] for t in toks[max(0, k - 4):k]] + [t[1] for t in toks[k + 1:k + 4]]
+    near = [t[1] for t in toks[max(0, k - 4) : k]] + [t[1] for t in toks[k + 1 : k + 4]]
     return any(w in TIE_WORDS for w in near)
 
 
@@ -244,16 +307,26 @@ def line_hits(line, identity=False):
     toks, found = names_in(stripped)
     if not found:
         return []
-    whole = identity or IDENTITY.match(stripped) or TRAILER.match(stripped) \
+    whole = (
+        identity
+        or IDENTITY.match(stripped)
+        or TRAILER.match(stripped)
         or FIELD.match(stripped)
+    )
     tail = CHANGELOG_TAIL.search(stripped)
     hits = []
     for k, start, w, cls in found:
         end = start + len(toks[k][1])
-        label = MODEL_LABEL.match(stripped, end) or \
-            (toks[k][3] and SPACED_LABEL.match(stripped, end))
-        if cls == "tie" or whole or label or (tail and start >= tail.start(1)) \
-                or tie_word(toks, k):
+        label = MODEL_LABEL.match(stripped, end) or (
+            toks[k][3] and SPACED_LABEL.match(stripped, end)
+        )
+        if (
+            cls == "tie"
+            or whole
+            or label
+            or (tail and start >= tail.start(1))
+            or tie_word(toks, k)
+        ):
             hits.append(w)
         elif credit_phrase(toks, k) and (toks[k][3] or digest(w) not in COMMON):
             hits.append(w)
@@ -292,8 +365,12 @@ def text_of(data):
 
 def scan_bytes(label, data):
     if label.endswith(".pdf"):
-        p = subprocess.run(["pdftotext", "-layout", "-", "-"], input=data,
-                           capture_output=True, check=True)
+        p = subprocess.run(
+            ["pdftotext", "-layout", "-", "-"],
+            input=data,
+            capture_output=True,
+            check=True,
+        )
         return scan_text(label, p.stdout.decode("utf-8", errors="replace"))
     if label.endswith((".tar.gz", ".tgz", ".tar")):
         found = []
@@ -313,7 +390,11 @@ def scan_paths(paths):
     found = []
     for root in paths:
         root = Path(root)
-        files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file())
+        files = (
+            [root]
+            if root.is_file()
+            else sorted(p for p in root.rglob("*") if p.is_file())
+        )
         for f in files:
             if f.suffix == ".bundle" or f.name.endswith(".git"):
                 continue
@@ -324,8 +405,9 @@ def scan_paths(paths):
 
 
 def git(repo, *args, data=None):
-    return subprocess.run(["git", "-C", repo, *args], input=data, capture_output=True,
-                          check=True).stdout
+    return subprocess.run(
+        ["git", "-C", repo, *args], input=data, capture_output=True, check=True
+    ).stdout
 
 
 def scan_git_tree(repo, rev):
@@ -367,52 +449,81 @@ def self_test():
         return base64.b64decode(s).decode()
 
     # Encoded so the fixtures do not spell the names either.
-    fail = [d(s) for s in (
-        "Q28tYXV0aG9yZWQtYnk6IENvcGlsb3QgPGNvcGlsb3RAZXhhbXBsZS5jb20+",
-        "R2VuZXJhdGVkIHdpdGggQ2xhdWRlIENvZGU=",
-        "LSBGaXggdGVzdCBbQkVOQ0hdIC0gKGI1M2ZhOTEpIC0gKkhhb1pla2UqLCAqQ29waWxvdCo=",
-        "VGhpcyB3b3JrIHdhcyBkb25lIGJ5IGEgQ3Vyc29yIGNsb3VkIGFnZW50Lg==",
-        "VGhhbmtzIHRvIEdyb2sgZm9yIHRoZSByZXZpZXcu",
-        "UmVmZXJlZSBvcHVzLTUuNSBhc2tlZCBmb3IgYSByZXJ1bi4=",
-        "YXV0aG9yOiBHcm9r",
-        "XGFmZmlsaWF0aW9ue1NwYWNlWH0=",
-        "VGhlIHJ1bnMgdXNlZCBhIFRlYWNoWCBtYWNoaW5lLg==",
-        "RnJvbTogQ3Vyc29yIEFnZW50IDxjdXJzb3JhZ2VudEBjdXJzb3IuY29tPg==",
-        "SW1wbGVtZW50ZWQgYnkgQ3Vyc29y",
-        "YXV0aG9ycyA9IFsiQ29waWxvdCJd",
-        "U2VlIGJhdGNoMS9ncHQtNS42LXNvbC9SRUZFUkVFLXIzLm1k",
-        "dGhlIGdsbS01LjMgcmVwb3J0",
-        "Q2xhdWRlIDMuNSB3cm90ZSB0aGUgZmlyc3QgZHJhZnQu",
-        "VGhlIGVudHJ5IG9mIGI1M2ZhOTEgbGlzdGVkIGEgY29kZSBhc3Npc3RhbnQgdHdpY2Uu",
-        "ZG9jcyhjaGFuZ2Vsb2cpOiBkcm9wIHRoZSBhc3Npc3RhbnQgY28tYXV0aG9yIGNyZWRpdCBvbiBiNTNmYTkx",
-        "TW9zdCBvZiB0aGUgcGFyc2VyIHdhcyB3cml0dGVuIHdpdGggYW4gQUkgYXNzaXN0YW50Lg==",
-        "VGhpcyBwYXJzZXIgd2FzIHdyaXR0ZW4gd2l0aCBhIGxhbmd1YWdlIG1vZGVsLg==",
-    )]
-    pass_ = [d(s) for s in (
-        "bGV0IG11dCBjdXJzb3IgPSBzdGQ6OmlvOjpDdXJzb3I6Om5ldyhieXRlcyk7",
-        "LSAoKipwYXJzZXIqKikgbWVtY2hyIGxpbmUgY3Vyc29yLCBjb29yZHMtb25seSBhc3NlbWJsZSAtICgzM2EwYzY4KSAtICpIYW9aZWtlKg==",
-        "LSAoKipiZW5jaCoqKSByZWZyZXNoIENhY2hlZ3JpbmQgSS1yZWZzIGZvciBkb2NzIC0gKGE1ZjhhMmYpIC0gZ2l0aHViLWFjdGlvbnNbYm90XQ==",
-        "ICBnaXQgY29uZmlnIHVzZXIubmFtZSAiZ2l0aHViLWFjdGlvbnNbYm90XSI=",
-        "Lmdyb2sv",
-        "MSxjdWgyeDEwMCxiYXNlLDAuMDA0LDE2NzcxMDAsMTAwLG9rLCxjdXJzb3IsSW50ZWwoUikgWGVvbihSKQ==",
-        "SmVhbi1DbGF1ZGUgUGVkZXJzZW4=",
-        "Ly8vIEltcGxlbWVudGVkIGJ5IHRoZSBtZW1jaHIgY3Vyc29yIG9uIHRoZSBob3QgaXRlcmF0b3IgcGF0aCBhbmQgYnk=",
-        "ICBhdXRob3IgPSB7QmVydGhldCwgSmVhbi1DbGF1ZGUgYW5kIFBlZGVyc2VuLCBBbmRyZWFzfSw=",
-        "Zm9yIChpLCBjdXJzb3IpIGluIHJvd3MuaXRlcigpLmVudW1lcmF0ZSgpIHs=",
-        "Y3Vyc29yXzIgPSBjdXJzb3IgKyAx",
-        "TGludXggY3Vyc29yIDYuMTIuOTQrICMxIFNNUCBQUkVFTVBUX0RZTkFNSUMgeDg2XzY0IEdOVS9MaW51eA==",
-        "Q2hhdGJvdHMgd2VyZSB1c2VkIHRvIHJlZmluZSBjZXJ0YWluIHR1cm5zIG9mIHBocmFzZSBhbmQgdG8gc3BlZWQgdGhyb3VnaCBzb21lIGltcGxlbWVudGF0aW9uIGRldGFpbHM7IGFsbCB0aGUgd29yayBpcyB0aGUgYXV0aG9yJ3Mgb3duLg==",
-        "XHNlY3Rpb24qe0RlY2xhcmF0aW9uIG9mIGdlbmVyYXRpdmUgQUkgYW5kIEFJLWFzc2lzdGVkIHRlY2hub2xvZ2llcyBpbiB0aGUgbWFudXNjcmlwdCBwcmVwYXJhdGlvbiBwcm9jZXNzfQ==",
-    )]
+    fail = [
+        d(s)
+        for s in (
+            "Q28tYXV0aG9yZWQtYnk6IENvcGlsb3QgPGNvcGlsb3RAZXhhbXBsZS5jb20+",
+            "R2VuZXJhdGVkIHdpdGggQ2xhdWRlIENvZGU=",
+            "LSBGaXggdGVzdCBbQkVOQ0hdIC0gKGI1M2ZhOTEpIC0gKkhhb1pla2UqLCAqQ29waWxvdCo=",
+            "VGhpcyB3b3JrIHdhcyBkb25lIGJ5IGEgQ3Vyc29yIGNsb3VkIGFnZW50Lg==",
+            "VGhhbmtzIHRvIEdyb2sgZm9yIHRoZSByZXZpZXcu",
+            "UmVmZXJlZSBvcHVzLTUuNSBhc2tlZCBmb3IgYSByZXJ1bi4=",
+            "YXV0aG9yOiBHcm9r",
+            "XGFmZmlsaWF0aW9ue1NwYWNlWH0=",
+            "VGhlIHJ1bnMgdXNlZCBhIFRlYWNoWCBtYWNoaW5lLg==",
+            "RnJvbTogQ3Vyc29yIEFnZW50IDxjdXJzb3JhZ2VudEBjdXJzb3IuY29tPg==",
+            "SW1wbGVtZW50ZWQgYnkgQ3Vyc29y",
+            "YXV0aG9ycyA9IFsiQ29waWxvdCJd",
+            "U2VlIGJhdGNoMS9ncHQtNS42LXNvbC9SRUZFUkVFLXIzLm1k",
+            "dGhlIGdsbS01LjMgcmVwb3J0",
+            "Q2xhdWRlIDMuNSB3cm90ZSB0aGUgZmlyc3QgZHJhZnQu",
+            "VGhlIGVudHJ5IG9mIGI1M2ZhOTEgbGlzdGVkIGEgY29kZSBhc3Npc3RhbnQgdHdpY2Uu",
+            "ZG9jcyhjaGFuZ2Vsb2cpOiBkcm9wIHRoZSBhc3Npc3RhbnQgY28tYXV0aG9yIGNyZWRpdCBvbiBiNTNmYTkx",
+            "TW9zdCBvZiB0aGUgcGFyc2VyIHdhcyB3cml0dGVuIHdpdGggYW4gQUkgYXNzaXN0YW50Lg==",
+            "VGhpcyBwYXJzZXIgd2FzIHdyaXR0ZW4gd2l0aCBhIGxhbmd1YWdlIG1vZGVsLg==",
+        )
+    ]
+    pass_ = [
+        d(s)
+        for s in (
+            "bGV0IG11dCBjdXJzb3IgPSBzdGQ6OmlvOjpDdXJzb3I6Om5ldyhieXRlcyk7",
+            "LSAoKipwYXJzZXIqKikgbWVtY2hyIGxpbmUgY3Vyc29yLCBjb29yZHMtb25seSBhc3NlbWJsZSAtICgzM2EwYzY4KSAtICpIYW9aZWtlKg==",
+            "LSAoKipiZW5jaCoqKSByZWZyZXNoIENhY2hlZ3JpbmQgSS1yZWZzIGZvciBkb2NzIC0gKGE1ZjhhMmYpIC0gZ2l0aHViLWFjdGlvbnNbYm90XQ==",
+            "ICBnaXQgY29uZmlnIHVzZXIubmFtZSAiZ2l0aHViLWFjdGlvbnNbYm90XSI=",
+            "Lmdyb2sv",
+            "MSxjdWgyeDEwMCxiYXNlLDAuMDA0LDE2NzcxMDAsMTAwLG9rLCxjdXJzb3IsSW50ZWwoUikgWGVvbihSKQ==",
+            "SmVhbi1DbGF1ZGUgUGVkZXJzZW4=",
+            "Ly8vIEltcGxlbWVudGVkIGJ5IHRoZSBtZW1jaHIgY3Vyc29yIG9uIHRoZSBob3QgaXRlcmF0b3IgcGF0aCBhbmQgYnk=",
+            "ICBhdXRob3IgPSB7QmVydGhldCwgSmVhbi1DbGF1ZGUgYW5kIFBlZGVyc2VuLCBBbmRyZWFzfSw=",
+            "Zm9yIChpLCBjdXJzb3IpIGluIHJvd3MuaXRlcigpLmVudW1lcmF0ZSgpIHs=",
+            "Y3Vyc29yXzIgPSBjdXJzb3IgKyAx",
+            "TGludXggY3Vyc29yIDYuMTIuOTQrICMxIFNNUCBQUkVFTVBUX0RZTkFNSUMgeDg2XzY0IEdOVS9MaW51eA==",
+            "Q2hhdGJvdHMgd2VyZSB1c2VkIHRvIHJlZmluZSBjZXJ0YWluIHR1cm5zIG9mIHBocmFzZSBhbmQgdG8gc3BlZWQgdGhyb3VnaCBzb21lIGltcGxlbWVudGF0aW9uIGRldGFpbHM7IGFsbCB0aGUgd29yayBpcyB0aGUgYXV0aG9yJ3Mgb3duLg==",
+            "XHNlY3Rpb24qe0RlY2xhcmF0aW9uIG9mIGdlbmVyYXRpdmUgQUkgYW5kIEFJLWFzc2lzdGVkIHRlY2hub2xvZ2llcyBpbiB0aGUgbWFudXNjcmlwdCBwcmVwYXJhdGlvbiBwcm9jZXNzfQ==",
+        )
+    ]
     bad = [s for s in fail if not line_hits(s)] + [s for s in pass_ if line_hits(s)]
-    data, credit = d("enYreEFJJigxKiU4YSMzJDE7clY="), d("VGhhbmtzIHRvIEdyb2sgZm9yIHRoZSByZXZpZXcu")
-    patch = "\n".join(["diff --git a/bands.npz b/bands.npz", "index 1111111..2222222 100644", "GIT binary patch",
-                       "delta 23", data, "", "delta 23", data, "", "diff --git a/notes.txt b/notes.txt",
-                       "--- a/notes.txt", "+++ b/notes.txt", "@@ -0,0 +1 @@", "+" + credit])
-    if len(scan_text("fixture.patch", patch, patch=True)) != 1 or len(scan_text("fixture", patch)) != 3:
+    data, credit = (
+        d("enYreEFJJigxKiU4YSMzJDE7clY="),
+        d("VGhhbmtzIHRvIEdyb2sgZm9yIHRoZSByZXZpZXcu"),
+    )
+    patch = "\n".join(
+        [
+            "diff --git a/bands.npz b/bands.npz",
+            "index 1111111..2222222 100644",
+            "GIT binary patch",
+            "delta 23",
+            data,
+            "",
+            "delta 23",
+            data,
+            "",
+            "diff --git a/notes.txt b/notes.txt",
+            "--- a/notes.txt",
+            "+++ b/notes.txt",
+            "@@ -0,0 +1 @@",
+            "+" + credit,
+        ]
+    )
+    if (
+        len(scan_text("fixture.patch", patch, patch=True)) != 1
+        or len(scan_text("fixture", patch)) != 3
+    ):
         bad.append("the binary hunk of a patch")
-    print(f"check_names self-test: {len(fail)} credit lines, {len(pass_)} usage lines, "
-          f"1 patch with a binary hunk, {len(bad)} misclassified")
+    print(
+        f"check_names self-test: {len(fail)} credit lines, {len(pass_)} usage lines, "
+        f"1 patch with a binary hunk, {len(bad)} misclassified"
+    )
     return 1 if bad else 0
 
 
@@ -420,8 +531,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--self-test", action="store_true")
-    ap.add_argument("--git-tree", nargs=2, action="append", default=[], metavar=("REPO", "REV"))
-    ap.add_argument("--git-log", nargs=2, action="append", default=[], metavar=("REPO", "RANGE"))
+    ap.add_argument(
+        "--git-tree", nargs=2, action="append", default=[], metavar=("REPO", "REV")
+    )
+    ap.add_argument(
+        "--git-log", nargs=2, action="append", default=[], metavar=("REPO", "RANGE")
+    )
     ap.add_argument("paths", nargs="*")
     a = ap.parse_args()
     if a.self_test:

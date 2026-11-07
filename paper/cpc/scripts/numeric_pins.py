@@ -16,9 +16,18 @@ from __future__ import annotations
 import os
 
 KERNEL_SETS = {
-    "nehalem": {"OPENBLAS_CORETYPE": "Nehalem", "NPY_DISABLE_CPU_FEATURES": "X86_V3 X86_V4 AVX512_ICL AVX512_SPR"},
-    "haswell": {"OPENBLAS_CORETYPE": "Haswell", "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL AVX512_SPR"},
-    "skylakex": {"OPENBLAS_CORETYPE": "SkylakeX", "NPY_DISABLE_CPU_FEATURES": "AVX512_ICL AVX512_SPR"},
+    "nehalem": {
+        "OPENBLAS_CORETYPE": "Nehalem",
+        "NPY_DISABLE_CPU_FEATURES": "X86_V3 X86_V4 AVX512_ICL AVX512_SPR",
+    },
+    "haswell": {
+        "OPENBLAS_CORETYPE": "Haswell",
+        "NPY_DISABLE_CPU_FEATURES": "X86_V4 AVX512_ICL AVX512_SPR",
+    },
+    "skylakex": {
+        "OPENBLAS_CORETYPE": "SkylakeX",
+        "NPY_DISABLE_CPU_FEATURES": "AVX512_ICL AVX512_SPR",
+    },
     "cooperlake": {"OPENBLAS_CORETYPE": "Cooperlake", "NPY_DISABLE_CPU_FEATURES": ""},
 }
 SELECTED = os.environ.get("RC_KERNELS") or "nehalem"
@@ -41,13 +50,25 @@ def in_effect() -> dict:
     from numpy._core._multiarray_umath import __cpu_dispatch__, __cpu_features__
 
     np.linalg.solve(np.eye(3), np.ones(3))
-    blas = [(i["internal_api"], i.get("architecture"), i["num_threads"])
-            for i in threadpoolctl.threadpool_info() if i["user_api"] == "blas"]
+    blas = [
+        (i["internal_api"], i.get("architecture"), i["num_threads"])
+        for i in threadpoolctl.threadpool_info()
+        if i["user_api"] == "blas"
+    ]
     dispatched = [name for name in __cpu_dispatch__ if __cpu_features__.get(name)]
     disabled = PINS["NPY_DISABLE_CPU_FEATURES"].split()
     wanted = [name for name in __cpu_dispatch__ if name not in disabled]
-    if dispatched != wanted or any(arch != PINS["OPENBLAS_CORETYPE"] or threads != 1 for _, arch, threads in blas):
-        raise SystemExit(f"kernels not pinned: NumPy dispatches {dispatched}, BLAS {blas}")
-    pinned = {"environment": dict(PINS), "numpy_dispatch": dispatched,
-              "blas": [f"{api} {arch} kernels, {threads} thread" for api, arch, threads in blas]}
+    if dispatched != wanted or any(
+        arch != PINS["OPENBLAS_CORETYPE"] or threads != 1 for _, arch, threads in blas
+    ):
+        raise SystemExit(
+            f"kernels not pinned: NumPy dispatches {dispatched}, BLAS {blas}"
+        )
+    pinned = {
+        "environment": dict(PINS),
+        "numpy_dispatch": dispatched,
+        "blas": [
+            f"{api} {arch} kernels, {threads} thread" for api, arch, threads in blas
+        ],
+    }
     return pinned if SELECTED == "nehalem" else {"kernel_set": SELECTED, **pinned}

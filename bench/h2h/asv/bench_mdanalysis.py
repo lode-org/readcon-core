@@ -23,6 +23,7 @@ class MdanalysisPdb:
 
     def setup(self):
         import MDAnalysis as mda
+
         self.mda = mda
         self.path = str(support.WORK / "native" / "grid.pdb")
 

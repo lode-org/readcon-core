@@ -17,6 +17,7 @@ cuh2.con), so those two panels go through a temporary XYZ written next to
 the script outputs under figures/generated/work/, which is removed after
 rendering. Panel chrome is black on white, in Latin Modern.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -77,7 +78,12 @@ def pt_slab_middle() -> Atoms:
     band = ROOT / "data" / "failure" / "bands" / "uninterrupted.npz"
     z = np.load(band)
     mid = z["pos"].shape[0] // 2
-    return Atoms(numbers=z["numbers"], positions=z["pos"][mid], cell=z["cell"], pbc=[True, True, True])
+    return Atoms(
+        numbers=z["numbers"],
+        positions=z["pos"][mid],
+        cell=z["cell"],
+        pbc=[True, True, True],
+    )
 
 
 def _isolate(svg: str, prefix: str) -> tuple[str, str]:
@@ -90,8 +96,12 @@ def _isolate(svg: str, prefix: str) -> tuple[str, str]:
     if inner_match is None:
         raise SystemExit("xyzrender did not write an svg root")
     inner = inner_match.group(1)
-    inner = re.sub(r'\bid="([^"]+)"', lambda match: f'id="{prefix}{match.group(1)}"', inner)
-    inner = re.sub(r"url\(#([^)]+)\)", lambda match: f"url(#{prefix}{match.group(1)})", inner)
+    inner = re.sub(
+        r'\bid="([^"]+)"', lambda match: f'id="{prefix}{match.group(1)}"', inner
+    )
+    inner = re.sub(
+        r"url\(#([^)]+)\)", lambda match: f"url(#{prefix}{match.group(1)})", inner
+    )
     return viewbox, inner
 
 
@@ -155,7 +165,9 @@ def main() -> None:
         page.write_text(svg, encoding="utf-8")
         out_pdf = OUT / "structures.pdf"
         cairosvg.svg2pdf(url=str(page), write_to=str(out_pdf))
-        cairosvg.svg2png(url=str(page), write_to=str(OUT / "structures.png"), output_width=1600)
+        cairosvg.svg2png(
+            url=str(page), write_to=str(OUT / "structures.png"), output_width=1600
+        )
     finally:
         shutil.rmtree(WORK, ignore_errors=True)
     print("wrote", out_pdf)

@@ -57,17 +57,26 @@ def inputs(record: dict) -> dict:
     many = {name: cell for name, cell in cells.items() if cell["threads"] > 1}
     window_cell = min(many, key=lambda name: many[name]["median_s"])
     gap_cell = max(one, key=lambda name: max(one[name]["samples_s"]))
-    return {"band": statistics.median(cell["iqr_s"] / cell["median_s"] for cell in one.values()),
-            "band_cells": sorted(one),
-            "window_ms": 1e3 * many[window_cell]["median_s"], "window_cell": window_cell,
-            "gap_s": max(one[gap_cell]["samples_s"]), "gap_cell": gap_cell}
+    return {
+        "band": statistics.median(
+            cell["iqr_s"] / cell["median_s"] for cell in one.values()
+        ),
+        "band_cells": sorted(one),
+        "window_ms": 1e3 * many[window_cell]["median_s"],
+        "window_cell": window_cell,
+        "gap_s": max(one[gap_cell]["samples_s"]),
+        "gap_cell": gap_cell,
+    }
 
 
 def ratios(counts: dict[int, list[int]], windows: int) -> dict[int, list[float]]:
     """Per CPU and window, the time per pass over the median time per pass of all CPUs in the window."""
     out: dict[int, list[float]] = {cpu: [] for cpu in counts}
     for k in range(windows):
-        per_pass = {cpu: 1 / counts[cpu][k] if counts[cpu][k] else float("inf") for cpu in counts}
+        per_pass = {
+            cpu: 1 / counts[cpu][k] if counts[cpu][k] else float("inf")
+            for cpu in counts
+        }
         middle = statistics.median(per_pass.values())
         for cpu in counts:
             out[cpu].append(per_pass[cpu] / middle)
@@ -75,17 +84,24 @@ def ratios(counts: dict[int, list[int]], windows: int) -> dict[int, list[float]]
 
 
 def utc() -> str:
-    return subprocess.run(["date", "-u"], check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["date", "-u"], check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--record", type=Path, default=bf.RESULTS / "timings.json",
-                        help="the timing record that gives the band, the window and the gap")
+    parser.add_argument(
+        "--record",
+        type=Path,
+        default=bf.RESULTS / "timings.json",
+        help="the timing record that gives the band, the window and the gap",
+    )
     args = parser.parse_args()
     bf.RESULTS.mkdir(parents=True, exist_ok=True)
     log_path = bf.RESULTS / "settle.log"
     with log_path.open("w") as log_file:
+
         def log(line: str) -> None:
             print(line, flush=True)
             log_file.write(line + "\n")
@@ -99,12 +115,22 @@ def main() -> None:
         busy_ms = 1e3 * got["gap_s"]
         windows = int(busy_ms // got["window_ms"])
         hardware = provenance.hardware()
-        log("hardware: uname -m {uname_m}; nproc {nproc}; cpu_model {cpu_model}".format(**hardware))
-        log(f"record: {bf.portable.portable(str(record_path))} sha256 {bf.sha256(record_path)}")
-        log(f"band: {100 * got['band']:.4f} %, the median IQR over median of {len(got['band_cells'])} one-thread cells")
+        log(
+            "hardware: uname -m {uname_m}; nproc {nproc}; cpu_model {cpu_model}".format(
+                **hardware
+            )
+        )
+        log(
+            f"record: {bf.portable.portable(str(record_path))} sha256 {bf.sha256(record_path)}"
+        )
+        log(
+            f"band: {100 * got['band']:.4f} %, the median IQR over median of {len(got['band_cells'])} one-thread cells"
+        )
         log(f"window: {got['window_ms']:.3f} ms, the median of {got['window_cell']}")
-        log(f"gap: {got['gap_s']:.4f} s, the longest run of {got['gap_cell']}; each trial then keeps every CPU busy "
-            f"for {busy_ms:.1f} ms, {windows} whole windows")
+        log(
+            f"gap: {got['gap_s']:.4f} s, the longest run of {got['gap_cell']}; each trial then keeps every CPU busy "
+            f"for {busy_ms:.1f} ms, {windows} whole windows"
+        )
         load_start = os.getloadavg()
         log(f"load average before: {' '.join(f'{x:.2f}' for x in load_start)}")
         trials = []
@@ -112,37 +138,72 @@ def main() -> None:
             time.sleep(got["gap_s"])
             counts = interleave.settle(busy_ms, got["window_ms"])
             rat = ratios(counts, windows)
-            steady = {cpu: statistics.median(rat[cpu][windows // 2:]) for cpu in counts}
-            first = next((k for k in range(windows)
-                          if all(rat[cpu][k] <= steady[cpu] * (1 + got["band"]) for cpu in counts)), None)
+            steady = {
+                cpu: statistics.median(rat[cpu][windows // 2 :]) for cpu in counts
+            }
+            first = next(
+                (
+                    k
+                    for k in range(windows)
+                    if all(
+                        rat[cpu][k] <= steady[cpu] * (1 + got["band"]) for cpu in counts
+                    )
+                ),
+                None,
+            )
             if first is None or first >= windows // 2:
                 when = "in no window" if first is None else f"only in window {first}"
-                raise SystemExit(f"trial {t + 1}: the CPUs come level {when} of {windows}, in the second half, "
-                                 "whose windows give the steady values")
+                raise SystemExit(
+                    f"trial {t + 1}: the CPUs come level {when} of {windows}, in the second half, "
+                    "whose windows give the steady values"
+                )
             start = {cpu: rat[cpu][0] / steady[cpu] for cpu in counts}
-            trials.append({"settle_ms": first * got["window_ms"], "level_window": first, "steady": steady,
-                           "first_window_over_steady": start, "counts": {cpu: c[:windows] for cpu, c in counts.items()}})
-            log(f"trial {t + 1} of {n}: level from window {first}, {first * got['window_ms']:.1f} ms; first window, "
-                "ratio over steady value per CPU: " + " ".join(f"{cpu}:{v:.3f}" for cpu, v in sorted(start.items())))
+            trials.append(
+                {
+                    "settle_ms": first * got["window_ms"],
+                    "level_window": first,
+                    "steady": steady,
+                    "first_window_over_steady": start,
+                    "counts": {cpu: c[:windows] for cpu, c in counts.items()},
+                }
+            )
+            log(
+                f"trial {t + 1} of {n}: level from window {first}, {first * got['window_ms']:.1f} ms; first window, "
+                "ratio over steady value per CPU: "
+                + " ".join(f"{cpu}:{v:.3f}" for cpu, v in sorted(start.items()))
+            )
         load_end = os.getloadavg()
         settle_ms = max(trial["settle_ms"] for trial in trials)
         longest = 1 + max(range(n), key=lambda t: trials[t]["settle_ms"])
         log(f"load average after: {' '.join(f'{x:.2f}' for x in load_end)}")
-        log(f"settle_ms: {settle_ms:.1f}, trial {longest}, the longest settle time of the {n} trials")
-        bf.write("settle.json", {
-            "protocol": {"script": "paper/cpc/bench/settle_period.py", "loop": "interleave.settle",
-                         "record": str(record_path), "record_sha256": bf.sha256(record_path), **got,
-                         "busy_ms": busy_ms, "windows": windows, "trials": n,
-                         "ratio": "time per pass of a CPU over the median time per pass of all CPUs in the window",
-                         "steady": "median ratio of a CPU over the second half of the windows of its trial",
-                         "level": "ratio at most the steady value times 1 + band",
-                         "load_average_before": list(load_start), "load_average_after": list(load_end)},
-            "hardware": hardware,
-            "trials": trials,
-            "settle_ms": settle_ms,
-            "settle_trial": longest,
-            "provenance": bf.stamp(),
-        })
+        log(
+            f"settle_ms: {settle_ms:.1f}, trial {longest}, the longest settle time of the {n} trials"
+        )
+        bf.write(
+            "settle.json",
+            {
+                "protocol": {
+                    "script": "paper/cpc/bench/settle_period.py",
+                    "loop": "interleave.settle",
+                    "record": str(record_path),
+                    "record_sha256": bf.sha256(record_path),
+                    **got,
+                    "busy_ms": busy_ms,
+                    "windows": windows,
+                    "trials": n,
+                    "ratio": "time per pass of a CPU over the median time per pass of all CPUs in the window",
+                    "steady": "median ratio of a CPU over the second half of the windows of its trial",
+                    "level": "ratio at most the steady value times 1 + band",
+                    "load_average_before": list(load_start),
+                    "load_average_after": list(load_end),
+                },
+                "hardware": hardware,
+                "trials": trials,
+                "settle_ms": settle_ms,
+                "settle_trial": longest,
+                "provenance": bf.stamp(),
+            },
+        )
         log(f"end: {utc()}")
 
 

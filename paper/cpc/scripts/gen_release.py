@@ -58,13 +58,32 @@ RCIDX = "593f8375303f7fff27a5fc0d823cfefc808289b2"
 
 
 def git(*args: str) -> str | None:
-    out = subprocess.run(["git", "-C", str(provenance.REPO), *args], capture_output=True, text=True, check=False)
+    out = subprocess.run(
+        ["git", "-C", str(provenance.REPO), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     return out.stdout.strip() if out.returncode == 0 else None
 
 
 def ancestor(older: str, newer: str) -> bool:
-    return subprocess.run(["git", "-C", str(provenance.REPO), "merge-base", "--is-ancestor", older, newer],
-                          capture_output=True, check=False).returncode == 0
+    return (
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(provenance.REPO),
+                "merge-base",
+                "--is-ancestor",
+                older,
+                newer,
+            ],
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def pull_request(subject: str) -> str:
@@ -87,7 +106,9 @@ def named_commit() -> str:
     """The one commit src/commit.tex names."""
     found = COMMIT_MACRO.findall(COMMIT_TEX.read_text()) if COMMIT_TEX.is_file() else []
     if len(found) != 1:
-        raise SystemExit(f"src/commit.tex defines \\readconcommit {len(found)} times as 40 hexadecimal digits, not once")
+        raise SystemExit(
+            f"src/commit.tex defines \\readconcommit {len(found)} times as 40 hexadecimal digits, not once"
+        )
     return found[0]
 
 
@@ -95,41 +116,73 @@ def identity() -> dict:
     """The commit of src/commit.tex with its library digest and tag, after the checks of the module docstring."""
     commit = named_commit()
     if git("cat-file", "-e", f"{commit}^{{commit}}") is None:
-        raise SystemExit(f"src/commit.tex names {commit}, which this repository does not hold")
+        raise SystemExit(
+            f"src/commit.tex names {commit}, which this repository does not hold"
+        )
     tree, head = git("rev-parse", f"{commit}^{{tree}}"), git("rev-parse", "HEAD^{tree}")
     if tree != head:
-        raise SystemExit(f"HEAD has tree {(head or 'none')[:12]} and commit {commit[:12]} tree {tree[:12]}; "
-                         f"build the paper in a checkout of {commit[:12]}")
+        raise SystemExit(
+            f"HEAD has tree {(head or 'none')[:12]} and commit {commit[:12]} tree {tree[:12]}; "
+            f"build the paper in a checkout of {commit[:12]}"
+        )
     digest = provenance.library_digest()
     held = provenance.library_digest_at(commit)
     if held != digest:
-        raise SystemExit(f"commit {commit[:12]} holds library {(held or 'none')[:12]}; this tree holds "
-                         f"{digest[:12]}")
-    recorded = json.loads(BUILD_RECORD.read_text())["build"]["library_digest"] if BUILD_RECORD.is_file() else None
+        raise SystemExit(
+            f"commit {commit[:12]} holds library {(held or 'none')[:12]}; this tree holds "
+            f"{digest[:12]}"
+        )
+    recorded = (
+        json.loads(BUILD_RECORD.read_text())["build"]["library_digest"]
+        if BUILD_RECORD.is_file()
+        else None
+    )
     if recorded != digest:
-        raise SystemExit(f"commit {commit[:12]} holds library {digest[:12]}; {BUILD_RECORD.relative_to(ROOT)} "
-                         f"names {(recorded or 'none')[:12]}; other library files need a new run of every record")
+        raise SystemExit(
+            f"commit {commit[:12]} holds library {digest[:12]}; {BUILD_RECORD.relative_to(ROOT)} "
+            f"names {(recorded or 'none')[:12]}; other library files need a new run of every record"
+        )
     version = provenance.library_version()
     cargo = git("show", f"{commit}:Cargo.toml") or ""
     found = re.search(r'^version = "([^"]+)"', cargo, re.M)
     if not found or found.group(1) != version:
-        raise SystemExit(f"commit {commit[:12]} is version {found and found.group(1)}; Cargo.toml is {version}")
-    if not re.search(rf"^## v{re.escape(version)} ", git("show", f"{commit}:CHANGELOG.md") or "", re.M):
-        raise SystemExit(f"CHANGELOG.md of commit {commit[:12]} has no section for v{version}")
+        raise SystemExit(
+            f"commit {commit[:12]} is version {found and found.group(1)}; Cargo.toml is {version}"
+        )
+    if not re.search(
+        rf"^## v{re.escape(version)} ",
+        git("show", f"{commit}:CHANGELOG.md") or "",
+        re.M,
+    ):
+        raise SystemExit(
+            f"CHANGELOG.md of commit {commit[:12]} has no section for v{version}"
+        )
     if not ancestor(BASE, commit):
-        raise SystemExit(f"commit {BASE[:12]}, the head of pull request {BASE_PR}, is not an ancestor of {commit[:12]}")
+        raise SystemExit(
+            f"commit {BASE[:12]}, the head of pull request {BASE_PR}, is not an ancestor of {commit[:12]}"
+        )
     for older in (PBC, RCIDX):
         if not ancestor(older, BASE):
             raise SystemExit(f"commit {older[:12]} is not an ancestor of {BASE[:12]}")
     shipped, shipped_commit = published()
     if shipped == version:
-        raise SystemExit(f"tag v{version} is an ancestor of {BASE[:12]}; the candidate needs a new version")
+        raise SystemExit(
+            f"tag v{version} is an ancestor of {BASE[:12]}; the candidate needs a new version"
+        )
     tag = f"v{version}"
     tagged = git("rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}")
     if tagged is not None and tagged != commit:
-        raise SystemExit(f"tag {tag} names {tagged[:12]}; put that commit in src/commit.tex")
-    return {"commit": commit, "digest": digest, "version": version, "tag": tag,
-            "published": shipped, "published_commit": shipped_commit}
+        raise SystemExit(
+            f"tag {tag} names {tagged[:12]}; put that commit in src/commit.tex"
+        )
+    return {
+        "commit": commit,
+        "digest": digest,
+        "version": version,
+        "tag": tag,
+        "published": shipped,
+        "published_commit": shipped_commit,
+    }
 
 
 def render() -> str:
@@ -149,14 +202,26 @@ def render() -> str:
         "readconrcidxcommit": RCIDX[:7],
         "readconrcidxpr": pull_request(git("log", "-1", "--format=%s", RCIDX)),
     }
-    return ("% Written by paper/cpc/scripts/gen_release.py from src/commit.tex, Cargo.toml and the git history.\n"
-            + "".join(f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()))
+    return (
+        "% Written by paper/cpc/scripts/gen_release.py from src/commit.tex, Cargo.toml and the git history.\n"
+        + "".join(
+            f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+        )
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--check", action="store_true", help="exit 1 unless src/release.tex is what this writes")
-    parser.add_argument("--commit", action="store_true", help="print the commit of src/commit.tex and check nothing")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 unless src/release.tex is what this writes",
+    )
+    parser.add_argument(
+        "--commit",
+        action="store_true",
+        help="print the commit of src/commit.tex and check nothing",
+    )
     args = parser.parse_args()
     if args.commit:
         print(named_commit())
@@ -165,9 +230,13 @@ def main() -> int:
     commit = named_commit()
     if args.check:
         if not OUT.is_file() or OUT.read_text() != text:
-            print("src/release.tex differs from src/commit.tex and the tree; run scripts/gen_release.py")
+            print(
+                "src/release.tex differs from src/commit.tex and the tree; run scripts/gen_release.py"
+            )
             return 1
-        print(f"src/release.tex is current for commit {commit[:12]}, library {provenance.library_digest()[:12]}")
+        print(
+            f"src/release.tex is current for commit {commit[:12]}, library {provenance.library_digest()[:12]}"
+        )
         return 0
     OUT.write_text(text)
     return 0

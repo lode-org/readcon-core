@@ -82,7 +82,14 @@ def layout(theme) -> None:
                 linewidth=0.4,
             )
         )
-        ax.text(0.06, y + 0.5, text, va="center", fontsize=8, color="white" if color == TEAL else BLACK)
+        ax.text(
+            0.06,
+            y + 0.5,
+            text,
+            va="center",
+            fontsize=8,
+            color="white" if color == TEAL else BLACK,
+        )
     v1 = [
         "Line 2 is only a comment",
         "Column 4 is 0 or 1",
@@ -99,7 +106,9 @@ def layout(theme) -> None:
     for i, text in enumerate(v1):
         y = len(rows) - i - 1
         ax.add_patch(
-            Rectangle((0.02, y + 0.15), 0.96, 0.7, facecolor=SUN, edgecolor=BLACK, lw=0.4)
+            Rectangle(
+                (0.02, y + 0.15), 0.96, 0.7, facecolor=SUN, edgecolor=BLACK, lw=0.4
+            )
         )
         ax.text(0.06, y + 0.5, text, va="center", fontsize=8)
     fig.tight_layout()
@@ -255,9 +264,20 @@ def timing(theme) -> None:
     meds = [_type7(arms[name])[0] for name in order]
     fig, ax = plt.subplots(figsize=(7.2, 3.4))
     x = np.arange(len(order))
-    ax.bar(x, meds, color=[CYCLE[i % len(CYCLE)] for i in range(len(order))], edgecolor=BLACK, linewidth=0.4)
+    ax.bar(
+        x,
+        meds,
+        color=[CYCLE[i % len(CYCLE)] for i in range(len(order))],
+        edgecolor=BLACK,
+        linewidth=0.4,
+    )
     ax.set_xticks(x)
-    ax.set_xticklabels([CON_LABELS.get(name, name) for name in order], fontsize=7, rotation=30, ha="right")
+    ax.set_xticklabels(
+        [CON_LABELS.get(name, name) for name in order],
+        fontsize=7,
+        rotation=30,
+        ha="right",
+    )
     ax.set_yscale("log")
     ax.set_ylabel("median wall time (s)")
     pf._theme_axes([ax], theme)
@@ -266,7 +286,11 @@ def timing(theme) -> None:
 
 def memory(theme) -> None:
     """VmHWM after the read minus VmHWM after the import, in MiB, CON arms."""
-    rows = [row for row in _summary_rows() if "mib_median" in row and row.get("arm") in CON_ARMS]
+    rows = [
+        row
+        for row in _summary_rows()
+        if "mib_median" in row and row.get("arm") in CON_ARMS
+    ]
     order = [name for name in CON_ARMS if any(row["arm"] == name for row in rows)]
     by_arm = {row["arm"]: float(row["mib_median"]) for row in rows}
     meds = [by_arm[name] for name in order]
@@ -274,7 +298,12 @@ def memory(theme) -> None:
     x = np.arange(len(order))
     ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
     ax.set_xticks(x)
-    ax.set_xticklabels([CON_LABELS.get(name, name) for name in order], fontsize=7, rotation=30, ha="right")
+    ax.set_xticklabels(
+        [CON_LABELS.get(name, name) for name in order],
+        fontsize=7,
+        rotation=30,
+        ha="right",
+    )
     ax.set_ylabel("MiB above the import")
     pf._theme_axes([ax], theme)
     pf._save(fig, "memory", None)
@@ -307,7 +336,13 @@ def matrix(theme) -> None:
                 colors.append(cmap((value - lo) / span))
     else:
         colors = [SKY] * len(rows)
-    ax.barh(y, [1.0 if np.isfinite(v) else 0.35 for v in values], color=colors, edgecolor=BLACK, linewidth=0.3)
+    ax.barh(
+        y,
+        [1.0 if np.isfinite(v) else 0.35 for v in values],
+        color=colors,
+        edgecolor=BLACK,
+        linewidth=0.3,
+    )
     ax.set_yticks(y)
     ax.set_yticklabels(labels, fontsize=6)
     ax.set_xlabel("displacement present (bar) or absent (short bar)")
@@ -350,7 +385,12 @@ def structures() -> None:
                 in_coord = False
                 continue
             if not in_coord:
-                if text and text[0].isalpha() and " " not in text and not text.startswith("{"):
+                if (
+                    text
+                    and text[0].isalpha()
+                    and " " not in text
+                    and not text.startswith("{")
+                ):
                     element = text
                 continue
             parts = text.split()
@@ -387,7 +427,9 @@ def structures() -> None:
             raise SystemExit("xyzrender did not write an svg root")
         inner = inner_match.group(1)
         inner = re.sub(r'\bid="([^"]+)"', lambda m: f'id="{prefix}{m.group(1)}"', inner)
-        inner = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{prefix}{m.group(1)})", inner)
+        inner = re.sub(
+            r"url\(#([^)]+)\)", lambda m: f"url(#{prefix}{m.group(1)})", inner
+        )
         return viewbox, inner
 
     panels = []
@@ -396,7 +438,12 @@ def structures() -> None:
             dest = work / f"{src.stem}.svg"
             one(src, dest)
             panels.append((label, dest))
-        font_bytes = (ROOT / "fonts" / "atkinson-hyperlegible" / "AtkinsonHyperlegible-Regular.ttf").read_bytes()
+        font_bytes = (
+            ROOT
+            / "fonts"
+            / "atkinson-hyperlegible"
+            / "AtkinsonHyperlegible-Regular.ttf"
+        ).read_bytes()
         font = "data:font/otf;base64," + base64.b64encode(font_bytes).decode("ascii")
         width, height = 1780, 700
         slot = 540

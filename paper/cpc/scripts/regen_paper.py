@@ -55,7 +55,10 @@ MEASURE = [
     ["scripts/spec_corpus_recount.py"],
     ["scripts/restart_formats.py"],
     # The kernel sets of numeric_pins.KERNEL_SETS; importing numeric_pins here would pin every step.
-    *[["scripts/restart_formats.py", "--kernels", name] for name in ("nehalem", "haswell", "skylakex", "cooperlake")],
+    *[
+        ["scripts/restart_formats.py", "--kernels", name]
+        for name in ("nehalem", "haswell", "skylakex", "cooperlake")
+    ],
     ["evidence/e5_prefactor.py"],
     ["scripts/velocity_case.py"],
     ["scripts/hcn_case.py"],
@@ -189,9 +192,14 @@ def run(step: list[str], env: dict[str, str], ledger: list[dict] | None = None) 
     script = [str(CPC / step[0]), *step[1:]]
     with tempfile.TemporaryDirectory(prefix="regen-") as tmp:
         log = Path(tmp) / "opened.json"
-        command = [sys.executable, *script] if ledger is None else [sys.executable, "-c", HOOK, str(REPO), str(log),
-                                                                     *script]
-        code = subprocess.run(command, cwd=REPO, env=env, check=False, stdout=subprocess.DEVNULL).returncode
+        command = (
+            [sys.executable, *script]
+            if ledger is None
+            else [sys.executable, "-c", HOOK, str(REPO), str(log), *script]
+        )
+        code = subprocess.run(
+            command, cwd=REPO, env=env, check=False, stdout=subprocess.DEVNULL
+        ).returncode
         if code:
             raise SystemExit(f"{' '.join(step)} exited {code}")
         if ledger is not None:
@@ -200,26 +208,46 @@ def run(step: list[str], env: dict[str, str], ledger: list[dict] | None = None) 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--measure", action="store_true", help="rerun the measurements before formatting")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--measure",
+        action="store_true",
+        help="rerun the measurements before formatting",
+    )
     args = parser.parse_args()
     env = dict(os.environ, SOURCE_DATE_EPOCH=SOURCE_DATE_EPOCH, FORCE_SOURCE_DATE="1")
     env["PATH"] = os.pathsep.join([str(Path(sys.prefix) / "bin"), env.get("PATH", "")])
-    env.setdefault("READCON_LIB", str(REPO / "target" / "release" / "libreadcon_core.so"))
+    env.setdefault(
+        "READCON_LIB", str(REPO / "target" / "release" / "libreadcon_core.so")
+    )
     if args.measure:
         if not Path(env["READCON_LIB"]).is_file():
-            raise SystemExit(f"{env['READCON_LIB']} is missing; run cargo build --release")
+            raise SystemExit(
+                f"{env['READCON_LIB']} is missing; run cargo build --release"
+            )
         for step in MEASURE:
             run(step, env)
     # matplotlib runs fc-list when it builds its font cache, and the ledger would record that run for the first
     # step that imports matplotlib in a new HOME, so the cache is built before the ledgered steps.
-    subprocess.run([sys.executable, "-c", "import matplotlib.font_manager"], cwd=REPO, env=env, check=True,
-                   stdout=subprocess.DEVNULL)
+    subprocess.run(
+        [sys.executable, "-c", "import matplotlib.font_manager"],
+        cwd=REPO,
+        env=env,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     ledger: list[dict] = []
     for step in FORMAT:
         run(step, env, ledger)
     READS.parent.mkdir(parents=True, exist_ok=True)
-    READS.write_text(json.dumps({"script": "paper/cpc/scripts/regen_paper.py", "steps": ledger}, indent=1) + "\n")
+    READS.write_text(
+        json.dumps(
+            {"script": "paper/cpc/scripts/regen_paper.py", "steps": ledger}, indent=1
+        )
+        + "\n"
+    )
     run(VERSION_MAP, env)
 
 

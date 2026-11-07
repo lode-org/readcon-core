@@ -49,12 +49,20 @@ def prime(path: Path) -> None:
 
 def timed_run(argv: list[str], payload: Path, env: dict | None = None) -> dict:
     """One fresh process: READY, the payload read into the page cache, the line that starts its clock, its JSON."""
-    proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                            env=env)
+    proc = subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
     ready = proc.stdout.readline().strip()
     if ready != "READY":
         _, err = proc.communicate()
-        raise SystemExit(f"{' '.join(argv)} printed {ready!r} instead of READY: {err[-2000:]}")
+        raise SystemExit(
+            f"{' '.join(argv)} printed {ready!r} instead of READY: {err[-2000:]}"
+        )
     prime(payload)
     out, err = proc.communicate("\n")
     if proc.returncode != 0:
@@ -70,7 +78,9 @@ def python_cell(reader: str, threads: int):
 
 def cpp_cell(cell: tuple):
     payload = cpp_reads.PAYLOADS / cell[3]
-    return lambda: timed_run(cpp_reads.argv(cell), payload, cpp_reads.environment(cell[5]))
+    return lambda: timed_run(
+        cpp_reads.argv(cell), payload, cpp_reads.environment(cell[5])
+    )
 
 
 def sha256(path: Path) -> str:
@@ -82,7 +92,9 @@ def main() -> None:
     cpp_build = json.loads((RESULTS / "cpp" / "build.json").read_text())
     for program, path in cpp_reads.PROGRAMS.items():
         if sha256(path) != cpp_build["artifacts"][program]:
-            raise SystemExit(f"{path} is not the {program} that cpp/build.json hashed; rerun bench/cpp_reads.py")
+            raise SystemExit(
+                f"{path} is not the {program} that cpp/build.json hashed; rerun bench/cpp_reads.py"
+            )
     manifest = json.loads((RESULTS / "payloads.json").read_text())
 
     cells, meta = {}, {}
@@ -90,19 +102,34 @@ def main() -> None:
         name = f"python:{reader}:{threads}"
         contract, _, payload, warm = readers.READERS[reader]
         cells[name] = python_cell(reader, threads)
-        meta[name] = {"kind": "python", "reader": reader, "threads": threads, "contract": contract,
-                      "payload": payload, "warm": warm}
+        meta[name] = {
+            "kind": "python",
+            "reader": reader,
+            "threads": threads,
+            "contract": contract,
+            "payload": payload,
+            "warm": warm,
+        }
     for cell in cpp_reads.CELLS:
         name = f"cpp:{cell[0]}"
         cells[name] = cpp_cell(cell)
-        meta[name] = {"kind": "cpp", "reader": cell[0], "program": cell[1], "threads": cell[5],
-                      "contract": cell[2], "payload": cell[3], "warm": cell[4]}
+        meta[name] = {
+            "kind": "cpp",
+            "reader": cell[0],
+            "program": cell[1],
+            "threads": cell[5],
+            "contract": cell[2],
+            "payload": cell[3],
+            "warm": cell[4],
+        }
 
     record = interleave.campaign(cells)
     bad = []
     for name, info in meta.items():
         cell = record["cells"][name]
-        reference = manifest["references"][manifest["files"][info["payload"]]["payload"]]
+        reference = manifest["references"][
+            manifest["files"][info["payload"]]["payload"]
+        ]
         if info["kind"] == "python":
             wrong = readers.mismatches(cell["printed"], reference)
         else:
@@ -115,7 +142,9 @@ def main() -> None:
     record["provenance"] = stamp
     record["cpp_artifacts"] = cpp_build["artifacts"]
     RESULTS.mkdir(parents=True, exist_ok=True)
-    (RESULTS / "reads.json").write_text(json.dumps(portable.portable(record), indent=2) + "\n")
+    (RESULTS / "reads.json").write_text(
+        json.dumps(portable.portable(record), indent=2) + "\n"
+    )
     print("wrote", RESULTS / "reads.json")
 
 

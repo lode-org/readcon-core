@@ -25,20 +25,27 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-from vendored_font import register as register_vendored_font
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+from vendored_font import register as register_vendored_font  # noqa: E402
 
 register_vendored_font()
-from chemparseplot.parse.projection import compute_projection_basis, project_to_sd
-from chemparseplot.plot.neb import mark_saddle_point, plot_energy_path, plot_landscape_surface
-from chemparseplot.plot.theme import (
+from chemparseplot.parse.projection import (  # noqa: E402
+    compute_projection_basis,
+    project_to_sd,
+)
+from chemparseplot.plot.neb import (  # noqa: E402
+    mark_saddle_point,
+    plot_energy_path,
+    plot_landscape_surface,
+)
+from chemparseplot.plot.theme import (  # noqa: E402
     apply_axis_theme,
     get_theme,
     setup_publication_theme,
 )
-from matplotlib.ticker import FormatStrFormatter
-from rgpycrumbs.eon.plot_config import merge_plot_settings
+from matplotlib.ticker import FormatStrFormatter  # noqa: E402
+from rgpycrumbs.eon.plot_config import merge_plot_settings  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
@@ -62,8 +69,13 @@ SEQUENTIAL = matplotlib.colormaps["cividis"]
 
 _LM_CANDIDATES = (
     Path("/usr/share/texmf/fonts/opentype/public/lm/lmroman10-regular.otf"),
-    Path("/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"),
-    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
+    Path(
+        "/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"
+    ),
+    Path(__file__).resolve().parents[1]
+    / "fonts"
+    / "latin-modern"
+    / "lmroman10-regular.otf",
 )
 
 
@@ -98,6 +110,7 @@ def use_latin_modern() -> str:
     )
     return name
 
+
 LAYER_NAMES = ["Rust core", "C++ wrapper", "Python objects"]
 RESTART_BANDS = (
     ("full", "uninterrupted", TEAL, "o", "-"),
@@ -123,9 +136,7 @@ def require_theme_font(family: str) -> None:
         ) from exc
     resolved = fm.FontProperties(fname=found).get_name()
     if resolved != family:
-        raise SystemExit(
-            f"Theme font {family!r} resolved to {resolved!r} at {found}."
-        )
+        raise SystemExit(f"Theme font {family!r} resolved to {resolved!r} at {found}.")
 
 
 def house_style():
@@ -208,7 +219,9 @@ def _eon_images(directory: Path, reactant=None):
     images = ase_read(directory / "neb.con", index=":")
     reactant = images[0] if reactant is None else reactant
     for image in images:
-        shift, _ = find_mic(image.positions - reactant.positions, reactant.cell, pbc=True)
+        shift, _ = find_mic(
+            image.positions - reactant.positions, reactant.cell, pbc=True
+        )
         image.positions = reactant.positions + shift
     return images
 
@@ -222,7 +235,11 @@ def _eon_band(directory: Path, ref, prod, ira_kmax: float) -> dict[str, np.ndarr
 
     columns = np.loadtxt(directory / "neb.dat", skiprows=1).T
     rmsd_r, rmsd_p = calculate_landscape_coords(
-        _eon_images(directory, ref), ira_mod.IRA(), float(ira_kmax), ref_a=ref, ref_b=prod
+        _eon_images(directory, ref),
+        ira_mod.IRA(),
+        float(ira_kmax),
+        ref_a=ref,
+        ref_b=prod,
     )
     grad_r, grad_p = compute_synthetic_gradients(rmsd_r, rmsd_p, columns[3])
     return {
@@ -253,7 +270,9 @@ def _mark_ends(ax, s, d, energy) -> None:
         linewidths=0.9,
         zorder=60,
     )
-    ax.annotate("R", (s[0], d[0]), textcoords="offset points", xytext=(4, 4), fontsize=8)
+    ax.annotate(
+        "R", (s[0], d[0]), textcoords="offset points", xytext=(4, 4), fontsize=8
+    )
     ax.scatter(
         s[-1],
         d[-1],
@@ -264,7 +283,9 @@ def _mark_ends(ax, s, d, energy) -> None:
         linewidths=0.9,
         zorder=60,
     )
-    ax.annotate("P", (s[-1], d[-1]), textcoords="offset points", xytext=(4, 4), fontsize=8)
+    ax.annotate(
+        "P", (s[-1], d[-1]), textcoords="offset points", xytext=(4, 4), fontsize=8
+    )
     peak = _saddle_index(energy)
     # chemparseplot.plot.neb.mark_saddle_point writes ``label`` twice:
     # the scatter legend entry (neb.py line 1830) and the annotation
@@ -284,7 +305,9 @@ def _mark_ends(ax, s, d, energy) -> None:
             artist.set_label("_nolegend_")
 
 
-def _companion(ax, s, energy, color, marker, linestyle, label: str | None, saddle: bool = True) -> None:
+def _companion(
+    ax, s, energy, color, marker, linestyle, label: str | None, saddle: bool = True
+) -> None:
     plot_energy_path(
         ax,
         np.asarray(s, dtype=float),
@@ -317,7 +340,9 @@ def _companion(ax, s, energy, color, marker, linestyle, label: str | None, saddl
     )
 
 
-def _draw_surface(ax, band, basis, cmap, extra_points=None, show_pts: bool = False) -> object:
+def _draw_surface(
+    ax, band, basis, cmap, extra_points=None, show_pts: bool = False
+) -> object:
     """Draw one ``E(s, d)`` contour and return the filled contour set."""
     captured: dict = {}
     original = ax.contourf
@@ -367,7 +392,12 @@ def _energy_levels(captured, band_energies, count: int = 20) -> np.ndarray:
 
 
 def _energy_bar(fig, contour, cax, levels) -> None:
-    bar = fig.colorbar(contour, cax=cax, label="energy (eV)", ticks=np.linspace(levels[0], levels[-1], 5))
+    bar = fig.colorbar(
+        contour,
+        cax=cax,
+        label="energy (eV)",
+        ticks=np.linspace(levels[0], levels[-1], 5),
+    )
     bar.solids.set_rasterized(False)
     bar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
 
@@ -412,7 +442,9 @@ def restart(theme, settings, png_dir: Path | None) -> None:
     _energy_bar(fig, _relevel(ax, captured, levels, SEQUENTIAL), cax, levels)
     for band, label, color, marker, linestyle in bands:
         progress, deviation = _sd(band, basis)
-        ax.plot(progress, deviation, linestyle=linestyle, color=color, lw=1.0, zorder=44)
+        ax.plot(
+            progress, deviation, linestyle=linestyle, color=color, lw=1.0, zorder=44
+        )
         ax.scatter(
             progress,
             deviation,

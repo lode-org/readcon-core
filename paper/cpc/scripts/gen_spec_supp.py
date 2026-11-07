@@ -45,6 +45,7 @@ holding '="', which org itself closes at that "=".
     gen_spec_supp.py --as-is --compile  also compile spec_normative.tex with pdflatex in a test document
     gen_spec_supp.py --measure          write data/spec/versions.json from the release tags
 """
+
 import argparse
 import difflib
 import json
@@ -75,14 +76,34 @@ INFORMATIVE = ("Reader compatibility", "Appendix: PEG", "References")
 # Two informative sentences of the units section round the parsed natural time
 # unit and its difference from eOn. The supplement prints both values as
 # velocity_case.py computes them in their place.
-ROUNDED = (" =units.rs= parses it as about 10.180505710759414 fs.", "\nThe relative difference is about 2e-8.")
+ROUNDED = (
+    " =units.rs= parses it as about 10.180505710759414 fs.",
+    "\nThe relative difference is about 2e-8.",
+)
 CELL_CLAUSE = "CON-cell.6"
 LEVELS = r"MUST NOT|SHOULD NOT|MUST|SHOULD|MAY"
 GREEK = ("alpha", "beta", "gamma")
-QUOTED_VERBATIM = re.compile(r'(?<![^\s(])=([^\s=][^=\n]*="[^"\n]*"[^\s=]*)=(?=[\s.,;:!?)]|$)', re.M)
-TT_ESCAPES = {"\\": r"\textbackslash{}", "{": r"\{", "}": r"\}", "_": r"\_", "^": r"\^{}", "#": r"\#",
-              "$": r"\$", "%": r"\%", "&": r"\&", "~": r"\textasciitilde{}", "|": r"\textbar{}",
-              "<": r"\textless{}", ">": r"\textgreater{}", "[": "{[}", "]": "{]}", " ": r"\ "}
+QUOTED_VERBATIM = re.compile(
+    r'(?<![^\s(])=([^\s=][^=\n]*="[^"\n]*"[^\s=]*)=(?=[\s.,;:!?)]|$)', re.M
+)
+TT_ESCAPES = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "_": r"\_",
+    "^": r"\^{}",
+    "#": r"\#",
+    "$": r"\$",
+    "%": r"\%",
+    "&": r"\&",
+    "~": r"\textasciitilde{}",
+    "|": r"\textbar{}",
+    "<": r"\textless{}",
+    ">": r"\textgreater{}",
+    "[": "{[}",
+    "]": "{]}",
+    " ": r"\ ",
+}
 TABLE_CHARS = 74
 EQUATION_CHARS = 40
 BREAKABLE_CHARS = 20
@@ -92,7 +113,9 @@ EXAMPLE_STYLE = r"basicstyle=\ttfamily\scriptsize,breaklines=true,showlines=true
 def bib_dois(path: Path) -> dict[str, str]:
     dois = {}
     for key, body in re.findall(r"@\w+\{([^,\s]+),(.*?)\n\}", path.read_text(), re.S):
-        doi = re.search(r"doi\s*=\s*[{\"]\s*(?:https?://(?:dx\.)?doi\.org/)?([^}\"]+)", body, re.I)
+        doi = re.search(
+            r"doi\s*=\s*[{\"]\s*(?:https?://(?:dx\.)?doi\.org/)?([^}\"]+)", body, re.I
+        )
         if doi:
             dois[key] = doi[1].strip().lower()
     return dois
@@ -129,7 +152,9 @@ class Expr:
     def take(self, want=None):
         tok = self.peek()
         if tok is None or (want is not None and tok != want):
-            raise SystemExit(f"{CELL_CLAUSE}: expected {want!r} at token {self.k} of {self.toks}")
+            raise SystemExit(
+                f"{CELL_CLAUSE}: expected {want!r} at token {self.k} of {self.toks}"
+            )
         self.k += 1
         return tok
 
@@ -279,7 +304,9 @@ def cell_equation(org: str) -> tuple[str, str, int]:
     """The CON-cell.6 vectors as one LaTeX equation, checked against ASE."""
     from ase.geometry import cellpar_to_cell
 
-    line = next((ln for ln in org.splitlines() if ln.startswith(f"- {CELL_CLAUSE} ::")), None)
+    line = next(
+        (ln for ln in org.splitlines() if ln.startswith(f"- {CELL_CLAUSE} ::")), None
+    )
     if line is None:
         raise SystemExit(f"spec.org has no clause {CELL_CLAUSE}")
     spans = re.search(r"~a=([^~]*)~, ~b=([^~]*)~, and ~c=([^~]*)~", line)
@@ -297,7 +324,9 @@ def cell_equation(org: str) -> tuple[str, str, int]:
         for row, name in zip(ase_cell, "abc"):
             ours = [value(part, env) for part in vectors[name]]
             if any(abs(x - y) > 1e-9 * max(lengths) for x, y in zip(ours, row)):
-                raise SystemExit(f"{CELL_CLAUSE} {name} = {ours} differs from ASE {list(row)}")
+                raise SystemExit(
+                    f"{CELL_CLAUSE} {name} = {ours} differs from ASE {list(row)}"
+                )
     rows = " \\\\ ".join(vector_row(name, vectors[name]) for name in "abc")
     math_tex = f"\\begin{{equation}}\\begin{{aligned}} {rows} \\end{{aligned}}\\label{{eq:spec-cell}}\\end{{equation}}"
     return spans[0], math_tex, trials
@@ -320,8 +349,14 @@ def history_rows(org: str) -> list[dict]:
             rows[-1]["change"] += " " + cells[-1]
         else:
             row = dict(zip(head, cells))
-            rows.append({"version": "3.0" if cells[0] == "3" else cells[0], "date": row["Date"],
-                         "release": row.get("Release"), "change": cells[-1]})
+            rows.append(
+                {
+                    "version": "3.0" if cells[0] == "3" else cells[0],
+                    "date": row["Date"],
+                    "release": row.get("Release"),
+                    "change": cells[-1],
+                }
+            )
     return rows
 
 
@@ -387,7 +422,9 @@ def text_changes(old: str, new: str) -> list[dict]:
     for name in dict.fromkeys([*after, *before]):
         was, now = before.get(name, empty), after.get(name, empty)
         added, dropped = [], []
-        matcher = difflib.SequenceMatcher(None, was["sentences"], now["sentences"], autojunk=False)
+        matcher = difflib.SequenceMatcher(
+            None, was["sentences"], now["sentences"], autojunk=False
+        )
         for op, i1, i2, j1, j2 in matcher.get_opcodes():
             if op != "equal":
                 dropped += was["sentences"][i1:i2]
@@ -396,7 +433,11 @@ def text_changes(old: str, new: str) -> list[dict]:
             "section": name,
             "clauses_added": [c for c in now["clauses"] if c not in old_texts],
             "clauses_dropped": [c for c in was["clauses"] if c not in new_ids],
-            "clauses_reworded": [c for c, t in now["clauses"].items() if c in old_texts and old_texts[c] != t],
+            "clauses_reworded": [
+                c
+                for c, t in now["clauses"].items()
+                if c in old_texts and old_texts[c] != t
+            ],
             "sentences_added": added,
             "sentences_dropped": dropped,
         }
@@ -407,20 +448,31 @@ def text_changes(old: str, new: str) -> list[dict]:
 
 def newest(tag: dict) -> tuple:
     """The newest (version, date) of a tag's version history, or () when it has none."""
-    return (tag["history"][-1]["version"], tag["history"][-1]["date"]) if tag["history"] else ()
+    return (
+        (tag["history"][-1]["version"], tag["history"][-1]["date"])
+        if tag["history"]
+        else ()
+    )
 
 
 def second_text(previous: dict, tag: dict) -> bool:
     """Whether tag ships another spec.org under the newest version of the tag before it, both with numbered clauses."""
-    return bool(previous and tag["spec_blob"] and previous["clauses"] and tag["clauses"]
-                and newest(tag) and newest(previous) == newest(tag)
-                and previous["spec_blob"] != tag["spec_blob"])
+    return bool(
+        previous
+        and tag["spec_blob"]
+        and previous["clauses"]
+        and tag["clauses"]
+        and newest(tag)
+        and newest(previous) == newest(tag)
+        and previous["spec_blob"] != tag["spec_blob"]
+    )
 
 
 def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     """The Change cell of a second text: each clause it added, reworded or dropped, with the first
     sentence of a clause spec.org holds, and each sentence it added or dropped in a section whose
     clauses stay the same."""
+
     def first(clause: str) -> str:
         return texts[clause].split(". ")[0].rstrip(".")
 
@@ -429,9 +481,19 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
         parts += [f"Adds ={c}=: {first(c)}." for c in change["clauses_added"]]
         parts += [f"Rewords ={c}=: {first(c)}." for c in change["clauses_reworded"]]
         parts += [f"Drops ={c}=." for c in change["clauses_dropped"]]
-        if not (change["clauses_added"] or change["clauses_reworded"] or change["clauses_dropped"]):
-            parts += [f"Adds to {change['section']}: ``{s}''" for s in change["sentences_added"]]
-            parts += [f"Drops from {change['section']}: ``{s}''" for s in change["sentences_dropped"]]
+        if not (
+            change["clauses_added"]
+            or change["clauses_reworded"]
+            or change["clauses_dropped"]
+        ):
+            parts += [
+                f"Adds to {change['section']}: ``{s}''"
+                for s in change["sentences_added"]
+            ]
+            parts += [
+                f"Drops from {change['section']}: ``{s}''"
+                for s in change["sentences_dropped"]
+            ]
     return " ".join(parts)
 
 
@@ -450,30 +512,58 @@ def release_rows(org: str) -> list[dict]:
         if row["version"] == "1":
             row["release"] = "eOn"
             continue
-        first = next((t["tag"] for t in record["tags"] if any(
-            (h["version"], h["date"]) == (row["version"], row["date"]) for h in t["history"])), None)
+        first = next(
+            (
+                t["tag"]
+                for t in record["tags"]
+                if any(
+                    (h["version"], h["date"]) == (row["version"], row["date"])
+                    for h in t["history"]
+                )
+            ),
+            None,
+        )
         if first is None:
-            raise SystemExit(f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
-                             f"of {row['date']}")
+            raise SystemExit(
+                f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
+                f"of {row['date']}"
+            )
         row["release"] = f"readcon-core {first[1:]}"
-    texts = dict(re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M))
+    texts = dict(
+        re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M)
+    )
     previous = None
     for tag in (t for t in record["tags"] if t["spec_blob"] and t["history"]):
         if second_text(previous, tag):
             if "changes" not in tag:
-                raise SystemExit(f"{VERSIONS.relative_to(ROOT)} records no changes for {tag['tag']}; "
-                                 "run gen_spec_supp.py --measure")
-            missing = [c for change in tag["changes"] for c in change["clauses_added"] + change["clauses_reworded"]
-                       if c not in texts]
+                raise SystemExit(
+                    f"{VERSIONS.relative_to(ROOT)} records no changes for {tag['tag']}; "
+                    "run gen_spec_supp.py --measure"
+                )
+            missing = [
+                c
+                for change in tag["changes"]
+                for c in change["clauses_added"] + change["clauses_reworded"]
+                if c not in texts
+            ]
             if missing:
-                raise SystemExit(f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
-                                 "does not hold")
-            at = max(i for i, row in enumerate(rows) if row["version"] == newest(tag)[0])
+                raise SystemExit(
+                    f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
+                    "does not hold"
+                )
+            at = max(
+                i for i, row in enumerate(rows) if row["version"] == newest(tag)[0]
+            )
             # The mark goes under the date, so the date column keeps the width of a bare date.
-            rows.insert(at + 1, {"version": newest(tag)[0],
-                                 "date": rf"\begin{{tabular}}[t]{{@{{}}l@{{}}}}{tag['date']}\\(tag)\end{{tabular}}",
-                                 "release": f"readcon-core {tag['tag'][1:]}",
-                                 "change": second_text_change(tag["changes"], texts)})
+            rows.insert(
+                at + 1,
+                {
+                    "version": newest(tag)[0],
+                    "date": rf"\begin{{tabular}}[t]{{@{{}}l@{{}}}}{tag['date']}\\(tag)\end{{tabular}}",
+                    "release": f"readcon-core {tag['tag'][1:]}",
+                    "change": second_text_change(tag["changes"], texts),
+                },
+            )
         previous = tag
     return rows
 
@@ -487,51 +577,87 @@ def spec_macros(org: str) -> str:
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     if same is None:
-        raise SystemExit(f"no release tag in {VERSIONS.relative_to(ROOT)} ships {SPEC.relative_to(ROOT)} "
-                         f"(blob {blob[:8]})")
-    values = {"specClauses": len(set(CLAUSE_ID.findall(org))), "specTextRelease": same, "specTextBlob": blob[:8]}
-    return (f"% Written by paper/cpc/scripts/gen_spec_supp.py from {SPEC.relative_to(ROOT)} and "
-            f"{VERSIONS.relative_to(ROOT)}.\n"
-            + "".join(f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()))
+        raise SystemExit(
+            f"no release tag in {VERSIONS.relative_to(ROOT)} ships {SPEC.relative_to(ROOT)} "
+            f"(blob {blob[:8]})"
+        )
+    values = {
+        "specClauses": len(set(CLAUSE_ID.findall(org))),
+        "specTextRelease": same,
+        "specTextBlob": blob[:8],
+    }
+    return (
+        f"% Written by paper/cpc/scripts/gen_spec_supp.py from {SPEC.relative_to(ROOT)} and "
+        f"{VERSIONS.relative_to(ROOT)}.\n"
+        + "".join(
+            f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+        )
+    )
 
 
 def org_inline(text: str) -> str:
     """Org table text as LaTeX, a =verbatim= span as texttt."""
     parts = re.split(r"=([^=\s][^=]*?)=", text)
-    return "".join(f"\\texttt{{{''.join(TT_ESCAPES.get(ch, ch) for ch in part)}}}" if k % 2
-                   else re.sub(r"([&%$#_{}])", r"\\\1", part) for k, part in enumerate(parts))
+    return "".join(
+        f"\\texttt{{{''.join(TT_ESCAPES.get(ch, ch) for ch in part)}}}"
+        if k % 2
+        else re.sub(r"([&%$#_{}])", r"\\\1", part)
+        for k, part in enumerate(parts)
+    )
 
 
 def versions_table(rows: list[dict]) -> str:
-    lines = [(f"% Written by paper/cpc/scripts/gen_spec_supp.py from {SPEC.relative_to(ROOT)} and "
-              f"{VERSIONS.relative_to(ROOT)}.")]
+    lines = [
+        (
+            f"% Written by paper/cpc/scripts/gen_spec_supp.py from {SPEC.relative_to(ROOT)} and "
+            f"{VERSIONS.relative_to(ROOT)}."
+        )
+    ]
     for row in rows:
-        release = re.sub(rf"^readcon-core v(?={RELEASE}$)", "readcon-core ", row["release"])
-        lines.append(" & ".join((row["version"], row["date"], release, org_inline(row["change"]))) + " \\\\")
+        release = re.sub(
+            rf"^readcon-core v(?={RELEASE}$)", "readcon-core ", row["release"]
+        )
+        lines.append(
+            " & ".join(
+                (row["version"], row["date"], release, org_inline(row["change"]))
+            )
+            + " \\\\"
+        )
     return "\n".join([*lines, "\\bottomrule"]) + "\n"
 
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=check)
+    return subprocess.run(
+        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=check
+    )
 
 
 def versions_record() -> dict:
     """The version history and clause ids of spec.org at every release tag vX.Y.Z, and what a second text changed."""
     spec = SPEC.relative_to(ROOT).as_posix()
-    listing = git("for-each-ref", "refs/tags",
-                  "--format=%(refname:short)%09%(creatordate:short)%09%(objectname)%09%(*objectname)").stdout
+    listing = git(
+        "for-each-ref",
+        "refs/tags",
+        "--format=%(refname:short)%09%(creatordate:short)%09%(objectname)%09%(*objectname)",
+    ).stdout
     tags = []
     for line in listing.splitlines():
         name, date, target, peeled = line.split("\t")
         if re.fullmatch(rf"v{RELEASE}", name):
-            tags.append((tuple(map(int, name[1:].split("."))), name, date, peeled or target))
+            tags.append(
+                (tuple(map(int, name[1:].split("."))), name, date, peeled or target)
+            )
     entries, previous, previous_org = [], None, ""
     for _, name, date, commit in sorted(tags):
         shown = git("show", f"{commit}:{spec}", check=False)
         org = shown.stdout if shown.returncode == 0 else ""
         entry = {
-            "tag": name, "date": date, "commit": commit,
-            "spec_blob": git("rev-parse", f"{commit}:{spec}").stdout.strip() if org else None,
+            "tag": name,
+            "date": date,
+            "commit": commit,
+            "spec_blob": git("rev-parse", f"{commit}:{spec}").stdout.strip()
+            if org
+            else None,
             "history": history_rows(org),
             "clauses": sorted(set(CLAUSE_ID.findall(org)), key=clause_order),
         }
@@ -540,16 +666,29 @@ def versions_record() -> dict:
         if entry["spec_blob"] and entry["history"]:
             previous, previous_org = entry, org
         entries.append(entry)
-    release = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)[1]
-    return {"spec": spec, "tags": entries,
-            "tree": {"release": release, "tagged": f"v{release}" in {e["tag"] for e in entries}}}
+    release = re.search(
+        r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M
+    )[1]
+    return {
+        "spec": spec,
+        "tags": entries,
+        "tree": {
+            "release": release,
+            "tagged": f"v{release}" in {e["tag"] for e in entries},
+        },
+    }
 
 
 def measure() -> None:
-    versions = {"generator": "paper/cpc/scripts/gen_spec_supp.py --measure", **versions_record()}
+    versions = {
+        "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
+        **versions_record(),
+    }
     VERSIONS.parent.mkdir(parents=True, exist_ok=True)
     VERSIONS.write_text(json.dumps(versions, indent=2) + "\n")
-    print(f"wrote {VERSIONS.relative_to(ROOT)}: {len(versions['tags'])} tags, release {versions['tree']}")
+    print(
+        f"wrote {VERSIONS.relative_to(ROOT)}: {len(versions['tags'])} tags, release {versions['tree']}"
+    )
 
 
 def org_source() -> tuple[str, list[str], int]:
@@ -563,13 +702,24 @@ def org_source() -> tuple[str, list[str], int]:
     org = "\n".join(kept) + "\n"
     for sentence in ROUNDED:
         if org.count(sentence) != 1:
-            raise SystemExit(f"{SPEC.relative_to(ROOT)} does not hold {sentence.strip()!r} once")
+            raise SystemExit(
+                f"{SPEC.relative_to(ROOT)} does not hold {sentence.strip()!r} once"
+            )
         org = org.replace(sentence, "", 1)
     span, math_tex, trials = cell_equation(org)
     org = org.replace(span + ",", span, 1).replace(span, f"@@latex:{math_tex}@@", 1)
-    org = re.sub(r"^[ \t]*\|(?!-).*$", lambda m: re.sub(r"[ \t]*\|[ \t]*", " | ", m[0]).strip(), org, flags=re.M)
+    org = re.sub(
+        r"^[ \t]*\|(?!-).*$",
+        lambda m: re.sub(r"[ \t]*\|[ \t]*", " | ", m[0]).strip(),
+        org,
+        flags=re.M,
+    )
     org = QUOTED_VERBATIM.sub(
-        lambda m: "@@latex:\\texttt{" + "".join(TT_ESCAPES.get(ch, ch) for ch in m[1]) + "}@@", org)
+        lambda m: (
+            "@@latex:\\texttt{" + "".join(TT_ESCAPES.get(ch, ch) for ch in m[1]) + "}@@"
+        ),
+        org,
+    )
     mapped, unmatched = citation_map()
     dropped = []
 
@@ -587,7 +737,11 @@ def org_source() -> tuple[str, list[str], int]:
 def pandoc(org: str) -> str:
     return subprocess.run(
         [*PANDOC, "-f", "org", "-t", "latex", "--syntax-highlighting=none"],
-        input=org, capture_output=True, text=True, check=True, cwd=SPEC.parent,
+        input=org,
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=SPEC.parent,
     ).stdout
 
 
@@ -614,14 +768,30 @@ def tabular(match: re.Match) -> str:
     if sum(natural) + 3 * ncols <= TABLE_CHARS:
         spec, end, lead = "l" * ncols, " \\\\", ""
     else:
-        least = [max(plain_length(w) for row in rows for w in re.split(r"\s+|\\ ", row[j]) if w)
-                 for j in range(ncols)]
+        least = [
+            max(
+                plain_length(w)
+                for row in rows
+                for w in re.split(r"\s+|\\ ", row[j])
+                if w
+            )
+            for j in range(ncols)
+        ]
         spare = max((1.0 - 0.04 * ncols) * TABLE_CHARS - sum(least), 0.0)
         extra = [n - m for n, m in zip(natural, least)]
-        widths = [m + spare * e / sum(extra) for m, e in zip(least, extra)] if sum(extra) else least
+        widths = (
+            [m + spare * e / sum(extra) for m, e in zip(least, extra)]
+            if sum(extra)
+            else least
+        )
         spec = "".join(f"p{{{w / TABLE_CHARS:.2f}\\linewidth}}" for w in widths)
         end, lead = " \\tabularnewline", "\\raggedright "
-    lines = ["\\begin{center}", "\\footnotesize", f"\\begin{{tabular}}{{@{{}}{spec}@{{}}}}", "\\toprule"]
+    lines = [
+        "\\begin{center}",
+        "\\footnotesize",
+        f"\\begin{{tabular}}{{@{{}}{spec}@{{}}}}",
+        "\\toprule",
+    ]
     lines += [" & ".join(lead + c for c in row) + end for row in head]
     lines.append("\\midrule")
     lines += [" & ".join(lead + c for c in row) + end for row in body]
@@ -633,16 +803,24 @@ def breakable(match: re.Match) -> str:
     """A long code span may break after an underscore or a path slash."""
     if plain_length(match[1]) < BREAKABLE_CHARS:
         return match[0]
-    return "\\texttt{" + re.sub(r"\\_|(?<=[A-Za-z])/(?=[A-Za-z])", r"\g<0>\\allowbreak{}", match[1]) + "}"
+    return (
+        "\\texttt{"
+        + re.sub(r"\\_|(?<=[A-Za-z])/(?=[A-Za-z])", r"\g<0>\\allowbreak{}", match[1])
+        + "}"
+    )
 
 
 def stray_markers(tex: str) -> list[str]:
     """Org verbatim markers that reached the LaTeX, the trace of a split span."""
-    text = re.sub(r"\\begin\{(verbatim|lstlisting|equation)\}.*?\\end\{\1\}", "", tex, flags=re.S)
+    text = re.sub(
+        r"\\begin\{(verbatim|lstlisting|equation)\}.*?\\end\{\1\}", "", tex, flags=re.S
+    )
     found = re.findall(r"=\\textbar\{\}|\\textbar\{\}\\ =", text)
     text = re.sub(r"\\texttt\{(?:[^{}]|\{[^{}]*\})*\}", "T", text)
     text = re.sub(r"\\text(?:greater|less)=", "", text)
-    return found + re.findall(r"\S{0,20}(?<![\s=<>!])=(?=[\s.,;:!?')\]}]|$)", text, re.M)
+    return found + re.findall(
+        r"\S{0,20}(?<![\s=<>!])=(?=[\s.,;:!?')\]}]|$)", text, re.M
+    )
 
 
 def postprocess(tex: str) -> str:
@@ -652,22 +830,50 @@ def postprocess(tex: str) -> str:
 
     tex = re.sub(r"\\(sub)?section\{(.*?)\}\\label\{(.*?)\}", heading, tex, flags=re.S)
     tex = re.sub(r"\\label\{(?!eq:spec-)", r"\\label{spec:", tex)
-    tex = re.sub(r"\\(ref|hyperref|autoref|pageref)([\[{])(?!spec:|eq:spec-)", r"\\\1\2spec:", tex)
+    tex = re.sub(
+        r"\\(ref|hyperref|autoref|pageref)([\[{])(?!spec:|eq:spec-)",
+        r"\\\1\2spec:",
+        tex,
+    )
     tex = re.sub(
         r"\{\\def\\LTcaptype\{none\}[^\n]*\n\\begin\{longtable\}\[\]\{[^\n]*\}\n\\toprule\\noalign\{\}\n"
         r"(?P<head>.*?)\\midrule\\noalign\{\}\n\\endhead\n\\bottomrule\\noalign\{\}\n\\endlastfoot\n"
         r"(?P<body>.*?)\\end\{longtable\}\n\}",
-        tabular, tex, flags=re.S,
+        tabular,
+        tex,
+        flags=re.S,
     )
-    tex = re.sub(r"\\href\{(?!https?:|mailto:)[^}]*\}\{((?:[^{}]|\{[^{}]*\})*)\}", r"\1", tex)
-    tex = re.sub(rf"\\item\[(CON-[^\]]+)\]\s*\n?({LEVELS})\s+::\s+", r"\\item[\1 (\2)] ", tex)
+    tex = re.sub(
+        r"\\href\{(?!https?:|mailto:)[^}]*\}\{((?:[^{}]|\{[^{}]*\})*)\}", r"\1", tex
+    )
+    tex = re.sub(
+        rf"\\item\[(CON-[^\]]+)\]\s*\n?({LEVELS})\s+::\s+", r"\\item[\1 (\2)] ", tex
+    )
     while re.search(r"\\cite\{[^}]*\}\s+\\cite\{", tex):
         tex = re.sub(r"\\cite\{([^}]*)\}\s+\\cite\{([^}]*)\}", r"\\cite{\1,\2}", tex)
-    tex = re.sub(r"\\begin\{verbatim\}(.*?)\\end\{verbatim\}",
-                 lambda m: f"\\begin{{lstlisting}}[{EXAMPLE_STYLE}]{m[1]}\\end{{lstlisting}}", tex, flags=re.S)
+    tex = re.sub(
+        r"\\begin\{verbatim\}(.*?)\\end\{verbatim\}",
+        lambda m: f"\\begin{{lstlisting}}[{EXAMPLE_STYLE}]{m[1]}\\end{{lstlisting}}",
+        tex,
+        flags=re.S,
+    )
     tex = re.sub(r"\\texttt\{((?:[^{}]|\{[^{}]*\})*)\}", breakable, tex)
-    left = [m for m in (r"\section{", "longtable", r"\LTcaptype", r"\endhead", r"\noalign", r"\NormalTok",
-                        "Shaded", ":: MUST", ":: MAY", ":: SHOULD") if m in tex]
+    left = [
+        m
+        for m in (
+            r"\section{",
+            "longtable",
+            r"\LTcaptype",
+            r"\endhead",
+            r"\noalign",
+            r"\NormalTok",
+            "Shaded",
+            ":: MUST",
+            ":: MAY",
+            ":: SHOULD",
+        )
+        if m in tex
+    ]
     left += stray_markers(tex)
     if left:
         raise SystemExit(f"pandoc output still has {left}")
@@ -675,7 +881,9 @@ def postprocess(tex: str) -> str:
 
 
 def pandoc_version() -> str:
-    out = subprocess.run([*PANDOC, "--version"], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(
+        [*PANDOC, "--version"], capture_output=True, text=True, check=True
+    ).stdout
     first = out.splitlines()[0]
     if first != "pandoc 3.13":
         raise SystemExit(f"{first} on PATH; the fragment is written with pandoc 3.13")
@@ -689,41 +897,73 @@ def compile_test(fragment: Path) -> None:
     The test document has no bibliography, so every citation is undefined.
     """
     preamble = SUPP.read_text().split("\\begin{document}", 1)[0]
-    packages = [m for m in re.findall(r"\\usepackage(?:\[[^\]]*\])?\{[^}]*\}", preamble)
-                if not re.search(r"\{(fontspec|xr-hyper)\}", m)]
+    packages = [
+        m
+        for m in re.findall(r"\\usepackage(?:\[[^\]]*\])?\{[^}]*\}", preamble)
+        if not re.search(r"\{(fontspec|xr-hyper)\}", m)
+    ]
     lengths = re.findall(r"^\\setlength\{[^}]*\}\{[^}]*\}", preamble, re.M)
     lstset = re.search(r"\\lstset\{.*?\n\}", preamble, re.S)
-    found = subprocess.run([str(Path(PDFLATEX).with_name("kpsewhich")), "elsarticle.cls"], capture_output=True)
-    documentclass = "\\documentclass[preprint,12pt]{elsarticle}" if found.returncode == 0 else "\\documentclass[12pt]{article}"
+    found = subprocess.run(
+        [str(Path(PDFLATEX).with_name("kpsewhich")), "elsarticle.cls"],
+        capture_output=True,
+    )
+    documentclass = (
+        "\\documentclass[preprint,12pt]{elsarticle}"
+        if found.returncode == 0
+        else "\\documentclass[12pt]{article}"
+    )
     generated = PAPER_SRC / "figures" / "generated"
-    doc = "\n".join([
-        documentclass, *packages, *lengths,
-        lstset[0] if lstset else "",
-        "\\begin{document}", "\\section{Specification}", f"\\input{{{fragment}}}",
-        "Equation~\\eqref{eq:spec-cell}.", "\\end{document}", "",
-    ])
+    doc = "\n".join(
+        [
+            documentclass,
+            *packages,
+            *lengths,
+            lstset[0] if lstset else "",
+            "\\begin{document}",
+            "\\section{Specification}",
+            f"\\input{{{fragment}}}",
+            "Equation~\\eqref{eq:spec-cell}.",
+            "\\end{document}",
+            "",
+        ]
+    )
     env = {**os.environ, "max_print_line": "100000"}
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "test.tex").write_text(doc)
         for _ in range(2):
-            run = subprocess.run([PDFLATEX, "-interaction=nonstopmode", "-halt-on-error", "test.tex"],
-                                 cwd=tmp, capture_output=True, text=True, env=env)
+            run = subprocess.run(
+                [PDFLATEX, "-interaction=nonstopmode", "-halt-on-error", "test.tex"],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
         log = (Path(tmp) / "test.log").read_text(errors="replace")
     pages = re.search(r"Output written on test\.pdf \((\d+) pages?", log)
     errors = re.findall(r"^! .*", log, re.M)
-    opened = [(m.start(), Path(m[1]).name) for m in re.finditer(rf"\(({re.escape(str(generated))}/[^\s()]+\.tex)", log)]
+    opened = [
+        (m.start(), Path(m[1]).name)
+        for m in re.finditer(rf"\(({re.escape(str(generated))}/[^\s()]+\.tex)", log)
+    ]
 
     def source(at: int) -> str:
         names = [name for start, name in opened if start < at]
         return names[-1] if names else "test.tex"
 
-    overfull = [(m[1], source(m.start()), m[2]) for m in
-                re.finditer(r"^Overfull \\hbox \(([\d.]+)pt too wide\)[^\n]*?lines? (\d+)", log, re.M)]
+    overfull = [
+        (m[1], source(m.start()), m[2])
+        for m in re.finditer(
+            r"^Overfull \\hbox \(([\d.]+)pt too wide\)[^\n]*?lines? (\d+)", log, re.M
+        )
+    ]
     citations = sorted(set(re.findall(r"Citation `([^']+)' .*undefined", log)))
     references = sorted(set(re.findall(r"Reference `([^']+)' .*undefined", log)))
-    print(f"pdflatex ({documentclass}) exit {run.returncode}, pages {pages[1] if pages else 0}, "
-          f"errors {len(errors)}, overfull hbox {len(overfull)}, undefined references {references}, "
-          f"citations {citations}")
+    print(
+        f"pdflatex ({documentclass}) exit {run.returncode}, pages {pages[1] if pages else 0}, "
+        f"errors {len(errors)}, overfull hbox {len(overfull)}, undefined references {references}, "
+        f"citations {citations}"
+    )
     for line in errors[:10]:
         print(" ", line)
     for width, name, at in overfull:
@@ -733,21 +973,36 @@ def compile_test(fragment: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--as-is", action="store_true",
-                      help="typeset spec.org as this release tree ships it; the release of each version is the "
-                           "first tag that ships its row")
-    mode.add_argument("--measure", action="store_true", help="write data/spec/versions.json")
-    mode.add_argument("--check", action="store_true",
-                      help="exit 1 unless the three generated files are byte for byte what --as-is writes")
-    parser.add_argument("--compile", action="store_true", help="also compile the fragment with pdflatex")
+    mode.add_argument(
+        "--as-is",
+        action="store_true",
+        help="typeset spec.org as this release tree ships it; the release of each version is the "
+        "first tag that ships its row",
+    )
+    mode.add_argument(
+        "--measure", action="store_true", help="write data/spec/versions.json"
+    )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 unless the three generated files are byte for byte what --as-is writes",
+    )
+    parser.add_argument(
+        "--compile", action="store_true", help="also compile the fragment with pdflatex"
+    )
     args = parser.parse_args()
     if args.measure:
         measure()
         return
     rows = release_rows(SPEC.read_text())
-    outputs = {VERSIONS_OUT: versions_table(rows), MACROS_OUT: spec_macros(SPEC.read_text())}
+    outputs = {
+        VERSIONS_OUT: versions_table(rows),
+        MACROS_OUT: spec_macros(SPEC.read_text()),
+    }
     org, dropped, trials = org_source()
     tex = postprocess(pandoc(org))
     records = ", ".join(p.relative_to(ROOT).as_posix() for p in (SPEC, VERSIONS))
@@ -762,20 +1017,33 @@ def main() -> None:
     )
     outputs[OUT] = header + tex.rstrip("\n") + "\n\\endgroup\n"
     if args.check:
-        stale = [p.relative_to(ROOT).as_posix() for p, text in outputs.items()
-                 if not p.is_file() or p.read_text() != text]
+        stale = [
+            p.relative_to(ROOT).as_posix()
+            for p, text in outputs.items()
+            if not p.is_file() or p.read_text() != text
+        ]
         if stale:
-            raise SystemExit(f"{', '.join(stale)} differ from {SPEC.relative_to(ROOT)}; run gen_spec_supp.py --as-is")
-        macros = dict(re.findall(r"\\newcommand\{\\(\w+)\}\{([^}]*)\}", outputs[MACROS_OUT]))
-        print(f"spec_normative.tex, versions_table.tex and spec_macros.tex are byte for byte the "
-              f"{macros['specClauses']}-clause {SPEC.relative_to(ROOT)}, the text of release "
-              f"{macros['specTextRelease']}")
+            raise SystemExit(
+                f"{', '.join(stale)} differ from {SPEC.relative_to(ROOT)}; run gen_spec_supp.py --as-is"
+            )
+        macros = dict(
+            re.findall(r"\\newcommand\{\\(\w+)\}\{([^}]*)\}", outputs[MACROS_OUT])
+        )
+        print(
+            f"spec_normative.tex, versions_table.tex and spec_macros.tex are byte for byte the "
+            f"{macros['specClauses']}-clause {SPEC.relative_to(ROOT)}, the text of release "
+            f"{macros['specTextRelease']}"
+        )
         return
     for path, text in outputs.items():
         path.write_text(text)
-    print(f"wrote {OUT.relative_to(ROOT)}; {CELL_CLAUSE} matches ase.geometry.cellpar_to_cell on {trials} random cells")
-    print(f"wrote {VERSIONS_OUT.relative_to(ROOT)}: {len(rows)} rows, each release read from "
-          f"{VERSIONS.relative_to(ROOT)}")
+    print(
+        f"wrote {OUT.relative_to(ROOT)}; {CELL_CLAUSE} matches ase.geometry.cellpar_to_cell on {trials} random cells"
+    )
+    print(
+        f"wrote {VERSIONS_OUT.relative_to(ROOT)}: {len(rows)} rows, each release read from "
+        f"{VERSIONS.relative_to(ROOT)}"
+    )
     for entry in dropped:
         print(f"citation without an rg_main.bib entry, dropped: {entry}")
     if args.compile:

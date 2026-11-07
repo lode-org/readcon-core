@@ -183,12 +183,18 @@ def main() -> None:
         writer = csv.DictWriter(handle, fieldnames=list(loss_rows[0].keys()))
         writer.writeheader()
         writer.writerows(loss_rows)
-    out.with_suffix(".json").write_text(json.dumps({
-        "rows": len(loss_rows),
-        "binary": str(BINARY.relative_to(ROOT)),
-        "binary_sha256": hashlib.sha256(BINARY.read_bytes()).hexdigest(),
-        "provenance": provenance.record(),
-    }, indent=2) + "\n")
+    out.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "rows": len(loss_rows),
+                "binary": str(BINARY.relative_to(ROOT)),
+                "binary_sha256": hashlib.sha256(BINARY.read_bytes()).hexdigest(),
+                "provenance": provenance.record(),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     print(f"wrote {path} {out}")
 
 

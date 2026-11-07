@@ -38,12 +38,21 @@ def mantissa(text: str) -> str:
     if len(text.lstrip("+-").replace(".", "").lstrip("0")) <= KEPT_FIGURES:
         return text
     value = Decimal(text)
-    return str(value.quantize(Decimal(1).scaleb(value.adjusted() - ROUNDED_FIGURES + 1), rounding=ROUND_HALF_EVEN))
+    return str(
+        value.quantize(
+            Decimal(1).scaleb(value.adjusted() - ROUNDED_FIGURES + 1),
+            rounding=ROUND_HALF_EVEN,
+        )
+    )
 
 
 def enot(text: str, full: bool = False) -> str:
     """``m\\times10^{e}`` as ``me<e>``; text without a power of ten is returned as it is."""
-    return re.sub(SCI, lambda m: f"{m.group(1) if full else mantissa(m.group(1))}e{int(m.group(2))}", text)
+    return re.sub(
+        SCI,
+        lambda m: f"{m.group(1) if full else mantissa(m.group(1))}e{int(m.group(2))}",
+        text,
+    )
 
 
 def num(text: str) -> str:
@@ -76,21 +85,33 @@ def render() -> str:
                 continue
             for sibling, text in siblings.items():
                 if sibling in defined:
-                    raise SystemExit(f"{path.name}: \\{sibling} is already a generated macro")
+                    raise SystemExit(
+                        f"{path.name}: \\{sibling} is already a generated macro"
+                    )
                 lines.append(rf"\newcommand{{\{sibling}}}{{{text}}}")
     names = ", ".join(p.name for p in sources())
-    return f"% Written by paper/cpc/scripts/sinum.py from {names}.\n" + "\n".join(lines) + "\n"
+    return (
+        f"% Written by paper/cpc/scripts/sinum.py from {names}.\n"
+        + "\n".join(lines)
+        + "\n"
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--check", action="store_true", help="write nothing; fail when si_macros.tex is stale")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="write nothing; fail when si_macros.tex is stale",
+    )
     args = parser.parse_args()
     text = render()
     count = text.count(r"\newcommand")
     if args.check:
         if not OUT.is_file() or OUT.read_text() != text:
-            print(f"{OUT.relative_to(ROOT)} differs from the generated macros; run scripts/sinum.py")
+            print(
+                f"{OUT.relative_to(ROOT)} differs from the generated macros; run scripts/sinum.py"
+            )
             return 1
         print(f"{count} siunitx macros current")
         return 0

@@ -86,8 +86,13 @@ def con_cell(frame, meta: dict) -> np.ndarray:
     alpha, beta, gamma = np.radians(frame.angles)
     cy = (math.cos(alpha) - math.cos(beta) * math.cos(gamma)) / math.sin(gamma)
     cz = math.sqrt(max(1.0 - math.cos(beta) ** 2 - cy**2, 0.0))
-    return np.array([[a, 0.0, 0.0], [b * math.cos(gamma), b * math.sin(gamma), 0.0],
-                     [c * math.cos(beta), c * cy, c * cz]])
+    return np.array(
+        [
+            [a, 0.0, 0.0],
+            [b * math.cos(gamma), b * math.sin(gamma), 0.0],
+            [c * math.cos(beta), c * cy, c * cz],
+        ]
+    )
 
 
 def ase_fixed(atoms) -> np.ndarray:
@@ -105,8 +110,18 @@ def r_ase_extxyz(path: str, threads: int):
     records = []
     for atoms in ase.io.read(path, ":", format="extxyz"):
         arrays = atoms.arrays
-        records.append((arrays["positions"], arrays["velo"], ase_fixed(atoms), arrays["id"], arrays["numbers"],
-                        atoms.cell.array, atoms.pbc, atoms))
+        records.append(
+            (
+                arrays["positions"],
+                arrays["velo"],
+                ase_fixed(atoms),
+                arrays["id"],
+                arrays["numbers"],
+                atoms.cell.array,
+                atoms.pbc,
+                atoms,
+            )
+        )
     return records
 
 
@@ -117,8 +132,18 @@ def r_extxyz_c(path: str, threads: int):
     records = []
     for frame in frames if isinstance(frames, list) else [frames]:
         arrays = frame.arrays
-        records.append((arrays["pos"], arrays["velo"], np.repeat(~arrays["move_mask"][:, None], 3, axis=1),
-                        arrays["id"], numbers_of(arrays["species"].tolist()), frame.cell.T, frame.pbc, frame))
+        records.append(
+            (
+                arrays["pos"],
+                arrays["velo"],
+                np.repeat(~arrays["move_mask"][:, None], 3, axis=1),
+                arrays["id"],
+                numbers_of(arrays["species"].tolist()),
+                frame.cell.T,
+                frame.pbc,
+                frame,
+            )
+        )
     return records
 
 
@@ -139,9 +164,18 @@ def r_ovito(path: str, threads: int):
         data = source.compute(i)
         particles = data.particles
         held = np.asarray(particles["move_mask"]) == 0
-        records.append((np.asarray(particles.positions), np.asarray(particles["Velocity"]),
-                        np.repeat(held[:, None], 3, axis=1), np.asarray(particles["Particle Identifier"]),
-                        _ovito_numbers(particles), np.asarray(data.cell)[:, :3].T, np.array(data.cell.pbc), data))
+        records.append(
+            (
+                np.asarray(particles.positions),
+                np.asarray(particles["Velocity"]),
+                np.repeat(held[:, None], 3, axis=1),
+                np.asarray(particles["Particle Identifier"]),
+                _ovito_numbers(particles),
+                np.asarray(data.cell)[:, :3].T,
+                np.array(data.cell.pbc),
+                data,
+            )
+        )
     return records
 
 
@@ -152,7 +186,9 @@ def r_ovito_xyz(path: str, threads: int):
     records = []
     for i in range(source.num_frames):
         data = source.compute(i)
-        records.append((np.asarray(data.particles.positions), _ovito_numbers(data.particles), data))
+        records.append(
+            (np.asarray(data.particles.positions), _ovito_numbers(data.particles), data)
+        )
     return records
 
 
@@ -162,8 +198,18 @@ def r_ase_traj(path: str, threads: int):
     records = []
     for atoms in ase.io.read(path, ":", format="traj"):
         arrays = atoms.arrays
-        records.append((arrays["positions"], atoms.get_velocities(), ase_fixed(atoms), arrays["tags"],
-                        arrays["numbers"], atoms.cell.array, atoms.pbc, atoms))
+        records.append(
+            (
+                arrays["positions"],
+                atoms.get_velocities(),
+                ase_fixed(atoms),
+                arrays["tags"],
+                arrays["numbers"],
+                atoms.cell.array,
+                atoms.pbc,
+                atoms,
+            )
+        )
     return records
 
 
@@ -172,11 +218,26 @@ def r_h5py(path: str, threads: int):
 
     with h5py.File(path, "r") as handle:
         group = handle["particles/all"]
-        position, velocity, edges = group["position/value"], group["velocity/value"], group["box/edges/value"]
+        position, velocity, edges = (
+            group["position/value"],
+            group["velocity/value"],
+            group["box/edges/value"],
+        )
         species, ids, fixed = group["species"][()], group["id"][()], group["fixed"][()]
         pbc = np.array([b == b"periodic" for b in group["box"].attrs["boundary"]])
-        return [(position[i], velocity[i], fixed.astype(bool), ids.copy(), species.copy(), edges[i], pbc.copy(), None)
-                for i in range(position.shape[0])]
+        return [
+            (
+                position[i],
+                velocity[i],
+                fixed.astype(bool),
+                ids.copy(),
+                species.copy(),
+                edges[i],
+                pbc.copy(),
+                None,
+            )
+            for i in range(position.shape[0])
+        ]
 
 
 def r_mda_h5md(path: str, threads: int):
@@ -187,14 +248,19 @@ def r_mda_h5md(path: str, threads: int):
         n_atoms = handle["particles/all/position/value"].shape[1]
     universe = mda.Universe.empty(n_atoms, trajectory=False)
     universe.load_new(path, format="H5MD", convert_units=False)
-    return [(ts.positions.copy(), ts.velocities.copy(), ts.dimensions.copy()) for ts in universe.trajectory]
+    return [
+        (ts.positions.copy(), ts.velocities.copy(), ts.dimensions.copy())
+        for ts in universe.trajectory
+    ]
 
 
 def r_ase_eon(path: str, threads: int):
     import ase.io
 
-    return [(atoms.arrays["positions"], atoms.arrays["numbers"], atoms)
-            for atoms in ase.io.read(path, ":", format="eon")]
+    return [
+        (atoms.arrays["positions"], atoms.arrays["numbers"], atoms)
+        for atoms in ase.io.read(path, ":", format="eon")
+    ]
 
 
 def r_chemfiles_py(path: str, threads: int):
@@ -205,15 +271,28 @@ def r_chemfiles_py(path: str, threads: int):
     records = []
     for _ in range(traj.nsteps):
         frame = traj.read()
-        records.append((frame.positions, np.fromiter((atom.atomic_number for atom in frame.atoms), dtype=np.int64,
-                                                     count=len(frame.atoms)), frame))
+        records.append(
+            (
+                frame.positions,
+                np.fromiter(
+                    (atom.atomic_number for atom in frame.atoms),
+                    dtype=np.int64,
+                    count=len(frame.atoms),
+                ),
+                frame,
+            )
+        )
     traj.close()
     return records
 
 
 def fsum(arrays) -> float:
     """Correctly rounded sum of every value, so it equals the generator's ``math.fsum``."""
-    return math.fsum(itertools.chain.from_iterable(np.asarray(a, dtype=np.float64).ravel().tolist() for a in arrays))
+    return math.fsum(
+        itertools.chain.from_iterable(
+            np.asarray(a, dtype=np.float64).ravel().tolist() for a in arrays
+        )
+    )
 
 
 def isum(arrays) -> int:
@@ -227,17 +306,31 @@ def count(arrays) -> int:
 def checksums(contract: str, kept) -> dict:
     if contract == "mode":
         _, frames = kept
-        return {"contract": contract, "frames": len(frames), "atoms": sum(len(frame) for frame in frames)}
+        return {
+            "contract": contract,
+            "frames": len(frames),
+            "atoms": sum(len(frame) for frame in frames),
+        }
     columns = list(zip(*kept, strict=True)) if kept else [()] * 8
-    out = {"contract": contract, "frames": len(kept), "atoms": sum(len(p) for p in columns[0]),
-           "sum_positions": fsum(columns[0])}
+    out = {
+        "contract": contract,
+        "frames": len(kept),
+        "atoms": sum(len(p) for p in columns[0]),
+        "sum_positions": fsum(columns[0]),
+    }
     if contract == "coords":
         out["sum_numbers"] = isum(columns[1])
     elif contract == "single":
         out["sum_velocities"] = fsum(columns[1])
     else:
-        out.update(sum_velocities=fsum(columns[1]), n_fixed=count(columns[2]), sum_ids=isum(columns[3]),
-                   sum_numbers=isum(columns[4]), sum_cell=fsum(columns[5]), n_pbc=count(columns[6]))
+        out.update(
+            sum_velocities=fsum(columns[1]),
+            n_fixed=count(columns[2]),
+            sum_ids=isum(columns[3]),
+            sum_numbers=isum(columns[4]),
+            sum_cell=fsum(columns[5]),
+            n_pbc=count(columns[6]),
+        )
     return out
 
 
@@ -267,8 +360,18 @@ def main() -> int:
     gc.collect()
     freed = time.perf_counter()
     parse_s, free_s = parsed - start, freed - release
-    print(json.dumps({"seconds": parse_s + free_s, "parse_seconds": parse_s, "free_seconds": free_s, **out,
-                      "threads": threads}), flush=True)
+    print(
+        json.dumps(
+            {
+                "seconds": parse_s + free_s,
+                "parse_seconds": parse_s,
+                "free_seconds": free_s,
+                **out,
+                "threads": threads,
+            }
+        ),
+        flush=True,
+    )
     return 0
 
 

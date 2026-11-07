@@ -65,20 +65,29 @@ def kernel_runs(routes: list[dict[str, str]]) -> dict[str, dict]:
     """The reruns of ``restart_formats.py --kernels`` by kernel set. The nehalem set is the kernels of the record, so
     its rerun must give the steps and the three-figure residues of restart_formats.csv, and every set must give the
     steps of the record."""
-    runs = {path.stem: json.loads(path.read_text()) for path in sorted(KERNELS.glob("*.json"))}
+    runs = {
+        path.stem: json.loads(path.read_text())
+        for path in sorted(KERNELS.glob("*.json"))
+    }
     if "nehalem" not in runs:
-        raise SystemExit(f"no {KERNELS / 'nehalem.json'}: run restart_formats.py --kernels for every kernel set")
+        raise SystemExit(
+            f"no {KERNELS / 'nehalem.json'}: run restart_formats.py --kernels for every kernel set"
+        )
     for row in routes:
         if row["route"] == "uninterrupted" or row["error"]:
             continue
         for name, run in runs.items():
             mine = run["routes"][row["route"]]
             if str(mine["steps"]) != row["steps"]:
-                raise SystemExit(f"{row['route']}: {mine['steps']} steps on the {name} kernels, {row['steps']} in "
-                                 "restart_formats.csv")
+                raise SystemExit(
+                    f"{row['route']}: {mine['steps']} steps on the {name} kernels, {row['steps']} in "
+                    "restart_formats.csv"
+                )
         mine = runs["nehalem"]["routes"][row["route"]]
         if any(f"{mine[key]:.2e}" != f"{float(row[key]):.2e}" for key in SHIFTS):
-            raise SystemExit(f"{row['route']}: the nehalem rerun gives {mine}, restart_formats.csv {row}")
+            raise SystemExit(
+                f"{row['route']}: the nehalem rerun gives {mine}, restart_formats.csv {row}"
+            )
     return runs
 
 
@@ -117,18 +126,33 @@ def mark(notes: dict[str, str], text: str) -> str:
 
 def footnotes(notes: dict[str, str], host: str | None = None) -> str:
     """The roundoff footnotes; ``host`` is the macro naming the host whose record they come from."""
-    marks = " ".join(r"\textsuperscript{" + letter + "}" + text + "." for text, letter in notes.items())
-    return marks + (f" These counts were recorded on host {host} with the kernels of \\texttt{{scripts/numeric\\_pins.py}}: "
-                    "one OpenBLAS thread on its Nehalem kernels and NumPy at its x86-64-v2 baseline, which every "
-                    "x86-64-v2 host runs." if notes and host else "")
+    marks = " ".join(
+        r"\textsuperscript{" + letter + "}" + text + "."
+        for text, letter in notes.items()
+    )
+    return marks + (
+        f" These counts were recorded on host {host} with the kernels of \\texttt{{scripts/numeric\\_pins.py}}: "
+        "one OpenBLAS thread on its Nehalem kernels and NumPy at its x86-64-v2 baseline, which every "
+        "x86-64-v2 host runs."
+        if notes and host
+        else ""
+    )
 
 
 def kept_cell(row: dict[str, str]) -> str:
-    fields = row["kept"].split() + (["version"] if row["file_version"] not in ("", "none") else [])
+    fields = row["kept"].split() + (
+        ["version"] if row["file_version"] not in ("", "none") else []
+    )
     return ", ".join(fields) or "none"
 
 
-def shift_cell(row: dict[str, str], key: str, notes: dict[str, str], energy: float, runs: dict[str, dict]) -> str:
+def shift_cell(
+    row: dict[str, str],
+    key: str,
+    notes: dict[str, str],
+    energy: float,
+    runs: dict[str, dict],
+) -> str:
     """The difference to the figures on which every kernel set agrees; a few-ULP one is marked with the magnitude
     it is counted on."""
     if row[key] == "":
@@ -161,7 +185,9 @@ def restart_rows(
 ) -> tuple[list[str], list[str]]:
     """Table rows; with ``step_cap`` a Kept column, and a band that did not converge prints only that, with
     em-dashes in the three columns taken from the band."""
-    columns = ["Route", r"File (\AA)", "Modes"] + (["Kept"] if step_cap else []) + ["Steps"]
+    columns = (
+        ["Route", r"File (\AA)", "Modes"] + (["Kept"] if step_cap else []) + ["Steps"]
+    )
     columns += ["Force calls"] if force else []
     columns += ["Wall (s)", "IQR (s)"] if walls else []
     columns += ["Barrier (eV)", r"$\Delta E^\ddagger$ (eV)", r"Max displacement (\AA)"]
@@ -173,20 +199,36 @@ def restart_rows(
                 f"{{no file: {texttt(row['error'])}}} \\\\"
             )
             continue
-        cells = [row["route"], shift_cell(row, "file_dpos_A", notes, energy, runs), row["free_modes_mid"]]
-        cells += [kept_cell(row) if row["route"] != "uninterrupted" else "--"] if step_cap else []
+        cells = [
+            row["route"],
+            shift_cell(row, "file_dpos_A", notes, energy, runs),
+            row["free_modes_mid"],
+        ]
+        cells += (
+            [kept_cell(row) if row["route"] != "uninterrupted" else "--"]
+            if step_cap
+            else []
+        )
         if row["converged"] != "True":
             if not step_cap or int(row["steps"]) != step_cap:
-                raise SystemExit(f"{row['route']}: not converged, and not stopped by a recorded step cap")
+                raise SystemExit(
+                    f"{row['route']}: not converged, and not stopped by a recorded step cap"
+                )
             rest = len(columns) - len(cells) - 3
-            lines.append(" & ".join(cells) + f" & \\multicolumn{{{rest}}}{{l}}{{not converged at the "
-                         f"{step_cap}-step cap}} & --- & --- & --- \\\\")
+            lines.append(
+                " & ".join(cells)
+                + f" & \\multicolumn{{{rest}}}{{l}}{{not converged at the "
+                f"{step_cap}-step cap}} & --- & --- & --- \\\\"
+            )
             continue
         cells += [row["steps"]]
         cells += [row["force_calls"]] if force else []
         if walls:
             timed = walls.get(row["route"], {})
-            cells += [fsec(timed[key]) if timed.get(key) else "--" for key in ("wall_s", "wall_iqr_s")]
+            cells += [
+                fsec(timed[key]) if timed.get(key) else "--"
+                for key in ("wall_s", "wall_iqr_s")
+            ]
         cells += [
             sig4(float(row["barrier_eV"])),
             shift_cell(row, "d_barrier_eV", notes, energy, runs),
@@ -196,7 +238,9 @@ def restart_rows(
     return columns, lines
 
 
-def restart_table(columns: list[str], lines: list[str], caption: str, label: str) -> str:
+def restart_table(
+    columns: list[str], lines: list[str], caption: str, label: str
+) -> str:
     body = [
         r"\begin{table}[tbp]",
         r"\centering",
@@ -225,16 +269,26 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
     for name in sorted(runs, key=lambda n: (n != "nehalem", n)):
         pins = runs[name]["roundoff_host"]["numeric_pins"]
         dispatch = pins["numpy_dispatch"]
-        level = "x86-64-v4" if "X86_V4" in dispatch else "x86-64-v3" if "X86_V3" in dispatch else "x86-64-v2"
+        level = (
+            "x86-64-v4"
+            if "X86_V4" in dispatch
+            else "x86-64-v3"
+            if "X86_V3" in dispatch
+            else "x86-64-v2"
+        )
         extra = [texttt(target) for target in dispatch if not target.startswith("X86_")]
-        sets.append(f"OpenBLAS {pins['environment']['OPENBLAS_CORETYPE']} with NumPy at {level}"
-                    + (f" with {' and '.join(extra)}" if extra else "")
-                    + (", the kernels of the record" if name == "nehalem" else ""))
+        sets.append(
+            f"OpenBLAS {pins['environment']['OPENBLAS_CORETYPE']} with NumPy at {level}"
+            + (f" with {' and '.join(extra)}" if extra else "")
+            + (", the kernels of the record" if name == "nehalem" else "")
+        )
     listed = ", ".join(sets[:-1]) + " and " + sets[-1] if len(sets) > 1 else sets[0]
-    return (f"File, $\\Delta E^\\ddagger$ and the displacement are printed to the significant figures, three at most, "
-            f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} kernel sets of "
-            f"\\texttt{{scripts/numeric\\_pins.py}} on that host agree, and as a range where their first figures "
-            f"differ: {listed}, the kernels that hosts of those generations select when nothing is pinned.")
+    return (
+        f"File, $\\Delta E^\\ddagger$ and the displacement are printed to the significant figures, three at most, "
+        f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} kernel sets of "
+        f"\\texttt{{scripts/numeric\\_pins.py}} on that host agree, and as a range where their first figures "
+        f"differ: {listed}, the kernels that hosts of those generations select when nothing is pinned."
+    )
 
 
 def restart_walls() -> tuple[dict[str, dict[str, str]], int]:
@@ -243,7 +297,9 @@ def restart_walls() -> tuple[dict[str, dict[str, str]], int]:
     record = json.loads(meta.read_text()) if meta.is_file() else {}
     if record.get("timed") != "resumed leg":
         return {}, 0
-    return {row["route"]: row for row in read_csv(WALLS / "restart_walls.csv")}, int(record["wall_repeats"])
+    return {row["route"]: row for row in read_csv(WALLS / "restart_walls.csv")}, int(
+        record["wall_repeats"]
+    )
 
 
 def main() -> None:
@@ -251,17 +307,25 @@ def main() -> None:
     p = record["parameters"]
     routes = read_csv(FAILURE / "restart_formats.csv")
     by_route = {row["route"]: row for row in routes}
-    energy = max(json.loads((FAILURE / "restart_bands.json").read_text())["energies_eV"]["uninterrupted"])
+    energy = max(
+        json.loads((FAILURE / "restart_bands.json").read_text())["energies_eV"][
+            "uninterrupted"
+        ]
+    )
     walls, repeats = restart_walls()
     for row in routes:
         timed = walls.get(row["route"], {}).get("force_calls", "")
         if timed and timed != row["force_calls"]:
-            raise SystemExit(f"{row['route']}: restart_walls.csv and restart_formats.csv disagree on force calls")
+            raise SystemExit(
+                f"{row['route']}: restart_walls.csv and restart_formats.csv disagree on force calls"
+            )
 
     runs = kernel_runs(routes)
     notes: dict[str, str] = {}
-    columns, lines = restart_rows(routes, notes, energy, True, walls, runs, p["step_cap"])
-    base = by_route["uninterrupted"]
+    columns, lines = restart_rows(
+        routes, notes, energy, True, walls, runs, p["step_cap"]
+    )
+    _base = by_route["uninterrupted"]
     timing = (
         f"Wall is the median wall-clock time of that leg alone over {repeats} interleaved fresh processes, "
         f"with the interquartile range of those times beside it, so building the band, "
@@ -284,7 +348,9 @@ def main() -> None:
             "are against the uninterrupted band.",
             "Force calls count the resumed leg, or the whole band in the uninterrupted row.",
             timing,
-            " ".join(f"{row['route']}: {row['notes']}." for row in routes if row["notes"]),
+            " ".join(
+                f"{row['route']}: {row['notes']}." for row in routes if row["notes"]
+            ),
             footnotes(notes),
             "Section~\\ref*{sec:supp-restart} gives the linear-algebra builds on which the printed figures agree.",
         ]
@@ -296,10 +362,16 @@ def main() -> None:
         for part in [
             "The counts in units in the last place of Table~\\ref*{tab:restartfmt} were recorded on host "
             r"\rfHost{} with the kernels of \texttt{scripts/numeric\_pins.py}: one OpenBLAS thread on its Nehalem "
-            "kernels and NumPy at its x86-64-v2 baseline, which every x86-64-v2 host runs." if notes else "",
+            "kernels and NumPy at its x86-64-v2 baseline, which every x86-64-v2 host runs."
+            if notes
+            else "",
             kernel_sentence(runs),
             "Every rerun takes the steps of the table"
-            + (r", the wall times are those of host \rfWallHost{}, and" if walls else " and")
+            + (
+                r", the wall times are those of host \rfWallHost{}, and"
+                if walls
+                else " and"
+            )
             + f" the build is readcon {record['provenance']['build']['readcon_version']} with "
             f"ASE {record['provenance']['peers']['ase']}.",
         ]

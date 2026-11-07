@@ -53,7 +53,16 @@ def main() -> None:
     iqr = [readers[key]["wall_s"]["iqr"] for key in ORDER]
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
     x = np.arange(len(ORDER))
-    ax.bar(x, med, color=COLORS, edgecolor=BLACK, linewidth=0.4, yerr=iqr, capsize=3, ecolor=BLACK)
+    ax.bar(
+        x,
+        med,
+        color=COLORS,
+        edgecolor=BLACK,
+        linewidth=0.4,
+        yerr=iqr,
+        capsize=3,
+        ecolor=BLACK,
+    )
     ax.set_xticks(x, LABELS, rotation=20, ha="right")
     ax.set_ylabel("median wall time (s)")
     ax.set_yscale("log")

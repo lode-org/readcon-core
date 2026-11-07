@@ -44,15 +44,27 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 BENCH = ROOT / "bench"
 WORK = Path(os.environ.get("BENCH_WORK", BENCH / "work" / "r0174"))
-PAYLOADS = Path(os.environ.get("BENCH_RESULTS", BENCH / "results" / "r0174")) / "payloads.json"
+PAYLOADS = (
+    Path(os.environ.get("BENCH_RESULTS", BENCH / "results" / "r0174")) / "payloads.json"
+)
 OUT = Path(os.environ.get("BENCH_SIZES_CSV", ROOT / "data" / "sizes.csv"))
-GENERATED = Path(os.environ.get("BENCH_GENERATED", ROOT / "src" / "figures" / "generated"))
+GENERATED = Path(
+    os.environ.get("BENCH_GENERATED", ROOT / "src" / "figures" / "generated")
+)
 GZIP_LEVEL = 6
 FORMATS = ("con", "extxyz", "traj", "h5md")
-NAMES = {"con": "CON", "extxyz": "extended XYZ", "traj": "ASE trajectory", "h5md": "H5MD"}
+NAMES = {
+    "con": "CON",
+    "extxyz": "extended XYZ",
+    "traj": "ASE trajectory",
+    "h5md": "H5MD",
+}
 MACRO = {"con": "Con", "extxyz": "Extxyz", "traj": "Asetraj", "h5md": "Hfive"}
-PAYLOAD_SETS = (("first frame", "One", False), ("first frame with velocities", "OneVel", True),
-                ("timed trajectory", "Traj", True))
+PAYLOAD_SETS = (
+    ("first frame", "One", False),
+    ("first frame with velocities", "OneVel", True),
+    ("timed trajectory", "Traj", True),
+)
 TABLE_SETS = ("first frame", "timed trajectory")
 
 sys.path.insert(0, str(BENCH))
@@ -67,7 +79,11 @@ def sha256(path: Path) -> str:
 
 
 def without_provenance_sha256(path: Path) -> str:
-    record = {key: value for key, value in json.loads(path.read_text()).items() if key != "provenance"}
+    record = {
+        key: value
+        for key, value in json.loads(path.read_text()).items()
+        if key != "provenance"
+    }
     return hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
 
 
@@ -80,8 +96,12 @@ def writers() -> dict[str, str]:
     import h5py
     import readcon
 
-    return {"con": f"readcon {readcon.__version__}", "extxyz": "make_payloads.py",
-            "traj": f"ASE {ase.__version__}", "h5md": f"h5py {h5py.__version__}"}
+    return {
+        "con": f"readcon {readcon.__version__}",
+        "extxyz": "make_payloads.py",
+        "traj": f"ASE {ase.__version__}",
+        "h5md": f"h5py {h5py.__version__}",
+    }
 
 
 def timed_name(fmt: str, payload: str, velocities: bool) -> str | None:
@@ -94,9 +114,20 @@ def timed_name(fmt: str, payload: str, velocities: bool) -> str | None:
 
 
 def main() -> None:
-    from make_payloads import con_version, write_con, write_extxyz, write_h5md, write_traj
+    from make_payloads import (
+        con_version,
+        write_con,
+        write_extxyz,
+        write_h5md,
+        write_traj,
+    )
 
-    write = {"con": write_con, "extxyz": write_extxyz, "traj": write_traj, "h5md": write_h5md}
+    write = {
+        "con": write_con,
+        "extxyz": write_extxyz,
+        "traj": write_traj,
+        "h5md": write_h5md,
+    }
     traj = dict(np.load(WORK / "trajectory.npz"))
     timed = json.loads(PAYLOADS.read_text())["files"]
     n_frames, n_atoms = traj["positions"].shape[:2]
@@ -110,13 +141,29 @@ def main() -> None:
                 write[fmt](path, traj, slice(0, nf), velocities)
                 digest, name = sha256(path), timed_name(fmt, payload, velocities)
                 if name is not None and digest != timed[name]["sha256"]:
-                    raise SystemExit(f"{payload}, {NAMES[fmt]}: differs from the timed {name}")
+                    raise SystemExit(
+                        f"{payload}, {NAMES[fmt]}: differs from the timed {name}"
+                    )
                 raw, z = path.stat().st_size, gz(path)
-                label = f"{NAMES[fmt]} {con_version(path)}" if fmt == "con" else NAMES[fmt]
-                rows.append({"payload": payload, "format": label, "velocities": "yes" if velocities else "no",
-                             "bytes": raw, "gzip_bytes": z, "bytes_per_atom": f"{raw / (n_atoms * nf):.2f}",
-                             "gzip_bytes_per_atom": f"{z / (n_atoms * nf):.2f}", "frames": nf, "atoms": n_atoms,
-                             "writer": writer[fmt], "sha256": digest, "timed": name or ""})
+                label = (
+                    f"{NAMES[fmt]} {con_version(path)}" if fmt == "con" else NAMES[fmt]
+                )
+                rows.append(
+                    {
+                        "payload": payload,
+                        "format": label,
+                        "velocities": "yes" if velocities else "no",
+                        "bytes": raw,
+                        "gzip_bytes": z,
+                        "bytes_per_atom": f"{raw / (n_atoms * nf):.2f}",
+                        "gzip_bytes_per_atom": f"{z / (n_atoms * nf):.2f}",
+                        "frames": nf,
+                        "atoms": n_atoms,
+                        "writer": writer[fmt],
+                        "sha256": digest,
+                        "timed": name or "",
+                    }
+                )
                 path.unlink()
                 print(f"{payload}, {label}: {raw} bytes", flush=True)
     with OUT.open("w", newline="") as handle:
@@ -125,10 +172,20 @@ def main() -> None:
         out.writerows(rows)
     import provenance
 
-    OUT.with_suffix(".json").write_text(json.dumps({
-        "script": "paper/cpc/scripts/file_sizes.py", "csv": OUT.name,
-        "payloads_sha256_without_provenance": without_provenance_sha256(PAYLOADS),
-        "provenance": provenance.record()}, indent=2) + "\n")
+    OUT.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "script": "paper/cpc/scripts/file_sizes.py",
+                "csv": OUT.name,
+                "payloads_sha256_without_provenance": without_provenance_sha256(
+                    PAYLOADS
+                ),
+                "provenance": provenance.record(),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     print(OUT.read_text())
 
 
@@ -137,7 +194,9 @@ def tex_int(n: int) -> str:
 
 
 def fmt_of(label: str) -> str:
-    return next(f for f in FORMATS if label == NAMES[f] or label.startswith(NAMES[f] + " "))
+    return next(
+        f for f in FORMATS if label == NAMES[f] or label.startswith(NAMES[f] + " ")
+    )
 
 
 def table() -> None:
@@ -174,7 +233,9 @@ Extended XYZ prints the shortest decimal that returns each binary64 value, H5MD~
 \cmidrule(lr){2-3}\cmidrule(l){4-5}
 Format & raw & gzip & raw & gzip \\
 \midrule
-""" + "\n".join(body) + r"""
+"""
+        + "\n".join(body)
+        + r"""
 \bottomrule
 \end{tabular}
 \end{table}
@@ -182,8 +243,12 @@ Format & raw & gzip & raw & gzip \\
     )
     GENERATED.mkdir(parents=True, exist_ok=True)
     (GENERATED / "sizes_table.tex").write_text(t)
-    macros = {"sizeFrames": tex_int(frames), "sizeGzipLevel": str(GZIP_LEVEL),
-              "sizeWriter": con["writer"].split()[-1], "sizeConVersion": con_version}
+    macros = {
+        "sizeFrames": tex_int(frames),
+        "sizeGzipLevel": str(GZIP_LEVEL),
+        "sizeWriter": con["writer"].split()[-1],
+        "sizeConVersion": con_version,
+    }
     stems = {payload: stem for payload, stem, _v in PAYLOAD_SETS}
     for r in rows:
         base = f"size{MACRO[fmt_of(r['format'])]}{stems[r['payload']]}"

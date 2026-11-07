@@ -23,6 +23,7 @@ class AseExtxyz:
 
     def setup(self):
         from ase.io import read as ase_read
+
         self.read = ase_read
         self.path = str(support.WORK / "native" / "grid.extxyz")
 

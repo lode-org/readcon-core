@@ -29,7 +29,9 @@ def canonical(name: str) -> str:
 
 
 def conda_records() -> list[dict]:
-    records = [json.loads(p.read_text()) for p in sorted((CONDA / "conda-meta").glob("*.json"))]
+    records = [
+        json.loads(p.read_text()) for p in sorted((CONDA / "conda-meta").glob("*.json"))
+    ]
     if not records:
         raise SystemExit(f"{CONDA} holds no conda-meta records")
     return records
@@ -38,14 +40,21 @@ def conda_records() -> list[dict]:
 def explicit(records: list[dict]) -> str:
     platforms = {r["subdir"] for r in records} - {"noarch"}
     if len(platforms) != 1:
-        raise SystemExit(f"conda-meta records of {sorted(platforms)}, not of one platform")
+        raise SystemExit(
+            f"conda-meta records of {sorted(platforms)}, not of one platform"
+        )
     by_name = {r["name"]: r for r in records}
-    needs = {r["name"]: {d.split()[0] for d in r.get("depends", [])} & by_name.keys() for r in records}
+    needs = {
+        r["name"]: {d.split()[0] for d in r.get("depends", [])} & by_name.keys()
+        for r in records
+    }
     order: list[str] = []
     while needs:
         ready = sorted(name for name, deps in needs.items() if deps <= set(order))
         if not ready:
-            raise SystemExit(f"conda packages that depend on each other: {sorted(needs)}")
+            raise SystemExit(
+                f"conda packages that depend on each other: {sorted(needs)}"
+            )
         order += ready
         for name in ready:
             del needs[name]
@@ -65,7 +74,10 @@ def pins(records: list[dict]) -> str:
             if canonical(name) in found or canonical(name) in SKIP:
                 found.setdefault(canonical(name), "")
                 continue
-            if info.is_relative_to(CONDA) and f"{info.relative_to(CONDA)}/METADATA" in conda_files:
+            if (
+                info.is_relative_to(CONDA)
+                and f"{info.relative_to(CONDA)}/METADATA" in conda_files
+            ):
                 found[canonical(name)] = ""
                 continue
             found[canonical(name)] = f"{name}=={dist.version}\n"
@@ -77,8 +89,10 @@ def main() -> None:
     ENV.mkdir(exist_ok=True)
     (ENV / "conda-linux-64.txt").write_text(explicit(records))
     (ENV / "requirements.txt").write_text(pins(records))
-    print(f"wrote {ENV.relative_to(ROOT.parents[1])}: {len(records)} conda packages, "
-          f"{(ENV / 'requirements.txt').read_text().count(chr(10)) - 1} pip pins")
+    print(
+        f"wrote {ENV.relative_to(ROOT.parents[1])}: {len(records)} conda packages, "
+        f"{(ENV / 'requirements.txt').read_text().count(chr(10)) - 1} pip pins"
+    )
 
 
 if __name__ == "__main__":

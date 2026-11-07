@@ -17,7 +17,7 @@ for the `release` hook) and unpack the matching asset:
 
 ```bash
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "VER={v}")]]]
-VER=0.18.0
+VER=0.18.1
 # [[[end]]]
 TARGET=x86_64-unknown-linux-gnu   # or aarch64-unknown-linux-gnu, *-apple-darwin
 curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"

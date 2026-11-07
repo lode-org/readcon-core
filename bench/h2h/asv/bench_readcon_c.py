@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import support
 
+
 class ReadconC:
     timeout = 600
     number = 1
@@ -34,5 +35,12 @@ class ReadconC:
         support.use_reference(path)
         seen = support.c_inspect(path)
         atoms, frames = support.CASES["atoms-1000000"]
-        row = support.judge(seen["n_atoms"], seen["n_frames"], seen["cell"], seen["coords"], atoms, frames)
+        row = support.judge(
+            seen["n_atoms"],
+            seen["n_frames"],
+            seen["cell"],
+            seen["coords"],
+            atoms,
+            frames,
+        )
         return 1.0 if row["correct"] else 0.0

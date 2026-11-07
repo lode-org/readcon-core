@@ -35,6 +35,7 @@ REPO = ROOT.parents[1]
 OUT = ROOT / "data" / "spec"
 TEX = ROOT / "src" / "figures" / "generated"
 
+
 def tree_commit(tree) -> str:
     """The commit of the readcon checkout under test; records must not carry host paths.
 
@@ -48,7 +49,9 @@ def tree_commit(tree) -> str:
     try:
         out = subprocess.run(
             ["git", "-C", str(tree), "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
@@ -118,8 +121,8 @@ def run(tree: Path) -> dict:
             want = "accept" if kind == "valid" else "reject"
             record["agrees_with_manifest"] = record["verdict"] == want
             if kind == "invalid" and record["verdict"] == "reject":
-                record["agrees_with_manifest"] = (
-                    record["error_class"] == entry.get("error")
+                record["agrees_with_manifest"] = record["error_class"] == entry.get(
+                    "error"
                 )
             records.append(record)
 
@@ -160,9 +163,7 @@ def table(result: dict) -> str:
         rows.append(("Other legal", len(leftover)))
     rows.append(("Illegal", result["n_invalid"]))
 
-    body = "\n".join(
-        f"{name} & {n} & {WHAT.get(name, '')} \\\\" for name, n in rows
-    )
+    body = "\n".join(f"{name} & {n} & {WHAT.get(name, '')} \\\\" for name, n in rows)
     return f"""% Written by paper/cpc/scripts/spec_corpus_recount.py.
 \\begin{{table}}[tbp]
 \\centering
@@ -183,11 +184,16 @@ Category & Files & What a reader must do \\\\
 
 def macros(result: dict) -> str:
     agree = sum(r["agrees_with_manifest"] for r in result["records"])
-    values = {"corpusConfFiles": result["n_total"], "corpusConfValid": result["n_valid"],
-              "corpusConfInvalid": result["n_invalid"], "corpusConfAgree": agree,
-              "corpusConfDisagree": result["n_disagreements"]}
+    values = {
+        "corpusConfFiles": result["n_total"],
+        "corpusConfValid": result["n_valid"],
+        "corpusConfInvalid": result["n_invalid"],
+        "corpusConfAgree": agree,
+        "corpusConfDisagree": result["n_disagreements"],
+    }
     return "% Written by paper/cpc/scripts/spec_corpus_recount.py.\n" + "".join(
-        f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items())
+        f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
+    )
 
 
 def write_tex(tex: Path, result: dict) -> None:
@@ -205,8 +211,14 @@ def main() -> int:
         help="readcon-core checkout that holds resources/conformance",
     )
     ap.add_argument("--no-tex", action="store_true")
-    ap.add_argument("--tables", action="store_true", help="rewrite the table from the committed record only")
-    ap.add_argument("--out", type=Path, help="write the record and the table to this directory")
+    ap.add_argument(
+        "--tables",
+        action="store_true",
+        help="rewrite the table from the committed record only",
+    )
+    ap.add_argument(
+        "--out", type=Path, help="write the record and the table to this directory"
+    )
     args = ap.parse_args()
     out, tex = (args.out, args.out) if args.out else (OUT, TEX)
 
@@ -230,7 +242,9 @@ def main() -> int:
         flag = " " if record["agrees_with_manifest"] else "!"
         cls = record["error_class"] or ""
         line = f"line {record['line']}" if record["line"] else ""
-        print(f"{flag} {record['kind']:<7} {record['id']:<28} {record['verdict']:<6} {cls} {line}")
+        print(
+            f"{flag} {record['kind']:<7} {record['id']:<28} {record['verdict']:<6} {cls} {line}"
+        )
     if result["n_disagreements"]:
         print(f"\n{result['n_disagreements']} fixture(s) disagree with the manifest")
         return 1

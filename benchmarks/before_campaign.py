@@ -67,7 +67,9 @@ def rss_kb() -> int:
     return 0
 
 
-def call_read(path: Path, workers: int, build: str, expect: int | None, fold) -> tuple[float, int, int, int]:
+def call_read(
+    path: Path, workers: int, build: str, expect: int | None, fold
+) -> tuple[float, int, int, int]:
     import readcon
 
     gc.disable()
@@ -78,7 +80,9 @@ def call_read(path: Path, workers: int, build: str, expect: int | None, fold) ->
     if build == "touch":
         digest = touch_fold.shared_digest(frames, fold)
         if expect is not None and digest != expect:
-            raise SystemExit(f"digest mismatch workers={workers} got={digest} expect={expect}")
+            raise SystemExit(
+                f"digest mismatch workers={workers} got={digest} expect={expect}"
+            )
     elif len(frames) < 1:
         raise SystemExit(f"empty read {path}")
     rss = rss_kb()
@@ -94,7 +98,9 @@ def call_read(path: Path, workers: int, build: str, expect: int | None, fold) ->
     )
 
 
-def round_robin(paths: dict[int, Path], build: str, expects: dict[int, int], fold, host: str) -> None:
+def round_robin(
+    paths: dict[int, Path], build: str, expects: dict[int, int], fold, host: str
+) -> None:
     import readcon
 
     print(f"meminfo before {build} hostname={host} {meminfo()}", flush=True)
@@ -138,15 +144,28 @@ def round_robin(paths: dict[int, Path], build: str, expects: dict[int, int], fol
         )
 
 
-def rank_once(binary: Path, ranks: int, path: Path, stub: Path) -> tuple[float, int, int, int]:
+def rank_once(
+    binary: Path, ranks: int, path: Path, stub: Path
+) -> tuple[float, int, int, int]:
     proc = subprocess.run(
-        ["mpirun", "--bind-to", "core", "-n", str(ranks), str(binary), str(path), str(stub)],
+        [
+            "mpirun",
+            "--bind-to",
+            "core",
+            "-n",
+            str(ranks),
+            str(binary),
+            str(path),
+            str(stub),
+        ],
         text=True,
         capture_output=True,
     )
     if proc.returncode != 0:
         raise SystemExit(proc.stderr[-500:])
-    line = next(item for item in proc.stdout.splitlines() if item.startswith("sample_s="))
+    line = next(
+        item for item in proc.stdout.splitlines() if item.startswith("sample_s=")
+    )
     parts = dict(item.split("=", 1) for item in line.split())
     return (
         float(parts["sample_s"]),
@@ -164,7 +183,9 @@ def rank_curve(binary: Path, paths: dict[int, Path], stub_dir: Path, host: str) 
     rss: dict[int, list[int]] = {w: [] for w in LADDER}
     for _ in range(REPEATS):
         for ranks, path in paths.items():
-            dt, flt, maj, resident = rank_once(binary, ranks, path, stub_dir / f"r{ranks}")
+            dt, flt, maj, resident = rank_once(
+                binary, ranks, path, stub_dir / f"r{ranks}"
+            )
             print(
                 f"hostname={host} before ranks={ranks} sample_s={dt:.6f} "
                 f"minflt={flt} majflt={maj} rss_kb={resident} "

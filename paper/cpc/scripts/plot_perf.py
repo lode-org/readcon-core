@@ -35,7 +35,10 @@ BLACK = "#000000"
 GRID = "#B0B0B0"
 
 FONT_CANDIDATES = (
-    Path(__file__).resolve().parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf",
+    Path(__file__).resolve().parents[1]
+    / "fonts"
+    / "latin-modern"
+    / "lmroman10-regular.otf",
 )
 
 # Reader key, axis label. The key is the name in the record.
@@ -103,7 +106,9 @@ def _style(ax, xlabel: str) -> None:
     ax.tick_params(length=3, width=0.6)
 
 
-def _bars(ax, labels, medians, lows, highs, xlabel: str, log: bool | None = None) -> None:
+def _bars(
+    ax, labels, medians, lows, highs, xlabel: str, log: bool | None = None
+) -> None:
     """Bars of the medians, with whiskers from the first quartile to the third."""
     medians = np.asarray(medians, dtype=float)
     lows = np.asarray(lows, dtype=float)
@@ -144,7 +149,9 @@ def python_cells():
 
 
 def native_cells():
-    cells = json.loads((RESULTS / "binary_formats" / "timings.json").read_text())["cells"]
+    cells = json.loads((RESULTS / "binary_formats" / "timings.json").read_text())[
+        "cells"
+    ]
     labels, medians, lows, highs = [], [], [], []
     for key, label in NATIVE:
         cell = cells[key]
@@ -163,7 +170,9 @@ def timing(at) -> None:
         1,
         figsize=(DOUBLE_CM / 2.54, 17.6 / 2.54),
         layout="constrained",
-        gridspec_kw={"height_ratios": [len(FULL_FIELDS), len(COORDINATES), len(NATIVE)]},
+        gridspec_kw={
+            "height_ratios": [len(FULL_FIELDS), len(COORDINATES), len(NATIVE)]
+        },
     )
     panels = (
         (axes[0], FULL_FIELDS, "Python, positions, velocities, masks, identifiers"),
@@ -186,7 +195,12 @@ def timing(at) -> None:
     for ax in axes[:2]:
         ax.set_xlim(lo / 1.35, hi * 1.35)
     _bars(axes[2], *native_cells(), "wall time (s)")
-    axes[2].set_title("native trajectory readers, positions and box, all frames", loc="left", fontsize=8, pad=2)
+    axes[2].set_title(
+        "native trajectory readers, positions and box, all frames",
+        loc="left",
+        fontsize=8,
+        pad=2,
+    )
     _save(fig, "timing")
 
 

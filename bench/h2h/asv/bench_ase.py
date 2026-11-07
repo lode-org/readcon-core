@@ -23,6 +23,7 @@ class AseEon:
 
     def setup(self):
         from ase.io import read as ase_read
+
         self.read = ase_read
         self.path = support.rel(support.case_path("atoms-1000000"))
 

@@ -35,7 +35,9 @@ RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174"))
 
 def _out(*cmd: str) -> str | None:
     try:
-        return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
+        return subprocess.run(
+            cmd, check=True, capture_output=True, text=True
+        ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -60,8 +62,16 @@ def host() -> dict:
     info = provenance.host()
     for line in (_out("lscpu") or "").splitlines():
         key, _, value = line.partition(":")
-        if key.strip() in ("Hypervisor vendor", "Stepping", "Thread(s) per core", "L2 cache", "L3 cache"):
-            info[key.strip().lower().replace(" ", "_").replace("(s)", "s")] = value.strip()
+        if key.strip() in (
+            "Hypervisor vendor",
+            "Stepping",
+            "Thread(s) per core",
+            "L2 cache",
+            "L3 cache",
+        ):
+            info[key.strip().lower().replace(" ", "_").replace("(s)", "s")] = (
+                value.strip()
+            )
     os_release = Path("/etc/os-release")
     if os_release.exists():
         for line in os_release.read_text().splitlines():
@@ -74,12 +84,16 @@ def build() -> dict:
     identity = provenance.source_identity()
     commit = identity["source_commit"]
     if commit is None:
-        raise SystemExit("no tag or HEAD holds this tree's library files; the measurements need a commit")
+        raise SystemExit(
+            "no tag or HEAD holds this tree's library files; the measurements need a commit"
+        )
     if _git("merge-base", "--is-ancestor", BASE, commit) is None:
         raise SystemExit(f"commit {commit[:12]} does not descend from {BASE[:12]}")
     at_commit = provenance.library_digest_at(commit)
     if at_commit != identity["library_digest"]:
-        raise SystemExit(f"commit {commit[:12]} holds library {at_commit}, the tree {identity['library_digest']}")
+        raise SystemExit(
+            f"commit {commit[:12]} holds library {at_commit}, the tree {identity['library_digest']}"
+        )
     record = {
         "release": provenance.library_version(),
         "commit": commit,
@@ -91,19 +105,40 @@ def build() -> dict:
         "library_digest_at_commit": at_commit,
         "source_files": identity["source_files"],
     }
-    record.update({key: value for key, value in provenance.readcon_build().items()
-                   if key in ("readcon_version", "readcon_module", "readcon_module_sha256", "rustc", "newer_sources")})
+    record.update(
+        {
+            key: value
+            for key, value in provenance.readcon_build().items()
+            if key
+            in (
+                "readcon_version",
+                "readcon_module",
+                "readcon_module_sha256",
+                "rustc",
+                "newer_sources",
+            )
+        }
+    )
     if record["newer_sources"]:
-        raise SystemExit(f"the readcon module is older than {record['newer_sources'][:5]}; rebuild it (cpc-readcon)")
+        raise SystemExit(
+            f"the readcon module is older than {record['newer_sources'][:5]}; rebuild it (cpc-readcon)"
+        )
     return record
 
 
 def record() -> dict:
-    return {"build": build(), "host": host(), "hardware": provenance.hardware(), "peers": provenance.peers(),
-            "tools": tools()}
+    return {
+        "build": build(),
+        "host": host(),
+        "hardware": provenance.hardware(),
+        "peers": provenance.peers(),
+        "tools": tools(),
+    }
 
 
 if __name__ == "__main__":
     RESULTS.mkdir(parents=True, exist_ok=True)
-    (RESULTS / "provenance.json").write_text(json.dumps(portable.portable(record()), indent=2) + "\n")
+    (RESULTS / "provenance.json").write_text(
+        json.dumps(portable.portable(record()), indent=2) + "\n"
+    )
     print("wrote", RESULTS / "provenance.json")

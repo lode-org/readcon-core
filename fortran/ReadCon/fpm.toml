@@ -1,6 +1,6 @@
 name = "ReadCon"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
-version = "0.18.0"
+version = "0.18.1"
 # [[[end]]]
 license = "MIT"
 author = "LODE developers"

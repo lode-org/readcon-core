@@ -24,8 +24,13 @@ LOG = ROOT / "logs" / "regen-figures.log"
 
 def main() -> int:
     import subprocess
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT.parents[1], text=True).strip()
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT.parents[1], text=True).strip()
+
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT.parents[1], text=True
+    ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT.parents[1], text=True
+    ).strip()
     lines = [
         f"rev_parse {head}",
         f"tree {tree}",
