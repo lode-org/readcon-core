@@ -397,9 +397,14 @@ impl<W: Write> ConFrameWriter<W> {
     /// Atoms are not rebuilt.
     pub fn write_frame_binding(&mut self, frame: &mut ConFrame) -> Result<(), WriteError> {
         let stamped = binding_metadata(frame);
-        let saved = std::mem::replace(&mut frame.header.metadata, stamped);
+        let saved_meta = std::mem::replace(&mut frame.header.metadata, stamped);
+        let saved_spec = frame.header.spec_version;
+        if frame.header.spec_version < crate::CON_SPEC_VERSION {
+            frame.header.spec_version = crate::CON_SPEC_VERSION;
+        }
         let result = self.write_frame(frame);
-        frame.header.metadata = saved;
+        frame.header.metadata = saved_meta;
+        frame.header.spec_version = saved_spec;
         result
     }
 
@@ -933,6 +938,14 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
     meta.remove(meta::SECTIONS);
     let has_velocity = frame.atom_data.iter().any(|atom| atom.has_velocity());
     stamp_legacy_velocity_time(&mut meta, frame.header.spec_version, has_velocity);
+    // The builder writes the current spec and fills units when the file
+    // omitted them. A binding rewrite has to emit that same header.
+    if !meta.contains_key(meta::UNITS) {
+        meta.insert(
+            meta::UNITS.to_string(),
+            crate::units::default_v3_units_json(),
+        );
+    }
     if !meta.contains_key(meta::CON_SPEC_MINOR) {
         meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
     }
@@ -943,10 +956,10 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
     out.header.metadata = binding_metadata(frame);
-    // Spec 1 keeps line 2 as free text. A binding rewrite emits JSON,
-    // which the writer does only from spec 2 upward.
-    if out.header.spec_version < 2 {
-        out.header.spec_version = 2;
+    // A parsed spec 1 frame keeps line 2 as free text. The builder emits
+    // the current spec as JSON, so the rewrite does too.
+    if out.header.spec_version < crate::CON_SPEC_VERSION {
+        out.header.spec_version = crate::CON_SPEC_VERSION;
     }
     Ok(out)
 }
