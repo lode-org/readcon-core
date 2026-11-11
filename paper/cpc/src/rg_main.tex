@@ -435,8 +435,9 @@ The whisker runs from the first quartile to the third.}
 \label{fig:conread}
 \end{figure}
 
-A write of that coordinate file takes \SI{0.539}{\second} in Rust and adds \SI{0.40}{\mebi\byte} to the resident set, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer, and \SI{12.1}{\second} and \SI{418}{\mebi\byte} in eOn.
-The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust, \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{9.01}{\second} and \SI{418}{\mebi\byte} in eOn.
+A write of that coordinate file takes \SI{0.539}{\second} in Rust and adds \SI{0.40}{\mebi\byte} to the resident set, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
+The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
+No eOn write time or resident set is reported.
 The released eOn 3.6.0 client stops in \texttt{matter2con}; a fix is going upstream.
 ASE's eon reader raises \texttt{ValueError} on the velocity title, so it does not read that file.
 ASE's eon writer raises \texttt{TypeError} on a frame held in one component.

@@ -221,14 +221,14 @@ eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
 \caption{Write of the \num{100000}-frame file.
 Time in seconds, then the resident-set increase in mebibytes.}
 \label{tab:conwrite}
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lp{0.32\linewidth}p{0.36\linewidth}@{}}
 \toprule
 Writer & Coordinates & With velocities \\
 \midrule
 readcon, Rust & 0.539, 0.40 & 0.938, 0.34 \\
 readcon, Python & 0.583, 0.26 & 1.25, 0.26 \\
 ASE eon & 14.7, 6.4 & \\
-eOn & 12.1, 418 & 9.01, 418 \\
+eOn & \multicolumn{2}{p{0.68\linewidth}}{\textbf{TODO:} replacement $n=6$ write. No time or memory until then.} \\
 \bottomrule
 \end{tabular}
 \end{table}
