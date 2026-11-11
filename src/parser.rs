@@ -603,14 +603,7 @@ fn parse_coord_fields_fast(
         if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
             return None;
         }
-        if looks_like_nonfinite(bytes, i) {
-            return None;
-        }
-        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).ok()?;
-        if !val.is_finite() {
-            return None;
-        }
-        let next = i + consumed;
+        let (val, next) = crate::fast_dec::parse_f64_hot(bytes, i)?;
         if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
             return None;
         }
@@ -1247,7 +1240,11 @@ pub fn parse_frame_header<'a>(
     // rejects trailing junk after the value.
     let trimmed = prebox2_raw.trim();
     let (spec_version, metadata, sections, validate, sections_declared) =
-        if trimmed.starts_with('{') {
+        if trimmed == "{\"con_spec_version\":2}" {
+            // The line written by every stock trajectory. Same object the
+            // JSON parser would build: major 2, no extra keys.
+            (2, BTreeMap::new(), Vec::new(), false, false)
+        } else if trimmed.starts_with('{') {
             let json_val: serde_json::Value = serde_json::from_str(trimmed)
                 .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
             let json_obj = json_val.as_object().ok_or_else(|| {
