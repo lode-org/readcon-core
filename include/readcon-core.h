@@ -12,9 +12,9 @@
  *     free_rkr_frame_array(frames, *num_frames). Each individual frame is
  *     released by free_rkr_frame_array; do NOT also call free_rkr_frame.
  *   - char* values returned by rkr_frame_metadata_json,
- *     rkr_frame_potential_type, and rkr_frame_get_header_line_cpp are heap
- *     allocated; free them with rkr_free_string. rkr_free_string is safe
- *     to call with NULL (no-op).
+ *     rkr_frame_potential_type, rkr_frame_get_header_line_cpp, and
+ *     rkr_write_frames_to_string are heap allocated; free them with
+ *     rkr_free_string. rkr_free_string is safe to call with NULL (no-op).
  *   - const char* returned by rkr_library_version and rkr_status_message
  *     is process-static; do NOT free it.
  *   - const char* returned by rkr_last_error_message is thread-local.
@@ -869,6 +869,27 @@ struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 struct RKRConFrameWriter *create_writer_from_path_round_trip_c(const char *filename_c);
 
 /**
+ * Opens an uncompressed file for appending.
+ * A missing file is created. A non-empty file that does not end in a
+ * newline receives one. Gzip and zstd paths return NULL.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be a valid path or null.
+ */
+struct RKRConFrameWriter *create_writer_from_path_append_c(const char *filename_c);
+
+/**
+ * Opens an uncompressed file for appending with a fixed decimal precision.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be a valid path or null.
+ */
+struct RKRConFrameWriter *create_writer_from_path_append_with_precision_c(const char *filename_c,
+                                                                          uint8_t precision);
+
+/**
  * Flush buffered CON data. Returns RKR_STATUS_IO_ERROR on write failure.
  * On failure, `rkr_last_error_message` returns the underlying I/O text.
  */
@@ -905,6 +926,22 @@ struct RKRConFrame *rkr_frame_binding_rewrite(const struct RKRConFrame *frame_ha
 enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
                                  const struct RKRConFrame *const *frame_handles,
                                  uintptr_t num_frames);
+
+/**
+ * Serialize frames to a newly allocated CON string. No file is created.
+ * On success `*out_text` is NUL-terminated and `*out_len` is the payload
+ * length, excluding that NUL. Free `*out_text` with `rkr_free_string`.
+ * The bytes match `create_writer_from_path_c` writing the same frames.
+ * `num_frames == 0` accepts a null `frame_handles` and returns an empty string.
+ *
+ * # Safety
+ * out_text and out_len must be valid. Each frame handle must be valid
+ * when num_frames > 0.
+ */
+enum RKRStatus rkr_write_frames_to_string(const struct RKRConFrame *const *frame_handles,
+                                          uintptr_t num_frames,
+                                          char **out_text,
+                                          uintptr_t *out_len);
 
 /**
  * Write frames with the binding metadata stamp and the caller's atoms.

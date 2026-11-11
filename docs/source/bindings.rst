@@ -77,6 +77,18 @@ task.
     | Chemfiles import / selection                                   | yes (``chemfiles`` feature)                    | ``select_on_frame`` / ``select_atom_indices``                      | ``select_on_frame`` / ``select_atom_indices`` (FFI; chemfiles lib) | ``rkr_frame_select`` / ``read_chemfiles_first``                  | ``rkr_frame_select``                                              | ``ConFrame::select``                       |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
 
+**Appending and in-memory writes.** ``ConFrameWriter::from_path_append``
+opens an existing uncompressed file at the end. ``ConFrameWriter::flush``
+makes the bytes written so far parseable before the writer is dropped.
+``write_frames_to_string`` returns those bytes and does not create a file.
+The same three calls are ``write_con(..., append=True)`` (flush is on
+return) and ``write_con_string`` in Python,
+``create_writer_from_path_append_c``, ``rkr_writer_flush``, and
+``rkr_write_frames_to_string`` in C, and
+``ConFrameWriter(path, OpenMode::Append)``, ``ConFrameWriter::flush``, and
+``write_frames_to_string`` in C++. A file this writer produced already ends
+in a newline, so appending the remaining frames matches one whole-file write.
+
 **Selection (shared evaluator).** One evaluator core; every
 surface is a pass-through (``evaluate_selection_on_con_frame`` → chemfiles
 ``Selection`` after projecting the frame). Build with ``--features chemfiles``;

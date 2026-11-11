@@ -733,6 +733,15 @@ class ConFrameWriter {
     enum class Compression { None, Gzip, Zstd };
 
     /**
+     * @brief Whether a path writer replaces the file or extends it.
+     *
+     * `Append` is only valid for an uncompressed file. A missing file is
+     * created. A non-empty file that does not end in a newline receives
+     * one before the next frame.
+     */
+    enum class OpenMode { Truncate, Append };
+
+    /**
      * @brief Constructs a writer and opens the specified file for writing.
      * @param path The path to the output .con file.
      * @throws std::runtime_error if the file cannot be created.
@@ -758,6 +767,15 @@ class ConFrameWriter {
                             Compression compression, uint8_t precision);
 
     /**
+     * @brief Opens `path` for a truncating write or an uncompressed append.
+     * @throws std::runtime_error if the file cannot be opened, or if
+     *         `OpenMode::Append` is asked to extend a gzip or zstd path.
+     */
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode);
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode,
+                            uint8_t precision);
+
+    /**
      * @brief Picks a compression codec from a path's file extension.
      * @param path The output path to inspect.
      * @return `Compression::Gzip` for `.gz`, `Compression::Zstd` for `.zst`,
@@ -777,6 +795,15 @@ class ConFrameWriter {
      */
     void extend(const std::vector<ConFrame> &frames);
 
+    /**
+     * @brief Flushes buffered frames to the file.
+     *
+     * After this returns, a reader sees a complete, parseable prefix,
+     * before this object is destroyed.
+     * @throws std::runtime_error if the flush fails.
+     */
+    void flush();
+
     /// Campaign-stable CON serialization (deterministic metadata key order).
     void set_canonical(bool on);
     [[nodiscard]] bool is_canonical() const {
@@ -784,6 +811,9 @@ class ConFrameWriter {
     }
 
   private:
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode,
+                            std::optional<uint8_t> precision);
+
     struct WriterDeleter {
         void operator()(RKRConFrameWriter *ptr) const {
             if (ptr)
@@ -792,6 +822,15 @@ class ConFrameWriter {
     };
     std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
 };
+
+/**
+ * @brief Serializes frames to CON text. No file is created.
+ *
+ * The bytes match `ConFrameWriter` writing the same frames to a new file.
+ * @throws std::runtime_error if a frame cannot be serialized.
+ */
+[[nodiscard]] std::string
+write_frames_to_string(const std::vector<ConFrame> &frames);
 
 /**
  * @brief A builder for constructing ConFrame objects from in-memory data.
@@ -1675,6 +1714,65 @@ ConFrameWriter::compression_from_extension(
 inline void ConFrameWriter::set_canonical(bool on) {
     throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
                    "rkr_writer_set_canonical");
+}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      OpenMode mode)
+    : ConFrameWriter(path, mode, std::nullopt) {}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      OpenMode mode, uint8_t precision)
+    : ConFrameWriter(path, mode, std::optional<uint8_t>(precision)) {}
+
+inline ConFrameWriter::ConFrameWriter(
+    const std::filesystem::path &path, OpenMode mode,
+    std::optional<uint8_t> precision) {
+    if (mode == OpenMode::Append &&
+        compression_from_extension(path) != Compression::None) {
+        throw std::runtime_error(
+            "append is only supported for an uncompressed file: " +
+            path.string());
+    }
+    const std::string p = path.string();
+    RKRConFrameWriter *raw = nullptr;
+    if (mode == OpenMode::Append) {
+        raw = precision ? create_writer_from_path_append_with_precision_c(
+                              p.c_str(), *precision)
+                        : create_writer_from_path_append_c(p.c_str());
+    } else {
+        raw = precision ? create_writer_from_path_with_precision_c(p.c_str(),
+                                                                   *precision)
+                        : create_writer_from_path_c(p.c_str());
+    }
+    writer_handle_.reset(raw);
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " + p);
+    }
+}
+
+inline void ConFrameWriter::flush() {
+    throw_on_error(rkr_writer_flush(writer_handle_.get()), "rkr_writer_flush");
+}
+
+inline std::string
+write_frames_to_string(const std::vector<ConFrame> &frames) {
+    std::vector<const RKRConFrame *> handles;
+    handles.reserve(frames.size());
+    for (const auto &frame : frames) {
+        handles.push_back(frame.get_handle());
+    }
+    char *text = nullptr;
+    uintptr_t len = 0;
+    throw_on_error(rkr_write_frames_to_string(
+                       frames.empty() ? nullptr : handles.data(), frames.size(),
+                       &text, &len),
+                   "rkr_write_frames_to_string");
+    std::string out;
+    if (text != nullptr) {
+        out.assign(text, static_cast<std::size_t>(len));
+    }
+    rkr_free_string(text);
+    return out;
 }
 
 inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
