@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_declared_sections, LineStream};
+use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
 use std::path::Path;
 
@@ -193,11 +193,7 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad {
-            invalid_utf8()
-        } else {
-            err
-        }
+        if self.utf8_bad { invalid_utf8() } else { err }
     }
 }
 
@@ -1138,12 +1134,22 @@ unsafe impl Send for SlotWritePtr {}
 unsafe impl Sync for SlotWritePtr {}
 
 /// Minor faults of the calling thread.
+///
+/// `RUSAGE_THREAD` is Linux. Other hosts report 0; the counter is
+/// diagnostic and the parse result does not depend on it.
 #[cfg(feature = "parallel")]
 fn thread_minflt() -> i64 {
-    unsafe {
-        let mut usage = std::mem::zeroed::<libc::rusage>();
-        libc::getrusage(libc::RUSAGE_THREAD, &mut usage);
-        usage.ru_minflt
+    #[cfg(target_os = "linux")]
+    {
+        unsafe {
+            let mut usage = std::mem::zeroed::<libc::rusage>();
+            libc::getrusage(libc::RUSAGE_THREAD, &mut usage);
+            usage.ru_minflt
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
     }
 }
 
@@ -1154,43 +1160,47 @@ fn thread_minflt() -> i64 {
 /// per-worker minor faults instead.
 #[cfg(feature = "parallel")]
 fn sample_llc_misses() -> i64 {
-    #[repr(C)]
-    struct PerfEventAttr {
-        typ: u32,
-        size: u32,
-        config: u64,
-        rest: [u64; 14],
-    }
-    let mut attr = PerfEventAttr {
-        typ: 3,
-        size: std::mem::size_of::<PerfEventAttr>() as u32,
-        // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
-        config: 2 | (1 << 16),
-        rest: [0; 14],
-    };
-    let fd = unsafe {
-        libc::syscall(
-            libc::SYS_perf_event_open,
-            &attr as *const PerfEventAttr,
-            0i32,
-            -1i32,
-            -1i32,
-            0u64,
-        )
-    };
-    if fd < 0 {
+    // `perf_event_open` is Linux. `-1` is the existing "counter refused" value.
+    #[cfg(not(target_os = "linux"))]
+    {
         return -1;
     }
-    let fd = fd as libc::c_int;
-    let mut value = 0u64;
-    let n = unsafe { libc::read(fd, &mut value as *mut u64 as *mut libc::c_void, 8) };
-    unsafe {
-        libc::close(fd);
-    }
-    if n == 8 {
-        value as i64
-    } else {
-        -1
+    #[cfg(target_os = "linux")]
+    {
+        #[repr(C)]
+        struct PerfEventAttr {
+            typ: u32,
+            size: u32,
+            config: u64,
+            rest: [u64; 14],
+        }
+        let attr = PerfEventAttr {
+            typ: 3,
+            size: std::mem::size_of::<PerfEventAttr>() as u32,
+            // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
+            config: 2 | (1 << 16),
+            rest: [0; 14],
+        };
+        let fd = unsafe {
+            libc::syscall(
+                libc::SYS_perf_event_open,
+                &attr as *const PerfEventAttr,
+                0i32,
+                -1i32,
+                -1i32,
+                0u64,
+            )
+        };
+        if fd < 0 {
+            return -1;
+        }
+        let fd = fd as libc::c_int;
+        let mut value = 0u64;
+        let n = unsafe { libc::read(fd, &mut value as *mut u64 as *mut libc::c_void, 8) };
+        unsafe {
+            libc::close(fd);
+        }
+        if n == 8 { value as i64 } else { -1 }
     }
 }
 
@@ -1492,8 +1502,11 @@ struct TimedParse {
 /// The same policy on every width leaves the parse fault count flat.
 #[cfg(feature = "parallel")]
 fn keep_parse_pages() {
+    // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`. macOS and Windows have
+    // no `mallopt`; leaving the pages to the system allocator is enough
+    // for the parse to be correct.
+    #[cfg(target_os = "linux")]
     unsafe {
-        // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`.
         libc::mallopt(-4, 0);
         libc::mallopt(-1, i32::MAX);
     }
@@ -1532,8 +1545,8 @@ fn recycle_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache(
-) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache()
+-> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -1566,22 +1579,34 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
 }
 
 /// Minor faults of this process.
+///
+/// `getrusage` is Unix. Windows reports 0.
 #[cfg(feature = "parallel")]
 pub fn process_minflt() -> i64 {
-    unsafe {
-        let mut usage = std::mem::zeroed::<libc::rusage>();
-        libc::getrusage(libc::RUSAGE_SELF, &mut usage);
-        usage.ru_minflt
+    #[cfg(unix)]
+    {
+        unsafe {
+            let mut usage = std::mem::zeroed::<libc::rusage>();
+            libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+            usage.ru_minflt
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        0
     }
 }
 
 /// Page size from `sysconf`, with the POSIX page as the fallback.
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
-    let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if raw > 0 {
-        raw as usize
-    } else {
+    #[cfg(unix)]
+    {
+        let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if raw > 0 { raw as usize } else { 4096 }
+    }
+    #[cfg(not(unix))]
+    {
         4096
     }
 }
@@ -2117,11 +2142,7 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 {
-        1
-    } else {
-        requested
-    }
+    if len < 2 { 1 } else { requested }
 }
 
 /// I/O, UTF-8, or a located parse failure while loading a path.
