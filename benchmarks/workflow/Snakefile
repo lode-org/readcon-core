@@ -556,3 +556,16 @@ rule h2h_report:
 rule h2h:
     input:
         "bench/h2h/results.json",
+
+
+# Serial headline and the parallel scaling curve. The asv class times one
+# read_con call. This rule runs the warmup-plus-six campaign.
+rule h2h_parallel_frames:
+    output:
+        "bench/h2h/logs/parallel-frames/campaign.log",
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p bench/h2h/logs/parallel-frames
+        python3 bench/h2h/asv/bench_parallel_frames.py campaign
+        """
