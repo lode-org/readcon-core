@@ -439,18 +439,12 @@ impl PyConFrame {
 
     #[getter]
     fn has_velocities(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_velocity))
+        self.has_vector_section(py, true)
     }
 
     #[getter]
     fn has_forces(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_forces))
+        self.has_vector_section(py, false)
     }
 
     #[getter]
@@ -531,21 +525,10 @@ impl PyConFrame {
     #[getter]
     fn vel<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         if let Some(frame) = self.inner.as_ref() {
-            let n = frame.velocities.nrows();
-            if n == 0 {
+            if frame.velocities.nrows() == 0 {
                 return Ok(None);
             }
-            let mut data = Vec::with_capacity(n.saturating_mul(3));
-            if let Some(src) = frame.velocities.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n {
-                    data.extend_from_slice(&frame.velocities.as_f64_row(i));
-                }
-            }
-            let array = Array2::from_shape_vec((n, 3), data)
-                .map_err(|e| PyValueError::new_err(format!("vel shape error: {e}")))?;
-            return Ok(Some(array.into_pyarray(py)));
+            return Ok(Some(array2_from_storage(py, &frame.velocities)?));
         }
         self.velocities_array(py)
     }
@@ -553,21 +536,10 @@ impl PyConFrame {
     #[getter]
     fn frc<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         if let Some(frame) = self.inner.as_ref() {
-            let n = frame.forces.nrows();
-            if n == 0 {
+            if frame.forces.nrows() == 0 {
                 return Ok(None);
             }
-            let mut data = Vec::with_capacity(n.saturating_mul(3));
-            if let Some(src) = frame.forces.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n {
-                    data.extend_from_slice(&frame.forces.as_f64_row(i));
-                }
-            }
-            let array = Array2::from_shape_vec((n, 3), data)
-                .map_err(|e| PyValueError::new_err(format!("frc shape error: {e}")))?;
-            return Ok(Some(array.into_pyarray(py)));
+            return Ok(Some(array2_from_storage(py, &frame.forces)?));
         }
         self.forces_array(py)
     }
@@ -576,18 +548,22 @@ impl PyConFrame {
     /// `[N, 3] float64` array, in the type-grouped order used by the
     /// underlying frame.
     ///
-    /// Always allocates a **fresh** array from the current Python atom list so
-    /// in-place mutation of a previous return value cannot corrupt later
-    /// calls, and edits to `atoms` are reflected immediately.
+    /// Allocates a **fresh** array. Before `.atoms` is built, the values
+    /// are copied once from the coordinate slab or the parsed SoA. After
+    /// that, the copy walks the Python atoms so edits show up, and
+    /// mutating a previous return value does not affect the next call.
     fn coords_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if !self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            if let Some(copied) = self.copy_positions(py)? {
+                return Ok(copied);
+            }
+        }
         let atoms = self.py_atoms(py)?;
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
         for atom in &atoms {
             data.extend_from_slice(&[atom.x, atom.y, atom.z]);
         }
-        let array = Array2::from_shape_vec((atoms.len(), 3), data)
-            .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-        Ok(array.into_pyarray(py))
+        array2_from_f64(py, atoms.len(), 3, data)
     }
 
     /// Returns the per-atom velocity vectors as a contiguous numpy
@@ -597,38 +573,14 @@ impl PyConFrame {
         &self,
         py: Python<'py>,
     ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
-        let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_velocity) {
-            return Ok(None);
-        }
-        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
-        for atom in &atoms {
-            data.push(atom.vx.unwrap_or(0.0));
-            data.push(atom.vy.unwrap_or(0.0));
-            data.push(atom.vz.unwrap_or(0.0));
-        }
-        let array = Array2::from_shape_vec((atoms.len(), 3), data)
-            .map_err(|e| PyValueError::new_err(format!("velocities_array shape error: {e}")))?;
-        Ok(Some(array.into_pyarray(py)))
+        self.vector_section_array(py, true)
     }
 
     /// Returns the per-atom force vectors as a contiguous numpy
     /// `[N, 3] float64` array. Returns `None` if the frame has no
     /// force data.
     fn forces_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
-        let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_forces) {
-            return Ok(None);
-        }
-        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
-        for atom in &atoms {
-            data.push(atom.fx.unwrap_or(0.0));
-            data.push(atom.fy.unwrap_or(0.0));
-            data.push(atom.fz.unwrap_or(0.0));
-        }
-        let array = Array2::from_shape_vec((atoms.len(), 3), data)
-            .map_err(|e| PyValueError::new_err(format!("forces_array shape error: {e}")))?;
-        Ok(Some(array.into_pyarray(py)))
+        self.vector_section_array(py, false)
     }
 
     /// Returns the per-atom displacements (Angstrom) as a contiguous
@@ -1078,6 +1030,114 @@ impl PyConFrame {
             .unwrap_or(0)
     }
 
+    fn has_vector_section(&self, py: Python<'_>, velocity: bool) -> PyResult<bool> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            let atoms = self.atoms.bind(py);
+            if atoms.is_empty() {
+                return Ok(false);
+            }
+            let first = atoms.get_item(0)?.extract::<PyAtomDatum>()?;
+            return Ok(if velocity {
+                first.has_velocity()
+            } else {
+                first.has_forces()
+            });
+        }
+        let Some(frame) = self.inner.as_ref() else {
+            return Ok(false);
+        };
+        let rows = if velocity {
+            frame.velocities.nrows()
+        } else {
+            frame.forces.nrows()
+        };
+        if rows > 0 {
+            return Ok(true);
+        }
+        Ok(frame.atom_data.first().is_some_and(|atom| {
+            if velocity {
+                atom.has_velocity()
+            } else {
+                atom.has_forces()
+            }
+        }))
+    }
+
+    fn copy_positions<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if let Some(slab) = &self.slab {
+            let row = slab.bind(py).get_item(self.slab_index)?;
+            let arr = row.cast::<PyArray2<f64>>()?;
+            return Ok(Some(copy_pyarray2(py, arr)?));
+        }
+        if let Some(owned) = &self.xyz_owned {
+            return Ok(Some(copy_pyarray2(py, owned.bind(py))?));
+        }
+        if let Some(frame) = self.inner.as_ref() {
+            if frame.positions.nrows() > 0 {
+                return Ok(Some(array2_from_storage(py, &frame.positions)?));
+            }
+        }
+        Ok(None)
+    }
+
+    fn vector_section_array<'py>(
+        &self,
+        py: Python<'py>,
+        velocity: bool,
+    ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if !self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            if let Some(frame) = self.inner.as_ref() {
+                let storage = if velocity {
+                    &frame.velocities
+                } else {
+                    &frame.forces
+                };
+                if storage.nrows() > 0 {
+                    return Ok(Some(array2_from_storage(py, storage)?));
+                }
+                let present = frame.atom_data.first().is_some_and(|atom| {
+                    if velocity {
+                        atom.has_velocity()
+                    } else {
+                        atom.has_forces()
+                    }
+                });
+                if !present {
+                    return Ok(None);
+                }
+            } else {
+                return Ok(None);
+            }
+        }
+        let atoms = self.py_atoms(py)?;
+        let present = atoms.first().is_some_and(|atom| {
+            if velocity {
+                atom.has_velocity()
+            } else {
+                atom.has_forces()
+            }
+        });
+        if !present {
+            return Ok(None);
+        }
+        let mut data = Vec::with_capacity(atoms.len() * 3);
+        for atom in &atoms {
+            if velocity {
+                data.push(atom.vx.unwrap_or(0.0));
+                data.push(atom.vy.unwrap_or(0.0));
+                data.push(atom.vz.unwrap_or(0.0));
+            } else {
+                data.push(atom.fx.unwrap_or(0.0));
+                data.push(atom.fy.unwrap_or(0.0));
+                data.push(atom.fz.unwrap_or(0.0));
+            }
+        }
+        Ok(Some(array2_from_f64(py, atoms.len(), 3, data)?))
+    }
+
     fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
         Self::from_owned(py, frame.clone())
     }
@@ -1314,6 +1374,53 @@ impl PyConFrame {
             .build()
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
+}
+
+fn array2_from_f64<'py>(
+    py: Python<'py>,
+    rows: usize,
+    cols: usize,
+    data: Vec<f64>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let array = Array2::from_shape_vec((rows, cols), data)
+        .map_err(|e| PyValueError::new_err(format!("array shape error: {e}")))?;
+    Ok(array.into_pyarray(py))
+}
+
+fn array2_from_storage<'py>(
+    py: Python<'py>,
+    storage: &crate::storage_dtype::Array2Storage,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let rows = storage.nrows();
+    let cols = storage.ncols();
+    let mut data = Vec::with_capacity(rows.saturating_mul(cols));
+    if let Some(src) = storage.f64_slice() {
+        data.extend_from_slice(src);
+    } else {
+        for row in 0..rows {
+            let values = storage.as_f64_row(row);
+            let n = cols.min(values.len());
+            data.extend_from_slice(&values[..n]);
+            data.resize(data.len() + cols - n, 0.0);
+        }
+    }
+    array2_from_f64(py, rows, cols, data)
+}
+
+fn copy_pyarray2<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyArray2<f64>>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let dims = arr.dims();
+    let rows = dims[0];
+    let cols = dims[1];
+    let ro = arr.readonly();
+    let data = if let Ok(slice) = ro.as_slice() {
+        slice.to_vec()
+    } else {
+        ro.as_array().iter().copied().collect()
+    };
+    array2_from_f64(py, rows, cols, data)
 }
 
 fn push_positions(storage: crate::storage_dtype::Array2Storage, out: &mut Vec<f64>) {

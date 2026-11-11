@@ -596,13 +596,81 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
 /// Where a parsed section lives.
 ///
 /// A velocity-only atom, the `.convel` case, keeps the three components
-/// inline. Any other section still uses one boxed tail. Coordinate-only
-/// atoms stay empty.
+/// inline. A force-only atom does the same. Velocity and force together
+/// share one frame slab (`velocities` then `forces`, both length `n * 3`)
+/// instead of a boxed tail per atom. Any other section still uses one
+/// boxed tail. Coordinate-only atoms stay empty.
 #[derive(Debug, Clone, PartialEq)]
 enum AtomSections {
     Empty,
     Velocity([f64; 3]),
+    Force([f64; 3]),
+    /// `data` is `n * 6` floats: all velocities, then all forces.
+    VelocityForce {
+        data: Arc<[f64]>,
+        index: u32,
+    },
     Full(Box<AtomTail>),
+}
+
+fn slab_row(data: &[f64], index: usize) -> [f64; 3] {
+    let i = index * 3;
+    [data[i], data[i + 1], data[i + 2]]
+}
+
+fn pack_velocity_force(velocity: [f64; 3], force: [f64; 3]) -> Arc<[f64]> {
+    Arc::from(vec![
+        velocity[0],
+        velocity[1],
+        velocity[2],
+        force[0],
+        force[1],
+        force[2],
+    ])
+}
+
+fn compact_sections(velocity: Option<[f64; 3]>, force: Option<[f64; 3]>) -> AtomSections {
+    match (velocity, force) {
+        (None, None) => AtomSections::Empty,
+        (Some(v), None) => AtomSections::Velocity(v),
+        (None, Some(f)) => AtomSections::Force(f),
+        (Some(v), Some(f)) => AtomSections::VelocityForce {
+            data: pack_velocity_force(v, f),
+            index: 0,
+        },
+    }
+}
+
+/// Install forces parsed for this frame.
+///
+/// Force-only atoms stay inline. When every atom already has a velocity,
+/// one slab holds both sections and every atom borrows it. A mixed frame
+/// falls back to the per-atom setter.
+pub(crate) fn apply_parsed_forces(atoms: &mut [AtomDatum], forces: &[[f64; 3]]) {
+    let n = atoms.len().min(forces.len());
+    if n == 0 {
+        return;
+    }
+    if atoms[..n].iter().all(|atom| atom.velocity().is_some()) {
+        let mut buf = Vec::with_capacity(n * 6);
+        for atom in &atoms[..n] {
+            buf.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
+        }
+        for force in &forces[..n] {
+            buf.extend_from_slice(force);
+        }
+        let data: Arc<[f64]> = Arc::from(buf);
+        for (index, atom) in atoms[..n].iter_mut().enumerate() {
+            atom.tail = AtomSections::VelocityForce {
+                data: Arc::clone(&data),
+                index: index as u32,
+            };
+        }
+        return;
+    }
+    for (atom, force) in atoms[..n].iter_mut().zip(forces[..n].iter().copied()) {
+        atom.set_force(Some(force));
+    }
 }
 
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
@@ -617,19 +685,6 @@ struct AtomTail {
     magmom: Option<[f64; 3]>,
     displacement: Option<[f64; 3]>,
     spread: Option<[f64; 3]>,
-}
-
-impl AtomTail {
-    fn is_empty(&self) -> bool {
-        self.velocity.is_none()
-            && self.force.is_none()
-            && self.energy.is_none()
-            && self.charge.is_none()
-            && self.spin.is_none()
-            && self.magmom.is_none()
-            && self.displacement.is_none()
-            && self.spread.is_none()
-    }
 }
 
 /// Represents the data for a single atom in a frame.
@@ -736,16 +791,14 @@ impl AtomDatum {
             || displacement.is_some()
             || spread.is_some()
         {
-            let only_velocity = velocity.is_some()
-                && force.is_none()
-                && energy.is_none()
+            let only_vel_force = energy.is_none()
                 && charge.is_none()
                 && spin.is_none()
                 && magmom.is_none()
                 && displacement.is_none()
                 && spread.is_none();
-            atom.tail = if only_velocity {
-                AtomSections::Velocity(velocity.unwrap())
+            atom.tail = if only_vel_force {
+                compact_sections(velocity, force)
             } else {
                 AtomSections::Full(Box::new(AtomTail {
                     velocity,
@@ -764,35 +817,34 @@ impl AtomDatum {
 
     fn ensure_tail(&mut self) -> &mut AtomTail {
         if !matches!(self.tail, AtomSections::Full(_)) {
-            let velocity = match self.tail {
-                AtomSections::Velocity(v) => Some(v),
-                AtomSections::Empty | AtomSections::Full(_) => None,
-            };
+            let velocity = self.velocity();
+            let force = self.force();
             self.tail = AtomSections::Full(Box::new(AtomTail {
                 velocity,
+                force,
                 ..AtomTail::default()
             }));
         }
         match &mut self.tail {
             AtomSections::Full(tail) => tail,
-            AtomSections::Empty | AtomSections::Velocity(_) => unreachable!(),
+            AtomSections::Empty
+            | AtomSections::Velocity(_)
+            | AtomSections::Force(_)
+            | AtomSections::VelocityForce { .. } => unreachable!(),
         }
     }
 
     fn shrink_tail(&mut self) {
         let next = match &self.tail {
-            AtomSections::Full(tail) if tail.is_empty() => Some(AtomSections::Empty),
             AtomSections::Full(tail)
-                if tail.force.is_none()
-                    && tail.energy.is_none()
+                if tail.energy.is_none()
                     && tail.charge.is_none()
                     && tail.spin.is_none()
                     && tail.magmom.is_none()
                     && tail.displacement.is_none()
-                    && tail.spread.is_none()
-                    && tail.velocity.is_some() =>
+                    && tail.spread.is_none() =>
             {
-                Some(AtomSections::Velocity(tail.velocity.unwrap()))
+                Some(compact_sections(tail.velocity, tail.force))
             }
             _ => None,
         };
@@ -806,16 +858,24 @@ impl AtomDatum {
     pub fn velocity(&self) -> Option<[f64; 3]> {
         match &self.tail {
             AtomSections::Velocity(v) => Some(*v),
+            AtomSections::VelocityForce { data, index } => {
+                Some(slab_row(data, *index as usize))
+            }
             AtomSections::Full(tail) => tail.velocity,
-            AtomSections::Empty => None,
+            AtomSections::Empty | AtomSections::Force(_) => None,
         }
     }
     /// Force vector `[fx, fy, fz]`.
     #[inline]
     pub fn force(&self) -> Option<[f64; 3]> {
         match &self.tail {
+            AtomSections::Force(f) => Some(*f),
+            AtomSections::VelocityForce { data, index } => {
+                let base = data.len() / 2;
+                Some(slab_row(data, base / 3 + *index as usize))
+            }
             AtomSections::Full(tail) => tail.force,
-            _ => None,
+            AtomSections::Empty | AtomSections::Velocity(_) => None,
         }
     }
     /// Per-atom energy contribution.
@@ -868,24 +928,25 @@ impl AtomDatum {
     }
 
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
-        match (&self.tail, value) {
-            (AtomSections::Empty, None) => {}
-            (AtomSections::Empty, Some(v)) | (AtomSections::Velocity(_), Some(v)) => {
-                self.tail = AtomSections::Velocity(v);
-            }
-            (AtomSections::Velocity(_), None) => self.tail = AtomSections::Empty,
-            (AtomSections::Full(_), value) => {
-                self.ensure_tail().velocity = value;
-                self.shrink_tail();
-            }
+        if matches!(self.tail, AtomSections::Full(_)) {
+            self.ensure_tail().velocity = value;
+            self.shrink_tail();
+            return;
         }
+        let force = self.force();
+        self.tail = compact_sections(value, force);
     }
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
         if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
-        self.ensure_tail().force = value;
-        self.shrink_tail();
+        if matches!(self.tail, AtomSections::Full(_)) {
+            self.ensure_tail().force = value;
+            self.shrink_tail();
+            return;
+        }
+        let velocity = self.velocity();
+        self.tail = compact_sections(velocity, value);
     }
     pub fn set_energy(&mut self, value: Option<f64>) {
         if value.is_none() && matches!(self.tail, AtomSections::Empty) {
@@ -3516,6 +3577,53 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn force_slab_shares_one_buffer_and_keeps_atom_size() {
+        assert_eq!(std::mem::size_of::<AtomDatum>(), 88);
+        let mut atoms = vec![
+            AtomDatum::coords("Cu", 1.0, 2.0, 3.0, [false; 3], 0),
+            AtomDatum::coords("Cu", 4.0, 5.0, 6.0, [false; 3], 1),
+        ];
+        atoms[0].set_velocity(Some([0.1, 0.2, 0.3]));
+        atoms[1].set_velocity(Some([-0.4, 0.5, 0.6]));
+        apply_parsed_forces(&mut atoms, &[[7.0, 8.0, 9.0], [1.5, -2.5, 3.5]]);
+        assert_eq!(atoms[0].velocity(), Some([0.1, 0.2, 0.3]));
+        assert_eq!(atoms[0].force(), Some([7.0, 8.0, 9.0]));
+        assert_eq!(atoms[1].velocity(), Some([-0.4, 0.5, 0.6]));
+        assert_eq!(atoms[1].force(), Some([1.5, -2.5, 3.5]));
+        match (&atoms[0].tail, &atoms[1].tail) {
+            (
+                AtomSections::VelocityForce { data: left, .. },
+                AtomSections::VelocityForce { data: right, .. },
+            ) => assert!(Arc::ptr_eq(left, right)),
+            _ => panic!("velocity and force must share one slab"),
+        }
+        atoms[0].set_force(Some([9.0, 9.0, 9.0]));
+        assert_eq!(atoms[0].force(), Some([9.0, 9.0, 9.0]));
+        assert_eq!(atoms[0].velocity(), Some([0.1, 0.2, 0.3]));
+        assert_eq!(atoms[1].force(), Some([1.5, -2.5, 3.5]));
+        assert_eq!(atoms[1].velocity(), Some([-0.4, 0.5, 0.6]));
+        let force_only = AtomDatum::with_sections(
+            "H",
+            0.0,
+            0.0,
+            0.0,
+            [false; 3],
+            3,
+            None,
+            Some([1.0, 0.0, 0.0]),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(force_only.force(), Some([1.0, 0.0, 0.0]));
+        assert!(matches!(force_only.tail, AtomSections::Force(_)));
+        assert!(force_only.velocity().is_none());
+    }
 
     #[test]
     fn test_x_only_is_one_under_spec_2() {
