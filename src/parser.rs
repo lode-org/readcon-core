@@ -9,6 +9,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Line source with peek for section detection (blank-line separators).
 ///
@@ -1548,12 +1549,11 @@ struct CoordSink<'a> {
 }
 
 /// Parse `n` coordinate rows into flat SoA buffers.
-#[inline(always)]
 fn ingest_coord_rows<'a, L>(
     lines: &mut L,
     n: usize,
     spec_version: u32,
-    mut global_atom_idx: u64,
+    global_atom_idx: u64,
     symbol: &Arc<str>,
     sink: CoordSink<'_>,
 ) -> Result<u64, ParseError>
@@ -1566,14 +1566,25 @@ where
         positions_other,
         atom_data,
     } = sink;
+    if positions_other.is_none() {
+        return ingest_coord_rows_f64(
+            lines,
+            n,
+            spec_version,
+            global_atom_idx,
+            symbol,
+            pos_flat,
+            ids,
+            atom_data,
+        );
+    }
+    let mut global_atom_idx = global_atom_idx;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         if let Some(pos) = positions_other.as_mut() {
             pos.set_f64_row(ids.len(), xyz);
         }
-        pos_flat.push(xyz[0]);
-        pos_flat.push(xyz[1]);
-        pos_flat.push(xyz[2]);
+        pos_flat.extend_from_slice(&xyz);
         ids.push(atom_id);
         atom_data.push(AtomDatum::coords(
             Arc::clone(symbol),
@@ -1586,6 +1597,128 @@ where
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
+}
+
+/// Coordinate rows for the f64 storage path.
+///
+/// The symbol `Arc` is bumped once for the whole block. Cloning it per atom
+/// was a visible share of the coordinate parse.
+#[inline(never)]
+fn ingest_coord_rows_f64<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    let mut shares = symbol_shares(symbol, n);
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        let sym = shares.take();
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+/// `n` extra strong references to `symbol`, taken one at a time.
+///
+/// `Arc<str>` stores the header (strong count, weak count) immediately
+/// before the bytes. One `fetch_add` covers the block; each [`SymbolShares::take`]
+/// turns one of those counts into an `Arc`. Leftovers drop with the guard.
+struct SymbolShares {
+    data: *const u8,
+    len: usize,
+    left: usize,
+}
+
+impl SymbolShares {
+    fn raw(&self) -> *const str {
+        std::ptr::slice_from_raw_parts(self.data, self.len) as *const str
+    }
+
+    fn take(&mut self) -> Arc<str> {
+        debug_assert!(self.left > 0);
+        self.left -= 1;
+        unsafe { Arc::from_raw(self.raw()) }
+    }
+}
+
+impl Drop for SymbolShares {
+    fn drop(&mut self) {
+        for _ in 0..self.left {
+            drop(unsafe { Arc::from_raw(self.raw()) });
+        }
+        self.left = 0;
+    }
+}
+
+fn symbol_shares(symbol: &Arc<str>, n: usize) -> SymbolShares {
+    if n == 0 {
+        return SymbolShares {
+            data: std::ptr::null(),
+            len: 0,
+            left: 0,
+        };
+    }
+    let data = Arc::as_ptr(symbol);
+    let offset = arc_str_header(symbol.as_ref());
+    // SAFETY: `Arc::as_ptr` points at the `str` inside the allocation, and
+    // the two atomic counts sit in front of it. This is the same subtraction
+    // `Arc::increment_strong_count` performs, done once for `n` clones.
+    let bytes = data as *const u8;
+    let strong = unsafe { bytes.sub(offset) as *const AtomicUsize };
+    unsafe { (*strong).fetch_add(n, Ordering::Relaxed) };
+    SymbolShares {
+        data: bytes,
+        len: symbol.len(),
+        left: n,
+    }
+}
+
+fn arc_str_header(text: &str) -> usize {
+    let header = 2 * std::mem::size_of::<usize>();
+    let align = std::mem::align_of_val(text);
+    let rem = header % align;
+    if rem == 0 {
+        header
+    } else {
+        header + (align - rem)
+    }
+}
+
+#[cfg(test)]
+mod symbol_share_tests {
+    use super::symbol_shares;
+    use std::sync::Arc;
+
+    #[test]
+    fn one_bump_matches_n_clones() {
+        for text in ["", "Cu", "Gold", "a-much-longer-component-symbol"] {
+            let symbol: Arc<str> = Arc::from(text);
+            let mut shares = symbol_shares(&symbol, 3);
+            assert_eq!(Arc::strong_count(&symbol), 4);
+            let owned = [shares.take(), shares.take(), shares.take()];
+            assert!(owned.iter().all(|arc| arc.as_ref() == text));
+            drop(owned);
+            assert_eq!(Arc::strong_count(&symbol), 1);
+            let mut partial = symbol_shares(&symbol, 2);
+            let one = partial.take();
+            drop(partial);
+            drop(one);
+            assert_eq!(Arc::strong_count(&symbol), 1);
+        }
+    }
 }
 
 fn validate_header_geometry(boxl: &[f64], angles: &[f64]) -> Result<(), ParseError> {
