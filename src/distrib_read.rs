@@ -27,7 +27,7 @@ use ::mpi::datatype::Partition;
 use ::mpi::traits::*;
 
 use crate::compression::{self, Compression, FileContents};
-use crate::distrib::{block_range, Comm};
+use crate::distrib::{Comm, block_range};
 use crate::frame_index::{self, FrameIndex};
 use crate::iterators::parse_frames_at_offsets;
 use crate::types::ConFrame;
@@ -134,18 +134,45 @@ fn newlines_before(bytes: &[u8], at: usize) -> u32 {
 /// Shared-mode ranks hold only their own span, so the file line of that
 /// span is the newline count of the prefix. Every rank takes the same
 /// branch: a failed prefix read is collective, like the span read.
+///
+/// The count reads at most [`PREFIX_COUNT_CHUNK`] bytes at a time. A
+/// `Vec` of length `at` would sit beside the span the rank already
+/// parsed, and the last rank's prefix is almost the whole file.
 fn line_offset_before(comm: &Comm, path: &Path, at: usize) -> Result<u32, BoxErr> {
-    let prefix = if at == 0 {
-        Ok(Vec::new())
-    } else {
-        read_span(path, 0, at)
-    };
-    let ok = agree(comm, prefix.is_ok());
-    match (prefix, ok) {
-        (Ok(bytes), true) => Ok(newlines_before(&bytes, at)),
+    let counted = count_newlines_before(path, at);
+    let ok = agree(comm, counted.is_ok());
+    match (counted, ok) {
+        (Ok(n), true) => Ok(n),
         (Err(e), _) => Err(format!("rank {}: {e}", comm.rank()).into()),
         (Ok(_), false) => Err("file open failed on another rank".into()),
     }
+}
+
+/// Newlines in `[0, at)` of `path`, without storing that prefix.
+fn count_newlines_before(path: &Path, at: usize) -> Result<u32, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    if at == 0 {
+        return Ok(0);
+    }
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len() as usize;
+    if at > len {
+        return Err("byte range is outside the file".into());
+    }
+    file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    let mut left = at;
+    let mut count = 0u32;
+    let chunk = PREFIX_COUNT_CHUNK.min(at);
+    let mut buf = vec![0u8; chunk];
+    #[cfg(test)]
+    note_prefix_alloc(buf.len());
+    while left > 0 {
+        let n = chunk.min(left);
+        file.read_exact(&mut buf[..n]).map_err(|e| e.to_string())?;
+        count = count.saturating_add(newlines_before(&buf, n));
+        left -= n;
+    }
+    Ok(count)
 }
 
 /// 1-based file line of a cursor inside a frame whose first line is `frame_line`.
@@ -328,8 +355,35 @@ fn read_span(path: &Path, lo: usize, hi: usize) -> Result<Vec<u8>, String> {
     file.seek(SeekFrom::Start(lo as u64))
         .map_err(|e| e.to_string())?;
     let mut buf = vec![0u8; hi - lo];
+    #[cfg(test)]
+    if lo == 0 {
+        note_prefix_alloc(buf.len());
+    }
     file.read_exact(&mut buf).map_err(|e| e.to_string())?;
     Ok(buf)
+}
+
+/// Largest buffer a shared-mode newline count may allocate.
+///
+/// The count used to `read_span` `[0, lo)` into one `Vec`. A later rank
+/// then held its frame span and almost the whole file.
+const PREFIX_COUNT_CHUNK: usize = 64 * 1024;
+
+#[cfg(test)]
+thread_local! {
+    static PREFIX_ALLOCS: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn note_prefix_alloc(n: usize) {
+    if n > 0 {
+        PREFIX_ALLOCS.with(|slot| slot.borrow_mut().push(n));
+    }
+}
+
+#[cfg(test)]
+fn take_prefix_allocs() -> Vec<usize> {
+    PREFIX_ALLOCS.with(|slot| std::mem::take(&mut *slot.borrow_mut()))
 }
 
 /// Span and frame count when the first two frames share one length and
@@ -698,36 +752,87 @@ mod tests {
         assert_eq!(cursor_file_line(&text[second..], 13), 14);
     }
 
+    /// A prefix newline count must not allocate a `Vec` of length `lo`.
+    ///
+    /// Shared mode asks every rank for the newlines before its span.
+    /// `read_span(0, lo)` is that allocation. The chunk cap is the
+    /// largest buffer the count may hold.
+    #[test]
+    fn shared_prefix_count_does_not_allocate_a_vec_of_size_lo() {
+        with_comm(|comm| {
+            let at = PREFIX_COUNT_CHUNK * 2 + 7;
+            let path = std::env::temp_dir().join(format!(
+                "readcon-mpi-prefix-count-{}.con",
+                std::process::id()
+            ));
+            std::fs::write(&path, vec![b'\n'; at]).unwrap();
+            let _ = take_prefix_allocs();
+            let n = line_offset_before(comm, &path, at).unwrap();
+            let sizes = take_prefix_allocs();
+            let _ = std::fs::remove_file(&path);
+            assert_eq!(n, at as u32);
+            assert!(!sizes.is_empty(), "prefix count did not record its buffer");
+            assert!(
+                sizes.iter().all(|&n| n <= PREFIX_COUNT_CHUNK && n < at),
+                "shared-mode prefix count allocated a Vec of size lo={at}: {sizes:?}"
+            );
+        });
+    }
+
+    /// MPI can be initialized once per process. Later tests reuse that
+    /// universe; dropping it would finalize MPI and the next init fails.
+    fn with_comm(body: impl FnOnce(&crate::distrib::Comm)) {
+        let _hold = mpi_test_lock();
+        let world = shared_universe().world();
+        let comm = crate::distrib::Comm::dup_of(&world);
+        body(&comm);
+    }
+
+    fn shared_universe() -> &'static ::mpi::environment::Universe {
+        use std::sync::OnceLock;
+        static SLOT: OnceLock<usize> = OnceLock::new();
+        let ptr = *SLOT.get_or_init(|| {
+            let universe = ::mpi::initialize().expect("MPI_Init");
+            Box::into_raw(Box::new(universe)) as usize
+        });
+        unsafe { &*(ptr as *const ::mpi::environment::Universe) }
+    }
+
+    fn mpi_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|err| err.into_inner())
+    }
+
     /// Collective read of the same file. The owning rank reports line 14.
     /// The serial reader covers this text when the MPI feature is off.
     #[test]
     fn distrib_later_frame_metadata_reports_its_file_line() {
-        let universe = ::mpi::initialize().expect("MPI_Init");
-        let comm = crate::distrib::Comm::dup_of(&universe.world());
-        let owned = if comm.rank() == 0 {
-            let path = std::env::temp_dir()
-                .join(format!("readcon-mpi-later-line-{}.con", std::process::id()));
-            std::fs::write(&path, two_frames()).unwrap();
-            path.to_string_lossy().into_owned().into_bytes()
-        } else {
-            Vec::new()
-        };
-        let path =
-            PathBuf::from(String::from_utf8(bcast_result(&comm, Ok(owned)).unwrap()).unwrap());
-        for mode in [ReadMode::Shared, ReadMode::Scatter] {
-            let err = read_block(&comm, &path, mode, Some(1)).expect_err("malformed frame");
-            match err.downcast::<crate::error::LocatedParseError>() {
-                Ok(located) => {
-                    assert_eq!(located.error.class_name(), "InvalidMetadataJson");
-                    assert_eq!(located.frame_index, 1, "{mode:?} {located}");
-                    assert_eq!(located.line, 14, "{mode:?} {located}");
+        with_comm(|comm| {
+            let owned = if comm.rank() == 0 {
+                let path = std::env::temp_dir()
+                    .join(format!("readcon-mpi-later-line-{}.con", std::process::id()));
+                std::fs::write(&path, two_frames()).unwrap();
+                path.to_string_lossy().into_owned().into_bytes()
+            } else {
+                Vec::new()
+            };
+            let path =
+                PathBuf::from(String::from_utf8(bcast_result(comm, Ok(owned)).unwrap()).unwrap());
+            for mode in [ReadMode::Shared, ReadMode::Scatter] {
+                let err = read_block(comm, &path, mode, Some(1)).expect_err("malformed frame");
+                match err.downcast::<crate::error::LocatedParseError>() {
+                    Ok(located) => {
+                        assert_eq!(located.error.class_name(), "InvalidMetadataJson");
+                        assert_eq!(located.frame_index, 1, "{mode:?} {located}");
+                        assert_eq!(located.line, 14, "{mode:?} {located}");
+                    }
+                    Err(err) if err.is::<PeerParseError>() => {}
+                    Err(err) => panic!("mode {mode:?}: {err}"),
                 }
-                Err(err) if err.is::<PeerParseError>() => {}
-                Err(err) => panic!("mode {mode:?}: {err}"),
             }
-        }
-        if comm.rank() == 0 {
-            let _ = std::fs::remove_file(&path);
-        }
+            if comm.rank() == 0 {
+                let _ = std::fs::remove_file(&path);
+            }
+        });
     }
 }
