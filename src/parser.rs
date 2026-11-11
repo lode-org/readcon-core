@@ -133,7 +133,7 @@ pub fn parse_line_of_range_f64_stack(
     let mut i = 0usize;
     let mut found = 0usize;
     while found < max {
-        while i < n && bytes[i].is_ascii_whitespace() {
+        while i < n && is_field_ws(bytes[i]) {
             i += 1;
         }
         if i >= n {
@@ -141,7 +141,7 @@ pub fn parse_line_of_range_f64_stack(
         }
         let end = bytes[i..]
             .iter()
-            .position(|b| b.is_ascii_whitespace())
+            .position(|b| is_field_ws(*b))
             .map(|k| i + k)
             .unwrap_or(n);
         let token = std::str::from_utf8(&bytes[i..end]).unwrap_or("");
@@ -164,7 +164,7 @@ pub fn parse_line_of_range_f64_stack(
         found += 1;
         i = next;
     }
-    while i < n && bytes[i].is_ascii_whitespace() {
+    while i < n && is_field_ws(bytes[i]) {
         i += 1;
     }
     // Reject trailing extra tokens (same contract as the old split loop).
@@ -206,7 +206,7 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
         return Ok(buf[..n].to_vec());
     }
     let mut values = Vec::with_capacity(n);
-    for token in line.split_ascii_whitespace() {
+    for token in line.split([' ', '\t']).filter(|token| !token.is_empty()) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() == n {
@@ -237,7 +237,7 @@ pub fn parse_line_of_range_f64(
         return Ok(buf[..max].to_vec());
     }
     let mut values = Vec::with_capacity(max);
-    for token in line.split_ascii_whitespace() {
+    for token in line.split([' ', '\t']).filter(|token| !token.is_empty()) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() < min || values.len() > max {
@@ -289,7 +289,7 @@ fn parse_finite_float_token(token: &str) -> Result<f64, ParseError> {
 }
 
 fn skip_ascii_ws(bytes: &[u8], mut i: usize) -> usize {
-    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+    while i < bytes.len() && is_field_ws(bytes[i]) {
         i += 1;
     }
     i
@@ -301,7 +301,7 @@ fn take_token(line: &str, i: usize) -> Option<(&str, usize)> {
         return None;
     }
     let mut j = i;
-    while j < bytes.len() && !bytes[j].is_ascii_whitespace() {
+    while j < bytes.len() && !is_field_ws(bytes[j]) {
         j += 1;
     }
     Some((&line[i..j], j))
@@ -378,10 +378,38 @@ fn parse_vector_row(
     Ok(row)
 }
 
-/// Field separator inside a coordinate row. Newline ends the row.
+/// Field separator inside a line. CON-token.3 allows spaces and tabs only.
+/// A carriage return or a form feed is not a separator. A carriage return
+/// ends a line only when it is the last byte or the byte before LF.
 #[inline(always)]
 fn is_field_ws(b: u8) -> bool {
-    matches!(b, b' ' | b'\t' | b'\r' | 0x0c)
+    b == b' ' || b == b'\t'
+}
+
+#[inline(always)]
+fn is_line_end(bytes: &[u8], i: usize) -> bool {
+    if i >= bytes.len() || bytes[i] == b'\n' {
+        return true;
+    }
+    bytes[i] == b'\r' && (i + 1 >= bytes.len() || bytes[i + 1] == b'\n')
+}
+
+#[inline(always)]
+fn consume_line_end(bytes: &[u8], i: usize) -> usize {
+    if i >= bytes.len() {
+        return i;
+    }
+    if bytes[i] == b'\n' {
+        return i + 1;
+    }
+    if bytes[i] == b'\r' {
+        let next = i + 1;
+        if next < bytes.len() && bytes[next] == b'\n' {
+            return next + 1;
+        }
+        return next;
+    }
+    i
 }
 
 #[inline(always)]
@@ -394,7 +422,7 @@ fn skip_field_ws(bytes: &[u8], mut i: usize) -> usize {
 
 fn token_on_line(bytes: &[u8], i: usize) -> String {
     let mut j = i;
-    while j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    while j < bytes.len() && !is_field_ws(bytes[j]) && !is_line_end(bytes, j) {
         j += 1;
     }
     String::from_utf8_lossy(&bytes[i..j]).into_owned()
@@ -404,11 +432,11 @@ fn count_tokens_on_line(bytes: &[u8], mut i: usize) -> usize {
     let mut n = 0usize;
     loop {
         i = skip_field_ws(bytes, i);
-        if i >= bytes.len() || bytes[i] == b'\n' {
+        if is_line_end(bytes, i) {
             break;
         }
         n += 1;
-        while i < bytes.len() && !is_field_ws(bytes[i]) && bytes[i] != b'\n' {
+        while i < bytes.len() && !is_field_ws(bytes[i]) && !is_line_end(bytes, i) {
             i += 1;
         }
     }
@@ -449,7 +477,7 @@ fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize
         ParseError::InvalidNumberFormat(format!("invalid float: {}", token_on_line(bytes, i)))
     })?;
     let next = i + consumed;
-    let boundary = next >= bytes.len() || is_field_ws(bytes[next]) || bytes[next] == b'\n';
+    let boundary = is_line_end(bytes, next) || (next < bytes.len() && is_field_ws(bytes[next]));
     if !boundary || !val.is_finite() {
         let token = token_on_line(bytes, i);
         if is_nonfinite_spelling(&token) || !val.is_finite() {
@@ -468,7 +496,7 @@ fn parse_flag_at(
     i: usize,
     spec_version: u32,
 ) -> Result<([bool; 3], usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if is_line_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 3,
@@ -493,7 +521,7 @@ fn parse_flag_at(
             .ok_or_else(bad)?;
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if j < bytes.len() && !is_field_ws(bytes[j]) && !is_line_end(bytes, j) {
         return Err(bad());
     }
     let fixed = if spec_version < 2 {
@@ -513,7 +541,7 @@ fn parse_flag_at(
 
 #[inline(always)]
 fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' || !bytes[i].is_ascii_digit() {
+    if is_line_end(bytes, i) || !bytes[i].is_ascii_digit() {
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid integer: {}",
             token_on_line(bytes, i)
@@ -534,7 +562,7 @@ fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
             })?;
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if j < bytes.len() && !is_field_ws(bytes[j]) && !is_line_end(bytes, j) {
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid integer: {}",
             token_on_line(bytes, i)
@@ -576,7 +604,7 @@ fn parse_coord_fields_fast(
     let mut i = skip_field_ws(bytes, i);
     let mut xyz = [0.0f64; 3];
     for dest in &mut xyz {
-        if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
+        if is_line_end(bytes, i) || bytes[i] >= 0x80 {
             return None;
         }
         if looks_like_nonfinite(bytes, i) {
@@ -587,7 +615,7 @@ fn parse_coord_fields_fast(
             return None;
         }
         let next = i + consumed;
-        if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
+        if next < bytes.len() && !is_field_ws(bytes[next]) && !is_line_end(bytes, next) {
             return None;
         }
         *dest = val;
@@ -595,18 +623,16 @@ fn parse_coord_fields_fast(
     }
     let (fixed, next) = parse_flag_fast(bytes, i, spec_version)?;
     i = skip_field_ws(bytes, next);
-    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+    let (atom_id, next) = if is_line_end(bytes, i) {
         (default_id?, i)
     } else {
         parse_u64_fast(bytes, i)?
     };
     i = skip_field_ws(bytes, next);
-    if i < bytes.len() && bytes[i] != b'\n' {
+    if !is_line_end(bytes, i) {
         return None;
     }
-    if i < bytes.len() && bytes[i] == b'\n' {
-        i += 1;
-    }
+    i = consume_line_end(bytes, i);
     Some(((xyz, fixed, atom_id), i))
 }
 
@@ -627,7 +653,7 @@ fn parse_u64_fast(bytes: &[u8], i: usize) -> Option<(u64, usize)> {
         val = val * 10 + u64::from(bytes[j] - b'0');
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if j < bytes.len() && !is_field_ws(bytes[j]) && !is_line_end(bytes, j) {
         return None;
     }
     Some((val, j))
@@ -661,7 +687,7 @@ fn parse_coord_fields_detailed(
 ) -> Result<(ParsedCoord, usize), ParseError> {
     let line_start = i;
     let mut i = skip_field_ws(bytes, i);
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if is_line_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 0,
@@ -669,7 +695,7 @@ fn parse_coord_fields_detailed(
     }
     let mut xyz = [0.0f64; 3];
     for (slot, dest) in xyz.iter_mut().enumerate() {
-        if i >= bytes.len() || bytes[i] == b'\n' {
+        if is_line_end(bytes, i) {
             return Err(ParseError::InvalidVectorLength {
                 expected: 5,
                 found: slot,
@@ -684,7 +710,7 @@ fn parse_coord_fields_detailed(
     }
     let (fixed, next) = parse_flag_at(bytes, i, spec_version)?;
     i = skip_field_ws(bytes, next);
-    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+    let (atom_id, next) = if is_line_end(bytes, i) {
         (
             default_id.ok_or(ParseError::InvalidVectorLength {
                 expected: 5,
@@ -696,13 +722,11 @@ fn parse_coord_fields_detailed(
         parse_id_at(bytes, i)?
     };
     i = skip_field_ws(bytes, next);
-    if i < bytes.len() && bytes[i] != b'\n' {
+    if !is_line_end(bytes, i) {
         let found = 5 + count_tokens_on_line(bytes, i);
         return Err(ParseError::InvalidVectorLength { expected: 5, found });
     }
-    if i < bytes.len() && bytes[i] == b'\n' {
-        i += 1;
-    }
+    i = consume_line_end(bytes, i);
     Ok(((xyz, fixed, atom_id), i))
 }
 
@@ -771,7 +795,7 @@ fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
         ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
     })?;
     let next = i + consumed;
-    let boundary = next == bytes.len() || bytes[next].is_ascii_whitespace();
+    let boundary = next == bytes.len() || is_field_ws(bytes[next]);
     if !boundary || !val.is_finite() {
         let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
         if is_nonfinite_spelling(token) || !val.is_finite() {
@@ -866,7 +890,7 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
 /// rejects a per-type count of 0 when the type count is 1 or more (D4).
 pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
     let mut values = Vec::with_capacity(n);
-    for token in line.split_ascii_whitespace() {
+    for token in line.split([' ', '\t']).filter(|token| !token.is_empty()) {
         if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
             return Err(ParseError::InvalidCount(format!(
                 "count field is not an unsigned integer: {token}"
@@ -892,7 +916,7 @@ pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, Parse
 
 /// True when `line` has no tokens. Spaces and tabs count as empty.
 pub(crate) fn line_is_whitespace(line: &str) -> bool {
-    line.split_ascii_whitespace().next().is_none()
+    line.bytes().all(is_field_ws)
 }
 
 /// Lines 8 and 9 of a type count of 0.
@@ -1460,7 +1484,12 @@ where
 {
     let header = parse_frame_header(lines)?;
     let validate = header.strict_validation;
-    let total_atoms: usize = header.natms_per_type.iter().sum();
+    let mut total_atoms: usize = 0;
+    for count in &header.natms_per_type {
+        total_atoms = total_atoms.checked_add(*count).ok_or_else(|| {
+            ParseError::InvalidCount("atom count sum does not fit in usize".into())
+        })?;
+    }
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;

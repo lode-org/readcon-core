@@ -524,8 +524,28 @@ impl<'a> ConFrameIterator<'a> {
         if let Err(e) = self.advance_lines(1) {
             return Some(Err(e));
         }
-        let total_atoms: usize = natms_per_type.iter().sum();
-        let coord_block_lines = total_atoms + natm_types * 2;
+        let mut total_atoms: usize = 0;
+        for count in &natms_per_type {
+            total_atoms = match total_atoms.checked_add(*count) {
+                Some(sum) => sum,
+                None => {
+                    return Some(Err(error::ParseError::InvalidCount(
+                        "atom count sum does not fit in usize".into(),
+                    )));
+                }
+            };
+        }
+        let coord_block_lines = match natm_types
+            .checked_mul(2)
+            .and_then(|lines| total_atoms.checked_add(lines))
+        {
+            Some(lines) => lines,
+            None => {
+                return Some(Err(error::ParseError::InvalidCount(
+                    "atom count sum does not fit in usize".into(),
+                )));
+            }
+        };
         if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
             return Some(Err(e));
         }
@@ -541,7 +561,7 @@ impl<'a> ConFrameIterator<'a> {
                 Some(pos) => &rest[..pos],
                 None => rest,
             };
-            let is_blank = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
+            let is_blank = std::str::from_utf8(line).is_ok_and(|text| text.trim().is_empty());
             if !is_blank {
                 break;
             }
@@ -902,10 +922,48 @@ fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error
     Ok(())
 }
 
+fn fill_positions_one_pass(bytes: &[u8]) -> Result<PositionBlock, error::ParseError> {
+    let mut iter = ConFrameIterator::from_bytes(bytes);
+    let mut n_atoms = None;
+    let mut n_frames = 0usize;
+    let mut values = Vec::new();
+    while let Some(frame) = iter.next() {
+        let frame = frame?;
+        let rows = frame.positions.nrows();
+        match n_atoms {
+            None => n_atoms = Some(rows),
+            Some(expected) if expected != rows => {
+                return Err(error::ParseError::InvalidCount(
+                    "frame atom count does not match the first frame".into(),
+                ));
+            }
+            Some(_) => {}
+        }
+        if let Some(src) = frame.positions.f64_slice() {
+            values.extend_from_slice(src);
+        } else {
+            for row in 0..rows {
+                values.extend_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+        n_frames += 1;
+    }
+    Ok(PositionBlock {
+        n_frames,
+        n_atoms: n_atoms.unwrap_or(0),
+        values,
+    })
+}
+
 fn fill_position_block(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, error::ParseError> {
+    // One worker parses each frame once. The boundary walk plus a second
+    // parse made `read_positions` slower than reading the frames.
+    if matches!(num_threads, None | Some(0) | Some(1)) {
+        return fill_positions_one_pass(bytes);
+    }
     let boundaries = frame_starts(bytes)?;
     if boundaries.is_empty() {
         return Ok(PositionBlock {
@@ -2988,13 +3046,10 @@ mod parallel_header_scan_tests {
             }
         }
         let tailed = format!("{text}\n   \n\t\n");
-        assert_cuts_match(&tailed, &[
-            0,
-            3,
-            tailed.len() / 2,
-            tailed.len() - 1,
-            tailed.len(),
-        ]);
+        assert_cuts_match(
+            &tailed,
+            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
+        );
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
         assert_crlf_gap_cut(&crlf);

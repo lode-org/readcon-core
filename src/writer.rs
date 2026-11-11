@@ -813,37 +813,12 @@ fn push_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, value: f64, format: FloatF
 }
 
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
-/// Non-finite values and `prec > 17` fall back to `std::fmt`.
+///
+/// Scaling by `10^prec` in binary64 and casting to an integer does not match
+/// that rounding: `5e-7` became `0.000001`, `9.9999995` became `10.000000`,
+/// and values past `2^53 / 10^prec` lost digits or saturated.
 fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
-    // The six-decimal path uses fixed-point arithmetic; other precisions
-    // use the standard formatter.
-    if !v.is_finite() || prec != 6 {
-        let _ = write!(buf, "{v:.prec$}");
-        return;
-    }
-    if v.is_sign_negative() {
-        buf.push(b'-');
-    }
-    let ax = v.abs();
-    if prec == 0 {
-        push_u128(buf, ax.round() as u128);
-        return;
-    }
-    let scale = 10u128.pow(prec as u32);
-    let n = (ax * scale as f64).round() as u128;
-    let int_part = n / scale;
-    let frac = n % scale;
-    push_u128(buf, int_part);
-    buf.push(b'.');
-    let mut tmp = [b'0'; 20];
-    let mut x = frac;
-    let mut i = prec;
-    while i > 0 {
-        i -= 1;
-        tmp[i] = b'0' + (x % 10) as u8;
-        x /= 10;
-    }
-    buf.extend_from_slice(&tmp[..prec]);
+    let _ = write!(buf, "{v:.prec$}");
 }
 
 fn push_xyz_line(
@@ -1053,6 +1028,27 @@ mod float_format_tests {
                 let exp = format!("{v:.prec$}");
                 assert_eq!(got, exp, "v={v:?} prec={prec}");
             }
+        }
+    }
+
+    #[test]
+    fn fixed6_matches_std_where_scaling_does_not() {
+        let vals = [
+            9.9999995,
+            5e-7,
+            999_999.999_999_5,
+            1e20,
+            -1e20,
+            1e308,
+            -1e308,
+            f64::MAX,
+            -f64::MAX,
+            5.118_777_491_767_015e14,
+        ];
+        for v in vals {
+            let got = formatted(v, 6);
+            let exp = format!("{v:.6}");
+            assert_eq!(got, exp, "v={v:?}");
         }
     }
 }
