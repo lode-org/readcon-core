@@ -50,6 +50,29 @@ pub trait LineStream<'a> {
         let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
         parse_coord_row(line, spec_version, default_id)
     }
+
+    /// One vector-section row (xyz, flag, required id), fused with the line
+    /// scan when the stream can do it. End of input is [`ParseError::IncompleteFrame`];
+    /// callers that are inside a named section map that to `IncompleteSection`.
+    fn next_vector_row(
+        &mut self,
+        spec_version: u32,
+    ) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+        let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
+        parse_vector_section_row(line, spec_version)
+    }
+}
+
+fn take_vector_row<'a>(
+    lines: &mut impl LineStream<'a>,
+    spec_version: u32,
+    section: &str,
+) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+    match lines.next_vector_row(spec_version) {
+        Ok(row) => Ok(row),
+        Err(ParseError::IncompleteFrame) => Err(ParseError::IncompleteSection(section.to_string())),
+        Err(err) => Err(err),
+    }
 }
 
 impl<'a, I> LineStream<'a> for Peekable<I>
@@ -720,6 +743,18 @@ pub(crate) fn parse_coord_row_at(
         return Err(ParseError::IncompleteFrame);
     }
     parse_coord_fields(bytes, i, spec_version, Some(default_id))
+}
+
+/// Vector-section row at `i`. The id column is required.
+pub(crate) fn parse_vector_row_at(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+) -> Result<(ParsedCoord, usize), ParseError> {
+    if i >= bytes.len() {
+        return Err(ParseError::IncompleteFrame);
+    }
+    parse_coord_fields(bytes, i, spec_version, None)
 }
 
 /// Scalar section row: one finite float, a flag, and an id. Exact width 3.
@@ -1809,10 +1844,8 @@ pub fn parse_velocity_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let vel_line = lines
-                .next_line()
-                .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(vel_line, header.spec_version)?;
+            let (vals, fixed, atom_id) =
+                take_vector_row(lines, header.spec_version, SECTION_VELOCITIES)?;
             if validate {
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
@@ -1863,10 +1896,8 @@ pub fn parse_force_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let force_line = lines
-                .next_line()
-                .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(force_line, header.spec_version)?;
+            let (vals, fixed, atom_id) =
+                take_vector_row(lines, header.spec_version, SECTION_FORCES)?;
             if validate {
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
@@ -2195,10 +2226,7 @@ fn parse_vector_named_section<'a>(
             )?;
         }
         for _ in 0..num_atoms {
-            let row = lines
-                .next_line()
-                .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(row, header.spec_version)?;
+            let (vals, fixed, atom_id) = take_vector_row(lines, header.spec_version, section_name)?;
             check_row(atom_idx, vals)?;
             if validate {
                 validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;
