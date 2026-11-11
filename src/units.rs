@@ -76,7 +76,13 @@ struct UnitValue {
     dim: Dimension,
 }
 
-fn base_table() -> HashMap<&'static str, UnitValue> {
+fn base_table() -> &'static HashMap<&'static str, UnitValue> {
+    static TABLE: std::sync::OnceLock<HashMap<&'static str, UnitValue>> =
+        std::sync::OnceLock::new();
+    TABLE.get_or_init(build_base_table)
+}
+
+fn build_base_table() -> HashMap<&'static str, UnitValue> {
     let mut m = HashMap::new();
     let ins = |m: &mut HashMap<&'static str, UnitValue>, names: &[&'static str], u: UnitValue| {
         for n in names {
@@ -84,87 +90,159 @@ fn base_table() -> HashMap<&'static str, UnitValue> {
         }
     };
     // Length → meters
-    ins(&mut m, &["m", "meter", "metre"], UnitValue {
-        si_factor: 1.0,
-        dim: Dimension::LENGTH,
-    });
-    ins(&mut m, &["angstrom", "a", "å"], UnitValue {
-        si_factor: 1e-10,
-        dim: Dimension::LENGTH,
-    });
-    ins(&mut m, &["nm", "nanometer"], UnitValue {
-        si_factor: 1e-9,
-        dim: Dimension::LENGTH,
-    });
-    ins(&mut m, &["bohr", "a0"], UnitValue {
-        si_factor: 5.291_772_109_03e-11,
-        dim: Dimension::LENGTH,
-    });
+    ins(
+        &mut m,
+        &["m", "meter", "metre"],
+        UnitValue {
+            si_factor: 1.0,
+            dim: Dimension::LENGTH,
+        },
+    );
+    ins(
+        &mut m,
+        &["angstrom", "a", "å"],
+        UnitValue {
+            si_factor: 1e-10,
+            dim: Dimension::LENGTH,
+        },
+    );
+    ins(
+        &mut m,
+        &["nm", "nanometer"],
+        UnitValue {
+            si_factor: 1e-9,
+            dim: Dimension::LENGTH,
+        },
+    );
+    ins(
+        &mut m,
+        &["bohr", "a0"],
+        UnitValue {
+            si_factor: 5.291_772_109_03e-11,
+            dim: Dimension::LENGTH,
+        },
+    );
     // Time → seconds
-    ins(&mut m, &["s", "second"], UnitValue {
-        si_factor: 1.0,
-        dim: Dimension::TIME,
-    });
-    ins(&mut m, &["fs", "femtosecond"], UnitValue {
-        si_factor: 1e-15,
-        dim: Dimension::TIME,
-    });
-    ins(&mut m, &["ps", "picosecond"], UnitValue {
-        si_factor: 1e-12,
-        dim: Dimension::TIME,
-    });
-    ins(&mut m, &["ns", "nanosecond"], UnitValue {
-        si_factor: 1e-9,
-        dim: Dimension::TIME,
-    });
+    ins(
+        &mut m,
+        &["s", "second"],
+        UnitValue {
+            si_factor: 1.0,
+            dim: Dimension::TIME,
+        },
+    );
+    ins(
+        &mut m,
+        &["fs", "femtosecond"],
+        UnitValue {
+            si_factor: 1e-15,
+            dim: Dimension::TIME,
+        },
+    );
+    ins(
+        &mut m,
+        &["ps", "picosecond"],
+        UnitValue {
+            si_factor: 1e-12,
+            dim: Dimension::TIME,
+        },
+    );
+    ins(
+        &mut m,
+        &["ns", "nanosecond"],
+        UnitValue {
+            si_factor: 1e-9,
+            dim: Dimension::TIME,
+        },
+    );
     // Mass → kg
-    ins(&mut m, &["kg", "kilogram"], UnitValue {
-        si_factor: 1.0,
-        dim: Dimension::MASS,
-    });
-    ins(&mut m, &["u", "amu", "dalton", "da"], UnitValue {
-        si_factor: 1.660_539_066_60e-27,
-        dim: Dimension::MASS,
-    });
+    ins(
+        &mut m,
+        &["kg", "kilogram"],
+        UnitValue {
+            si_factor: 1.0,
+            dim: Dimension::MASS,
+        },
+    );
+    ins(
+        &mut m,
+        &["u", "amu", "dalton", "da"],
+        UnitValue {
+            si_factor: 1.660_539_066_60e-27,
+            dim: Dimension::MASS,
+        },
+    );
     // Energy → joule (M L^2 T^-2)
     let energy_dim = Dimension::MASS
         .mul(Dimension::LENGTH.pow(2.0))
         .div(Dimension::TIME.pow(2.0));
-    ins(&mut m, &["j", "joule"], UnitValue {
-        si_factor: 1.0,
-        dim: energy_dim,
-    });
-    ins(&mut m, &["ev"], UnitValue {
-        si_factor: 1.602_176_634e-19,
-        dim: energy_dim,
-    });
-    ins(&mut m, &["mev"], UnitValue {
-        si_factor: 1.602_176_634e-22,
-        dim: energy_dim,
-    });
-    ins(&mut m, &["hartree", "ha"], UnitValue {
-        si_factor: 4.359_744_722_207_1e-18,
-        dim: energy_dim,
-    });
+    ins(
+        &mut m,
+        &["j", "joule"],
+        UnitValue {
+            si_factor: 1.0,
+            dim: energy_dim,
+        },
+    );
+    ins(
+        &mut m,
+        &["ev"],
+        UnitValue {
+            si_factor: 1.602_176_634e-19,
+            dim: energy_dim,
+        },
+    );
+    ins(
+        &mut m,
+        &["mev"],
+        UnitValue {
+            si_factor: 1.602_176_634e-22,
+            dim: energy_dim,
+        },
+    );
+    ins(
+        &mut m,
+        &["hartree", "ha"],
+        UnitValue {
+            si_factor: 4.359_744_722_207_1e-18,
+            dim: energy_dim,
+        },
+    );
     // Charge
-    ins(&mut m, &["e", "electron_charge"], UnitValue {
-        si_factor: 1.602_176_634e-19,
-        dim: Dimension::CHARGE,
-    });
+    ins(
+        &mut m,
+        &["e", "electron_charge"],
+        UnitValue {
+            si_factor: 1.602_176_634e-19,
+            dim: Dimension::CHARGE,
+        },
+    );
     // 1 mol = N_A entities. `kcal / mol` is then 4184/N_A J per entity
     // (metatomic: eV -> kcal/mol is ~23.06).
-    ins(&mut m, &["mol"], UnitValue {
-        si_factor: 6.022_140_76e23,
-        dim: Dimension::ZERO,
-    });
-    ins(&mut m, &["kcal"], UnitValue {
-        si_factor: 4184.0,
-        dim: energy_dim,
-    });
-    ins(&mut m, &["kj"], UnitValue {
-        si_factor: 1000.0,
-        dim: energy_dim,
-    });
+    ins(
+        &mut m,
+        &["mol"],
+        UnitValue {
+            si_factor: 6.022_140_76e23,
+            dim: Dimension::ZERO,
+        },
+    );
+    ins(
+        &mut m,
+        &["kcal"],
+        UnitValue {
+            si_factor: 4184.0,
+            dim: energy_dim,
+        },
+    );
+    ins(
+        &mut m,
+        &["kj"],
+        UnitValue {
+            si_factor: 1000.0,
+            dim: energy_dim,
+        },
+    );
     m
 }
 
@@ -174,9 +252,11 @@ pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError>
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
     }
+    // One table for the process. Rebuilding it on every frame allocated
+    // a map per unit string, and those maps did not scale with the pool.
     let table = base_table();
     // CON-units.16 names are case-insensitive, including `Å`.
-    parse_expr(&s.to_lowercase(), &table)
+    parse_expr(&s.to_lowercase(), table)
 }
 
 fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimension), ParseError> {
@@ -543,6 +623,24 @@ pub fn canonicalize_units_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn base_table_is_shared_across_calls_and_threads() {
+        let first = base_table() as *const HashMap<&'static str, UnitValue>;
+        let second = base_table() as *const HashMap<&'static str, UnitValue>;
+        assert_eq!(first, second);
+        let factors = std::thread::scope(|scope| {
+            let mut joins = Vec::new();
+            for _ in 0..8 {
+                joins.push(scope.spawn(|| parse_unit_expression("Angstrom").unwrap().0));
+            }
+            joins
+                .into_iter()
+                .map(|join| join.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert!(factors.iter().all(|factor| (*factor - 1e-10).abs() < 1e-22));
+    }
 
     #[test]
     fn angstrom_to_nm() {
