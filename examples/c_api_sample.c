@@ -1,6 +1,8 @@
 #include "readcon-core.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 const size_t MAX_HEADER_LENGTH = 256;
 
@@ -66,6 +68,7 @@ void print_frame_summary(const RKRConFrame *frame_handle) {
 }
 
 int main(int argc, char *argv[]) {
+    int failed = 0;
     if (argc < 2 || argc > 3) {
         fprintf(stderr, "Usage: %s <input.con> [output.con]\n", argv[0]);
         return 1;
@@ -143,21 +146,73 @@ int main(int argc, char *argv[]) {
         printf("\nWriting %zu frames to '%s'...\n", frame_count,
                output_filename);
 
-        // Use the new object-oriented writer API
+        // The first frame replaces the file. The rest are appended.
+        // rkr_writer_flush leaves that prefix parseable before the writer
+        // is closed. rkr_write_frames_to_string returns the same bytes
+        // without creating a file.
+        size_t head = frame_count > 1 ? 1 : frame_count;
         RKRConFrameWriter *writer = create_writer_from_path_c(output_filename);
+        RKRStatus result = RKR_STATUS_IO_ERROR;
         if (!writer) {
             fprintf(stderr, "Failed to create writer for file '%s'.\n",
                     output_filename);
         } else {
-            RKRStatus result = rkr_writer_extend(
-                writer, (const RKRConFrame **)handles_array, frame_count);
+            result = rkr_writer_extend(
+                writer, (const RKRConFrame **)handles_array, head);
             if (result == RKR_STATUS_SUCCESS) {
-                printf("Successfully wrote all frames.\n");
-            } else {
-                fprintf(stderr, "An error occurred while writing the file.\n");
+                result = rkr_writer_flush(writer);
             }
-            // Free the writer to close the file and release resources.
             free_rkr_writer(writer);
+            if (result == RKR_STATUS_SUCCESS && frame_count > head) {
+                writer = create_writer_from_path_append_c(output_filename);
+                if (!writer) {
+                    fprintf(stderr, "Failed to append to '%s'.\n",
+                            output_filename);
+                    result = RKR_STATUS_IO_ERROR;
+                } else {
+                    result = rkr_writer_extend(
+                        writer, (const RKRConFrame **)handles_array + head,
+                        frame_count - head);
+                    if (result == RKR_STATUS_SUCCESS) {
+                        result = rkr_writer_flush(writer);
+                    }
+                    free_rkr_writer(writer);
+                }
+            }
+        }
+        if (result == RKR_STATUS_SUCCESS) {
+            char *text = NULL;
+            uintptr_t text_len = 0;
+            result = rkr_write_frames_to_string(
+                (const RKRConFrame *const *)handles_array, frame_count, &text,
+                &text_len);
+            if (result == RKR_STATUS_SUCCESS) {
+                FILE *out = fopen(output_filename, "rb");
+                char *file = out ? malloc(text_len + 1) : NULL;
+                size_t nread = file ? fread(file, 1, text_len + 1, out) : 0;
+                if (!out || nread != text_len ||
+                    memcmp(file, text, text_len) != 0) {
+                    fprintf(stderr,
+                            "Serialized frames differ from '%s'.\n",
+                            output_filename);
+                    result = RKR_STATUS_IO_ERROR;
+                } else {
+                    printf("Successfully wrote all frames.\n");
+                }
+                free(file);
+                if (out) {
+                    fclose(out);
+                }
+            }
+            rkr_free_string(text);
+            if (result != RKR_STATUS_SUCCESS) {
+                fprintf(stderr, "Failed to serialize frames.\n");
+            }
+        } else {
+            fprintf(stderr, "An error occurred while writing the file.\n");
+        }
+        if (result != RKR_STATUS_SUCCESS) {
+            failed = 1;
         }
     }
 
@@ -175,5 +230,5 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Done.\n");
-    return 0;
+    return failed;
 }

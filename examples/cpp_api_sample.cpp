@@ -1,5 +1,8 @@
 #include "readcon-core.hpp"
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <string>
 #include <vector>
 
 // A helper function to print the frame's data in detail.
@@ -152,11 +155,38 @@ int main(int argc, char *argv[]) {
                 std::cout << "\nWriting " << all_frames.size()
                           << " frames...\n";
 
-                // Use the new, ergonomic ConFrameWriter object.
-                // RAII ensures the file is properly closed when the writer goes
-                // out of scope.
-                readcon::ConFrameWriter writer(output_filename);
-                writer.extend(all_frames);
+                // Serialize before the frames are moved into the writers.
+                // The first frame replaces the file. flush makes that prefix
+                // parseable before the writer is destroyed. Later frames use
+                // OpenMode::Append. The file matches write_frames_to_string.
+                const std::string bytes =
+                    readcon::write_frames_to_string(all_frames);
+                {
+                    readcon::ConFrameWriter writer(output_filename);
+                    std::vector<readcon::ConFrame> head;
+                    head.push_back(std::move(all_frames.front()));
+                    writer.extend(head);
+                    writer.flush();
+                    if (readcon::read_all_frames(output_filename).size() != 1) {
+                        throw std::runtime_error(
+                            "flush did not leave a parseable frame");
+                    }
+                }
+                all_frames.erase(all_frames.begin());
+                if (!all_frames.empty()) {
+                    readcon::ConFrameWriter writer(
+                        output_filename,
+                        readcon::ConFrameWriter::OpenMode::Append);
+                    writer.extend(all_frames);
+                    writer.flush();
+                }
+                std::ifstream in(output_filename, std::ios::binary);
+                const std::string file{std::istreambuf_iterator<char>(in),
+                                       std::istreambuf_iterator<char>()};
+                if (file != bytes) {
+                    throw std::runtime_error(
+                        "serialized frames differ from the file");
+                }
 
                 std::cout << "Successfully wrote all frames." << std::endl;
             }

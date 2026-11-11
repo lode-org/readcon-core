@@ -2754,8 +2754,14 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
 /// - `None` (default): auto-detect from extension (.gz = gzip, else uncompressed)
 /// - `"gzip"`: force gzip compression
 /// - `"none"`: force uncompressed
+///
+/// `append=True` extends an existing uncompressed file instead of replacing
+/// it. The bytes match one `write_con` of the old frames followed by these
+/// frames when the existing file was written by readcon. Gzip, zstd, and
+/// `comm=` are refused. The file is flushed before this function returns.
+/// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto"))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false))]
 #[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
@@ -2766,7 +2772,13 @@ fn write_con(
     canonical: bool,
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
+    append: bool,
 ) -> PyResult<()> {
+    if append && comm.is_some() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "append is not supported with comm=",
+        ));
+    }
     let rust_frames = py_frames_to_rust(py, frames)?;
     if let Some(comm) = comm {
         if compression.is_some_and(|c| c != "none") || path.ends_with(".gz") || canonical {
@@ -2787,6 +2799,28 @@ fn write_con(
         }
         None => path.ends_with(".gz"),
     };
+
+    if append {
+        if use_gzip {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "append is only supported for an uncompressed file",
+            ));
+        }
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_append_with_precision(path, precision)
+                .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
+            None => ConFrameWriter::from_path_append(path)
+                .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
+        }
+        .canonical(canonical);
+        writer
+            .extend(rust_frames.iter())
+            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+        writer
+            .flush()
+            .map_err(|e| PyIOError::new_err(format!("flush error: {e}")))?;
+        return Ok(());
+    }
 
     if use_gzip {
         let mut writer = match precision {

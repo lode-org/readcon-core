@@ -455,9 +455,13 @@ Writing frames
     # Write to file
     readcon.write_con("output.con", frames)
 
-    # Write to string
+    # Write to string. The bytes match the file write.
     output = readcon.write_con_string(frames)
     print(output)
+
+    # Append to an uncompressed file. Gzip and zstd are refused.
+    readcon.write_con("output.con", frames[:1])
+    readcon.write_con("output.con", frames[1:], append=True)
 
 Writing with custom precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

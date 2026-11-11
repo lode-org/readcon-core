@@ -1260,6 +1260,54 @@ pub unsafe extern "C" fn create_writer_from_path_round_trip_c(
     }
 }
 
+/// Opens an uncompressed file for appending.
+///
+/// The caller owns the handle and must call `free_rkr_writer`. A missing
+/// file is created. A non-empty file that does not end in a newline receives
+/// one. Gzip and zstd paths return null; [`rkr_last_error_message`] explains
+/// why.
+///
+/// # Safety
+/// `filename_c` must be a valid NUL-terminated path or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_from_path_append_c(
+    filename_c: *const c_char,
+) -> *mut RKRConFrameWriter {
+    let Some(filename) = (unsafe { cstr_path(filename_c) }) else {
+        return ptr::null_mut();
+    };
+    match crate::writer::open_uncompressed_append(Path::new(filename)) {
+        Ok(file) => into_rkr_writer(Box::new(file), None),
+        Err(err) => {
+            set_last_error(&err.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Opens an uncompressed file for appending with a fixed decimal precision.
+///
+/// The caller owns the handle and must call `free_rkr_writer`.
+///
+/// # Safety
+/// `filename_c` must be a valid NUL-terminated path or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_writer_from_path_append_with_precision_c(
+    filename_c: *const c_char,
+    precision: u8,
+) -> *mut RKRConFrameWriter {
+    let Some(filename) = (unsafe { cstr_path(filename_c) }) else {
+        return ptr::null_mut();
+    };
+    match crate::writer::open_uncompressed_append(Path::new(filename)) {
+        Ok(file) => into_rkr_writer(Box::new(file), Some(precision)),
+        Err(err) => {
+            set_last_error(&err.to_string());
+            ptr::null_mut()
+        }
+    }
+}
+
 /// Flushes buffered CON data and reports write errors.
 ///
 /// On failure the status is `RKR_STATUS_IO_ERROR` and
@@ -1397,6 +1445,65 @@ pub unsafe extern "C" fn rkr_writer_extend(
         }
         Err(err) => {
             set_last_error(&err.to_string());
+            RKRStatus::RKR_STATUS_IO_ERROR
+        }
+    }
+}
+
+/// Serializes frames to a newly allocated CON string. No file is created.
+///
+/// On success `*out_text` is a NUL-terminated buffer of `*out_len` payload
+/// bytes (the NUL is not included in the length). Free it with
+/// [`rkr_free_string`]. The bytes match `create_writer_from_path_c` writing
+/// the same frames. `num_frames == 0` yields an empty string and accepts a
+/// null `frame_handles`.
+///
+/// # Safety
+/// `out_text` and `out_len` must be valid. Each frame handle must be valid
+/// when `num_frames > 0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_write_frames_to_string(
+    frame_handles: *const *const RKRConFrame,
+    num_frames: usize,
+    out_text: *mut *mut c_char,
+    out_len: *mut usize,
+) -> RKRStatus {
+    if out_text.is_null() || out_len.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    unsafe {
+        *out_text = ptr::null_mut();
+        *out_len = 0;
+    }
+    if num_frames > 0 && frame_handles.is_null() {
+        return RKRStatus::RKR_STATUS_NULL_POINTER;
+    }
+    let mut buffer = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        for i in 0..num_frames {
+            let handle = unsafe { *frame_handles.add(i) };
+            let Some(frame) = (unsafe { (handle as *const ConFrame).as_ref() }) else {
+                return RKRStatus::RKR_STATUS_NULL_POINTER;
+            };
+            if let Err(err) = writer.write_frame(frame) {
+                set_last_error(&err.to_string());
+                return RKRStatus::RKR_STATUS_IO_ERROR;
+            }
+        }
+    }
+    let len = buffer.len();
+    match CString::new(buffer) {
+        Ok(text) => {
+            unsafe {
+                *out_text = text.into_raw();
+                *out_len = len;
+            }
+            clear_last_error();
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(_) => {
+            set_last_error("serialized CON contains an interior NUL");
             RKRStatus::RKR_STATUS_IO_ERROR
         }
     }

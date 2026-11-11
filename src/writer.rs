@@ -5,8 +5,8 @@ use crate::types::{
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 /// Failure from [`ConFrameWriter`]. I/O stays distinct from format errors
@@ -723,7 +723,11 @@ impl<W: Write> ConFrameWriter<W> {
         Ok(())
     }
 
-    /// Flushes buffered data to the underlying writer and reports errors.
+    /// Flushes buffered frames to the underlying writer.
+    ///
+    /// `write_frame` fills a buffer and does not always reach the sink.
+    /// After `flush` returns, a reader sees a complete, parseable prefix.
+    /// Dropping the writer flushes as well.
     pub fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
@@ -979,6 +983,81 @@ impl ConFrameWriter<File> {
         let file = File::create(path)?;
         Ok(Self::with_precision(file, precision))
     }
+
+    /// Opens an uncompressed file for appending.
+    ///
+    /// The file is created when it does not exist. A non-empty file that does
+    /// not end in a newline receives one, so the next frame header starts on
+    /// its own line. A file this writer produced already ends in a newline,
+    /// and appending the remaining frames reproduces one whole-file write.
+    /// Gzip and zstd paths are refused: a compressed member cannot be extended.
+    pub fn from_path_append<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        Ok(Self::new(open_uncompressed_append(path.as_ref())?))
+    }
+
+    /// Opens an uncompressed file for appending with a fixed decimal precision.
+    pub fn from_path_append_with_precision<P: AsRef<Path>>(
+        path: P,
+        precision: usize,
+    ) -> io::Result<Self> {
+        Ok(Self::with_precision(
+            open_uncompressed_append(path.as_ref())?,
+            precision,
+        ))
+    }
+}
+
+/// Opens `path` at the end. See [`ConFrameWriter::from_path_append`].
+pub(crate) fn open_uncompressed_append(path: &Path) -> io::Result<File> {
+    if let Some(ext) = path.extension().and_then(|ext| ext.to_str())
+        && (ext == "gz" || ext == "zst")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "append is only supported for an uncompressed file",
+        ));
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .append(true)
+        .open(path)?;
+    let len = file.seek(SeekFrom::End(0))?;
+    if len > 0 {
+        file.seek(SeekFrom::End(-1))?;
+        let mut last = [0u8; 1];
+        file.read_exact(&mut last)?;
+        if last[0] != b'\n' {
+            file.write_all(b"\n")?;
+        }
+    }
+    Ok(file)
+}
+
+/// Serializes `frames` to CON bytes. No file is created.
+///
+/// The bytes match [`ConFrameWriter::from_path`] writing the same frames.
+pub fn write_frames_to_vec(frames: &[ConFrame]) -> Result<Vec<u8>, WriteError> {
+    let mut buffer = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(&mut buffer);
+        writer.extend(frames.iter())?;
+    }
+    Ok(buffer)
+}
+
+/// Serializes `frames` to a CON string. No file is created.
+///
+/// The bytes match [`ConFrameWriter::from_path`] writing the same frames.
+pub fn write_frames_to_string(frames: &[ConFrame]) -> Result<String, WriteError> {
+    let bytes = write_frames_to_vec(frames)?;
+    String::from_utf8(bytes).map_err(|err| {
+        WriteError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            err.utf8_error().to_string(),
+        ))
+    })
 }
 
 // Gzip-compressed writer constructors.
