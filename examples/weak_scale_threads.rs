@@ -97,16 +97,7 @@ fn online_cpus() -> usize {
 }
 
 fn record_cpu() -> String {
-    let raw = cpu_model();
-    let cleaned = raw.replace("(R)", "").replace("(TM)", "").replace('®', "");
-    let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
-    if cleaned.contains("Xeon") {
-        "Intel Xeon Processor".to_string()
-    } else if cleaned.is_empty() {
-        "unknown".to_string()
-    } else {
-        cleaned
-    }
+    cpu_model()
 }
 
 fn json_escape(text: &str) -> String {
