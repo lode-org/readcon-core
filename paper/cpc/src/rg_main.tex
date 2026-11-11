@@ -419,7 +419,38 @@ On the million-atom frame OVITO is the fastest of these readers.
 
 \subsection{CON}
 \label{sec:conread}
-The CON file is \num{100000} frames of 32 atoms.
+Table~\ref{tab:survey} is one convel frame, the survey frame, read on one core.
+One warmup precedes six repeats, and the median is the type-7 median.
+The Python binding takes $\num{2.87e-5}$\,s and \SI{34}{\mebi\byte}.
+Before the small-frame fix that read took $\num{1.10e-3}$\,s.
+The Rust reader takes $\num{1.83e-5}$\,s and the C binding $\num{1.66e-5}$\,s.
+Those are the readcon rows the fix changes.
+eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the current eOn client $\num{2.62e-5}$\,s and eOn 3.6.0 $\num{2.32e-5}$\,s.
+Those three differ from the previous run only by run-to-run variation.
+ASE's eon reader stops at line 23, the velocity title.
+
+\begin{table}[tbp]
+\centering
+\caption{Median read of one convel frame, in seconds.
+The Python resident set is \SI{34}{\mebi\byte}.
+ASE stops at line 23.}
+\label{tab:survey}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Reader & Median \\
+\midrule
+readcon, Python & \num{2.87e-5} \\
+readcon, Rust & \num{1.83e-5} \\
+readcon, C & \num{1.66e-5} \\
+eOn \texttt{loadcons} & \num{3.15e-4} \\
+eOn, current & \num{2.62e-5} \\
+eOn 3.6.0 & \num{2.32e-5} \\
+ASE eon & stops at line 23 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The trajectory file is \num{100000} frames of 32 atoms.
 Figure~\ref{fig:conread} is the read.
 The C binding takes \SI{0.375}{\second} and \SI{554}{\mebi\byte}.
 The Fortran binding takes \SI{0.504}{\second} at the same resident set.
@@ -478,6 +509,7 @@ A short decimal takes Clinger's exact scaling, and every other spelling takes an
 That path is $1.02$ and $1.05$ times the reader without it.
 On one frame of $10^{6}$ atoms, extxyz 0.4.6 and cextxyz are faster than readcon, and OVITO is faster than both.
 On \num{10000} frames the Rust reader is faster than those three.
+One convel frame takes $\num{2.87e-5}$\,s in Python, down from $\num{1.10e-3}$\,s, and $\num{1.66e-5}$\,s in C.
 The C binding reads \num{100000} CON frames in \SI{0.375}{\second}; the current eOn client takes \SI{0.854}{\second}.
 ASE does not read a velocity block and does not write a per-component hold.
 chemfiles and OVITO do not open CON.
