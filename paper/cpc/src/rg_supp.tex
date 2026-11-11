@@ -726,7 +726,7 @@ The resident set is the peak of the fresh process, in mebibytes.
 The triple is the first quartile, the median and the third quartile, in seconds.
 Table~\ref{tab:conwrite} is the write.
 For readcon and ASE the second number is the increase in the resident set, in mebibytes.
-The eOn row is the fixed client on core 0, one warmup and six repeats, and it states its own units.
+The eOn row is the streaming write on core 0, one warmup and six repeats, and it states its own units.
 
 \begin{table}[htbp]
 \centering
@@ -748,7 +748,7 @@ eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
 \centering
 \caption{Write of the 32-atom, \num{100000}-frame file.
 For readcon and ASE the entry is the time in seconds, then the resident-set increase in mebibytes.
-The eOn streaming row is the fixed client, core 0, one warmup and six repeats.
+The eOn streaming row is core 0, one warmup and six repeats.
 Its high-water mark is from the read.}
 \label{tab:conwrite}
 \footnotesize
@@ -761,7 +761,6 @@ readcon, Rust & 0.539, 0.40 & 0.938, 0.34 \\
 readcon, Python & 0.583, 0.26 & 1.25, 0.26 \\
 ASE eon & 14.7, 6.4 & \\
 eOn, streaming & \multicolumn{2}{p{0.70\linewidth}}{9.71~s. Final RSS $+1.9$~MiB above the Matter. High-water $+458$~MiB is from the read.} \\
-eOn, held frames & \multicolumn{2}{p{0.70\linewidth}}{9.42~s, RSS $+1.06$~GiB. Unmodified develop segfaults in \texttt{matter2con} on this arm. That bug is fixed in the streaming client.} \\
 \bottomrule
 \end{tabular}
 \end{table}
