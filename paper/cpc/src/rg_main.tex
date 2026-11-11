@@ -1549,8 +1549,16 @@ Both eOn clients exit with a segmentation fault in \texttt{matter2con}
 and in \texttt{matter2convel}.
 On the 100000-frame file the same two readcon writers and ASE
 \texttt{format='eon'} do write the CON geometry.
-The convel file still stops ASE on line 23 of a velocity title, and
-both eOn clients still segfault.
+The convel file still stops ASE on line 23 of a velocity title.
+The fixed eOn client, pinned with \texttt{taskset -c 0}, writes that
+32-atom file by streaming.
+One warmup and six repeats give a median of \SI{9.71}{\second}.
+The final resident set is \SI{1.9}{\mebi\byte} above the Matter, and the
+high-water mark of \SI{458}{\mebi\byte} is from the read.
+The arm that holds every frame takes \SI{9.42}{\second} and adds
+\SI{1.06}{\gibi\byte}.
+Unmodified develop segfaults in \texttt{matter2con} on that arm, and
+that bug is fixed in the client timed here.
 
 \begin{table}[tbp] \centering \footnotesize
 \caption{Writes of the 32-atom, 100000-frame geometry. The resident and heap columns are the increase above the loaded input.}
@@ -2036,9 +2044,9 @@ The whisker runs from the first quartile to the third.}
 
 A write of that coordinate file takes \SI{0.539}{\second} in Rust and adds \SI{0.40}{\mebi\byte} to the resident set, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
 The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
-No eOn write time or resident set is reported.
+The fixed eOn client streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 0.
+Table~\ref{tab:conwrite} gives that row, the final resident set above the Matter, and the arm that holds every frame.
 The released eOn 3.6.0 client stops in \texttt{matter2con}.
-Table~\ref{tab:conwrite} records the readcon and ASE writes, and the eOn cell stays open until six new samples are measured.
 ASE's eon reader raises \texttt{ValueError} on the velocity title, so it does not read that file.
 ASE's eon writer raises \texttt{TypeError} on a frame held in one component.
 
