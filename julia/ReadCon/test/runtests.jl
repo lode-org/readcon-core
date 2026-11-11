@@ -170,6 +170,14 @@ end
         written_minor, _ = round_trip(minor1)
         @test occursin("\"time\":\"fs\"", written_minor)
         @test !occursin(natural, written_minor)
+
+        # A multi-byte unit label is inside the units object. The scan must
+        # step by character, not by byte, or rewriting the time label throws.
+        angstrom = "{\"con_spec_version\":3,\"units\":{\"length\":\"Å\",\"energy\":\"eV\"}}"
+        written_ang, reread_ang = round_trip(angstrom)
+        @test occursin("\"time\":\"$natural\"", written_ang)
+        @test occursin("Å", written_ang)
+        @test reread_ang[1].atoms[1].vx ≈ 0.1
     end
 
     @testset "Header strings" begin

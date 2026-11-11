@@ -507,7 +507,8 @@ function _units_object_bounds(metadata_json::AbstractString)
     open = findnext(==('{'), metadata_json, m.offset)
     open === nothing && return nothing
     depth = 0
-    for i in open:lastindex(metadata_json)
+    i = open
+    while i <= lastindex(metadata_json)
         c = metadata_json[i]
         if c == '{'
             depth += 1
@@ -515,6 +516,7 @@ function _units_object_bounds(metadata_json::AbstractString)
             depth -= 1
             depth == 0 && return (open, i)
         end
+        i = nextind(metadata_json, i)
     end
     return nothing
 end
