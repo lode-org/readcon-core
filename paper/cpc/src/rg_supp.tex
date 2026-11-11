@@ -112,60 +112,166 @@ Section & Values & Width \\
 \end{tabular}
 \end{table}
 
-\section{Quartiles}
-\label{sec:times}
-Table~\ref{tab:times} is the multi-reader session.
-Each arm was repeated seven times on one core.
-The quartiles are type 7.
-A coordinate match is to the last bit, except chemfiles, whose positions differ by at most $\num{1.8e-15}$\,\si{\angstrom} on the largest file and which returns no velocities.
+\section{Extended XYZ}
+\label{sec:xyz-tables}
+Times are seconds.
+The triple in Table~\ref{tab:xyzq} is the first quartile, the median and the third quartile.
+The heap in Table~\ref{tab:heap} is the massif increase, in mebibytes, for the write of one frame of $10^{6}$ atoms.
 
 \begin{table}[htbp]
 \centering
 \footnotesize
-\caption{Read time in milliseconds. The triple is the first quartile, the median and the third quartile.}
-\label{tab:times}
-\begin{tabular}{@{}ll@{}}
+\caption{Median extended XYZ read time, in seconds.}
+\label{tab:xyz}
+\begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Reader and file & Quartile, median, quartile \\
+Atoms $\times$ frames & Rust & Python & ASE & cextxyz & extxyz 0.4.6 \\
 \midrule
-readcon, 24$\times$36 & 0.103, 0.103, 0.107 \\
-eOn C, 24$\times$36 & 0.259, 0.262, 0.262 \\
-ASE, 24$\times$36 & 3.89, 3.92, 3.95 \\
-chemfiles, 24$\times$36 & 2.34, 2.38, 2.39 \\
-cextxyz, 24$\times$36 & 2.30, 2.33, 2.35 \\
-extxyz Python, 24$\times$36 & 9.85, 9.92, 10.0 \\
-\midrule
-readcon, 160$\times$180 & 1.85, 1.88, 1.95 \\
-eOn C, 160$\times$180 & 8.70, 8.74, 8.85 \\
-ASE, 160$\times$180 & 69.2, 69.7, 70.4 \\
-chemfiles, 160$\times$180 & 63.3, 63.5, 63.7 \\
-cextxyz, 160$\times$180 & 64.3, 64.4, 64.6 \\
-extxyz Python, 160$\times$180 & 143, 144, 145 \\
-\midrule
-readcon, 600$\times$280 & 10.4, 10.5, 10.9 \\
-eOn C, 600$\times$280 & 51.0, 51.2, 51.3 \\
-ASE, 600$\times$280 & 367, 370, 372 \\
-chemfiles, 600$\times$280 & 355, 355, 356 \\
-cextxyz, 600$\times$280 & 369, 370, 371 \\
-extxyz Python, 600$\times$280 & 735, 737, 738 \\
+10 $\times$ 1 & 1.277e-5 & 2.358e-5 & 3.564e-4 & 1.735e-4 & 8.541e-5 \\
+10 $\times$ 8 & 3.816e-5 & 5.872e-5 & 1.879e-3 & 7.391e-4 & 4.170e-4 \\
+1000 $\times$ 1 & 2.389e-4 & 3.392e-4 & 1.986e-3 & 4.023e-4 & 3.066e-4 \\
+100 $\times$ 100 & 2.597e-3 & 3.245e-3 & 0.03347 & 8.829e-3 & 6.856e-3 \\
+$10^{6}$ $\times$ 1 & 0.2868 & 0.4191 & 1.909 & 0.2747 & 0.2606 \\
+100 $\times$ 10000 & 0.2942 & 0.4543 & 3.411 & 0.9368 & 0.7399 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:fast} is the interleaved session: eight samples, the same quartile definition.
-The order in each round is the Eisel--Lemire build, the eOn-style reader, the short-decimal build, the short-decimal build, the eOn-style reader, and the Eisel--Lemire build.
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Quartiles of the two large extended XYZ reads, in seconds.}
+\label{tab:xyzq}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Reader & File & First, median, third \\
+\midrule
+Rust & $10^{6}$ & 0.2766, 0.2868, 0.2948 \\
+Rust & 10000 frames & 0.2923, 0.2942, 0.2963 \\
+Python & $10^{6}$ & 0.3941, 0.4191, 0.4324 \\
+Python & 10000 frames & 0.4453, 0.4543, 0.4599 \\
+ASE extxyz & $10^{6}$ & 1.817, 1.909, 2.036 \\
+ASE extxyz & 10000 frames & 3.384, 3.411, 3.446 \\
+cextxyz & $10^{6}$ & 0.2578, 0.2747, 0.2872 \\
+cextxyz & 10000 frames & 0.9068, 0.9368, 0.9753 \\
+extxyz 0.4.6 & $10^{6}$ & 0.2415, 0.2606, 0.2671 \\
+extxyz 0.4.6 & 10000 frames & 0.7251, 0.7399, 0.7491 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{table}[htbp]
 \centering
-\caption{Interleaved session, in milliseconds. The triple is the first quartile, the median and the third quartile.}
+\footnotesize
+\caption{Median extended XYZ write time, in seconds.}
+\label{tab:xyzw}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Atoms $\times$ frames & Rust & Python & ASE & cextxyz & extxyz 0.4.6 \\
+\midrule
+10 $\times$ 1 & 4.906e-5 & 5.773e-5 & 2.224e-4 & 1.751e-4 & 1.153e-4 \\
+10 $\times$ 8 & 8.195e-5 & 9.573e-5 & 9.669e-4 & 7.604e-4 & 6.011e-4 \\
+1000 $\times$ 1 & 4.445e-4 & 4.709e-4 & 3.778e-3 & 8.579e-4 & 6.695e-4 \\
+100 $\times$ 100 & 4.010e-3 & 4.089e-3 & 0.04191 & 0.01450 & 0.01169 \\
+$10^{6}$ $\times$ 1 & 0.4875 & 0.4424 & 3.741 & 0.9482 & 0.9064 \\
+100 $\times$ 10000 & 0.4310 & 0.4110 & 4.256 & 1.473 & 1.193 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Heap added by writing one frame of $10^{6}$ atoms, in mebibytes.}
+\label{tab:heap}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+ & Rust & Python & ASE & cextxyz & extxyz 0.4.6 \\
+\midrule
+Heap & 61.04 & 84.30 & 115.4 & 171.6 & 163.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{CON}
+\label{sec:con-tables}
+Table~\ref{tab:conread} is the read of \num{100000} frames of 32 atoms.
+The resident set is the peak of the fresh process, in mebibytes.
+The triple is the first quartile, the median and the third quartile, in seconds.
+Table~\ref{tab:conwrite} is the write.
+The second number is the increase in the resident set, in mebibytes.
+
+\begin{table}[htbp]
+\centering
+\caption{CON read.}
+\label{tab:conread}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Reader & Resident set & First, median, third \\
+\midrule
+readcon C & 553.8 & 0.3613, 0.3747, 0.3936 \\
+readcon Fortran & 554.2 & 0.4850, 0.5044, 0.5364 \\
+eOn, current & 921.2 & 0.8397, 0.8544, 0.8646 \\
+eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Write of the \num{100000}-frame file.
+Time in seconds, then the resident-set increase in mebibytes.}
+\label{tab:conwrite}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Writer & Coordinates & With velocities \\
+\midrule
+readcon, Rust & 0.539, 0.40 & 0.938, 0.34 \\
+readcon, Python & 0.583, 0.26 & 1.25, 0.26 \\
+ASE eon & 14.7, 6.4 & \\
+eOn & 12.1, 418 & 9.01, 418 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{chemfiles and OVITO}
+\label{sec:copper}
+Both readers open the copper extended XYZ files and do not open CON.
+Table~\ref{tab:copper} is the median read time in seconds.
+
+\begin{table}[htbp]
+\centering
+\caption{Median read of the copper extended XYZ files.}
+\label{tab:copper}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Atoms $\times$ frames & chemfiles 0.10.4 & OVITO 3.17.2 \\
+\midrule
+10 $\times$ 1 & 3.738e-5 & 9.787e-5 \\
+10 $\times$ 8 & 1.787e-4 & 5.493e-4 \\
+1000 $\times$ 1 & 3.653e-4 & 2.490e-4 \\
+100 $\times$ 100 & 5.634e-3 & 6.906e-3 \\
+$10^{6}$ $\times$ 1 & 0.4545 & 0.1501 \\
+100 $\times$ 10000 & 0.5670 & 0.6573 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Short-decimal comparison}
+\label{sec:fast-table}
+Eight samples, interleaved.
+The triple is the first quartile, the median and the third quartile, in milliseconds.
+
+\begin{table}[htbp]
+\centering
+\caption{Short-decimal comparison.}
 \label{tab:fast}
 \begin{tabular}{@{}lll@{}}
 \toprule
-Reader & 160$\times$180 & 600$\times$280 \\
+Reader & 160 frames & 600 frames \\
 \midrule
-Eisel--Lemire only & 2.89, 2.90, 2.91 & 16.2, 16.3, 16.8 \\
-Short decimal & 2.76, 2.84, 2.87 & 15.4, 15.5, 15.6 \\
-eOn-style C & 8.79, 8.83, 8.86 & 52.2, 52.3, 52.4 \\
+Eisel--Lemire only & 2.891, 2.901, 2.913 & 16.23, 16.29, 16.81 \\
+Short decimal & 2.764, 2.842, 2.873 & 15.43, 15.52, 15.63 \\
+Coordinate loop & 8.789, 8.827, 8.859 & 52.17, 52.30, 52.36 \\
 \bottomrule
 \end{tabular}
 \end{table}

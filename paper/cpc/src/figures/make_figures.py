@@ -355,29 +355,107 @@ def _panel(ax, keys, labels, colors, hatches, ylabel):
     ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
 
 
+# Extended XYZ reads. Each triple is median, first quartile, third quartile, in seconds.
+# Left key is one frame of 10^6 atoms. Right key is 10000 frames of 100 atoms.
+XYZ_READ = {
+    "million": {
+        "rust": (0.2868497115, 0.2766002985, 0.29475368925),
+        "python": (0.4190754730, 0.3941091440, 0.4323542325),
+        "ase": (1.9093637970, 1.8171037457, 2.0362047050),
+        "cextxyz": (0.2746891725, 0.2577884180, 0.2871632380),
+        "extxyz": (0.2605849290, 0.2414517785, 0.2671215115),
+    },
+    "frames": {
+        "rust": (0.2942440815, 0.2922807927, 0.2963004235),
+        "python": (0.4542537435, 0.4453317227, 0.4598796245),
+        "ase": (3.4106924720, 3.3839164965, 3.4460836375),
+        "cextxyz": (0.9368387665, 0.9067542910, 0.9753003415),
+        "extxyz": (0.7399175515, 0.7250607070, 0.7491076323),
+    },
+}
+
+# CON read of 100000 frames of 32 atoms: median, q25, q75, seconds.
+CON_READ = [
+    ("C", 0.374650079, 0.361296658, 0.393588427, READCON),
+    ("Fortran", 0.504394652, 0.484972569, 0.536435369, GREEN),
+    ("eOn", 0.854441416, 0.839720239, 0.864606928, TEAL),
+    ("eOn 3.6.0", 1.009843619, 0.979702768, 1.039440342, PINK),
+]
+
+
 def timings() -> None:
+    """Extended XYZ reads. cextxyz and extxyz 0.4.6 undercut readcon on one large frame."""
     use_latin_modern()
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.6 / 2.54))
-    _panel(
-        axes[0],
-        ["readcon", "eon", "ase"],
-        ["readcon", "eOn C", "ASE 3.29.0"],
-        [READCON, TEAL, PINK],
-        ["", "", ""],
-        "median read time (s)",
-    )
-    _panel(
-        axes[1],
-        ["chemfiles", "cextxyz", "extxyz"],
-        ["chemfiles 0.10.4", "cextxyz", "extxyz Python"],
-        [ORANGE, SKY, VERMILLION],
-        ["///", "", ""],
-        "median read time (s)",
-    )
-    axes[0].set_title("Same CON file", fontsize=8, loc="left")
-    axes[1].set_title("Same extended XYZ file", fontsize=8, loc="left")
-    fig.tight_layout(pad=0.4)
+    keys = ["rust", "python", "ase", "cextxyz", "extxyz"]
+    labels = ["readcon Rust", "readcon Python", "ASE extxyz", "cextxyz", "extxyz 0.4.6"]
+    colors = [READCON, GREEN, PINK, SKY, VERMILLION]
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.8 / 2.54))
+    for ax, size, title in (
+        (axes[0], "million", r"$10^{6}$ atoms, one frame"),
+        (axes[1], "frames", "100 atoms, 10 000 frames"),
+    ):
+        med = [XYZ_READ[size][k][0] for k in keys]
+        err = np.array(
+            [
+                [XYZ_READ[size][k][0] - XYZ_READ[size][k][1] for k in keys],
+                [XYZ_READ[size][k][2] - XYZ_READ[size][k][0] for k in keys],
+            ]
+        )
+        x = np.arange(len(keys))
+        ax.bar(x, med, color=colors, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
+        ax.errorbar(
+            x, med, yerr=err, fmt="none", ecolor=BLACK,
+            elinewidth=0.6, capsize=2, capthick=0.6, zorder=4,
+        )
+        ax.set_xticks(x, labels, rotation=18, ha="right")
+        ax.set_ylabel("median read time (s)")
+        ax.set_title(title, fontsize=8, loc="left")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.set_axisbelow(True)
+        ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
+        if size == "million":
+            for i, key in enumerate(keys):
+                if key == "ase":
+                    continue
+                top = XYZ_READ[size][key][2]
+                ax.text(
+                    i, top + 0.05, f"{XYZ_READ[size][key][0]:.3f}",
+                    ha="center", va="bottom", fontsize=6.5,
+                )
+    fig.tight_layout(pad=0.45)
     _save(fig, "timings", DOUBLE_CM)
+
+
+def conread() -> None:
+    """CON read of 100000 frames of 32 atoms."""
+    use_latin_modern()
+    fig, ax = plt.subplots(figsize=(SINGLE_CM / 2.54, 6.2 / 2.54))
+    med = [row[1] for row in CON_READ]
+    err = np.array(
+        [
+            [row[1] - row[2] for row in CON_READ],
+            [row[3] - row[1] for row in CON_READ],
+        ]
+    )
+    x = np.arange(len(CON_READ))
+    ax.bar(
+        x, med, color=[row[4] for row in CON_READ],
+        edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3,
+    )
+    ax.errorbar(
+        x, med, yerr=err, fmt="none", ecolor=BLACK,
+        elinewidth=0.6, capsize=2.5, capthick=0.6, zorder=4,
+    )
+    ax.set_xticks(x, [row[0] for row in CON_READ])
+    ax.set_ylabel("median read time (s)")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_axisbelow(True)
+    ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
+    ax.set_ylim(0, max(med) * 1.25)
+    fig.tight_layout(pad=0.4)
+    _save(fig, "conread", SINGLE_CM)
 
 
 def fastpath() -> None:
@@ -438,6 +516,7 @@ def main() -> None:
     architecture()
     parser()
     timings()
+    conread()
     fastpath()
 
 

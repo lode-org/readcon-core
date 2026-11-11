@@ -76,11 +76,11 @@ CON 3.1 is a versioned grammar for that text: one JSON header, five fields on ea
 readcon-core is one Rust parser and writer for the grammar, with a C interface for C, C++, Julia and Fortran and a Python binding.
 A decimal with no exponent, at most 19 digits and a power of ten from $-22$ to $22$ is converted by Clinger's exact scaling.
 Every other spelling goes through an Eisel--Lemire kernel.
-On one core of an Intel Xeon, that short path is $1.02$ times faster than the same reader on a file of 160 frames and $1.05$ times faster on a file of 600 frames.
-In that interleaved session it is $3.11$ and $3.37$ times faster than an eOn-style C reader of the same files.
-In a second session on the same host the short-path reader is faster than ASE 3.29.0 on the CON file and faster than chemfiles 0.10.4, cextxyz and the Python reader in extxyz 0.4.6 on the extended XYZ of the same geometries.
-chemfiles returns no velocities.
-The eOn-style reader returns coordinates, masses and the cell, and it does not read the mask or the identifier.
+On one core of an Intel Xeon, that short path is $1.02$ and $1.05$ times the same reader without it, and $3.11$ and $3.37$ times an eOn-style coordinate loop.
+On one extended XYZ frame of $10^{6}$ atoms, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}, both faster than the Rust reader at \SI{0.287}{\second}.
+A CON file of \num{100000} frames of 32 atoms takes \SI{0.375}{\second} through the C binding and \SI{0.854}{\second} in the current eOn client.
+chemfiles 0.10.4 and OVITO 3.17.2 do not open a CON file.
+ASE's eon reader rejects a velocity title and does not write a per-component hold.
 \end{abstract}
 
 \begin{keyword}
@@ -91,8 +91,8 @@ geometry checkpoint \sep file format \sep saddle search \sep floating-point pars
 \item CON 3.1 is a versioned text checkpoint for a resumed saddle search.
 \item One parser serves C, C++, Python, Julia and Fortran.
 \item Short decimals take Clinger's conversion; every other spelling takes Eisel--Lemire.
-\item The short path is $1.02\times$ and $1.05\times$ the reader without it, and $3.11\times$ and $3.37\times$ an eOn-style C reader.
-\item ASE, chemfiles, cextxyz and extxyz 0.4.6 are timed in the same session.
+\item On one frame of $10^{6}$ atoms, cextxyz and extxyz 0.4.6 are faster than readcon.
+\item A CON file of \num{100000} frames takes \SI{0.375}{\second} in C and \SI{0.854}{\second} in the current eOn client.
 \end{highlights}
 \end{frontmatter}
 \hypersetup{pageanchor=true}
@@ -163,7 +163,7 @@ This paper states that grammar and the parser that implements it.
 Section~\ref{sec:frame} reads one frame line by line.
 Section~\ref{sec:grammar} states the rules that frame uses.
 Section~\ref{sec:parser} is the reader: one core, a boundary walk, and the two conversions of a decimal.
-Section~\ref{sec:timings} times that reader against ASE, an eOn-style C reader, chemfiles, cextxyz and the Python reader in extxyz 0.4.6.
+Section~\ref{sec:timings} times that reader against ASE, the eOn client, cextxyz, extxyz 0.4.6, chemfiles and OVITO.
 
 \section{One frame}
 \label{sec:frame}
@@ -349,69 +349,97 @@ readcon.write_con("band.con", frames)
 
 \section{Readers on one core}
 \label{sec:timings}
-The geometries are Cu and H in an orthogonal cell, generated in the session.
-The masks in these files are only 0 and 7: every fifth atom is fixed in every component, and the others are free.
-There is no per-axis hold in the timed files.
-The CON files are 24 frames of 36 atoms (\num{30426} bytes), 160 frames of 180 atoms (\num{856362} bytes) and 600 frames of 280 atoms (\num{4933995} bytes).
-The extended XYZ files of the same geometries carry positions and velocities and are \num{54507}, \num{1708341} and \num{9787127} bytes.
-Every arm ran on one core.
-The multi-reader session repeated each read seven times and the tables report the median.
-The quartiles are in Table~\ref{tab:times}.
+Every median below is from one core of the host in the last paragraph of the paper.
+Six repeats follow one warmup, and the median is the type-7 median.
+The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper}.
+
+\subsection{Extended XYZ}
+\label{sec:xyz}
+The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 atoms.
+Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
+On the single large frame, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}.
+The Rust reader takes \SI{0.287}{\second} and the Python binding \SI{0.419}{\second}.
+cextxyz and extxyz 0.4.6 are faster than readcon on that frame.
+ASE's own extxyz reader takes \SI{1.91}{\second}.
+On the \num{10000}-frame file the order changes.
+The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
 
 \begin{figure*}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timings.pdf}
-\caption{Median read time on one core.
+\caption{Median extended XYZ read on one core.
 The whisker runs from the first quartile to the third.
-Left: one CON file, read by readcon-core with the short-decimal path, by an eOn-style C reader, and by ASE 3.29.0.
-Right: the extended XYZ of the same geometries, read by chemfiles 0.10.4, by cextxyz, and by the Python reader in extxyz 0.4.6.
-The hatched bars are chemfiles, which returns no velocities.
-The vertical axis is logarithmic.}
+On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.}
 \label{fig:timings}
 \end{figure*}
 
 \begin{table}[tbp]
 \centering
-\caption{Median read time in milliseconds, from the session in Figure~\ref{fig:timings}.
-The CON readers open the CON file.
-The extended XYZ readers open the other file.
-chemfiles returns no velocities.}
-\label{tab:medians}
-\begin{tabular}{@{}lrrr@{}}
+\caption{Median extended XYZ read time in seconds.}
+\label{tab:xyzread}
+\begin{tabular}{@{}lrr@{}}
 \toprule
-Reader & 24$\times$36 & 160$\times$180 & 600$\times$280 \\
+Reader & $10^{6}$ atoms & \num{10000} frames \\
 \midrule
-readcon, short decimal & 0.103 & 1.88 & 10.5 \\
-eOn-style C & 0.262 & 8.74 & 51.2 \\
-ASE 3.29.0 & 3.92 & 69.7 & 370 \\
-chemfiles 0.10.4 & 2.38 & 63.5 & 355 \\
-cextxyz & 2.33 & 64.4 & 370 \\
-extxyz 0.4.6, Python & 9.92 & 144 & 737 \\
+readcon, Rust & 0.287 & 0.294 \\
+readcon, Python & 0.419 & 0.454 \\
+ASE extxyz & 1.91 & 3.41 \\
+ASE cextxyz & 0.275 & 0.937 \\
+extxyz 0.4.6 & 0.261 & 0.740 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-On the CON file, ASE 3.29.0 returns coordinates that match to the last bit, and it returns the atoms of mask 7 as fixed in every component.
-It returns no identifier.
-The header of these files names no periodicity, which the grammar reads as periodic in all three directions, and ASE marks every direction open.
-The eOn-style reader is a C loop in the shape of the eOn coordinate reader: nine header lines, then a symbol, a component line and one coordinate line per atom, with \texttt{sscanf} of three doubles.
-The trailing mask and identifier are not stored.
-Coordinates, masses and the cell match to the last bit.
-The reader does not read a velocity block.
+The writes of the same two files are in Table~\ref{tab:xyzwrite}.
+On the million-atom frame the Python binding writes in \SI{0.442}{\second}, faster than the Rust writer at \SI{0.487}{\second}.
+extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's extxyz writer \SI{3.74}{\second}.
+On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
+The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
 
-On the extended XYZ file, cextxyz and the Python reader in extxyz 0.4.6 return positions and velocities that match to the last bit, and they return the orthogonal cell.
-chemfiles 0.10.4 returns no velocities.
-Its positions differ from the written values by at most $\num{5.6e-17}$, $\num{4.4e-16}$ and $\num{1.8e-15}$\,\si{\angstrom} on the three files.
-On the smallest file the cell lengths differ by $\num{1.8e-15}$ and $\num{3.6e-15}$, one and two units in the last place, because the lengths are rebuilt from the lattice matrix.
-Those three losses are why the chemfiles bars in Figure~\ref{fig:timings} are hatched.
-The extended XYZ file is a different text: it is larger, it stores velocities on every row, and it has no mask and no identifier.
-The times on the right of the figure are the cost of that file, not a ratio against the CON file.
+\begin{table}[tbp]
+\centering
+\caption{Median extended XYZ write time in seconds.}
+\label{tab:xyzwrite}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Writer & $10^{6}$ atoms & \num{10000} frames \\
+\midrule
+readcon, Rust & 0.487 & 0.431 \\
+readcon, Python & 0.442 & 0.411 \\
+ASE extxyz & 3.74 & 4.26 \\
+ASE cextxyz & 0.948 & 1.47 \\
+extxyz 0.4.6 & 0.906 & 1.19 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-In this session the short-decimal reader is faster than every other arm on every size.
-Against the eOn-style reader the ratios are $2.53$, $4.65$ and $4.89$.
-Against ASE they are $37.9$, $37.1$ and $35.3$.
-Against cextxyz they are $22.5$, $34.3$ and $35.4$, and against the Python extxyz reader $95.9$, $76.6$ and $70.5$.
-The absolute times are not the same in the next session.
+chemfiles 0.10.4 reads the same two copper files in \SI{0.455}{\second} and \SI{0.567}{\second}.
+OVITO 3.17.2 reads them in \SI{0.150}{\second} and \SI{0.657}{\second}.
+On the million-atom frame OVITO is the fastest of these readers.
+
+\subsection{CON}
+\label{sec:conread}
+The CON file is \num{100000} frames of 32 atoms.
+Figure~\ref{fig:conread} is the read.
+The C binding takes \SI{0.375}{\second} and \SI{554}{\mebi\byte}.
+The Fortran binding takes \SI{0.504}{\second} at the same resident set.
+The current eOn client takes \SI{0.854}{\second} and \SI{921}{\mebi\byte}.
+eOn 3.6.0 takes \SI{1.01}{\second} and \SI{1530}{\mebi\byte}.
+chemfiles 0.10.4 and OVITO 3.17.2 do not open a file with the \texttt{.con} suffix.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/generated/conread.pdf}
+\caption{Median read of \num{100000} CON frames of 32 atoms.
+The whisker runs from the first quartile to the third.}
+\label{fig:conread}
+\end{figure}
+
+A write of that coordinate file takes \SI{0.539}{\second} in Rust and adds \SI{0.40}{\mebi\byte} to the resident set, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer, and \SI{12.1}{\second} and \SI{418}{\mebi\byte} in eOn.
+The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust, \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{9.01}{\second} and \SI{418}{\mebi\byte} in eOn.
+The released eOn 3.6.0 client stops in \texttt{matter2con}; a fix is going upstream.
+ASE's eon reader raises \texttt{ValueError} on the velocity title, so it does not read that file.
+ASE's eon writer raises \texttt{TypeError} on a frame held in one component.
 
 \subsection{The short decimal}
 \label{sec:fast}
@@ -434,16 +462,10 @@ The vertical axis is linear and starts at zero.}
 On the 160-frame file the medians are \SI{2.90}{\milli\second} without the short path, \SI{2.84}{\milli\second} with it, and \SI{8.83}{\milli\second} for the eOn-style reader.
 On the 600-frame file they are \SI{16.3}{\milli\second}, \SI{15.5}{\milli\second} and \SI{52.3}{\milli\second}.
 The short path is $1.02$ and $1.05$ times the other readcon build.
-It is $3.11$ and $3.37$ times the eOn-style reader.
-The ranges do not overlap on either file, so both ratios stand.
+It is $3.11$ and $3.37$ times that coordinate loop.
+The quartiles do not overlap on either file.
 The gain over the other readcon build is small.
-The gain over the C reader is the larger part of the difference, and it is already present in the build that sends every decimal through Eisel--Lemire: that build is $3.04$ and $3.21$ times the eOn reader in the same session.
-
-The same 160-frame file took \SI{1.88}{\milli\second} in the multi-reader session and \SI{2.84}{\milli\second} here.
-The 600-frame file took \SI{10.5}{\milli\second} and \SI{15.5}{\milli\second}.
-The eOn-style reader stayed at \SI{8.74}{\milli\second} and \SI{8.83}{\milli\second}, and at \SI{51.2}{\milli\second} and \SI{52.3}{\milli\second}.
-The ratio against that reader is $4.65$ and $4.89$ in the first session and $3.11$ and $3.37$ in the second, because the readcon time moved and the C reader's time did not.
-The comparison that cancels a drift through the round is the interleaved one.
+The build that sends every decimal through Eisel--Lemire is already $3.04$ and $3.21$ times the coordinate loop.
 
 \section{Conclusions}
 \label{sec:conclusions}
@@ -452,20 +474,20 @@ The second line names the version, the units and the sections.
 Each coordinate row carries a three-bit mask and an identifier, and a velocity section from minor 1 names its time unit.
 readcon-core parses that text once, and every language binding calls that parse.
 A short decimal takes Clinger's exact scaling, and every other spelling takes an Eisel--Lemire kernel.
-On the files measured here the short path is $1.02$ and $1.05$ times the reader without it.
-The same reader is $3.11$ and $3.37$ times an eOn-style C reader in the interleaved session, and faster than ASE, chemfiles, cextxyz and the Python extxyz reader in the other session.
-The losses are on the other side of the comparison and in the absolute times.
-chemfiles drops the velocities and misses the cell lengths by one or two units in the last place.
-ASE returns no identifier and no periodic direction.
-The eOn-style reader does not store the mask or the identifier.
-The readcon time on one file is \SI{1.88}{\milli\second} in one session and \SI{2.84}{\milli\second} in the other.
+That path is $1.02$ and $1.05$ times the reader without it.
+On one frame of $10^{6}$ atoms, extxyz 0.4.6 and cextxyz are faster than readcon, and OVITO is faster than both.
+On \num{10000} frames the Rust reader is faster than those three.
+The C binding reads \num{100000} CON frames in \SI{0.375}{\second}; the current eOn client takes \SI{0.854}{\second}.
+ASE does not read a velocity block and does not write a per-component hold.
+chemfiles and OVITO do not open CON.
 
-The timings were taken on one core of an Intel Xeon with 8 cores and \SI{47}{\gibi\byte} of memory.
-readcon-core 0.18.1 was compiled with rustc 1.88.0 in the release profile, once with the short-decimal path and once without it.
-The eOn-style reader was compiled with gcc 13.3.0 at \texttt{-O3}.
-ASE 3.29.0, chemfiles 0.10.4, extxyz 0.4.6 and NumPy 2.5.4 ran under Python 3.12.3, with one thread.
-The multi-reader session used seven repeats and reports the median and the type-7 quartiles.
-The fast-path session used eight samples in the interleaved order above and records a ratio only when the quartiles do not overlap.
+The reads and writes ran on one core of an Intel Xeon with 8 cores and \SI{47}{\gibi\byte} of memory.
+readcon-core 0.18.1 was compiled with rustc 1.91.0.
+Python 3.12.3, NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4 and OVITO 3.17.2 each ran with one thread.
+The eOn client is the current source and the released 3.6.0.
+Each median is the type-7 median of six repeats after one warmup.
+The write heap is the Valgrind 3.22.0 massif increase above the loaded frame.
+The short-decimal comparison used rustc 1.88.0, eight samples, and the interleaved order in Section~\ref{sec:fast}.
 The library is at \url{https://github.com/lode-org/readcon-core}, and the concept record is \url{https://doi.org/10.5281/zenodo.18753567} \cite{goswamiReadconcoreConConvel2026}.
 
 \section*{CRediT authorship contribution statement}
