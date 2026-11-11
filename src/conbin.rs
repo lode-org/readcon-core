@@ -229,11 +229,16 @@ fn page_size() -> Result<usize, ParseError> {
     };
     #[cfg(windows)]
     let page = {
+        // dwPageSize is the DWORD after the 4-byte architecture union in
+        // SYSTEM_INFO, on both 32-bit and 64-bit Windows.
         // https://learn.microsoft.com/windows/win32/api/sysinfoapi/ns-sysinfoapi-system_info
-        use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
-        let mut info = std::mem::MaybeUninit::<SYSTEM_INFO>::uninit();
-        unsafe { GetSystemInfo(info.as_mut_ptr()) };
-        unsafe { info.assume_init() }.dwPageSize as usize
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetSystemInfo(info: *mut std::ffi::c_void);
+        }
+        let mut info = [0u8; 64];
+        unsafe { GetSystemInfo(info.as_mut_ptr().cast()) };
+        u32::from_ne_bytes(info[4..8].try_into().unwrap()) as usize
     };
     if !page.is_power_of_two() || page == 0 {
         return Err(ParseError::ValidationError(
