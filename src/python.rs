@@ -2,19 +2,19 @@ use ndarray::{Array2, Array3, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
 };
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
-use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
-use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
+use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -1454,7 +1454,7 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let frames = py
         .detach(|| {
             crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
-                .map_err(box_to_count_fail)
+                .map_err(|err| box_to_count_fail(Path::new(&path_owned), None, err))
         })
         .map_err(count_fail_to_py)?;
     let parse_s = parse_start.elapsed().as_secs_f64();
@@ -2108,7 +2108,7 @@ fn load_phased(
                         phased.share_bytes,
                     )
                 })
-                .map_err(box_to_count_fail)
+                .map_err(|err| box_to_count_fail(Path::new(&path_owned), n_threads, err))
         })
         .map_err(count_fail_to_py)?;
     let elapsed = t_enter.elapsed().as_secs_f64();
@@ -2284,7 +2284,7 @@ fn read_positions(
     let block = py
         .detach(|| {
             crate::iterators::read_positions_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(box_to_count_fail)
+                .map_err(|err| box_to_count_fail(Path::new(&path_owned), n_threads, err))
         })
         .map_err(count_fail_to_py)?;
     let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
@@ -2362,15 +2362,16 @@ fn read_con_mpi(
     // rank that met the failure raises its class with the global frame
     // index, the other ranks raise ConError; everything else is I/O.
     let t_parse = std::time::Instant::now();
-    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads).map_err(
-        |e| match e.downcast::<crate::error::LocatedParseError>() {
-            Ok(located) => located_to_py(*located),
-            Err(e) if e.is::<crate::distrib_read::PeerParseError>() => {
-                ConError::new_err(e.to_string())
+    let rf =
+        crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads).map_err(|e| {
+            match e.downcast::<crate::error::LocatedParseError>() {
+                Ok(located) => located_to_py(*located),
+                Err(e) if e.is::<crate::distrib_read::PeerParseError>() => {
+                    ConError::new_err(e.to_string())
+                }
+                Err(e) => PyIOError::new_err(e.to_string()),
             }
-            Err(e) => PyIOError::new_err(e.to_string()),
-        },
-    )?;
+        })?;
     let worker_parse_s = t_parse.elapsed().as_secs_f64();
     let phases = crate::iterators::ReadPhaseTimes {
         worker_parse_s,
@@ -3738,28 +3739,154 @@ fn count_fail_to_py(err: CountFail) -> PyErr {
     })
 }
 
-fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
-    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8")
-    {
+fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
+    CountFail::Parse {
+        class: located.error.class_name(),
+        message: located.error.to_string(),
+        line: located.line,
+        frame: located.frame_index,
+    }
+}
+
+/// Map a boxed reader error onto [`CountFail`].
+///
+/// `read_all_frames_with_threads`, `read_all_frames_phased`, and
+/// `read_positions_with_threads` return a bare [`ParseError`]. Its
+/// `line()` is 0 for most classes and its frame is not recorded, so a
+/// later frame would be reported as line 0 of frame 0. Those failures
+/// are read again on the located path, the same one `count_frames`,
+/// `read_nth_frame`, and `read_con_string` use.
+fn box_to_count_fail(
+    path: &Path,
+    n_threads: Option<usize>,
+    err: Box<dyn std::error::Error>,
+) -> CountFail {
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
         return CountFail::Io(err.to_string());
     }
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
-        return CountFail::Parse {
-            class: located.error.class_name(),
-            message: located.error.to_string(),
-            line: located.line,
-            frame: located.frame_index,
-        };
+        return count_fail_located(located);
     }
-    if let Some(parse) = err.downcast_ref::<ParseError>() {
-        return CountFail::Parse {
-            class: parse.class_name(),
-            message: parse.to_string(),
-            line: parse.line(),
-            frame: 0,
-        };
+    if err.downcast_ref::<ParseError>().is_some() {
+        match crate::iterators::read_all_frames_located(path, n_threads) {
+            Err(crate::iterators::LoadError::Parse(located)) => {
+                return count_fail_located(&located);
+            }
+            Err(crate::iterators::LoadError::Utf8(utf)) => {
+                return CountFail::Io(utf.to_string());
+            }
+            Err(crate::iterators::LoadError::Io(io)) => return CountFail::Io(io.to_string()),
+            Err(crate::iterators::LoadError::Empty) => {
+                return CountFail::Parse {
+                    class: "IncompleteHeader",
+                    message: ParseError::IncompleteHeader.to_string(),
+                    line: 1,
+                    frame: 0,
+                };
+            }
+            Ok(_) => {}
+        }
+        if let Some(parse) = err.downcast_ref::<ParseError>() {
+            return CountFail::Parse {
+                class: parse.class_name(),
+                message: parse.to_string(),
+                line: parse.line(),
+                frame: 0,
+            };
+        }
     }
     CountFail::Other(err.to_string())
+}
+
+#[cfg(test)]
+mod batch_location_tests {
+    use super::{CountFail, box_to_count_fail};
+
+    fn later_frame_path() -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-batch-later-{}-{}.con",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        std::fs::write(&path, format!("{good}{bad}")).unwrap();
+        path
+    }
+
+    fn assert_later(fail: CountFail) {
+        match fail {
+            CountFail::Parse {
+                class, line, frame, ..
+            } => {
+                assert_eq!(class, "InvalidCount");
+                assert_eq!(line, 20, "file line of the bad count");
+                assert_eq!(frame, 1, "0-based frame index");
+            }
+            CountFail::Io(msg) => panic!("expected InvalidCount, got io: {msg}"),
+            CountFail::Other(msg) => panic!("expected InvalidCount, got: {msg}"),
+        }
+    }
+
+    /// `read_con`, `read_all_frames`, `read_coords`, and `read_positions`
+    /// all map these readers through `box_to_count_fail`. A count error
+    /// in the second frame is file line 20, frame 1.
+    #[test]
+    fn batch_readers_keep_the_later_frame_location() {
+        let path = later_frame_path();
+        let cases: [(
+            Option<usize>,
+            fn(&std::path::Path, Option<usize>) -> CountFail,
+        ); 5] = [
+            (None, fail_read_all),
+            (None, fail_phased),
+            (Some(2), fail_phased),
+            (None, fail_positions),
+            (Some(2), fail_positions),
+        ];
+        for (threads, fail_of) in cases {
+            assert_later(fail_of(&path, threads));
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn fail_of(
+        path: &std::path::Path,
+        threads: Option<usize>,
+        result: Result<(), Box<dyn std::error::Error>>,
+    ) -> CountFail {
+        match result {
+            Err(err) => box_to_count_fail(path, threads, err),
+            Ok(()) => panic!("expected a parse error"),
+        }
+    }
+
+    fn fail_read_all(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(
+            path,
+            threads,
+            crate::iterators::read_all_frames_with_threads(path, threads).map(|_| ()),
+        )
+    }
+
+    fn fail_phased(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(
+            path,
+            threads,
+            crate::iterators::read_all_frames_phased(path, threads).map(|_| ()),
+        )
+    }
+
+    fn fail_positions(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(
+            path,
+            threads,
+            crate::iterators::read_positions_with_threads(path, threads).map(|_| ()),
+        )
+    }
 }
 
 fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {

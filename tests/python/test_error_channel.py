@@ -122,6 +122,28 @@ def test_count_frames_locates_the_later_frame(tmp_path):
         raise AssertionError("count_frames accepted the bad second frame")
 
 
+def test_batch_reads_locate_the_later_frame(tmp_path):
+    path = _later_frame_path(tmp_path)
+    openers = (
+        lambda: readcon.read_con(path),
+        lambda: readcon.read_con(path, n_threads=1),
+        lambda: readcon.read_con(path, n_threads=2),
+        lambda: readcon.read_all_frames(path),
+        lambda: readcon.read_all_frames(path, n_threads=2),
+        lambda: readcon.read_coords(path),
+        lambda: readcon.read_positions(path),
+        lambda: readcon.read_positions(path, n_threads=1),
+        lambda: readcon.read_positions(path, n_threads=2),
+    )
+    for opener in openers:
+        try:
+            opener()
+        except readcon.InvalidCount as exc:
+            _assert_later_invalid_count(exc)
+        else:
+            raise AssertionError("batch read accepted the bad second frame")
+
+
 def test_non_finite_is_a_con_error_with_a_line():
     text = (
         "seed\n"
