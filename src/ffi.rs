@@ -614,20 +614,44 @@ pub struct CAtom {
 #[repr(C)]
 pub struct CConFrameIterator {
     iterator: *mut ConFrameIterator<'static>,
-    file_contents: *mut String,
+    file_contents: *mut crate::compression::ByteSource,
+}
+
+/// Build an iterator over bytes this handle owns.
+///
+/// `utf8_checked` skips the scan when the caller already knows the buffer
+/// is UTF-8. A failed scan frees the buffer and returns NULL, which is the
+/// open-time contract of [`read_con_file_iterator`].
+fn c_iterator_from_source(
+    source: crate::compression::ByteSource,
+    utf8_checked: bool,
+) -> *mut CConFrameIterator {
+    let source = Box::new(source);
+    let source_ptr = Box::into_raw(source);
+    let bytes = unsafe { (*source_ptr).as_slice() };
+    if !utf8_checked && std::str::from_utf8(bytes).is_err() {
+        unsafe {
+            drop(Box::from_raw(source_ptr));
+        }
+        return ptr::null_mut();
+    }
+    // SAFETY: either the caller checked these bytes or the scan above did.
+    // The iterator borrows them for as long as `source_ptr` is alive.
+    let text: &'static str = unsafe { std::str::from_utf8_unchecked(bytes) };
+    let iterator = Box::new(ConFrameIterator::new(text));
+    let c_iterator = Box::new(CConFrameIterator {
+        iterator: Box::into_raw(iterator),
+        file_contents: source_ptr,
+    });
+    Box::into_raw(c_iterator)
 }
 
 /// Build a path/buffer-backed C iterator from an owned CON text buffer.
 fn c_iterator_from_owned_string(contents: String) -> *mut CConFrameIterator {
-    let file_contents_box = Box::new(contents);
-    let file_contents_ptr = Box::into_raw(file_contents_box);
-    let static_file_contents: &'static str = unsafe { &*file_contents_ptr };
-    let iterator = Box::new(ConFrameIterator::new(static_file_contents));
-    let c_iterator = Box::new(CConFrameIterator {
-        iterator: Box::into_raw(iterator),
-        file_contents: file_contents_ptr,
-    });
-    Box::into_raw(c_iterator)
+    c_iterator_from_source(
+        crate::compression::ByteSource::Buf(contents.into_bytes()),
+        true,
+    )
 }
 
 //=============================================================================
@@ -656,14 +680,11 @@ pub unsafe extern "C" fn read_con_file_iterator(
         Ok(s) => s,
         Err(_) => return ptr::null_mut(),
     };
-    let owned = match crate::compression::read_file_contents(Path::new(filename)) {
-        Ok(fc) => match fc.as_str() {
-            Ok(s) => s.to_owned(),
-            Err(_) => return ptr::null_mut(),
-        },
+    let owned = match crate::compression::read_bytes_owned(Path::new(filename)) {
+        Ok(bytes) => bytes,
         Err(_) => return ptr::null_mut(),
     };
-    c_iterator_from_owned_string(owned)
+    c_iterator_from_source(owned, false)
 }
 
 /// Iterate frames from an in-memory CON text buffer (null-terminated C string).

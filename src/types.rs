@@ -593,6 +593,18 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
     None
 }
 
+/// Where a parsed section lives.
+///
+/// A velocity-only atom, the `.convel` case, keeps the three components
+/// inline. Any other section still uses one boxed tail. Coordinate-only
+/// atoms stay empty.
+#[derive(Debug, Clone, PartialEq)]
+enum AtomSections {
+    Empty,
+    Velocity([f64; 3]),
+    Full(Box<AtomTail>),
+}
+
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
 /// does not pay a fat tail on every atom.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -653,7 +665,7 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    tail: Option<Box<AtomTail>>,
+    tail: AtomSections,
 }
 
 impl PartialEq for AtomDatum {
@@ -692,7 +704,7 @@ impl AtomDatum {
             z,
             fixed,
             atom_id,
-            tail: None,
+            tail: AtomSections::Empty,
         }
     }
 
@@ -724,125 +736,194 @@ impl AtomDatum {
             || displacement.is_some()
             || spread.is_some()
         {
-            atom.tail = Some(Box::new(AtomTail {
-                velocity,
-                force,
-                energy,
-                charge,
-                spin,
-                magmom,
-                displacement,
-                spread,
-            }));
+            let only_velocity = velocity.is_some()
+                && force.is_none()
+                && energy.is_none()
+                && charge.is_none()
+                && spin.is_none()
+                && magmom.is_none()
+                && displacement.is_none()
+                && spread.is_none();
+            atom.tail = if only_velocity {
+                AtomSections::Velocity(velocity.unwrap())
+            } else {
+                AtomSections::Full(Box::new(AtomTail {
+                    velocity,
+                    force,
+                    energy,
+                    charge,
+                    spin,
+                    magmom,
+                    displacement,
+                    spread,
+                }))
+            };
         }
         atom
     }
 
     fn ensure_tail(&mut self) -> &mut AtomTail {
-        if self.tail.is_none() {
-            self.tail = Some(Box::new(AtomTail::default()));
+        if !matches!(self.tail, AtomSections::Full(_)) {
+            let velocity = match self.tail {
+                AtomSections::Velocity(v) => Some(v),
+                AtomSections::Empty | AtomSections::Full(_) => None,
+            };
+            self.tail = AtomSections::Full(Box::new(AtomTail {
+                velocity,
+                ..AtomTail::default()
+            }));
         }
-        self.tail.as_mut().unwrap()
+        match &mut self.tail {
+            AtomSections::Full(tail) => tail,
+            AtomSections::Empty | AtomSections::Velocity(_) => unreachable!(),
+        }
     }
 
     fn shrink_tail(&mut self) {
-        if self.tail.as_ref().is_some_and(|tail| tail.is_empty()) {
-            self.tail = None;
+        let next = match &self.tail {
+            AtomSections::Full(tail) if tail.is_empty() => Some(AtomSections::Empty),
+            AtomSections::Full(tail)
+                if tail.force.is_none()
+                    && tail.energy.is_none()
+                    && tail.charge.is_none()
+                    && tail.spin.is_none()
+                    && tail.magmom.is_none()
+                    && tail.displacement.is_none()
+                    && tail.spread.is_none()
+                    && tail.velocity.is_some() =>
+            {
+                Some(AtomSections::Velocity(tail.velocity.unwrap()))
+            }
+            _ => None,
+        };
+        if let Some(next) = next {
+            self.tail = next;
         }
     }
 
     /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
     #[inline]
     pub fn velocity(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.velocity)
+        match &self.tail {
+            AtomSections::Velocity(v) => Some(*v),
+            AtomSections::Full(tail) => tail.velocity,
+            AtomSections::Empty => None,
+        }
     }
     /// Force vector `[fx, fy, fz]`.
     #[inline]
     pub fn force(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.force)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.force,
+            _ => None,
+        }
     }
     /// Per-atom energy contribution.
     #[inline]
     pub fn energy(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.energy)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.energy,
+            _ => None,
+        }
     }
     /// Partial charge.
     #[inline]
     pub fn charge(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.charge)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.charge,
+            _ => None,
+        }
     }
     /// Spin scalar.
     #[inline]
     pub fn spin(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.spin)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.spin,
+            _ => None,
+        }
     }
     /// Magnetic moment `[mx, my, mz]`.
     #[inline]
     pub fn magmom(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.magmom)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.magmom,
+            _ => None,
+        }
     }
     /// Displacement `[dx, dy, dz]`.
     #[inline]
     pub fn displacement(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.displacement)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.displacement,
+            _ => None,
+        }
     }
     /// RMS spread `[sx, sy, sz]`.
     #[inline]
     pub fn spread(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.spread)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.spread,
+            _ => None,
+        }
     }
 
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
-            return;
+        match (&self.tail, value) {
+            (AtomSections::Empty, None) => {}
+            (AtomSections::Empty, Some(v)) | (AtomSections::Velocity(_), Some(v)) => {
+                self.tail = AtomSections::Velocity(v);
+            }
+            (AtomSections::Velocity(_), None) => self.tail = AtomSections::Empty,
+            (AtomSections::Full(_), value) => {
+                self.ensure_tail().velocity = value;
+                self.shrink_tail();
+            }
         }
-        self.ensure_tail().velocity = value;
-        self.shrink_tail();
     }
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().force = value;
         self.shrink_tail();
     }
     pub fn set_energy(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().energy = value;
         self.shrink_tail();
     }
     pub fn set_charge(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().charge = value;
         self.shrink_tail();
     }
     pub fn set_spin(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().spin = value;
         self.shrink_tail();
     }
     pub fn set_magmom(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().magmom = value;
         self.shrink_tail();
     }
     pub fn set_displacement(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().displacement = value;
         self.shrink_tail();
     }
     pub fn set_spread(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().spread = value;

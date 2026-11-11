@@ -2301,7 +2301,7 @@ fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyC
     if !rectangular || py.import("numpy").is_err() {
         return frames
             .into_iter()
-            .map(|frame| PyConFrame::from_con_frame(py, &frame))
+            .map(|frame| PyConFrame::from_owned(py, frame))
             .collect();
     }
     let mut values = Vec::with_capacity(frames.len().saturating_mul(n_atoms).saturating_mul(3));
@@ -2491,7 +2491,7 @@ impl PyConFrameIterator {
             FrameSource::Stream(reader) => {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
-                    Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
+                    Some(Ok(frame)) => Ok(Some(PyConFrame::from_owned(py, frame)?)),
                     Some(Err(e)) => Err(stream_error("parse", e)),
                     None => Ok(None),
                 };
@@ -2512,7 +2512,7 @@ impl PyConFrameIterator {
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
-                Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
+                Ok(Some(PyConFrame::from_owned(py, frame)?))
             }
             Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
             None => {
@@ -2661,7 +2661,7 @@ impl PyConTrajectory {
             }
             e => PyIOError::new_err(format!("parse error in frame {i}: {e}")),
         })?;
-        PyConFrame::from_con_frame(py, &frame)
+        PyConFrame::from_owned(py, frame)
     }
 }
 
