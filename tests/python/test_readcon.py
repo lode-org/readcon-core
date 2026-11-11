@@ -534,13 +534,19 @@ class TestConFrameConstructor:
             try:
                 list(readcon.iter_con(str(plain)))
                 message = None
-            except IOError as e:
+                exc_type = OSError
+            except OSError as e:
                 message = str(e)
-            if message.startswith("stream did not contain valid UTF-8"):
-                message = "parse error: CON validation failed: invalid UTF-8"
+                exc_type = OSError
+            except readcon.ConError as e:
+                message = str(e)
+                exc_type = type(e)
+            if message is not None and message.startswith("stream did not contain valid UTF-8"):
+                message = "CON validation failed: invalid UTF-8"
+                exc_type = OSError
             it = readcon.iter_con(str(path), stream=True)
             assert len([next(it) for _ in range(3)]) == 3
-            with pytest.raises(IOError) as raised:
+            with pytest.raises(exc_type) as raised:
                 next(it)
             assert str(raised.value) == message
             assert next(it, None) is None
