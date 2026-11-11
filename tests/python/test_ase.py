@@ -305,7 +305,9 @@ class TestRestartDefects:
         assert ids == [7, 3, 5]
 
     def test_from_ase_scalar_pbc_is_stored(self):
-        atoms = ase.Atoms("H", positions=[[0.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True)
+        atoms = ase.Atoms(
+            "H", positions=[[0.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True
+        )
         frame = readcon.ConFrame.from_ase(atoms)
         assert list(frame.metadata["pbc"]) == [True, True, True]
 

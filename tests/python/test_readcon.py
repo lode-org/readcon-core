@@ -541,7 +541,9 @@ class TestConFrameConstructor:
             except readcon.ConError as e:
                 message = str(e)
                 exc_type = type(e)
-            if message is not None and message.startswith("stream did not contain valid UTF-8"):
+            if message is not None and message.startswith(
+                "stream did not contain valid UTF-8"
+            ):
                 message = "CON validation failed: invalid UTF-8"
                 exc_type = OSError
             it = readcon.iter_con(str(path), stream=True)
