@@ -600,17 +600,54 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
 /// share one frame slab (`velocities` then `forces`, both length `n * 3`)
 /// instead of a boxed tail per atom. Any other section still uses one
 /// boxed tail. Coordinate-only atoms stay empty.
+/// `u64` discriminant keeps the `[f64; 3]` payload at offset 8, the same
+/// aligned store the velocity row loop had before the slab variant.
+#[repr(u64)]
 #[derive(Debug, Clone, PartialEq)]
 enum AtomSections {
     Empty,
     Velocity([f64; 3]),
     Force([f64; 3]),
     /// `data` is `n * 6` floats: all velocities, then all forces.
+    ///
+    /// The arc and the boxed tail are `ManuallyDrop` so a velocity-only
+    /// atom does not run their drop glue. `Drop` frees them only for
+    /// these two variants.
     VelocityForce {
-        data: Arc<[f64]>,
+        data: std::mem::ManuallyDrop<Arc<[f64]>>,
         index: u32,
     },
-    Full(Box<AtomTail>),
+    Full(std::mem::ManuallyDrop<Box<AtomTail>>),
+}
+
+impl Drop for AtomSections {
+    #[inline(always)]
+    fn drop(&mut self) {
+        if matches!(
+            self,
+            AtomSections::Empty | AtomSections::Velocity(_) | AtomSections::Force(_)
+        ) {
+            return;
+        }
+        self.drop_owned();
+    }
+}
+
+impl AtomSections {
+    #[inline(never)]
+    fn drop_owned(&mut self) {
+        match self {
+            AtomSections::VelocityForce { data, .. } => {
+                // SAFETY: this variant owns the arc, and drop runs once.
+                unsafe { std::mem::ManuallyDrop::drop(data) }
+            }
+            AtomSections::Full(tail) => {
+                // SAFETY: this variant owns the box, and drop runs once.
+                unsafe { std::mem::ManuallyDrop::drop(tail) }
+            }
+            AtomSections::Empty | AtomSections::Velocity(_) | AtomSections::Force(_) => {}
+        }
+    }
 }
 
 fn slab_row(data: &[f64], index: usize) -> [f64; 3] {
@@ -635,7 +672,7 @@ fn compact_sections(velocity: Option<[f64; 3]>, force: Option<[f64; 3]>) -> Atom
         (Some(v), None) => AtomSections::Velocity(v),
         (None, Some(f)) => AtomSections::Force(f),
         (Some(v), Some(f)) => AtomSections::VelocityForce {
-            data: pack_velocity_force(v, f),
+            data: std::mem::ManuallyDrop::new(pack_velocity_force(v, f)),
             index: 0,
         },
     }
@@ -662,7 +699,7 @@ pub(crate) fn apply_parsed_forces(atoms: &mut [AtomDatum], forces: &[[f64; 3]]) 
         let data: Arc<[f64]> = Arc::from(buf);
         for (index, atom) in atoms[..n].iter_mut().enumerate() {
             atom.tail = AtomSections::VelocityForce {
-                data: Arc::clone(&data),
+                data: std::mem::ManuallyDrop::new(Arc::clone(&data)),
                 index: index as u32,
             };
         }
@@ -800,7 +837,7 @@ impl AtomDatum {
             atom.tail = if only_vel_force {
                 compact_sections(velocity, force)
             } else {
-                AtomSections::Full(Box::new(AtomTail {
+                AtomSections::Full(std::mem::ManuallyDrop::new(Box::new(AtomTail {
                     velocity,
                     force,
                     energy,
@@ -809,7 +846,7 @@ impl AtomDatum {
                     magmom,
                     displacement,
                     spread,
-                }))
+                })))
             };
         }
         atom
@@ -819,14 +856,14 @@ impl AtomDatum {
         if !matches!(self.tail, AtomSections::Full(_)) {
             let velocity = self.velocity();
             let force = self.force();
-            self.tail = AtomSections::Full(Box::new(AtomTail {
+            self.tail = AtomSections::Full(std::mem::ManuallyDrop::new(Box::new(AtomTail {
                 velocity,
                 force,
                 ..AtomTail::default()
-            }));
+            })));
         }
         match &mut self.tail {
-            AtomSections::Full(tail) => tail,
+            AtomSections::Full(tail) => &mut **tail,
             AtomSections::Empty
             | AtomSections::Velocity(_)
             | AtomSections::Force(_)
@@ -940,15 +977,28 @@ impl AtomDatum {
         }
     }
 
-    #[inline(always)]
+    /// Not inlined into the convel row loop. Inlining the store made that
+    /// loop slower than the call it replaced.
+    #[inline(never)]
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
-        // The convel parse sets a velocity on an empty tail. That stays a
-        // single store, with no force lookup. The other tails are cold.
-        if matches!(self.tail, AtomSections::Empty | AtomSections::Velocity(_)) {
-            self.tail = match value {
-                Some(v) => AtomSections::Velocity(v),
-                None => AtomSections::Empty,
-            };
+        // The convel parse sets a velocity on an empty tail. Those variants
+        // own no heap, so the store skips drop instead of running the slab
+        // drop glue.
+        if matches!(
+            &self.tail,
+            AtomSections::Empty | AtomSections::Velocity(_)
+        ) {
+            // SAFETY: Empty and Velocity own no allocation. Overwriting
+            // them does not drop a slab arc or a boxed tail.
+            unsafe {
+                std::ptr::write(
+                    &mut self.tail,
+                    match value {
+                        Some(v) => AtomSections::Velocity(v),
+                        None => AtomSections::Empty,
+                    },
+                );
+            }
             return;
         }
         self.set_velocity_other(value);
@@ -970,11 +1020,21 @@ impl AtomDatum {
 
     #[inline(always)]
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
-        if matches!(self.tail, AtomSections::Empty | AtomSections::Force(_)) {
-            self.tail = match value {
-                Some(force) => AtomSections::Force(force),
-                None => AtomSections::Empty,
-            };
+        if matches!(
+            &self.tail,
+            AtomSections::Empty | AtomSections::Force(_)
+        ) {
+            // SAFETY: Empty and Force own no allocation. Overwriting them
+            // does not drop a slab arc or a boxed tail.
+            unsafe {
+                std::ptr::write(
+                    &mut self.tail,
+                    match value {
+                        Some(force) => AtomSections::Force(force),
+                        None => AtomSections::Empty,
+                    },
+                );
+            }
             return;
         }
         self.set_force_other(value);
