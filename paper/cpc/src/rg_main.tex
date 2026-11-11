@@ -1105,7 +1105,43 @@ a write call, on one set of files.
 
 Table~\ref{tab:drift} is in the supplement.
 
-\section{Resumed saddle searches}\label{sec:cases} The reads in
+\section{Resumed saddle searches}\label{sec:cases}
+\subsection{Requirements and the failure each one closes}
+\label{sec:requirements}
+Table~\ref{tab:requirements} states five requirements.
+Each is a field a later step reads.
+
+\begin{table}[tbp]
+\centering
+\small
+\caption{Requirements on a restart state, the step that reads each field, and the failure measured when the field is missing.}
+\label{tab:requirements}
+\begin{tabular}{p{0.22\linewidth}p{0.32\linewidth}p{0.36\linewidth}}
+\toprule
+Requirement & Step that reads it & Failure measured here \\
+\midrule
+R1, per-axis mask & Surface search, prefactor & Height constraint dropped; barrier \(-70.2\,\mathrm{meV}\) \\
+R2, persistent id & Band and event table & Id lost on completed foreign round trips \\
+R3, declared time unit & Dynamics & Kinetic energy scaled by \(103.642696\) \\
+R4, binary64 geometry, cell, periodicity & Resume of a search & \(10^{-9}\) to \(10^{-6}\,\text{\AA}\), or periodicity rewritten \\
+R5, versioned grammar & Any second reader & One file, four answers from five readers \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+R1 is a mask for each Cartesian axis of each atom.
+R2 is an integer stored on the row, so a later frame finds the same atom after the file groups rows by element.
+R3 is a time unit written in the file.
+R4 is coordinates, cell and periodic flags that read back as the values written.
+R5 is a grammar with a major and a minor, a rule for what a later minor may add, and a corpus that decides disputes.
+The short history of an optimiser is outside the five.
+Limited-memory quasi-Newton updates a Hessian from a few previous steps \cite{nocedalUpdatingQuasinewtonMatrices1980}.
+The optimisers used on minimum-energy paths keep an analogous history \cite{sheppardOptimizationMethodsFinding2008}.
+FIRE carries velocities of the images between steps \cite{bitzekStructuralRelaxationMade2006}.
+A resume can match the coordinates and still take a different next step.
+The subsections below measure that on one band.
+
+The reads in
 Section~\ref{sec:host} use the library built for that host.
 We first wrote the survey frame of Listing~\ref{lst:frame} with one
 library and read it back with the same library or another,
@@ -1815,6 +1851,32 @@ Section~\ref{sec:host} gives the repeats measured on this host.
 Every median below is from one core of the host in the last paragraph of the paper.
 Six repeats follow one warmup, and the median is the type-7 median.
 The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper}.
+
+Table~\ref{tab:serial} is a separate serial session on core 0, one warmup and six repeats.
+On the \num{100000}-frame CON file readcon takes \SI{1.10}{\second} and ASE's eon reader takes \SI{10.9}{\second}.
+On the convel file readcon takes \SI{0.766}{\second}.
+ASE cannot read that file.
+On the copper extended XYZ file readcon takes \SI{0.331}{\second}, chemfiles \SI{1.59}{\second}, OVITO \SI{4.13}{\second}, ASE \SI{10.1}{\second} and pymatgen \SI{23.9}{\second}.
+Each entry is the type-7 median of that one-core run.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Serial reads on one core.
+One warmup and six repeats, type-7 median, core 0.
+A blank cell was not part of this comparison.}
+\label{tab:serial}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+File & readcon & ASE & chemfiles & OVITO & pymatgen \\
+\midrule
+\num{100000}-frame CON & 1.10 & 10.9 & & & \\
+convel & 0.766 & cannot read & & & \\
+copper extended XYZ & 0.331 & 10.1 & 1.59 & 4.13 & 23.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Extended XYZ}
 \label{sec:xyz}

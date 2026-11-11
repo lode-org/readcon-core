@@ -580,12 +580,64 @@ The binary-format, DLPack, ordering and head-to-head tables, and the layout figu
 \refstepcounter{table}\label{tab:perf}
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
 \begin{center}
-\includegraphics[width=\linewidth]{figures/generated/layout.pdf}\\
-\includegraphics[width=\linewidth]{figures/generated/matrix.pdf}\\
-\includegraphics[width=\linewidth]{figures/generated/pipeline.pdf}\\
-\includegraphics[width=\linewidth]{figures/generated/threads.pdf}
+\includegraphics[width=\linewidth]{figures/generated/layout.pdf}
 \end{center}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{figures/generated/matrix.pdf}
+\caption{Compatibility codes for the checkpoint fields.}
+\label{fig:matrix}
+\end{figure}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{figures/generated/pipeline.pdf}
+\caption{Read of a multi-frame file.
+A serial scan records where each frame starts.
+Each frame is then parsed on one of \(N\) workers.
+The frames are returned in file order.}
+\label{fig:pipeline}
+\end{figure}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{figures/generated/threads.pdf}
+\caption{Thread scaling on the ten-thousand-frame file, from an interleaved run.
+Left: speedup.
+Right: parallel efficiency.}
+\label{fig:threads}
+\end{figure}
 \endgroup
+
+\section{Language pairs}
+\label{sec:supp-pairs}
+Table~\ref{tab:restart-pairs} is the climbing-image band through each writer and reader among Python, C, C++, Fortran and Julia.
+The Fortran rows call \texttt{rkr\_frame\_add\_atom\_full} in the C header order.
+The public Fortran \texttt{add\_atom} wrapper binds a different argument order, returns status \(-4\), and is not one of these rows.
+\input{figures/generated/restart_pairs}
+
+\section{MPI ranks}
+\label{sec:supp-mpi}
+Tables~\ref{tab:mpi-strong} and~\ref{tab:mpi-weak} are the warm medians.
+The tables here list every rank that was run, cold and warm.
+Ranks 16 and 32 were not run.
+Every repeat matched the serial bytes.
+\input{figures/generated/mpi_strong_warm}
+\input{figures/generated/mpi_strong_cold}
+\input{figures/generated/mpi_strong_warm_full}
+\input{figures/generated/mpi_weak_warm}
+\input{figures/generated/mpi_weak_cold}
+\input{figures/generated/mpi_weak_warm_full}
+
+\section{ABNF of one frame}
+\label{sec:appendix-abnf}
+The non-normative ABNF of one frame follows.
+An empty first header line is the user line, an empty second header line is implicit version 1, and a blank line after a frame is the next frame unless it begins a velocity block.
+The listing has 50 rules.
+The specification wins where the two disagree.
+\input{figures/generated/con_abnf}
+
+\section{CON-bin}
+\label{sec:conbin}
+\input{figures/generated/conbin-mmap}
 
 \section{Extended XYZ}
 \label{sec:xyz-tables}

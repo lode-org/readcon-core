@@ -1,0 +1,40 @@
+% Written by paper/cpc/scripts/gen_cloud_tables.py.
+\begin{table}[ht]
+\centering
+\scriptsize
+\caption{The same band through each writer and reader pair among Python, C, C++, Fortran and Julia. Fortran calls \texttt{rkr\_frame\_add\_atom\_full} in the C header order. The columns are the columns of Table~\ref{tab:restartfmt}.}
+\label{tab:restart-pairs}
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Route & File (\AA) & Modes & Steps & $\Delta E^\ddagger$ (eV) & Max displacement (\AA) \\
+\midrule
+CON 3.1 Python to Python & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Python to C & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Python to C++ & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Python to Fortran & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Python to Julia & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C to Python & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C to C & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C to C++ & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C to Fortran & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C to Julia & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C++ to Python & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C++ to C & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C++ to C++ & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C++ to Fortran & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 C++ to Julia & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Fortran to Python & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Fortran to C & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Fortran to C++ & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Fortran to Fortran & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Fortran to Julia & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Julia to Python & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Julia to C & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Julia to C++ & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Julia to Fortran & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+CON 3.1 Julia to Julia & 0 & 56 & 60 & $-2.31\times10^{-14}$ & $3.55\times10^{-15}$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
