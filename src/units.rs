@@ -76,6 +76,11 @@ struct UnitValue {
     dim: Dimension,
 }
 
+#[cfg(test)]
+pub(crate) fn cached_unit_table_addr() -> usize {
+    base_table() as *const HashMap<&'static str, UnitValue> as usize
+}
+
 fn base_table() -> &'static HashMap<&'static str, UnitValue> {
     static TABLE: std::sync::OnceLock<HashMap<&'static str, UnitValue>> =
         std::sync::OnceLock::new();

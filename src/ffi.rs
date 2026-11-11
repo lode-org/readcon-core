@@ -6079,6 +6079,49 @@ mod tests {
         unsafe { free_rkr_frame(handle) };
     }
     #[test]
+    fn c_read_uses_the_cached_unit_table() {
+        let text = "\
+v3
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10 10 10
+90 90 90
+
+
+1
+1
+1.0
+H
+Coordinates of Component 1
+0.5 0.25 0.125 0 7
+";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v3.con");
+        std::fs::write(&path, text).unwrap();
+        let serial = crate::iterators::read_all_frames(&path).unwrap();
+        let addr = crate::units::cached_unit_table_addr();
+        let c_path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        let mut n: usize = 0;
+        let arr = unsafe { rkr_read_all_frames(c_path.as_ptr(), &mut n) };
+        assert!(!arr.is_null() && n == 1);
+        assert_eq!(crate::units::cached_unit_table_addr(), addr);
+        let nat = unsafe { rkr_frame_atom_count(*arr) };
+        assert_eq!(nat, serial[0].atom_data.len());
+        let mut buf = vec![0.0f64; nat * 3];
+        assert_eq!(
+            unsafe { rkr_frame_copy_positions(*arr, buf.as_mut_ptr(), buf.len()) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        assert_eq!(buf[0].to_bits(), serial[0].positions.as_f64_row(0)[0].to_bits());
+        unsafe { free_rkr_frame_array(arr, n) };
+        let bad = dir.path().join("bad.con");
+        std::fs::write(&bad, text.replace("angstrom", "not-a-unit")).unwrap();
+        let bad_c = std::ffi::CString::new(bad.to_str().unwrap()).unwrap();
+        let mut n_bad = 0usize;
+        assert!(unsafe { rkr_read_all_frames(bad_c.as_ptr(), &mut n_bad) }.is_null());
+        assert_eq!(crate::units::cached_unit_table_addr(), addr);
+    }
+
+    #[test]
     fn read_all_frames_c_abi_tiny() {
         let path = std::ffi::CString::new("resources/test/tiny_cuh2.con").unwrap();
         let mut n: usize = 0;
