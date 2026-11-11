@@ -146,7 +146,9 @@ def test_trailing_non_utf8_keeps_the_later_frame_class(tmp_path):
         except readcon.InvalidCount as exc:
             _assert_later_invalid_count(exc)
         except OSError as exc:
-            raise AssertionError(f"original InvalidCount became OSError: {exc}") from exc
+            raise AssertionError(
+                f"original InvalidCount became OSError: {exc}"
+            ) from exc
         else:
             raise AssertionError("batch read accepted the bad second frame")
 
