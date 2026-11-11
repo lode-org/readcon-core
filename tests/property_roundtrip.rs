@@ -119,6 +119,64 @@ fn truncated_frame_is_an_error() {
     assert!(parsed.last().unwrap().is_err(), "{parsed:?}");
 }
 
+#[test]
+fn two_frames_with_units_round_trip_bit_for_bit() {
+    let mut builder = ConFrameBuilder::new([15.3456, 21.702, 100.0], [90.0, 90.0, 90.0]);
+    builder
+        .set_metadata_json(r#"{"units":{"length":"angstrom","energy":"eV","mass":"amu"}}"#)
+        .expect("metadata");
+    builder.add_atom("Cu", 0.6394, -0.0, 6.9753, [true, true, true], 0, 63.546);
+    builder.add_atom(
+        "H",
+        8.6823,
+        9.947,
+        11.733,
+        [false, false, false],
+        1,
+        1.00784,
+    );
+    let first = builder.build().expect("build");
+    let mut second = first.clone();
+    second.atom_data[0].x = -1.25;
+    let mut buffer = Vec::new();
+    {
+        let mut writer = ConFrameWriter::new(Cursor::new(&mut buffer));
+        writer.write_frame(&first).expect("write");
+        writer.write_frame(&second).expect("write");
+        writer.flush().expect("flush");
+    }
+    let text = String::from_utf8(buffer).expect("utf8");
+    let parsed: Vec<_> = ConFrameIterator::new(&text).collect();
+    assert_eq!(parsed.len(), 2);
+    for (got, expect) in parsed.iter().zip([&first, &second]) {
+        let got = got.as_ref().expect("parse");
+        assert_eq!(
+            got.header.boxl.map(f64::to_bits),
+            expect.header.boxl.map(f64::to_bits)
+        );
+        assert_eq!(
+            got.header
+                .masses_per_type
+                .iter()
+                .map(|mass| mass.to_bits())
+                .collect::<Vec<_>>(),
+            expect
+                .header
+                .masses_per_type
+                .iter()
+                .map(|mass| mass.to_bits())
+                .collect::<Vec<_>>()
+        );
+        for (atom, src) in got.atom_data.iter().zip(&expect.atom_data) {
+            assert_eq!(atom.x.to_bits(), src.x.to_bits());
+            assert_eq!(atom.y.to_bits(), src.y.to_bits());
+            assert_eq!(atom.z.to_bits(), src.z.to_bits());
+            assert_eq!(atom.fixed, src.fixed);
+            assert_eq!(atom.atom_id, src.atom_id);
+        }
+    }
+}
+
 fn xorshift(state: &mut u64) -> u64 {
     *state = state.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
     *state
