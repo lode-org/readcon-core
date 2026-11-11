@@ -1846,28 +1846,50 @@ Every median below is from one core of the host in the last paragraph of the pap
 Six repeats follow one warmup, and the median is the type-7 median.
 The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper}.
 
-Table~\ref{tab:serial} is a separate serial session on core 0, one warmup and six repeats.
-On the \num{100000}-frame CON file readcon takes \SI{1.10}{\second} and ASE's eon reader takes \SI{10.9}{\second}.
-On the convel file readcon takes \SI{0.766}{\second}.
+Table~\ref{tab:serial} and Table~\ref{tab:serial-xyz} are a serial session on core 0, one warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
+On the \num{100000}-frame CON file the Rust reader takes \SI{0.301}{\second}, the C binding \SI{0.326}{\second} and the Python binding \SI{0.484}{\second}.
+ASE's eon reader takes \SI{10.669}{\second} and eOn \texttt{loadcons} takes \SI{10.128}{\second}.
+On the convel file the Rust reader takes \SI{0.370}{\second}, the C binding \SI{0.410}{\second} and the Python binding \SI{0.535}{\second}.
 ASE cannot read that file.
-On the copper extended XYZ file readcon takes \SI{0.331}{\second}, chemfiles \SI{1.59}{\second}, OVITO \SI{4.13}{\second}, ASE \SI{10.1}{\second} and pymatgen \SI{23.9}{\second}.
-Each entry is the type-7 median of that one-core run.
+On one CON frame of $10^{6}$ atoms the Python binding takes \SI{0.0516}{\second} and the Rust reader takes \SI{0.0648}{\second}.
+ASE's eon reader takes \SI{1.378}{\second}.
+On the copper extended XYZ file readcon takes \SI{0.263}{\second}, chemfiles \SI{1.069}{\second}, OVITO \SI{3.309}{\second}, ASE \SI{9.766}{\second} and pymatgen \SI{24.373}{\second}.
 
 \begin{table}[tbp]
 \centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Serial reads on one core.
-One warmup and six repeats, type-7 median, core 0.
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Serial CON reads on one core.
+One warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
 A blank cell was not part of this comparison.}
 \label{tab:serial}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
-File & readcon & ASE & chemfiles & OVITO & pymatgen \\
+File & Rust & Python & C & ASE eon & \texttt{loadcons} \\
 \midrule
-\num{100000}-frame CON & 1.10 & 10.9 & & & \\
-convel & 0.766 & cannot read & & & \\
-copper extended XYZ & 0.331 & 10.1 & 1.59 & 4.13 & 23.9 \\
+\num{100000} frames & 0.301 (0.0350) & 0.484 (0.0130) & 0.326 (0.0223) & 10.669 (0.0591) & 10.128 (0.2189) \\
+convel & 0.370 (0.0029) & 0.535 (0.0017) & 0.410 (0.0023) & cannot read & \\
+$10^{6}$ atoms & 0.0648 (0.0011) & 0.0516 (0.0003) & & 1.378 (0.0312) & \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Serial read of the copper extended XYZ file on one core.
+One warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
+\label{tab:serial-xyz}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+readcon & chemfiles & OVITO & ASE & pymatgen \\
+\midrule
+0.263 (0.0005) & 1.069 (0.0018) & 3.309 (0.0024) & 9.766 (0.1636) & 24.373 (0.4896) \\
 \bottomrule
 \end{tabular}
 \end{table}
