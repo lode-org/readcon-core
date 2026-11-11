@@ -16,6 +16,7 @@ import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "generated"
@@ -510,12 +511,59 @@ def fastpath() -> None:
     _save(fig, "fastpath", DOUBLE_CM)
 
 
+# Trajectory XYZ medians, seconds. Columns are one frame of 10^6 atoms,
+# 10000 frames of 100 atoms, and 100000 frames of 32 atoms.
+TRAJ_XYZ = [
+    ("readcon Rust", [0.259, 0.276, 0.920], READCON),
+    ("readcon Python", [0.362, 0.453, 2.10], GREEN),
+    ("ASE iread", [1.74, 3.60, 25.6], PINK),
+    ("chemfiles 0.10.4", [0.364, 0.490, 2.60], ORANGE),
+    ("chemfiles 0.11.0-rc1", [0.359, 0.412, 2.24], SKY),
+    ("MDAnalysis", [2.09, 0.520, 1.87], BLUE),
+    ("MDTraj", [0.790, 0.781, 2.64], VERMILLION),
+]
+
+
+def trajxyz() -> None:
+    """Three copper XYZ trajectories. Medians only; quartiles are not in the record."""
+    use_latin_modern()
+    titles = [
+        r"$10^{6}$ atoms, one frame",
+        "100 atoms, 10 000 frames",
+        "32 atoms, 100 000 frames",
+    ]
+    limits = [(0.2, 4.5), (0.2, 5.5), (0.55, 40)]
+    ticks = ([0.3, 1, 3], [0.3, 1, 3], [1, 3, 10, 30])
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_CM / 2.54, 7.6 / 2.54), sharey=True)
+    y = np.arange(len(TRAJ_XYZ))
+    for ax, title, column, lim, tick in zip(axes, titles, range(3), limits, ticks):
+        values = [row[1][column] for row in TRAJ_XYZ]
+        colors = [row[2] for row in TRAJ_XYZ]
+        ax.barh(y, values, color=colors, edgecolor=BLACK, linewidth=0.4, height=0.72, zorder=3)
+        ax.set_xscale("log")
+        ax.set_xlim(*lim)
+        ax.xaxis.set_minor_locator(NullLocator())
+        ax.xaxis.set_major_locator(FixedLocator(tick))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:g}"))
+        ax.set_title(title, fontsize=8, loc="left")
+        ax.set_xlabel("median read time (s)")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.set_axisbelow(True)
+        ax.xaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
+    axes[0].set_yticks(y, [row[0] for row in TRAJ_XYZ])
+    axes[0].invert_yaxis()
+    fig.tight_layout(pad=0.45)
+    _save(fig, "trajxyz", DOUBLE_CM)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     layout()
     architecture()
     parser()
     timings()
+    trajxyz()
     conread()
     fastpath()
 
