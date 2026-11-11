@@ -515,11 +515,11 @@ def fastpath() -> None:
 # 10000 frames of 100 atoms, and 100000 frames of 32 atoms.
 TRAJ_XYZ = [
     ("readcon Rust", [0.259, 0.276, 0.920], READCON),
-    ("readcon Python", [0.362, 0.453, 2.10], GREEN),
+    ("readcon Python", [0.362, 0.453, 1.209], GREEN),
     ("ASE iread", [1.74, 3.60, 25.6], PINK),
     ("chemfiles 0.10.4", [0.364, 0.490, 2.60], ORANGE),
     ("chemfiles 0.11.0-rc1", [0.359, 0.412, 2.24], SKY),
-    ("MDAnalysis", [2.09, 0.520, 1.87], BLUE),
+    ("MDAnalysis", [2.09, 0.520, 1.869], BLUE),
     ("MDTraj", [0.790, 0.781, 2.64], VERMILLION),
 ]
 

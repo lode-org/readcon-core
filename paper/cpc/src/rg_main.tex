@@ -421,11 +421,12 @@ On the million-atom frame OVITO is the fastest of these readers.
 \label{sec:trajxyz}
 Table~\ref{tab:trajxyz} and Figure~\ref{fig:trajxyz} are plain XYZ trajectories of copper: one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.
 The Rust reader is fastest in every column, at \SI{0.259}{\second}, \SI{0.276}{\second} and \SI{0.920}{\second}.
-The Python binding takes \SI{0.362}{\second}, \SI{0.453}{\second} and \SI{2.10}{\second}.
+The Python binding takes \SI{0.362}{\second}, \SI{0.453}{\second} and \SI{1.209}{\second}.
 On \num{10000} frames, chemfiles 0.11.0-rc1 takes \SI{0.412}{\second}, faster than that Python read.
-On \num{100000} frames, the MDAnalysis XYZReader takes \SI{1.87}{\second}, also faster than the Python binding \cite{michaudAgrawalMDAnalysisToolkit2011}.
-A fix of that Python read is in progress.
-chemfiles 0.10.4 takes \SI{2.60}{\second} on that file, chemfiles 0.11.0-rc1 takes \SI{2.24}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
+On \num{100000} frames the Python read shares a repeated symbol across frames.
+That median is \SI{1.209}{\second}, with an interquartile range of \SI{0.0109}{\second}, down from \SI{2.095}{\second} with a range of \SI{0.0999}{\second}.
+In that column the Python binding is second only to the Rust reader.
+MDAnalysis takes \SI{1.869}{\second} there \cite{michaudAgrawalMDAnalysisToolkit2011}, chemfiles 0.10.4 takes \SI{2.60}{\second}, chemfiles 0.11.0-rc1 takes \SI{2.24}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
 Every interquartile range is under 5 percent of its median, except chemfiles 0.10.4 on the \num{100000}-frame file, where the range is \SI{0.28}{\second}.
 
 \begin{table}[tbp]
@@ -438,11 +439,11 @@ Columns are one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \n
 Reader & $10^{6}$ & \num{10000} & \num{100000} \\
 \midrule
 readcon, Rust & 0.259 & 0.276 & 0.920 \\
-readcon, Python & 0.362 & 0.453 & 2.10 \\
+readcon, Python & 0.362 & 0.453 & 1.209 \\
 ASE \texttt{iread} & 1.74 & 3.60 & 25.6 \\
 chemfiles 0.10.4 & 0.364 & 0.490 & 2.60 \\
 chemfiles 0.11.0-rc1 & 0.359 & 0.412 & 2.24 \\
-MDAnalysis & 2.09 & 0.520 & 1.87 \\
+MDAnalysis & 2.09 & 0.520 & 1.869 \\
 MDTraj & 0.790 & 0.781 & 2.64 \\
 \bottomrule
 \end{tabular}
@@ -454,7 +455,7 @@ MDTraj & 0.790 & 0.781 & 2.64 \\
 \caption{Median XYZ read on one core.
 The axis is logarithmic.
 The Rust reader is fastest on each file.
-On \num{100000} frames of 32 atoms, MDAnalysis is faster than the Python binding.}
+On \num{100000} frames of 32 atoms, the Python binding is second only to the Rust reader.}
 \label{fig:trajxyz}
 \end{figure*}
 
@@ -573,7 +574,7 @@ That path is $1.02$ and $1.05$ times the reader without it.
 On one frame of $10^{6}$ atoms, extxyz 0.4.6 and cextxyz are faster than readcon, and OVITO is faster than both.
 On \num{10000} frames the Rust reader is faster than those three.
 On copper XYZ files the Rust reader is again fastest at each size.
-On \num{100000} frames of 32 atoms MDAnalysis takes \SI{1.87}{\second} and the Python binding takes \SI{2.10}{\second}.
+On \num{100000} frames of 32 atoms the Python binding takes \SI{1.209}{\second}, second to the Rust reader at \SI{0.920}{\second}, and MDAnalysis takes \SI{1.869}{\second}.
 One convel frame takes $\num{2.87e-5}$\,s in Python, down from $\num{1.10e-3}$\,s, and $\num{1.66e-5}$\,s in C.
 The C binding reads \num{100000} CON frames in \SI{0.375}{\second}; the current eOn client takes \SI{0.854}{\second}.
 ASE does not read a velocity block and does not write a per-component hold.
