@@ -433,12 +433,10 @@ fn parallel_blank_chunk_is_an_incomplete_frame() {
     assert_eq!(err.frame_index, 0);
     assert_eq!(err.line, 1, "{err}");
 
+    // The parallel slot list matches the serial iterator: ASCII whitespace
+    // is not a frame. The located reader above still reports the failure.
     let parts = readcon_core::iterators::parse_frames_parallel(" \n");
-    assert_eq!(parts.len(), 1);
-    assert!(matches!(
-        &parts[0],
-        Err(err) if err.class_name() == "IncompleteFrame"
-    ));
+    assert!(parts.is_empty());
 
     // A truncated header stops the byte scanner on the error. A non-breaking
     // space is not ASCII whitespace, so it is still a chunk, and the parser
