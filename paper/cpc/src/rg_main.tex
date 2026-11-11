@@ -2103,6 +2103,73 @@ ASE xyz & & 127 & \\
 \end{tabular}
 \end{table}
 
+Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes after the fix.
+Each row is a type-7 median of six repeats after one warmup, on one core.
+The resident set and the massif heap are the increase above the loaded input.
+The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
+Before the fix that write took \SI{3.36}{\second}, with a resident set of \SI{2045}{\mebi\byte} and a heap of \SI{721}{\mebi\byte}.
+The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
+Before the fix it took \SI{3.45}{\second}, \SI{2048}{\mebi\byte} and \SI{725}{\mebi\byte}.
+The gzip write of one frame of $10^{6}$ atoms takes \SI{0.704}{\second}, \SI{39.0}{\mebi\byte} and \SI{32.3}{\mebi\byte}.
+Before the fix it took \SI{1.23}{\second}, \SI{1022}{\mebi\byte} and \SI{577}{\mebi\byte}.
+The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
+Before the fix it took \SI{0.718}{\second}, \SI{1022}{\mebi\byte} and \SI{577}{\mebi\byte}.
+The heap of that zstd write matches the Rust writer.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Python compressed writes after the fix.
+Time is the type-7 median in seconds.
+RSS and massif are the increase above the loaded input, in mebibytes.}
+\label{tab:pywrite}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+File & Time (s) & RSS & Massif \\
+\midrule
+trajectory gzip & 0.560 & 0.73 & 0.36 \\
+trajectory zstd & 0.467 & 3.47 & 3.55 \\
+$10^{6}$ atoms, gzip & 0.704 & 39.0 & 32.3 \\
+$10^{6}$ atoms, zstd & 0.198 & 39.0 & 35.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+readcon-db appends the same trajectory in \SI{6.25}{\second}, with a resident set of \SI{34.7}{\mebi\byte} and a heap of \SI{5.2}{\mebi\byte}.
+It is slower than the earlier \SI{5.51}{\second} because it now commits every 64 frames.
+One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set of \SI{58.9}{\mebi\byte} and a heap of \SI{7.19}{\mebi\byte}.
+The coordinates match.
+ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{readcon-db on one core.
+Time is the type-7 median in seconds.
+RSS and massif are the increase above the loaded input, in mebibytes.
+The ASE rows are the same thousand random-frame reads.}
+\label{tab:rcdb}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Operation & Time (s) & RSS & Massif \\
+\midrule
+append & 6.25 & 34.7 & 5.2 \\
+1000 random-frame reads & 0.0242 & 58.9 & 7.19 \\
+ASE database, 1000 reads & 0.297 & & \\
+ASE trajectory, 1000 reads & 0.047 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/pywrite.pdf}
+\caption{Left: Python compressed-write medians after the fix.
+Right: one thousand random-frame reads.
+Both axes are linear and start at zero.}
+\label{fig:pywrite}
+\end{figure*}
+
 \subsection{The short decimal}
 \label{sec:fast}
 The fast-path session interleaves the two readcon builds and the eOn-style reader on the two larger CON files.

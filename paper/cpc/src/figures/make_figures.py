@@ -557,6 +557,48 @@ def trajxyz() -> None:
     _save(fig, "trajxyz", DOUBLE_CM)
 
 
+def pywrite() -> None:
+    """Python compressed writes and readcon-db random-frame reads. Medians, seconds."""
+    use_latin_modern()
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.4 / 2.54))
+    writes = [
+        ("trajectory\ngzip", 0.560),
+        ("trajectory\nzstd", 0.467),
+        (r"$10^{6}$-atom" "\ngzip", 0.704),
+        (r"$10^{6}$-atom" "\nzstd", 0.198),
+    ]
+    reads = [
+        ("readcon-db", 0.0242, READCON),
+        ("ASE trajectory", 0.047, GREEN),
+        ("ASE db", 0.297, PINK),
+    ]
+    ax = axes[0]
+    x = np.arange(len(writes))
+    ax.bar(x, [v for _, v in writes], color=GREEN, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
+    ax.set_xticks(x, [name for name, _ in writes], fontsize=7)
+    ax.set_ylabel("median write time (s)")
+    ax.set_ylim(0, 0.9)
+    ax.set_title("Python compressed write", fontsize=8, loc="left")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_axisbelow(True)
+    ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
+    ax = axes[1]
+    y = np.arange(len(reads))
+    ax.barh(y, [v for _, v, _ in reads], color=[c for _, _, c in reads], edgecolor=BLACK, linewidth=0.4, height=0.62, zorder=3)
+    ax.set_yticks(y, [name for name, _, _ in reads])
+    ax.invert_yaxis()
+    ax.set_xlabel("median read time (s)")
+    ax.set_xlim(0, 0.36)
+    ax.set_title("1000 random frames", fontsize=8, loc="left")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_axisbelow(True)
+    ax.xaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
+    fig.tight_layout(pad=0.45)
+    _save(fig, "pywrite", DOUBLE_CM)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     layout()
@@ -566,6 +608,7 @@ def main() -> None:
     trajxyz()
     conread()
     fastpath()
+    pywrite()
 
 
 if __name__ == "__main__":
