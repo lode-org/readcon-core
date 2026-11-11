@@ -1266,11 +1266,10 @@ fn fill_position_spans(
         let parallel = !matches!(num_threads, Some(n) if n <= 1);
         if parallel {
             use rayon::prelude::*;
-            // `try_for_each` returns whichever span fails first in the pool.
-            // A later worker can stop the walk before an earlier slot runs,
-            // so the same file disagrees with the serial collectors.
-            // `find_map_first` keeps the earliest failure and still stops
-            // spans to its right.
+            // The serial walk reports the earliest failing span. A pool
+            // that stops on the first finished failure can hand back a
+            // later span of the same file. `find_map_first` keeps the
+            // earliest slot and still stops spans to its right.
             let mut run = || match values
                 .par_chunks_mut(stride)
                 .enumerate()
