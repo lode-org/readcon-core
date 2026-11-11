@@ -311,22 +311,54 @@ def run_series(reader: str, path: Path, threads: int) -> dict:
     return doc
 
 
+def time_readcon(path: Path, threads: int) -> int:
+    """The clock is ``read_con`` only.
+
+    Copying every frame's coordinates in Python is a serial walk of about
+    a quarter second on this file. Correctness does that walk before the
+    samples. It is not part of the timed call.
+    """
+    import readcon
+
+    frames = readcon.read_con(os.fspath(path), n_threads=threads)
+    count = len(frames)
+    del frames
+    return count
+
+
 def series_main(reader: str, path: str, threads: int) -> None:
-    loader = READERS[reader]
     file_path = Path(path)
+    if reader == "readcon":
+
+        def load() -> int:
+            return time_readcon(file_path, threads)
+
+        def ok(got: object) -> bool:
+            return got == N_FRAMES
+    else:
+        loader = READERS[reader]
+
+        def load() -> np.ndarray:
+            return loader(file_path, threads)
+
+        def ok(got: object) -> bool:
+            return getattr(got, "shape", None) == (N_FRAMES, N_ATOMS, 3)
+
     # Import and one unreadied call sit outside the samples.
     started = time.perf_counter()
-    got = loader(file_path, threads)
+    got = load()
     warmup_s = time.perf_counter() - started
-    if getattr(got, "shape", None) != (N_FRAMES, N_ATOMS, 3):
-        raise SystemExit(f"shape {getattr(got, 'shape', None)}")
+    if not ok(got):
+        raise SystemExit(f"warmup result {got!r}")
+    del got
     samples = []
     for _ in range(SAMPLES):
         started = time.perf_counter()
-        got = loader(file_path, threads)
+        got = load()
         samples.append(time.perf_counter() - started)
-        if got.shape != (N_FRAMES, N_ATOMS, 3):
-            raise SystemExit(f"shape {got.shape}")
+        if not ok(got):
+            raise SystemExit(f"sample result {got!r}")
+        del got
     print(json.dumps({"warmup_s": warmup_s, "samples": samples, "reader": reader, "threads": threads}))
 
 
