@@ -2431,10 +2431,24 @@ fn read_con_string(
     let parsed = py
         .detach(|| {
             crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads).map_err(|e| {
-                CountFail::Parse {
-                    class: e.class_name(),
-                    message: e.to_string(),
-                    line: e.line(),
+                if utf8_failure(&e) {
+                    return CountFail::Io(e.to_string());
+                }
+                let located = crate::iterators::frames_from_text_located(&owned, n_threads).err();
+                if let Some(loc) = located {
+                    CountFail::Parse {
+                        class: loc.error.class_name(),
+                        message: loc.error.to_string(),
+                        line: loc.line,
+                        frame: loc.frame_index,
+                    }
+                } else {
+                    CountFail::Parse {
+                        class: e.class_name(),
+                        message: e.to_string(),
+                        line: e.line(),
+                        frame: 0,
+                    }
                 }
             })
         })
@@ -2495,14 +2509,14 @@ enum FrameSource {
 
 fn stream_error(
     py: Python<'_>,
-    what: &str,
+    _what: &str,
     e: crate::stream::StreamError,
     frame_index: u64,
 ) -> PyErr {
     if let Some(parse) = e.downcast_ref::<ParseError>() {
         parse_err_to_py(py, parse, parse.line(), frame_index)
     } else {
-        PyIOError::new_err(format!("{what} error: {e}"))
+        PyIOError::new_err(format!("read error: {e}"))
     }
 }
 
@@ -3669,7 +3683,14 @@ fn class_err_to_py(
 }
 
 fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
+    if utf8_failure(err) {
+        return PyIOError::new_err(err.to_string());
+    }
     class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
+}
+
+fn utf8_failure(err: &ParseError) -> bool {
+    matches!(err, ParseError::ValidationError(msg) if msg.contains("invalid UTF-8"))
 }
 
 fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
@@ -3681,7 +3702,13 @@ fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
     match err {
         LoadError::Io(io) => PyIOError::new_err(io.to_string()),
         LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
-        LoadError::Parse(located) => located_to_py(located),
+        LoadError::Parse(located) => {
+            if utf8_failure(&located.error) {
+                PyIOError::new_err(located.error.to_string())
+            } else {
+                located_to_py(located)
+            }
+        }
         LoadError::Empty => {
             Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
         }
@@ -3694,6 +3721,7 @@ enum CountFail {
         class: &'static str,
         message: String,
         line: u32,
+        frame: u64,
     },
     Other(String),
 }
@@ -3705,22 +3733,33 @@ fn count_fail_to_py(err: CountFail) -> PyErr {
             class,
             message,
             line,
-        } => class_err_to_py(py, class, message, line, 0),
+            frame,
+        } => class_err_to_py(py, class, message, line, frame),
     })
 }
 
 fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
-    if err.downcast_ref::<std::io::Error>().is_some() {
-        CountFail::Io(err.to_string())
-    } else if let Some(parse) = err.downcast_ref::<ParseError>() {
-        CountFail::Parse {
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8")
+    {
+        return CountFail::Io(err.to_string());
+    }
+    if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
+        return CountFail::Parse {
+            class: located.error.class_name(),
+            message: located.error.to_string(),
+            line: located.line,
+            frame: located.frame_index,
+        };
+    }
+    if let Some(parse) = err.downcast_ref::<ParseError>() {
+        return CountFail::Parse {
             class: parse.class_name(),
             message: parse.to_string(),
             line: parse.line(),
-        }
-    } else {
-        CountFail::Other(err.to_string())
+            frame: 0,
+        };
     }
+    CountFail::Other(err.to_string())
 }
 
 fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
