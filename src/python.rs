@@ -11,6 +11,22 @@ use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// NumPy is imported once. The first `read_con` of a small frame was
+/// spending the import, and its page faults, inside the coordinate slab.
+fn numpy_import_ok(py: Python<'_>) -> bool {
+    static READY: AtomicBool = AtomicBool::new(false);
+    if READY.load(Ordering::Acquire) {
+        return true;
+    }
+    if py.import("numpy").is_ok() {
+        READY.store(true, Ordering::Release);
+        true
+    } else {
+        false
+    }
+}
 
 use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
@@ -439,6 +455,9 @@ impl PyConFrame {
 
     #[getter]
     fn has_velocities(&self, py: Python<'_>) -> PyResult<bool> {
+        if let Some(present) = self.inner_flag(|frame| frame.velocities.nrows() > 0) {
+            return Ok(present);
+        }
         Ok(self
             .py_atoms(py)?
             .first()
@@ -447,6 +466,9 @@ impl PyConFrame {
 
     #[getter]
     fn has_forces(&self, py: Python<'_>) -> PyResult<bool> {
+        if let Some(present) = self.inner_flag(|frame| frame.forces.nrows() > 0) {
+            return Ok(present);
+        }
         Ok(self
             .py_atoms(py)?
             .first()
@@ -455,6 +477,9 @@ impl PyConFrame {
 
     #[getter]
     fn has_displacements(&self, py: Python<'_>) -> PyResult<bool> {
+        if let Some(present) = self.inner_flag(|frame| frame.displacements.nrows() > 0) {
+            return Ok(present);
+        }
         Ok(self
             .py_atoms(py)?
             .first()
@@ -463,10 +488,32 @@ impl PyConFrame {
 
     #[getter]
     fn has_spreads(&self, py: Python<'_>) -> PyResult<bool> {
+        if let Some(present) = self.inner_flag(|frame| frame.spreads.nrows() > 0) {
+            return Ok(present);
+        }
         Ok(self
             .py_atoms(py)?
             .first()
             .is_some_and(PyAtomDatum::has_spread))
+    }
+
+    /// Chemical symbols in file order.
+    ///
+    /// A frame that still holds the parser's atom rows returns those
+    /// symbols directly. Building `atoms` is reserved for callers that
+    /// index an `Atom`.
+    #[getter]
+    fn symbols<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        if !self.atoms_ready.load(Ordering::Acquire) {
+            if let Some(frame) = self.inner.as_ref() {
+                return PyTuple::new(
+                    py,
+                    frame.atom_data.iter().map(|atom| atom.symbol.as_ref()),
+                );
+            }
+        }
+        let atoms = self.py_atoms(py)?;
+        PyTuple::new(py, atoms.iter().map(|atom| atom.symbol.as_str()))
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -704,6 +751,14 @@ impl PyConFrame {
     /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
     /// array, useful for filtering / one-hot encoding workflows.
     fn atom_ids_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u64>>> {
+        if !self.atoms_ready.load(Ordering::Acquire) {
+            if let Some(frame) = self.inner.as_ref() {
+                if frame.atom_ids.len() == frame.atom_data.len() && !frame.atom_ids.is_empty() {
+                    let data: Vec<u64> = frame.atom_ids.iter().copied().collect();
+                    return Ok(data.into_pyarray(py));
+                }
+            }
+        }
         let atoms = self.py_atoms(py)?;
         let data: Vec<u64> = atoms.iter().map(|a| a.atom_id).collect();
         Ok(data.into_pyarray(py))
@@ -1065,6 +1120,14 @@ impl PyConFrame {
 }
 
 impl PyConFrame {
+    /// Section presence from the parser arrays, before any `Atom` exists.
+    fn inner_flag(&self, pred: impl FnOnce(&ConFrame) -> bool) -> Option<bool> {
+        if self.atoms_ready.load(Ordering::Acquire) {
+            return None;
+        }
+        self.inner.as_ref().map(pred)
+    }
+
     fn atom_count(&self, py: Python<'_>) -> usize {
         if self.n_atoms > 0 {
             return self.n_atoms;
@@ -1088,7 +1151,7 @@ impl PyConFrame {
         // NumPy C API, which panics when the numpy module is absent.
         // A read that only writes the frames back keeps the parser's
         // coordinates on the frame instead.
-        let xyz_owned = if py.import("numpy").is_ok() {
+        let xyz_owned = if numpy_import_ok(py) {
             let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
             if let Some(src) = frame.positions.f64_slice() {
                 data.extend_from_slice(src);
@@ -1996,7 +2059,7 @@ fn con_frame_list(
     // `into_pyarray` panics if the numpy module is not installed. The
     // shared slab is the coordinate view; the frames still hold the
     // parsed coordinates when that view cannot be built.
-    let numpy_ok = py.import("numpy").is_ok();
+    let numpy_ok = numpy_import_ok(py);
     let packed = if numpy_ok {
         py.detach(|| match pool.as_ref() {
             Some(pool) if workers >= 2 => {
@@ -2298,7 +2361,7 @@ fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyC
         && frames
             .iter()
             .all(|frame| frame.positions.nrows() == n_atoms);
-    if !rectangular || py.import("numpy").is_err() {
+    if !rectangular || !numpy_import_ok(py) {
         return frames
             .into_iter()
             .map(|frame| PyConFrame::from_con_frame(py, &frame))
@@ -3495,6 +3558,9 @@ fn write_conbin(
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Fault NumPy's pages at import. A one-frame read then does not pay
+    // that import inside the coordinate slab.
+    let _ = numpy_import_ok(m.py());
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
