@@ -176,7 +176,7 @@ end
         angstrom = "{\"con_spec_version\":3,\"units\":{\"length\":\"Å\",\"energy\":\"eV\"}}"
         written_ang, reread_ang = round_trip(angstrom)
         @test occursin("\"time\":\"$natural\"", written_ang)
-        @test occursin("Å", written_ang)
+        @test occursin("\"length\":\"angstrom\"", written_ang)
         @test reread_ang[1].atoms[1].vx ≈ 0.1
     end
 
