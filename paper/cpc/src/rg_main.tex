@@ -514,6 +514,28 @@ The released eOn 3.6.0 client stops in \texttt{matter2con}; a fix is going upstr
 ASE's eon reader raises \texttt{ValueError} on the velocity title, so it does not read that file.
 ASE's eon writer raises \texttt{TypeError} on a frame held in one component.
 
+Table~\ref{tab:plugin} compares the ASE eon format with the readcon-con ASE plugin on the same \num{100000}-frame coordinate file.
+The readcon-con read takes \SI{1.72}{\second}.
+Of that time, the parse is \SI{0.432}{\second} and building the ASE \texttt{Atoms} objects is \SI{1.07}{\second}.
+The ASE eon read takes \SI{10.7}{\second}.
+The readcon-con write takes \SI{1.15}{\second} and the ASE eon write takes \SI{13.9}{\second}.
+
+\begin{table}[tbp]
+\centering
+\caption{ASE plugins on the \num{100000}-frame CON file.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
+Six repeats follow one warmup, on one core.}
+\label{tab:plugin}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Reader & Read & Write \\
+\midrule
+ASE eon & 10.7 (0.226) & 13.9 (0.178) \\
+readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{The short decimal}
 \label{sec:fast}
 The fast-path session interleaves the two readcon builds and the eOn-style reader on the two larger CON files.
