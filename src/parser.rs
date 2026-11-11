@@ -1996,6 +1996,7 @@ pub fn parse_velocity_section<'a>(
 /// `fx fy fz fixed_flag atom_id`).
 ///
 /// Returns `Ok(true)` if forces were found and parsed, `Ok(false)` otherwise.
+#[inline(never)]
 pub fn parse_force_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,

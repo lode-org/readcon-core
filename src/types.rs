@@ -854,28 +854,41 @@ impl AtomDatum {
     }
 
     /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
-    #[inline]
+    #[inline(always)]
     pub fn velocity(&self) -> Option<[f64; 3]> {
+        if let AtomSections::Velocity(v) = self.tail {
+            return Some(v);
+        }
+        self.velocity_other()
+    }
+
+    #[inline(never)]
+    fn velocity_other(&self) -> Option<[f64; 3]> {
         match &self.tail {
-            AtomSections::Velocity(v) => Some(*v),
-            AtomSections::VelocityForce { data, index } => {
-                Some(slab_row(data, *index as usize))
-            }
+            AtomSections::VelocityForce { data, index } => Some(slab_row(data, *index as usize)),
             AtomSections::Full(tail) => tail.velocity,
-            AtomSections::Empty | AtomSections::Force(_) => None,
+            AtomSections::Empty | AtomSections::Velocity(_) | AtomSections::Force(_) => None,
         }
     }
+
     /// Force vector `[fx, fy, fz]`.
-    #[inline]
+    #[inline(always)]
     pub fn force(&self) -> Option<[f64; 3]> {
+        if let AtomSections::Force(f) = self.tail {
+            return Some(f);
+        }
+        self.force_other()
+    }
+
+    #[inline(never)]
+    fn force_other(&self) -> Option<[f64; 3]> {
         match &self.tail {
-            AtomSections::Force(f) => Some(*f),
             AtomSections::VelocityForce { data, index } => {
                 let base = data.len() / 2;
                 Some(slab_row(data, base / 3 + *index as usize))
             }
             AtomSections::Full(tail) => tail.force,
-            AtomSections::Empty | AtomSections::Velocity(_) => None,
+            AtomSections::Empty | AtomSections::Velocity(_) | AtomSections::Force(_) => None,
         }
     }
     /// Per-atom energy contribution.
@@ -927,7 +940,25 @@ impl AtomDatum {
         }
     }
 
+    #[inline(always)]
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
+        // The convel parse sets a velocity on an empty tail. That stays a
+        // single store, with no force lookup. The other tails are cold.
+        if matches!(self.tail, AtomSections::Empty | AtomSections::Velocity(_)) {
+            self.tail = match value {
+                Some(v) => AtomSections::Velocity(v),
+                None => AtomSections::Empty,
+            };
+            return;
+        }
+        self.set_velocity_other(value);
+    }
+
+    #[inline(never)]
+    fn set_velocity_other(&mut self, value: Option<[f64; 3]>) {
+        if matches!(self.tail, AtomSections::Force(_)) && value.is_none() {
+            return;
+        }
         if matches!(self.tail, AtomSections::Full(_)) {
             self.ensure_tail().velocity = value;
             self.shrink_tail();
@@ -936,8 +967,22 @@ impl AtomDatum {
         let force = self.force();
         self.tail = compact_sections(value, force);
     }
+
+    #[inline(always)]
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
+        if matches!(self.tail, AtomSections::Empty | AtomSections::Force(_)) {
+            self.tail = match value {
+                Some(force) => AtomSections::Force(force),
+                None => AtomSections::Empty,
+            };
+            return;
+        }
+        self.set_force_other(value);
+    }
+
+    #[inline(never)]
+    fn set_force_other(&mut self, value: Option<[f64; 3]>) {
+        if matches!(self.tail, AtomSections::Velocity(_)) && value.is_none() {
             return;
         }
         if matches!(self.tail, AtomSections::Full(_)) {
