@@ -1454,7 +1454,7 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let frames = py
         .detach(|| {
             crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
-                .map_err(|err| box_to_count_fail(Path::new(&path_owned), None, err))
+                .map_err(box_to_count_fail)
         })
         .map_err(count_fail_to_py)?;
     let parse_s = parse_start.elapsed().as_secs_f64();
@@ -2108,7 +2108,7 @@ fn load_phased(
                         phased.share_bytes,
                     )
                 })
-                .map_err(|err| box_to_count_fail(Path::new(&path_owned), n_threads, err))
+                .map_err(box_to_count_fail)
         })
         .map_err(count_fail_to_py)?;
     let elapsed = t_enter.elapsed().as_secs_f64();
@@ -2284,7 +2284,7 @@ fn read_positions(
     let block = py
         .detach(|| {
             crate::iterators::read_positions_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(|err| box_to_count_fail(Path::new(&path_owned), n_threads, err))
+                .map_err(box_to_count_fail)
         })
         .map_err(count_fail_to_py)?;
     let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
@@ -3751,49 +3751,23 @@ fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
 /// Map a boxed reader error onto [`CountFail`].
 ///
 /// `read_all_frames_with_threads`, `read_all_frames_phased`, and
-/// `read_positions_with_threads` return a bare [`ParseError`]. Its
-/// `line()` is 0 for most classes and its frame is not recorded, so a
-/// later frame would be reported as line 0 of frame 0. Those failures
-/// are read again on the located path, the same one `count_frames`,
-/// `read_nth_frame`, and `read_con_string` use.
-fn box_to_count_fail(
-    path: &Path,
-    n_threads: Option<usize>,
-    err: Box<dyn std::error::Error>,
-) -> CountFail {
+/// `read_positions_with_threads` return the [`crate::error::LocatedParseError`]
+/// from the parse that failed. The line and frame are already on that
+/// error, so this does not open the path again.
+fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
     if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
         return CountFail::Io(err.to_string());
     }
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
         return count_fail_located(located);
     }
-    if err.downcast_ref::<ParseError>().is_some() {
-        match crate::iterators::read_all_frames_located(path, n_threads) {
-            Err(crate::iterators::LoadError::Parse(located)) => {
-                return count_fail_located(&located);
-            }
-            Err(crate::iterators::LoadError::Utf8(utf)) => {
-                return CountFail::Io(utf.to_string());
-            }
-            Err(crate::iterators::LoadError::Io(io)) => return CountFail::Io(io.to_string()),
-            Err(crate::iterators::LoadError::Empty) => {
-                return CountFail::Parse {
-                    class: "IncompleteHeader",
-                    message: ParseError::IncompleteHeader.to_string(),
-                    line: 1,
-                    frame: 0,
-                };
-            }
-            Ok(_) => {}
-        }
-        if let Some(parse) = err.downcast_ref::<ParseError>() {
-            return CountFail::Parse {
-                class: parse.class_name(),
-                message: parse.to_string(),
-                line: parse.line(),
-                frame: 0,
-            };
-        }
+    if let Some(parse) = err.downcast_ref::<ParseError>() {
+        return CountFail::Parse {
+            class: parse.class_name(),
+            message: parse.to_string(),
+            line: parse.line(),
+            frame: 0,
+        };
     }
     CountFail::Other(err.to_string())
 }
@@ -3853,39 +3827,117 @@ mod batch_location_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    fn fail_of(
-        path: &std::path::Path,
-        threads: Option<usize>,
-        result: Result<(), Box<dyn std::error::Error>>,
-    ) -> CountFail {
+    fn fail_of(result: Result<(), Box<dyn std::error::Error>>) -> CountFail {
         match result {
-            Err(err) => box_to_count_fail(path, threads, err),
+            Err(err) => box_to_count_fail(err),
             Ok(()) => panic!("expected a parse error"),
         }
     }
 
     fn fail_read_all(path: &std::path::Path, threads: Option<usize>) -> CountFail {
-        fail_of(
-            path,
-            threads,
-            crate::iterators::read_all_frames_with_threads(path, threads).map(|_| ()),
-        )
+        fail_of(crate::iterators::read_all_frames_with_threads(path, threads).map(|_| ()))
     }
 
     fn fail_phased(path: &std::path::Path, threads: Option<usize>) -> CountFail {
-        fail_of(
-            path,
-            threads,
-            crate::iterators::read_all_frames_phased(path, threads).map(|_| ()),
-        )
+        fail_of(crate::iterators::read_all_frames_phased(path, threads).map(|_| ()))
     }
 
     fn fail_positions(path: &std::path::Path, threads: Option<usize>) -> CountFail {
-        fail_of(
-            path,
-            threads,
-            crate::iterators::read_positions_with_threads(path, threads).map(|_| ()),
-        )
+        fail_of(crate::iterators::read_positions_with_threads(path, threads).map(|_| ()))
+    }
+
+    fn later_frame_bytes() -> Vec<u8> {
+        let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        format!("{good}{bad}").into_bytes()
+    }
+
+    fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-batch-class-{}-{}.con",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn class_cases() -> [(
+        Option<usize>,
+        fn(&std::path::Path, Option<usize>) -> CountFail,
+    ); 6] {
+        [
+            (None, fail_read_all),
+            (Some(2), fail_read_all),
+            (None, fail_phased),
+            (Some(2), fail_phased),
+            (None, fail_positions),
+            (Some(2), fail_positions),
+        ]
+    }
+
+    /// A byte the whole-file UTF-8 check would reject must not replace the
+    /// count error the batch parser already produced. The file is past the
+    /// map threshold, so the first read parses bytes and a second open
+    /// would fail the mapped buffer as UTF-8.
+    #[test]
+    fn trailing_non_utf8_keeps_the_parse_class() {
+        let mut bytes = later_frame_bytes();
+        bytes.resize(64 * 1024, b' ');
+        bytes.push(0xff);
+        let path = write_temp(&bytes);
+        for (threads, fail_of_reader) in class_cases() {
+            assert_later(fail_of_reader(&path, threads));
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The path is gone before a second open could map it. The count error
+    /// from the first read is the one that is reported.
+    #[test]
+    fn deleted_path_keeps_the_parse_class() {
+        let mut bytes = later_frame_bytes();
+        bytes.resize(64 * 1024, b' ');
+        for (threads, read_err) in [
+            (
+                None,
+                err_read_all as fn(&std::path::Path, Option<usize>) -> Box<dyn std::error::Error>,
+            ),
+            (Some(2), err_read_all),
+            (None, err_phased),
+            (Some(2), err_phased),
+            (None, err_positions),
+            (Some(2), err_positions),
+        ] {
+            let path = write_temp(&bytes);
+            let err = read_err(&path, threads);
+            std::fs::remove_file(&path).unwrap();
+            assert_later(box_to_count_fail(err));
+        }
+    }
+
+    fn err_read_all(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_all_frames_with_threads(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+
+    fn err_phased(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_all_frames_phased(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+
+    fn err_positions(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_positions_with_threads(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
     }
 }
 

@@ -122,6 +122,35 @@ def test_count_frames_locates_the_later_frame(tmp_path):
         raise AssertionError("count_frames accepted the bad second frame")
 
 
+def test_trailing_non_utf8_keeps_the_later_frame_class(tmp_path):
+    # Past the map threshold the batch readers parse bytes. A trailing
+    # non-UTF-8 byte used to make the recovery read fail the whole file
+    # as OSError and drop the count error in frame 1.
+    payload = (_good_frame() + _bad_count_frame()).encode()
+    payload = payload + b" " * (64 * 1024 - len(payload)) + b"\xff"
+    path = tmp_path / "later-frame-tail.con"
+    path.write_bytes(payload)
+    name = str(path)
+    openers = (
+        lambda: readcon.read_con(name),
+        lambda: readcon.read_con(name, n_threads=2),
+        lambda: readcon.read_all_frames(name),
+        lambda: readcon.read_all_frames(name, n_threads=2),
+        lambda: readcon.read_coords(name),
+        lambda: readcon.read_positions(name),
+        lambda: readcon.read_positions(name, n_threads=2),
+    )
+    for opener in openers:
+        try:
+            opener()
+        except readcon.InvalidCount as exc:
+            _assert_later_invalid_count(exc)
+        except OSError as exc:
+            raise AssertionError(f"original InvalidCount became OSError: {exc}") from exc
+        else:
+            raise AssertionError("batch read accepted the bad second frame")
+
+
 def test_batch_reads_locate_the_later_frame(tmp_path):
     path = _later_frame_path(tmp_path)
     openers = (
