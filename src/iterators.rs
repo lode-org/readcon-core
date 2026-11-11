@@ -1084,11 +1084,18 @@ fn fill_position_spans(
         let parallel = !matches!(num_threads, Some(n) if n <= 1);
         if parallel {
             use rayon::prelude::*;
-            let mut run = || {
-                values
-                    .par_chunks_mut(stride)
-                    .enumerate()
-                    .try_for_each(|(i, dest)| write_one(i, dest))
+            // `try_for_each` returns whichever span fails first in the pool.
+            // A later worker can stop the walk before an earlier slot runs,
+            // so the same file disagrees with the serial collectors.
+            // `find_map_first` keeps the earliest failure and still stops
+            // spans to its right.
+            let mut run = || match values
+                .par_chunks_mut(stride)
+                .enumerate()
+                .find_map_first(|(i, dest)| write_one(i, dest).err())
+            {
+                Some(err) => Err(err),
+                None => Ok(()),
             };
             return match num_threads {
                 Some(n) if n >= 2 => {
@@ -3952,5 +3959,53 @@ mod later_frame_location_tests {
             assert_eq!(err.frame_index, 1, "{threads:?}");
             assert_eq!(err.line, 14, "{threads:?}: {err}");
         }
+    }
+
+    /// Several spans after the first frame fail. Serial collection keeps
+    /// the earliest slot. The parallel position reader must report that
+    /// same line and frame index.
+    ///
+    /// The first frame is large. A later worker can fail before the
+    /// calling thread reaches the earliest bad span, which is the case
+    /// that used to return the later slot.
+    #[test]
+    fn parallel_positions_report_the_earliest_failing_slot() {
+        const SLOW_ATOMS: usize = 20_000;
+        let slow = counted_frame(SLOW_ATOMS);
+        let bad = counted_frame(1);
+        let text = format!("{slow}{bad}{bad}{bad}");
+        let earliest_line = 1 + slow.bytes().filter(|byte| *byte == b'\n').count() as u32;
+        let path =
+            std::env::temp_dir().join(format!("readcon-earliest-slot-{}.con", std::process::id()));
+        fs::write(&path, &text).unwrap();
+        assert_earliest_slot(
+            take_err(read_positions_with_threads(&path, Some(1))),
+            earliest_line,
+        );
+        assert_earliest_slot(
+            take_err(read_positions_with_threads(&path, Some(2))),
+            earliest_line,
+        );
+        let _ = fs::remove_file(&path);
+    }
+
+    fn counted_frame(natoms: usize) -> String {
+        let mut body = String::with_capacity(natoms * 10 + 96);
+        body.push_str("seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n");
+        body.push_str(&natoms.to_string());
+        body.push_str("\n1.0\nH\nCoordinates of Component 1\n");
+        for _ in 0..natoms {
+            body.push_str("0 0 0 0 0\n");
+        }
+        body
+    }
+
+    fn assert_earliest_slot(err: Box<dyn std::error::Error>, line: u32) {
+        let located = err
+            .downcast_ref::<error::LocatedParseError>()
+            .unwrap_or_else(|| panic!("position read lost the location: {err}"));
+        assert_eq!(located.error.class_name(), "InvalidCount", "{located:?}");
+        assert_eq!(located.frame_index, 1, "{located:?}");
+        assert_eq!(located.line, line, "{located:?}");
     }
 }
