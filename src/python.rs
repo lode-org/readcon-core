@@ -12,6 +12,7 @@ use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
@@ -1059,7 +1060,7 @@ impl PyConFrame {
             .canonical(canonical);
         writer
             .write_frame(&frame)
-            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+            .map_err(|e| write_err_to_py(py, e))?;
         Ok(())
     }
 }
@@ -1312,7 +1313,7 @@ impl PyConFrame {
 
         builder
             .build()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+            .map_err(|e| parse_err_to_py(py, &e, e.line(), 0))
     }
 }
 
@@ -1453,9 +1454,9 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let frames = py
         .detach(|| {
             crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
-                .map_err(|err| err.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let parse_s = parse_start.elapsed().as_secs_f64();
     let convert_start = std::time::Instant::now();
     let n_frames = frames.len();
@@ -2049,15 +2050,18 @@ fn con_frame_list(
         _ => frames.into_iter().map(Some).collect(),
     });
     let t_return = std::time::Instant::now();
-    let obj = Py::new(py, ConFrameList {
-        frames: std::sync::Mutex::new(stored),
-        cache: std::sync::Mutex::new(cache),
-        slab,
-        n_atoms,
-        workers,
-        phases: std::sync::Mutex::new(record),
-        pool: std::sync::Mutex::new(pool),
-    })?;
+    let obj = Py::new(
+        py,
+        ConFrameList {
+            frames: std::sync::Mutex::new(stored),
+            cache: std::sync::Mutex::new(cache),
+            slab,
+            n_atoms,
+            workers,
+            phases: std::sync::Mutex::new(record),
+            pool: std::sync::Mutex::new(pool),
+        },
+    )?;
     let return_s = t_return.elapsed().as_secs_f64();
     let list_s = t_list.elapsed().as_secs_f64();
     let accounted = slab_s + release_s + python_build_s + return_s;
@@ -2104,9 +2108,9 @@ fn load_phased(
                         phased.share_bytes,
                     )
                 })
-                .map_err(|err| err.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let elapsed = t_enter.elapsed().as_secs_f64();
     let phases = &loaded.1;
     let named = phases.open_mmap_s
@@ -2280,9 +2284,9 @@ fn read_positions(
     let block = py
         .detach(|| {
             crate::iterators::read_positions_with_threads(Path::new(&path_owned), n_threads)
-                .map_err(|e| e.to_string())
+                .map_err(box_to_count_fail)
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
         .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
     Ok(array.into_pyarray(py).unbind())
@@ -2354,9 +2358,20 @@ fn read_con_mpi(
     };
     let c = comm_from_py(comm)?;
     // MPI handles are not Send, so the GIL stays held for the collective.
+    // Parse failures keep the ConError contract of the serial read: the
+    // rank that met the failure raises its class with the global frame
+    // index, the other ranks raise ConError; everything else is I/O.
     let t_parse = std::time::Instant::now();
-    let rf = crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads)
-        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    let rf =
+        crate::distrib_read::read_block(&c, Path::new(path), mode, n_threads).map_err(|e| {
+            match e.downcast::<crate::error::LocatedParseError>() {
+                Ok(located) => located_to_py(*located),
+                Err(e) if e.is::<crate::distrib_read::PeerParseError>() => {
+                    ConError::new_err(e.to_string())
+                }
+                Err(e) => PyIOError::new_err(e.to_string()),
+            }
+        })?;
     let worker_parse_s = t_parse.elapsed().as_secs_f64();
     let phases = crate::iterators::ReadPhaseTimes {
         worker_parse_s,
@@ -2396,10 +2411,8 @@ fn read_con_mpi(
 fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_first_frame(Path::new(&path_owned)).map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_first_frame_located(Path::new(&path_owned)))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -2418,10 +2431,29 @@ fn read_con_string(
     let n_bytes = owned.len();
     let parsed = py
         .detach(|| {
-            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads)
-                .map_err(|e| e.to_string())
+            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads).map_err(|e| {
+                if utf8_failure(&e) {
+                    return CountFail::Io(e.to_string());
+                }
+                let located = crate::iterators::frames_from_text_located(&owned, n_threads).err();
+                if let Some(loc) = located {
+                    CountFail::Parse {
+                        class: loc.error.class_name(),
+                        message: loc.error.to_string(),
+                        line: loc.line,
+                        frame: loc.frame_index,
+                    }
+                } else {
+                    CountFail::Parse {
+                        class: e.class_name(),
+                        message: e.to_string(),
+                        line: e.line(),
+                        frame: 0,
+                    }
+                }
+            })
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(count_fail_to_py)?;
     let phases = crate::iterators::ReadPhaseTimes {
         open_mmap_s,
         pool_s: parsed.pool_s,
@@ -2461,6 +2493,11 @@ fn read_con_string(
 #[pyclass(name = "ConFrameIterator")]
 struct PyConFrameIterator {
     source: FrameSource,
+    /// Newlines before the next frame. A fresh cursor on the remainder
+    /// reports a line within that slice; this offset makes it a file line.
+    line_base: u32,
+    /// 0-based index of the frame the cursor points at.
+    frame_index: u64,
 }
 
 enum FrameSource {
@@ -2471,12 +2508,30 @@ enum FrameSource {
     Stream(std::sync::Mutex<crate::stream::ConFrameReader<Box<dyn std::io::Read + Send>>>),
 }
 
-fn stream_error(what: &str, e: crate::stream::StreamError) -> PyErr {
-    if e.is::<crate::error::ParseError>() {
-        PyIOError::new_err(format!("{what} error: {e}"))
+fn stream_error(
+    py: Python<'_>,
+    _what: &str,
+    e: crate::stream::StreamError,
+    frame_index: u64,
+) -> PyErr {
+    if let Some(parse) = e.downcast_ref::<ParseError>() {
+        parse_err_to_py(py, parse, parse.line(), frame_index)
     } else {
         PyIOError::new_err(format!("read error: {e}"))
     }
+}
+
+/// 1-based file line for a cursor whose slice starts after `line_base` newlines.
+fn file_line(line_base: u32, cursor_line: u32) -> u32 {
+    if cursor_line == 0 {
+        line_base.saturating_add(1)
+    } else {
+        line_base.saturating_add(cursor_line)
+    }
+}
+
+fn newlines_in(text: &str) -> u32 {
+    text.bytes().filter(|&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -2491,8 +2546,11 @@ impl PyConFrameIterator {
             FrameSource::Stream(reader) => {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
-                    Some(Ok(frame)) => Ok(Some(PyConFrame::from_con_frame(py, &frame)?)),
-                    Some(Err(e)) => Err(stream_error("parse", e)),
+                    Some(Ok(frame)) => {
+                        self.frame_index = self.frame_index.saturating_add(1);
+                        Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
+                    }
+                    Some(Err(e)) => Err(stream_error(py, "parse", e, self.frame_index)),
                     None => Ok(None),
                 };
             }
@@ -2501,20 +2559,27 @@ impl PyConFrameIterator {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
-        // owns that boundary and trailing whitespace.
+        // owns that boundary and trailing whitespace. The cursor is rebuilt
+        // on the remainder, so the file line is `line_base` plus its line.
         let slice = &contents.as_str()[*pos..];
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
                 let consumed =
                     (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
+                let lines = newlines_in(span);
                 *pos += consumed;
+                self.line_base = self.line_base.saturating_add(lines);
+                self.frame_index = self.frame_index.saturating_add(1);
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_con_frame(py, &frame)?))
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("parse error: {e}"))),
+            Some(Err(e)) => {
+                let line = file_line(self.line_base, iter.lines.line_no());
+                Err(parse_err_to_py(py, &e, line, self.frame_index))
+            }
             None => {
                 *pos = contents.as_str().len();
                 Ok(None)
@@ -2529,8 +2594,11 @@ impl PyConFrameIterator {
             FrameSource::Stream(reader) => {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.forward()) {
-                    Some(Ok(())) => Ok(true),
-                    Some(Err(e)) => Err(stream_error("skip", e)),
+                    Some(Ok(())) => {
+                        self.frame_index = self.frame_index.saturating_add(1);
+                        Ok(true)
+                    }
+                    Some(Err(e)) => Err(stream_error(py, "skip", e, self.frame_index)),
                     None => Ok(false),
                 };
             }
@@ -2542,13 +2610,20 @@ impl PyConFrameIterator {
         let mut iter = ConFrameIterator::new(slice);
         match iter.forward() {
             Some(Ok(())) => {
-                *pos += iter.byte_pos();
+                let consumed = iter.byte_pos();
+                let lines = newlines_in(&slice[..consumed]);
+                *pos += consumed;
+                self.line_base = self.line_base.saturating_add(lines);
+                self.frame_index = self.frame_index.saturating_add(1);
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
-            Some(Err(e)) => Err(PyIOError::new_err(format!("skip error: {e}"))),
+            Some(Err(e)) => {
+                let line = file_line(self.line_base, iter.lines.line_no());
+                Err(parse_err_to_py(py, &e, line, self.frame_index))
+            }
             None => Ok(false),
         }
     }
@@ -2611,15 +2686,19 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
             .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
-    Ok(PyConFrameIterator { source })
+    Ok(PyConFrameIterator {
+        source,
+        line_base: 0,
+        frame_index: 0,
+    })
 }
 
 /// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
     let path_owned = path.to_owned();
-    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)).map_err(|e| e.to_string()))
-        .map_err(PyIOError::new_err)
+    py.detach(|| crate::iterators::count_frames(Path::new(&path_owned)))
+        .map_err(load_err_to_py)
 }
 
 /// Skip `index` frames (no atom parse), then return that frame.
@@ -2627,11 +2706,8 @@ fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
 fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
     let path_owned = path.to_owned();
     let frame = py
-        .detach(|| {
-            crate::iterators::read_nth_frame(Path::new(&path_owned), index)
-                .map_err(|e| e.to_string())
-        })
-        .map_err(PyIOError::new_err)?;
+        .detach(|| crate::iterators::read_nth_frame_located(Path::new(&path_owned), index))
+        .map_err(load_err_to_py)?;
     PyConFrame::from_con_frame(py, &frame)
 }
 
@@ -2798,7 +2874,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     } else {
         let mut writer = match precision {
             Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
@@ -2809,7 +2885,7 @@ fn write_con(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     Ok(())
 }
@@ -2876,7 +2952,7 @@ fn write_con_string(
         .canonical(canonical);
         writer
             .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
+            .map_err(|e| write_err_to_py(py, e))?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))
 }
@@ -2993,7 +3069,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
-    // Set velocities if present
+    // Set velocities if present. ASE stores the natural time unit (D10).
     if frame.has_velocities(py)? {
         let time_unit = crate::units::velocity_file_time_unit(
             frame.spec_version,
@@ -3154,31 +3230,36 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .call_method0("tolist")?
             .extract()?;
         if cellpar.len() == 6 && cellpar.iter().all(|value| value.is_finite()) {
-            ([cellpar[0], cellpar[1], cellpar[2]], [
-                cellpar[3], cellpar[4], cellpar[5],
-            ])
+            (
+                [cellpar[0], cellpar[1], cellpar[2]],
+                [cellpar[3], cellpar[4], cellpar[5]],
+            )
         } else {
             (lengths, raw_angles)
         }
     } else {
-        (lengths, [
-            if raw_angles[0].is_finite() {
-                raw_angles[0]
-            } else {
-                90.0
-            },
-            if raw_angles[1].is_finite() {
-                raw_angles[1]
-            } else {
-                90.0
-            },
-            if raw_angles[2].is_finite() {
-                raw_angles[2]
-            } else {
-                90.0
-            },
-        ])
+        (
+            lengths,
+            [
+                if raw_angles[0].is_finite() {
+                    raw_angles[0]
+                } else {
+                    90.0
+                },
+                if raw_angles[1].is_finite() {
+                    raw_angles[1]
+                } else {
+                    90.0
+                },
+                if raw_angles[2].is_finite() {
+                    raw_angles[2]
+                } else {
+                    90.0
+                },
+            ],
+        )
     };
+    let pbc = ase_pbc(ase_atoms)?;
 
     // Extract fixed atom info from constraints
     let n_atoms = symbols.len();
@@ -3325,7 +3406,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .collect();
 
     let metadata = PyDict::new(py);
-    metadata.set_item(meta::PBC, ase_atoms.getattr("pbc")?.call_method0("tolist")?)?;
+    metadata.set_item(meta::PBC, pbc.to_vec())?;
     if angles_defined {
         metadata.set_item(meta::LATTICE_VECTORS, cell_matrix)?;
     }
@@ -3354,6 +3435,22 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         slab_index: 0,
         xyz_owned: None,
     })
+}
+
+fn ase_pbc(ase_atoms: &Bound<'_, PyAny>) -> PyResult<[bool; 3]> {
+    let pbc = ase_atoms.getattr("pbc")?;
+    if let Ok(flag) = pbc.extract::<bool>() {
+        return Ok([flag, flag, flag]);
+    }
+    let values: Vec<bool> = if let Ok(list) = pbc.call_method0("tolist") {
+        list.extract()?
+    } else {
+        pbc.extract()?
+    };
+    if values.len() != 3 {
+        return Err(PyValueError::new_err("ASE pbc must have length 3"));
+    }
+    Ok([values[0], values[1], values[2]])
 }
 
 /// Atomic number for a chemical symbol, or the sentinel 0 if unknown.
@@ -3492,9 +3589,364 @@ fn write_conbin(
     Ok((header.n_frames, header.n_atoms))
 }
 
+pyo3::create_exception!(readcon, ConError, pyo3::exceptions::PyValueError);
+pyo3::create_exception!(readcon, NonFiniteValue, ConError);
+pyo3::create_exception!(readcon, InvalidFixedFlag, ConError);
+pyo3::create_exception!(readcon, InvalidCount, ConError);
+pyo3::create_exception!(readcon, InvalidUnits, ConError);
+pyo3::create_exception!(readcon, IncompleteHeader, ConError);
+pyo3::create_exception!(readcon, IncompleteFrame, ConError);
+pyo3::create_exception!(readcon, IncompleteSection, ConError);
+pyo3::create_exception!(readcon, IncompleteVelocitySection, ConError);
+pyo3::create_exception!(readcon, IncompleteForceSection, ConError);
+pyo3::create_exception!(readcon, IncompleteEnergySection, ConError);
+pyo3::create_exception!(readcon, InvalidNumberFormat, ConError);
+pyo3::create_exception!(readcon, InvalidVectorLength, ConError);
+pyo3::create_exception!(readcon, UnknownSection, ConError);
+pyo3::create_exception!(readcon, UnsupportedVersion, ConError);
+pyo3::create_exception!(readcon, ValidationError, ConError);
+pyo3::create_exception!(readcon, MissingSpecVersion, ConError);
+pyo3::create_exception!(readcon, InvalidMetadataJson, ConError);
+pyo3::create_exception!(readcon, IndexOutOfBounds, ConError);
+pyo3::create_exception!(readcon, MassMismatch, ConError);
+
+fn class_err_to_py(
+    py: Python<'_>,
+    class_name: &str,
+    message: String,
+    line: u32,
+    frame_index: u64,
+) -> PyErr {
+    let ty = match class_name {
+        "NonFiniteValue" => py.get_type::<NonFiniteValue>().into_any(),
+        "InvalidFixedFlag" => py.get_type::<InvalidFixedFlag>().into_any(),
+        "InvalidCount" => py.get_type::<InvalidCount>().into_any(),
+        "InvalidUnits" => py.get_type::<InvalidUnits>().into_any(),
+        "IncompleteHeader" => py.get_type::<IncompleteHeader>().into_any(),
+        "IncompleteFrame" => py.get_type::<IncompleteFrame>().into_any(),
+        "IncompleteSection" => py.get_type::<IncompleteSection>().into_any(),
+        "IncompleteVelocitySection" => py.get_type::<IncompleteVelocitySection>().into_any(),
+        "IncompleteForceSection" => py.get_type::<IncompleteForceSection>().into_any(),
+        "IncompleteEnergySection" => py.get_type::<IncompleteEnergySection>().into_any(),
+        "InvalidNumberFormat" => py.get_type::<InvalidNumberFormat>().into_any(),
+        "InvalidVectorLength" => py.get_type::<InvalidVectorLength>().into_any(),
+        "UnknownSection" => py.get_type::<UnknownSection>().into_any(),
+        "UnsupportedVersion" => py.get_type::<UnsupportedVersion>().into_any(),
+        "ValidationError" => py.get_type::<ValidationError>().into_any(),
+        "MissingSpecVersion" => py.get_type::<MissingSpecVersion>().into_any(),
+        "InvalidMetadataJson" => py.get_type::<InvalidMetadataJson>().into_any(),
+        "IndexOutOfBounds" => py.get_type::<IndexOutOfBounds>().into_any(),
+        "MassMismatch" => py.get_type::<MassMismatch>().into_any(),
+        _ => py.get_type::<ConError>().into_any(),
+    };
+    match ty.call1((message,)) {
+        Ok(inst) => {
+            let _ = inst.setattr("line", line);
+            let _ = inst.setattr("frame_index", frame_index);
+            PyErr::from_value(inst)
+        }
+        Err(err) => err,
+    }
+}
+
+fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
+    if utf8_failure(err) {
+        return PyIOError::new_err(err.to_string());
+    }
+    class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
+}
+
+fn utf8_failure(err: &ParseError) -> bool {
+    matches!(err, ParseError::ValidationError(msg) if msg.contains("invalid UTF-8"))
+}
+
+fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
+    Python::attach(|py| parse_err_to_py(py, &err.error, err.line, err.frame_index))
+}
+
+fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
+    use crate::iterators::LoadError;
+    match err {
+        LoadError::Io(io) => PyIOError::new_err(io.to_string()),
+        LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
+        LoadError::Parse(located) => {
+            if utf8_failure(&located.error) {
+                PyIOError::new_err(located.error.to_string())
+            } else {
+                located_to_py(located)
+            }
+        }
+        LoadError::Empty => {
+            Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
+        }
+    }
+}
+
+enum CountFail {
+    Io(String),
+    Parse {
+        class: &'static str,
+        message: String,
+        line: u32,
+        frame: u64,
+    },
+    Other(String),
+}
+
+fn count_fail_to_py(err: CountFail) -> PyErr {
+    Python::attach(|py| match err {
+        CountFail::Io(msg) | CountFail::Other(msg) => PyIOError::new_err(msg),
+        CountFail::Parse {
+            class,
+            message,
+            line,
+            frame,
+        } => class_err_to_py(py, class, message, line, frame),
+    })
+}
+
+fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
+    CountFail::Parse {
+        class: located.error.class_name(),
+        message: located.error.to_string(),
+        line: located.line,
+        frame: located.frame_index,
+    }
+}
+
+/// Map a boxed reader error onto [`CountFail`].
+///
+/// `read_all_frames_with_threads`, `read_all_frames_phased`, and
+/// `read_positions_with_threads` return the [`crate::error::LocatedParseError`]
+/// from the parse that failed. The line and frame are already on that
+/// error, so this does not open the path again.
+fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
+        return CountFail::Io(err.to_string());
+    }
+    if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
+        return count_fail_located(located);
+    }
+    if let Some(parse) = err.downcast_ref::<ParseError>() {
+        return CountFail::Parse {
+            class: parse.class_name(),
+            message: parse.to_string(),
+            line: parse.line(),
+            frame: 0,
+        };
+    }
+    CountFail::Other(err.to_string())
+}
+
+#[cfg(test)]
+mod batch_location_tests {
+    use super::{CountFail, box_to_count_fail};
+
+    fn later_frame_path() -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-batch-later-{}-{}.con",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        std::fs::write(&path, format!("{good}{bad}")).unwrap();
+        path
+    }
+
+    fn assert_later(fail: CountFail) {
+        match fail {
+            CountFail::Parse {
+                class, line, frame, ..
+            } => {
+                assert_eq!(class, "InvalidCount");
+                assert_eq!(line, 20, "file line of the bad count");
+                assert_eq!(frame, 1, "0-based frame index");
+            }
+            CountFail::Io(msg) => panic!("expected InvalidCount, got io: {msg}"),
+            CountFail::Other(msg) => panic!("expected InvalidCount, got: {msg}"),
+        }
+    }
+
+    /// `read_con`, `read_all_frames`, `read_coords`, and `read_positions`
+    /// all map these readers through `box_to_count_fail`. A count error
+    /// in the second frame is file line 20, frame 1.
+    #[test]
+    fn batch_readers_keep_the_later_frame_location() {
+        let path = later_frame_path();
+        let cases: [(
+            Option<usize>,
+            fn(&std::path::Path, Option<usize>) -> CountFail,
+        ); 5] = [
+            (None, fail_read_all),
+            (None, fail_phased),
+            (Some(2), fail_phased),
+            (None, fail_positions),
+            (Some(2), fail_positions),
+        ];
+        for (threads, fail_of) in cases {
+            assert_later(fail_of(&path, threads));
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn fail_of(result: Result<(), Box<dyn std::error::Error>>) -> CountFail {
+        match result {
+            Err(err) => box_to_count_fail(err),
+            Ok(()) => panic!("expected a parse error"),
+        }
+    }
+
+    fn fail_read_all(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(crate::iterators::read_all_frames_with_threads(path, threads).map(|_| ()))
+    }
+
+    fn fail_phased(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(crate::iterators::read_all_frames_phased(path, threads).map(|_| ()))
+    }
+
+    fn fail_positions(path: &std::path::Path, threads: Option<usize>) -> CountFail {
+        fail_of(crate::iterators::read_positions_with_threads(path, threads).map(|_| ()))
+    }
+
+    fn later_frame_bytes() -> Vec<u8> {
+        let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        format!("{good}{bad}").into_bytes()
+    }
+
+    fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-batch-class-{}-{}.con",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn class_cases() -> [(
+        Option<usize>,
+        fn(&std::path::Path, Option<usize>) -> CountFail,
+    ); 6] {
+        [
+            (None, fail_read_all),
+            (Some(2), fail_read_all),
+            (None, fail_phased),
+            (Some(2), fail_phased),
+            (None, fail_positions),
+            (Some(2), fail_positions),
+        ]
+    }
+
+    /// A byte the whole-file UTF-8 check would reject must not replace the
+    /// count error the batch parser already produced. The file is past the
+    /// map threshold, so the first read parses bytes and a second open
+    /// would fail the mapped buffer as UTF-8.
+    #[test]
+    fn trailing_non_utf8_keeps_the_parse_class() {
+        let mut bytes = later_frame_bytes();
+        bytes.resize(64 * 1024, b' ');
+        bytes.push(0xff);
+        let path = write_temp(&bytes);
+        for (threads, fail_of_reader) in class_cases() {
+            assert_later(fail_of_reader(&path, threads));
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The path is gone before a second open could map it. The count error
+    /// from the first read is the one that is reported.
+    #[test]
+    fn deleted_path_keeps_the_parse_class() {
+        let mut bytes = later_frame_bytes();
+        bytes.resize(64 * 1024, b' ');
+        for (threads, read_err) in [
+            (
+                None,
+                err_read_all as fn(&std::path::Path, Option<usize>) -> Box<dyn std::error::Error>,
+            ),
+            (Some(2), err_read_all),
+            (None, err_phased),
+            (Some(2), err_phased),
+            (None, err_positions),
+            (Some(2), err_positions),
+        ] {
+            let path = write_temp(&bytes);
+            let err = read_err(&path, threads);
+            std::fs::remove_file(&path).unwrap();
+            assert_later(box_to_count_fail(err));
+        }
+    }
+
+    fn err_read_all(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_all_frames_with_threads(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+
+    fn err_phased(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_all_frames_phased(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+
+    fn err_positions(path: &std::path::Path, threads: Option<usize>) -> Box<dyn std::error::Error> {
+        match crate::iterators::read_positions_with_threads(path, threads) {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+}
+
+fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
+    match err {
+        crate::writer::WriteError::Io(io) => PyIOError::new_err(io.to_string()),
+        crate::writer::WriteError::Format(parse) => parse_err_to_py(py, &parse, parse.line(), 0),
+    }
+}
+
 /// readcon Python module implemented in Rust.
 #[pymodule]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    m.add("ConError", py.get_type::<ConError>())?;
+    m.add("NonFiniteValue", py.get_type::<NonFiniteValue>())?;
+    m.add("InvalidFixedFlag", py.get_type::<InvalidFixedFlag>())?;
+    m.add("InvalidCount", py.get_type::<InvalidCount>())?;
+    m.add("InvalidUnits", py.get_type::<InvalidUnits>())?;
+    m.add("IncompleteHeader", py.get_type::<IncompleteHeader>())?;
+    m.add("IncompleteFrame", py.get_type::<IncompleteFrame>())?;
+    m.add("IncompleteSection", py.get_type::<IncompleteSection>())?;
+    m.add(
+        "IncompleteVelocitySection",
+        py.get_type::<IncompleteVelocitySection>(),
+    )?;
+    m.add(
+        "IncompleteForceSection",
+        py.get_type::<IncompleteForceSection>(),
+    )?;
+    m.add(
+        "IncompleteEnergySection",
+        py.get_type::<IncompleteEnergySection>(),
+    )?;
+    m.add("InvalidNumberFormat", py.get_type::<InvalidNumberFormat>())?;
+    m.add("InvalidVectorLength", py.get_type::<InvalidVectorLength>())?;
+    m.add("UnknownSection", py.get_type::<UnknownSection>())?;
+    m.add("UnsupportedVersion", py.get_type::<UnsupportedVersion>())?;
+    m.add("ValidationError", py.get_type::<ValidationError>())?;
+    m.add("MissingSpecVersion", py.get_type::<MissingSpecVersion>())?;
+    m.add("InvalidMetadataJson", py.get_type::<InvalidMetadataJson>())?;
+    m.add("IndexOutOfBounds", py.get_type::<IndexOutOfBounds>())?;
+    m.add("MassMismatch", py.get_type::<MassMismatch>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
@@ -3844,11 +4296,13 @@ fn evaluate_selection_on_frames(
 /// Atom-context multi-frame selection: positions of selected atoms per frame.
 ///
 /// Errors if the selection is not atom context (size 1) on the first frame.
-/// Typical use::
+/// Typical use:
 ///
-///     frames = readcon.read_all_frames("traj.con")
-///     out = readcon.select_atom_positions_on_frames("name H", frames)
-///     # out["frames"][i]["positions"] — H xyz on frame i
+/// ```python
+/// frames = readcon.read_all_frames("traj.con")
+/// out = readcon.select_atom_positions_on_frames("name H", frames)
+/// # out["frames"][i]["positions"] — H xyz on frame i
+/// ```
 #[pyfunction]
 fn select_atom_positions_on_frames(
     py: Python<'_>,

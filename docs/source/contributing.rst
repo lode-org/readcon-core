@@ -70,7 +70,10 @@ Commit conventions
 
 The project uses `conventional commits <https://www.conventionalcommits.org/>`_ enforced by cocogitto.
 The CI lint check rejects non-conforming commit messages on the PR
-range. Some historical commits use ``docs+bench:`` or untyped merges;
+range. A push whose previous tip is not in the clone, including a
+rewritten branch, is checked from the merge-base with origin/main,
+the same as a new branch. Some historical commits use ``docs+bench:``
+or untyped merges;
 ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
 ``scripts/release-prep.sh`` calls ``scripts/bump-version.sh``, so towncrier
 writes the ``## vX.Y.Z`` heading from the fragments in ``changelog.d/``.
