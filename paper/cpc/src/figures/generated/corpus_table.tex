@@ -1,0 +1,19 @@
+% Written by paper/cpc/scripts/spec_corpus_recount.py.
+\begin{table}[tbp]
+\centering
+\small
+\caption{Conformance corpus of readcon-core \readconversion{} by the verdict that a conforming reader returns on each group of files.
+The counts come from reading every file of the corpus with that release.}
+\label{tab:corpus}
+\begin{tabular}{@{}lrp{0.55\linewidth}@{}}
+\toprule
+Category & Files & What a reader must do \\
+\midrule
+Header and units & 2 & Accept a version-2 header and a version-3 units line. \\
+Column-4 masks & 5 & Accept version-1 full freeze and version-2 per-component flags. \\
+Empty frame & 3 & Accept a type count of zero. \\
+Empty header lines & 4 & Accept an empty line 1 and an empty line 2. \\
+Illegal & 8 & Reject the file. \\
+\bottomrule
+\end{tabular}
+\end{table}

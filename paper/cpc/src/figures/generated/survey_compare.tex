@@ -1,0 +1,69 @@
+% Written by paper/cpc/scripts/gen_failure_tables.py.
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{The version, the atom ids and the per-component mask in the specification of each format, one row per format.
+A cell restates the source of its row's letter unless it carries its own letter.
+The list below the table gives the sources.
+Table~\ref{tab:survey} measures round trips through those of these formats that its libraries write.}
+\label{tab:spec-compare}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{\dimexpr(\linewidth-6\tabcolsep)*160/1000\relax}p{\dimexpr(\linewidth-6\tabcolsep)*280/1000\relax}p{\dimexpr(\linewidth-6\tabcolsep)*280/1000\relax}p{\dimexpr(\linewidth-6\tabcolsep)*280/1000\relax}@{}}
+\toprule
+\raggedright Format & \raggedright Version in the file & \raggedright Atom ids & \raggedright Per-component mask \tabularnewline
+\midrule
+\raggedright H5MD 1.1.0-rc1\textsuperscript{a} & \raggedright yes; major and minor stored as Integer[2] & \raggedright yes & \raggedright not among the standardized particle identifiers \tabularnewline
+\raggedright extended XYZ\textsuperscript{c} & \raggedright no in-frame version field in the specification section & \raggedright not a reserved column & \raggedright not stated in the specification section \tabularnewline
+\raggedright ASE trajectory\textsuperscript{d} & \raggedright yes; version=1 plus ase\_version & \raggedright not stated; optional tags have no reorder rule & \raggedright constraints stored as encoded dicts; no mask-bit field \tabularnewline
+\raggedright TNG 1.8.2\textsuperscript{e} & \raggedright yes; a 64 bit version in every block header & \raggedright yes; particle mapping blocks give the real particle number of each stored particle & \raggedright not among the standard blocks \tabularnewline
+\raggedright TRR\textsuperscript{g} & \raggedright not stated in the trr section & \raggedright not stated in the trr section & \raggedright not stated in the trr section \tabularnewline
+\raggedright XTC\textsuperscript{g} & \raggedright yes; magic 1995 for the current file version & \raggedright not in the field list & \raggedright not in the field list \tabularnewline
+\raggedright AMBER NetCDF 1.0 revision C\textsuperscript{h} & \raggedright yes; ConventionVersion must be 1.0 & \raggedright no; atom is an index dimension & \raggedright not stated in the variables section \tabularnewline
+\raggedright DCD\textsuperscript{i} & \raggedright plugin writes Charmm 24; no spec-version field in the header layout & \raggedright not in the layout & \raggedright no; a fixed-atom count only \tabularnewline
+\raggedright LAMMPS text dump\textsuperscript{j} & \raggedright manual is per LAMMPS release; no in-file version token stated for the text snapshot & \raggedright yes when the id column is written & \raggedright not in the attribute list \tabularnewline
+\raggedright POSCAR\textsuperscript{k} & \raggedright no in-file version token stated & \raggedright not stated; order follows the species counts & \raggedright yes; selective dynamics \tabularnewline
+\raggedright CIF 1.1 and PDBx mmCIF\textsuperscript{l} & \raggedright yes for the syntax comment; dictionary version on the item pages & \raggedright yes as a unique record id\textsuperscript{m} & \raggedright not stated in the syntax page or the four dictionary items fetched \tabularnewline
+\raggedright PDB format 3.3\textsuperscript{o} & \raggedright the document is version 3.3; no in-file spec version on these pages & \raggedright serial numbers a record and is not defined as stable across models & \raggedright not stated; occupancy is not a constraint mask \tabularnewline
+\raggedright TREXIO\textsuperscript{p} & \raggedright library version in the file; no separate format-spec version attribute & \raggedright labels and indices; no reorder rule stated & \raggedright not stated; nuclei are fixed point charges \tabularnewline
+\raggedright CON 3.1\textsuperscript{q} & \raggedright yes; majors 1 2 3.0 and 3.1 with minor rules & \raggedright yes; column 5 & \raggedright yes; bits 0 1 and 2 from spec 2 \tabularnewline
+\bottomrule
+\end{tabular}
+
+\smallskip
+\raggedright
+Sources: a~\url{https://www.nongnu.org/h5md/h5md.html}; c~\url{https://github.com/libAtoms/extxyz/blob/master/README.md}; d~ASE 3.29.0 ase/io/trajectory.py; e~TNG 14dd68f Trajectoryformatspecification.mk; g~GROMACS 2026.4 Reference Manual File formats; h~\url{https://ambermd.org/netcdf/nctraj.xhtml}; i~fetched page titled DCD Plugin Version 1.11 on www.ks.uiuc.edu/Research/vmd/; j~\url{https://docs.lammps.org/dump.html}; k~\url{https://www.vasp.at/wiki/index.php?title=POSCAR&oldid=37632}; l~\url{https://www.iucr.org/resources/cif/spec/version1.1/cifsyntax}; m~\url{https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_atom_site.id.html}; o~\url{https://www.wwpdb.org/documentation/file-format-content/format33/sect9.html}; p~\url{https://trex-coe.github.io/trexio/trex.html}; q~docs/orgmode/spec.org.
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{The velocity time unit and the decimal round trip of the coordinates in the specification of each format, one row per format (the formats of Table~\ref{tab:spec-compare}).
+A cell restates the source of its row's letter unless it carries its own letter.
+The list below the table gives the sources.}
+\label{tab:spec-compare-values}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{\dimexpr(\linewidth-4\tabcolsep)*160/1000\relax}p{\dimexpr(\linewidth-4\tabcolsep)*420/1000\relax}p{\dimexpr(\linewidth-4\tabcolsep)*420/1000\relax}@{}}
+\toprule
+\raggedright Format & \raggedright Velocity time unit & \raggedright Decimal round trip \tabularnewline
+\midrule
+\raggedright H5MD 1.1.0-rc1\textsuperscript{a} & \raggedright yes through the units module; an optional unit attribute on the value and time datasets\textsuperscript{b} & \raggedright binary Float or Integer; no decimal round-trip rule \tabularnewline
+\raggedright extended XYZ\textsuperscript{c} & \raggedright no; velo is mapped to momenta & \raggedright not stated \tabularnewline
+\raggedright ASE trajectory\textsuperscript{d} & \raggedright no; momenta with no time unit & \raggedright binary arrays; no decimal round-trip rule in this module \tabularnewline
+\raggedright TNG 1.8.2\textsuperscript{e} & \raggedright no unit field for velocities; the library stores a distance-unit exponent and frame times in seconds\textsuperscript{f} & \raggedright no decimal form; binary32 or binary64 uncompressed, integers times a multiplier when compressed \tabularnewline
+\raggedright TRR\textsuperscript{g} & \raggedright velocities are stored; no time-unit label stated & \raggedright binary full precision in the index; no decimal rule \tabularnewline
+\raggedright XTC\textsuperscript{g} & \raggedright no velocities; time is a float with no unit name & \raggedright no \tabularnewline
+\raggedright AMBER NetCDF 1.0 revision C\textsuperscript{h} & \raggedright yes; angstrom/picosecond & \raggedright binary float or double; no decimal rule \tabularnewline
+\raggedright DCD\textsuperscript{i} & \raggedright not in the layout shown & \raggedright DOUBLE coordinates in the layout; no decimal rule \tabularnewline
+\raggedright LAMMPS text dump\textsuperscript{j} & \raggedright velocities as vx vy vz; no time-unit label in the text snapshot & \raggedright no \tabularnewline
+\raggedright POSCAR\textsuperscript{k} & \raggedright velocities optional; no time-unit label in the block & \raggedright no; at least 7 significant digits recommended \tabularnewline
+\raggedright CIF 1.1 and PDBx mmCIF\textsuperscript{l} & \raggedright not stated in the items consulted\textsuperscript{n} & \raggedright not stated \tabularnewline
+\raggedright PDB format 3.3\textsuperscript{o} & \raggedright not stated in the coordinate section & \raggedright no; coordinates are Real(8.3) \tabularnewline
+\raggedright TREXIO\textsuperscript{p} & \raggedright not stated in the nucleus or metadata groups & \raggedright not stated; values are typed float \tabularnewline
+\raggedright CON 3.1\textsuperscript{q} & \raggedright yes from minor 1 & \raggedright yes for the default printer; fixed decimals are opt-in and need not round-trip \tabularnewline
+\bottomrule
+\end{tabular}
+
+\smallskip
+\raggedright
+Sources: a~\url{https://www.nongnu.org/h5md/h5md.html}; b~\url{https://www.nongnu.org/h5md/modules/units.html}; c~\url{https://github.com/libAtoms/extxyz/blob/master/README.md}; d~ASE 3.29.0 ase/io/trajectory.py; e~TNG 14dd68f Trajectoryformatspecification.mk; f~TNG 14dd68f src/lib/tng\_io.c; g~GROMACS 2026.4 Reference Manual File formats; h~\url{https://ambermd.org/netcdf/nctraj.xhtml}; i~fetched page titled DCD Plugin Version 1.11 on www.ks.uiuc.edu/Research/vmd/; j~\url{https://docs.lammps.org/dump.html}; k~\url{https://www.vasp.at/wiki/index.php?title=POSCAR&oldid=37632}; l~\url{https://www.iucr.org/resources/cif/spec/version1.1/cifsyntax}; n~\url{https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_atom_site.Cartn_x.html}; o~\url{https://www.wwpdb.org/documentation/file-format-content/format33/sect9.html}; p~\url{https://trex-coe.github.io/trexio/trex.html}; q~docs/orgmode/spec.org.
+\end{table}

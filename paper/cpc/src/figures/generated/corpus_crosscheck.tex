@@ -1,0 +1,35 @@
+% Written by paper/cpc/scripts/corpus_crosscheck.py from paper/cpc/data/corpus_crosscheck.json.
+\begin{table}[tbp]
+\centering
+\small
+\caption{readcon-core and the independent reader over the conformance corpus and the CON 3.1 corpus.
+Each entry of the CON 3.1 corpus manifest names acceptance with a frame count, or rejection with an error class and a line, and the basis of that outcome in the released CON 3.1 text (\texttt{docs/orgmode/spec.org}, 125 clauses): explicit when clauses decide the outcome and the class, class-open when clauses require the rejection and name no class, optional when a clause permits the outcome without requiring it, and open when no clause decides the file.
+The corpus has 95 explicit, 21 class-open, 4 optional and 23 open entries.
+The conformance manifest names acceptance, or rejection with an error class, and its entries count as explicit.
+A reader matches an entry when it returns every value that the entry names.
+These are the verdict, the frame count, the error class, the line of the error where the reader reports one, and the periodicity and the column-4 mask of the first frame where the entry names them.
+The reader also warns of a time-unit override exactly on the entries that name one.
+For \texttt{read\_con}, the rewrite of each file that its entry marks keeps the version, minor and units of every frame of major 3.
+It writes a frame of major 1 or 2 as major 3, with each unit that the frame declares and the same fields, as the Python, Julia and Fortran writers do.
+That rewrite keeps the minor of a frame that declares one or whose velocities carry a time label, which pins it to minor 0; a frame of version 3.0 with neither comes back at minor 1, and no marked file contains one.
+A reader that differs from an explicit entry disagrees with the specification, and one that differs from any other entry departs from the reading that entry records.
+readcon-core \readconCargoVersion{} puts no line number in its Python exceptions, so its lines are not compared; it warns of a declared time unit that it does not apply only when it converts a frame to ASE (\texttt{ConFrame.to\_ase}), and the check converts every frame that has velocities.
+\texttt{read\_con} and \texttt{iter\_con} are two paths through readcon-core; the independent reader is pure Python written from the released text, and it follows the reading the manifest records where that text leaves a case open.
+Field-identical counts the files that both \texttt{read\_con} and the independent reader accept with equal fields: coordinates, velocities and cell equal in every bit, and the same masks, identifiers, symbols, masses, version, minor, declared and applied time unit and periodicity.}
+\label{tab:corpus-crosscheck}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrrrr@{}}
+\toprule
+ & & \multicolumn{3}{c}{\texttt{read\_con}} & \multicolumn{3}{c}{\texttt{iter\_con}} & \multicolumn{3}{c}{Independent} & \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+File group & Files & Match & Disagree & Not followed & Match & Disagree & Not followed & Match & Disagree & Not followed & Field-identical \\
+\midrule
+Conformance, valid & 14 & 14 & 0 & 0 & 14 & 0 & 0 & 14 & 0 & 0 & 14/14 \\
+Conformance, invalid & 8 & 8 & 0 & 0 & 8 & 0 & 0 & 8 & 0 & 0 & -- \\
+CON 3.1 corpus, accept & 62 & 62 & 0 & 0 & 62 & 0 & 0 & 62 & 0 & 0 & 62/62 \\
+CON 3.1 corpus, reject & 81 & 81 & 0 & 0 & 81 & 0 & 0 & 81 & 0 & 0 & -- \\
+\midrule
+All & 165 & 165 & 0 & 0 & 165 & 0 & 0 & 165 & 0 & 0 & 76/76 \\
+\bottomrule
+\end{tabular}}
+\end{table}

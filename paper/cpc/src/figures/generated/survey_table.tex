@@ -1,0 +1,28 @@
+% Written by paper/cpc/scripts/gen_failure_tables.py.
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Fields returned when the Pt(100) frame of Listing~\ref{lst:frame} is written by one library and read back by the same library or another.
+The bottom layer is held in every component, the adatom in \(z\), the identifiers are not the row order, and the velocities are in the natural unit.
+Each library stores each field through the mechanism its own documentation gives for it.
+A returned field is fixed by the format, kept or declared, when the format's own specification defines the place it was stored in, and a convention when only a library's documented layout defines that place, so only readers that share the layout get it back.
+Declared means that the reader took the velocity unit from the file and that the velocities agree after conversion with it, and no unit means that the file names no time unit.
+Label means that the identifier came back inside the CIF site label, which CIF defines as a unique site name.
+The H5MD file with a private mask dataset has the H5MD root group and version and keeps the mask in a dataset that H5MD does not define.
+Shift is the largest coordinate change when a coordinate differs in any bit, with the magnitude of that coordinate and the change in units in the last place (ulp).
+Periodicity is the flags of the slab, periodic in \(x\) and \(y\) and open in \(z\), after the read, and version is the version the written file carries.
+``Error'' rows failed before any field was compared.
+\textsuperscript{a}readcon to ase: \texttt{RuntimeError: boom} at \texttt{demo.py:3}.
+\textsuperscript{b}ase to readcon: stopped.}
+\label{tab:survey}
+\setlength{\tabcolsep}{2.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llllllllll@{}}
+\toprule
+Format & Writer & Reader & Mask & Identifier & Time unit & Shift (\AA) & at (\AA), ulp & Periodicity & Version \\
+\midrule
+CON & readcon & ase\textsuperscript{a} & error & kept & kept & exact & -- & kept & none \\
+XYZ & ase\textsuperscript{b} & readcon & error & kept & kept & exact & -- & kept & none \\
+\bottomrule
+\end{tabular}}
+\end{table}

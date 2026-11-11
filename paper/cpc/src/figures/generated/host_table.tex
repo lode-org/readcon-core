@@ -1,0 +1,23 @@
+% Written by paper/cpc/scripts/host_from_log.py from logs/reader-exchange-public.log.
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Coordinate reads of 100000 frames, six fresh processes, type 7 median. Each row is one summary arm and the scope on that line. \texttt{readcon\_tip} and \texttt{readcon\_v0173} are all-frames arms. The log does not name the first \texttt{read\_positions}. The log does not name the second 0.18.0 \texttt{read\_con}. ASE \texttt{get\_positions} and eOn \texttt{loadcons} are all-frames arms. The C++ row is \texttt{read\_all\_frames} and then \texttt{con2matter}. readcon-db is an ingest of the file followed by a read of that corpus. The last two rows read one frame. A one-frame row is not a ratio against a full read.}
+\label{tab:host}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Median (s) & IQR (s) & MiB & Matched \\
+\midrule
+0.17.3 \texttt{read\_con}, all frames & 1.509 & 0.0573 & 881.1 & 100000/100000 \\
+tip \texttt{read\_con}, all frames & 0.1779 & 0.0116 & 205.4 & 100000/100000 \\
+0.17.3, untagged \texttt{readcon\_base}, all frames & 1.968 & 0.0928 & 2532 & 100000/100000 \\
+\texttt{read\_all\_frames} then \texttt{con2matter}, 1 thread & 1.468 & 0.0142 & 1059 & 100000/100000 \\
+ASE \texttt{get\_positions}, 1 thread & 10.97 & 0.15 & 383.9 & 100000/100000 \\
+eOn \texttt{loadcons}, 1 thread & 14.62 & 0.319 & 2692 & 100000/100000 \\
+readcon-db ingest, 1 thread & 11.51 & 0.119 & 398.3 & 100000/100000 \\
+\texttt{read\_first\_frame}, 1 frame & 0.03207 & 0.0132 & 131.1 & 1/1 \\
+eOn \texttt{con2matter}, 1 frame & 0.2902 & 0.0172 & 263 & 1/1 \\
+\bottomrule
+\end{tabular}}
+\end{table}

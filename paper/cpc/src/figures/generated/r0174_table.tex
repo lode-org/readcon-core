@@ -1,0 +1,31 @@
+% Written by paper/cpc/scripts/r0174_tables.py from bench/results/r0174 (reads.json, memray.json, cachegrind/cachegrind_results.json, cpp/build.json, provenance.json, payloads.json).
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}p{0.21\linewidth}p{0.18\linewidth}rrrrr@{}}
+\toprule
+Reader & File & Threads & Median & IQR & Peak heap & readcon/\\
+ & & & (s) & (s) & (MiB) & reader\\
+\midrule
+\multicolumn{7}{@{}l@{}}{\textit{Positions, velocities, masks, identifiers, atomic numbers, cell and periodic flags}}\\
+readcon-core & CON 3.1 & 1 & 2.62 & 0.034 & 1803 & --\\
+readcon-core & CON 3.1 & 8 & 2.39 & 0.11 & 1801 & --\\
+ASE & extended XYZ & 1 & 5.73 & 0.030 & 158 & 0.46\\
+\texttt{extxyz} (C) & extended XYZ & 1 & 1.46 & 0.0100 & 220 & 1.8\\
+OVITO & extended XYZ & 1 & 4.92 & 0.34 & 242 & 0.53\\
+ASE & ASE trajectory & 1 & 1.42 & 0.024 & 218 & 1.8\\
+h5py & H5MD & 1 & 0.160 & 0.0026 & 141 & 16\\
+\addlinespace
+\multicolumn{7}{@{}l@{}}{\textit{Positions and velocities in binary32}}\\
+MDAnalysis & H5MD & 1 & 5.67 & 0.12 & 55 & --\\
+\addlinespace
+\multicolumn{7}{@{}l@{}}{\textit{Positions and atomic numbers}}\\
+readcon-core & CON 3.1, no velocities & 1 & 1.35 & 0.021 & 1237 & --\\
+readcon-core & CON 3.1, no velocities & 8 & 1.15 & 0.021 & 1233 & --\\
+ASE \texttt{eon} & CON 3.1, no velocities & 1 & 3.33 & 0.031 & 108 & 0.40\\
+chemfiles & XYZ & 1 & 7.08 & 0.054 & 356 & 0.19\\
+OVITO & XYZ & 1 & 2.30 & 0.14 & 108 & 0.59\\
+\addlinespace
+\multicolumn{7}{@{}l@{}}{\textit{Frames only, no field copied out}}\\
+readcon-core, frames only & CON 3.1 & 1 & 0.886 & 0.015 & 934 & --\\
+readcon-core, frames only & CON 3.1 & 8 & 0.459 & 0.025 & 953 & --\\
+\bottomrule
+\end{tabular}
