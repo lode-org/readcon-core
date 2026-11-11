@@ -27,7 +27,7 @@ use ::mpi::datatype::Partition;
 use ::mpi::traits::*;
 
 use crate::compression::{self, Compression, FileContents};
-use crate::distrib::{Comm, block_range};
+use crate::distrib::{block_range, Comm};
 use crate::frame_index::{self, FrameIndex};
 use crate::iterators::parse_frames_at_offsets;
 use crate::types::ConFrame;
@@ -631,7 +631,13 @@ pub unsafe extern "C" fn rkr_mpi_read_block_f(
 ) -> *mut *mut crate::ffi::RKRConFrame {
     let comm = match unsafe { Comm::dup_fint(comm_f) } {
         Ok(c) => c,
-        Err(_) => return std::ptr::null_mut(),
+        Err(e) => {
+            crate::ffi::record_status_message(
+                crate::ffi::RKRStatus::RKR_STATUS_IO_ERROR,
+                &format!("MPI_Comm_dup failed with MPI error {e}"),
+            );
+            return std::ptr::null_mut();
+        }
     };
     // Argument checks are agreed collectively so no rank is left waiting.
     let args = (!path_c.is_null()
@@ -642,6 +648,10 @@ pub unsafe extern "C" fn rkr_mpi_read_block_f(
     .flatten()
     .zip(ReadMode::from_i32(mode));
     if !agree(&comm, args.is_some()) {
+        crate::ffi::record_status_message(
+            crate::ffi::RKRStatus::RKR_STATUS_NULL_POINTER,
+            "null argument",
+        );
         return std::ptr::null_mut();
     }
     let (path, mode) = args.unwrap();
@@ -652,7 +662,10 @@ pub unsafe extern "C" fn rkr_mpi_read_block_f(
             *total_frames = rf.n_total as u64;
             crate::ffi::pack_frame_handles(rf.frames, num_frames)
         },
-        Err(_) => std::ptr::null_mut(),
+        Err(err) => {
+            crate::ffi::record_mpi_failure(err.as_ref());
+            std::ptr::null_mut()
+        }
     }
 }
 

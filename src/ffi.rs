@@ -564,6 +564,28 @@ fn note_located(err: &crate::error::LocatedParseError) -> RKRStatus {
     status
 }
 
+/// Store a collective read failure for `rkr_last_error`.
+///
+/// A located parse keeps its file line and frame index. Any other failure
+/// is I/O, including a peer rank's parse and a path that could not be read.
+pub(crate) fn record_mpi_failure(err: &(dyn std::error::Error + 'static)) {
+    if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
+        note_located(located);
+        return;
+    }
+    set_last_error(
+        RKRStatus::RKR_STATUS_IO_ERROR as i32,
+        &err.to_string(),
+        0,
+        0,
+    );
+}
+
+/// Store a status whose message is not the fixed `rkr_status_message` text.
+pub(crate) fn record_status_message(status: RKRStatus, message: &str) {
+    set_last_error(status as i32, message, 0, 0);
+}
+
 fn null_located<T>(err: &crate::error::LocatedParseError) -> *mut T {
     note_located(err);
     ptr::null_mut()
@@ -7027,5 +7049,33 @@ mod tests {
             free_rkr_frame(fr);
             free_con_frame_iterator(it);
         }
+    }
+
+    #[test]
+    fn mpi_read_failure_keeps_the_file_line_and_frame() {
+        let located = crate::error::LocatedParseError::new(
+            crate::error::ParseError::InvalidMetadataJson("{not-json".into()),
+            14,
+            1,
+        );
+        rkr_clear_error();
+        record_mpi_failure(&located);
+        let err = rkr_last_error();
+        assert!(!err.is_null());
+        let err = unsafe { &*err };
+        assert_eq!(err.line, 14);
+        assert_eq!(err.frame_index, 1);
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(message.contains("InvalidMetadataJson"), "{message}");
+
+        let io = std::io::Error::new(std::io::ErrorKind::NotFound, "missing file");
+        record_mpi_failure(&io);
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_IO_ERROR as i32);
+        assert_eq!(err.line, 0);
+        assert_eq!(err.frame_index, 0);
+        let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(message.contains("missing file"), "{message}");
     }
 }
