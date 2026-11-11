@@ -537,6 +537,37 @@ readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
 \end{tabular}
 \end{table}
 
+The same \num{100000}-frame copper trajectory, which repeats one grid, is \SI{63.5}{\mega\byte} as plain text, \SI{492}{\kilo\byte} as gzip and \SI{181}{\kilo\byte} as zstd.
+Those ratios, 129 for gzip and 351 for zstd, belong to this repeated file and not to a general trajectory.
+Table~\ref{tab:gzip} is the compressed read and the gzip write, again six repeats after one warmup on one core.
+The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
+ASE's eon reader takes \SI{10.6}{\second}.
+Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
+On a gzip file of one frame of $10^{6}$ atoms the Rust reader takes \SI{0.100}{\second} and ASE's eon reader takes \SI{1.47}{\second}.
+ASE's xyz reader takes \SI{127}{\second} on that file and returns cell lengths of zero.
+The Rust writer emits the \num{100000}-frame file as gzip in \SI{0.561}{\second}.
+ASE's eon writer takes \SI{14.2}{\second}.
+
+\begin{table}[tbp]
+\centering
+\caption{Median time in seconds for gzip CON.
+The first two columns are reads.
+The last column is the write of the \num{100000}-frame file.
+A blank cell was not part of this comparison.}
+\label{tab:gzip}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
+\midrule
+readcon, Rust & 0.412 & 0.100 & 0.561 \\
+readcon, Python & 0.439 & & \\
+ASE eon & 10.6 & 1.47 & 14.2 \\
+gzip, then plain read & 0.643 & & \\
+ASE xyz & & 127 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{The short decimal}
 \label{sec:fast}
 The fast-path session interleaves the two readcon builds and the eOn-style reader on the two larger CON files.
@@ -577,6 +608,8 @@ On copper XYZ files the Rust reader is again fastest at each size.
 On \num{100000} frames of 32 atoms the Python binding takes \SI{1.209}{\second}, second to the Rust reader at \SI{0.920}{\second}, and MDAnalysis takes \SI{1.869}{\second}.
 One convel frame takes $\num{2.87e-5}$\,s in Python, down from $\num{1.10e-3}$\,s, and $\num{1.66e-5}$\,s in C.
 The C binding reads \num{100000} CON frames in \SI{0.375}{\second}; the current eOn client takes \SI{0.854}{\second}.
+The Rust reader opens the gzip of that repeated copper file in \SI{0.412}{\second}.
+ASE's xyz reader takes \SI{127}{\second} on the million-atom gzip and returns cell lengths of zero.
 ASE does not read a velocity block and does not write a per-component hold.
 chemfiles and OVITO do not open CON.
 
