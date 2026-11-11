@@ -367,4 +367,233 @@ mod tests {
         assert_eq!(val.to_bits(), 1.2f64.to_bits());
         assert_eq!(b"1.2.3"[n], b'.');
     }
+
+    /// xorshift64. The seed is fixed so a failure reprints the same string.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next_u64(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+
+        fn below(&mut self, n: usize) -> usize {
+            (self.next_u64() as usize) % n
+        }
+    }
+
+    fn push_digits(rng: &mut Rng, out: &mut Vec<u8>, n: usize, lead_zero: bool) {
+        for i in 0..n {
+            let digit = if i == 0 && !lead_zero {
+                1 + rng.below(9)
+            } else if lead_zero && rng.below(3) == 0 {
+                0
+            } else {
+                rng.below(10)
+            };
+            out.push(b'0' + digit as u8);
+        }
+    }
+
+    /// One decimal token, possibly followed by junk the scan must not swallow.
+    fn push_token(rng: &mut Rng, out: &mut Vec<u8>, kind: usize) {
+        out.clear();
+        let sign = rng.below(3);
+        if sign == 1 {
+            out.push(b'+');
+        } else if sign == 2 {
+            out.push(b'-');
+        }
+        match kind % 8 {
+            0 | 1 | 2 => {
+                // In-range form: 1..=19 digits, optional dot, optional trailing dot.
+                let digits = 1 + rng.below(19);
+                let lead_zero = rng.below(2) == 0;
+                let dot_at = rng.below(digits + 1);
+                push_digits(rng, out, digits, lead_zero);
+                if dot_at < digits {
+                    out.insert(out.len() - (digits - dot_at), b'.');
+                } else if rng.below(4) == 0 {
+                    out.push(b'.');
+                }
+            }
+            3 => {
+                // 20-digit mantissa. The scan must fall back.
+                let lead_zero = rng.below(2) == 0;
+                push_digits(rng, out, 20, lead_zero);
+                if rng.below(2) == 0 {
+                    let at = 1 + rng.below(19);
+                    out.insert(out.len() - at, b'.');
+                }
+            }
+            4 => {
+                // Magnitude near the subnormal and overflow edges, written
+                // with an exponent so the simple scan has to refuse it.
+                let exp: i32 = match rng.below(8) {
+                    0 => -324,
+                    1 => -323,
+                    2 => -308,
+                    3 => -307,
+                    4 => 308,
+                    5 => 309,
+                    6 => -400 + rng.below(50) as i32,
+                    _ => 280 + rng.below(40) as i32,
+                };
+                let body = 1 + rng.below(6);
+                push_digits(rng, out, body, false);
+                if rng.below(2) == 0 {
+                    out.push(b'.');
+                    let frac = rng.below(8);
+                    push_digits(rng, out, frac, true);
+                }
+                out.push(if rng.below(2) == 0 { b'e' } else { b'E' });
+                if exp < 0 {
+                    out.push(b'-');
+                }
+                out.extend(exp.unsigned_abs().to_string().bytes());
+            }
+            5 => {
+                // Long run of zeros after the point: subnormal or underflow
+                // if it were accepted, and past the 19-digit cutoff.
+                out.push(b'0');
+                out.push(b'.');
+                let zeros = 20 + rng.below(340);
+                out.extend(std::iter::repeat(b'0').take(zeros));
+                out.push(b'1');
+            }
+            6 => {
+                // Explicit fallback spellings and empty prefixes.
+                const SPELL: [&[u8]; 8] =
+                    [b"", b"+", b"-", b".", b"nan", b"inf", b"+Infinity", b"-inf"];
+                out.extend_from_slice(SPELL[rng.below(SPELL.len())]);
+            }
+            _ => {
+                // Leading zeros, a short body, and a trailing dot.
+                let zeros = rng.below(8);
+                out.extend(std::iter::repeat(b'0').take(zeros));
+                let body = 1 + rng.below(12);
+                push_digits(rng, out, body, false);
+                out.push(b'.');
+                if rng.below(2) == 0 {
+                    let frac = rng.below(6);
+                    push_digits(rng, out, frac, true);
+                }
+            }
+        }
+        // Junk after the token. An exponent marker forces a fallback.
+        match rng.below(6) {
+            0 => out.push(b' '),
+            1 => out.push(b'x'),
+            2 => out.extend_from_slice(b"e10"),
+            3 => out.push(b'\n'),
+            _ => {}
+        }
+    }
+
+    fn agree(bytes: &[u8], at: usize) -> bool {
+        let hot = parse_f64_hot(bytes, at);
+        let reference = fast_float2::parse_partial::<f64, _>(&bytes[at..]);
+        match (hot, reference) {
+            (Some((got, end)), Ok((want, n))) => {
+                assert_eq!(
+                    end,
+                    at + n,
+                    "length mismatch on {:?} at {at}",
+                    String::from_utf8_lossy(bytes)
+                );
+                assert_eq!(
+                    got.to_bits(),
+                    want.to_bits(),
+                    "bit mismatch on {:?} at {at}: scanner {:e} reference {:e}",
+                    String::from_utf8_lossy(bytes),
+                    got,
+                    want
+                );
+                false
+            }
+            (Some((got, end)), Err(_)) => {
+                panic!(
+                    "scanner accepted {:?} at {at} as {got:e} ending at {end}, reference rejected it",
+                    String::from_utf8_lossy(bytes)
+                );
+            }
+            (None, _) => true,
+        }
+    }
+
+    #[test]
+    fn random_decimals_match_fast_float_bits() {
+        let mut rng = Rng(0x5eed_f64d_ec17_a10d);
+        let mut token = Vec::with_capacity(400);
+        let mut buf = Vec::with_capacity(420);
+        let mut accepted = 0usize;
+        let mut fallback = 0usize;
+        let mut saw_sign = false;
+        let mut saw_lead_zero = false;
+        let mut saw_trail_dot = false;
+        let mut saw_twenty = false;
+        let mut saw_extreme = false;
+        const N: usize = 1_000_000;
+        for i in 0..N {
+            push_token(&mut rng, &mut token, i);
+            let text = String::from_utf8(token.clone()).unwrap();
+            if text.starts_with('+') || text.starts_with('-') {
+                saw_sign = true;
+            }
+            if text.contains("00") {
+                saw_lead_zero = true;
+            }
+            if text.contains('.')
+                && !text
+                    .as_bytes()
+                    .windows(2)
+                    .any(|w| w[0] == b'.' && w[1].is_ascii_digit())
+            {
+                saw_trail_dot = true;
+            }
+            let digits = text.bytes().filter(|b| b.is_ascii_digit()).count();
+            if digits >= 20 && !text.bytes().any(|b| b == b'e' || b == b'E') {
+                saw_twenty = true;
+                assert!(
+                    parse_f64_hot(text.as_bytes(), 0).is_none(),
+                    "20-digit mantissa must fall back: {text}"
+                );
+            }
+            if text.bytes().any(|b| b == b'e' || b == b'E')
+                || text.bytes().filter(|b| *b == b'0').count() > 24
+            {
+                saw_extreme = true;
+            }
+            if agree(text.as_bytes(), 0) {
+                fallback += 1;
+            } else {
+                accepted += 1;
+            }
+            // The same token starting later in a buffer.
+            if i % 32 == 0 {
+                buf.clear();
+                buf.extend_from_slice(b"[]");
+                buf.extend_from_slice(text.as_bytes());
+                let fell = agree(&buf, 2);
+                if fell {
+                    fallback += 1;
+                } else {
+                    accepted += 1;
+                }
+            }
+        }
+        assert!(saw_sign && saw_lead_zero && saw_trail_dot && saw_twenty && saw_extreme);
+        assert!(
+            accepted > 400_000,
+            "accepted {accepted}, expected the hot path to take a large share"
+        );
+        assert!(
+            fallback > 200_000,
+            "fallback {fallback}, expected exponents, long mantissas, and non-finite spellings"
+        );
+    }
 }

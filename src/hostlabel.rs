@@ -1,8 +1,24 @@
 //! CPU model string used when a bench records one.
 //!
-//! The value is the `model name` line from `/proc/cpuinfo`, or `unknown`.
+//! The value is the `model name` line from `/proc/cpuinfo`, written the
+//! same way as `benches/cpu_model.py`: trademark marks removed, and any
+//! Xeon collapsed to one plain name. Missing input is `unknown`.
 
 use std::fs;
+
+/// Same spelling as `normalize_cpu` in `benches/cpu_model.py`.
+pub fn normalize_cpu(raw: &str) -> String {
+    let stripped = raw.replace("(R)", "").replace("(TM)", "").replace('®', "");
+    let cleaned = stripped.split_whitespace().collect::<Vec<_>>().join(" ");
+    if cleaned.contains("Xeon") {
+        return "Intel Xeon Processor".to_string();
+    }
+    if cleaned.is_empty() {
+        "unknown".to_string()
+    } else {
+        cleaned
+    }
+}
 
 /// CPU model from `/proc/cpuinfo`, or `unknown` when that line is absent.
 pub fn cpu_model() -> String {
@@ -12,7 +28,7 @@ pub fn cpu_model() -> String {
                 if let Some((_, value)) = line.split_once(':') {
                     let value = value.trim();
                     if !value.is_empty() {
-                        return value.to_string();
+                        return normalize_cpu(value);
                     }
                 }
             }
@@ -29,6 +45,20 @@ mod tests {
     #[test]
     fn cpu_model_value() {
         println!("CPU_MODEL={}", cpu_model());
+    }
+
+    #[test]
+    fn normalize_cpu_matches_the_python_record_name() {
+        assert_eq!(
+            super::normalize_cpu("Intel(R) Xeon(R) Processor"),
+            "Intel Xeon Processor"
+        );
+        assert_eq!(
+            super::normalize_cpu("Intel(R) Core(TM) i7"),
+            "Intel Core i7"
+        );
+        assert_eq!(super::normalize_cpu("  AMD   EPYC  "), "AMD EPYC");
+        assert_eq!(super::normalize_cpu("   "), "unknown");
     }
 
     #[test]
