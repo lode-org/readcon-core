@@ -205,6 +205,19 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         self.pos = pos;
         Ok(row)
     }
+    #[inline]
+    fn next_vector_row(
+        &mut self,
+        spec_version: u32,
+    ) -> Result<([f64; 3], [bool; 3], u64), crate::error::ParseError> {
+        if let Some(p) = self.peeked.take() {
+            return crate::parser::parse_vector_row_at(p.as_bytes(), 0, spec_version)
+                .map(|(row, _)| row);
+        }
+        let (row, pos) = crate::parser::parse_vector_row_at(self.bytes, self.pos, spec_version)?;
+        self.pos = pos;
+        Ok(row)
+    }
     fn remainder_is_whitespace(&mut self) -> bool {
         if self.utf8_bad {
             return false;
@@ -702,7 +715,10 @@ impl<'a> Iterator for ConFrameIterator<'a> {
                 Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
             };
         if sections > 0 {
-            frame.sync_arrays_from_atom_data();
+            // One flat fill per section that was actually parsed. The full
+            // sync walks every absent section and writes each row through
+            // ArcArray uniqueness checks.
+            frame.install_declared_section_soa();
         }
         Some(Ok(frame))
     }
@@ -774,6 +790,77 @@ mod aos_soa_agreement_tests {
             fr2.forces.as_f64_row(0),
             fr2.atom_data[0].force().expect("force")
         );
+    }
+
+    /// Section SoA is filled from one flat buffer. Every value must match the
+    /// per-atom tail, including past a small-vector boundary.
+    #[test]
+    fn declared_sections_soa_matches_every_atom() {
+        let n = 400;
+        let mut text = String::new();
+        text.push_str("soa fill\n");
+        text.push_str(
+            "{\"con_spec_version\":2,\"sections\":[\"velocities\",\"forces\",\"energies\"]}\n",
+        );
+        text.push_str("10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0 0\n1\n");
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            let x = (i as f64) * 0.125 - 3.5;
+            let y = (i as f64) * -0.05 + 1.0;
+            let z = (i % 17) as f64 * 0.333;
+            text.push_str(&format!("{x:.8} {y:.8} {z:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nVelocities of Component 1\n");
+        for i in 0..n {
+            let vx = (i as f64) * 1.0e-4 - 0.02;
+            let vy = ((i * 3) % 11) as f64 * -1.0e-3;
+            let vz = (i as f64).sin() * 0.01;
+            text.push_str(&format!("{vx:.8} {vy:.8} {vz:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nForces of Component 1\n");
+        for i in 0..n {
+            let fx = (i as f64) * 0.01;
+            let fy = -fx / 2.0;
+            let fz = (i % 5) as f64;
+            text.push_str(&format!("{fx:.8} {fy:.8} {fz:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nEnergies of Component 1\n");
+        for i in 0..n {
+            let e = (i as f64) * 0.02 - 4.0;
+            text.push_str(&format!("{e:.8} 0 {i}\n"));
+        }
+        let frame = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        assert_eq!(frame.atom_data.len(), n);
+        assert_eq!(frame.velocities.nrows(), n);
+        assert_eq!(frame.forces.nrows(), n);
+        assert_eq!(frame.atom_energies.len(), n);
+        assert_eq!(frame.positions.nrows(), n);
+        assert!(frame.magmoms.nrows() == 0);
+        for i in 0..n {
+            let atom = &frame.atom_data[i];
+            let pos = frame.positions.as_f64_row(i);
+            assert_eq!(pos[0].to_bits(), atom.x.to_bits());
+            assert_eq!(pos[1].to_bits(), atom.y.to_bits());
+            assert_eq!(pos[2].to_bits(), atom.z.to_bits());
+            let vel = atom.velocity().unwrap();
+            let soa_v = frame.velocities.as_f64_row(i);
+            assert_eq!(soa_v[0].to_bits(), vel[0].to_bits());
+            assert_eq!(soa_v[1].to_bits(), vel[1].to_bits());
+            assert_eq!(soa_v[2].to_bits(), vel[2].to_bits());
+            let frc = atom.force().unwrap();
+            let soa_f = frame.forces.as_f64_row(i);
+            assert_eq!(soa_f[0].to_bits(), frc[0].to_bits());
+            assert_eq!(soa_f[1].to_bits(), frc[1].to_bits());
+            assert_eq!(soa_f[2].to_bits(), frc[2].to_bits());
+            assert_eq!(
+                frame.atom_energies.get_f64(i).to_bits(),
+                atom.energy().unwrap().to_bits()
+            );
+            assert_eq!(frame.atom_ids[i], atom.atom_id);
+        }
     }
 }
 
@@ -2988,13 +3075,10 @@ mod parallel_header_scan_tests {
             }
         }
         let tailed = format!("{text}\n   \n\t\n");
-        assert_cuts_match(&tailed, &[
-            0,
-            3,
-            tailed.len() / 2,
-            tailed.len() - 1,
-            tailed.len(),
-        ]);
+        assert_cuts_match(
+            &tailed,
+            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
+        );
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
         assert_crlf_gap_cut(&crlf);
