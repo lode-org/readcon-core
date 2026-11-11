@@ -177,6 +177,35 @@ fn two_frames_with_units_round_trip_bit_for_bit() {
     }
 }
 
+#[test]
+fn coordinate_spellings_match_from_str_bits() {
+    let rows = [
+        ("-0.0", "0.0", "+0"),
+        (".5", "5.", "+.5"),
+        ("-.5", "+1.5", "1.50"),
+        ("1.25e-1", "1e22", "9007199254740992"),
+        ("9007199254740993", "1.0000000000000002", "-2.5e-23"),
+        ("00.10", "1.", ".25"),
+        ("-0.000", "2.5e+1", "1e-22"),
+    ];
+    for (index, (x, y, z)) in rows.iter().enumerate() {
+        let text = header(&format!("{x} {y} {z} 0 {index}"));
+        let frame = ConFrameIterator::new(&text)
+            .next()
+            .unwrap_or_else(|| panic!("no frame for {x} {y} {z}"))
+            .unwrap_or_else(|err| panic!("parse {x} {y} {z}: {err}"));
+        let atom = &frame.atom_data[0];
+        let expect = |token: &str| -> f64 {
+            let trimmed = token.trim_start_matches('+');
+            trimmed.parse::<f64>().expect(token)
+        };
+        assert_eq!(atom.x.to_bits(), expect(x).to_bits(), "x={x}");
+        assert_eq!(atom.y.to_bits(), expect(y).to_bits(), "y={y}");
+        assert_eq!(atom.z.to_bits(), expect(z).to_bits(), "z={z}");
+        assert_eq!(atom.atom_id, index as u64);
+    }
+}
+
 fn xorshift(state: &mut u64) -> u64 {
     *state = state.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
     *state

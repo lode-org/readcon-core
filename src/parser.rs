@@ -593,6 +593,107 @@ fn parse_coord_fields(
     parse_coord_fields_detailed(bytes, i, spec_version, default_id)
 }
 
+/// Powers of ten used by the Clinger fast path. Same literals as
+/// `fast_float2`'s f64 table, so a short decimal divides to the same bits.
+const POW10_FAST: [f64; 23] = [
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
+    1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+];
+/// `2^53`. Integers above this are not all exact in binary64.
+const MAX_FAST_MANTISSA: u64 = 1_u64 << 53;
+
+/// Decimal with no exponent whose significand fits the Clinger range.
+///
+/// This is the same conversion `fast_float2` takes before Eisel-Lemire:
+/// an exact integer mantissa of at most `2^53`, scaled by `10^e` for
+/// `e` in `-22..=22`. Anything else, including an exponent marker, returns
+/// `None` so the caller uses `fast_float2` on the original bytes.
+#[inline(always)]
+fn parse_f64_clinger(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
+    let mut j = i;
+    if j >= bytes.len() {
+        return None;
+    }
+    let mut neg = false;
+    match bytes[j] {
+        b'-' => {
+            neg = true;
+            j += 1;
+        }
+        b'+' => j += 1,
+        _ => {}
+    }
+    if j >= bytes.len() {
+        return None;
+    }
+    let mut mantissa: u64 = 0;
+    let mut n_digits: u32 = 0;
+    let mut frac: i32 = 0;
+    let mut saw_dot = false;
+    let mut saw_digit = false;
+    while j < bytes.len() {
+        let b = bytes[j];
+        if b.is_ascii_digit() {
+            if n_digits == 19 {
+                return None;
+            }
+            n_digits += 1;
+            mantissa = mantissa * 10 + u64::from(b - b'0');
+            if saw_dot {
+                frac += 1;
+            }
+            saw_digit = true;
+            j += 1;
+        } else if b == b'.' && !saw_dot {
+            saw_dot = true;
+            j += 1;
+        } else {
+            break;
+        }
+    }
+    if !saw_digit || (j < bytes.len() && (bytes[j] == b'e' || bytes[j] == b'E')) {
+        return None;
+    }
+    let exponent = -i64::from(frac);
+    if mantissa > MAX_FAST_MANTISSA || !(-22..=22).contains(&exponent) {
+        return None;
+    }
+    let mut value = mantissa as f64;
+    if exponent < 0 {
+        value /= POW10_FAST[(-exponent) as usize];
+    } else if exponent > 0 {
+        value *= POW10_FAST[exponent as usize];
+    }
+    if neg {
+        value = -value;
+    }
+    Some((value, j))
+}
+
+/// One finite decimal. The short path is Clinger; every other spelling
+/// goes through `fast_float2`, which is the bit-exact fallback.
+#[inline(always)]
+fn parse_f64_coord(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
+    if let Some(parsed) = parse_f64_clinger(bytes, i) {
+        return Some(parsed);
+    }
+    if i >= bytes.len() || is_line_end(bytes, i) || bytes[i] >= 0x80 {
+        return None;
+    }
+    if looks_like_nonfinite(bytes, i) {
+        return None;
+    }
+    let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).ok()?;
+    if !val.is_finite() {
+        return None;
+    }
+    let next = i + consumed;
+    if next < bytes.len() && !is_field_ws(bytes[next]) && !is_line_end(bytes, next) {
+        return None;
+    }
+    Some((val, next))
+}
+
 /// Common coordinate row: three finite decimals, a small flag, an optional id.
 #[inline(always)]
 fn parse_coord_fields_fast(
@@ -604,20 +705,7 @@ fn parse_coord_fields_fast(
     let mut i = skip_field_ws(bytes, i);
     let mut xyz = [0.0f64; 3];
     for dest in &mut xyz {
-        if is_line_end(bytes, i) || bytes[i] >= 0x80 {
-            return None;
-        }
-        if looks_like_nonfinite(bytes, i) {
-            return None;
-        }
-        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).ok()?;
-        if !val.is_finite() {
-            return None;
-        }
-        let next = i + consumed;
-        if next < bytes.len() && !is_field_ws(bytes[next]) && !is_line_end(bytes, next) {
-            return None;
-        }
+        let (val, next) = parse_f64_coord(bytes, i)?;
         *dest = val;
         i = skip_field_ws(bytes, next);
     }
