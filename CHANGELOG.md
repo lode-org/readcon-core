@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.19.0 - 2026-11-12
+
+### Features
+
+- A multi-frame read stays on the calling thread until the caller asks for two
+  or more workers. Equal-length frames, including a whitespace tail, use
+  equal-span boundaries, so the caller does not walk every header. A plain file
+  of 64 KiB or more stays mapped. The unit name table is built once and shared
+  by the serial reader, the C reader, and the pool.
+- Rust, C, C++, and Python can append an uncompressed CON file, flush the
+  writer buffer, and keep one frame of text in a scratch buffer in front of an
+  8 KiB `BufWriter`. `OpenMode::Append` and `write_con(..., append=True)`
+  refuse gzip and zstd. Python `write_con` and `write_con_string` emit one
+  frame at a time. `write_con_string` takes a half-open `start` and `stop`.
+  `.gz` and `.zst` select the write codec from the extension.
+- The `ase-readcon` package registers `readcon-con` and `readcon-convel` on the
+  `ase.ioformats` entry point so `ase.io.read` and `ase.io.write` load CON and
+  convel through readcon.
+- `read_extxyz` returns a dict of positions, masses, cell, species tuples, and
+  per-atom columns. A repeated symbol is one string, and a frame that matches
+  the previous frame reuses that tuple. `write_extxyz` writes the dict back
+  without copying the numeric columns.
+
+### Bugfixes
+
+- A vectorized newline skip now adds those lines to the file line. A parse
+  error in a later frame reports that frame's line and index, including when
+  several spans fail and the earliest slot is the one the serial walk would
+  report.
+
+### Documentation
+
+- The how-to covers the parallel reader, append and flush, compression chosen
+  by extension, reading CON from stdin, the unit table, and the ASE plugin.
+  `read_extxyz` callers index the returned dict.
+
+
 ## v0.18.1 - 2026-11-07
 
 ### Bugfixes
@@ -1276,6 +1313,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.19.0]: https://github.com/lode-org/readcon-core/compare/v0.18.1...v0.19.0
 [v0.18.1]: https://github.com/lode-org/readcon-core/compare/v0.18.0...v0.18.1
 [v0.18.0]: https://github.com/lode-org/readcon-core/compare/v0.17.3...v0.18.0
 [v0.17.3]: https://github.com/lode-org/readcon-core/compare/v0.17.2...v0.17.3

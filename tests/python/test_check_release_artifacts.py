@@ -49,13 +49,13 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_matching_wheel_and_cxx_pass(self) -> None:
         self.assertEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.19.0",
+                "0.19.0",
                 {
-                    "readcon-0.18.1-cp312-cp312-manylinux_2_17_x86_64.whl": "w",
-                    "readcon_chemfiles-0.18.1.tar.gz": "s",
-                    "readcon-core-cxx-0.18.1.tar.gz": "c",
-                    "readcon-core-clib-0.18.1-x86_64-unknown-linux-gnu.tar.gz": "l",
+                    "readcon-0.19.0-cp312-cp312-manylinux_2_17_x86_64.whl": "w",
+                    "readcon_chemfiles-0.19.0.tar.gz": "s",
+                    "readcon-core-cxx-0.19.0.tar.gz": "c",
+                    "readcon-core-clib-0.19.0-x86_64-unknown-linux-gnu.tar.gz": "l",
                 },
             ),
             0,
@@ -64,8 +64,8 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_old_wheel_name_is_refused(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.19.0",
+                "0.19.0",
                 {"readcon-0.17.3-cp312-cp312-manylinux_2_17_x86_64.whl": "w"},
             ),
             0,
@@ -73,15 +73,15 @@ class ReleaseArtifactGuard(unittest.TestCase):
 
     def test_version_file_must_match_the_tag(self) -> None:
         self.assertNotEqual(
-            run("v0.18.1", "0.17.3", {"readcon-0.17.3.tar.gz": "s"}),
+            run("v0.19.0", "0.17.3", {"readcon-0.17.3.tar.gz": "s"}),
             0,
         )
 
     def test_dist_binary_without_manifest_is_refused(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.19.0",
+                "0.19.0",
                 {"readcon-core-x86_64-unknown-linux-gnu.tar.xz": "b"},
             ),
             0,
@@ -100,8 +100,8 @@ class ReleaseArtifactGuard(unittest.TestCase):
         }
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.19.0",
+                "0.19.0",
                 {"readcon-core-x86_64-unknown-linux-gnu.tar.xz": "b"},
                 manifest,
             ),
@@ -111,24 +111,24 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_dist_binary_passes_when_manifest_version_matches(self) -> None:
         name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
         manifest = {
-            "announcement_tag": "v0.18.1",
+            "announcement_tag": "v0.19.0",
             "releases": [
-                {"app_version": "0.18.1", "artifacts": [name, "source.tar.gz"]}
+                {"app_version": "0.19.0", "artifacts": [name, "source.tar.gz"]}
             ],
             "artifacts": {name: {"name": name}},
         }
         self.assertEqual(
-            run("v0.18.1", "0.18.1", {name: "b", "source.tar.gz": "s"}, manifest),
+            run("v0.19.0", "0.19.0", {name: "b", "source.tar.gz": "s"}, manifest),
             0,
         )
 
     def test_wrap_names_are_not_release_assets(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.19.0",
+                "0.19.0",
                 {
-                    "readcon-core-cxx-0.18.1.tar.gz": "c",
+                    "readcon-core-cxx-0.19.0.tar.gz": "c",
                     "readcon-core.wrap": "slim hash overwritten by vendor",
                 },
             ),
@@ -136,9 +136,9 @@ class ReleaseArtifactGuard(unittest.TestCase):
         )
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
-                {"readcon-core-cxx-0.18.1.wrap": "versioned sidecar"},
+                "v0.19.0",
+                "0.19.0",
+                {"readcon-core-cxx-0.19.0.wrap": "versioned sidecar"},
             ),
             0,
         )
@@ -228,14 +228,14 @@ class ReleaseArtifactGuard(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            code = clib_workspace(ws, "0.18.1", "0.18.1", "abc")
+            code = clib_workspace(ws, "0.19.0", "0.19.0", "abc")
             self.assertEqual(code, 0)
             missing = subprocess.call(
                 [
                     sys.executable,
                     "scripts/check_release_artifacts.py",
                     "--tag",
-                    "v0.18.1",
+                    "v0.19.0",
                 ],
                 cwd=ws,
                 stdout=subprocess.DEVNULL,
@@ -246,13 +246,13 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_clib_manifest_rejects_a_wrong_version_and_a_wrong_hash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.17.3", "old"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.19.0", "0.17.3", "old"), 0)
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.18.1", "old-url"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.19.0", "0.19.0", "old-url"), 0)
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.18.1", "bad-hash"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.19.0", "0.19.0", "bad-hash"), 0)
 
     def test_cachegrind_harness_builds_with_and_without_chemfiles(self) -> None:
         env = os.environ.copy()
@@ -342,7 +342,7 @@ lazy = true
     (dist / f"Artifacts-{target}.toml").write_text(toml, encoding="utf-8")
     env = os.environ.copy()
     env["GITHUB_WORKSPACE"] = str(ws)
-    env["RELEASE_TAG"] = "v0.18.1"
+    env["RELEASE_TAG"] = "v0.19.0"
     return subprocess.call(
         [
             "bash",
